@@ -175,6 +175,8 @@ impl BuildContext {
     ) -> Result<Self, std::io::Error> {
         let cache_dirs = CacheDirs::new(cache_dir.clone());
         let root_dir = channel_config.root_dir.clone();
+        let top_level_reporter =
+            reporters::TopLevelReporter::new(pixi_progress::global_multi_progress());
         Ok(Self {
             channel_config,
             glob_hash_cache: GlobHashCache::default(),
@@ -185,6 +187,7 @@ impl BuildContext {
             variant_config,
             command_queue: CommandQueue::builder()
                 .with_cache_dirs(cache_dirs)
+                .with_reporter(top_level_reporter)
                 .with_root_dir(root_dir)
                 .finish(),
         })

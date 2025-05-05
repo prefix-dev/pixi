@@ -90,8 +90,14 @@ pub trait GitCheckoutReporter {
 ///
 /// The reporter has to be `Send` but does not require `Sync`.
 pub trait Reporter: Send {
+    /// Returns a mutable reference to a reporter that reports on any git progress.
     fn as_git_reporter(&mut self) -> Option<&mut dyn GitCheckoutReporter>;
+    /// Returns a mutable reference to a reporter that reports on conda solve progress.
     fn as_conda_solve_reporter(&mut self) -> Option<&mut dyn CondaSolveReporter>;
+    /// Returns a mutable reference to a reporter that reports on an entire pixi solve progress.
+    /// so that can mean solves for multiple ecosystems for an environment.
     fn as_pixi_solve_reporter(&mut self) -> Option<&mut dyn PixiSolveReporter>;
+    /// Returns a mutable reference to a reporter that reports on the progress of
+    /// actual package installation.
     fn as_pixi_install_reporter(&mut self) -> Option<&mut dyn PixiInstallReporter>;
 }

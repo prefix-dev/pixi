@@ -130,7 +130,7 @@ impl pixi_command_queue::GitCheckoutReporter for SourceCheckoutReporter {
     fn on_checkout_start(&mut self, checkout_id: GitCheckoutId) {
         let pb = self
             .multi_progress
-            .insert_before(&self.original_progress, ProgressBar::hidden());
+            .insert_after(&self.original_progress, ProgressBar::hidden());
         let repo = self.get_repo_reference(checkout_id);
         pb.set_style(SourceCheckoutReporter::spinner_style());
         pb.set_prefix("fetching git dependencies");
@@ -156,5 +156,45 @@ impl pixi_command_queue::GitCheckoutReporter for SourceCheckoutReporter {
             repo.reference
         ));
         removed_pb.finish_and_clear();
+    }
+}
+
+/// A top-level reporter that combine the different reporters into one.
+/// this directyl implements the [`pixi_command_queue::Reporter`] trait.
+/// And subsequently, offloads the work to its sub-reporters.
+pub(crate) struct TopLevelReporter {
+    multi_progress: MultiProgress,
+    source_checkout_reporter: SourceCheckoutReporter,
+}
+
+impl TopLevelReporter {
+    pub fn new(multi_progress: MultiProgress) -> Self {
+        let pb = multi_progress.insert_before(0, ProgressBar::hidden());
+        Self {
+            multi_progress: multi_progress.clone(),
+            source_checkout_reporter: SourceCheckoutReporter::new(pb, multi_progress),
+        }
+    }
+}
+
+impl pixi_command_queue::Reporter for TopLevelReporter {
+    fn as_git_reporter(&mut self) -> Option<&mut dyn pixi_command_queue::GitCheckoutReporter> {
+        Some(&mut self.source_checkout_reporter)
+    }
+
+    fn as_conda_solve_reporter(
+        &mut self,
+    ) -> Option<&mut dyn pixi_command_queue::CondaSolveReporter> {
+        None
+    }
+
+    fn as_pixi_solve_reporter(&mut self) -> Option<&mut dyn pixi_command_queue::PixiSolveReporter> {
+        None
+    }
+
+    fn as_pixi_install_reporter(
+        &mut self,
+    ) -> Option<&mut dyn pixi_command_queue::PixiInstallReporter> {
+        None
     }
 }
