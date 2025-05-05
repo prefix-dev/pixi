@@ -81,7 +81,7 @@ impl ProgressState {
 }
 
 /// A reporter implementation for source checkouts.
-pub struct SourceCheckoutReporter {
+pub struct GitCheckoutProgress {
     /// The original progress bar.
     original_progress: ProgressBar,
     /// The multi-progress bar. Usually, this is the global multi-progress bar.
@@ -92,7 +92,7 @@ pub struct SourceCheckoutReporter {
     repository_references: HashMap<GitCheckoutId, RepositoryReference>,
 }
 
-impl SourceCheckoutReporter {
+impl GitCheckoutProgress {
     /// Creates a new source checkout reporter.
     pub fn new(original_progress: ProgressBar, multi_progress: MultiProgress) -> Self {
         Self {
@@ -110,7 +110,7 @@ impl SourceCheckoutReporter {
     }
 }
 
-impl SourceCheckoutReporter {
+impl GitCheckoutProgress {
     pub fn get_repo_reference(&self, id: GitCheckoutId) -> &RepositoryReference {
         self.repository_references
             .get(&id)
@@ -118,7 +118,7 @@ impl SourceCheckoutReporter {
     }
 }
 
-impl pixi_command_queue::GitCheckoutReporter for SourceCheckoutReporter {
+impl pixi_command_queue::GitCheckoutReporter for GitCheckoutProgress {
     /// Called when a git checkout was queued on the [`CommandQueue`].
     fn on_checkout_queued(&mut self, env: &RepositoryReference) -> GitCheckoutId {
         let id = self.progress_state.id();
@@ -132,7 +132,7 @@ impl pixi_command_queue::GitCheckoutReporter for SourceCheckoutReporter {
             .multi_progress
             .insert_after(&self.original_progress, ProgressBar::hidden());
         let repo = self.get_repo_reference(checkout_id);
-        pb.set_style(SourceCheckoutReporter::spinner_style());
+        pb.set_style(GitCheckoutProgress::spinner_style());
         pb.set_prefix("fetching git dependencies");
         pb.set_message(format!(
             "checking out {}@{}",
@@ -161,23 +161,23 @@ impl pixi_command_queue::GitCheckoutReporter for SourceCheckoutReporter {
 
 /// A top-level reporter that combine the different reporters into one.
 /// this directyl implements the [`pixi_command_queue::Reporter`] trait.
-/// And subsequently, offloads the work to its sub-reporters.
-pub(crate) struct TopLevelReporter {
+/// And subsequently, offloads the work to its sub progress reporters.
+pub(crate) struct TopLevelProgress {
     multi_progress: MultiProgress,
-    source_checkout_reporter: SourceCheckoutReporter,
+    source_checkout_reporter: GitCheckoutProgress,
 }
 
-impl TopLevelReporter {
+impl TopLevelProgress {
     pub fn new(multi_progress: MultiProgress) -> Self {
         let pb = multi_progress.insert_before(0, ProgressBar::hidden());
         Self {
             multi_progress: multi_progress.clone(),
-            source_checkout_reporter: SourceCheckoutReporter::new(pb, multi_progress),
+            source_checkout_reporter: GitCheckoutProgress::new(pb, multi_progress),
         }
     }
 }
 
-impl pixi_command_queue::Reporter for TopLevelReporter {
+impl pixi_command_queue::Reporter for TopLevelProgress {
     fn as_git_reporter(&mut self) -> Option<&mut dyn pixi_command_queue::GitCheckoutReporter> {
         Some(&mut self.source_checkout_reporter)
     }

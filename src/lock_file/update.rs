@@ -47,7 +47,7 @@ use crate::{
     Workspace,
     activation::CurrentEnvVarBehavior,
     build::{
-        BuildContext, BuildEnvironment, GlobHashCache, SourceCheckoutReporter,
+        BuildContext, BuildEnvironment, GitCheckoutProgress, GlobHashCache,
         source_metadata_collector::{CollectedSourceMetadata, SourceMetadataCollector},
     },
     environment::{

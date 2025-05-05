@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 use std::sync::{Arc, LazyLock};
 
-use crate::build::{BuildContext, SourceCheckoutReporter};
+use crate::build::{BuildContext, GitCheckoutProgress};
 use crate::environment::PythonStatus;
 use crate::lock_file::IoConcurrencyLimit;
 use crate::prefix::{Prefix, PrefixError};

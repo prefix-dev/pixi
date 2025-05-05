@@ -41,7 +41,7 @@ use rattler_conda_types::{
 };
 use rattler_digest::Sha256;
 use reporters::SourceReporter;
-pub use reporters::{BuildMetadataReporter, BuildReporter, SourceCheckoutReporter};
+pub use reporters::{BuildMetadataReporter, BuildReporter, GitCheckoutProgress};
 use thiserror::Error;
 use tracing::instrument;
 use typed_path::{Utf8TypedPath, Utf8TypedPathBuf};
@@ -176,7 +176,7 @@ impl BuildContext {
         let cache_dirs = CacheDirs::new(cache_dir.clone());
         let root_dir = channel_config.root_dir.clone();
         let top_level_reporter =
-            reporters::TopLevelReporter::new(pixi_progress::global_multi_progress());
+            reporters::TopLevelProgress::new(pixi_progress::global_multi_progress());
         Ok(Self {
             channel_config,
             glob_hash_cache: GlobHashCache::default(),
