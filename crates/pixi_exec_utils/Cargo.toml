@@ -1,15 +1,12 @@
 [package]
-name = "pixi_exec_utils"
-version = "0.1.0"
 authors.workspace = true
 edition.workspace = true
 homepage.workspace = true
 license.workspace = true
+name = "pixi_exec_utils"
 readme.workspace = true
 repository.workspace = true
-
-[dependencies]
-tracing = "0.1"
+version = "0.1.0"
 
 [profile.release]
 # Enable Link Time Optimization.
@@ -23,6 +20,9 @@ panic = "abort"
 # Automatically strip symbols from the binary.
 debug = false
 strip = true
+
+[dependencies]
+tracing = "0.1"
 
 [dev-dependencies]
 rstest = { workspace = true }
