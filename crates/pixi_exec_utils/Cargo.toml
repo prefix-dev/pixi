@@ -9,3 +9,17 @@ readme.workspace = true
 repository.workspace = true
 
 [dependencies]
+tracing = "0.1"
+
+[profile.release]
+# Enable Link Time Optimization.
+lto = true
+# Reduce number of codegen units to increase optimizations.
+codegen-units = 1
+# Optimize for size.
+opt-level = "z"
+# Abort on panic.
+panic = "abort"
+# Automatically strip symbols from the binary.
+debug = false
+strip = true

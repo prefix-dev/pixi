@@ -1,6 +1,6 @@
 use fs_err::File;
 use anyhow::{Result, Context};
-use pixi_utils::executable_from_path;
+use pixi_exec_utils::executable_from_path;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::env;
