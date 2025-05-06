@@ -200,7 +200,7 @@ description = "Build the trampolines"
 # Feature to build recipes
 #
 [feature.recipes.dependencies]
-rattler-build = ">=0.40,<0.41"
+rattler-build = ">=0.41,<0.42"
 
 [feature.recipes.tasks.build-backends]
 cmd = "rattler-build build --recipe-dir empty --output-dir ."
