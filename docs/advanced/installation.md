@@ -67,6 +67,12 @@ The installer will download Pixi and add it to the `PATH`.
 winget install prefix-dev.pixi
 ```
 
+### Scoop
+
+```
+scoop install main/pixi
+```
+
 ### Download From GitHub Releases
 
 Pixi is a single executable and can be run without any external dependencies.
