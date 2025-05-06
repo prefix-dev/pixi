@@ -312,3 +312,47 @@ def test_smokey(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
     metadata = json.loads(conda_meta.read_text())
 
     assert metadata["name"] == "smokey"
+
+
+@pytest.mark.slow
+def test_recursive_source_run_dependencies(
+    pixi: Path, build_data: Path, tmp_pixi_workspace: Path
+) -> None:
+    """
+    Test whether recursive source dependencies work properly if
+    they are specified in the `run-dependencies` section
+    """
+    project = "recursive_source_run_dep"
+    test_data = build_data.joinpath(project)
+
+    shutil.copytree(test_data, tmp_pixi_workspace, dirs_exist_ok=True)
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    # TODO: Setting the cache dir shouldn't be necessary!
+    env = {
+        "PIXI_CACHE_DIR": str(tmp_pixi_workspace.joinpath("pixi_cache")),
+    }
+
+    verify_cli_command(
+        [
+            pixi,
+            "install",
+            "--manifest-path",
+            manifest_path,
+        ],
+        env=env,
+    )
+
+    # Package B is a dependency of Package A
+    # Check that it is properly installed
+    verify_cli_command(
+        [
+            pixi,
+            "run",
+            "--manifest-path",
+            manifest_path,
+            "package-b",
+        ],
+        env=env,
+        stdout_contains="hello from package-b",
+    )
