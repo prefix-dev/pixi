@@ -5,11 +5,11 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::env;
 use std::ops::Not;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 
 #[cfg(target_family = "unix")]
 use std::os::unix::process::CommandExt;
-use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 
 // trampoline configuration folder name
 pub const TRAMPOLINE_CONFIGURATION: &str = "trampoline_configuration";
