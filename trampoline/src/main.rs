@@ -53,18 +53,23 @@ fn setup_path(path_diff: &str) -> Result<String> {
     let current_paths = std::env::split_paths(&current_path);
     let path_diffs = std::env::split_paths(path_diff);
 
+    // If PIXI_BASE_PATH is set, we handle path priority differently
     let paths: Vec<PathBuf> = if let Ok(base_path) = std::env::var("PIXI_BASE_PATH") {
         let base_paths: Vec<PathBuf> = env::split_paths(&base_path).collect();
+
+        // Filter out base paths from current path
         let new_parts: Vec<PathBuf> = current_paths
             .filter(|current| base_paths.contains(current).not())
             .collect();
 
+        // Combine paths in priority order: new paths, path diffs, base paths
         new_parts
             .into_iter()
             .chain(path_diffs)
             .chain(base_paths)
             .collect()
     } else {
+        // Standard case: path_diffs take precedence over current paths
         path_diffs.chain(current_paths).collect()
     };
 
@@ -94,7 +99,7 @@ fn trampoline() -> Result<()> {
         cmd.env(key, value);
     }
 
-    // Special case for PATH
+    // Set up the PATH environment variable with proper priorities
     cmd.env("PATH", setup_path(&configuration.path_diff)?);
 
     // Add any additional arguments
