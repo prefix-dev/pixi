@@ -31,7 +31,7 @@ async fn pypi_dependency_index_preserved_on_upgrade() {
     let file_contents = r#"
 [workspace]
 channels = ["conda-forge"]
-platforms = ["linux-64"]
+platforms = ["linux-64", "osx-arm64", "win-64"]
 exclude-newer = "2025-05-19"
 
 [pypi-dependencies]
