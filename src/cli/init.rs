@@ -339,7 +339,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         for requirement in pypi_deps {
             workspace.manifest().add_pep508_dependency(
-                &requirement,
+                (&requirement, &None),
                 // No platforms required as you can't define them in the yaml
                 &[],
                 &FeatureName::default(),

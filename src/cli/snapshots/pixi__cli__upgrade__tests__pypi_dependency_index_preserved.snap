@@ -1,0 +1,13 @@
+---
+source: src/cli/upgrade.rs
+expression: "fs_err::read_to_string(file_path).unwrap_or_default()"
+---
+             [workspace]
+             channels = ["conda-forge"]
+             platforms = ["linux-64"]
+
+             [pypi-dependencies]
+torch = { version = ">=2.7.0, <3", index = "https://download.pytorch.org/whl/cpu" }
+
+             [dependencies]
+python = ">=3.13.3,<3.14"
