@@ -157,12 +157,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             {
                 Some(vcs_reqs) => vcs_reqs
                     .into_iter()
-                    .map(|(name, req)| (name, (req, None)))
+                    .map(|(name, req)| (name, (req, None, None)))
                     .collect(),
                 None => dependency_config
                     .pypi_deps(workspace.workspace())?
                     .into_iter()
-                    .map(|(name, req)| (name, (req, None)))
+                    .map(|(name, req)| (name, (req, None, None)))
                     .collect(),
             };
 
