@@ -40,7 +40,7 @@ use pixi_manifest::{
     HasWorkspaceManifest, LoadManifestsError, ManifestProvenance, Manifests, PackageManifest,
     SpecType, WithProvenance, WithWarnings, WorkspaceManifest,
 };
-use pixi_pypi_spec::PypiPackageName;
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::SourceSpec;
 use pixi_utils::reqwest::build_reqwest_clients;
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
@@ -180,7 +180,11 @@ impl Debug for Workspace {
 
 pub type PypiDeps = indexmap::IndexMap<
     PypiPackageName,
-    (Requirement, Option<pixi_manifest::PypiDependencyLocation>),
+    (
+        Requirement,
+        Option<PixiPypiSpec>,
+        Option<pixi_manifest::PypiDependencyLocation>,
+    ),
 >;
 
 pub type MatchSpecs = indexmap::IndexMap<PackageName, (MatchSpec, SpecType)>;
