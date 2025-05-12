@@ -2012,6 +2012,15 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#scoop" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scoop
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#download-from-github-releases" class="md-nav__link">
     <span class="md-ellipsis">
       Download From GitHub Releases
@@ -2598,6 +2607,15 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#scoop" class="md-nav__link">
+    <span class="md-ellipsis">
+      Scoop
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#download-from-github-releases" class="md-nav__link">
     <span class="md-ellipsis">
       Download From GitHub Releases
@@ -2773,6 +2791,9 @@ The installer will download Pixi and add it to the <code>PATH</code>.</p>
 <h3 id="winget">Winget<a class="headerlink" href="#winget" title="Permanent link">#</a></h3>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>winget install prefix-dev.pixi
 </span></code></pre></div>
+<h3 id="scoop">Scoop<a class="headerlink" href="#scoop" title="Permanent link">#</a></h3>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>scoop install main/pixi
+</span></code></pre></div>
 <h3 id="download-from-github-releases">Download From GitHub Releases<a class="headerlink" href="#download-from-github-releases" title="Permanent link">#</a></h3>
 <p>Pixi is a single executable and can be run without any external dependencies.
 That means you can manually download the suitable archive for your architecture and operating system from our <a href="https://github.com/prefix-dev/pixi/releases">GitHub releases</a>, unpack it and then use it as is.
@@ -2781,13 +2802,13 @@ The executables are located in <a href="../../reference/environment_variables/">
 <h3 id="install-from-source">Install From Source<a class="headerlink" href="#install-from-source" title="Permanent link">#</a></h3>
 <p>pixi is 100% written in Rust, and therefore it can be installed, built and tested with cargo.
 To start using Pixi from a source build run:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>cargo<span class="w"> </span>install<span class="w"> </span>--locked<span class="w"> </span>--git<span class="w"> </span>https://github.com/prefix-dev/pixi.git<span class="w"> </span>pixi
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>cargo<span class="w"> </span>install<span class="w"> </span>--locked<span class="w"> </span>--git<span class="w"> </span>https://github.com/prefix-dev/pixi.git<span class="w"> </span>pixi
 </span></code></pre></div>
 <p>We don't publish to <code>crates.io</code> anymore, so you need to install it from the repository.
 The reason for this is that we depend on some unpublished crates which disallows us to publish to <code>crates.io</code>.</p>
 <p>or when you want to make changes use:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>cargo<span class="w"> </span>build
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>cargo<span class="w"> </span><span class="nb">test</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>cargo<span class="w"> </span>build
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>cargo<span class="w"> </span><span class="nb">test</span>
 </span></code></pre></div>
 <p>If you have any issues building because of the dependency on <code>rattler</code> checkout
 its <a href="https://github.com/conda/rattler/tree/main#give-it-a-try">compile steps</a>.</p>
@@ -2833,10 +2854,10 @@ its <a href="https://github.com/conda/rattler/tree/main#give-it-a-try">compile s
 </tbody>
 </table>
 <p>For example, on Apple Silicon, you can force the installation of the x86 version:
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>curl<span class="w"> </span>-fsSL<span class="w"> </span>https://pixi.sh/install.sh<span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="nv">PIXI_ARCH</span><span class="o">=</span>x86_64<span class="w"> </span>bash
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>curl<span class="w"> </span>-fsSL<span class="w"> </span>https://pixi.sh/install.sh<span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="nv">PIXI_ARCH</span><span class="o">=</span>x86_64<span class="w"> </span>bash
 </span></code></pre></div>
 Or set the version
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>curl<span class="w"> </span>-fsSL<span class="w"> </span>https://pixi.sh/install.sh<span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="nv">PIXI_VERSION</span><span class="o">=</span>v0.18.0<span class="w"> </span>bash
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>curl<span class="w"> </span>-fsSL<span class="w"> </span>https://pixi.sh/install.sh<span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="nv">PIXI_VERSION</span><span class="o">=</span>v0.18.0<span class="w"> </span>bash
 </span></code></pre></div></p>
 </div>
 <div class="tabbed-block">
@@ -2872,7 +2893,7 @@ Or set the version
 </tbody>
 </table>
 <p>For example, set the version using:</p>
-<div class="language-powershell highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="nb">iwr </span><span class="n">-useb</span> <span class="n">https</span><span class="p">://</span><span class="n">pixi</span><span class="p">.</span><span class="n">sh</span><span class="p">/</span><span class="n">install</span><span class="p">.</span><span class="n">ps1</span> <span class="p">|</span> <span class="nb">iex </span><span class="n">-Args</span> <span class="s2">&quot;-PixiVersion v0.18.0&quot;</span>
+<div class="language-powershell highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nb">iwr </span><span class="n">-useb</span> <span class="n">https</span><span class="p">://</span><span class="n">pixi</span><span class="p">.</span><span class="n">sh</span><span class="p">/</span><span class="n">install</span><span class="p">.</span><span class="n">ps1</span> <span class="p">|</span> <span class="nb">iex </span><span class="n">-Args</span> <span class="s2">&quot;-PixiVersion v0.18.0&quot;</span>
 </span></code></pre></div>
 </div>
 </div>
@@ -2882,32 +2903,32 @@ Or set the version
 Afterwards, restart the shell or source the shell config file.</p>
 <h3 id="bash-default-on-most-linux-systems">Bash (default on most Linux systems)<a class="headerlink" href="#bash-default-on-most-linux-systems" title="Permanent link">#</a></h3>
 <p>Add the following to the end of <code>~/.bashrc</code>:</p>
-<div class="language-bash highlight"><span class="filename">~/.bashrc</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nb">eval</span><span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>pixi<span class="w"> </span>completion<span class="w"> </span>--shell<span class="w"> </span>bash<span class="k">)</span><span class="s2">&quot;</span>
+<div class="language-bash highlight"><span class="filename">~/.bashrc</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="nb">eval</span><span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>pixi<span class="w"> </span>completion<span class="w"> </span>--shell<span class="w"> </span>bash<span class="k">)</span><span class="s2">&quot;</span>
 </span></code></pre></div>
 <h3 id="zsh-default-on-macos">Zsh (default on macOS)<a class="headerlink" href="#zsh-default-on-macos" title="Permanent link">#</a></h3>
 <p>Add the following to the end of <code>~/.zshrc</code>:</p>
-<div class="language-zsh highlight"><span class="filename">~/.zshrc</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>autoload<span class="w"> </span>-Uz<span class="w"> </span>compinit<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>compinit<span class="w">  </span><span class="c1"># redundant with Oh My Zsh</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="nb">eval</span><span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>pixi<span class="w"> </span>completion<span class="w"> </span>--shell<span class="w"> </span>zsh<span class="k">)</span><span class="s2">&quot;</span>
+<div class="language-zsh highlight"><span class="filename">~/.zshrc</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>autoload<span class="w"> </span>-Uz<span class="w"> </span>compinit<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>compinit<span class="w">  </span><span class="c1"># redundant with Oh My Zsh</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="nb">eval</span><span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>pixi<span class="w"> </span>completion<span class="w"> </span>--shell<span class="w"> </span>zsh<span class="k">)</span><span class="s2">&quot;</span>
 </span></code></pre></div>
 <h3 id="powershell-pre-installed-on-all-windows-systems">PowerShell (pre-installed on all Windows systems)<a class="headerlink" href="#powershell-pre-installed-on-all-windows-systems" title="Permanent link">#</a></h3>
 <p>Add the following to the end of <code>Microsoft.PowerShell_profile.ps1</code>.
 You can check the location of this file by querying the <code>$PROFILE</code> variable in PowerShell.
 Typically the path is <code>~\Documents\PowerShell\Microsoft.PowerShell_profile.ps1</code> or
 <code>~/.config/powershell/Microsoft.PowerShell_profile.ps1</code> on -Nix.</p>
-<div class="language-pwsh highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="p">(&amp;</span> <span class="n">pixi</span> <span class="n">completion</span> <span class="p">-</span><span class="n">-shell</span> <span class="n">powershell</span><span class="p">)</span> <span class="p">|</span> <span class="nb">Out-String</span> <span class="p">|</span> <span class="nb">Invoke-Expression</span>
+<div class="language-pwsh highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="p">(&amp;</span> <span class="n">pixi</span> <span class="n">completion</span> <span class="p">-</span><span class="n">-shell</span> <span class="n">powershell</span><span class="p">)</span> <span class="p">|</span> <span class="nb">Out-String</span> <span class="p">|</span> <span class="nb">Invoke-Expression</span>
 </span></code></pre></div>
 <h3 id="fish">Fish<a class="headerlink" href="#fish" title="Permanent link">#</a></h3>
 <p>Add the following to the end of <code>~/.config/fish/config.fish</code>:</p>
-<div class="language-fish highlight"><span class="filename">~/.config/fish/config.fish</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>pixi completion --shell <span class="nb">fish</span> <span class="o">|</span> <span class="nb">source</span>
+<div class="language-fish highlight"><span class="filename">~/.config/fish/config.fish</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>pixi completion --shell <span class="nb">fish</span> <span class="o">|</span> <span class="nb">source</span>
 </span></code></pre></div>
 <h3 id="nushell">Nushell<a class="headerlink" href="#nushell" title="Permanent link">#</a></h3>
 <p>Add the following to your Nushell config file (find it by running <code>$nu.config-path</code> in Nushell):</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>mkdir $&quot;($nu.data-dir)/vendor/autoload&quot;
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>pixi completion --shell nushell | save --force $&quot;($nu.data-dir)/vendor/autoload/pixi-completions.nu&quot;
+<div class="language-text highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>mkdir $&quot;($nu.data-dir)/vendor/autoload&quot;
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>pixi completion --shell nushell | save --force $&quot;($nu.data-dir)/vendor/autoload/pixi-completions.nu&quot;
 </span></code></pre></div>
 <h3 id="elvish">Elvish<a class="headerlink" href="#elvish" title="Permanent link">#</a></h3>
 <p>Add the following to the end of <code>~/.elvish/rc.elv</code>:</p>
-<div class="language-text highlight"><span class="filename">~/.elvish/rc.elv</span><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>eval (pixi completion --shell elvish | slurp)
+<div class="language-text highlight"><span class="filename">~/.elvish/rc.elv</span><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>eval (pixi completion --shell elvish | slurp)
 </span></code></pre></div>
 
 
