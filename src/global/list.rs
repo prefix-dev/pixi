@@ -289,8 +289,6 @@ pub async fn list_all_global_environments(
         );
         if show_header {
             println!("{}", header);
-        } else {
-            tracing::info!("{}", header);
         }
         println!("{}", message);
     }
