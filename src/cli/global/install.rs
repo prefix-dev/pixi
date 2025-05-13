@@ -157,7 +157,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         Some(env_names),
         Some(&env_changes),
         None,
-        false,
     )
     .await?;
 
