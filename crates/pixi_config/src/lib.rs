@@ -1276,6 +1276,12 @@ impl Config {
     /// The given config will have higher priority
     #[must_use]
     pub fn merge_config(mut self, mut other: Config) -> Self {
+        tracing::trace!(
+            "merge self config {:#?}, with other config {:#?}",
+            self,
+            other
+        );
+
         self.mirrors.extend(other.mirrors);
         other.loaded_from.extend(self.loaded_from);
 
@@ -1816,7 +1822,14 @@ pub fn config_path_system() -> PathBuf {
 /// Returns the path(s) to the global pixi config file.
 pub fn config_path_global() -> Vec<PathBuf> {
     vec![
+        #[cfg(target_os = "macos")]
+        std::env::var("XDG_CONFIG_HOME").ok().map(|d| {
+            PathBuf::from(d)
+                .join(consts::CONFIG_DIR)
+                .join(consts::CONFIG_FILE)
+        }),
         dirs::config_dir().map(|d| d.join(consts::CONFIG_DIR).join(consts::CONFIG_FILE)),
+        // On macos, add the XDG_CONFIG_HOME directory as well, although it's not a standard.
         pixi_home().map(|d| d.join(consts::CONFIG_FILE)),
     ]
     .into_iter()
