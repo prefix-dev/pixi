@@ -69,18 +69,14 @@ impl UvReporter {
     /// This uses a set size and message
     pub(crate) fn new(options: UvReporterOptions) -> Self {
         // Use a new progress bar if none was provided.
-        // let pb = if let Some(pb) = options.progress_bar {
-        //     pixi_progress::global_multi_progress().add(pb)
-        // } else {
-        //     create_progress(
-        //         options.length.unwrap_or_default(),
-        //         options.top_level_message,
-        //     )
-        // };
-        let pb = create_progress(
-            options.length.unwrap_or_default(),
-            options.top_level_message,
-        );
+        let pb = if let Some(pb) = options.progress_bar {
+            pixi_progress::global_multi_progress().add(pb)
+        } else {
+            create_progress(
+                options.length.unwrap_or_default(),
+                options.top_level_message,
+            )
+        };
 
         // Create the formatter
         let fmt = ProgressBarMessageFormatter::new(pb.clone());
