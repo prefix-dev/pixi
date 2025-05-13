@@ -1823,13 +1823,13 @@ pub fn config_path_system() -> PathBuf {
 pub fn config_path_global() -> Vec<PathBuf> {
     vec![
         #[cfg(target_os = "macos")]
+        // On macos, add the XDG_CONFIG_HOME directory as well, although it's not a standard.
         std::env::var("XDG_CONFIG_HOME").ok().map(|d| {
             PathBuf::from(d)
                 .join(consts::CONFIG_DIR)
                 .join(consts::CONFIG_FILE)
         }),
         dirs::config_dir().map(|d| d.join(consts::CONFIG_DIR).join(consts::CONFIG_FILE)),
-        // On macos, add the XDG_CONFIG_HOME directory as well, although it's not a standard.
         pixi_home().map(|d| d.join(consts::CONFIG_FILE)),
     ]
     .into_iter()
