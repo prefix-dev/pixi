@@ -329,13 +329,24 @@ impl WorkspaceDiscoverer {
             // Read the contents of the manifest file.
             let contents = provenance.read()?.map(Arc::<str>::from);
 
-            // Cheap check to see if the manifest contains a pixi section.
+            // Cheap check to see if the manifest contains a pixi section and if so has the required sections.
             if let ManifestSource::PyProjectToml(source) = &contents {
-                if !source.contains("[tool.pixi")
-                    && matches!(search_path.clone(), SearchPath::Explicit(_))
+                if (source.contains("[tool.pixi")
+                    || matches!(search_path.clone(), SearchPath::Explicit(_)))
+                    && !Self::REQUIRED_SECTIONS
+                        .iter()
+                        .any(|section| source.contains(&format!("[tool.pixi.{}", section)))
                 {
                     return Err(WorkspaceDiscoveryError::Toml(Box::new(WithSourceCode {
-                        error: TomlError::NoPixiTable(ManifestKind::Pyproject, None),
+                        error: TomlError::NoPixiTable(
+                            ManifestKind::Pyproject,
+                            Some(format!(
+                                "Any of the following sections is required:\n{}",
+                                Self::REQUIRED_SECTIONS
+                                    .map(|s| format!("* tool.pixi.{}", s))
+                                    .join("\n")
+                            )),
+                        ),
                         source: contents.into_named(provenance.absolute_path().to_string_lossy()),
                     })));
                 }
@@ -416,15 +427,13 @@ impl WorkspaceDiscoverer {
                     }
                 }
                 ManifestKind::Pyproject => {
-                    if closest_package_manifest.is_some()
-                        && toml.pointer("/tool/pixi/workspace").is_none()
-                    {
-                        // The manifest does not contain a workspace section, and we don't care
+                    if closest_package_manifest.is_some() && toml.pointer("/tool/pixi").is_none() {
+                        // The manifest does not contain a pixi section, and we don't care
                         // about the package section.
                         continue;
                     }
 
-                    // Parse as a pixi.toml manifest
+                    // Parse as a pyproject.toml manifest
                     let manifest = match PyProjectManifest::deserialize(&mut toml) {
                         Ok(manifest) => manifest,
                         Err(err) => {
@@ -626,7 +635,7 @@ mod test {
     #[case::empty("empty")]
     #[case::package_specific("package_a/pixi.toml")]
     #[case::missing_table_pixi_manifest("missing-tables/pixi.toml")]
-    #[case::missing_table_pyproject_manifest("missing-tables/pyproject.toml")]
+    #[case::missing_table_pyproject_manifest("missing-tables-pyproject/pyproject.toml")]
     fn test_explicit_workspace_discoverer(#[case] subdir: &str) {
         let test_data_root = dunce::canonicalize(
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/workspace-discovery"),
@@ -699,5 +708,25 @@ mod test {
         .expect_err("Expected an error");
 
         assert!(matches!(err, WorkspaceDiscoveryError::Canonicalize(_, _)));
+    }
+
+    #[test]
+    fn test_missing_tables_pyproject_discovery() {
+        let test_data_root = dunce::canonicalize(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/workspace-discovery"),
+        )
+        .unwrap();
+
+        let err = WorkspaceDiscoverer::new(DiscoveryStart::SearchRoot(
+            test_data_root.join("missing-tables-pyproject"),
+        ))
+        .discover()
+        .expect_err("Expected an error");
+
+        assert!(matches!(err, WorkspaceDiscoveryError::Toml(_)));
+        assert!(
+            err.to_string()
+                .contains("Missing table in manifest pyproject.toml")
+        )
     }
 }

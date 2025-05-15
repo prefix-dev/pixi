@@ -1,6 +1,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     error::Error,
+    io::Write,
     path::PathBuf,
     str::FromStr,
 };
@@ -250,7 +251,12 @@ fn print_heading(value: &str) {
     eprintln!("{}\n{:-<2$}", bold.apply_to(value), "", value.len(),);
 }
 
-fn print_tasks(task_map: HashMap<Environment, HashMap<TaskName, &Task>>, summary: bool) {
+/// Create a human-readable representation of a list of tasks.
+/// Using a tabwriter for described tasks.
+fn print_tasks(
+    task_map: HashMap<Environment, HashMap<TaskName, &Task>>,
+    summary: bool,
+) -> Result<(), std::io::Error> {
     if summary {
         print_heading("Tasks per environment:");
         for (env, tasks) in task_map {
@@ -261,7 +267,7 @@ fn print_tasks(task_map: HashMap<Environment, HashMap<TaskName, &Task>>, summary
                 .join(", ");
             eprintln!("{}: {}", env.name().fancy_display().bold(), formatted);
         }
-        return;
+        return Ok(());
     }
 
     let mut all_tasks: BTreeSet<TaskName> = BTreeSet::new();
@@ -273,11 +279,7 @@ fn print_tasks(task_map: HashMap<Environment, HashMap<TaskName, &Task>>, summary
             if let Some(description) = task.description() {
                 formatted_descriptions.insert(
                     taskname.clone(),
-                    format!(
-                        " - {:<15} {}",
-                        taskname.fancy_display(),
-                        console::style(description).italic()
-                    ),
+                    format!("{}", console::style(description).italic()),
                 );
             }
         });
@@ -287,8 +289,19 @@ fn print_tasks(task_map: HashMap<Environment, HashMap<TaskName, &Task>>, summary
     let formatted_tasks: String = all_tasks.iter().map(|name| name.fancy_display()).join(", ");
     eprintln!("{}", formatted_tasks);
 
-    let formatted_descriptions: String = formatted_descriptions.values().join("\n");
-    eprintln!("\n{}", formatted_descriptions);
+    let mut writer = tabwriter::TabWriter::new(std::io::stdout());
+    let header_style = console::Style::new().bold().cyan();
+    let header = format!(
+        "{}\t{}",
+        header_style.apply_to("Task"),
+        header_style.apply_to("Description"),
+    );
+    writeln!(writer, "{}", &header)?;
+    for (taskname, row) in formatted_descriptions {
+        writeln!(writer, "{}\t{}", taskname.fancy_display(), row)?;
+    }
+
+    writer.flush()
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -374,7 +387,7 @@ async fn list_tasks(workspace: Workspace, args: ListArgs) -> miette::Result<()> 
         })
         .collect();
 
-    print_tasks(tasks_per_env, args.summary);
+    print_tasks(tasks_per_env, args.summary).into_diagnostic()?;
     Ok(())
 }
 

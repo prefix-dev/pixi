@@ -21,7 +21,7 @@ build-debug = "cargo build"
 build-release = "cargo build --release"
 bump = "tbump --only-patch $RELEASE_VERSION"
 generate-cli-docs = "cargo run --locked --manifest-path pixi_docs/Cargo.toml"
-install = "cargo install --path . --locked"
+install = { cmd = "cargo install --path . --locked", description = "Install pixi itself locally using cargo" }
 install-as = { cmd = "python scripts/install.py", depends-on = [
   "build-release",
 ] }
@@ -30,7 +30,7 @@ release = "python scripts/release.py"
 run-all-examples = { cmd = "python tests/scripts/run-all-examples.py --pixi-exec $CARGO_TARGET_DIR/release/pixi", depends-on = [
   "build-release",
 ] }
-test = { depends-on = ["test-all-fast"] }
+test = { depends-on = ["test-all-fast"], description = "Run all fast tests" }
 test-all-fast = { depends-on = ["test-fast", "test-integration-fast"] }
 test-all-slow = { depends-on = ["test-slow", "test-integration-slow"] }
 test-fast = "cargo nextest run --workspace --all-targets"
@@ -110,7 +110,7 @@ cargo-clippy-pixi_docs = "cargo clippy --all-targets --workspace --manifest-path
 cargo-fmt = "cargo fmt --all"
 cargo-fmt-pixi_docs = "cargo fmt --all --manifest-path pixi_docs/Cargo.toml"
 check-openssl = "python tests/scripts/check-openssl.py"
-lint = "pre-commit run --all-files --hook-stage=manual"
+lint = { cmd = "pre-commit run --all-files --hook-stage=manual", description = "Run all linters and formatters on all code" }
 lint-pixi_docs = { depends-on = [
   "cargo-fmt-pixi_docs",
   "cargo-clippy-pixi_docs",
@@ -165,12 +165,12 @@ build-docs = "mkdocs build --strict"
 bump-changelog = "git-cliff --unreleased --prepend CHANGELOG.md --tag $RELEASE_VERSION"
 deploy-dev = "mike deploy --push dev devel"
 deploy-latest = "mike deploy --push --update-aliases $RELEASE_VERSION latest"
-docs = "mkdocs serve"
+docs = { cmd = "mkdocs serve", description = "Serve the docs locally" }
 mike-serve = "mike serve"
 
 [feature.schema.tasks]
 generate-schema = { cmd = "python model.py > schema.json", cwd = "schema" }
-test-schema = { cmd = "pytest -s", depends-on = "generate-schema", cwd = "schema" }
+test-schema = { cmd = "pytest -s", depends-on = "generate-schema", cwd = "schema", description = "Test the manifest json schema" }
 
 [feature.schema.dependencies]
 jsonschema = "*"
@@ -192,14 +192,15 @@ tasks = { test-export = "bash tests/scripts/test-export.sh" }
 python = ">=3.13.1,<3.14"
 zstd = ">=1.5.6,<2"
 
-[feature.trampoline.tasks]
-build-trampoline = "python trampoline/build-trampoline.py"
+[feature.trampoline.tasks.build-trampoline]
+cmd = "python trampoline/build-trampoline.py"
+description = "Build the trampolines"
 
 #
 # Feature to build recipes
 #
 [feature.recipes.dependencies]
-rattler-build = ">=0.40,<0.41"
+rattler-build = ">=0.41,<0.42"
 
 [feature.recipes.tasks.build-backends]
 cmd = "rattler-build build --recipe-dir empty --output-dir ."

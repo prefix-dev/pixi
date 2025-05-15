@@ -143,6 +143,7 @@ nav:
           - Lockfile Updates: integration/ci/updates_github_actions.md
       - Third Party:
           - Pixi Diff: integration/third_party/pixi_diff.md
+          - Pixi Install-to-prefix: integration/third_party/pixi_install_to_prefix.md
           - Direnv: integration/third_party/direnv.md
           - Starship: integration/third_party/starship.md
   - Switching from:
