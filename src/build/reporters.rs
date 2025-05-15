@@ -3,6 +3,8 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use indicatif::{MultiProgress, ProgressBar};
 use parking_lot::Mutex;
 use pixi_build_frontend::{CondaBuildReporter, CondaMetadataReporter};
+use pixi_git::GIT_SSH_CLONING_WARNING_MSG;
+use pixi_progress::create_warning_pb;
 
 pub trait BuildMetadataReporter: CondaMetadataReporter {
     /// Reporters that the metadata has been cached.
@@ -114,12 +116,20 @@ impl pixi_git::Reporter for SourceCheckoutReporter {
             .multi_progress
             .insert_before(&self.original_progress, ProgressBar::hidden());
         pb.set_style(SourceCheckoutReporter::spinner_style());
-        // pb.set_style(pixi_progress::default_progress_style());
+
         pb.set_prefix("fetching git dependencies");
         pb.set_message(format!("checking out {}@{}", url, rev));
         pb.enable_steady_tick(Duration::from_millis(100));
 
-        state.bars.insert(id, pb);
+        let bar_pb = if url.scheme() == "ssh" {
+            let warning_pb = create_warning_pb(GIT_SSH_CLONING_WARNING_MSG.to_string());
+            let original_pb = pb.clone();
+            pixi_progress::global_multi_progress().insert_before(&original_pb, warning_pb.clone())
+        } else {
+            pb
+        };
+
+        state.bars.insert(id, bar_pb);
 
         id
     }

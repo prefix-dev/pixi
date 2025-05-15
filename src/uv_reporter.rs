@@ -1,6 +1,7 @@
 use indicatif::ProgressBar;
 use itertools::Itertools;
-use pixi_progress::{self, ProgressBarMessageFormatter, ScopedTask};
+use pixi_git::GIT_SSH_CLONING_WARNING_MSG;
+use pixi_progress::{self, ProgressBarMessageFormatter, ScopedTask, create_warning_pb};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use uv_distribution_types::{BuildableSource, CachedDist, Name, VersionOrUrlRef};
 use uv_normalize::PackageName;
@@ -135,17 +136,17 @@ impl UvReporter {
     }
 }
 
-fn create_ssh_warning_pb(current_pb: &ProgressBar) -> ProgressBar {
-    let pb = pixi_progress::global_multi_progress().insert_before(current_pb, ProgressBar::new(0));
-    pb.set_style(
-        indicatif::ProgressStyle::default_spinner() // Or default_bar() if you used ProgressBar::new(length)
-            .template("  {spinner:.yellow} {wide_msg:.yellow}") // Yellow spinner, clear message
-            .expect("failed to set a progress bar template"),
-    );
-    pb.set_message("Clonning with ssh. Please make sure that your passphrase is set beforehand with ssh-add, otherwise it will hang.");
-    pb.enable_steady_tick(Duration::from_millis(100));
-    pb
-}
+// fn create_ssh_warning_pb(current_pb: &ProgressBar) -> ProgressBar {
+//     let pb = pixi_progress::global_multi_progress().insert_before(current_pb, ProgressBar::new(0));
+//     pb.set_style(
+//         indicatif::ProgressStyle::default_spinner() // Or default_bar() if you used ProgressBar::new(length)
+//             .template("  {spinner:.yellow} {wide_msg:.yellow}") // Yellow spinner, clear message
+//             .expect("failed to set a progress bar template"),
+//     );
+//     pb.set_message("Clonning with ssh. Please make sure that your passphrase is set beforehand with ssh-add, otherwise it will hang.");
+//     pb.enable_steady_tick(Duration::from_millis(100));
+//     pb
+// }
 
 impl uv_installer::PrepareReporter for UvReporter {
     fn on_progress(&self, dist: &CachedDist) {
@@ -175,7 +176,12 @@ impl uv_installer::PrepareReporter for UvReporter {
     fn on_checkout_start(&self, url: &url::Url, _rev: &str) -> usize {
         if url.scheme().eq("ssh") {
             // create the warning progress bar for ssh URL
-            let pb = create_ssh_warning_pb(&self.pb);
+            // and insert it before the current progress bar
+            let warning_pb = create_warning_pb(GIT_SSH_CLONING_WARNING_MSG.to_string());
+            let original_pb = self.pb.clone();
+            let pb = pixi_progress::global_multi_progress()
+                .insert_before(&original_pb, warning_pb.clone());
+
             // we always want to have a fresh one for any SSH checkout that started
             self.checkout_helper_pb
                 .lock()
