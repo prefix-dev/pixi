@@ -61,7 +61,7 @@ pub struct UvReporter {
     fmt: ProgressBarMessageFormatter,
     scoped_tasks: Arc<std::sync::Mutex<Vec<Option<ScopedTask>>>>,
     name_to_id: HashMap<String, usize>,
-    // New field for the helper checkout progress bar
+    // helper checkout progress bar for git ssh operation
     checkout_helper_pb: Arc<std::sync::Mutex<Option<ProgressBar>>>,
 }
 
@@ -135,18 +135,6 @@ impl UvReporter {
         self.pb.inc(1);
     }
 }
-
-// fn create_ssh_warning_pb(current_pb: &ProgressBar) -> ProgressBar {
-//     let pb = pixi_progress::global_multi_progress().insert_before(current_pb, ProgressBar::new(0));
-//     pb.set_style(
-//         indicatif::ProgressStyle::default_spinner() // Or default_bar() if you used ProgressBar::new(length)
-//             .template("  {spinner:.yellow} {wide_msg:.yellow}") // Yellow spinner, clear message
-//             .expect("failed to set a progress bar template"),
-//     );
-//     pb.set_message("Clonning with ssh. Please make sure that your passphrase is set beforehand with ssh-add, otherwise it will hang.");
-//     pb.enable_steady_tick(Duration::from_millis(100));
-//     pb
-// }
 
 impl uv_installer::PrepareReporter for UvReporter {
     fn on_progress(&self, dist: &CachedDist) {

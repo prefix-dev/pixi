@@ -86,6 +86,8 @@ pub struct SourceCheckoutReporter {
     original_progress: ProgressBar,
     /// The multi-progress bar. Usually, this is the global multi-progress bar.
     multi_progress: MultiProgress,
+    // helper checkout progress bar for git ssh operation
+    checkout_helper_pb: Arc<std::sync::Mutex<Option<ProgressBar>>>,
     /// The state of the progress bars for each source checkout.
     progress_state: Arc<Mutex<ProgressState>>,
 }
@@ -97,6 +99,7 @@ impl SourceCheckoutReporter {
             original_progress,
             multi_progress,
             progress_state: Default::default(),
+            checkout_helper_pb: Default::default(),
         }
     }
 
@@ -121,10 +124,23 @@ impl pixi_git::Reporter for SourceCheckoutReporter {
         pb.set_message(format!("checking out {}@{}", url, rev));
         pb.enable_steady_tick(Duration::from_millis(100));
 
-        let bar_pb = if url.scheme() == "ssh" {
+        let bar_pb = if url.scheme().eq("ssh") {
             let warning_pb = create_warning_pb(GIT_SSH_CLONING_WARNING_MSG.to_string());
             let original_pb = pb.clone();
-            pixi_progress::global_multi_progress().insert_before(&original_pb, warning_pb.clone())
+
+            let pb = pixi_progress::global_multi_progress()
+                .insert_before(&original_pb, warning_pb.clone());
+
+            // we always want to have a fresh one for any SSH checkout that started
+            self.checkout_helper_pb
+                .lock()
+                .expect("checkout_helper_pb lock poison")
+                .replace(pb.clone())
+                .inspect(|pb| {
+                    // if we have a previous one, we need to finish it
+                    pb.finish_and_clear();
+                });
+            pb
         } else {
             pb
         };
@@ -136,6 +152,15 @@ impl pixi_git::Reporter for SourceCheckoutReporter {
 
     fn on_checkout_complete(&self, url: &url::Url, rev: &str, index: usize) {
         let mut state = self.progress_state.lock();
+        // if we have a helper progress bar, we need to finish it
+        if let Some(pb) = self
+            .checkout_helper_pb
+            .lock()
+            .expect("on_checkout_complete poison")
+            .take()
+        {
+            pb.finish_and_clear();
+        }
         let removed_pb = state
             .bars
             .remove(&index)
