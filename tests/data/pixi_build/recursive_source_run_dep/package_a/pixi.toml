@@ -1,0 +1,16 @@
+[package]
+name = "package_a"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "pixi-build-python", version = "0.1.*" }
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+
+[package.host-dependencies]
+hatchling = "*"
+
+[package.run-dependencies]
+package_b = { path = "../package_b" }
