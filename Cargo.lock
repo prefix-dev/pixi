@@ -1964,19 +1964,6 @@ dependencies = [
 [[package]]
 name = "file_url"
 version = "0.2.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46ca1565923e8d9bcf962889abeeb2f15d4b73356689ce26ae7dd1f54b928498"
-dependencies = [
- "itertools 0.14.0",
- "percent-encoding",
- "thiserror 2.0.12",
- "typed-path",
- "url",
-]
-
-[[package]]
-name = "file_url"
-version = "0.2.4"
 source = "git+https://github.com/conda/rattler?branch=main#0160a2f88129935ced52596ab795389f70164557"
 dependencies = [
  "itertools 0.14.0",
@@ -4688,7 +4675,7 @@ dependencies = [
 name = "pixi_record"
 version = "0.1.0"
 dependencies = [
- "file_url 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "file_url",
  "miette 7.6.0",
  "pixi_git",
  "pixi_spec",
@@ -4706,7 +4693,7 @@ name = "pixi_spec"
 version = "0.1.0"
 dependencies = [
  "dirs",
- "file_url 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "file_url",
  "insta",
  "itertools 0.14.0",
  "pixi_git",
@@ -5326,7 +5313,7 @@ dependencies = [
  "chrono",
  "core-foundation 0.10.0",
  "dirs",
- "file_url 0.2.4 (git+https://github.com/conda/rattler?branch=main)",
+ "file_url",
  "fs-err",
  "fxhash",
  "glob",
@@ -5380,7 +5367,7 @@ version = "0.23.3"
 source = "git+https://github.com/conda/rattler?branch=main#0160a2f88129935ced52596ab795389f70164557"
 dependencies = [
  "chrono",
- "file_url 0.2.4 (git+https://github.com/conda/rattler?branch=main)",
+ "file_url",
  "fxhash",
  "indexmap 2.9.0",
  "itertools 0.14.0",
@@ -5532,7 +5519,7 @@ dependencies = [
  "chrono",
  "dashmap",
  "dirs",
- "file_url 0.2.4 (git+https://github.com/conda/rattler?branch=main)",
+ "file_url",
  "fs-err",
  "futures",
  "hex",

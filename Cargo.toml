@@ -384,6 +384,7 @@ tokio = { workspace = true, features = ["rt"] }
 
 [patch.crates-io]
 # This is a temporary patch to get `cargo vendor` to work with the `uv` and pep508_rs` crates.
+file_url = { git = "https://github.com/conda/rattler", branch = "main" }
 rattler = { git = "https://github.com/conda/rattler", branch = "main" }
 rattler_cache = { git = "https://github.com/conda/rattler", branch = "main" }
 rattler_conda_types = { git = "https://github.com/conda/rattler", branch = "main" }
