@@ -1,7 +1,12 @@
+!!!tip "Native Pixi support on YouTrack"
+    There is a tracking issue for native Pixi support in PyCharm, [PY-79041](https://youtrack.jetbrains.com/issue/PY-79041).
+    Feel free to upvote it if it is relevant to you.
+    For CLion, you can track [CPP-42761](https://youtrack.jetbrains.com/issue/CPP-42761).
 
 ## Pycharm
 
 <!-- Keep in sync with https://github.com/pavelzw/pixi-pycharm/blob/main/README.md -->
+
 
 You can use PyCharm with Pixi environments by using the `conda` shim provided by the [pixi-pycharm](https://github.com/pavelzw/pixi-pycharm) package.
 

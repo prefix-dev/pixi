@@ -167,6 +167,7 @@ pub async fn list_all_global_environments(
     envs: Option<Vec<EnvironmentName>>,
     envs_changes: Option<&EnvChanges>,
     regex: Option<String>,
+    show_header: bool,
 ) -> miette::Result<()> {
     let mut project_envs = project.environments().clone();
     project_envs.sort_by(|a, _, b, _| a.to_string().cmp(&b.to_string()));
@@ -282,11 +283,14 @@ pub async fn list_all_global_environments(
     if message.is_empty() {
         println!("No global environments found.");
     } else {
-        println!(
-            "Global environments as specified in '{}'\n{}",
-            console::style(project.manifest.path.display()).bold(),
-            message
+        let header = format!(
+            "Global environments as specified in '{}'",
+            project.manifest.path.display()
         );
+        if show_header {
+            println!("{}", header);
+        }
+        println!("{}", message);
     }
 
     Ok(())
