@@ -384,22 +384,18 @@ tokio = { workspace = true, features = ["rt"] }
 
 [patch.crates-io]
 # This is a temporary patch to get `cargo vendor` to work with the `uv` and pep508_rs` crates.
-rattler = { git = "https://github.com/conda/rattler", branch = "main", default-features = false }
-rattler_cache = { git = "https://github.com/conda/rattler", branch = "main", default-features = false }
-rattler_conda_types = { git = "https://github.com/conda/rattler", branch = "main", default-features = false, features = [
-  "rayon",
-] }
-rattler_digest = { git = "https://github.com/conda/rattler", branch = "main", default-features = false }
-rattler_lock = { git = "https://github.com/conda/rattler", branch = "main", default-features = false }
-rattler_menuinst = { git = "https://github.com/conda/rattler", branch = "main", default-features = false }
-rattler_networking = { git = "https://github.com/conda/rattler", branch = "main", default-features = false, features = [
-  "google-cloud-auth",
-] }
-rattler_package_streaming = { git = "https://github.com/conda/rattler", branch = "main", default-features = false }
-rattler_repodata_gateway = { git = "https://github.com/conda/rattler", branch = "main", default-features = false }
-rattler_shell = { git = "https://github.com/conda/rattler", branch = "main", default-features = false }
-rattler_solve = { git = "https://github.com/conda/rattler", branch = "main", default-features = false }
-rattler_virtual_packages = { git = "https://github.com/conda/rattler", branch = "main", default-features = false }
+rattler = { git = "https://github.com/conda/rattler", branch = "main" }
+rattler_cache = { git = "https://github.com/conda/rattler", branch = "main" }
+rattler_conda_types = { git = "https://github.com/conda/rattler", branch = "main" }
+rattler_digest = { git = "https://github.com/conda/rattler", branch = "main" }
+rattler_lock = { git = "https://github.com/conda/rattler", branch = "main" }
+rattler_menuinst = { git = "https://github.com/conda/rattler", branch = "main" }
+rattler_networking = { git = "https://github.com/conda/rattler", branch = "main" }
+rattler_package_streaming = { git = "https://github.com/conda/rattler", branch = "main" }
+rattler_repodata_gateway = { git = "https://github.com/conda/rattler", branch = "main" }
+rattler_shell = { git = "https://github.com/conda/rattler", branch = "main" }
+rattler_solve = { git = "https://github.com/conda/rattler", branch = "main" }
+rattler_virtual_packages = { git = "https://github.com/conda/rattler", branch = "main" }
 version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "b70cf707aa43f21b32f3a61b8a0889b15032d5c4" }
 
 
