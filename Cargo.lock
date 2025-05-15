@@ -5277,9 +5277,9 @@ dependencies = [
 
 [[package]]
 name = "rattler"
-version = "0.33.5"
+version = "0.33.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2e7bfacc5f5ff3517d984b5e2f2df3eea46e8309685cb7cdff39d62f7b2bee2"
+checksum = "34de4f8098d3a0eba431eb4501baeb3d7d18a3e61e4d09b988eda1da24b98c5d"
 dependencies = [
  "anyhow",
  "clap",
@@ -5321,9 +5321,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_cache"
-version = "0.3.17"
+version = "0.3.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd2ad44802bc15f7196f0898ff52729aab52338203ddbdff5212146f45aa2a67"
+checksum = "b38e4b51282a51819f2b8c0ba8223c8a02f5546a0e4d43c012126dc9932d357d"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -5353,9 +5353,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_conda_types"
-version = "0.32.0"
+version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "21c2ed99f2fc8044499c63c65db265f6ec3e0333cdf15bb442d5063187449d51"
+checksum = "dc8dfc4019dba3522879f8c09dcb0e27c3cffe9697f441bb2ffccc061be612d2"
 dependencies = [
  "chrono",
  "core-foundation 0.10.0",
@@ -5411,9 +5411,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_lock"
-version = "0.23.2"
+version = "0.23.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c847b4006d0f46a711e203e21a2f58af0b6d38e20f9756b01184081e1e10e4de"
+checksum = "66997b1ff7707c8be52364457a0a303781c15fc94bc8cd9e40de5cb9c72e64d4"
 dependencies = [
  "chrono",
  "file_url",
@@ -5447,9 +5447,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_menuinst"
-version = "0.2.7"
+version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb3eedb82b5366136093acb1bafc4839f3f122c64889a358cbe6e50fc8c573b0"
+checksum = "75ec854628aaaed95480771e6270d68f57dcb34c38f6b2d23a147ddd191dcc98"
 dependencies = [
  "chrono",
  "configparser",
@@ -5477,9 +5477,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_networking"
-version = "0.22.12"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfe0171ee4c22e335ade0cb926e83cdf08a5dda5eaf26fc21fa9948beb65c764"
+checksum = "a2d077d88bf9765c5c93c556b9a2c85c53e843816ad40e2501690af59e7af11d"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5508,9 +5508,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_package_streaming"
-version = "0.22.36"
+version = "0.22.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11879ff84195638459a15f0bb4c0d167f58ecd497d2df00df46c6cf81c0f2bb7"
+checksum = "34c38c6290bfddb95682e6230091888fbbd0007cd67e5f78fb1d6e7d8aeb0be7"
 dependencies = [
  "bzip2",
  "chrono",
@@ -5560,9 +5560,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_repodata_gateway"
-version = "0.22.5"
+version = "0.22.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e25d367f6ff1d83cf925ccacfcf7805f94030f96de6858992db37edb3c5a638"
+checksum = "ceb99427deb57ad4542d72a79f69238359a8802497d8a5fa781848206a70fd96"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -5617,9 +5617,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_shell"
-version = "0.22.26"
+version = "0.23.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bdf546ea648c95cfeb27d8eedb6d592c8dec050d2dc9fb9af5be4ffe13759d7f"
+checksum = "3049badb6083af663f14a361dbb0b7491c6189bae4caaebf9cc67b87e30391e9"
 dependencies = [
  "anyhow",
  "enum_dispatch",
@@ -5638,9 +5638,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_solve"
-version = "1.4.5"
+version = "1.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b632fe7366b6b17e5ba96b14af992258aca04e2d36cf467a19f7980fa2298d7"
+checksum = "a33a42efed1006faa7dd3c681124f316b99485cad4069ff3fdf1422426bb969d"
 dependencies = [
  "chrono",
  "futures",
@@ -5656,9 +5656,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_virtual_packages"
-version = "2.0.10"
+version = "2.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6f8be154a9e0be3bfab3a68263ac568207eab9fb0e0820316374e805b340033"
+checksum = "5d80eda8159d2d43b595b776ee2094a225a3fad2033b3721d5e0b974e7cc79ef"
 dependencies = [
  "archspec",
  "libloading",
