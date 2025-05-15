@@ -620,16 +620,14 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-checksums"
-version = "0.63.1"
+version = "0.63.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b65d21e1ba6f2cdec92044f904356a19f5ad86961acf015741106cdfafd747c0"
+checksum = "0c4e5a89d8103b8090a3f04259fb851ebd3f33abf4fb3ac13326fefaa827618b"
 dependencies = [
  "aws-smithy-http 0.62.1",
  "aws-smithy-types",
  "bytes",
- "crc32c",
- "crc32fast",
- "crc64fast-nvme",
+ "crc-fast",
  "hex",
  "http 0.2.12",
  "http-body 0.4.6",
@@ -1100,9 +1098,9 @@ checksum = "1bf2a5fb3207c12b5d208ebc145f967fea5cac41a021c37417ccc31ba40f39ee"
 
 [[package]]
 name = "cargo-util"
-version = "0.2.19"
+version = "0.2.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "527f6e2a4e80492e90628052be879a5996c2453ad5ec745bfa310a80b7eca20a"
+checksum = "d767bc85f367f6483a6072430b56f5c0d6ee7636751a21a800526d0711753d76"
 dependencies = [
  "anyhow",
  "core-foundation 0.10.0",
@@ -1375,12 +1373,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19d374276b40fb8bbdee95aef7c7fa6b5316ec764510eb64b8dd0e2ed0d7e7f5"
 
 [[package]]
-name = "crc32c"
-version = "0.6.8"
+name = "crc-fast"
+version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a47af21622d091a8f0fb295b88bc886ac74efcc613efc19f5d0b21de5c89e47"
+checksum = "add8d3a4c789d77eeb0f0e3c1035f73610d017f9047e87db94f89c02a56d8fef"
 dependencies = [
- "rustc_version",
+ "cc",
+ "crc",
+ "digest",
+ "libc",
+ "rand 0.9.1",
+ "regex",
 ]
 
 [[package]]
@@ -1390,15 +1393,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a97769d94ddab943e4510d138150169a2758b5ef3eb191a9ee688de3e23ef7b3"
 dependencies = [
  "cfg-if",
-]
-
-[[package]]
-name = "crc64fast-nvme"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4955638f00a809894c947f85a024020a20815b65a5eea633798ea7924edab2b3"
-dependencies = [
- "crc",
 ]
 
 [[package]]
@@ -1606,9 +1600,9 @@ dependencies = [
 
 [[package]]
 name = "deno_path_util"
-version = "0.3.2"
+version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c238a664a0a6f1ce0ff2b73c6854811526d00f442a12f878cb8555b23fe13aa3"
+checksum = "b8850326ea9cb786aafd938f3de9866432904c0bae3aa0139a7a4e570b0174f6"
 dependencies = [
  "deno_error",
  "percent-encoding",
@@ -1888,9 +1882,9 @@ dependencies = [
 
 [[package]]
 name = "errno"
-version = "0.3.11"
+version = "0.3.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "976dd42dc7e85965fe702eb8164f21f450704bdde31faefd6471dba214cb594e"
+checksum = "cea14ef9355e3beab063703aa9dab15afd25f0667c341310c1e5274bb1d0da18"
 dependencies = [
  "libc",
  "windows-sys 0.59.0",
@@ -1964,7 +1958,7 @@ dependencies = [
 [[package]]
 name = "file_url"
 version = "0.2.4"
-source = "git+https://github.com/conda/rattler?branch=main#0160a2f88129935ced52596ab795389f70164557"
+source = "git+https://github.com/conda/rattler?branch=main#34d2d997babfd980af5408a66d07ce567d5984dc"
 dependencies = [
  "itertools 0.14.0",
  "percent-encoding",
@@ -2825,7 +2819,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.61.0",
+ "windows-core 0.61.1",
 ]
 
 [[package]]
@@ -4051,9 +4045,9 @@ checksum = "b15813163c1d831bf4a13c3610c05c0d03b39feb07f7e09fa234dac9b15aaf39"
 
 [[package]]
 name = "owo-colors"
-version = "4.2.0"
+version = "4.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1036865bb9422d3300cf723f657c2851d0e9ab12567854b1f4eba3d77decf564"
+checksum = "26995317201fa17f3656c36716aed4a7c81743a9634ac4c99c0eeda495db0cec"
 
 [[package]]
 name = "p256"
@@ -5234,7 +5228,7 @@ dependencies = [
 [[package]]
 name = "rattler"
 version = "0.33.6"
-source = "git+https://github.com/conda/rattler?branch=main#0160a2f88129935ced52596ab795389f70164557"
+source = "git+https://github.com/conda/rattler?branch=main#34d2d997babfd980af5408a66d07ce567d5984dc"
 dependencies = [
  "anyhow",
  "clap",
@@ -5277,7 +5271,7 @@ dependencies = [
 [[package]]
 name = "rattler_cache"
 version = "0.3.18"
-source = "git+https://github.com/conda/rattler?branch=main#0160a2f88129935ced52596ab795389f70164557"
+source = "git+https://github.com/conda/rattler?branch=main#34d2d997babfd980af5408a66d07ce567d5984dc"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -5308,7 +5302,7 @@ dependencies = [
 [[package]]
 name = "rattler_conda_types"
 version = "0.33.0"
-source = "git+https://github.com/conda/rattler?branch=main#0160a2f88129935ced52596ab795389f70164557"
+source = "git+https://github.com/conda/rattler?branch=main#34d2d997babfd980af5408a66d07ce567d5984dc"
 dependencies = [
  "chrono",
  "core-foundation 0.10.0",
@@ -5347,7 +5341,7 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "1.1.1"
-source = "git+https://github.com/conda/rattler?branch=main#0160a2f88129935ced52596ab795389f70164557"
+source = "git+https://github.com/conda/rattler?branch=main#34d2d997babfd980af5408a66d07ce567d5984dc"
 dependencies = [
  "blake2",
  "digest",
@@ -5364,7 +5358,7 @@ dependencies = [
 [[package]]
 name = "rattler_lock"
 version = "0.23.3"
-source = "git+https://github.com/conda/rattler?branch=main#0160a2f88129935ced52596ab795389f70164557"
+source = "git+https://github.com/conda/rattler?branch=main#34d2d997babfd980af5408a66d07ce567d5984dc"
 dependencies = [
  "chrono",
  "file_url",
@@ -5389,7 +5383,7 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "1.0.8"
-source = "git+https://github.com/conda/rattler?branch=main#0160a2f88129935ced52596ab795389f70164557"
+source = "git+https://github.com/conda/rattler?branch=main#34d2d997babfd980af5408a66d07ce567d5984dc"
 dependencies = [
  "quote",
  "syn",
@@ -5398,7 +5392,7 @@ dependencies = [
 [[package]]
 name = "rattler_menuinst"
 version = "0.2.8"
-source = "git+https://github.com/conda/rattler?branch=main#0160a2f88129935ced52596ab795389f70164557"
+source = "git+https://github.com/conda/rattler?branch=main#34d2d997babfd980af5408a66d07ce567d5984dc"
 dependencies = [
  "chrono",
  "configparser",
@@ -5421,13 +5415,13 @@ dependencies = [
  "unicode-normalization",
  "which",
  "windows 0.60.0",
- "windows-registry 0.5.1",
+ "windows-registry 0.5.2",
 ]
 
 [[package]]
 name = "rattler_networking"
 version = "0.23.0"
-source = "git+https://github.com/conda/rattler?branch=main#0160a2f88129935ced52596ab795389f70164557"
+source = "git+https://github.com/conda/rattler?branch=main#34d2d997babfd980af5408a66d07ce567d5984dc"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -5457,7 +5451,7 @@ dependencies = [
 [[package]]
 name = "rattler_package_streaming"
 version = "0.22.37"
-source = "git+https://github.com/conda/rattler?branch=main#0160a2f88129935ced52596ab795389f70164557"
+source = "git+https://github.com/conda/rattler?branch=main#34d2d997babfd980af5408a66d07ce567d5984dc"
 dependencies = [
  "bzip2",
  "chrono",
@@ -5486,7 +5480,7 @@ dependencies = [
 [[package]]
 name = "rattler_pty"
 version = "0.2.0"
-source = "git+https://github.com/conda/rattler?branch=main#0160a2f88129935ced52596ab795389f70164557"
+source = "git+https://github.com/conda/rattler?branch=main#34d2d997babfd980af5408a66d07ce567d5984dc"
 dependencies = [
  "libc",
  "nix 0.29.0",
@@ -5496,7 +5490,7 @@ dependencies = [
 [[package]]
 name = "rattler_redaction"
 version = "0.1.10"
-source = "git+https://github.com/conda/rattler?branch=main#0160a2f88129935ced52596ab795389f70164557"
+source = "git+https://github.com/conda/rattler?branch=main#34d2d997babfd980af5408a66d07ce567d5984dc"
 dependencies = [
  "reqwest",
  "reqwest-middleware",
@@ -5506,7 +5500,7 @@ dependencies = [
 [[package]]
 name = "rattler_repodata_gateway"
 version = "0.22.6"
-source = "git+https://github.com/conda/rattler?branch=main#0160a2f88129935ced52596ab795389f70164557"
+source = "git+https://github.com/conda/rattler?branch=main#34d2d997babfd980af5408a66d07ce567d5984dc"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -5562,7 +5556,7 @@ dependencies = [
 [[package]]
 name = "rattler_shell"
 version = "0.23.0"
-source = "git+https://github.com/conda/rattler?branch=main#0160a2f88129935ced52596ab795389f70164557"
+source = "git+https://github.com/conda/rattler?branch=main#34d2d997babfd980af5408a66d07ce567d5984dc"
 dependencies = [
  "anyhow",
  "enum_dispatch",
@@ -5582,7 +5576,7 @@ dependencies = [
 [[package]]
 name = "rattler_solve"
 version = "1.4.6"
-source = "git+https://github.com/conda/rattler?branch=main#0160a2f88129935ced52596ab795389f70164557"
+source = "git+https://github.com/conda/rattler?branch=main#34d2d997babfd980af5408a66d07ce567d5984dc"
 dependencies = [
  "chrono",
  "futures",
@@ -5599,7 +5593,7 @@ dependencies = [
 [[package]]
 name = "rattler_virtual_packages"
 version = "2.0.11"
-source = "git+https://github.com/conda/rattler?branch=main#0160a2f88129935ced52596ab795389f70164557"
+source = "git+https://github.com/conda/rattler?branch=main#34d2d997babfd980af5408a66d07ce567d5984dc"
 dependencies = [
  "archspec",
  "libloading",
@@ -6682,7 +6676,7 @@ dependencies = [
 [[package]]
 name = "simple_spawn_blocking"
 version = "1.1.0"
-source = "git+https://github.com/conda/rattler?branch=main#0160a2f88129935ced52596ab795389f70164557"
+source = "git+https://github.com/conda/rattler?branch=main#34d2d997babfd980af5408a66d07ce567d5984dc"
 dependencies = [
  "tokio",
 ]
@@ -6905,9 +6899,23 @@ dependencies = [
 
 [[package]]
 name = "sys_traits"
-version = "0.1.9"
+version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3374191d43a934854e99a46cd47f8124369e690353e0f8db42769218d083690"
+checksum = "ce4475783d109dc026244ec6fda72b81868f502db08d27ae1b39419f67f40d71"
+dependencies = [
+ "sys_traits_macros",
+]
+
+[[package]]
+name = "sys_traits_macros"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "181f22127402abcf8ee5c83ccd5b408933fec36a6095cf82cda545634692657e"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "sysctl"
@@ -8287,8 +8295,8 @@ dependencies = [
  "uv-trampoline-builder",
  "uv-warnings",
  "which",
- "windows-registry 0.5.1",
- "windows-result 0.3.2",
+ "windows-registry 0.5.2",
+ "windows-result 0.3.3",
  "windows-sys 0.59.0",
 ]
 
@@ -8416,8 +8424,8 @@ dependencies = [
  "tracing",
  "uv-fs",
  "uv-static",
- "windows-registry 0.5.1",
- "windows-result 0.3.2",
+ "windows-registry 0.5.2",
+ "windows-result 0.3.3",
  "windows-sys 0.59.0",
 ]
 
@@ -8909,8 +8917,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c5ee8f3d025738cb02bad7868bbb5f8a6327501e870bf51f1b455b0a2454a419"
 dependencies = [
  "windows-collections 0.2.0",
- "windows-core 0.61.0",
- "windows-future 0.2.0",
+ "windows-core 0.61.1",
+ "windows-future 0.2.1",
  "windows-link",
  "windows-numerics 0.2.0",
 ]
@@ -8930,7 +8938,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3beeceb5e5cfd9eb1d76b381630e82c4241ccd0d27f1a39ed41b2760b255c5e8"
 dependencies = [
- "windows-core 0.61.0",
+ "windows-core 0.61.1",
 ]
 
 [[package]]
@@ -8954,21 +8962,21 @@ dependencies = [
  "windows-implement 0.59.0",
  "windows-interface 0.59.1",
  "windows-link",
- "windows-result 0.3.2",
+ "windows-result 0.3.3",
  "windows-strings 0.3.1",
 ]
 
 [[package]]
 name = "windows-core"
-version = "0.61.0"
+version = "0.61.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4763c1de310c86d75a878046489e2e5ba02c649d185f21c67d4cf8a56d098980"
+checksum = "46ec44dc15085cea82cf9c78f85a9114c463a369786585ad2882d1ff0b0acf40"
 dependencies = [
  "windows-implement 0.60.0",
  "windows-interface 0.59.1",
  "windows-link",
- "windows-result 0.3.2",
- "windows-strings 0.4.0",
+ "windows-result 0.3.3",
+ "windows-strings 0.4.1",
 ]
 
 [[package]]
@@ -8983,12 +8991,13 @@ dependencies = [
 
 [[package]]
 name = "windows-future"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a1d6bbefcb7b60acd19828e1bc965da6fcf18a7e39490c5f8be71e54a19ba32"
+checksum = "fc6a41e98427b19fe4b73c550f060b59fa592d7d686537eebf9385621bfbad8e"
 dependencies = [
- "windows-core 0.61.0",
+ "windows-core 0.61.1",
  "windows-link",
+ "windows-threading",
 ]
 
 [[package]]
@@ -9068,7 +9077,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9150af68066c4c5c07ddc0ce30421554771e528bde427614c61038bc2c92c2b1"
 dependencies = [
- "windows-core 0.61.0",
+ "windows-core 0.61.1",
  "windows-link",
 ]
 
@@ -9078,20 +9087,20 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4286ad90ddb45071efd1a66dfa43eb02dd0dfbae1545ad6cc3c51cf34d7e8ba3"
 dependencies = [
- "windows-result 0.3.2",
+ "windows-result 0.3.3",
  "windows-strings 0.3.1",
  "windows-targets 0.53.0",
 ]
 
 [[package]]
 name = "windows-registry"
-version = "0.5.1"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad1da3e436dc7653dfdf3da67332e22bff09bb0e28b0239e1624499c7830842e"
+checksum = "b3bab093bdd303a1240bb99b8aba8ea8a69ee19d34c9e2ef9594e708a4878820"
 dependencies = [
  "windows-link",
- "windows-result 0.3.2",
- "windows-strings 0.4.0",
+ "windows-result 0.3.3",
+ "windows-strings 0.4.1",
 ]
 
 [[package]]
@@ -9105,9 +9114,9 @@ dependencies = [
 
 [[package]]
 name = "windows-result"
-version = "0.3.2"
+version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c64fd11a4fd95df68efcfee5f44a294fe71b8bc6a91993e2791938abcc712252"
+checksum = "4b895b5356fc36103d0f64dd1e94dfa7ac5633f1c9dd6e80fe9ec4adef69e09d"
 dependencies = [
  "windows-link",
 ]
@@ -9123,9 +9132,9 @@ dependencies = [
 
 [[package]]
 name = "windows-strings"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7a2ba9642430ee452d5a7aa78d72907ebe8cfda358e8cb7918a2050581322f97"
+checksum = "2a7ab927b2637c19b3dbe0965e75d8f2d30bdd697a1516191cad2ec4df8fb28a"
 dependencies = [
  "windows-link",
 ]
@@ -9226,6 +9235,15 @@ dependencies = [
  "windows_x86_64_gnu 0.53.0",
  "windows_x86_64_gnullvm 0.53.0",
  "windows_x86_64_msvc 0.53.0",
+]
+
+[[package]]
+name = "windows-threading"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b66463ad2e0ea3bbf808b7f1d371311c80e115c0b71d60efc142cafbcfb057a6"
+dependencies = [
+ "windows-link",
 ]
 
 [[package]]

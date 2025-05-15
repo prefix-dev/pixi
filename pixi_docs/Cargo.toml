@@ -19,4 +19,5 @@ clap = "4.5.31"
 fs-err = "3.1.0"
 itertools = "0.14.0"
 pixi = { path = "../.", features = ["self_update"] }
-rattler_conda_types = "0.32.0"
+rattler_conda_types = { git = "https://github.com/conda/rattler", branch = "main" }
+# rattler_conda_types = "0.32.0"
