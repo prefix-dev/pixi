@@ -1,4 +1,10 @@
-//! Defines the [`CommandQueue`] and a builder to construct it.
+//! Defines the [`CommandQueue`] and its associated components for managing
+//! and synchronizing tasks across different environments.
+//!
+//! The [`CommandQueue`] is a central component for orchestrating tasks such as
+//! solving environments, fetching metadata, and managing source checkouts. It
+//! ensures efficient execution by avoiding redundant computations and
+//! supporting concurrent operations.
 
 pub use error::{CommandQueueError, CommandQueueErrorResultExt};
 pub(crate) use git::GitCheckoutTask;
@@ -37,7 +43,7 @@ mod error;
 mod git;
 mod instantiate_backend;
 
-/// The command_queue is responsible for synchronizing requests between
+/// The command queue is responsible for synchronizing requests between
 /// different conda environments.
 #[derive(Clone)]
 pub struct CommandQueue {
@@ -46,29 +52,33 @@ pub struct CommandQueue {
     pub(crate) data: Arc<CommandQueueData>,
 }
 
+/// Contains shared data required by the [`CommandQueue`].
+///
+/// This struct holds various components such as the gateway for querying
+/// repodata, cache directories, and network clients.
 pub(crate) struct CommandQueueData {
     /// The gateway to use to query conda repodata.
     pub gateway: Gateway,
 
-    /// The resolver of git repositories
+    /// The resolver of git repositories.
     pub git_resolver: GitResolver,
 
     /// The base directory to use if relative paths are discovered.
     pub root_dir: PathBuf,
 
-    /// The location to store caches
+    /// The location to store caches.
     pub cache_dirs: CacheDirs,
 
-    /// The reqwest client to use for network requests
+    /// The reqwest client to use for network requests.
     pub download_client: ClientWithMiddleware,
 
-    /// Backend overrides
+    /// Backend overrides for build environments.
     pub build_backend_overrides: BackendOverride,
 
-    /// A cache for hashes
+    /// A cache for glob hashes.
     pub glob_hash_cache: GlobHashCache,
 
-    /// Returns the limits to which the command queue should adhere.
+    /// The resolved limits for the command queue.
     pub limits: ResolvedLimits,
 
     /// The package cache used to store packages.
@@ -96,8 +106,10 @@ impl CommandQueueChannel {
     }
 }
 
-/// The context in which this particular command_queue is running. This is used
-/// to track dependencies.
+/// Context in which the [`CommandQueue`] is operating.
+///
+/// This enum is used to track dependencies and associate tasks with specific
+/// contexts.
 #[derive(Debug, Copy, Clone, derive_more::From)]
 pub(crate) enum CommandQueueContext {
     SolveCondaEnvironment(SolveCondaEnvironmentId),
@@ -188,7 +200,7 @@ impl CommandQueue {
         Self::builder().finish()
     }
 
-    /// Constructs a new builder for the command_queue.
+    /// Constructs a new builder for the command queue.
     pub fn builder() -> CommandQueueBuilder {
         CommandQueueBuilder::default()
     }
@@ -198,7 +210,7 @@ impl CommandQueue {
         &self.data.gateway
     }
 
-    /// Returns any build backend overrides
+    /// Returns any build backend overrides.
     pub fn build_backend_overrides(&self) -> &BackendOverride {
         &self.data.build_backend_overrides
     }
@@ -213,7 +225,7 @@ impl CommandQueue {
         &self.data.glob_hash_cache
     }
 
-    /// Returns the download client used by the command queue
+    /// Returns the download client used by the command queue.
     pub fn download_client(&self) -> &ClientWithMiddleware {
         &self.data.download_client
     }
@@ -232,7 +244,7 @@ impl CommandQueue {
         ForegroundMessage: From<Task<T>>,
     {
         let Some(sender) = self.channel.sender() else {
-            // If this fails, it means the command_queue was dropped and the task is
+            // If this fails, it means the command queue was dropped and the task is
             // immediately canceled.
             return Err(CommandQueueError::Cancelled);
         };
@@ -261,7 +273,18 @@ impl CommandQueue {
         self.execute_task(spec).await
     }
 
-    /// Solves a particular pixi environment.
+    /// Solves a particular pixi environment specified by `PixiEnvironmentSpec`.
+    ///
+    /// This function processes all package requirements defined in the spec, handling both
+    /// binary and source packages. For source packages, it:
+    ///
+    /// 1. Checks out source code repositories
+    /// 2. Builds necessary environments for processing source dependencies
+    /// 3. Queries metadata from source packages
+    /// 4. Recursively processes any transitive source dependencies
+    ///
+    /// The function automatically deduplicates work when the same source is referenced
+    /// multiple times, and ensures efficient parallel execution where possible.
     pub async fn solve_pixi_environment(
         &self,
         spec: PixiEnvironmentSpec,
@@ -270,6 +293,10 @@ impl CommandQueue {
     }
 
     /// Install a pixi environment.
+    ///
+    /// This method takes a previously solved environment specification and installs
+    /// all required packages into the target prefix. It handles both binary packages
+    /// (from conda repositories) and source packages (built from source code).
     pub async fn install_pixi_environment(
         &self,
         spec: InstallPixiEnvironmentSpec,
@@ -278,6 +305,14 @@ impl CommandQueue {
     }
 
     /// Solves a particular conda environment.
+    ///
+    /// This method processes a complete environment specification containing both
+    /// binary and source packages to find a compatible set of packages that satisfy
+    /// all requirements and constraints.
+    ///
+    /// Unlike solving pixi environments, this method does not perform recursive
+    /// source resolution and querying repodata as all information is already
+    /// available in the specification.
     pub async fn solve_conda_environment(
         &self,
         spec: SolveCondaEnvironmentSpec,
@@ -286,6 +321,10 @@ impl CommandQueue {
     }
 
     /// Instantiates an environment for a tool based on the given spec. Reuses the environment if possible.
+    ///
+    /// This method creates isolated environments for build backends and other tools.
+    /// These environments are specialized containers with specific packages needed
+    /// for particular tasks like building packages, extracting metadata, or running tools.
     pub async fn instantiate_tool_environment(
         &self,
         spec: InstantiateToolEnvironmentSpec,
@@ -294,6 +333,15 @@ impl CommandQueue {
     }
 
     /// Checks out a particular source based on a source spec.
+    ///
+    /// This function resolves the source specification to a concrete checkout by:
+    /// 1. For path sources: Resolving relative paths against the root directory
+    /// 2. For git sources: Cloning or fetching the repository and checking out the specified reference
+    /// 3. For URL sources: Downloading and extracting the archive (currently unimplemented)
+    ///
+    /// The function handles path normalization and ensures security by preventing
+    /// directory traversal attacks. It also manages caching of source checkouts to
+    /// avoid redundant downloads or clones when the same source is used multiple times.
     pub async fn pin_and_checkout(
         &self,
         source_spec: SourceSpec,
@@ -314,7 +362,16 @@ impl CommandQueue {
         }
     }
 
-    /// Checkout pinned source record
+    /// Checkout pinned source record.
+    ///
+    /// Similar to `pin_and_checkout` but works with already pinned source specifications.
+    /// This is used when we have a concrete revision (e.g., a specific git commit) that
+    /// we want to check out rather than resolving a reference like a branch name.
+    ///
+    /// The method handles different source types appropriately:
+    /// - For path sources: Resolves and validates the path
+    /// - For git sources: Checks out the specific revision
+    /// - For URL sources: Extracts the archive with the exact checksum (unimplemented)
     pub async fn checkout_pinned_source(
         &self,
         pinned_spec: PinnedSourceSpec,
@@ -409,7 +466,7 @@ pub struct CommandQueueBuilder {
 }
 
 impl CommandQueueBuilder {
-    /// The cache directory to use
+    /// Sets the cache directories to use.
     pub fn with_cache_dirs(self, cache_dirs: CacheDirs) -> Self {
         Self {
             cache_dirs: Some(cache_dirs),
@@ -433,7 +490,7 @@ impl CommandQueueBuilder {
         }
     }
 
-    /// Sets the git resolver used to fetch git repositories
+    /// Sets the git resolver used to fetch git repositories.
     pub fn with_git_resolver(self, resolver: GitResolver) -> Self {
         Self {
             git_resolver: Some(resolver),
@@ -441,8 +498,7 @@ impl CommandQueueBuilder {
         }
     }
 
-    /// Sets the root directory which serves as the base directory when dealing
-    /// with relative paths.
+    /// Sets the root directory for resolving relative paths.
     pub fn with_root_dir(self, root_dir: PathBuf) -> Self {
         Self {
             root_dir: Some(root_dir),
@@ -468,7 +524,7 @@ impl CommandQueueBuilder {
         Self { executor, ..self }
     }
 
-    /// Finish building the [`CommandQueue`] and return it.
+    /// Completes the builder and returns a new [`CommandQueue`].
     pub fn finish(self) -> CommandQueue {
         let root_dir = self
             .root_dir

@@ -157,8 +157,13 @@ struct PendingInstallPixiEnvironment {
 /// tasks can come in which are deduplicated, every task is returned the result
 /// when available.
 enum PendingDeduplicatingTask<T: TaskSpec> {
+    /// Task is currently executing, contains channels to notify when complete
     Pending(Vec<oneshot::Sender<Result<T::Output, T::Error>>>),
+
+    /// Task has completed successfully, result is cached
     Result(T::Output),
+
+    /// Task has failed, future requests will also fail
     Errored,
 }
 

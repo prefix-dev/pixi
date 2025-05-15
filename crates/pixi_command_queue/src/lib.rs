@@ -2,6 +2,8 @@
 //! constructing a graph of interdependent operations that can be executed
 //! concurrently.
 //!
+//! # Overview
+//!
 //! For example, solving a pixi environment can entail many different recursive
 //! tasks. When source dependencies are part of the environment, we need to
 //! check out the source, construct another environment for the build backend,
@@ -13,9 +15,22 @@
 //! information or checking out sources twice. This requires some orchestration.
 //! A [`CommandQueue`] is a tool that allows doing this.
 //!
+//! # Architecture
+//!
+//! The [`CommandQueue`] is built around a task-based execution model:
+//!
+//! 1. Each operation is represented as a task implementing the [`TaskSpec`] trait
+//! 2. Tasks are submitted to a central queue and processed asynchronously
+//! 3. Duplicate tasks are detected and consolidated to avoid redundant work
+//! 4. Dependencies between tasks are tracked to ensure proper execution order
+//! 5. Results are cached when appropriate to improve performance
+//!
+//! # Usage
+//!
 //! The API of the [`CommandQueue`] is designed to be used in a way that allows
 //! executing a request and awaiting the result. Multiple futures can be created
-//! and awaited concurrently.
+//! and awaited concurrently. This enables parallel execution while maintaining
+//! a simple API surface.
 
 mod build;
 mod cache_dirs;

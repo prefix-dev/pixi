@@ -111,6 +111,19 @@ impl InstantiateToolEnvironmentSpec {
         )
     }
 
+    /// Instantiates a tool environment using the given command queue.
+    ///
+    /// This method creates or reuses a cached environment based on the specification.
+    /// The process includes:
+    ///
+    /// 1. Generating a unique cache key for the environment based on its requirements
+    /// 2. Checking if a matching environment already exists in the cache
+    /// 3. If found, reusing the existing environment
+    /// 4. If not found, solving and installing a new environment using `CommandQueue::solve_pixi_environment`
+    ///
+    /// The method applies proper locking to ensure thread safety and handles
+    /// concurrent access to the same environment appropriately. This prevents race conditions
+    /// when multiple processes attempt to create the same tool environment simultaneously.
     pub async fn instantiate(
         self,
         command_queue: CommandQueue,
