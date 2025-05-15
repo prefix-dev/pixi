@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use indicatif::{MultiProgress, ProgressBar};
 use parking_lot::Mutex;
 use pixi_build_frontend::{CondaBuildReporter, CondaMetadataReporter};
-use pixi_command_queue::GitCheckoutId;
+use pixi_command_dispatcher::GitCheckoutId;
 use pixi_git::resolver::RepositoryReference;
 
 pub trait BuildMetadataReporter: CondaMetadataReporter {
@@ -118,7 +118,7 @@ impl GitCheckoutProgress {
     }
 }
 
-impl pixi_command_queue::GitCheckoutReporter for GitCheckoutProgress {
+impl pixi_command_dispatcher::GitCheckoutReporter for GitCheckoutProgress {
     /// Called when a git checkout was queued on the [`CommandQueue`].
     fn on_checkout_queued(&mut self, env: &RepositoryReference) -> GitCheckoutId {
         let id = self.progress_state.id();
@@ -160,7 +160,7 @@ impl pixi_command_queue::GitCheckoutReporter for GitCheckoutProgress {
 }
 
 /// A top-level reporter that combine the different reporters into one.
-/// this directyl implements the [`pixi_command_queue::Reporter`] trait.
+/// this directyl implements the [`pixi_command_dispatcher::Reporter`] trait.
 /// And subsequently, offloads the work to its sub progress reporters.
 pub(crate) struct TopLevelProgress {
     multi_progress: MultiProgress,
@@ -177,24 +177,26 @@ impl TopLevelProgress {
     }
 }
 
-impl pixi_command_queue::Reporter for TopLevelProgress {
-    fn as_git_reporter(&mut self) -> Option<&mut dyn pixi_command_queue::GitCheckoutReporter> {
+impl pixi_command_dispatcher::Reporter for TopLevelProgress {
+    fn as_git_reporter(&mut self) -> Option<&mut dyn pixi_command_dispatcher::GitCheckoutReporter> {
         Some(&mut self.source_checkout_reporter)
     }
 
     fn as_conda_solve_reporter(
         &mut self,
-    ) -> Option<&mut dyn pixi_command_queue::CondaSolveReporter> {
+    ) -> Option<&mut dyn pixi_command_dispatcher::CondaSolveReporter> {
         None
     }
 
-    fn as_pixi_solve_reporter(&mut self) -> Option<&mut dyn pixi_command_queue::PixiSolveReporter> {
+    fn as_pixi_solve_reporter(
+        &mut self,
+    ) -> Option<&mut dyn pixi_command_dispatcher::PixiSolveReporter> {
         None
     }
 
     fn as_pixi_install_reporter(
         &mut self,
-    ) -> Option<&mut dyn pixi_command_queue::PixiInstallReporter> {
+    ) -> Option<&mut dyn pixi_command_dispatcher::PixiInstallReporter> {
         None
     }
 }

@@ -20,7 +20,7 @@ use crate::{
     repodata::Repodata,
     utils::{MoveError, move_file},
 };
-use pixi_command_queue::SourceCheckout;
+use pixi_command_dispatcher::SourceCheckout;
 
 #[derive(Parser, Debug)]
 #[clap(verbatim_doc_comment)]

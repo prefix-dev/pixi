@@ -10,7 +10,7 @@ use rattler_solve::{SolveStrategy, SolverImpl, resolvo};
 use url::Url;
 
 use crate::lock_file::LockedCondaPackages;
-use pixi_command_queue::SourceCheckout;
+use pixi_command_dispatcher::SourceCheckout;
 
 /// Solves the conda package environment for the given input. This function is
 /// async because it spawns a background task for the solver. Since solving is a

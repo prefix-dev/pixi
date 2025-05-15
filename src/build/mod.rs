@@ -49,8 +49,8 @@ use url::Url;
 use uv_configuration::RAYON_INITIALIZE;
 use xxhash_rust::xxh3::Xxh3;
 
-use pixi_command_queue::{
-    CacheDirs, CommandQueue, CommandQueueError, SourceCheckout, SourceCheckoutError,
+use pixi_command_dispatcher::{
+    CacheDirs, CommandDispatcher, CommandDispatcherError, SourceCheckout, SourceCheckoutError,
 };
 
 use crate::{
@@ -76,7 +76,7 @@ pub struct BuildContext {
     work_dir: PathBuf,
     tool_context: Arc<ToolContext>,
     variant_config: Targets<Option<HashMap<String, Vec<String>>>>,
-    command_queue: CommandQueue,
+    command_queue: CommandDispatcher,
 }
 
 #[derive(Clone)]
@@ -133,7 +133,7 @@ pub enum BuildError {
     GitFetch(#[from] GitError),
 
     #[error(transparent)]
-    SourceCheckoutError(#[from] CommandQueueError<SourceCheckoutError>),
+    SourceCheckoutError(#[from] CommandDispatcherError<SourceCheckoutError>),
 }
 
 // /// Location of the source code for a package. This will be used as the input
@@ -185,7 +185,7 @@ impl BuildContext {
             work_dir: dot_pixi_dir.join("build-v0"),
             tool_context,
             variant_config,
-            command_queue: CommandQueue::builder()
+            command_queue: CommandDispatcher::builder()
                 .with_cache_dirs(cache_dirs)
                 .with_reporter(top_level_reporter)
                 .with_root_dir(root_dir)
