@@ -559,6 +559,10 @@ click = { url = "https://github.com/pallets/click/releases/download/8.1.7/click-
 pytest = { git = "https://github.com/pytest-dev/pytest.git"}
 ```
 
+!!! warning "Using git SSH URLs"
+    When using SSH URLs in git dependencies, make sure to have your SSH key added to your SSH agent.
+    You can do this by running `ssh-add` which will prompt you for your SSH key passphrase. Make sure that the `ssh-add` agent or service is running and you have a generated public/private SSH key. For more details on how to do this, check the [Github SSH documentation](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent).
+
 #### Full specification
 
 The full specification of a PyPI dependencies that Pixi supports can be split into the following fields:

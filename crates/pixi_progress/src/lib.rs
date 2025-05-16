@@ -80,6 +80,20 @@ pub async fn await_in_progress<T, F: FnOnce(ProgressBar) -> Fut, Fut: Future<Out
     result
 }
 
+/// Creates a new progress bar with a warning style and the given message.
+pub fn create_warning_pb(warning_msg: String) -> ProgressBar {
+    // let pb = global_multi_progress().insert_before(current_pb, ProgressBar::new(0));
+    let pb = ProgressBar::new(0);
+    pb.set_style(
+        indicatif::ProgressStyle::default_spinner() // Or default_bar() if you used ProgressBar::new(length)
+            .template("  {spinner:.yellow} {wide_msg:.yellow}") // Yellow spinner, clear message
+            .expect("failed to set a progress bar template"),
+    );
+    pb.set_message(warning_msg);
+    pb.enable_steady_tick(Duration::from_millis(100));
+    pb
+}
+
 /// A struct that can be used to format the message part of a progress bar.
 ///
 /// It's primary usecase is when you have a single progress bar but multiple tasks that are running
