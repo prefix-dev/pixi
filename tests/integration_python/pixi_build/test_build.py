@@ -71,6 +71,48 @@ def test_build_conda_package_variants(
         assert package.exists()
 
 
+@pytest.mark.skip(reason="pixi-build-rattler-build seems to always rebuild at the moment")
+def test_no_change_should_be_fully_cached(pixi: Path, simple_workspace: Workspace) -> None:
+    simple_workspace.write_files()
+    # Setting PIXI_CACHE_DIR shouldn't be necessary
+    env = {
+        "PIXI_CACHE_DIR": str(simple_workspace.workspace_dir.joinpath("pixi_cache")),
+    }
+    verify_cli_command(
+        [
+            pixi,
+            "install",
+            "--manifest-path",
+            simple_workspace.workspace_dir,
+        ],
+        env=env,
+    )
+
+    conda_metadata_params = simple_workspace.debug_dir.joinpath("conda_metadata_params.json")
+    conda_build_params = simple_workspace.debug_dir.joinpath("conda_build_params.json")
+
+    assert conda_metadata_params.is_file()
+    assert conda_build_params.is_file()
+
+    # Remove the files to get a clean state
+    conda_metadata_params.unlink()
+    conda_build_params.unlink()
+
+    verify_cli_command(
+        [
+            pixi,
+            "install",
+            "--manifest-path",
+            simple_workspace.workspace_dir,
+        ],
+        env=env,
+    )
+
+    # Everything should be cached, so no getMetadata or build call
+    assert not conda_metadata_params.is_file()
+    assert not conda_build_params.is_file()
+
+
 def test_source_change_trigger_rebuild(pixi: Path, simple_workspace: Workspace) -> None:
     simple_workspace.write_files()
     verify_cli_command(
