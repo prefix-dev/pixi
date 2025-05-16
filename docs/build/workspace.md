@@ -37,10 +37,10 @@ The source directory structure now looks like this:
 ```
 
 Within a Pixi manifest, you can manage a workspace and/or describe a package.
-In the case of `python_rich` we choose to do both, so the only thing we have to add is the dependency on the `cpp_math`.
+In the case of `python_rich` we choose to do both, so the only thing we have to add `cpp_math` as a run dependency of `python_rich`.
 
 ```py title="pixi.toml"
---8<-- "docs/source_files/pixi_workspaces/pixi_build/workspace/pixi.toml:workspace"
+--8<-- "docs/source_files/pixi_workspaces/pixi_build/workspace/pixi.toml:run-dependencies"
 ```
 
 We only want to use the `workspace` table of the top-level manifest.

@@ -8,7 +8,6 @@ preview = ["pixi-build"]
 
 # --8<-- [start:dependencies]
 [dependencies]
-cpp_math = { path = "packages/cpp_math" }
 python_rich = { path = "." }
 # --8<-- [end:dependencies]
 
@@ -45,4 +44,5 @@ backend = { name = "pixi-build-python", version = "0.1.*" }
 hatchling = "==1.26.3"
 
 [package.run-dependencies]
+cpp_math = { path = "packages/cpp_math" }
 rich = ">=13.9.4,<14"
