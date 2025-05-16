@@ -134,6 +134,44 @@ impl UvReporter {
     pub(crate) fn increment_progress(&self) {
         self.pb.inc(1);
     }
+
+    pub(crate) fn on_checkout_start_warning_pb(&self) {
+        // create the warning progress bar for ssh URL
+        // and insert it before the current progress bar
+        let warning_pb = create_warning_pb(GIT_SSH_CLONING_WARNING_MSG.to_string());
+        let original_pb = self.pb.clone();
+        let pb =
+            pixi_progress::global_multi_progress().insert_before(&original_pb, warning_pb.clone());
+
+        // we always want to have a fresh one for any SSH checkout that started
+        self.checkout_helper_pb
+            .lock()
+            .expect("checkout_helper_pb lock poison")
+            .replace(pb)
+            .inspect(|pb| {
+                // if we have a previous one, we need to finish it
+                pb.finish_and_clear();
+            });
+    }
+
+    pub(crate) fn on_checkout_complete_warning_pb(&self) {
+        // create the warning progress bar for ssh URL
+        // and insert it before the current progress bar
+        let warning_pb = create_warning_pb(GIT_SSH_CLONING_WARNING_MSG.to_string());
+        let original_pb = self.pb.clone();
+        let pb =
+            pixi_progress::global_multi_progress().insert_before(&original_pb, warning_pb.clone());
+
+        // we always want to have a fresh one for any SSH checkout that started
+        self.checkout_helper_pb
+            .lock()
+            .expect("checkout_helper_pb lock poison")
+            .replace(pb)
+            .inspect(|pb| {
+                // if we have a previous one, we need to finish it
+                pb.finish_and_clear();
+            });
+    }
 }
 
 impl uv_installer::PrepareReporter for UvReporter {
@@ -163,36 +201,16 @@ impl uv_installer::PrepareReporter for UvReporter {
 
     fn on_checkout_start(&self, url: &url::Url, _rev: &str) -> usize {
         if url.scheme().eq("ssh") {
-            // create the warning progress bar for ssh URL
-            // and insert it before the current progress bar
-            let warning_pb = create_warning_pb(GIT_SSH_CLONING_WARNING_MSG.to_string());
-            let original_pb = self.pb.clone();
-            let pb = pixi_progress::global_multi_progress()
-                .insert_before(&original_pb, warning_pb.clone());
-
-            // we always want to have a fresh one for any SSH checkout that started
-            self.checkout_helper_pb
-                .lock()
-                .expect("checkout_helper_pb lock poison")
-                .replace(pb)
-                .inspect(|pb| {
-                    // if we have a previous one, we need to finish it
-                    pb.finish_and_clear();
-                });
+            self.on_checkout_start_warning_pb();
         }
         self.start(format!("cloning {}", url))
     }
 
-    fn on_checkout_complete(&self, _url: &url::Url, _rev: &str, index: usize) {
-        // if we have a helper progress bar, we need to finish it
-        if let Some(pb) = self
-            .checkout_helper_pb
-            .lock()
-            .expect("on_checkout_complete poison")
-            .take()
-        {
-            pb.finish_and_clear();
+    fn on_checkout_complete(&self, url: &url::Url, _rev: &str, index: usize) {
+        if url.scheme().eq("ssh") {
+            self.on_checkout_complete_warning_pb();
         }
+
         self.finish(index);
     }
 
@@ -236,10 +254,16 @@ impl uv_resolver::ResolverReporter for UvReporter {
     }
 
     fn on_checkout_start(&self, url: &url::Url, _rev: &str) -> usize {
+        if url.scheme().eq("ssh") {
+            self.on_checkout_start_warning_pb();
+        }
         self.start(format!("cloning {}", url))
     }
 
-    fn on_checkout_complete(&self, _url: &url::Url, _rev: &str, index: usize) {
+    fn on_checkout_complete(&self, url: &url::Url, _rev: &str, index: usize) {
+        if url.scheme().eq("ssh") {
+            self.on_checkout_complete_warning_pb();
+        }
         self.finish(index);
     }
 
@@ -269,10 +293,16 @@ impl uv_distribution::Reporter for UvReporter {
     }
 
     fn on_checkout_start(&self, url: &url::Url, _rev: &str) -> usize {
+        if url.scheme().eq("ssh") {
+            self.on_checkout_start_warning_pb();
+        }
         self.start(format!("cloning {}", url))
     }
 
-    fn on_checkout_complete(&self, _url: &url::Url, _rev: &str, index: usize) {
+    fn on_checkout_complete(&self, url: &url::Url, _rev: &str, index: usize) {
+        if url.scheme().eq("ssh") {
+            self.on_checkout_complete_warning_pb();
+        }
         self.finish(index);
     }
 
