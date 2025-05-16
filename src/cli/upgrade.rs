@@ -261,17 +261,18 @@ fn parse_specs(
             _ => false,
         })
         // Only upgrade version specs
-        .filter_map(|(name, req)| match req {
+        .filter_map(|(name, req)| match &req {
             PixiPypiSpec::Version { extras, .. } => Some((
                 name.clone(),
                 Requirement {
                     name: name.as_normalized().clone(),
-                    extras,
+                    extras: extras.clone(),
                     // TODO: Add marker support here to avoid overwriting existing markers
                     marker: MarkerTree::default(),
                     origin: None,
                     version_or_url: None,
                 },
+                req,
             )),
             PixiPypiSpec::RawVersion(_) => Some((
                 name.clone(),
@@ -282,16 +283,17 @@ fn parse_specs(
                     origin: None,
                     version_or_url: None,
                 },
+                req,
             )),
             _ => None,
         })
-        .map(|(name, req)| {
+        .map(|(name, req, pixi_req)| {
             let location = workspace.document().pypi_dependency_location(
                 &name,
                 None, // TODO: add support for platforms
                 &args.specs.feature,
             );
-            (name, (req, location))
+            (name, (req, Some(pixi_req), location))
         })
         .collect();
 
@@ -343,4 +345,83 @@ fn ensure_package_exists(package_name: &str, available_packages: &[String]) -> m
         labels: None,
     }
     .into())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Workspace;
+    use insta::assert_snapshot;
+    use std::io::Write;
+    use std::path::Path;
+    use tempfile::tempdir;
+
+    use super::*;
+
+    // When the specific template is not in the file or the file does not exist.
+    // Make the file and append the template to the file.
+    fn create_or_append_file(path: &Path, template: &str) -> std::io::Result<()> {
+        let file = fs_err::read_to_string(path).unwrap_or_default();
+
+        if !file.contains(template) {
+            std::fs::OpenOptions::new()
+                .append(true)
+                .create(true)
+                .open(path)?
+                .write_all(template.as_bytes())?;
+        }
+        Ok(())
+    }
+
+    // This test requires network connection, takes a lot of time to
+    // complete, and torch version can change over time, so we ignore
+    // it by default.
+    #[ignore]
+    #[tokio::test]
+    async fn pypi_dependency_index_preserved() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("pixi.toml");
+        let file_contents = r#"
+             [workspace]
+             channels = ["conda-forge"]
+             platforms = ["linux-64"]
+
+             [pypi-dependencies]
+             torch = { version = "==2.7.0", index = "https://download.pytorch.org/whl/cpu" }
+
+             [dependencies]
+             python = "==3.13.3"
+        "#;
+        create_or_append_file(&file_path, file_contents).unwrap();
+
+        let mut args = Args::default();
+        args.workspace_config.manifest_path = Some(file_path.clone());
+
+        let workspace = Workspace::from_path(&file_path).unwrap();
+
+        let workspace_value = workspace.workspace.value.clone();
+        let feature = workspace_value.feature(&args.specs.feature).unwrap();
+
+        let mut workspace = workspace.modify().unwrap();
+
+        let (match_specs, pypi_deps) = parse_specs(feature, &args, &workspace).unwrap();
+
+        let _ = workspace
+            .update_dependencies(
+                match_specs,
+                pypi_deps,
+                IndexMap::default(),
+                &args.prefix_update_config,
+                &args.lock_file_update_config,
+                &args.specs.feature,
+                &[],
+                true,
+                args.dry_run,
+            )
+            .await
+            .unwrap();
+
+        workspace.save().await.unwrap();
+
+        assert_snapshot!(fs_err::read_to_string(file_path).unwrap_or_default());
+    }
 }
