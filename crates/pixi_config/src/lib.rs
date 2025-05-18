@@ -1102,7 +1102,7 @@ impl Config {
         }
 
         config.loaded_from.push(path.to_path_buf());
-        tracing::info!("Loaded config from: {}", path.display());
+        tracing::debug!("Loaded config from: {}", path.display());
 
         config
             .validate()
