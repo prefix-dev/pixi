@@ -19,7 +19,7 @@ use rattler_lock::LockFile;
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
-use super::task_hash::{InputHashesError, TaskCache, TaskHash};
+use super::task_hash::{InputHashesError, NameHash, TaskCache, TaskHash};
 use crate::{
     Workspace,
     activation::CurrentEnvVarBehavior,
@@ -87,7 +87,7 @@ pub enum CanSkip {
 /// A task that contains enough information to be able to execute it. The
 /// lifetime [`'p`] refers to the lifetime of the project that contains the
 /// tasks.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ExecutableTask<'p> {
     pub workspace: &'p Workspace,
     pub name: Option<TaskName>,
@@ -274,11 +274,14 @@ impl<'p> ExecutableTask<'p> {
     /// We store the hashes of the inputs and the outputs of the task in a file
     /// in the cache. The current name is something like
     /// `run_environment-task_name.json`.
-    pub(crate) fn cache_name(&self) -> String {
+    pub(crate) fn cache_name(&self, args_cache: Option<NameHash>) -> String {
         format!(
-            "{}-{}.json",
+            "{}-{}-{}.json",
             self.run_environment.name(),
-            self.name().unwrap_or("default")
+            self.name().unwrap_or("default"),
+            args_cache
+                .map(|hash| hash.to_string())
+                .unwrap_or("".to_string())
         )
     }
 
@@ -289,13 +292,17 @@ impl<'p> ExecutableTask<'p> {
     /// quickly.
     pub(crate) async fn can_skip(&self, lock_file: &LockFile) -> Result<CanSkip, std::io::Error> {
         tracing::info!("Checking if task can be skipped");
-        let cache_name = self.cache_name();
+        let args_hash = TaskHash::task_args_hash(self).await.unwrap_or_default();
+        let cache_name = self.cache_name(args_hash);
         let cache_file = self.project().task_cache_folder().join(cache_name);
+        tracing::debug!("Checking if cache file exists: {}", cache_file.display());
         if cache_file.exists() {
             let cache = tokio_fs::read_to_string(&cache_file).await?;
             let cache: TaskCache = serde_json::from_str(&cache)?;
             let hash = TaskHash::from_task(self, lock_file).await;
+            tracing::debug!("Cache hash of running task: {:?}", hash,);
             if let Ok(Some(hash)) = hash {
+                tracing::debug!("Hash recorded in the file: {:?}", cache.hash,);
                 if hash.computation_hash() != cache.hash {
                     return Ok(CanSkip::No(Some(hash)));
                 } else {
@@ -315,9 +322,11 @@ impl<'p> ExecutableTask<'p> {
         previous_hash: Option<TaskHash>,
     ) -> Result<(), CacheUpdateError> {
         let task_cache_folder = self.project().task_cache_folder();
-        let cache_file = task_cache_folder.join(self.cache_name());
+        let args_cache = TaskHash::task_args_hash(self).await?;
+        let cache_file = task_cache_folder.join(self.cache_name(args_cache));
         let new_hash = if let Some(mut previous_hash) = previous_hash {
             previous_hash.update_output(self).await?;
+            tracing::debug!("Updating output cache {:?}", previous_hash.outputs);
             previous_hash
         } else if let Some(hash) = TaskHash::from_task(self, &lock_file.lock_file).await? {
             hash
@@ -330,6 +339,7 @@ impl<'p> ExecutableTask<'p> {
         let cache = TaskCache {
             hash: new_hash.computation_hash(),
         };
+        tracing::debug!("new cache: {:?}", cache);
         let cache = serde_json::to_string(&cache)?;
         Ok(tokio::fs::write(&cache_file, cache).await?)
     }

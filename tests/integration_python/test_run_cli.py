@@ -1245,3 +1245,104 @@ def test_argument_forwarding_in_dependencies(pixi: Path, tmp_pixi_workspace: Pat
         [pixi, "run", "--manifest-path", manifest_path, "task2", "arg1"],
         stdout_contains="arg1",
     )
+
+
+def test_task_caching_with_multiple_outputs_args(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test executing the same task with different arguments is successively cached."""
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+
+    # create the outputs folder
+    output_dir = tmp_pixi_workspace.joinpath("outputs")
+    output_dir.mkdir(exist_ok=True)
+
+    manifest_content["tasks"] = {
+        "base-task": {
+            "cmd": "echo task with {{ arg1 }} > outputs/{{ arg1 }}.txt",
+            "args": ["arg1"],
+            "outputs": ["outputs/{{ arg1 }}.txt"],
+        },
+        "multiple-depends": {
+            "depends-on": [
+                {"task": "base-task", "args": ["custom1"]},
+                {"task": "base-task", "args": ["custom2"]},
+            ]
+        },
+    }
+
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    # Run first time without cache
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "multiple-depends"],
+        # stdout_contains=["Base task with custom1", "Base task with custom2"],
+        stderr_excludes=[
+            "Task 'base-task' with args arg1 = custom1 can be skipped (cache hit)",
+            "Task 'base-task' with args arg1 = custom2 can be skipped (cache hit)",
+        ],
+    )
+
+    # Now we should receive a cache hit
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "multiple-depends"],
+        stderr_contains=[
+            "Task 'base-task' with args arg1 = custom1 can be skipped (cache hit)",
+            "Task 'base-task' with args arg1 = custom2 can be skipped (cache hit)",
+        ],
+    )
+
+
+def test_task_caching_with_multiple_inputs_args(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test executing the same task with different arguments is successively cached."""
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+
+    # create the inputs and outputs folders
+    # that will be tests if they are cached hit
+    input_dir = tmp_pixi_workspace.joinpath("inputs")
+    output_dir = tmp_pixi_workspace.joinpath("outputs")
+    input_dir.mkdir(exist_ok=True)
+    output_dir.mkdir(exist_ok=True)
+
+    for name in ["file1", "file2"]:
+        input_file = input_dir.joinpath(f"{name}.txt")
+        input_file.write_text(f"Content for {name}")
+
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+
+    manifest_content["tasks"] = {
+        "process-file": {
+            "cmd": "echo Processing $(cat inputs/{{ filename }}.txt) > outputs/{{ filename }}.out",
+            "args": [{"arg": "filename"}],
+            "inputs": ["inputs/{{ filename }}.txt"],
+        },
+        "multiple-depends": {
+            "depends-on": [
+                {"task": "process-file", "args": ["file1"]},
+                {"task": "process-file", "args": ["file2"]},
+            ]
+        },
+    }
+
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    # Run first time without cache
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "multiple-depends"],
+        # stdout_contains=["Base task with custom1", "Base task with custom2"],
+        stderr_excludes=[
+            "Task 'process-file' with args filename = file1 can be skipped (cache hit)",
+            "Task 'process-file' with args filename = file2 can be skipped (cache hit)",
+        ],
+    )
+
+    # Now we should receive a cache hit
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "multiple-depends"],
+        stderr_contains=[
+            "Task 'process-file' with args filename = file1 can be skipped (cache hit)",
+            "Task 'process-file' with args filename = file2 can be skipped (cache hit)",
+        ],
+    )

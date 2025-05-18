@@ -9,13 +9,33 @@ use toml_span::{
 
 use crate::{
     EnvironmentName, Task, TaskName, WithWarnings,
-    task::{Alias, ArgName, CmdArgs, Dependency, Execute, TaskArg, TemplateString},
+    task::{Alias, ArgName, CmdArgs, Dependency, Execute, GlobPatterns, TaskArg, TemplateString},
     warning::Deprecation,
 };
 
 impl<'de> toml_span::Deserialize<'de> for TemplateString {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         Ok(TemplateString::new(value.take_string(None)?.into_owned()))
+    }
+}
+
+impl<'de> toml_span::Deserialize<'de> for GlobPatterns {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        match value.take() {
+            ValueInner::Array(array) => {
+                let mut packages: Vec<TemplateString> = Vec::with_capacity(array.len());
+                for mut value in array {
+                    packages.push(TemplateString::new(value.take_string(None)?.into_owned()));
+                }
+                Ok(GlobPatterns::new(packages))
+            }
+            _ => Err(expected(
+                "an array of packages e.g. [\"foo\", \"bar\"]",
+                value.take(),
+                value.span,
+            )
+            .into()),
+        }
     }
 }
 
