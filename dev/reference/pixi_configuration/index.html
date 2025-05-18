@@ -2858,29 +2858,34 @@ The configuration is loaded in the following order:</p>
 </thead>
 <tbody>
 <tr>
-<td>6</td>
+<td>7</td>
 <td>Command line arguments (<code>--tls-no-verify</code>, <code>--change-ps1=false</code>, etc.)</td>
 <td>Configuration via command line arguments</td>
 </tr>
 <tr>
-<td>5</td>
+<td>6</td>
 <td><code>your_project/.pixi/config.toml</code></td>
 <td>Project-specific configuration</td>
 </tr>
 <tr>
-<td>4</td>
+<td>5</td>
 <td><code>$PIXI_HOME/config.toml</code></td>
 <td>Global configuration in <code>PIXI_HOME</code>.</td>
 </tr>
 <tr>
-<td>3</td>
+<td>4</td>
 <td><code>$HOME/.pixi/config.toml</code></td>
 <td>Global configuration in the user home directory.</td>
 </tr>
 <tr>
-<td>2</td>
+<td>3</td>
 <td><code>$HOME/Library/Application Support/pixi/config.toml</code></td>
 <td>User-specific configuration</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>$XDG_CONFIG_HOME/pixi/config.toml</code></td>
+<td>XDG compliant user-specific configuration</td>
 </tr>
 <tr>
 <td>1</td>
