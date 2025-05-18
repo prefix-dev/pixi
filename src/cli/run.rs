@@ -227,7 +227,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
 
         // check task cache
-        tracing::debug!("Checking if task '{:?}' can be skipped", executable_task);
         let task_cache = match executable_task
             .can_skip(&lock_file.lock_file)
             .await

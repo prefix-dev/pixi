@@ -292,17 +292,14 @@ impl<'p> ExecutableTask<'p> {
     /// quickly.
     pub(crate) async fn can_skip(&self, lock_file: &LockFile) -> Result<CanSkip, std::io::Error> {
         tracing::info!("Checking if task can be skipped");
-        let args_hash = TaskHash::task_args_hash(self).await.unwrap_or_default();
+        let args_hash = TaskHash::task_args_hash(self).unwrap_or_default();
         let cache_name = self.cache_name(args_hash);
         let cache_file = self.project().task_cache_folder().join(cache_name);
-        tracing::debug!("Checking if cache file exists: {}", cache_file.display());
         if cache_file.exists() {
             let cache = tokio_fs::read_to_string(&cache_file).await?;
             let cache: TaskCache = serde_json::from_str(&cache)?;
             let hash = TaskHash::from_task(self, lock_file).await;
-            tracing::debug!("Cache hash of running task: {:?}", hash,);
             if let Ok(Some(hash)) = hash {
-                tracing::debug!("Hash recorded in the file: {:?}", cache.hash,);
                 if hash.computation_hash() != cache.hash {
                     return Ok(CanSkip::No(Some(hash)));
                 } else {
@@ -322,11 +319,10 @@ impl<'p> ExecutableTask<'p> {
         previous_hash: Option<TaskHash>,
     ) -> Result<(), CacheUpdateError> {
         let task_cache_folder = self.project().task_cache_folder();
-        let args_cache = TaskHash::task_args_hash(self).await?;
+        let args_cache = TaskHash::task_args_hash(self)?;
         let cache_file = task_cache_folder.join(self.cache_name(args_cache));
         let new_hash = if let Some(mut previous_hash) = previous_hash {
             previous_hash.update_output(self).await?;
-            tracing::debug!("Updating output cache {:?}", previous_hash.outputs);
             previous_hash
         } else if let Some(hash) = TaskHash::from_task(self, &lock_file.lock_file).await? {
             hash
@@ -339,7 +335,6 @@ impl<'p> ExecutableTask<'p> {
         let cache = TaskCache {
             hash: new_hash.computation_hash(),
         };
-        tracing::debug!("new cache: {:?}", cache);
         let cache = serde_json::to_string(&cache)?;
         Ok(tokio::fs::write(&cache_file, cache).await?)
     }

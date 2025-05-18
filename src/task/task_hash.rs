@@ -176,9 +176,7 @@ impl TaskHash {
 
     /// Return the hash that should be used as the name of the task cache file.
     /// It takes the rendered inputs and rendered outputs of the task into account.
-    pub async fn task_args_hash(
-        task: &ExecutableTask<'_>,
-    ) -> Result<Option<NameHash>, InputHashesError> {
+    pub fn task_args_hash(task: &ExecutableTask<'_>) -> Result<Option<NameHash>, InputHashesError> {
         let mut hasher = Xxh3::new();
 
         let Ok(execute) = task.task().as_execute() else {
@@ -191,10 +189,6 @@ impl TaskHash {
             let rendered_inputs = inputs.render(Some(task.args()))?;
             rendered_inputs.hash(&mut hasher);
         }
-
-        // let rendered_inputs = inputs.render(Some(task.args()))?;
-
-        // rendered_inputs.hash(&mut hasher);
 
         // and the same for output args
         if let Some(ref outputs) = execute.outputs {

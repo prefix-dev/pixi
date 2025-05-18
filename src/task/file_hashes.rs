@@ -108,8 +108,6 @@ impl FileHashes {
         // by the Installer.
         LazyLock::force(&RAYON_INITIALIZE);
 
-        tracing::debug!("Computing hashes for {} files", entries.len());
-
         // Process entries in parallel using rayon
         entries.into_par_iter().for_each(|entry| {
             let tx = tx.clone();

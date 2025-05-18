@@ -23,14 +23,14 @@ impl<'de> toml_span::Deserialize<'de> for GlobPatterns {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         match value.take() {
             ValueInner::Array(array) => {
-                let mut packages: Vec<TemplateString> = Vec::with_capacity(array.len());
+                let mut args: Vec<TemplateString> = Vec::with_capacity(array.len());
                 for mut value in array {
-                    packages.push(TemplateString::new(value.take_string(None)?.into_owned()));
+                    args.push(TemplateString::new(value.take_string(None)?.into_owned()));
                 }
-                Ok(GlobPatterns::new(packages))
+                Ok(GlobPatterns::new(args))
             }
             _ => Err(expected(
-                "an array of packages e.g. [\"foo\", \"bar\"]",
+                "an array of args e.g. [\"main.py\", \"tests_*\"]",
                 value.take(),
                 value.span,
             )

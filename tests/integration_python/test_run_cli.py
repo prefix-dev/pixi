@@ -1276,7 +1276,6 @@ def test_task_caching_with_multiple_outputs_args(pixi: Path, tmp_pixi_workspace:
     # Run first time without cache
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest_path, "multiple-depends"],
-        # stdout_contains=["Base task with custom1", "Base task with custom2"],
         stderr_excludes=[
             "Task 'base-task' with args arg1 = custom1 can be skipped (cache hit)",
             "Task 'base-task' with args arg1 = custom2 can be skipped (cache hit)",
@@ -1331,7 +1330,6 @@ def test_task_caching_with_multiple_inputs_args(pixi: Path, tmp_pixi_workspace: 
     # Run first time without cache
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest_path, "multiple-depends"],
-        # stdout_contains=["Base task with custom1", "Base task with custom2"],
         stderr_excludes=[
             "Task 'process-file' with args filename = file1 can be skipped (cache hit)",
             "Task 'process-file' with args filename = file2 can be skipped (cache hit)",
