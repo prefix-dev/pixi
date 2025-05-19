@@ -1,5 +1,6 @@
 use std::{collections::HashMap, fmt::Display, hash::Hash, str::FromStr};
 
+use crate::toml::ExternalPackageProperties;
 use crate::{
     DependencyOverwriteBehavior, GetFeatureError, Preview, PrioritizedChannel,
     PypiDependencyLocation, SpecType, SystemRequirements, TargetSelector, Task, TaskName,
@@ -186,6 +187,22 @@ impl WorkspaceManifest {
             .values()
             .flat_map(|f| f.targets.targets())
             .any(|f| f.pypi_dependencies.is_some())
+    }
+
+    /// Returns default values for the external package properties.
+    pub(crate) fn derived_external_package_properties(&self) -> ExternalPackageProperties {
+        ExternalPackageProperties {
+            name: self.workspace.name.clone(),
+            version: self.workspace.version.clone(),
+            description: self.workspace.description.clone(),
+            repository: self.workspace.repository.clone(),
+            license: self.workspace.license.clone(),
+            license_file: self.workspace.license_file.clone(),
+            readme: self.workspace.readme.clone(),
+            authors: self.workspace.authors.clone(),
+            documentation: self.workspace.documentation.clone(),
+            homepage: self.workspace.homepage.clone(),
+        }
     }
 }
 
