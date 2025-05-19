@@ -14,7 +14,7 @@ pub enum BackendOverride {
     // e.g like an isolated spec
 }
 
-/// Default implementation for the backend override were no tools are overriden.
+/// Default implementation for the backend override were no tools are overridden.
 impl Default for BackendOverride {
     fn default() -> Self {
         Self::System(OverriddenBackends::Specified(Vec::new()))

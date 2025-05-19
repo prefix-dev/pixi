@@ -1,9 +1,9 @@
+use std::{collections::HashMap, time::Duration};
+
 use indexmap::IndexMap;
 use indicatif::{MultiProgress, ProgressBar};
-use pixi_command_dispatcher::{GitCheckoutId, ReporterContext};
+use pixi_command_dispatcher::{ReporterContext, reporter::GitCheckoutId};
 use pixi_git::resolver::RepositoryReference;
-use std::collections::HashMap;
-use std::time::Duration;
 
 /// A reporter implementation for source checkouts.
 pub struct GitCheckoutProgress {
