@@ -17,7 +17,7 @@ def test_build_conda_package(
             pixi,
             "build",
             "--manifest-path",
-            simple_workspace.workspace_dir,
+            simple_workspace.package_dir,
             "--output-dir",
             simple_workspace.workspace_dir,
         ],
@@ -39,10 +39,12 @@ def test_build_conda_package_variants(
 
     # Add package3 to build-variants
     variants = ["0.1.0", "0.2.0"]
-    simple_workspace.manifest["workspace"].setdefault("channels", []).insert(
+    simple_workspace.workspace_manifest["workspace"].setdefault("channels", []).insert(
         0, multiple_versions_channel_1
     )
-    simple_workspace.manifest["workspace"].setdefault("build-variants", {})["package3"] = variants
+    simple_workspace.workspace_manifest["workspace"].setdefault("build-variants", {})[
+        "package3"
+    ] = variants
 
     # Write files
     simple_workspace.write_files()
@@ -53,7 +55,7 @@ def test_build_conda_package_variants(
             pixi,
             "build",
             "--manifest-path",
-            simple_workspace.workspace_dir,
+            simple_workspace.package_dir,
             "--output-dir",
             simple_workspace.workspace_dir,
         ],
@@ -131,7 +133,7 @@ def test_source_change_trigger_rebuild(pixi: Path, simple_workspace: Workspace) 
     conda_build_params.unlink()
 
     # Touch the recipe
-    simple_workspace.workspace_dir.joinpath("recipe.yaml").touch()
+    simple_workspace.recipe_path.touch()
 
     verify_cli_command(
         [
@@ -167,7 +169,7 @@ def test_host_dependency_change_trigger_rebuild(
     conda_build_params.unlink()
 
     # Add dummy-b to host-dependencies
-    simple_workspace.manifest["package"].setdefault("host-dependencies", {})["dummy-b"] = {
+    simple_workspace.package_manifest["package"].setdefault("host-dependencies", {})["dummy-b"] = {
         "version": "*",
         "channel": dummy_channel_1,
     }
