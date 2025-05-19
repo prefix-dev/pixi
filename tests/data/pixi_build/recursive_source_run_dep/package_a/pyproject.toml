@@ -1,7 +1,7 @@
 [project]
 authors = [{ name = "Julian Hofer", email = "julianhofer@gnome.org" }]
 dependencies = []
-name = "pixi_build_package_dev"
+name = "package_a"
 requires-python = ">= 3.11"
 version = "0.1.0"
 
