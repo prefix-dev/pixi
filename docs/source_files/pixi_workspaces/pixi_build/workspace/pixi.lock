@@ -774,11 +774,11 @@ packages:
   build: pyhbf21a9e_0
   subdir: noarch
   depends:
-  - rich 13.9.*
   - cpp_math
+  - rich 13.9.*
   - python
   input:
-    hash: 5008932e0e6d18c40ded1127ee4523f72febd1388b532f87bdaccf21d300126b
+    hash: 3faf7b3f59ceeac0af67d0681025dbfc847410eef0ed4649b6f03ceda554e007
     globs:
     - pixi.toml
   sources:
