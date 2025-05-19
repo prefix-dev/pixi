@@ -5,6 +5,7 @@ from typing import Any
 import yaml
 import tomli_w
 import pytest
+import shutil
 from ..common import CURRENT_PLATFORM
 
 
@@ -28,18 +29,26 @@ def examples_dir() -> Path:
 class Workspace:
     recipe: dict[str, Any]
     manifest: dict[str, Any]
-    path: Path
+    workspace_dir: Path
+    debug_dir: Path
 
     def write_files(self) -> None:
-        recipe_path = self.path.joinpath("recipe.yaml")
+        recipe_path = self.workspace_dir.joinpath("recipe.yaml")
         recipe_path.write_text(yaml.dump(self.recipe))
-        manifest_path = self.path.joinpath("pixi.toml")
+        manifest_path = self.workspace_dir.joinpath("pixi.toml")
         manifest_path.write_text(tomli_w.dumps(self.manifest))
 
 
 @pytest.fixture
 def simple_workspace(tmp_pixi_workspace: Path, request: pytest.FixtureRequest) -> Workspace:
     name = request.node.name
+
+    workspace_dir = tmp_pixi_workspace.joinpath("workspace")
+    workspace_dir.mkdir()
+    shutil.move(tmp_pixi_workspace.joinpath(".pixi"), workspace_dir.joinpath(".pixi"))
+
+    debug_dir = tmp_pixi_workspace.joinpath("debug_dir")
+    debug_dir.mkdir()
 
     recipe = {"package": {"name": name, "version": "1.0.0"}}
 
@@ -58,9 +67,9 @@ def simple_workspace(tmp_pixi_workspace: Path, request: pytest.FixtureRequest) -
         "package": {
             "build": {
                 "backend": {"name": "pixi-build-rattler-build", "version": "0.1.*"},
-                "configuration": {"debug-dir": str(tmp_pixi_workspace)},
+                "configuration": {"debug-dir": str(debug_dir)},
             }
         },
     }
 
-    return Workspace(recipe, manifest, tmp_pixi_workspace)
+    return Workspace(recipe, manifest, workspace_dir, debug_dir)
