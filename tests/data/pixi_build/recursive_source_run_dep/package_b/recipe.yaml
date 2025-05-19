@@ -5,12 +5,13 @@ package:
 build:
   number: 0
   script:
-    - mkdir -p $PREFIX/bin
     - if: win
       then:
-        - echo "@echo off" > $PREFIX/bin/package-b.bat
-        - echo "echo hello from package-b" >> $PREFIX/bin/package-b.bat
+        - mkdir %PREFIX%\bin
+        - echo "@echo off" > %PREFIX%\bin\package-b.bat
+        - echo "echo hello from package-b" >> %PREFIX%\bin\package-b.bat
       else:
+        - mkdir -p $PREFIX/bin
         - echo "#!/usr/bin/env bash" > $PREFIX/bin/package-b
         - echo "echo hello from package-b" >> $PREFIX/bin/package-b
         - chmod +x $PREFIX/bin/package-b
