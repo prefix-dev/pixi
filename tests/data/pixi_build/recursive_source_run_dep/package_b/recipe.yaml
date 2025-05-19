@@ -8,9 +8,7 @@ build:
     - if: win
       then:
         - mkdir %PREFIX%\bin
-        # Corrected: Removed quotes around @echo off
         - echo @echo off > %PREFIX%\bin\package-b.bat
-        # Corrected: Removed quotes around echo hello from package-b
         - echo echo hello from package-b >> %PREFIX%\bin\package-b.bat
       else:
         - mkdir -p $PREFIX/bin
