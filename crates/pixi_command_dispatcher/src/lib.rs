@@ -19,7 +19,7 @@
 //!
 //! The [`CommandDispatcher`] is built around a task-based execution model:
 //!
-//! 1. Each operation is represented as a task implementing the [`TaskSpec`]
+//! 1. Each operation is represented as a task implementing the `TaskSpec`
 //!    trait
 //! 2. Tasks are submitted to a central queue and processed asynchronously
 //! 3. Duplicate tasks are detected and consolidated to avoid redundant work

@@ -10,7 +10,7 @@ use crate::{
 pub struct PixiInstallId(pub usize);
 
 pub trait PixiInstallReporter {
-    /// Called when the [`CommandDispatcher`] learns of a new pixi environment
+    /// Called when the [`crate::CommandDispatcher`] learns of a new pixi environment
     /// to install.
     ///
     /// This function should return an identifier which is used to identify this
@@ -34,7 +34,7 @@ pub trait PixiInstallReporter {
 pub struct PixiSolveId(pub usize);
 
 pub trait PixiSolveReporter {
-    /// Called when the [`CommandDispatcher`] learns of a new pixi environment
+    /// Called when the [`crate::CommandDispatcher`] learns of a new pixi environment
     /// to solve.
     ///
     /// The command_dispatcher might not immediately start solving the
@@ -62,7 +62,7 @@ pub trait PixiSolveReporter {
 pub struct CondaSolveId(pub usize);
 
 pub trait CondaSolveReporter {
-    /// Called when the [`CommandDispatcher`] learns of a new conda environment
+    /// Called when the [`crate::CommandDispatcher`] learns of a new conda environment
     /// to solve.
     ///
     /// The command_dispatcher might not immediately start solving the
@@ -90,7 +90,7 @@ pub trait CondaSolveReporter {
 pub struct GitCheckoutId(pub usize);
 
 pub trait GitCheckoutReporter {
-    /// Called when a git checkout was queued on the [`CommandDispatcher`].
+    /// Called when a git checkout was queued on the [`crate::CommandDispatcher`].
     fn on_checkout_queued(
         &mut self,
         reason: Option<ReporterContext>,
@@ -104,7 +104,7 @@ pub trait GitCheckoutReporter {
     fn on_checkout_finished(&mut self, checkout_id: GitCheckoutId);
 }
 
-/// A trait that is used to report the progress of the [`CommandDispatcher`].
+/// A trait that is used to report the progress of the [`crate::CommandDispatcher`].
 ///
 /// The reporter has to be `Send` but does not require `Sync`.
 pub trait Reporter: Send {
