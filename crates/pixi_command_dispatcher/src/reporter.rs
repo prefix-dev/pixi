@@ -1,7 +1,9 @@
 use pixi_git::resolver::RepositoryReference;
+use serde::Serialize;
 
-use crate::install_pixi::InstallPixiEnvironmentSpec;
-use crate::{PixiEnvironmentSpec, SolveCondaEnvironmentSpec};
+use crate::{
+    PixiEnvironmentSpec, SolveCondaEnvironmentSpec, install_pixi::InstallPixiEnvironmentSpec,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
 #[serde(transparent)]
@@ -14,7 +16,11 @@ pub trait PixiInstallReporter {
     /// This function should return an identifier which is used to identify this
     /// particular installation. Other functions in this trait will use this
     /// identifier to link the events to the particular solve.
-    fn on_install_queued(&mut self, env: &InstallPixiEnvironmentSpec) -> PixiInstallId;
+    fn on_install_queued(
+        &mut self,
+        reason: Option<ReporterContext>,
+        env: &InstallPixiEnvironmentSpec,
+    ) -> PixiInstallId;
 
     /// Called when solving of the specified environment has started.
     fn on_install_start(&mut self, solve_id: PixiInstallId);
@@ -38,7 +44,11 @@ pub trait PixiSolveReporter {
     /// This function should return an identifier which is used to identify this
     /// particular solve. Other functions in this trait will use this identifier
     /// to link the events to the particular solve.
-    fn on_solve_queued(&mut self, env: &PixiEnvironmentSpec) -> PixiSolveId;
+    fn on_solve_queued(
+        &mut self,
+        reason: Option<ReporterContext>,
+        env: &PixiEnvironmentSpec,
+    ) -> PixiSolveId;
 
     /// Called when solving of the specified environment has started.
     fn on_solve_start(&mut self, solve_id: PixiSolveId);
@@ -62,7 +72,11 @@ pub trait CondaSolveReporter {
     /// This function should return an identifier which is used to identify this
     /// particular solve. Other functions in this trait will use this identifier
     /// to link the events to the particular solve.
-    fn on_solve_queued(&mut self, env: &SolveCondaEnvironmentSpec) -> CondaSolveId;
+    fn on_solve_queued(
+        &mut self,
+        reason: Option<ReporterContext>,
+        env: &SolveCondaEnvironmentSpec,
+    ) -> CondaSolveId;
 
     /// Called when solving of the specified environment has started.
     fn on_solve_start(&mut self, solve_id: CondaSolveId);
@@ -77,7 +91,11 @@ pub struct GitCheckoutId(pub usize);
 
 pub trait GitCheckoutReporter {
     /// Called when a git checkout was queued on the [`CommandDispatcher`].
-    fn on_checkout_queued(&mut self, env: &RepositoryReference) -> GitCheckoutId;
+    fn on_checkout_queued(
+        &mut self,
+        reason: Option<ReporterContext>,
+        env: &RepositoryReference,
+    ) -> GitCheckoutId;
 
     /// Called when the git checkout has started.
     fn on_checkout_start(&mut self, checkout_id: GitCheckoutId);
@@ -103,4 +121,12 @@ pub trait Reporter: Send {
     /// Returns a mutable reference to a reporter that reports on the progress
     /// of actual package installation.
     fn as_pixi_install_reporter(&mut self) -> Option<&mut dyn PixiInstallReporter>;
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ReporterContext {
+    SolvePixi(PixiSolveId),
+    SolveConda(CondaSolveId),
+    InstallPixi(PixiInstallId),
 }

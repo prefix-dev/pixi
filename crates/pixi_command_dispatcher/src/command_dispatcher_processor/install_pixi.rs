@@ -13,11 +13,12 @@ impl CommandDispatcherProcessor {
     /// task was received.
     pub(crate) fn on_install_pixi_environment(&mut self, task: InstallPixiEnvironmentTask) {
         // Notify the reporter that a new solve has been queued.
+        let parent_context = task.context.and_then(|ctx| self.reporter_context(ctx));
         let reporter_id = self
             .reporter
             .as_deref_mut()
             .and_then(Reporter::as_pixi_install_reporter)
-            .map(|reporter| reporter.on_install_queued(&task.spec));
+            .map(|reporter| reporter.on_install_queued(parent_context, &task.spec));
 
         // Store information about the pending environment.
         let pending_env_id = self

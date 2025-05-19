@@ -8,8 +8,10 @@ use serde::Serialize;
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize)]
 pub struct BuildEnvironment {
     pub host_platform: Platform,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub host_virtual_packages: Vec<GenericVirtualPackage>,
     pub build_platform: Platform,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub build_virtual_packages: Vec<GenericVirtualPackage>,
 }
 

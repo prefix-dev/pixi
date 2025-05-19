@@ -37,12 +37,11 @@ mod build;
 mod cache_dirs;
 mod command_dispatcher;
 mod command_dispatcher_processor;
-mod event_reporter;
 mod executor;
 mod install_pixi;
 mod instantiate_tool_env;
 mod limits;
-mod reporter;
+pub mod reporter;
 mod solve_conda;
 mod solve_pixi;
 mod source_checkout;
@@ -51,77 +50,25 @@ mod source_metadata;
 pub use build::BuildEnvironment;
 pub use cache_dirs::CacheDirs;
 pub use command_dispatcher::{
-    CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    InstantiateBackendError, InstantiateBackendSpec,
+    CommandDispatcher, CommandDispatcherBuilder, CommandDispatcherError,
+    CommandDispatcherErrorResultExt, InstantiateBackendError, InstantiateBackendSpec,
 };
 pub use executor::Executor;
+pub use install_pixi::{InstallPixiEnvironmentError, InstallPixiEnvironmentSpec};
+pub use limits::Limits;
 pub use reporter::{
-    CondaSolveId, CondaSolveReporter, GitCheckoutId, GitCheckoutReporter, PixiInstallReporter,
-    PixiSolveId, PixiSolveReporter, Reporter,
+    CondaSolveReporter, GitCheckoutReporter, PixiInstallReporter, PixiSolveReporter, Reporter,
+    ReporterContext,
 };
 pub use solve_conda::SolveCondaEnvironmentSpec;
 pub use solve_pixi::{PixiEnvironmentSpec, SolvePixiEnvironmentError};
 pub use source_checkout::{InvalidPathError, SourceCheckout, SourceCheckoutError};
 pub use source_metadata::SourceMetadataSpec;
 
-#[cfg(test)]
-mod test {
-    use pixi_spec::GitSpec;
-    use pixi_spec_containers::DependencyMap;
-    use rattler_conda_types::{ChannelUrl, Platform};
-    use std::path::Path;
-    use std::str::FromStr;
-    use url::Url;
-
-    use crate::event_reporter::EventReporter;
-    use crate::{BuildEnvironment, CommandDispatcher, Executor, PixiEnvironmentSpec};
-
-    fn local_channel(name: &str) -> ChannelUrl {
-        Url::from_directory_path(
-            Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join(format!("../../tests/data/channels/channels/{name}/")),
-        )
-        .unwrap()
-        .into()
-    }
-
-    #[tokio::test]
-    pub async fn simple_test() {
-        let (reporter, events) = EventReporter::new();
-        let dispatcher = CommandDispatcher::builder()
-            .with_reporter(reporter)
-            .with_executor(Executor::Serial)
-            .finish();
-
-        let result = dispatcher
-            .solve_pixi_environment(PixiEnvironmentSpec {
-                requirements: DependencyMap::from_iter([(
-                    "boost-check".parse().unwrap(),
-                    GitSpec {
-                        git: "https://github.com/wolfv/pixi-build-examples.git"
-                            .parse()
-                            .unwrap(),
-                        rev: None,
-                        subdirectory: Some(String::from("boost-check")),
-                    }
-                    .into(),
-                )]),
-                channels: vec![
-                    Url::from_str("https://prefix.dev/conda-forge")
-                        .unwrap()
-                        .into(),
-                ],
-                build_environment: BuildEnvironment {
-                    build_platform: Platform::Win64,
-                    ..BuildEnvironment::simple_cross(Platform::Win64).unwrap()
-                },
-                ..PixiEnvironmentSpec::default()
-            })
-            .await
-            .unwrap();
-
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].package_record().name.as_source(), "dummy-c");
-        insta::assert_debug_snapshot!(&events.lock().unwrap());
-    }
+/// A helper function to check if a value is the default value for its type.
+fn is_default<T: Default + PartialEq>(value: &T) -> bool {
+    T::default() == *value
 }
+
+#[cfg(test)]
+mod test {}

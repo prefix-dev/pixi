@@ -25,6 +25,12 @@ pub enum Limit {
     Default,
 }
 
+impl From<usize> for Limit {
+    fn from(value: usize) -> Self {
+        NonZero::new(value).map(Limit::Max).unwrap_or(Limit::None)
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct ResolvedLimits {
     /// The maximum number of concurrent solves that can be performed.

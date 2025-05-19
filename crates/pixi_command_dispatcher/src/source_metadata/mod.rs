@@ -74,9 +74,9 @@ impl SourceMetadataSpec {
                 init_params: discovered_backend.init_params,
                 channel_config: self.channel_config.clone(),
                 build_environment: BuildEnvironment {
-                    host_platform: self.build_environment.build_platform.clone(),
+                    host_platform: self.build_environment.build_platform,
                     host_virtual_packages: self.build_environment.build_virtual_packages.clone(),
-                    build_platform: self.build_environment.build_platform.clone(),
+                    build_platform: self.build_environment.build_platform,
                     build_virtual_packages: self.build_environment.build_virtual_packages.clone(),
                 },
                 enabled_protocols: self.enabled_protocols,

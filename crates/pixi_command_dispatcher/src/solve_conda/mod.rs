@@ -40,7 +40,7 @@ pub struct SolveCondaEnvironmentSpec {
     pub constraints: DependencyMap<rattler_conda_types::PackageName, NamelessMatchSpec>,
 
     /// Available source repodata records.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(skip)]
     pub source_repodata: Vec<Arc<SourceMetadata>>,
 
     /// Available Binary repodata records.
@@ -59,16 +59,19 @@ pub struct SolveCondaEnvironmentSpec {
     pub channels: Vec<ChannelUrl>,
 
     /// The virtual packages to include in the solve
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub virtual_packages: Vec<GenericVirtualPackage>,
 
     /// The strategy to use for solving
+    #[serde(skip_serializing_if = "crate::is_default")]
     pub strategy: SolveStrategy,
 
     /// The priority of channels to use for solving
+    #[serde(skip_serializing_if = "crate::is_default")]
     pub channel_priority: ChannelPriority,
 
     /// Exclude any packages after the first cut-off date.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip_serializing_if = "crate::is_default")]
     pub exclude_newer: Option<DateTime<Utc>>,
 
     /// The channel configuration to use for this environment.

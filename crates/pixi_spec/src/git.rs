@@ -22,7 +22,7 @@ pub struct GitSpec {
 }
 
 /// A reference to a specific commit in a git repository.
-#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord, ::serde::Deserialize)]
+#[derive(Default, Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord, ::serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum GitReference {
     /// The HEAD commit of a branch.
@@ -35,6 +35,7 @@ pub enum GitReference {
     Rev(String),
 
     /// A default branch.
+    #[default]
     DefaultBranch,
 }
 

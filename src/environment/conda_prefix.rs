@@ -1,14 +1,13 @@
 use std::collections::HashSet;
 use std::sync::{Arc, LazyLock};
 
-use crate::build::{BuildContext, GitCheckoutProgress};
+use crate::build::BuildContext;
 use crate::environment::PythonStatus;
 use crate::lock_file::IoConcurrencyLimit;
 use crate::prefix::{Prefix, PrefixError};
 use crate::workspace::HasWorkspaceRef;
 use crate::workspace::grouped_environment::{GroupedEnvironment, GroupedEnvironmentName};
 use futures::{StreamExt, TryFutureExt, TryStreamExt, stream};
-use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::IntoDiagnostic;
 use pixi_manifest::FeaturesExt;
@@ -301,7 +300,6 @@ pub async fn update_prefix_conda(
         });
 
     let mut progress_reporter = None;
-    let source_pb = global_multi_progress().add(ProgressBar::hidden());
 
     let source_records_length = source_records.len();
     // Build conda packages out of the source records

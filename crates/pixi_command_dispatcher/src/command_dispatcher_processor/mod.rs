@@ -163,10 +163,13 @@ struct PendingInstallPixiEnvironment {
 /// when available.
 enum PendingDeduplicatingTask<T: TaskSpec> {
     /// Task is currently executing, contains channels to notify when complete
-    Pending(Vec<oneshot::Sender<Result<T::Output, T::Error>>>),
+    Pending(
+        Vec<oneshot::Sender<Result<T::Output, T::Error>>>,
+        Option<CommandDispatcherContext>,
+    ),
 
     /// Task has completed successfully, result is cached
-    Result(T::Output),
+    Result(T::Output, Option<CommandDispatcherContext>),
 
     /// Task has failed, future requests will also fail
     Errored,
@@ -181,7 +184,7 @@ where
         &mut self,
         result: Result<T::Output, CommandDispatcherError<T::Error>>,
     ) {
-        let Self::Pending(pending) = self else {
+        let Self::Pending(pending, context) = self else {
             unreachable!("cannot get a result for a task that is not pending");
         };
 
@@ -196,7 +199,7 @@ where
                     let _ = tx.send(Ok(output.clone()));
                 }
 
-                *self = Self::Result(output);
+                *self = Self::Result(output, *context);
             }
             Err(mut err) => {
                 // Only send the error to the first channel, drop the rest, which cancels them.
@@ -216,8 +219,11 @@ where
 
 /// Information about a request for metadata of a particular source spec.
 enum PendingSourceMetadata {
-    Pending(Vec<oneshot::Sender<Result<Arc<SourceMetadata>, SourceMetadataError>>>),
-    Result(Arc<SourceMetadata>),
+    Pending(
+        Vec<oneshot::Sender<Result<Arc<SourceMetadata>, SourceMetadataError>>>,
+        Option<CommandDispatcherContext>,
+    ),
+    Result(Arc<SourceMetadata>, Option<CommandDispatcherContext>),
     Errored,
 }
 
@@ -328,5 +334,49 @@ impl CommandDispatcherProcessor {
             context: Some(context),
             data: self.inner.clone(),
         }
+    }
+
+    fn reporter_context(
+        &self,
+        context: CommandDispatcherContext,
+    ) -> Option<reporter::ReporterContext> {
+        let mut parent_context = Some(context);
+        while let Some(context) = parent_context.take() {
+            parent_context = match context {
+                CommandDispatcherContext::SolveCondaEnvironment(id) => {
+                    return self.conda_solves[id]
+                        .reporter_id
+                        .map(reporter::ReporterContext::SolveConda);
+                }
+                CommandDispatcherContext::SolvePixiEnvironment(id) => {
+                    return self.solve_pixi_environments[id]
+                        .reporter_id
+                        .map(reporter::ReporterContext::SolvePixi);
+                }
+                CommandDispatcherContext::SourceMetadata(id) => self
+                    .source_metadata
+                    .get(&id)
+                    .and_then(|pending| match pending {
+                        PendingSourceMetadata::Pending(_, context) => Some(*context),
+                        PendingSourceMetadata::Result(_, context) => Some(*context),
+                        PendingSourceMetadata::Errored => None,
+                    })?,
+                CommandDispatcherContext::InstallPixiEnvironment(id) => {
+                    return self.install_pixi_environment[id]
+                        .reporter_id
+                        .map(reporter::ReporterContext::InstallPixi);
+                }
+                CommandDispatcherContext::InstantiateToolEnv(id) => self
+                    .instantiated_tool_envs
+                    .get(&id)
+                    .and_then(|pending| match pending {
+                        PendingDeduplicatingTask::Pending(_, context) => Some(*context),
+                        PendingDeduplicatingTask::Result(_, context) => Some(*context),
+                        PendingDeduplicatingTask::Errored => None,
+                    })?,
+            };
+        }
+
+        None
     }
 }

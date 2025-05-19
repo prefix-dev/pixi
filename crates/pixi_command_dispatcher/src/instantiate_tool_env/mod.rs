@@ -137,20 +137,20 @@ impl InstantiateToolEnvironmentSpec {
 
         // Construct the prefix for the tool environment.
         let prefix = Prefix::create(command_queue.cache_dirs().build_backends().join(cache_key))
-            .map_err(InstantiateToolEnvironmentError::FailedToCreatePrefix)?;
+            .map_err(InstantiateToolEnvironmentError::CreatePrefix)?;
 
         // Acquire a lock on the tool prefix.
         let mut prefix_guard = AsyncPrefixGuard::new(prefix.path())
             .and_then(|guard| guard.write())
             .await
-            .map_err(InstantiateToolEnvironmentError::FailedToAcquireLock)?;
+            .map_err(InstantiateToolEnvironmentError::AcquireLock)?;
 
         // If the environment already exists, we can return early.
         if prefix_guard.is_ready() {
             prefix_guard
                 .finish()
                 .await
-                .map_err(InstantiateToolEnvironmentError::FailedToReleaseLock)?;
+                .map_err(InstantiateToolEnvironmentError::ReleaseLock)?;
             return Ok(prefix);
         }
 
@@ -158,10 +158,10 @@ impl InstantiateToolEnvironmentSpec {
         prefix_guard
             .begin()
             .await
-            .map_err(InstantiateToolEnvironmentError::FailedToUpdateLock)?;
+            .map_err(InstantiateToolEnvironmentError::UpdateLock)?;
 
         // Start by solving the environment.
-        let target_platorm = self.build_environment.host_platform;
+        let target_platform = self.build_environment.host_platform;
         let solved_environment = command_queue
             .solve_pixi_environment(PixiEnvironmentSpec {
                 requirements: self
@@ -181,7 +181,7 @@ impl InstantiateToolEnvironmentSpec {
             })
             .await
             .map_err_with(Box::new)
-            .map_err_with(InstantiateToolEnvironmentError::FailedToSolveEnvironment)?;
+            .map_err_with(InstantiateToolEnvironmentError::SolveEnvironment)?;
 
         // Install the environment
         command_queue
@@ -189,17 +189,17 @@ impl InstantiateToolEnvironmentSpec {
                 records: solved_environment,
                 prefix: prefix.clone(),
                 installed: None,
-                platform: target_platorm,
+                platform: target_platform,
                 force_reinstall: Default::default(),
             })
             .await
-            .map_err_with(InstantiateToolEnvironmentError::FailedToInstallEnvironment)?;
+            .map_err_with(InstantiateToolEnvironmentError::InstallEnvironment)?;
 
         // Mark the environment as finished.
         prefix_guard
             .finish()
             .await
-            .map_err(InstantiateToolEnvironmentError::FailedToUpdateLock)?;
+            .map_err(InstantiateToolEnvironmentError::UpdateLock)?;
 
         Ok(prefix)
     }
@@ -209,22 +209,22 @@ impl InstantiateToolEnvironmentSpec {
 #[derive(Debug, Error, Diagnostic)]
 pub enum InstantiateToolEnvironmentError {
     #[error("failed to construct a tool prefix")]
-    FailedToCreatePrefix(#[source] std::io::Error),
+    CreatePrefix(#[source] std::io::Error),
 
     #[error("failed to acquire a lock for the tool prefix")]
-    FailedToAcquireLock(#[source] std::io::Error),
+    AcquireLock(#[source] std::io::Error),
 
     #[error("failed to release lock for the tool prefix")]
-    FailedToReleaseLock(#[source] std::io::Error),
+    ReleaseLock(#[source] std::io::Error),
 
     #[error("failed to update lock for the tool prefix")]
-    FailedToUpdateLock(#[source] std::io::Error),
+    UpdateLock(#[source] std::io::Error),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    FailedToSolveEnvironment(Box<SolvePixiEnvironmentError>),
+    SolveEnvironment(Box<SolvePixiEnvironmentError>),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    FailedToInstallEnvironment(InstallPixiEnvironmentError),
+    InstallEnvironment(InstallPixiEnvironmentError),
 }

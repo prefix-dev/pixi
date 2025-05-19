@@ -29,8 +29,8 @@ impl CommandDispatcherProcessor {
 
         match self.source_metadata.entry(source_metadata_id) {
             Entry::Occupied(mut entry) => match entry.get_mut() {
-                PendingSourceMetadata::Pending(pending) => pending.push(task.tx),
-                PendingSourceMetadata::Result(fetch) => {
+                PendingSourceMetadata::Pending(pending, _) => pending.push(task.tx),
+                PendingSourceMetadata::Result(fetch, _) => {
                     let _ = task.tx.send(Ok(fetch.clone()));
                 }
                 PendingSourceMetadata::Errored => {
@@ -39,7 +39,7 @@ impl CommandDispatcherProcessor {
                 }
             },
             Entry::Vacant(entry) => {
-                entry.insert(PendingSourceMetadata::Pending(vec![task.tx]));
+                entry.insert(PendingSourceMetadata::Pending(vec![task.tx], task.context));
 
                 let dispatcher = self.create_task_command_queue(
                     CommandDispatcherContext::SourceMetadata(source_metadata_id),
@@ -66,10 +66,12 @@ impl CommandDispatcherProcessor {
         id: SourceMetadataId,
         result: Result<Arc<SourceMetadata>, CommandDispatcherError<SourceMetadataError>>,
     ) {
-        let Some(PendingSourceMetadata::Pending(pending)) = self.source_metadata.get_mut(&id)
+        let Some(PendingSourceMetadata::Pending(pending, context)) =
+            self.source_metadata.get_mut(&id)
         else {
             unreachable!("cannot get a result for source metadata that is not pending");
         };
+        let context = *context;
 
         let Some(result) = result.into_ok_or_failed() else {
             // If the job was canceled, we can just drop the sending end
@@ -84,7 +86,7 @@ impl CommandDispatcherProcessor {
                 }
 
                 self.source_metadata
-                    .insert(id, PendingSourceMetadata::Result(metadata));
+                    .insert(id, PendingSourceMetadata::Result(metadata, context));
             }
             Err(mut err) => {
                 // Only send the error to the first channel, drop the rest, which cancels them.

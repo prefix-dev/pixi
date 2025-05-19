@@ -26,7 +26,7 @@ pub struct JsonRpcBackendSpec {
 /// environment.
 #[derive(Debug)]
 pub enum CommandSpec {
-    EnvironmentSpec(EnvironmentSpec),
+    EnvironmentSpec(Box<EnvironmentSpec>),
     System(SystemCommandSpec),
 }
 
@@ -72,7 +72,7 @@ impl JsonRpcBackendSpec {
 
         Self {
             name: DEFAULT_BUILD_TOOL.to_string(),
-            command: CommandSpec::EnvironmentSpec(EnvironmentSpec {
+            command: CommandSpec::EnvironmentSpec(Box::new(EnvironmentSpec {
                 requirement: (
                     DEFAULT_BUILD_TOOL.parse().unwrap(),
                     NamelessMatchSpec::default(),
@@ -81,7 +81,7 @@ impl JsonRpcBackendSpec {
                 constraints: Default::default(),
                 channels: vec![conda_forge_channel, backends_channel],
                 command: None,
-            }),
+            })),
         }
     }
 }

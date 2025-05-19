@@ -57,9 +57,11 @@ pub struct PixiEnvironmentSpec {
     pub channels: Vec<ChannelUrl>,
 
     /// The strategy to use for solving
+    #[serde(skip_serializing_if = "crate::is_default")]
     pub strategy: SolveStrategy,
 
     /// The priority of channels to use for solving
+    #[serde(skip_serializing_if = "crate::is_default")]
     pub channel_priority: ChannelPriority,
 
     /// Exclude any packages after the first cut-off date.
@@ -70,6 +72,7 @@ pub struct PixiEnvironmentSpec {
     pub channel_config: ChannelConfig,
 
     /// The protocols that are enabled for source packages
+    #[serde(skip_serializing_if = "crate::is_default")]
     pub enabled_protocols: EnabledProtocols,
 }
 

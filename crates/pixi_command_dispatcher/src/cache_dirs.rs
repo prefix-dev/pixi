@@ -51,4 +51,12 @@ impl CacheDirs {
             .clone()
             .unwrap_or_else(|| self.root.join("pkgs"))
     }
+
+    /// Sets the working directory for build backends.
+    pub fn with_working_dirs(self, work_dirs: PathBuf) -> Self {
+        Self {
+            work_dirs: Some(work_dirs),
+            ..self
+        }
+    }
 }

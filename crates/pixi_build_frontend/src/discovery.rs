@@ -245,13 +245,13 @@ impl DiscoveredBackend {
         Ok(Some(Self {
             backend_spec: BackendSpec::JsonRpc(JsonRpcBackendSpec {
                 name: build_system.backend.name.as_normalized().to_string(),
-                command: CommandSpec::EnvironmentSpec(EnvironmentSpec {
+                command: CommandSpec::EnvironmentSpec(Box::new(EnvironmentSpec {
                     requirement,
                     additional_requirements,
                     channels,
                     constraints: DependencyMap::default(),
                     command: None,
-                }),
+                })),
             }),
             init_params: BackendInitializationParams {
                 manifest_path: pathdiff::diff_paths(provenance.path, &source_dir).expect(

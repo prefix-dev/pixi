@@ -47,7 +47,7 @@ use crate::{
     Workspace,
     activation::CurrentEnvVarBehavior,
     build::{
-        BuildContext, BuildEnvironment, GitCheckoutProgress, GlobHashCache,
+        BuildContext, BuildEnvironment, GlobHashCache,
         source_metadata_collector::{CollectedSourceMetadata, SourceMetadataCollector},
     },
     environment::{
@@ -87,9 +87,21 @@ impl Workspace {
         options: UpdateLockFileOptions,
     ) -> miette::Result<LockFileDerivedData<'_>> {
         let lock_file = self.load_lock_file().await?;
-        let package_cache =
-            PackageCache::new(pixi_config::get_cache_dir()?.join(consts::CONDA_PACKAGE_CACHE_DIR));
         let glob_hash_cache = GlobHashCache::default();
+
+        // Construct a command dispatcher that will be used to run the tasks.
+        let multi_progress = global_multi_progress();
+        let anchor_pb = multi_progress.add(ProgressBar::hidden());
+        let command_dispatcher = self
+            .command_dispatcher_builder()?
+            .with_reporter(crate::reporters::TopLevelProgress::new(
+                global_multi_progress(),
+                anchor_pb,
+            ))
+            .finish();
+
+        // Get the package cache from the dispatcher.
+        let package_cache = command_dispatcher.package_cache().clone();
 
         // should we check the lock-file in the first place?
         if !options.lock_file_usage.should_check_if_out_of_date() {
@@ -103,7 +115,7 @@ impl Workspace {
                 updated_pypi_prefixes: Default::default(),
                 uv_context: None,
                 io_concurrency_limit: IoConcurrencyLimit::default(),
-                build_context: BuildContext::from_workspace(self)?,
+                build_context: BuildContext::from_workspace(self, command_dispatcher)?,
                 glob_hash_cache,
             });
         }
@@ -127,7 +139,7 @@ impl Workspace {
                 updated_pypi_prefixes: Default::default(),
                 uv_context: None,
                 io_concurrency_limit: IoConcurrencyLimit::default(),
-                build_context: BuildContext::from_workspace(self)?,
+                build_context: BuildContext::from_workspace(self, command_dispatcher)?,
                 glob_hash_cache,
             });
         }
@@ -672,6 +684,9 @@ pub struct UpdateContext<'p> {
 
     /// Whether it is allowed to instantiate any prefix.
     no_install: bool,
+
+    /// The progress bar where all the command dispatcher progress will be placed.
+    dispatcher_progress_bar: ProgressBar,
 }
 
 impl<'p> UpdateContext<'p> {
@@ -1086,8 +1101,20 @@ impl<'p> UpdateContextBuilder<'p> {
             .with_client(client.clone())
             .build();
 
-        let build_context =
-            BuildContext::from_workspace(project)?.with_tool_context(Arc::new(tool_context));
+        // Construct a command dispatcher that will be used to run the tasks.
+        let multi_progress = global_multi_progress();
+        let anchor_pb = multi_progress.add(ProgressBar::hidden());
+        let command_dispatcher = self
+            .project
+            .command_dispatcher_builder()?
+            .with_reporter(crate::reporters::TopLevelProgress::new(
+                global_multi_progress(),
+                anchor_pb.clone(),
+            ))
+            .finish();
+
+        let build_context = BuildContext::from_workspace(project, command_dispatcher)?
+            .with_tool_context(Arc::new(tool_context));
 
         let mapping_client = self.mapping_client.unwrap_or_else(|| {
             MappingClient::builder(client)
@@ -1117,6 +1144,7 @@ impl<'p> UpdateContextBuilder<'p> {
             io_concurrency_limit: self.io_concurrency_limit.unwrap_or_default(),
             build_context,
             glob_hash_cache,
+            dispatcher_progress_bar: anchor_pb,
 
             no_install: self.no_install,
         })
@@ -1387,14 +1415,15 @@ impl<'p> UpdateContext<'p> {
             );
         }
 
-        let top_level_progress =
-            global_multi_progress().add(ProgressBar::new(pending_futures.len() as u64));
+        let top_level_progress = global_multi_progress()
+            .insert_before(&self.dispatcher_progress_bar, ProgressBar::hidden());
         top_level_progress.set_style(indicatif::ProgressStyle::default_bar()
             .template("{spinner:.cyan} {prefix:20!} [{elapsed_precise}] [{bar:40!.bright.yellow/dim.white}] {pos:>4}/{len:4} {wide_msg:.dim}")
             .expect("should be able to set style")
             .progress_chars("━━╾─"));
         top_level_progress.enable_steady_tick(Duration::from_millis(50));
         top_level_progress.set_prefix("updating lock-file");
+        top_level_progress.set_length(pending_futures.len() as u64);
 
         // Iterate over all the futures we spawned and wait for them to complete.
         //
@@ -1718,10 +1747,6 @@ async fn spawn_solve_conda_environment_task(
 
     // Get the channel configuration
     let channel_config = group.workspace().channel_config();
-
-    // A root progress bar for the task. It is used to attach sub-progress bars to,
-    // that doesn't need to be split up between multiple platforms.
-    let root_pb = global_multi_progress().add(ProgressBar::hidden());
 
     tokio::spawn(
         async move {

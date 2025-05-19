@@ -4,7 +4,7 @@ use indicatif::ProgressBar;
 use parking_lot::Mutex;
 use pixi_build_frontend::CondaBuildReporter;
 
-use crate::build::BuildReporter;
+use crate::reporters::BuildReporter;
 
 pub(super) struct CondaBuildProgress {
     main_progress: ProgressBar,

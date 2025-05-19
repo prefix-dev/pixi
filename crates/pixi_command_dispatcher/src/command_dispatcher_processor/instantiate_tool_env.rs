@@ -24,10 +24,10 @@ impl CommandDispatcherProcessor {
 
         match self.instantiated_tool_envs.entry(id) {
             Entry::Occupied(mut entry) => match entry.get_mut() {
-                PendingDeduplicatingTask::Pending(pending) => {
+                PendingDeduplicatingTask::Pending(pending, _) => {
                     pending.push(task.tx);
                 }
-                PendingDeduplicatingTask::Result(result) => {
+                PendingDeduplicatingTask::Result(result, _) => {
                     let _ = task.tx.send(Ok(result.clone()));
                 }
                 PendingDeduplicatingTask::Errored => {
@@ -36,7 +36,10 @@ impl CommandDispatcherProcessor {
                 }
             },
             Entry::Vacant(entry) => {
-                entry.insert(PendingDeduplicatingTask::Pending(vec![task.tx]));
+                entry.insert(PendingDeduplicatingTask::Pending(
+                    vec![task.tx],
+                    task.context,
+                ));
 
                 let command_queue = self
                     .create_task_command_queue(CommandDispatcherContext::InstantiateToolEnv(id));

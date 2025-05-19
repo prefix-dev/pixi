@@ -17,6 +17,8 @@ futures = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
 reqwest-middleware = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 slotmap = { workspace = true }
 strsim = { workspace = true }
 thiserror = { workspace = true }
@@ -25,15 +27,13 @@ tracing = { workspace = true }
 typed-path = { workspace = true }
 url = { workspace = true }
 xxhash-rust = { workspace = true, features = ["xxh3"] }
-serde = { workspace = true, features = ["derive"] }
-serde_json = { workspace = true }
 
+rattler = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_repodata_gateway = { workspace = true }
+rattler_shell = { workspace = true }
 rattler_solve = { workspace = true, features = ["resolvo"] }
 rattler_virtual_packages = { workspace = true }
-rattler = { workspace = true }
-rattler_shell = { workspace = true }
 
 pixi_build_frontend = { workspace = true }
 pixi_git = { workspace = true }
@@ -44,5 +44,6 @@ pixi_spec_containers = { workspace = true }
 pixi_utils = { workspace = true }
 
 [dev-dependencies]
+insta = { workspace = true, features = ["json"] }
+pixi_config = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
-insta = { workspace = true, features = ["ron"] }

@@ -7,10 +7,8 @@ use pixi_spec::{SourceAnchor, SourceSpec};
 use rattler_conda_types::{ChannelUrl, MatchSpec, ParseStrictness};
 use thiserror::Error;
 
-use crate::build::{
-    BuildContext, BuildEnvironment, BuildError, BuildMetadataReporter, SourceMetadata,
-    reporters::SourceReporter,
-};
+use crate::build::{BuildContext, BuildEnvironment, BuildError, SourceMetadata};
+use crate::reporters::BuildMetadataReporter;
 
 /// An object that is responsible for recursively collecting metadata of source
 /// dependencies.

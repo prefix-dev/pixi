@@ -1,0 +1,184 @@
+---
+source: crates/pixi_command_dispatcher/tests/integration/main.rs
+expression: events.lock().unwrap().deref()
+---
+[
+  {
+    "type": "pixi-solve-queued",
+    "id": 0,
+    "requirements": [
+      {
+        "boost-check": {
+          "git": "https://github.com/wolfv/pixi-build-examples.git",
+          "rev": "a4c27e86a4a5395759486552abb3df8a47d50172",
+          "subdirectory": "boost-check"
+        }
+      }
+    ],
+    "build-environment": {
+      "host_platform": "win-64",
+      "build_platform": "win-64",
+      "build_virtual_packages": [
+        "__win=10.0.26100=0",
+        "__archspec=1=x86_64_v3"
+      ]
+    },
+    "channels": [
+      "https://prefix.dev/conda-forge"
+    ],
+    "channel-config": {
+      "channel_alias": "https://conda.anaconda.org/",
+      "root_dir": "."
+    }
+  },
+  {
+    "type": "pixi-solve-started",
+    "id": 0
+  },
+  {
+    "type": "git-checkout-queued",
+    "id": 0,
+    "url": "https://github.com/wolfv/pixi-build-examples",
+    "reference": {
+      "full-commit": "a4c27e86a4a5395759486552abb3df8a47d50172"
+    },
+    "context": {
+      "solve-pixi": 0
+    }
+  },
+  {
+    "type": "git-checkout-started",
+    "id": 0
+  },
+  {
+    "type": "git-checkout-finished",
+    "id": 0
+  },
+  {
+    "type": "pixi-solve-queued",
+    "id": 1,
+    "requirements": [
+      {
+        "pixi-build-cmake": "*"
+      }
+    ],
+    "build-environment": {
+      "host_platform": "win-64",
+      "host_virtual_packages": [
+        "__win=10.0.26100=0",
+        "__archspec=1=x86_64_v3"
+      ],
+      "build_platform": "win-64",
+      "build_virtual_packages": [
+        "__win=10.0.26100=0",
+        "__archspec=1=x86_64_v3"
+      ]
+    },
+    "channels": [
+      "https://prefix.dev/pixi-build-backends",
+      "https://prefix.dev/conda-forge"
+    ],
+    "channel-config": {
+      "channel_alias": "https://conda.anaconda.org/",
+      "root_dir": "."
+    },
+    "context": {
+      "solve-pixi": 0
+    }
+  },
+  {
+    "type": "pixi-solve-started",
+    "id": 1
+  },
+  {
+    "type": "conda-solve-queued",
+    "id": 0,
+    "binary-specs": [
+      {
+        "pixi-build-cmake": {
+          "version": "*"
+        }
+      }
+    ],
+    "platform": "win-64",
+    "channels": [
+      "https://prefix.dev/pixi-build-backends",
+      "https://prefix.dev/conda-forge"
+    ],
+    "virtual-packages": [
+      "__win=10.0.26100=0",
+      "__archspec=1=x86_64_v3"
+    ],
+    "channel-config": {
+      "channel_alias": "https://conda.anaconda.org/",
+      "root_dir": "."
+    },
+    "context": {
+      "solve-pixi": 1
+    }
+  },
+  {
+    "type": "conda-solve-started",
+    "id": 0
+  },
+  {
+    "type": "conda-solve-finished",
+    "id": 0
+  },
+  {
+    "type": "pixi-solve-finished",
+    "id": 1
+  },
+  {
+    "type": "pixi-install-queued",
+    "id": 0,
+    "platform": "win-64",
+    "context": {
+      "solve-pixi": 0
+    }
+  },
+  {
+    "type": "pixi-install-started",
+    "id": 0
+  },
+  {
+    "type": "pixi-install-finished",
+    "id": 0
+  },
+  {
+    "type": "conda-solve-queued",
+    "id": 1,
+    "source-specs": [
+      {
+        "boost-check": {
+          "git": "https://github.com/wolfv/pixi-build-examples.git",
+          "rev": "a4c27e86a4a5395759486552abb3df8a47d50172",
+          "subdirectory": "boost-check"
+        }
+      }
+    ],
+    "platform": "win-64",
+    "channels": [
+      "https://prefix.dev/conda-forge"
+    ],
+    "channel-config": {
+      "channel_alias": "https://conda.anaconda.org/",
+      "root_dir": "."
+    },
+    "context": {
+      "solve-pixi": 0
+    }
+  },
+  {
+    "type": "conda-solve-started",
+    "id": 1
+  },
+  {
+    "type": "conda-solve-finished",
+    "id": 1
+  },
+  {
+    "type": "pixi-solve-finished",
+    "id": 0
+  }
+]

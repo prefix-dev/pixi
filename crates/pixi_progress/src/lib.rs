@@ -1,3 +1,4 @@
+mod placement;
 use indicatif::{HumanBytes, MultiProgress, ProgressBar, ProgressDrawTarget, ProgressState};
 use parking_lot::Mutex;
 use std::borrow::Cow;
@@ -5,6 +6,8 @@ use std::fmt::Write;
 use std::future::Future;
 use std::sync::{Arc, LazyLock};
 use std::time::Duration;
+
+pub use placement::ProgressBarPlacement;
 
 /// Returns a global instance of [`indicatif::MultiProgress`].
 ///

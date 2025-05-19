@@ -14,11 +14,14 @@ impl CommandDispatcherProcessor {
     /// task was received.
     pub(crate) fn on_solve_pixi_environment(&mut self, task: SolvePixiEnvironmentTask) {
         // Notify the reporter that a new solve has been queued.
+        let parent_context = task
+            .context
+            .and_then(|context| self.reporter_context(context));
         let reporter_id = self
             .reporter
             .as_deref_mut()
             .and_then(Reporter::as_pixi_solve_reporter)
-            .map(|reporter| reporter.on_solve_queued(&task.spec));
+            .map(|reporter| reporter.on_solve_queued(parent_context, &task.spec));
 
         // Store information about the pending environment.
         let pending_env_id = self.solve_pixi_environments.insert(PendingPixiEnvironment {
