@@ -12,12 +12,11 @@ use rattler_conda_types::VersionSpec;
 use thiserror::Error;
 use toml_span::Deserialize;
 
-use crate::toml::ExternalWorkspaceProperties;
 use crate::{
     AssociateProvenance, ManifestKind, ManifestProvenance, ManifestSource, PackageManifest,
     ProvenanceError, TomlError, WithProvenance, WithWarnings, WorkspaceManifest,
     pyproject::PyProjectManifest,
-    toml::{ExternalPackageProperties, TomlManifest},
+    toml::{ExternalWorkspaceProperties, TomlManifest},
     utils::WithSourceCode,
     warning::WarningWithSource,
 };
@@ -329,7 +328,8 @@ impl WorkspaceDiscoverer {
             // Read the contents of the manifest file.
             let contents = provenance.read()?.map(Arc::<str>::from);
 
-            // Cheap check to see if the manifest contains a pixi section and if so has the required sections.
+            // Cheap check to see if the manifest contains a pixi section and if so has the
+            // required sections.
             if let ManifestSource::PyProjectToml(source) = &contents {
                 if (source.contains("[tool.pixi")
                     || matches!(search_path.clone(), SearchPath::Explicit(_)))
@@ -352,10 +352,11 @@ impl WorkspaceDiscoverer {
                 }
             } else if let ManifestSource::PixiToml(source) = &contents {
                 // check if at least one of the required sections is present
-                if !Self::REQUIRED_SECTIONS
-                    .iter()
-                    .any(|section| source.contains(&format!("[{}]", section)))
-                {
+                if !Self::REQUIRED_SECTIONS.iter().any(|section| {
+                    source
+                        .lines()
+                        .any(|line| line.trim_start().starts_with(&format!("[{}", section)))
+                }) {
                     return Err(WorkspaceDiscoveryError::Toml(Box::new(WithSourceCode {
                         error: TomlError::NoPixiTable(
                             ManifestKind::Pixi,
@@ -494,7 +495,7 @@ impl WorkspaceDiscoverer {
                     let manifest_dir = provenance.path.parent().expect("a file must have a parent");
                     let package_manifest = match package_manifest {
                         EitherManifest::Pixi(manifest) => manifest.into_package_manifest(
-                            ExternalPackageProperties::default(),
+                            workspace_manifest.derived_external_package_properties(),
                             &workspace_manifest,
                             Some(manifest_dir),
                         ),
@@ -553,9 +554,10 @@ impl WorkspaceDiscoverer {
 mod test {
     use std::{fmt::Write, path::Path};
 
-    use super::*;
     use pixi_test_utils::format_diagnostic;
     use rstest::*;
+
+    use super::*;
 
     #[rstest]
     #[case::root("")]
@@ -636,6 +638,8 @@ mod test {
     #[case::package_specific("package_a/pixi.toml")]
     #[case::missing_table_pixi_manifest("missing-tables/pixi.toml")]
     #[case::missing_table_pyproject_manifest("missing-tables-pyproject/pyproject.toml")]
+    #[case::split_package("split_package/good/package")]
+    #[case::split_package("split_package/bad/package")]
     fn test_explicit_workspace_discoverer(#[case] subdir: &str) {
         let test_data_root = dunce::canonicalize(
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/workspace-discovery"),
@@ -694,7 +698,8 @@ mod test {
 
     #[test]
     fn test_non_existing_discovery() {
-        // Split from the previous rstests, to avoid insta snapshot path conflicts in the error.
+        // Split from the previous rstests, to avoid insta snapshot path conflicts in
+        // the error.
         let test_data_root = dunce::canonicalize(
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/workspace-discovery"),
         )
