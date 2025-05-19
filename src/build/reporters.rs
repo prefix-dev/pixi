@@ -4,7 +4,7 @@ use indicatif::{MultiProgress, ProgressBar};
 use parking_lot::Mutex;
 use pixi_build_frontend::{CondaBuildReporter, CondaMetadataReporter};
 use pixi_git::GIT_SSH_CLONING_WARNING_MSG;
-use pixi_progress::create_warning_pb;
+use pixi_progress::style_warning_pb;
 
 pub trait BuildMetadataReporter: CondaMetadataReporter {
     /// Reporters that the metadata has been cached.
@@ -124,28 +124,25 @@ impl pixi_git::Reporter for SourceCheckoutReporter {
         pb.set_message(format!("checking out {}@{}", url, rev));
         pb.enable_steady_tick(Duration::from_millis(100));
 
-        let bar_pb = if url.scheme().eq("ssh") {
-            let warning_pb = create_warning_pb(GIT_SSH_CLONING_WARNING_MSG.to_string());
-            let original_pb = pb.clone();
+        if url.scheme().eq("ssh") {
+            let warning_pb = self
+                .multi_progress
+                .insert_before(&pb, ProgressBar::hidden());
 
-            let pb = pixi_progress::global_multi_progress()
-                .insert_before(&original_pb, warning_pb.clone());
+            style_warning_pb(&warning_pb, GIT_SSH_CLONING_WARNING_MSG.to_string());
 
             // we always want to have a fresh one for any SSH checkout that started
             self.checkout_helper_pb
                 .lock()
                 .expect("checkout_helper_pb lock poison")
-                .replace(pb.clone())
-                .inspect(|pb| {
+                .replace(warning_pb)
+                .inspect(|replaced_pb| {
                     // if we have a previous one, we need to finish it
-                    pb.finish_and_clear();
+                    replaced_pb.finish_and_clear();
                 });
-            pb
-        } else {
-            pb
         };
 
-        state.bars.insert(id, bar_pb);
+        state.bars.insert(id, pb);
 
         id
     }
