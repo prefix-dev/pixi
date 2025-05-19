@@ -71,7 +71,6 @@ def test_build_conda_package_variants(
         assert package.exists()
 
 
-@pytest.mark.skip(reason="pixi-build-rattler-build seems to always rebuild at the moment")
 def test_no_change_should_be_fully_cached(pixi: Path, simple_workspace: Workspace) -> None:
     simple_workspace.write_files()
     # Setting PIXI_CACHE_DIR shouldn't be necessary
