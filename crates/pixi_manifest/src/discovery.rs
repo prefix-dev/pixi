@@ -328,7 +328,8 @@ impl WorkspaceDiscoverer {
             // Read the contents of the manifest file.
             let contents = provenance.read()?.map(Arc::<str>::from);
 
-            // Cheap check to see if the manifest contains a pixi section and if so has the required sections.
+            // Cheap check to see if the manifest contains a pixi section and if so has the
+            // required sections.
             if let ManifestSource::PyProjectToml(source) = &contents {
                 if (source.contains("[tool.pixi")
                     || matches!(search_path.clone(), SearchPath::Explicit(_)))
@@ -354,7 +355,7 @@ impl WorkspaceDiscoverer {
                 if !Self::REQUIRED_SECTIONS.iter().any(|section| {
                     source
                         .lines()
-                        .any(|line| line.starts_with(&format!("[{}", section)))
+                        .any(|line| line.trim_start().starts_with(&format!("[{}", section)))
                 }) {
                     return Err(WorkspaceDiscoveryError::Toml(Box::new(WithSourceCode {
                         error: TomlError::NoPixiTable(
