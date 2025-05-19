@@ -1277,8 +1277,12 @@ def test_task_caching_with_multiple_outputs_args(pixi: Path, tmp_pixi_workspace:
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest_path, "multiple-depends"],
         stderr_excludes=[
-            "Task 'base-task' with args arg1 = custom1 can be skipped (cache hit)",
-            "Task 'base-task' with args arg1 = custom2 can be skipped (cache hit)",
+            "cache hit",
+            "cache hit",
+        ],
+        stderr_contains=[
+            "task with custom1",
+            "task with custom2",
         ],
     )
 
@@ -1286,8 +1290,12 @@ def test_task_caching_with_multiple_outputs_args(pixi: Path, tmp_pixi_workspace:
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest_path, "multiple-depends"],
         stderr_contains=[
-            "Task 'base-task' with args arg1 = custom1 can be skipped (cache hit)",
-            "Task 'base-task' with args arg1 = custom2 can be skipped (cache hit)",
+            "cache hit",
+            "cache hit",
+        ],
+        stderr_excludes=[
+            "task with custom1",
+            "task with custom2",
         ],
     )
 
@@ -1295,8 +1303,6 @@ def test_task_caching_with_multiple_outputs_args(pixi: Path, tmp_pixi_workspace:
 def test_task_caching_with_multiple_inputs_args(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """Test executing the same task with different arguments is successively cached."""
     manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
-
-    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
 
     # create the inputs and outputs folders
     # that will be tests if they are cached hit
@@ -1330,9 +1336,13 @@ def test_task_caching_with_multiple_inputs_args(pixi: Path, tmp_pixi_workspace: 
     # Run first time without cache
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest_path, "multiple-depends"],
+        stderr_contains=[
+            "Processing $(cat inputs/file1.txt) > outputs/file1.out",
+            "Processing $(cat inputs/file2.txt) > outputs/file2.out",
+        ],
         stderr_excludes=[
-            "Task 'process-file' with args filename = file1 can be skipped (cache hit)",
-            "Task 'process-file' with args filename = file2 can be skipped (cache hit)",
+            "cache hit",
+            "cache hit",
         ],
     )
 
@@ -1340,7 +1350,9 @@ def test_task_caching_with_multiple_inputs_args(pixi: Path, tmp_pixi_workspace: 
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest_path, "multiple-depends"],
         stderr_contains=[
-            "Task 'process-file' with args filename = file1 can be skipped (cache hit)",
-            "Task 'process-file' with args filename = file2 can be skipped (cache hit)",
+            "file1",
+            "cache hit",
+            "file2",
+            "cache hit",
         ],
     )
