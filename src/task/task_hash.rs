@@ -28,8 +28,33 @@ impl Display for ComputationHash {
     }
 }
 
+/// The name hash is a combined hash of all the inputs and outputs of a task.
+/// and it's used as a name for the task cache file.
+///
+/// Use a [`TaskHash`] to construct a name hash.
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+pub struct NameHash(String);
+
+impl From<String> for NameHash {
+    fn from(value: String) -> Self {
+        NameHash(value)
+    }
+}
+
+impl From<&dyn Hasher> for NameHash {
+    fn from(hasher: &dyn Hasher) -> Self {
+        NameHash(format!("{:x}", hasher.finish()))
+    }
+}
+
+impl Display for NameHash {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 /// The cache of a task. It contains the hash of the task.
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct TaskCache {
     /// The hash of the task.
     pub hash: ComputationHash,
@@ -147,6 +172,32 @@ impl TaskHash {
         self.outputs.hash(&mut hasher);
         self.environment.hash(&mut hasher);
         ComputationHash(format!("{:x}", hasher.finish()))
+    }
+
+    /// Return the hash that should be used as the name of the task cache file.
+    /// It takes the rendered inputs and rendered outputs of the task into account.
+    pub fn task_args_hash(task: &ExecutableTask<'_>) -> Result<Option<NameHash>, InputHashesError> {
+        let mut hasher = Xxh3::new();
+
+        let Ok(execute) = task.task().as_execute() else {
+            return Ok(None);
+        };
+
+        // We need to compute hash from input args
+        // If no input args are provided, we treat them as empty list.
+        if let Some(ref inputs) = execute.inputs {
+            let rendered_inputs = inputs.render(Some(task.args()))?;
+            rendered_inputs.hash(&mut hasher);
+        }
+
+        // and the same for output args
+        if let Some(ref outputs) = execute.outputs {
+            let rendered_outputs = outputs.render(Some(task.args()))?;
+            rendered_outputs.hash(&mut hasher);
+        }
+
+        // Create a namehash from the hasher
+        Ok(Some(NameHash::from(&hasher as &dyn Hasher)))
     }
 }
 
