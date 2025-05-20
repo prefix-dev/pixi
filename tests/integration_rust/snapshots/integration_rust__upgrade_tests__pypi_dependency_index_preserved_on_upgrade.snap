@@ -1,10 +1,10 @@
 ---
 source: tests/integration_rust/upgrade_tests.rs
-expression: pixi.manifest_contents().unwrap_or_default()
+expression: redacted_content
 ---
         [workspace]
         channels = ["conda-forge"]
-        platforms = ["osx-arm64"]
+        platforms = ["[PLATFORM]"]
         exclude-newer = "2025-05-19"
 
         [pypi-dependencies]

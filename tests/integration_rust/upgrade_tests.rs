@@ -56,5 +56,8 @@ async fn pypi_dependency_index_preserved_on_upgrade() {
 
     workspace.save().await.unwrap();
 
-    assert_snapshot!(pixi.manifest_contents().unwrap_or_default());
+    // Redact platform-specific information for consistent snapshots across environments
+    let content = pixi.manifest_contents().unwrap_or_default();
+    let redacted_content = content.replace(&Platform::current().to_string(), "[PLATFORM]");
+    assert_snapshot!(redacted_content);
 }
