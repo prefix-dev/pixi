@@ -19,7 +19,7 @@ use crate::{
 use indexmap::{Equivalent, IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic, SourceCode, miette};
-use pixi_pypi_spec::PypiPackageName;
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{ParseStrictness::Strict, Platform, Version, VersionSpec};
 use toml_edit::Value;
@@ -495,12 +495,12 @@ impl WorkspaceManifestMut<'_> {
     /// `ManifestProvenance::save` to persist the changes to disk.
     pub fn add_pep508_dependency(
         &mut self,
-        requirement: &pep508_rs::Requirement,
+        (requirement, pixi_req): (&pep508_rs::Requirement, Option<&PixiPypiSpec>),
         platforms: &[Platform],
         feature_name: &FeatureName,
         editable: Option<bool>,
         overwrite_behavior: DependencyOverwriteBehavior,
-        location: &Option<PypiDependencyLocation>,
+        location: Option<&PypiDependencyLocation>,
     ) -> miette::Result<bool> {
         let mut any_added = false;
         for platform in to_options(platforms) {
@@ -513,6 +513,7 @@ impl WorkspaceManifestMut<'_> {
                 Ok(true) => {
                     self.document.add_pypi_dependency(
                         requirement,
+                        pixi_req,
                         platform,
                         feature_name,
                         editable,
@@ -906,12 +907,12 @@ start = "python -m flask run --port=5050"
         let requirement = pep508_rs::Requirement::from_str("numpy>=3.12").unwrap();
         manifest
             .add_pep508_dependency(
-                &requirement,
+                (&requirement, None),
                 &[],
                 &FeatureName::DEFAULT,
                 None,
                 DependencyOverwriteBehavior::Overwrite,
-                &None,
+                None,
             )
             .unwrap();
 
@@ -933,12 +934,12 @@ start = "python -m flask run --port=5050"
         let requirement = pep508_rs::Requirement::from_str("pytest>=3.12").unwrap();
         manifest
             .add_pep508_dependency(
-                &requirement,
+                (&requirement, None),
                 &[],
                 &FeatureName::from("test"),
                 None,
                 DependencyOverwriteBehavior::Overwrite,
-                &None,
+                None,
             )
             .unwrap();
         assert!(

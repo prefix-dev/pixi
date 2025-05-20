@@ -142,7 +142,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 /// This function processes the dependencies and PyPi dependencies specified in
 /// the feature, filters them based on the provided arguments, and returns the
 /// resulting match specifications and PyPi dependencies.
-fn parse_specs(
+pub fn parse_specs(
     feature: &pixi_manifest::Feature,
     args: &Args,
     workspace: &WorkspaceMut,
@@ -261,17 +261,18 @@ fn parse_specs(
             _ => false,
         })
         // Only upgrade version specs
-        .filter_map(|(name, req)| match req {
+        .filter_map(|(name, req)| match &req {
             PixiPypiSpec::Version { extras, .. } => Some((
                 name.clone(),
                 Requirement {
                     name: name.as_normalized().clone(),
-                    extras,
+                    extras: extras.clone(),
                     // TODO: Add marker support here to avoid overwriting existing markers
                     marker: MarkerTree::default(),
                     origin: None,
                     version_or_url: None,
                 },
+                req,
             )),
             PixiPypiSpec::RawVersion(_) => Some((
                 name.clone(),
@@ -282,16 +283,17 @@ fn parse_specs(
                     origin: None,
                     version_or_url: None,
                 },
+                req,
             )),
             _ => None,
         })
-        .map(|(name, req)| {
+        .map(|(name, req, pixi_req)| {
             let location = workspace.document().pypi_dependency_location(
                 &name,
                 None, // TODO: add support for platforms
                 &args.specs.feature,
             );
-            (name, (req, location))
+            (name, (req, Some(pixi_req), location))
         })
         .collect();
 
