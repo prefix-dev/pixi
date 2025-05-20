@@ -154,7 +154,7 @@ impl ToolContext {
     /// instead of rattler one
     #[cfg(test)]
     pub fn for_tests() -> ToolContextBuilder {
-        let cache_dir = tempfile::tempdir().unwrap().into_path();
+        let cache_dir = tempfile::tempdir().unwrap().keep();
         ToolContextBuilder::new().with_cache_dir(cache_dir)
     }
 
