@@ -13,7 +13,7 @@ impl CommandDispatcherProcessor {
     pub(crate) fn on_solve_conda_environment(&mut self, task: SolveCondaEnvironmentTask) {
         // Notify the reporter that a new solve has been queued.
         let parent_context = task
-            .context
+            .parent
             .and_then(|context| self.reporter_context(context));
         let reporter_id = self
             .reporter

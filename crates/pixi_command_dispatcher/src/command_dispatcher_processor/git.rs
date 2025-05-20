@@ -10,7 +10,7 @@ use crate::command_dispatcher::GitCheckoutTask;
 impl CommandDispatcherProcessor {
     /// Called when a [`ForegroundMessage::GitCheckout`] task was received.
     pub(crate) fn on_checkout_git(&mut self, task: GitCheckoutTask) {
-        let parent_context = task.context.and_then(|ctx| self.reporter_context(ctx));
+        let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
         match self.git_checkouts.entry(task.spec.clone()) {
             Entry::Occupied(mut existing_checkout) => match existing_checkout.get_mut() {
                 PendingGitCheckout::Pending(_, pending) => pending.push(task.tx),

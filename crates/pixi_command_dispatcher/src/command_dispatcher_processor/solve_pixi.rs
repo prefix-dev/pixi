@@ -15,7 +15,7 @@ impl CommandDispatcherProcessor {
     pub(crate) fn on_solve_pixi_environment(&mut self, task: SolvePixiEnvironmentTask) {
         // Notify the reporter that a new solve has been queued.
         let parent_context = task
-            .context
+            .parent
             .and_then(|context| self.reporter_context(context));
         let reporter_id = self
             .reporter
@@ -40,7 +40,7 @@ impl CommandDispatcherProcessor {
         }
 
         // Add the task to the list of pending futures.
-        let dispatcher = self.create_task_command_queue(
+        let dispatcher = self.create_task_command_dispatcher(
             CommandDispatcherContext::SolvePixiEnvironment(pending_env_id),
         );
         self.pending_futures.push(

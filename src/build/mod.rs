@@ -128,7 +128,7 @@ pub enum BuildError {
     SourceCheckoutError(#[from] CommandDispatcherError<SourceCheckoutError>),
 }
 
-// /// The metadata of a source checkout.
+/// The metadata of a source checkout.
 #[derive(Debug)]
 pub struct SourceMetadata {
     /// The source checkout that the manifest was extracted from.
@@ -215,7 +215,6 @@ impl BuildContext {
         metadata_reporter: Arc<dyn BuildMetadataReporter>,
         build_id: usize,
     ) -> Result<SourceMetadata, BuildError> {
-        // let source = self.fetch_source(source_spec, source_reporter).await?;
         let source = self
             .command_dispatcher
             .pin_and_checkout(source_spec.clone())

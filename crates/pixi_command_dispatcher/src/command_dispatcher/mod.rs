@@ -253,7 +253,7 @@ impl CommandDispatcher {
         sender
             .send(ForegroundMessage::from(Task {
                 spec,
-                context: self.context,
+                parent: self.context,
                 tx,
             }))
             .map_err(|_| CommandDispatcherError::Cancelled)?;
@@ -584,6 +584,6 @@ pub(crate) trait TaskSpec {
 
 pub(crate) struct Task<S: TaskSpec> {
     pub spec: S,
-    pub context: Option<CommandDispatcherContext>,
+    pub parent: Option<CommandDispatcherContext>,
     pub tx: oneshot::Sender<Result<S::Output, S::Error>>,
 }

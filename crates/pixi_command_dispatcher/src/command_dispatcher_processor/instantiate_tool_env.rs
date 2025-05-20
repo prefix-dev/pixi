@@ -38,11 +38,12 @@ impl CommandDispatcherProcessor {
             Entry::Vacant(entry) => {
                 entry.insert(PendingDeduplicatingTask::Pending(
                     vec![task.tx],
-                    task.context,
+                    task.parent,
                 ));
 
-                let command_queue = self
-                    .create_task_command_queue(CommandDispatcherContext::InstantiateToolEnv(id));
+                let command_queue = self.create_task_command_dispatcher(
+                    CommandDispatcherContext::InstantiateToolEnv(id),
+                );
                 self.pending_futures.push(
                     task.spec
                         .instantiate(command_queue)

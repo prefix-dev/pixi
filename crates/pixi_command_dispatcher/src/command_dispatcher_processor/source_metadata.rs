@@ -39,9 +39,9 @@ impl CommandDispatcherProcessor {
                 }
             },
             Entry::Vacant(entry) => {
-                entry.insert(PendingSourceMetadata::Pending(vec![task.tx], task.context));
+                entry.insert(PendingSourceMetadata::Pending(vec![task.tx], task.parent));
 
-                let dispatcher = self.create_task_command_queue(
+                let dispatcher = self.create_task_command_dispatcher(
                     CommandDispatcherContext::SourceMetadata(source_metadata_id),
                 );
                 self.pending_futures.push(

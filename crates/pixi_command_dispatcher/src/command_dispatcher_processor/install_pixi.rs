@@ -13,7 +13,7 @@ impl CommandDispatcherProcessor {
     /// task was received.
     pub(crate) fn on_install_pixi_environment(&mut self, task: InstallPixiEnvironmentTask) {
         // Notify the reporter that a new solve has been queued.
-        let parent_context = task.context.and_then(|ctx| self.reporter_context(ctx));
+        let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
         let reporter_id = self
             .reporter
             .as_deref_mut()
@@ -39,7 +39,7 @@ impl CommandDispatcherProcessor {
         }
 
         // Add the task to the list of pending futures.
-        let dispatcher = self.create_task_command_queue(
+        let dispatcher = self.create_task_command_dispatcher(
             CommandDispatcherContext::InstallPixiEnvironment(pending_env_id),
         );
         self.pending_futures.push(

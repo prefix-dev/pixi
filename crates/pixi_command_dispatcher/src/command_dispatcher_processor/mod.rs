@@ -328,7 +328,10 @@ impl CommandDispatcherProcessor {
 
     /// Constructs a new [`CommandDispatcher`] that can be used for tasks
     /// constructed by the command_dispatcher_processor itself.
-    fn create_task_command_queue(&self, context: CommandDispatcherContext) -> CommandDispatcher {
+    fn create_task_command_dispatcher(
+        &self,
+        context: CommandDispatcherContext,
+    ) -> CommandDispatcher {
         CommandDispatcher {
             channel: CommandDispatcherChannel::Weak(self.sender.clone()),
             context: Some(context),
