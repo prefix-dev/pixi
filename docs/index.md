@@ -1,131 +1,250 @@
-# Pixi
+**The next-generation package manager for reproducible, multi-language development.**
 
-![Pixi with magic wand](assets/pixi.webp)
+---
 
-Pixi is a package management tool for developers.
+<div align="center" markdown="1">
 
-- 🧪 **Conda**: Leverage the existing conda ecosystem to obtain packages written in Python, C, C++, and many other languages.
-- 🔄 **Reproducibility**: Work in dedicated, isolated environments that can be easily recreated.
-- 🛠️ **Tasks**: Manage complex pipelines effortlessly.
-- 🌐 **Multi Platform**: Ensure compatibility across Linux, macOS, Windows, and more.
-- 🧩 **Multi Environment**: Compose multiple environments within a single Pixi manifest.
-- 🏗️ **Building**: Build packages from source using powerful build backends.
-- 📦 **Distributing**: Distribute your software via conda channels or various other options.
-- 🐍 **Python**: Full support for `pyproject.toml` and PyPI dependencies.
-- 🌍 **Global Tools**: Install globally available tools, safely stored in separate environments.
+[![Get Started](https://img.shields.io/badge/Get%20Started-Install%20Pixi-blue?style=flat-square)](#installation)
+&nbsp;
+[![GitHub stars](https://img.shields.io/github/stars/prefix-dev/pixi?style=flat-square&)](https://github.com/prefix-dev/pixi)
+&nbsp;
+![Discord](https://img.shields.io/discord/1082332781146800168?style=flat-square&logo=discord&logoColor=%23FFFFFF&color=%235865F2&link=https%3A%2F%2Fdiscord.gg%2FkKV8ZxyzY4)
+&nbsp;
+![License](https://img.shields.io/github/license/prefix-dev/pixi?style=flat-square&)
 
-## Installation
+</div>
 
-To install `pixi` you can run the following command in your terminal:
+
+---
+
+## 🚀 Why Pixi?
+
+Pixi is a **fast, modern, and reproducible** package management tool for developers of all backgrounds.
+
+
+| 🔄 **Reproducibility** | 🛠️ **Tasks** | 🌐 **Multi Platform** |
+|---|---|---|
+| Isolated, easily recreated environments with lockfiles built-in | Manage complex pipelines effortlessly. | Works on Linux, macOS, Windows, and more. |
+| 🧩 **Multi Environment** | 🐍 **Python** | 🌍 **Global Tools** |
+| Compose multiple environments in one manifest. | Support for `pyproject.toml` and PyPI through [`uv`](https://docs.astral.sh/uv/). | Install global tools, safely isolated. Replacing `apt`, `homebrew`, `winget`|
+
+---
+
+
+## ✨ Quick Demo
+
+Project setup is a breeze with Pixi.
+```shell
+pixi init hello-world
+cd hello-world
+pixi add python
+pixi run python -c "print('Hello World!')"
+```
+![Pixi Demo](assets/pixi_project_demo.gif)
+
+Install your favorite tools with a single command.
+```shell
+pixi global install git gh nvim ipython btop bat starship ripgrep
+```
+![Pixi Global Tools demo](assets/pixi_global_demo.gif)
+
+---
+
+
+## ↔️ What is the difference with Pixi?
+
+| Builtin Core Features | Pixi | Conda | Pip | Poetry | uv |
+|-----------------------|---|---|---|---|---|
+| Installs Python | ✅ | ✅ | ❌ | ❌ | ✅ |
+| Supports more than Python | [✅]("Using the conda ecosystem Pixi installs any type of package, not just Python!") | ✅ | [❌]("Only Python packages") | [❌]("Only Python packages") |[❌]("Only Python packages") |
+| Cross-platform Task Runner | [✅](workspace/advanced_tasks.md "Run shell commands on all platforms with `pixi run`") | ❌ | ❌ | ❌ | ✅ |
+| Lockfiles | [✅](workspace/lockfile.md) | ❌ | ❌ | ✅ | ✅ |
+| Project Management | [✅](reference/pixi_manifest.md) | ❌ | ❌ | ✅ | ✅ |
+
+---
+
+
+## 🛠️ Installation
+
+To install `pixi`, run:
 
 === "Linux & macOS"
     ```bash
     curl -fsSL https://pixi.sh/install.sh | sh
     ```
 
-    The above invocation will automatically download the latest version of `pixi`, extract it, and move the `pixi` binary to `~/.pixi/bin`.
-    The script will also extend the `PATH` environment variable in the startup script of your shell to include `~/.pixi/bin`.
-    This allows you to invoke `pixi` from anywhere.
-
 === "Windows"
     ```powershell
     powershell -ExecutionPolicy ByPass -c "irm -useb https://pixi.sh/install.ps1 | iex"
     ```
 
-    The above invocation will automatically download the latest version of `pixi`, extract it, and move the `pixi` binary to `LocalAppData/pixi/bin`.
-    The command will also add `LocalAppData/pixi/bin` to your `PATH` environment variable, allowing you to invoke `pixi` from anywhere.
+!!! tip "Now restart your terminal or shell!"
+    The installation needs to become effective by restarting your terminal or sourcing your shell.
 
-!!! tip
+??? question "Don't trust our link? Check the script!"
+    You can check the installation `sh` script: [download](https://pixi.sh/install.sh) and the `ps1`: [download](https://pixi.sh/install.ps1).
+    The scripts are open source and available on [GitHub](https://github.com/prefix-dev/pixi/tree/main/install).
 
-    You might need to restart your terminal or source your shell for the changes to take effect.
+[**See all installation options →**](installation.md)
 
-Check out our [installation docs](./advanced/installation.md) to learn about alternative installation methods, autocompletion and more.
+---
 
-## Getting Started
+## 🏁 Getting Started
+
+=== "Python"
+    1. **Initialize a workspace:**
+        ```
+        pixi init hello-world
+        cd hello-world
+        ```
+
+    2. **Add dependencies:**
+        ```
+        pixi add cowpy python
+        ```
+
+    3. **Create your script:**
+        ```py title="hello.py"
+        --8<-- "docs/source_files/pixi_workspaces/introduction/deps_add/hello.py"
+        ```
+
+    5. **Add a task:**
+        ```
+        pixi task add start python hello.py
+        ```
+
+    6. **Run the task:**
+        ```
+        pixi run start
+        ```
+        ```
+        ✨ Pixi task (start): python hello.py
+        __________________
+        < Hello Pixi fans! >
+        ------------------
+            \   ^__^
+            \  (oo)\_______
+                (__)\       )\/\
+                ||----w |
+                ||     ||
+        ```
+
+    7. **Entry the environment shell:**
+        ```
+        pixi shell
+        python hello.py
+        exit
+        ```
+
+    More details on how to use Pixi with Python can be found in the [Python tutorial](python/tutorial.md).
+
+=== "Rust"
+    1. **Initialize a workspace:**
+        ```
+        pixi init pixi-rust
+        cd pixi-rust
+        ```
+    2. **Add dependencies:**
+        ```
+        pixi add rust
+        ```
+    3. **Create your script:**
+        ```rust title="hello.rs"
+        fn main() {
+            println!("Hello Pixi fans!");
+        }
+        ```
+    4. **Add a task:**
+        ```
+        pixi task add build "rustc hello.rs"
+        ```
+    5. **Run the task:**
+        ```
+        pixi run build
+        ```
+    6. **Run the script:**
+        ```
+        ./hello
+        ```
+        ```
+        Hello Pixi fans!
+        ```
+
+    More details on how to use Pixi with Rust can be found in the [Rust tutorial](tutorials/rust.md).
+
+=== "Node.js"
+    1. **Initialize a workspace:**
+        ```
+        pixi init pixi-node
+        cd pixi-node
+        ```
+    2. **Add dependencies:**
+        ```
+        pixi add nodejs
+        ```
+    3. **Create your script:**
+        ```js title="hello.js"
+        console.log("Hello Pixi fans!");
+        ```
+    4. **Add a task:**
+        ```
+        pixi task add start "node hello.js"
+        ```
+    5. **Run the task:**
+        ```
+        pixi run start
+        ```
+        ```
+        ✨ Pixi task (start): node hello.js
+        Hello Pixi fans!
+        ```
+
+=== "ROS2"
+
+    1. **Initialize a workspace:**
+        ```
+        pixi init pixi-ros2 -c https://prefix.dev/conda-forge -c "https://prefix.dev/robostack-humble"
+        cd pixi-ros2
+        ```
+    2. **Add dependencies:**
+        ```
+        pixi add ros-humble-desktop
+        ```
+
+        ??? tip "This might take a minute"
+            Depending on your internet connection, this will take a while to install, as it will download the entire ROS2 desktop package.
+
+    3. **Start Rviz**
+        ```
+        pixi run rviz2
+        ```
+
+    More details on how to use Pixi with ROS2 can be found in the [ROS2 tutorial](tutorials/ros2.md).
+---
+
+## 💬 What Developers Say
+> “I can’t stress enough how much I love using Pixi global as a package manager for my daily CLI tools. :)”
+
+[*Matthew Feickert*](https://www.matthewfeickert.com/)
 
 
-Initialize a new workspace and navigate to the workspace directory.
+> "Pixi is the unifying dev experience that I've been wanting for robotics"
 
-```bash
-pixi init hello-world
-cd hello-world
-```
+[*Audrow Nash*](https://x.com/audrow)
 
-This will create a Pixi manifest which is a file called `pixi.toml`.
-It describes the structure, dependencies and metadata of your workspace.
+> “We are changing how we manage ROS dependencies on Windows.  We will be using Pixi to install and manage dependencies from conda. I'm pretty excited about how much easier it will be for users going forward.”
 
-```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_workspaces/introduction/init/pixi.toml"
-```
+[*Michael Carroll*](https://x.com/carromj)
 
-Let's add dependencies!
+---
 
-```bash
-pixi add cowpy python
-```
+## 📚 Useful Links
 
-The dependencies are not only installed, but also tracked in the manifest.
+- [GitHub](https://github.com/prefix-dev/pixi): Pixi source code, feel free to leave a star!
+- [Discord](https://discord.gg/kKV8ZxyzY4): Join our community and ask questions.
+- [Prefix.dev](https://prefix.dev/): The company behind Pixi, building the future of package management.
+- [Conda-forge](https://conda-forge.org/): Community-driven collection of recipes for the conda package manager.
+- [rattler](https://github.com/conda/rattler): Everything conda but built in Rust. Backend of Pixi.
+- [rattler-build](https://rattler.build): A blazing fast build system for conda packages.
 
-```toml title="pixi.toml" hl_lines="6-8"
---8<-- "docs/source_files/pixi_workspaces/introduction/deps_add/pixi.toml"
-```
-
-We can now create a Python script which uses the `cowpy` library.
-
-```py title="hello.py"
---8<-- "docs/source_files/pixi_workspaces/introduction/deps_add/hello.py"
-```
-
-The dependencies are installed in a Pixi environment.
-In order to run a command within an environment, we prefix it with `pixi run`.
-
-```bash
-pixi run python hello.py
-```
-
-```
- __________________
-< Hello Pixi fans! >
- ------------------
-     \   ^__^
-      \  (oo)\_______
-         (__)\       )\/\
-           ||----w |
-           ||     ||
-
-```
-
-
-You can also put this run command in a **task**.
-
-```bash
-pixi task add start python hello.py
-```
-
-```toml title="pixi.toml" hl_lines="6-7"
---8<-- "docs/source_files/pixi_workspaces/introduction/task_add/pixi.toml"
-```
-
-After adding the task, you can run the task using its name.
-
-```bash
-pixi run start
-```
-
-```
- __________________
-< Hello Pixi fans! >
- ------------------
-     \   ^__^
-      \  (oo)\_______
-         (__)\       )\/\
-           ||----w |
-           ||     ||
-
-```
-
-
-You now know how to add dependencies and tasks to your environment.
-Put the workspace folder on a different machine, and you will find that Pixi will be able to fully reproduce your setup.
-
-If you want to learn more about Pixi, check out the next page!
+---
