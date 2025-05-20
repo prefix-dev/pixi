@@ -62,7 +62,6 @@ edit_uri: edit/main/docs/
 markdown_extensions:
   - admonition
   - abbr
-  - attr_list
   - def_list
   - footnotes
   - attr_list
