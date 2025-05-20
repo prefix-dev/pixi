@@ -19,8 +19,7 @@ pub const GIT_URL_QUERY_REV_TYPE: &str = "rev_type";
 /// This is intended to help user understand that they need to set their SSH passphrase
 /// before cloning a repository using SSH, otherwise the process can hang.
 /// Original issue: <https://github.com/prefix-dev/pixi/issues/3709>
-pub const GIT_SSH_CLONING_WARNING_MSG: &str =
-    "Heads-up: use `ssh-add` if this hangs.";
+pub const GIT_SSH_CLONING_WARNING_MSG: &str = "Heads-up: use `ssh-add` if this hangs.";
 
 /// A URL reference to a Git repository.
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Hash, Ord)]
