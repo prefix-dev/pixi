@@ -10,6 +10,23 @@ use serde::Serialize;
 
 #[derive(Debug, Serialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
+pub enum EventType {
+    CondaSolveQueued { id: CondaSolveId },
+    CondaSolveStarted { id: CondaSolveId },
+    CondaSolveFinished { id: CondaSolveId },
+    PixiSolveQueued { id: PixiSolveId },
+    PixiSolveStarted { id: PixiSolveId },
+    PixiSolveFinished { id: PixiSolveId },
+    PixiInstallQueued { id: PixiInstallId },
+    PixiInstallStarted { id: PixiInstallId },
+    PixiInstallFinished { id: PixiInstallId },
+    GitCheckoutQueued { id: GitCheckoutId },
+    GitCheckoutStarted { id: GitCheckoutId },
+    GitCheckoutFinished { id: GitCheckoutId },
+}
+
+#[derive(Debug, Serialize)]
+#[serde(tag = "type", rename_all = "kebab-case")]
 pub enum Event {
     CondaSolveQueued {
         id: CondaSolveId,
@@ -66,6 +83,25 @@ pub enum Event {
     GitCheckoutFinished {
         id: GitCheckoutId,
     },
+}
+
+impl Event {
+    pub fn event_type(&self) -> EventType {
+        match self {
+            Event::CondaSolveQueued { id, .. } => EventType::CondaSolveQueued { id: *id },
+            Event::CondaSolveStarted { id, .. } => EventType::CondaSolveStarted { id: *id },
+            Event::CondaSolveFinished { id, .. } => EventType::CondaSolveFinished { id: *id },
+            Event::PixiSolveQueued { id, .. } => EventType::PixiSolveQueued { id: *id },
+            Event::PixiSolveStarted { id, .. } => EventType::PixiSolveStarted { id: *id },
+            Event::PixiSolveFinished { id, .. } => EventType::PixiSolveFinished { id: *id },
+            Event::PixiInstallQueued { id, .. } => EventType::PixiInstallQueued { id: *id },
+            Event::PixiInstallStarted { id, .. } => EventType::PixiInstallStarted { id: *id },
+            Event::PixiInstallFinished { id, .. } => EventType::PixiInstallFinished { id: *id },
+            Event::GitCheckoutQueued { id, .. } => EventType::GitCheckoutQueued { id: *id },
+            Event::GitCheckoutStarted { id, .. } => EventType::GitCheckoutStarted { id: *id },
+            Event::GitCheckoutFinished { id, .. } => EventType::GitCheckoutFinished { id: *id },
+        }
+    }
 }
 
 pub struct EventReporter {

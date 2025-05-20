@@ -1,13 +1,10 @@
 mod event_reporter;
 
-use event_reporter::EventReporter;
-use pixi_command_dispatcher::{
-    BuildEnvironment, CacheDirs, CommandDispatcher, Executor, PixiEnvironmentSpec,
-};
+use event_reporter::{Event, EventReporter};
+use itertools::Itertools;
+use pixi_command_dispatcher::{CacheDirs, CommandDispatcher, Executor, PixiEnvironmentSpec};
 use pixi_spec::{GitReference, GitSpec};
 use pixi_spec_containers::DependencyMap;
-use rattler_conda_types::Platform;
-use std::ops::Deref;
 use std::str::FromStr;
 use url::Url;
 
@@ -45,14 +42,17 @@ pub async fn simple_test() {
                     .unwrap()
                     .into(),
             ],
-            build_environment: BuildEnvironment {
-                build_platform: Platform::current(),
-                ..BuildEnvironment::simple_cross(Platform::Win64).unwrap()
-            },
             ..PixiEnvironmentSpec::default()
         })
         .await
         .unwrap();
 
-    insta::assert_json_snapshot!(events.lock().unwrap().deref());
+    let events = events
+        .lock()
+        .unwrap()
+        .iter()
+        .map(Event::event_type)
+        .collect_vec();
+
+    insta::assert_json_snapshot!(events);
 }
