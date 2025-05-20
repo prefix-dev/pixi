@@ -13,7 +13,7 @@ use chrono::{DateTime, Utc};
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
-use miette::{Context, IntoDiagnostic};
+use miette::{Context, IntoDiagnostic, Report};
 use pixi_manifest::{EnvironmentName, SystemRequirements, pypi::pypi_options::PypiOptions};
 use pixi_pypi_spec::PixiPypiSpec;
 use pixi_record::PixiRecord;
@@ -535,7 +535,10 @@ pub async fn resolve_pypi(
     ))
     .resolve()
     .await
-    .into_diagnostic()
+    .map_err(|err| match ParsedResolveError::try_from(&err) {
+        Ok(_parsed_err) => todo!("where's the dependency graph?"),
+        Err(()) => Report::msg(err),
+    })
     .context("failed to resolve pypi dependencies")?;
     let resolution = Resolution::from(resolution);
 
@@ -562,6 +565,79 @@ pub async fn resolve_pypi(
     let conda_task = lazy_build_dispatch.conda_task;
 
     Ok((locked_packages, conda_task))
+}
+
+/// A parsed version of [`uv_resolver::ResolveError`] that includes the names
+/// and versions of the packages that caused the requirements to be
+/// unsatisfiable.
+#[derive(Debug)]
+struct ParsedResolveError {
+    lhs: ConflictingPackage,
+    rhs: ConflictingPackage,
+}
+
+#[derive(Debug)]
+struct ConflictingPackage {
+    name: uv_normalize::PackageName,
+    version: uv_pep440::VersionSpecifiers,
+}
+
+impl TryFrom<&uv_resolver::ResolveError> for ParsedResolveError {
+    type Error = ();
+
+    fn try_from(err: &uv_resolver::ResolveError) -> Result<Self, Self::Error> {
+        err.to_string().parse()
+    }
+}
+
+impl FromStr for ParsedResolveError {
+    type Err = ();
+
+    fn from_str(err: &str) -> Result<Self, Self::Err> {
+        fn inner(err: &str) -> Option<ParsedResolveError> {
+            #[rustfmt::skip]
+            let (lhs, rhs) = err
+                .split_once("you require ")?.1
+                .split_once(", we can conclude")?.0
+                .split_once(" and ")?;
+
+            Some(ParsedResolveError {
+                lhs: lhs.parse().ok()?,
+                rhs: rhs.parse().ok()?,
+            })
+        }
+
+        inner(err).ok_or(())
+    }
+}
+
+impl FromStr for ConflictingPackage {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        /// Returns whether the given character appears in the `Display`
+        /// impl of one of [`pep440_rs::Operator`]'s variants.
+        fn is_operator_char(ch: char) -> bool {
+            matches!(ch, '~' | '=' | '!' | '<' | '>')
+        }
+
+        fn inner(s: &str) -> Option<ConflictingPackage> {
+            let name_len = s
+                .chars()
+                .take_while(|&ch| !is_operator_char(ch))
+                .map(char::len_utf8)
+                .sum::<usize>();
+
+            let (name, version) = s.split_at(name_len);
+
+            Some(ConflictingPackage {
+                name: name.parse().ok()?,
+                version: version.parse().ok()?,
+            })
+        }
+
+        inner(s).ok_or(())
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
