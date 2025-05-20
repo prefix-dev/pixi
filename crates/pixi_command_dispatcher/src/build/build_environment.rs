@@ -17,9 +17,10 @@ pub struct BuildEnvironment {
 
 impl Default for BuildEnvironment {
     fn default() -> Self {
-        let virtual_packages = VirtualPackages::default()
+        let virtual_packages: Vec<_> = VirtualPackages::detect(&VirtualPackageOverrides::default())
+            .unwrap_or_default()
             .into_generic_virtual_packages()
-            .collect::<Vec<_>>();
+            .collect();
 
         Self {
             host_platform: Platform::current(),
