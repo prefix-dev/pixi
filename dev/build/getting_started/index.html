@@ -2556,6 +2556,11 @@ In this example, we are using <code>pixi-build-python</code> backend in order to
 <code>binary</code> dependencies are pre-built packages, while <code>source</code> dependencies are source code that needs to be built.</p>
 </div>
 <p>Source dependencies can be specified either by providing a local path to the directory containing the package or a <code>git</code> dependency. When using <code>git</code>, you can optionally define a <code>branch</code>, <code>tag</code>, or <code>rev</code> to pin the dependency. If none are specified, the latest commit on the default branch is used. Additionally, a <code>subdirectory</code> can be specified to indicate the package’s location within the repository.</p>
+<div class="admonition warning">
+<p class="admonition-title">Using git SSH URLs</p>
+<p>When using SSH URLs in git dependencies, make sure to have your SSH key added to your SSH agent.
+You can do this by running <code>ssh-add</code> which will prompt you for your SSH key passphrase. Make sure that the <code>ssh-add</code> agent or service is running and you have a generated public/private SSH key. For more details on how to do this, check the <a href="https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent">Github SSH documentation</a>.</p>
+</div>
 <p>Source dependencies are defined in one of two ways:</p>
 <ul>
 <li><code>Pixi</code>-based dependencies are built using the backend specified in the <code>[package.build]</code> section of pixi.toml.</li>

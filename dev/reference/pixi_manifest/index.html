@@ -3720,6 +3720,11 @@ See the example below to see how this is used in practice:</p>
 </span><span id="__span-34-33"><a id="__codelineno-34-33" name="__codelineno-34-33" href="#__codelineno-34-33"></a><span class="c1"># You can also just the default git repo, it will checkout the default branch</span>
 </span><span id="__span-34-34"><a id="__codelineno-34-34" name="__codelineno-34-34" href="#__codelineno-34-34"></a><span class="n">pytest</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">git</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;https://github.com/pytest-dev/pytest.git&quot;</span><span class="p">}</span>
 </span></code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Using git SSH URLs</p>
+<p>When using SSH URLs in git dependencies, make sure to have your SSH key added to your SSH agent.
+You can do this by running <code>ssh-add</code> which will prompt you for your SSH key passphrase. Make sure that the <code>ssh-add</code> agent or service is running and you have a generated public/private SSH key. For more details on how to do this, check the <a href="https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent">Github SSH documentation</a>.</p>
+</div>
 <h4 id="full-specification">Full specification<a class="headerlink" href="#full-specification" title="Permanent link">#</a></h4>
 <p>The full specification of a PyPI dependencies that Pixi supports can be split into the following fields:</p>
 <h5 id="extras"><code>extras</code><a class="headerlink" href="#extras" title="Permanent link">#</a></h5>
