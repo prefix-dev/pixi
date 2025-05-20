@@ -12,7 +12,7 @@ use std::{
 use barrier_cell::BarrierCell;
 use fancy_display::FancyDisplay;
 use futures::{FutureExt, StreamExt, stream::FuturesUnordered};
-use indexmap::{IndexMap, IndexSet};
+use indexmap::IndexSet;
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Diagnostic, IntoDiagnostic, MietteDiagnostic, Report, WrapErr};
@@ -2147,18 +2147,16 @@ async fn spawn_solve_pypi_task<'p>(
 
         let start = Instant::now();
 
-        let dependencies: Vec<(uv_normalize::PackageName, IndexSet<_>)> = dependencies
+        let dependencies = dependencies
             .into_iter()
             .map(|(name, requirement)| Ok((to_uv_normalize(name.as_normalized())?, requirement)))
             .collect::<Result<_, ConversionError>>()
             .into_diagnostic()?;
 
-        let requirements = IndexMap::from_iter(dependencies);
-
         let (records, prefix_task_result) = lock_file::resolve_pypi(
             resolution_context,
             &pypi_options,
-            requirements,
+            dependencies,
             system_requirements,
             pixi_solve_records,
             locked_pypi_records,
