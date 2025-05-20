@@ -212,16 +212,7 @@ pub async fn resolve_pypi(
     let conda_python_packages = locked_pixi_records
         .iter()
         .flat_map(|record| {
-            let result = match record {
-                PixiRecord::Binary(repodata_record) => {
-                    PypiPackageIdentifier::from_repodata_record(repodata_record)
-                }
-                PixiRecord::Source(source_record) => {
-                    PypiPackageIdentifier::from_package_record(&source_record.package_record)
-                }
-            };
-
-            result.map_or_else(
+            PypiPackageIdentifier::from_pixi_record(record).map_or_else(
                 |err| Either::Right(once(Err(err))),
                 |identifiers| {
                     Either::Left(identifiers.into_iter().map(|i| Ok((record.clone(), i))))
