@@ -1259,7 +1259,7 @@ def test_task_caching_with_multiple_outputs_args(pixi: Path, tmp_pixi_workspace:
 
     manifest_content["tasks"] = {
         "base-task": {
-            "cmd": "echo task with {{ arg1 }} > outputs/{{ arg1 }}.txt",
+            "cmd": "echo task with {{ arg1 }} > outputs/{{ arg1 }}.txt && cat outputs/{{ arg1 }}.txt",
             "args": ["arg1"],
             "outputs": ["outputs/{{ arg1 }}.txt"],
         },
@@ -1280,7 +1280,7 @@ def test_task_caching_with_multiple_outputs_args(pixi: Path, tmp_pixi_workspace:
             "cache hit",
             "cache hit",
         ],
-        stderr_contains=[
+        stdout_contains=[
             "task with custom1",
             "task with custom2",
         ],
@@ -1293,7 +1293,7 @@ def test_task_caching_with_multiple_outputs_args(pixi: Path, tmp_pixi_workspace:
             "cache hit",
             "cache hit",
         ],
-        stderr_excludes=[
+        stdout_excludes=[
             "task with custom1",
             "task with custom2",
         ],
