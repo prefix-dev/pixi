@@ -1,0 +1,31 @@
+# run `pixi r wheel` to regenerate the wheel if needed
+# remember to remove the sdist afterwards, we do not need it
+[project]
+authors = [{ name = "Tim de Jager", email = "tim@prefix.dev" }]
+dependencies = []
+name = "foobar"
+requires-python = ">= 3.11"
+version = "0.1.1"
+
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/foobar_whl"]
+
+# This is kept in because otherwise the mypy complains about foobar module existing twice
+# Which is essentially correct (it exists in foobar as well), so we rename this
+[tool.hatch.build.targets.wheel.sources]
+"src/foobar_whl" = "foobar"
+
+[tool.pixi.workspace]
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["osx-arm64"]
+
+[tool.pixi.dependencies]
+uv = "==0.6.14"
+
+[tool.pixi.tasks]
+build = "uv build"
+wheel = { cmd = "rm .gitignore *.tar.gz", cwd = "dist", depends-on = "build" }

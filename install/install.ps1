@@ -13,17 +13,22 @@
     setting the environment variable 'PIXI_HOME'.
 .PARAMETER NoPathUpdate
     If specified, the script will not update the PATH environment variable.
+.PARAMETER PixiRepourl
+    Specifies Pixi's repo url.
+    The default value is 'https://github.com/prefix-dev/pixi'. You can also specify it by
+    setting the environment variable 'PIXI_REPOURL'.
 .LINK
     https://pixi.sh
 .LINK
     https://github.com/prefix-dev/pixi
 .NOTES
-    Version: v0.46.0
+    Version: v0.47.0
 #>
 param (
     [string] $PixiVersion = 'latest',
     [string] $PixiHome = "$Env:USERPROFILE\.pixi",
-    [switch] $NoPathUpdate
+    [switch] $NoPathUpdate,
+    [string] $PixiRepourl = 'https://github.com/prefix-dev/pixi'
 )
 
 Set-StrictMode -Version Latest
@@ -145,8 +150,11 @@ if ($Env:PIXI_NO_PATH_UPDATE) {
     $NoPathUpdate = $true
 }
 
+if ($Env:PIXI_REPOURL) {
+    $PixiRepourl = $Env:PIXI_REPOURL -replace '/$', ''
+}
+
 # Repository name
-$REPO = 'prefix-dev/pixi'
 $ARCH = Get-TargetTriple
 
 if (-not @("x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc") -contains $ARCH) {
@@ -156,13 +164,11 @@ if (-not @("x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc") -contains $ARCH)
 $BINARY = "pixi-$ARCH"
 
 if ($PixiVersion -eq 'latest') {
-    $DOWNLOAD_URL = "https://github.com/$REPO/releases/latest/download/$BINARY.zip"
+    $DOWNLOAD_URL = "$PixiRepourl/releases/latest/download/$BINARY.zip"
 } else {
     # Check if version is incorrectly specified without prefix 'v', and prepend 'v' in this case
-    if ($PixiVersion -notmatch '^v') {
-        $PixiVersion = "v$PixiVersion"
-    }
-    $DOWNLOAD_URL = "https://github.com/$REPO/releases/download/$PixiVersion/$BINARY.zip"
+    $PixiVersion = "v" + ($PixiVersion -replace '^v', '')
+    $DOWNLOAD_URL = "$PixiRepourl/releases/download/$PixiVersion/$BINARY.zip"
 }
 
 $BinDir = Join-Path $PixiHome 'bin'

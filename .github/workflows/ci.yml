@@ -48,12 +48,13 @@ jobs:
       # Flag that is raised when any code is changed
       code: ${{ steps.changed.outputs.code_any_changed }}
       unix_installer: ${{ steps.unix_installer_changed.outputs.code_any_changed }}
+      win_installer: ${{ steps.win_installer_changed.outputs.code_any_changed }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
           fetch-depth: 0
 
-      - uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45
+      - uses: step-security/changed-files@95b56dadb92a30ca9036f16423fd3c088a71ee94 # v46
         id: changed
         with:
           files_yaml: |
@@ -66,12 +67,19 @@ jobs:
               - "!assets/**"
               - "!**/*.md"
 
-      - uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45
+      - uses: step-security/changed-files@95b56dadb92a30ca9036f16423fd3c088a71ee94 # v46
         id: unix_installer_changed
         with:
           files_yaml: |
             code:
               - "install/install.sh"
+
+      - uses: step-security/changed-files@95b56dadb92a30ca9036f16423fd3c088a71ee94 # v46
+        id: win_installer_changed
+        with:
+          files_yaml: |
+            code:
+              - "install/install.ps1"
 
   pre-commit:
     runs-on: ubuntu-latest
@@ -848,8 +856,9 @@ jobs:
       - name: "Install"
         run: |
           uname -a
-          test ! -e ~/.pixi/bin/pixi
+          test ! -e ~/.pixi/bin/pixi.exe
           sh < ./install/install.sh
+          ~/.pixi/bin/pixi.exe --version
           ~/.pixi/bin/pixi --version
         shell: msys2 {0}
 
@@ -871,4 +880,29 @@ jobs:
           test ! -e ~/.pixi/bin/pixi
           sh < ./install/install.sh
           ~/.pixi/bin/pixi --version
+        shell: msys2 {0}
+
+  test-install-ps1:
+    name: install.ps1
+    needs:
+      - determine_changes
+    runs-on: windows-latest
+    if: ${{ needs.determine_changes.outputs.win_installer == 'true' }}
+    env:
+      PIXI_REPOURL: "https://github.com/prefix-dev/pixi/"
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - name: Setup ucrt64 msys2
+        uses: msys2/setup-msys2@61f9e5e925871ba6c9e3e8da24ede83ea27fa91f # v2
+        with:
+          msystem: UCRT64
+      - name: "Before Install"
+        run: test ! -e $USERPROFILE/.pixi/bin/pixi.exe
+        shell: msys2 {0}
+
+      - name: "Install"
+        run: ${{ github.workspace }}/install/install.ps1
+
+      - name: "After Install"
+        run: $USERPROFILE/.pixi/bin/pixi.exe --version
         shell: msys2 {0}

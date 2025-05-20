@@ -234,9 +234,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         {
             CanSkip::No(cache) => cache,
             CanSkip::Yes => {
+                let args_text = if !executable_task.args().is_empty() {
+                    format!(
+                        " with args {}",
+                        console::style(executable_task.args()).bold()
+                    )
+                } else {
+                    String::new()
+                };
+
                 eprintln!(
-                    "Task '{}' can be skipped (cache hit) 🚀",
-                    console::style(executable_task.name().unwrap_or("")).bold()
+                    "Task '{}'{args_text} can be skipped (cache hit) 🚀",
+                    console::style(executable_task.name().unwrap_or("")).bold(),
                 );
                 task_idx += 1;
                 continue;

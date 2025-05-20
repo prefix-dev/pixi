@@ -1,6 +1,7 @@
 use indicatif::ProgressBar;
 use itertools::Itertools;
-use pixi_progress::{self, ProgressBarMessageFormatter, ScopedTask};
+use pixi_git::GIT_SSH_CLONING_WARNING_MSG;
+use pixi_progress::{self, ProgressBarMessageFormatter, ScopedTask, style_warning_pb};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use uv_distribution_types::{BuildableSource, CachedDist, Name, VersionOrUrlRef};
 use uv_normalize::PackageName;
@@ -60,6 +61,8 @@ pub struct UvReporter {
     fmt: ProgressBarMessageFormatter,
     scoped_tasks: Arc<std::sync::Mutex<Vec<Option<ScopedTask>>>>,
     name_to_id: HashMap<String, usize>,
+    // helper checkout progress bar for git ssh operation
+    checkout_helper_pb: Arc<std::sync::Mutex<Option<ProgressBar>>>,
 }
 
 impl UvReporter {
@@ -68,7 +71,7 @@ impl UvReporter {
     pub(crate) fn new(options: UvReporterOptions) -> Self {
         // Use a new progress bar if none was provided.
         let pb = if let Some(pb) = options.progress_bar {
-            pb
+            pixi_progress::global_multi_progress().add(pb)
         } else {
             create_progress(
                 options.length.unwrap_or_default(),
@@ -93,6 +96,7 @@ impl UvReporter {
             fmt,
             scoped_tasks: Arc::new(std::sync::Mutex::new(starting_tasks)),
             name_to_id,
+            checkout_helper_pb: Default::default(),
         }
     }
 
@@ -130,6 +134,50 @@ impl UvReporter {
     pub(crate) fn increment_progress(&self) {
         self.pb.inc(1);
     }
+
+    pub(crate) fn on_checkout_start_warning_pb(&self) {
+        // create the warning progress bar for ssh URL
+        // and insert it before the current progress bar
+        let warning_pb = style_warning_pb(
+            ProgressBar::hidden(),
+            GIT_SSH_CLONING_WARNING_MSG.to_string(),
+        );
+        let original_pb = self.pb.clone();
+        let pb =
+            pixi_progress::global_multi_progress().insert_before(&original_pb, warning_pb.clone());
+
+        // we always want to have a fresh one for any SSH checkout that started
+        self.checkout_helper_pb
+            .lock()
+            .expect("checkout_helper_pb lock poison")
+            .replace(pb)
+            .inspect(|pb| {
+                // if we have a previous one, we need to finish it
+                pb.finish_and_clear();
+            });
+    }
+
+    pub(crate) fn on_checkout_complete_warning_pb(&self) {
+        // create the warning progress bar for ssh URL
+        // and insert it before the current progress bar
+        let warning_pb = style_warning_pb(
+            ProgressBar::hidden(),
+            GIT_SSH_CLONING_WARNING_MSG.to_string(),
+        );
+        let original_pb = self.pb.clone();
+        let pb =
+            pixi_progress::global_multi_progress().insert_before(&original_pb, warning_pb.clone());
+
+        // we always want to have a fresh one for any SSH checkout that started
+        self.checkout_helper_pb
+            .lock()
+            .expect("checkout_helper_pb lock poison")
+            .replace(pb)
+            .inspect(|pb| {
+                // if we have a previous one, we need to finish it
+                pb.finish_and_clear();
+            });
+    }
 }
 
 impl uv_installer::PrepareReporter for UvReporter {
@@ -158,10 +206,17 @@ impl uv_installer::PrepareReporter for UvReporter {
     }
 
     fn on_checkout_start(&self, url: &url::Url, _rev: &str) -> usize {
+        if url.scheme().eq("ssh") {
+            self.on_checkout_start_warning_pb();
+        }
         self.start(format!("cloning {}", url))
     }
 
-    fn on_checkout_complete(&self, _url: &url::Url, _rev: &str, index: usize) {
+    fn on_checkout_complete(&self, url: &url::Url, _rev: &str, index: usize) {
+        if url.scheme().eq("ssh") {
+            self.on_checkout_complete_warning_pb();
+        }
+
         self.finish(index);
     }
 
@@ -205,10 +260,16 @@ impl uv_resolver::ResolverReporter for UvReporter {
     }
 
     fn on_checkout_start(&self, url: &url::Url, _rev: &str) -> usize {
+        if url.scheme().eq("ssh") {
+            self.on_checkout_start_warning_pb();
+        }
         self.start(format!("cloning {}", url))
     }
 
-    fn on_checkout_complete(&self, _url: &url::Url, _rev: &str, index: usize) {
+    fn on_checkout_complete(&self, url: &url::Url, _rev: &str, index: usize) {
+        if url.scheme().eq("ssh") {
+            self.on_checkout_complete_warning_pb();
+        }
         self.finish(index);
     }
 
@@ -238,10 +299,16 @@ impl uv_distribution::Reporter for UvReporter {
     }
 
     fn on_checkout_start(&self, url: &url::Url, _rev: &str) -> usize {
+        if url.scheme().eq("ssh") {
+            self.on_checkout_start_warning_pb();
+        }
         self.start(format!("cloning {}", url))
     }
 
-    fn on_checkout_complete(&self, _url: &url::Url, _rev: &str, index: usize) {
+    fn on_checkout_complete(&self, url: &url::Url, _rev: &str, index: usize) {
+        if url.scheme().eq("ssh") {
+            self.on_checkout_complete_warning_pb();
+        }
         self.finish(index);
     }
 

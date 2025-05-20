@@ -341,10 +341,11 @@ impl ManifestDocument {
     pub fn add_pypi_dependency(
         &mut self,
         requirement: &pep508_rs::Requirement,
+        pixi_requirement: Option<&PixiPypiSpec>,
         platform: Option<Platform>,
         feature_name: &FeatureName,
         editable: Option<bool>,
-        location: &Option<PypiDependencyLocation>,
+        location: Option<&PypiDependencyLocation>,
     ) -> Result<(), TomlError> {
         // Pypi dependencies can be stored in different places in pyproject.toml
         // manifests so we remove any potential dependency of the same name
@@ -369,7 +370,8 @@ impl ManifestDocument {
             || editable.is_some_and(|e| e)
         {
             let mut pypi_requirement =
-                PixiPypiSpec::try_from(requirement.clone()).map_err(Box::new)?;
+                PixiPypiSpec::try_from((requirement.clone(), pixi_requirement.cloned()))
+                    .map_err(Box::new)?;
             if let Some(editable) = editable {
                 pypi_requirement.set_editable(editable);
             }

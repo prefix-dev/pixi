@@ -1245,3 +1245,114 @@ def test_argument_forwarding_in_dependencies(pixi: Path, tmp_pixi_workspace: Pat
         [pixi, "run", "--manifest-path", manifest_path, "task2", "arg1"],
         stdout_contains="arg1",
     )
+
+
+def test_task_caching_with_multiple_outputs_args(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test executing the same task with different arguments is successively cached."""
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+
+    # create the outputs folder
+    output_dir = tmp_pixi_workspace.joinpath("outputs")
+    output_dir.mkdir(exist_ok=True)
+
+    manifest_content["tasks"] = {
+        "base-task": {
+            "cmd": "echo task with {{ arg1 }} > outputs/{{ arg1 }}.txt && cat outputs/{{ arg1 }}.txt",
+            "args": ["arg1"],
+            "outputs": ["outputs/{{ arg1 }}.txt"],
+        },
+        "multiple-depends": {
+            "depends-on": [
+                {"task": "base-task", "args": ["custom1"]},
+                {"task": "base-task", "args": ["custom2"]},
+            ]
+        },
+    }
+
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    # Run first time without cache
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "multiple-depends"],
+        stderr_excludes=[
+            "cache hit",
+            "cache hit",
+        ],
+        stdout_contains=[
+            "task with custom1",
+            "task with custom2",
+        ],
+    )
+
+    # Now we should receive a cache hit
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "multiple-depends"],
+        stderr_contains=[
+            "cache hit",
+            "cache hit",
+        ],
+        stdout_excludes=[
+            "task with custom1",
+            "task with custom2",
+        ],
+    )
+
+
+def test_task_caching_with_multiple_inputs_args(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test executing the same task with different arguments is successively cached."""
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    # create the inputs and outputs folders
+    # that will be tests if they are cached hit
+    input_dir = tmp_pixi_workspace.joinpath("inputs")
+    output_dir = tmp_pixi_workspace.joinpath("outputs")
+    input_dir.mkdir(exist_ok=True)
+    output_dir.mkdir(exist_ok=True)
+
+    for name in ["file1", "file2"]:
+        input_file = input_dir.joinpath(f"{name}.txt")
+        input_file.write_text(f"Content for {name}")
+
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+
+    manifest_content["tasks"] = {
+        "process-file": {
+            "cmd": "echo Processing $(cat inputs/{{ filename }}.txt) > outputs/{{ filename }}.out",
+            "args": [{"arg": "filename"}],
+            "inputs": ["inputs/{{ filename }}.txt"],
+        },
+        "multiple-depends": {
+            "depends-on": [
+                {"task": "process-file", "args": ["file1"]},
+                {"task": "process-file", "args": ["file2"]},
+            ]
+        },
+    }
+
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    # Run first time without cache
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "multiple-depends"],
+        stderr_contains=[
+            "Processing $(cat inputs/file1.txt) > outputs/file1.out",
+            "Processing $(cat inputs/file2.txt) > outputs/file2.out",
+        ],
+        stderr_excludes=[
+            "cache hit",
+            "cache hit",
+        ],
+    )
+
+    # Now we should receive a cache hit
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "multiple-depends"],
+        stderr_contains=[
+            "file1",
+            "cache hit",
+            "file2",
+            "cache hit",
+        ],
+    )

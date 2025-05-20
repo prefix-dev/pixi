@@ -1191,12 +1191,16 @@ packages:
   build: pyhbf21a9e_0
   subdir: noarch
   depends:
+  - cpp_math
   - rich >=13.9.4,<14
   - python
   input:
-    hash: f77143f26667bd070bf291d71e56fb9957f0df77305cff3a6e6ad02be34a4ce7
+    hash: e138edaa1a23f0e7601b6b4ac6587e47aaa504e3476269d1a2033a2561d55d85
     globs:
     - pixi.toml
+  sources:
+    cpp_math:
+      path: packages/cpp_math
 - conda: https://prefix.dev/conda-forge/linux-64/readline-8.2-h8228510_1.conda
   sha256: 5435cf39d039387fbdc977b0a762357ea909a7694d9528ab40f005e9208744d7
   md5: 47d31b792659ce70f470b5c82fdfb7a4
