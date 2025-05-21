@@ -487,8 +487,7 @@ impl Workspace {
     /// Returns a pre-filled command dispatcher builder that can be used to
     /// construct a [`pixi_command_dispatcher::CommandDispatcher`].
     pub fn command_dispatcher_builder(&self) -> miette::Result<CommandDispatcherBuilder> {
-        let cache_dirs = CacheDirs::new(pixi_config::get_cache_dir()?)
-            .with_working_dirs(self.pixi_dir().join("work-v1"));
+        let cache_dirs = CacheDirs::new(pixi_config::get_cache_dir()?);
         Ok(CommandDispatcher::builder()
             .with_cache_dirs(cache_dirs)
             .with_root_dir(self.root().to_path_buf())
