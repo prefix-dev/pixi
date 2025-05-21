@@ -4595,7 +4595,6 @@ dependencies = [
  "miette 7.5.0",
  "pixi_build_frontend",
  "pixi_config",
- "pixi_consts",
  "pixi_git",
  "pixi_glob",
  "pixi_record",

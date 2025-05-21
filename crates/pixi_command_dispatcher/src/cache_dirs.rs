@@ -1,7 +1,5 @@
 use std::path::PathBuf;
 
-use pixi_consts::consts::CACHED_GIT_DIR;
-
 pub struct CacheDirs {
     /// The root cache directory, all other cache directories are derived from
     /// this.
@@ -61,7 +59,7 @@ impl CacheDirs {
     pub fn git(&self) -> PathBuf {
         self.git
             .clone()
-            .unwrap_or_else(|| self.root.join(CACHED_GIT_DIR))
+            .unwrap_or_else(|| self.root.join("git-cache-v0"))
     }
 
     /// Sets the working directory for build backends.
