@@ -24,7 +24,7 @@ pub async fn simple_test() {
 
     let _result = dispatcher
         .solve_pixi_environment(PixiEnvironmentSpec {
-            requirements: DependencyMap::from_iter([(
+            dependencies: DependencyMap::from_iter([(
                 "boost-check".parse().unwrap(),
                 GitSpec {
                     git: "https://github.com/wolfv/pixi-build-examples.git"

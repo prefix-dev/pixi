@@ -39,7 +39,7 @@ use crate::{
 pub struct PixiEnvironmentSpec {
     /// The requirements of the environment
     #[serde(skip_serializing_if = "DependencyMap::is_empty")]
-    pub requirements: DependencyMap<rattler_conda_types::PackageName, PixiSpec>,
+    pub dependencies: DependencyMap<rattler_conda_types::PackageName, PixiSpec>,
 
     /// Additional constraints of the environment
     #[serde(skip_serializing_if = "DependencyMap::is_empty")]
@@ -79,7 +79,7 @@ pub struct PixiEnvironmentSpec {
 impl Default for PixiEnvironmentSpec {
     fn default() -> Self {
         Self {
-            requirements: DependencyMap::default(),
+            dependencies: DependencyMap::default(),
             constraints: DependencyMap::default(),
             installed: Vec::new(),
             build_environment: BuildEnvironment::default(),
@@ -102,7 +102,7 @@ impl PixiEnvironmentSpec {
         // Split the requirements into source and binary requirements.
         let (source_specs, binary_specs) = Self::split_into_source_and_binary_requirements(
             &self.channel_config,
-            self.requirements,
+            self.dependencies,
         );
 
         // Recursively collect the metadata of all the source specs.
