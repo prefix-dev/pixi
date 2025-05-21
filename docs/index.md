@@ -76,6 +76,10 @@ To install `pixi`, run:
     ```
 
 === "Windows"
+    [Download installer](https://github.com/prefix-dev/pixi/releases/latest/download/pixi-x86_64-pc-windows-msvc.msi){ .md-button }
+
+    Or run:
+
     ```powershell
     powershell -ExecutionPolicy ByPass -c "irm -useb https://pixi.sh/install.ps1 | iex"
     ```
