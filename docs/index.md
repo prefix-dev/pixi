@@ -8,9 +8,9 @@
 &nbsp;
 [![GitHub stars](https://img.shields.io/github/stars/prefix-dev/pixi?style=flat-square&)](https://github.com/prefix-dev/pixi)
 &nbsp;
-![Discord](https://img.shields.io/discord/1082332781146800168?style=flat-square&logo=discord&logoColor=%23FFFFFF&color=%235865F2&link=https%3A%2F%2Fdiscord.gg%2FkKV8ZxyzY4)
+[![Discord](https://img.shields.io/discord/1082332781146800168?style=flat-square&logo=discord&logoColor=%23FFFFFF&color=%235865F2&link=https%3A%2F%2Fdiscord.gg%2FkKV8ZxyzY4)](https://discord.gg/kKV8ZxyzY4)
 &nbsp;
-![License](https://img.shields.io/github/license/prefix-dev/pixi?style=flat-square&)
+[![License](https://img.shields.io/github/license/prefix-dev/pixi?style=flat-square&)](https://github.com/prefix-dev/pixi/blob/main/LICENSE)
 
 </div>
 
@@ -245,19 +245,23 @@ To install `pixi`, run:
 ---
 
 ## 💬 What Developers Say
-> “I can’t stress enough how much I love using Pixi global as a package manager for my daily CLI tools. :)”
+
+<div align="center" markdown="1">
+
+_**“I can’t stress enough how much I love using Pixi global as a package manager for my daily CLI tools. :)”**_
 
 [*Matthew Feickert*](https://www.matthewfeickert.com/)
 
 
-> "Pixi is the unifying dev experience that I've been wanting for robotics"
+_**"Pixi is the unifying dev experience that I've been wanting for robotics"**_
 
 [*Audrow Nash*](https://x.com/audrow)
 
-> “We are changing how we manage ROS dependencies on Windows.  We will be using Pixi to install and manage dependencies from conda. I'm pretty excited about how much easier it will be for users going forward.”
+**_“We are changing how we manage ROS dependencies on Windows.  We will be using Pixi to install and manage dependencies from conda. I'm pretty excited about how much easier it will be for users going forward.”**_
 
 [*Michael Carroll*](https://x.com/carromj)
 
+</div>
 ---
 
 ## 📚 Useful Links
