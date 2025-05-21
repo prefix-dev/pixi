@@ -36,6 +36,7 @@ rattler_solve = { workspace = true, features = ["resolvo"] }
 rattler_virtual_packages = { workspace = true }
 
 pixi_build_frontend = { workspace = true }
+pixi_consts = { workspace = true }
 pixi_git = { workspace = true }
 pixi_glob = { workspace = true }
 pixi_record = { workspace = true }

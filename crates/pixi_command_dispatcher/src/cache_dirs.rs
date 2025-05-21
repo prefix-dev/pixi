@@ -1,5 +1,9 @@
 use std::path::PathBuf;
 
+use pixi_consts::consts::{
+    CACHED_BUILD_BACKENDS, CACHED_BUILD_WORK_DIR, CACHED_GIT_DIR, CACHED_PACKAGES,
+};
+
 pub struct CacheDirs {
     /// The root cache directory, all other cache directories are derived from
     /// this.
@@ -39,27 +43,27 @@ impl CacheDirs {
     pub fn build_backends(&self) -> PathBuf {
         self.build_backends
             .clone()
-            .unwrap_or_else(|| self.root.join("build-backends-v1"))
+            .unwrap_or_else(|| self.root.join(CACHED_BUILD_BACKENDS))
     }
 
     /// Returns the directory where working directories are cached.
     pub fn working_dirs(&self) -> PathBuf {
         self.work_dirs
             .clone()
-            .unwrap_or_else(|| self.root.join("build-v0"))
+            .unwrap_or_else(|| self.root.join(CACHED_BUILD_WORK_DIR))
     }
 
     /// Returns the location to store packages
     pub fn packages(&self) -> PathBuf {
         self.packages
             .clone()
-            .unwrap_or_else(|| self.root.join("pkgs"))
+            .unwrap_or_else(|| self.root.join(CACHED_PACKAGES))
     }
 
     pub fn git(&self) -> PathBuf {
         self.git
             .clone()
-            .unwrap_or_else(|| self.root.join("git-cache-v0"))
+            .unwrap_or_else(|| self.root.join(CACHED_GIT_DIR))
     }
 
     /// Sets the working directory for build backends.
