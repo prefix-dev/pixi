@@ -176,6 +176,8 @@ To install `pixi`, run:
         Hello Pixi fans!
         ```
 
+    This is more of an example to show off how easy it is to use Pixi with Rust.
+    Not a recommended way to build Rust projects.
     More details on how to use Pixi with Rust can be found in the [Rust tutorial](tutorials/rust.md).
 
 === "Node.js"
