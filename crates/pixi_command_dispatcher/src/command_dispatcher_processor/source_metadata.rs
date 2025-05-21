@@ -10,7 +10,7 @@ use crate::{
 };
 
 impl CommandDispatcherProcessor {
-    /// Called when a [`super::ForegroundMessage::SourceMetadataTask`] task was
+    /// Called when a [`crate::command_dispatcher::SourceMetadataTask`] task was
     /// received.
     pub(crate) fn on_source_metadata(&mut self, task: SourceMetadataTask) {
         // Lookup the id of the source metadata to avoid deduplication.
