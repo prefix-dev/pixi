@@ -540,7 +540,6 @@ impl BuildContext {
             })
             .await
             .map_err(|frontend_error| {
-                tracing::error!("error setting up build frontend: {}", frontend_error);
                 BuildError::BuildFrontendSetup(Box::new(source.clone()), frontend_error)
             })?;
 
