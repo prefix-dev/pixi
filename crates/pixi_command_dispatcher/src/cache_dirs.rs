@@ -46,7 +46,7 @@ impl CacheDirs {
     pub fn working_dirs(&self) -> PathBuf {
         self.work_dirs
             .clone()
-            .unwrap_or_else(|| self.root.join("work-v1"))
+            .unwrap_or_else(|| self.root.join("build-v0"))
     }
 
     /// Returns the location to store packages
