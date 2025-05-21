@@ -40,13 +40,15 @@ cd hello-world
 pixi add python
 pixi run python -c "print('Hello World!')"
 ```
-![Pixi Demo](assets/pixi_project_demo.gif)
+![Pixi Demo](assets/vhs-tapes/pixi_project_demo_light.gif#only-light)
+![Pixi Demo](assets/vhs-tapes/pixi_project_demo_dark.gif#only-dark)
 
 Install your favorite tools with a single command.
 ```shell
-pixi global install git gh nvim ipython btop bat starship ripgrep
+pixi global install git gh nvim ipython btop bat ripgrep
 ```
-![Pixi Global Tools demo](assets/pixi_global_demo.gif)
+![Pixi Global Demo](assets/vhs-tapes/pixi_global_demo_light.gif#only-light)
+![Pixi Global Demo](assets/vhs-tapes/pixi_global_demo_dark.gif#only-dark)
 
 ---
 
