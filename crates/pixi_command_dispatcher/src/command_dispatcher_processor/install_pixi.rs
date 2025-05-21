@@ -54,7 +54,7 @@ impl CommandDispatcherProcessor {
     /// received.
     ///
     /// This function will relay the result of the task back to the
-    /// [`CommandDispatcher`] that issues it.
+    /// [`crate::CommandDispatcher`] that issues it.
     pub(crate) fn on_install_pixi_environment_result(
         &mut self,
         id: InstallPixiEnvironmentId,
