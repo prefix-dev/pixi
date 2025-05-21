@@ -17,7 +17,7 @@
 
 ---
 
-## 🚀 Why Pixi?
+## Why Pixi?
 
 Pixi is a **fast, modern, and reproducible** package management tool for developers of all backgrounds.
 
@@ -31,7 +31,7 @@ Pixi is a **fast, modern, and reproducible** package management tool for develop
 ---
 
 
-## ✨ Quick Demo
+## Quick Demo
 
 Project setup is a breeze with Pixi.
 ```shell
@@ -45,7 +45,7 @@ pixi run python -c "print('Hello World!')"
 
 Install your favorite tools with a single command.
 ```shell
-pixi global install git gh nvim ipython btop bat ripgrep
+pixi global install gh nvim ipython btop ripgrep
 ```
 ![Pixi Global Demo](assets/vhs-tapes/pixi_global_demo_light.gif#only-light)
 ![Pixi Global Demo](assets/vhs-tapes/pixi_global_demo_dark.gif#only-dark)
@@ -53,7 +53,7 @@ pixi global install git gh nvim ipython btop bat ripgrep
 ---
 
 
-## ↔️ What is the difference with Pixi?
+## What is the difference with Pixi?
 
 | Builtin Core Features | Pixi | Conda | Pip | Poetry | uv |
 |-----------------------|---|---|---|---|---|
@@ -66,7 +66,7 @@ pixi global install git gh nvim ipython btop bat ripgrep
 ---
 
 
-## 🛠️ Installation
+## Installation
 
 To install `pixi`, run:
 
@@ -226,6 +226,20 @@ To install `pixi`, run:
         ```
 
     More details on how to use Pixi with ROS2 can be found in the [ROS2 tutorial](tutorials/ros2.md).
+=== "DevOps"
+    1. Install all your favorite tools with a single command:
+    ```shell
+    pixi global install terraform ansible k9s make
+    ```
+    2. Use them everywhere:
+    ```shell
+    ansible --version
+    terraform --version
+    k9s version
+    make --version
+    ```
+
+
 ---
 
 ## 💬 What Developers Say
