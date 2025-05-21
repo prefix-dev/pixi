@@ -24,7 +24,7 @@ There are a few things we wanted to keep in mind in the design:
 ### Feature & Environment Set Definitions
 
 Introduce environment sets into the `pixi.toml` this describes environments based on features. Introduce features into the `pixi.toml` that can describe parts of environments.
-As an environment goes beyond just `dependencies` the `feature` fields should be described including the following fields:
+As an environment goes beyond just `dependencies` the `feature` fields can be described by including the following fields:
 
 - `dependencies`: The conda package dependencies
 - `pypi-dependencies`: The pypi package dependencies
