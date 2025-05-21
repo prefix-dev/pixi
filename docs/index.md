@@ -95,7 +95,7 @@ To install `pixi`, run:
 
 ---
 
-## 🏁 Getting Started
+## Getting Started
 
 === "Python"
     1. **Initialize a workspace:**
@@ -244,7 +244,7 @@ To install `pixi`, run:
 
 ---
 
-## 💬 What Developers Say
+## What Developers Say
 
 <div align="center" markdown="1">
 
@@ -264,7 +264,7 @@ _**"Pixi is the unifying dev experience that I've been wanting for robotics"**_
 </div>
 ---
 
-## 📚 Useful Links
+## Useful Links
 
 - [GitHub](https://github.com/prefix-dev/pixi): Pixi source code, feel free to leave a star!
 - [Discord](https://discord.gg/kKV8ZxyzY4): Join our community and ask questions.
