@@ -14,7 +14,7 @@ use pixi_git::url::RepositoryUrl;
 use pixi_glob::{GlobHashCache, GlobHashError, GlobHashKey};
 use pixi_manifest::{FeaturesExt, pypi::pypi_options::NoBuild};
 use pixi_record::{LockedGitUrl, ParseLockFileError, PixiRecord, SourceMismatchError};
-use pixi_spec::{PixiSpec, SourceSpec, SpecConversionError};
+use pixi_spec::{PixiSpec, SourceAnchor, SourceSpec, SpecConversionError};
 use pixi_uv_conversions::{
     AsPep508Error, as_uv_req, into_pixi_reference, pep508_requirement_to_uv_requirement,
     to_normalize, to_uv_specifiers, to_uv_version,
@@ -40,7 +40,6 @@ use super::{
     PixiRecordsByName, PypiRecord, PypiRecordsByName, package_identifier::ConversionError,
 };
 use crate::{
-    build::SourceAnchor,
     lock_file::records_by_name::HasNameVersion,
     workspace::{Environment, grouped_environment::GroupedEnvironment},
 };
@@ -1283,7 +1282,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                                 record.package_record.name.as_source(),
                                 &record.source
                             )),
-                            record.source.clone().into(),
+                            SourceSpec::from(record.source.clone()).into(),
                         ),
                     };
 

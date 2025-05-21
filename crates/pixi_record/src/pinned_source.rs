@@ -14,6 +14,7 @@ use pixi_git::{
 use pixi_spec::{GitReference, GitSpec, PathSourceSpec, SourceSpec, UrlSourceSpec};
 use rattler_digest::{Md5Hash, Sha256Hash};
 use rattler_lock::UrlOrPath;
+use serde_with::serde_as;
 use thiserror::Error;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
@@ -21,7 +22,8 @@ use url::Url;
 /// Describes an exact revision of a source checkout. This is used to pin a
 /// particular source definition to a revision. A git source spec does not
 /// describe an exact commit. This struct describes an exact commit.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(untagged)]
 pub enum PinnedSourceSpec {
     /// A pinned url source package.
     Url(PinnedUrlSpec),
@@ -134,13 +136,16 @@ impl From<MutablePinnedSourceSpec> for PinnedSourceSpec {
 }
 
 /// A pinned url archive.
-#[derive(Debug, Clone)]
+#[serde_as]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct PinnedUrlSpec {
     /// The URL of the archive.
     pub url: Url,
     /// The sha256 hash of the archive.
+    #[serde_as(as = "rattler_digest::serde::SerializableHash<rattler_digest::Sha256>")]
     pub sha256: Sha256Hash,
     /// The md5 hash of the archive.
+    #[serde_as(as = "Option<rattler_digest::serde::SerializableHash<rattler_digest::Md5>>")]
     pub md5: Option<Md5Hash>,
 }
 
@@ -151,13 +156,15 @@ impl From<PinnedUrlSpec> for PinnedSourceSpec {
 }
 
 /// A pinned version of a git checkout.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord, serde::Serialize)]
 pub struct PinnedGitCheckout {
     /// The commit hash of the git checkout.
     pub commit: GitSha,
     /// The subdirectory of the git checkout.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub subdirectory: Option<String>,
     /// The reference of the git checkout.
+    #[serde(skip_serializing_if = "GitReference::is_default")]
     pub reference: GitReference,
 }
 
@@ -234,12 +241,13 @@ impl PinnedGitCheckout {
 
 /// A pinned version of a git checkout.
 /// Similar with [`GitUrl`] but with a resolved commit field.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct PinnedGitSpec {
     /// The URL of the repository without the revision and subdirectory
     /// fragment.
     pub git: Url,
     /// The resolved git checkout.
+    #[serde(flatten)]
     pub source: PinnedGitCheckout,
 }
 
@@ -313,9 +321,11 @@ impl From<PinnedGitSpec> for PinnedSourceSpec {
 /// A pinned version of a path based source dependency. Different from a
 /// `PathSpec` this path is always either absolute or relative to the project
 /// root.
-#[derive(Debug, Clone)]
+#[serde_as]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct PinnedPathSpec {
     /// The path of the source.
+    #[serde_as(as = "serde_with::DisplayFromStr")]
     pub path: Utf8TypedPathBuf,
 }
 

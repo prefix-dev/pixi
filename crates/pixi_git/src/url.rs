@@ -97,7 +97,8 @@ impl CanonicalUrl {
 /// `https://github.com/pypa/package.git#subdirectory=pkg_b` would map to different
 /// [`CanonicalUrl`] values, but the same [`RepositoryUrl`], since they map to the same
 /// resource.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, serde::Serialize)]
+#[serde(transparent)]
 pub struct RepositoryUrl(Url);
 
 impl RepositoryUrl {
@@ -135,6 +136,10 @@ impl RepositoryUrl {
     /// Return the underlying [`Url`] of this repository.
     pub fn into_url(self) -> Url {
         self.into()
+    }
+
+    pub fn as_url(&self) -> &Url {
+        &self.0
     }
 }
 
