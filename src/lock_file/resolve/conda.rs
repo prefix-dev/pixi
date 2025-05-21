@@ -1,3 +1,4 @@
+use crate::build::SourceMetadata;
 use ahash::HashMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
@@ -8,10 +9,8 @@ use rattler_repodata_gateway::RepoData;
 use rattler_solve::{SolveStrategy, SolverImpl, resolvo};
 use url::Url;
 
-use crate::{
-    build::{SourceCheckout, SourceMetadata},
-    lock_file::LockedCondaPackages,
-};
+use crate::lock_file::LockedCondaPackages;
+use pixi_command_dispatcher::SourceCheckout;
 
 /// Solves the conda package environment for the given input. This function is
 /// async because it spawns a background task for the solver. Since solving is a

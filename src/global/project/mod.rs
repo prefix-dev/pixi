@@ -43,7 +43,7 @@ use once_cell::sync::OnceCell;
 use parsed_manifest::ParsedManifest;
 pub(crate) use parsed_manifest::{ExposedName, ParsedEnvironment};
 use pixi_config::{Config, default_channel_config, pixi_home};
-use pixi_consts::consts;
+use pixi_consts::consts::{self, CACHED_PACKAGES};
 use pixi_manifest::PrioritizedChannel;
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
 use pixi_utils::{executable_from_path, reqwest::build_reqwest_clients};
@@ -580,7 +580,7 @@ impl Project {
         LazyLock::force(&RAYON_INITIALIZE);
 
         // Install the environment
-        let package_cache = PackageCache::new(pixi_config::get_cache_dir()?.join("pkgs"));
+        let package_cache = PackageCache::new(pixi_config::get_cache_dir()?.join(CACHED_PACKAGES));
         let prefix = self.environment_prefix(env_name).await?;
         let authenticated_client = self.authenticated_client()?.clone();
         let result = await_in_progress(
