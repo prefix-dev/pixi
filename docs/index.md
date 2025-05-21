@@ -257,7 +257,7 @@ _**"Pixi is the unifying dev experience that I've been wanting for robotics"**_
 
 [*Audrow Nash*](https://x.com/audrow)
 
-**_“We are changing how we manage ROS dependencies on Windows.  We will be using Pixi to install and manage dependencies from conda. I'm pretty excited about how much easier it will be for users going forward.”**_
+_**“We are changing how we manage ROS dependencies on Windows.  We will be using Pixi to install and manage dependencies from conda. I'm pretty excited about how much easier it will be for users going forward.”**_
 
 [*Michael Carroll*](https://x.com/carromj)
 
