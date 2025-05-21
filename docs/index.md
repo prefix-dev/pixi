@@ -1,3 +1,5 @@
+![pixi logo](assets/banner.svg)
+
 **The next-generation package manager for reproducible, multi-language development.**
 
 ---
@@ -64,6 +66,23 @@ pixi global install gh nvim ipython btop ripgrep
 | Project Management | [✅](reference/pixi_manifest.md) | ❌ | ❌ | ✅ | ✅ |
 
 ---
+
+## Available software
+
+Pixi installs and manages "conda" packages. We support the biggest Conda package repository, [conda-forge](https://conda-forge.org/), which contains over 30,000 packages for Python, C/C++, Java, Rust, and more. It is an open source, community-driven project and you can add your own software as well (chat with us on Discord if you want to help!).
+
+Some examples:
+
+- **Python**: [`python`](https://prefix.dev/channels/conda-forge/packages/python), [`numpy`](https://prefix.dev/channels/conda-forge/packages/numpy), [`pandas`](https://prefix.dev/channels/conda-forge/packages/pandas), [`scikit-learn`](https://prefix.dev/channels/conda-forge/packages/scikit-learn), [`pytorch`](https://prefix.dev/channels/conda-forge/packages/pytorch)
+- **C/C++**: [`clang`](https://prefix.dev/channels/conda-forge/packages/clang), [`boost`](https://prefix.dev/channels/conda-forge/packages/boost-cpp), [`gsl`](https://prefix.dev/channels/conda-forge/packages/gsl), [`eigen`](https://prefix.dev/channels/conda-forge/packages/eigen), [`fftw`](https://prefix.dev/channels/conda-forge/packages/fftw), [`hdf5`](https://prefix.dev/channels/conda-forge/packages/hdf5), [`opencv`](https://prefix.dev/channels/conda-forge/packages/opencv), [sdl2](https://prefix.dev/channels/conda-forge/packages/sdl2), [`cmake`](https://prefix.dev/channels/conda-forge/packages/cmake), [`meson`](https://prefix.dev/channels/conda-forge/packages/meson), [`ninja`](https://prefix.dev/channels/conda-forge/packages/ninja)
+- **Java**: [`openjdk`](https://prefix.dev/channels/conda-forge/packages/openjdk), [`gradle`](https://prefix.dev/channels/conda-forge/packages/gradle), [`maven`](https://prefix.dev/channels/conda-forge/packages/maven)
+- **Rust**: [`rust`](https://prefix.dev/channels/conda-forge/packages/rust), [`cargo`](https://prefix.dev/channels/conda-forge/packages/cargo)
+- **Node.js**: [`nodejs`](https://prefix.dev/channels/conda-forge/packages/nodejs), [`pnpm`](https://prefix.dev/channels/conda-forge/packages/pnpm)
+- **Cli Tools**: [`git`](https://prefix.dev/channels/conda-forge/packages/git), [`gh`](https://prefix.dev/channels/conda-forge/packages/gh), [`ripgrep`](https://prefix.dev/channels/conda-forge/packages/ripgrep), [`make`](https://prefix.dev/channels/conda-forge/packages/make)
+
+And hundreds of other packages.
+
+To browse the available packages, you can use the fast package search on [prefix.dev](https://prefix.dev/).
 
 
 ## Installation
