@@ -4437,6 +4437,7 @@ dependencies = [
  "itertools 0.14.0",
  "miette 7.5.0",
  "pixi_build_frontend",
+ "pixi_consts",
  "pixi_git",
  "pixi_glob",
  "pixi_record",
