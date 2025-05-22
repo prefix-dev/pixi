@@ -950,6 +950,8 @@ async fn test_multiple_prefix_update() {
     let prefix = group.prefix();
     let virtual_packages = group.virtual_packages(current_platform);
 
+    let command_dispatcher = project.command_dispatcher_builder().unwrap().finish();
+
     let conda_prefix_updater = CondaPrefixUpdater::new(
         channels,
         name,
@@ -961,10 +963,10 @@ async fn test_multiple_prefix_update() {
         IoConcurrencyLimit::default(),
         BuildContext::new(
             tmp_dir.path().to_path_buf(),
-            tmp_dir.path().to_path_buf(),
             ChannelConfig::default_with_root_dir(tmp_dir.path().to_path_buf()),
             Default::default(),
             Arc::new(ToolContext::default()),
+            command_dispatcher,
         )
         .unwrap(),
         RunPostLinkScripts::False,

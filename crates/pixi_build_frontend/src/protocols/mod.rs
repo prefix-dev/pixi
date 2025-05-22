@@ -5,7 +5,6 @@ use std::{
     sync::Arc,
 };
 
-use error::BackendError;
 use futures::TryFutureExt;
 use jsonrpsee::{
     async_client::{Client, ClientBuilder},
@@ -37,6 +36,7 @@ use tokio::{
     sync::{Mutex, oneshot},
 };
 
+use crate::error::BackendError;
 use crate::{
     CondaBuildReporter, CondaMetadataReporter,
     jsonrpc::{RpcParams, stdio_transport},
@@ -45,7 +45,6 @@ use crate::{
 };
 
 pub mod builders;
-mod error;
 pub(super) mod stderr;
 
 #[derive(Debug, Error, Diagnostic)]

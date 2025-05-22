@@ -1,3 +1,4 @@
+mod placement;
 use indicatif::{HumanBytes, MultiProgress, ProgressBar, ProgressDrawTarget, ProgressState};
 use parking_lot::Mutex;
 use std::borrow::Cow;
@@ -5,6 +6,8 @@ use std::fmt::Write;
 use std::future::Future;
 use std::sync::{Arc, LazyLock};
 use std::time::Duration;
+
+pub use placement::ProgressBarPlacement;
 
 /// Returns a global instance of [`indicatif::MultiProgress`].
 ///
@@ -81,7 +84,7 @@ pub async fn await_in_progress<T, F: FnOnce(ProgressBar) -> Fut, Fut: Future<Out
 }
 
 /// Style an existing progress bar with a warning style and the given message.
-pub fn style_warning_pb(pb: &ProgressBar, warning_msg: String) {
+pub fn style_warning_pb(pb: ProgressBar, warning_msg: String) -> ProgressBar {
     pb.set_style(
         indicatif::ProgressStyle::default_spinner() // Or default_bar() if you used ProgressBar::new(length)
             .template("  {spinner:.yellow} {wide_msg:.yellow}") // Yellow spinner, clear message
@@ -89,6 +92,7 @@ pub fn style_warning_pb(pb: &ProgressBar, warning_msg: String) {
     );
     pb.set_message(warning_msg);
     pb.enable_steady_tick(Duration::from_millis(100));
+    pb
 }
 
 /// A struct that can be used to format the message part of a progress bar.
