@@ -1,6 +1,6 @@
-use pixi_record::PinnedSourceSpec;
-use pixi_spec::{GitSpec, PathSourceSpec, SourceSpec, UrlSourceSpec};
 use typed_path::Utf8TypedPath;
+
+use crate::{GitSpec, PathSourceSpec, SourceSpec, UrlSourceSpec};
 
 /// `SourceAnchor` represents the resolved base location of a `SourceSpec`.
 /// It serves as a reference point for interpreting relative or recursive
@@ -13,9 +13,9 @@ pub enum SourceAnchor {
     Source(SourceSpec),
 }
 
-impl From<PinnedSourceSpec> for SourceAnchor {
-    fn from(value: PinnedSourceSpec) -> Self {
-        SourceAnchor::Source(SourceSpec::from(value))
+impl From<SourceSpec> for SourceAnchor {
+    fn from(value: SourceSpec) -> Self {
+        SourceAnchor::Source(value)
     }
 }
 

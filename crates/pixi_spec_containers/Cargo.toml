@@ -11,5 +11,6 @@ version = "0.1.0"
 [dependencies]
 indexmap = { workspace = true }
 itertools = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 
 rattler_conda_types = { workspace = true }

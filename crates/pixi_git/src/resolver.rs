@@ -1,16 +1,11 @@
 /// Derived from `uv-git` implementation
 /// Source: https://github.com/astral-sh/uv/blob/4b8cc3e29e4c2a6417479135beaa9783b05195d3/crates/uv-git/src/resolver.rs
 /// This module expose types and functions to interact with Git repositories.
-use std::borrow::Cow;
 use std::path::PathBuf;
 use std::sync::Arc;
 
 use pixi_utils::AsyncPrefixGuard;
 use tracing::debug;
-
-use dashmap::DashMap;
-use dashmap::mapref::one::Ref;
-use reqwest_middleware::ClientWithMiddleware;
 
 use crate::{
     GitError, GitUrl, Reporter,
@@ -19,6 +14,10 @@ use crate::{
     source::{Fetch, GitSource, cache_digest},
     url::RepositoryUrl,
 };
+use dashmap::DashMap;
+use dashmap::mapref::one::Ref;
+use reqwest_middleware::ClientWithMiddleware;
+use serde::Serialize;
 
 #[derive(Debug, thiserror::Error)]
 pub enum GitResolverError {
@@ -50,22 +49,22 @@ impl GitResolver {
     /// Fetch a remote Git repository.
     pub async fn fetch(
         &self,
-        url: &GitUrl,
+        url: GitUrl,
         client: ClientWithMiddleware,
         cache: PathBuf,
         reporter: Option<Arc<dyn Reporter>>,
     ) -> Result<Fetch, GitError> {
         debug!("Fetching source distribution from Git: {url}");
 
-        let reference = RepositoryReference::from(url);
+        let reference = RepositoryReference::from(&url);
 
         // If we know the precise commit already, reuse it, to ensure that all fetches within a
         // single process are consistent.
         let url = {
             if let Some(precise) = self.get(&reference) {
-                Cow::Owned(url.clone().with_precise(*precise))
+                url.with_precise(*precise)
             } else {
-                Cow::Borrowed(url)
+                url
             }
         };
 
@@ -81,7 +80,7 @@ impl GitResolver {
         write_guard.begin().await?;
 
         // Fetch the Git repository.
-        let source = GitSource::new(url.as_ref().clone(), client, cache);
+        let source = GitSource::new(url.clone(), client, cache);
         let source = if let Some(reporter) = reporter {
             source.with_reporter(reporter)
         } else {
@@ -94,9 +93,7 @@ impl GitResolver {
 
         // Insert the resolved URL into the in-memory cache. This ensures that subsequent fetches
         // resolve to the same precise commit.
-        if let Some(precise) = fetch.git().precise() {
-            self.insert(reference, precise);
-        }
+        self.insert(reference, fetch.commit());
 
         write_guard.finish().await?;
 
@@ -162,11 +159,12 @@ pub struct ResolvedRepositoryReference {
     pub sha: GitSha,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub struct RepositoryReference {
     /// The URL of the Git repository, with any query parameters and fragments removed.
     pub url: RepositoryUrl,
     /// The reference to the commit to use, which could be a branch, tag, or revision.
+    #[serde(skip_serializing_if = "GitReference::is_default")]
     pub reference: GitReference,
 }
 
