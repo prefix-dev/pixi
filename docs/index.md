@@ -10,12 +10,32 @@ template: home.html
 
 Pixi is a **fast, modern, and reproducible** package management tool for developers of all backgrounds.
 
-
-| 🔄 **Reproducibility** | 🛠️ **Tasks** | 🌐 **Multi Platform** |
-|---|---|---|
-| Isolated, easily recreated environments with lockfiles built-in | Manage complex pipelines effortlessly. | Works on Linux, macOS, Windows, and more. |
-| 🧩 **Multi Environment** | 🐍 **Python** | 🌍 **Global Tools** |
-| Compose multiple environments in one manifest. | Support for `pyproject.toml` and PyPI through [`uv`](https://docs.astral.sh/uv/). | Install global tools, safely isolated. Replacing `apt`, `homebrew`, `winget`|
+<div class="feature-grid">
+  <div class="feature-card">
+    <strong>🔄 Reproducibility</strong>
+    <p>Isolated, easily recreated environments with lockfiles built-in</p>
+  </div>
+  <div class="feature-card">
+    <strong>🛠️ Tasks</strong>
+    <p>Manage complex pipelines effortlessly.</p>
+  </div>
+  <div class="feature-card">
+    <strong>🌐 Multi Platform</strong>
+    <p>Works on Linux, macOS, Windows, and more.</p>
+  </div>
+  <div class="feature-card">
+    <strong>🧩 Multi Environment</strong>
+    <p>Compose multiple environments in one manifest.</p>
+  </div>
+  <div class="feature-card">
+    <strong>🐍 Python</strong>
+    <p>Support for <code>pyproject.toml</code> and PyPI through <a href="https://docs.astral.sh/uv/" target="_blank">uv</a>.</p>
+  </div>
+  <div class="feature-card">
+    <strong>🌍 Global Tools</strong>
+    <p>Install global tools, safely isolated. Replacing <code>apt</code>, <code>homebrew</code>, <code>winget</code></p>
+  </div>
+</div>
 
 ---
 

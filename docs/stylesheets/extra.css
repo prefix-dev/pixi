@@ -116,3 +116,24 @@ table code {
   background-color: #F9C405FF;
   color: var(--md-primary-fg-color);
 }
+
+.feature-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  justify-content: center;
+}
+
+.feature-card {
+  flex: 1 1 calc(33% - 1rem);
+  min-width: 280px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+@media (max-width: 900px) {
+  .feature-card {
+    flex: 1 1 calc(50% - 1rem);
+  }
+}
