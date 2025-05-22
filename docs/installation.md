@@ -11,21 +11,30 @@ To install `pixi` you can run the following command in your terminal:
     wget -qO- https://pixi.sh/install.sh | sh
     ```
 
-    The above invocation will automatically download the latest version of `pixi`, extract it, and move the `pixi` binary to `~/.pixi/bin`.
-    The script will also extend the `PATH` environment variable in the startup script of your shell to include `~/.pixi/bin`.
-    This allows you to invoke `pixi` from anywhere.
+    ??? note "What does this do?"
+        The above invocation will automatically download the latest version of `pixi`, extract it, and move the `pixi` binary to `~/.pixi/bin`.
+        The script will also extend the `PATH` environment variable in the startup script of your shell to include `~/.pixi/bin`.
+        This allows you to invoke `pixi` from anywhere.
 
 === "Windows"
+    [Download installer](https://github.com/prefix-dev/pixi/releases/latest/download/pixi-x86_64-pc-windows-msvc.msi){ .md-button }
+
+    Or run:
+
     ```powershell
     powershell -ExecutionPolicy ByPass -c "irm -useb https://pixi.sh/install.ps1 | iex"
     ```
 
-    The above invocation will automatically download the latest version of `pixi`, extract it, and move the `pixi` binary to `%UserProfile%\.pixi\bin`.
-    The command will also add `%UserProfile%\.pixi\bin` to your `PATH` environment variable, allowing you to invoke `pixi` from anywhere.
+    ??? note "What does this do?"
+        The above invocation will automatically download the latest version of `pixi`, extract it, and move the `pixi` binary to `%UserProfile%\.pixi\bin`.
+        The command will also add `%UserProfile%\.pixi\bin` to your `PATH` environment variable, allowing you to invoke `pixi` from anywhere.
 
-!!! tip
+Now restart your terminal or shell to make the installation effective.
 
-    You might need to restart your terminal or source your shell for the changes to take effect.
+??? question "Don't trust our link? Check the script!"
+    You can check the installation `sh` script: [download](https://pixi.sh/install.sh) and the `ps1`: [download](https://pixi.sh/install.ps1).
+    The scripts are open source and available on [GitHub](https://github.com/prefix-dev/pixi/tree/main/install).
+
 
 ## Update
 
@@ -78,7 +87,7 @@ scoop install main/pixi
 Pixi is a single executable and can be run without any external dependencies.
 That means you can manually download the suitable archive for your architecture and operating system from our [GitHub releases](https://github.com/prefix-dev/pixi/releases), unpack it and then use it as is.
 If you want `pixi` itself or the executables installed via `pixi global` to be available in your `PATH`, you have to add them manually.
-The executables are located in [PIXI_HOME](../reference/environment_variables.md)/bin.
+The executables are located in [PIXI_HOME](reference/environment_variables.md)/bin.
 
 
 ### Install From Source

@@ -44,6 +44,7 @@ theme:
     - content.code.copy
     - content.action.edit
     - content.code.annotate
+    - content.tooltips
     # - content.code.select Sponsor only
     - navigation.instant
     - navigation.instant.progress
@@ -60,8 +61,11 @@ edit_uri: edit/main/docs/
 
 markdown_extensions:
   - admonition
+  - abbr
   - def_list
   - footnotes
+  - attr_list
+  - pymdownx.extra
   - pymdownx.tasklist:
       custom_checkbox: true
   - pymdownx.highlight:
@@ -98,8 +102,9 @@ extra:
     provider: mike
 
 nav:
-  - Frontpage: index.md
+  - Home: index.md
   - Getting Started: getting_started.md
+  - Installation: installation.md
   - Workspace:
       - Environments: workspace/environment.md
       - Tasks: workspace/advanced_tasks.md
@@ -154,7 +159,6 @@ nav:
       - Rust: tutorials/rust.md
       - Multi Environment: tutorials/multi_environment.md
   - Advanced:
-      - Installation: advanced/installation.md
       - Channel Logic: advanced/channel_logic.md
       - Info Command: advanced/explain_info_command.md
       - Shebang: advanced/shebang.md
@@ -220,6 +224,7 @@ plugins:
         "FAQ.md": "misc/FAQ.md"
         "integration/editor/devcontainer.md": "integration/editor/vscode.md"
         "integration/editor/pycharm.md": "integration/editor/jetbrains.md"
+        "advanced/installation.md": "installation.md"
 
   - search
   - social
