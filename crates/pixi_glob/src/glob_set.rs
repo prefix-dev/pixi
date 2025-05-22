@@ -240,11 +240,11 @@ mod tests {
             // pretend that we are in the workspace folder
             // and our recipe yaml is living inside some folder
             // that will point outside
-            .filter_directory(&root_path)
+            .filter_directory(root_path)
             .collect::<Result<Vec<_>, _>>()
             .unwrap()
             .into_iter()
-            .map(|p| p.path().strip_prefix(&root_path).unwrap().to_path_buf())
+            .map(|p| p.path().strip_prefix(root_path).unwrap().to_path_buf())
             .collect();
 
         // Assert the expected files are present
