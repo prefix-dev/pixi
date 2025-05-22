@@ -187,13 +187,10 @@ mod tests {
         fs_err::create_dir(&temp_path_as_root).unwrap();
 
         // Create files and directories
-        File::create(root_path.join("include1.txt")).unwrap();
-        File::create(root_path.join("include2.log")).unwrap();
-        File::create(root_path.join("exclude.txt")).unwrap();
         fs_err::create_dir(root_path.join("subdir")).unwrap();
         File::create(root_path.join("subdir/some_inner_source.cpp")).unwrap();
 
-        // Test globs: include all .txt but exclude exclude.txt
+        // Test globs: we want to get the file inside the subdir using a relative glob.
         let filter_globs = GlobSet::create(vec!["../**/*.cpp", "!exclude.txt"]).unwrap();
 
         // Filter directory and get results as strings
