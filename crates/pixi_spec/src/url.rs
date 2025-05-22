@@ -81,15 +81,20 @@ impl UrlSpec {
 }
 
 /// A specification of a source archive from a URL.
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[serde_as]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, serde::Serialize)]
 pub struct UrlSourceSpec {
     /// The URL of the package
     pub url: Url,
 
     /// The md5 hash of the archive
+    #[serde_as(as = "Option<rattler_digest::serde::SerializableHash<rattler_digest::Md5>>")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub md5: Option<Md5Hash>,
 
     /// The sha256 hash of the archive
+    #[serde_as(as = "Option<rattler_digest::serde::SerializableHash<rattler_digest::Sha256>>")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub sha256: Option<Sha256Hash>,
 }
 

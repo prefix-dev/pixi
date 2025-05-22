@@ -19,11 +19,6 @@ use std::{
     sync::Arc,
 };
 
-use crate::{
-    activation::{CurrentEnvVarBehavior, initialize_env_variables},
-    diff::LockFileDiff,
-    lock_file::filter_lock_file,
-};
 use async_once_cell::OnceCell as AsyncCell;
 pub use discovery::{DiscoveryStart, WorkspaceLocator, WorkspaceLocatorError};
 pub use environment::Environment;
@@ -33,14 +28,15 @@ use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use once_cell::sync::OnceCell;
 use pep508_rs::Requirement;
+use pixi_command_dispatcher::{CacheDirs, CommandDispatcher, CommandDispatcherBuilder, Limits};
 use pixi_config::Config;
-use pixi_consts::consts;
+use pixi_consts::consts::{self, CACHED_BUILD_WORK_DIR};
 use pixi_manifest::{
     AssociateProvenance, EnvironmentName, Environments, ExplicitManifestError,
     HasWorkspaceManifest, LoadManifestsError, ManifestProvenance, Manifests, PackageManifest,
     SpecType, WithProvenance, WithWarnings, WorkspaceManifest,
 };
-use pixi_pypi_spec::PypiPackageName;
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::SourceSpec;
 use pixi_utils::reqwest::build_reqwest_clients;
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
@@ -54,6 +50,12 @@ use tokio::sync::Semaphore;
 use url::Url;
 pub use workspace_mut::WorkspaceMut;
 use xxhash_rust::xxh3::xxh3_64;
+
+use crate::{
+    activation::{CurrentEnvVarBehavior, initialize_env_variables},
+    diff::LockFileDiff,
+    lock_file::filter_lock_file,
+};
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
 
@@ -180,7 +182,11 @@ impl Debug for Workspace {
 
 pub type PypiDeps = indexmap::IndexMap<
     PypiPackageName,
-    (Requirement, Option<pixi_manifest::PypiDependencyLocation>),
+    (
+        Requirement,
+        Option<PixiPypiSpec>,
+        Option<pixi_manifest::PypiDependencyLocation>,
+    ),
 >;
 
 pub type MatchSpecs = indexmap::IndexMap<PackageName, (MatchSpec, SpecType)>;
@@ -476,6 +482,20 @@ impl Workspace {
                 Arc::new(Semaphore::new(max_concurrent_downloads))
             })
             .clone()
+    }
+
+    /// Returns a pre-filled command dispatcher builder that can be used to
+    /// construct a [`pixi_command_dispatcher::CommandDispatcher`].
+    pub fn command_dispatcher_builder(&self) -> miette::Result<CommandDispatcherBuilder> {
+        let cache_dirs = CacheDirs::new(pixi_config::get_cache_dir()?)
+            .with_working_dirs(self.pixi_dir().join(CACHED_BUILD_WORK_DIR));
+        Ok(CommandDispatcher::builder()
+            .with_cache_dirs(cache_dirs)
+            .with_root_dir(self.root().to_path_buf())
+            .with_download_client(self.authenticated_client()?.clone())
+            .with_limits(Limits {
+                max_concurrent_solves: self.config().max_concurrent_solves().into(),
+            }))
     }
 
     fn client_and_authenticated_client(

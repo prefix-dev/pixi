@@ -1676,6 +1676,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "derive_more"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "093242cf7570c207c83073cf82f79706fe7b8317e98620a47d5be7c3d8497678"
+dependencies = [
+ "derive_more-impl",
+]
+
+[[package]]
+name = "derive_more-impl"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bda628edc44c4bb645fbe0f758797143e4e07926f7ebf4e9bdfbd3d2ce621df3"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "dialoguer"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4260,6 +4280,7 @@ dependencies = [
  "percent-encoding",
  "pixi_build_frontend",
  "pixi_build_types",
+ "pixi_command_dispatcher",
  "pixi_config",
  "pixi_consts",
  "pixi_default_versions",
@@ -4352,6 +4373,7 @@ dependencies = [
  "itertools 0.14.0",
  "jsonrpsee",
  "miette 7.5.0",
+ "pathdiff",
  "pixi_build_type_conversions",
  "pixi_build_types",
  "pixi_config",
@@ -4359,6 +4381,7 @@ dependencies = [
  "pixi_manifest",
  "pixi_progress",
  "pixi_spec",
+ "pixi_spec_containers",
  "pixi_utils",
  "rattler",
  "rattler_conda_types",
@@ -4400,6 +4423,44 @@ dependencies = [
  "serde_json",
  "serde_with",
  "url",
+]
+
+[[package]]
+name = "pixi_command_dispatcher"
+version = "0.1.0"
+dependencies = [
+ "base64 0.22.1",
+ "chrono",
+ "derive_more",
+ "dirs",
+ "futures",
+ "itertools 0.14.0",
+ "miette 7.5.0",
+ "pixi_build_frontend",
+ "pixi_consts",
+ "pixi_git",
+ "pixi_glob",
+ "pixi_record",
+ "pixi_spec",
+ "pixi_spec_containers",
+ "pixi_utils",
+ "rattler",
+ "rattler_conda_types",
+ "rattler_repodata_gateway",
+ "rattler_shell",
+ "rattler_solve",
+ "rattler_virtual_packages",
+ "reqwest-middleware",
+ "serde",
+ "serde_json",
+ "slotmap",
+ "strsim",
+ "thiserror 2.0.12",
+ "tokio",
+ "tracing",
+ "typed-path",
+ "url",
+ "xxhash-rust",
 ]
 
 [[package]]
@@ -4577,6 +4638,7 @@ dependencies = [
  "rattler_digest",
  "rattler_lock",
  "serde",
+ "serde_with",
  "thiserror 2.0.12",
  "typed-path",
  "url",
@@ -4612,6 +4674,7 @@ dependencies = [
  "indexmap 2.9.0",
  "itertools 0.14.0",
  "rattler_conda_types",
+ "serde",
 ]
 
 [[package]]
@@ -6584,6 +6647,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f92a496fb766b417c996b9c5e57daf2f7ad3b0bebe1ccfca4856390e3d3bb67"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "slotmap"
+version = "1.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dbff4acf519f630b3a3ddcfaea6c06b42174d9a44bc70c620e9ed1649d58b82a"
+dependencies = [
+ "version_check",
 ]
 
 [[package]]

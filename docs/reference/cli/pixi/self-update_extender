@@ -3,8 +3,8 @@
 ## Examples
 
 ```shell
-pixi global uninstall my-env
-pixi global uninstall pixi-pack rattler-build
+pixi self-update
+pixi self-update --version 0.46.0
 ```
 
 

@@ -33,6 +33,7 @@ csv = "1.3.1"
 ctrlc = "3.4.5"
 dashmap = "6.1.0"
 deno_task_shell = "0.22.0"
+derive_more = "2.0.1"
 dialoguer = "0.11.0"
 digest = "0.10"
 dirs = "6.0.0"
@@ -84,6 +85,7 @@ sha1 = "0.10.6"
 sha2 = "0.10.8"
 shlex = "1.3.0"
 signal-hook = "0.3.17"
+slotmap = "1.0.7"
 spdx = "0.10.8"
 strsim = "0.11.1"
 strum = "0.27.1"
@@ -160,6 +162,7 @@ pixi_allocator = { path = "crates/pixi_allocator" }
 pixi_build_frontend = { path = "crates/pixi_build_frontend" }
 pixi_build_type_conversions = { path = "crates/pixi_build_type_conversions" }
 pixi_build_types = { path = "crates/pixi_build_types" }
+pixi_command_dispatcher = { path = "crates/pixi_command_dispatcher" }
 pixi_config = { path = "crates/pixi_config" }
 pixi_consts = { path = "crates/pixi_consts" }
 pixi_default_versions = { path = "crates/pixi_default_versions" }
@@ -287,6 +290,7 @@ fs-err = { workspace = true, features = ["tokio"] }
 pixi_allocator = { workspace = true, optional = true }
 pixi_build_frontend = { workspace = true }
 pixi_build_types = { workspace = true }
+pixi_command_dispatcher = { workspace = true }
 pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_default_versions = { workspace = true }
