@@ -72,7 +72,8 @@ pixi global install gh nvim ipython btop ripgrep
 
 ## Available software
 
-Pixi installs and manages "conda" packages. We support the biggest Conda package repository, [conda-forge](https://conda-forge.org/), which contains over 30,000 packages for Python, C/C++, Java, Rust, and more. It is an open source, community-driven project and you can add your own software as well (chat with us on Discord if you want to help!).
+Pixi installs and manages "conda" packages. We support the **biggest Conda package repository**, [conda-forge](https://conda-forge.org/), which contains over **30,000 packages** for Python, C/C++, Java, Rust, and more.
+It is an open source, community-driven project, and you can add your own software as well (chat with us on [Discord](https://discord.gg/kKV8ZxyzY4) if you want to help!).
 
 Some examples:
 
