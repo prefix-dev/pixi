@@ -10,7 +10,7 @@ use crate::{
 };
 
 impl CommandDispatcherProcessor {
-    /// Called when a [`super::ForegroundMessage::SolvePixiEnvironmentTask`]
+    /// Called when a [`crate::command_dispatcher::SolvePixiEnvironmentTask`]
     /// task was received.
     pub(crate) fn on_solve_pixi_environment(&mut self, task: SolvePixiEnvironmentTask) {
         // Notify the reporter that a new solve has been queued.
@@ -55,7 +55,7 @@ impl CommandDispatcherProcessor {
     /// received.
     ///
     /// This function will relay the result of the task back to the
-    /// [`CommandDispatcher`] that issues it.
+    /// [`crate::CommandDispatcher`] that issues it.
     pub(crate) fn on_solve_pixi_environment_result(
         &mut self,
         id: SolvePixiEnvironmentId,
