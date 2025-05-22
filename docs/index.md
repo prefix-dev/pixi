@@ -47,7 +47,7 @@ pixi global install gh nvim ipython btop ripgrep
 | Builtin Core Features | Pixi | Conda | Pip | Poetry | uv |
 |-----------------------|---|---|---|---|---|
 | Installs Python | ✅ | ✅ | ❌ | ❌ | ✅ |
-| Supports Multiple Languages | ✅ | ✅ | ❌ | ❌ |❌ |
+| Supports Multiple Languages | ✅ | ✅ | ❌ | ❌ | ❌ |
 | Lockfiles | ✅ | ❌ | ❌ | ✅ | ✅ |
 | Task runner | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Project Management | ✅ | ❌ | ❌ | ✅ | ✅ |
