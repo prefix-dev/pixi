@@ -29,6 +29,9 @@ pub enum GlobSetError {
 
     #[error(transparent)]
     Build(#[from] wax::BuildError),
+
+    #[error(transparent)]
+    StripPrefix(#[from] std::path::StripPrefixError),
 }
 
 impl<'t> GlobSet<'t> {
@@ -72,25 +75,55 @@ impl<'t> GlobSet<'t> {
             .include
             .iter()
             .flat_map(move |glob| {
-                glob.walk(root_dir.clone())
+                let (effective_walk_root, glob) = if glob.has_semantic_literals() {
+                    // if the glob has semantic literals, we need to
+                    // join the root directory with the glob prefix
+                    // and use that as the effective walk root.
+                    // Example:
+                    // if `root_dir` is "/path/to/src" and `glob` is "../**/*.cpp",
+                    //   `effective_walk_root` becomes "/path/to".
+                    let (prefix, glob) = glob.clone().partition();
+                    (root_dir.join(&prefix), glob)
+                } else {
+                    (root_dir.clone(), glob.clone())
+                };
+
+                let walkable = glob
+                    .walk(&effective_walk_root)
                     .not(self.exclude.clone())
                     .expect("since the globs are already parsed this should not error")
+                    .collect_vec();
+
+                walkable
+                    .into_iter()
+                    .map(|w| {
+                        w.map_err(|e| GlobSetError::Metadata(effective_walk_root.to_path_buf(), e))
+                    })
+                    .collect_vec()
+                    .into_iter()
             })
             .filter_map(|entry| {
                 match entry {
                     Ok(entry) if entry.file_type().is_dir() => None,
                     Ok(entry) => Some(Ok(entry)),
                     Err(e) => {
-                        let path = e.path().map(Path::to_path_buf);
-                        let io_err = std::io::Error::from(e);
-                        match io_err.kind() {
-                            // Ignore DONE and permission errors
-                            io::ErrorKind::NotFound | io::ErrorKind::PermissionDenied => None,
-                            _ => Some(Err(if let Some(path) = path {
-                                GlobSetError::Io(path, io_err)
-                            } else {
-                                GlobSetError::DirWalk(io_err)
-                            })),
+                        match e {
+                            GlobSetError::Metadata(_, we) => {
+                                let path = we.path().map(Path::to_path_buf);
+                                let io_err = std::io::Error::from(we);
+                                match io_err.kind() {
+                                    // Ignore DONE and permission errors
+                                    io::ErrorKind::NotFound | io::ErrorKind::PermissionDenied => {
+                                        None
+                                    }
+                                    _ => Some(Err(if let Some(path) = path {
+                                        GlobSetError::Io(path, io_err)
+                                    } else {
+                                        GlobSetError::DirWalk(io_err)
+                                    })),
+                                }
+                            }
+                            _ => Some(Err(e)),
                         }
                     }
                 }
@@ -138,6 +171,86 @@ mod tests {
             "subdir/include_subdir.txt".parse().unwrap(),
         ];
         expected.sort();
+        assert_eq!(filtered_files, expected);
+    }
+
+    #[test]
+    fn test_filters_with_relatives_globs() {
+        // In this test we want to make sure that when globbing over
+        // patterns that contains semantic relative path, like
+        // ../pixi.toml or ../sources/*.toml, we are able to
+        // distinguish between glob and just a semantic path.
+        let temp_dir = tempdir().unwrap();
+        let root_path = temp_dir.path();
+
+        let temp_path_as_root = temp_dir.path().join("somewhere_inside");
+        fs_err::create_dir(&temp_path_as_root).unwrap();
+
+        // Create files and directories
+        File::create(root_path.join("include1.txt")).unwrap();
+        File::create(root_path.join("include2.log")).unwrap();
+        File::create(root_path.join("exclude.txt")).unwrap();
+        fs_err::create_dir(root_path.join("subdir")).unwrap();
+        File::create(root_path.join("subdir/some_inner_source.cpp")).unwrap();
+
+        // Test globs: include all .txt but exclude exclude.txt
+        let filter_globs = GlobSet::create(vec!["../**/*.cpp", "!exclude.txt"]).unwrap();
+
+        // Filter directory and get results as strings
+        let mut filtered_files: Vec<_> = filter_globs
+            // pretend that we are in the workspace folder
+            // and our recipe yaml is living inside some folder
+            // that will point outside
+            .filter_directory(&temp_path_as_root)
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap()
+            .into_iter()
+            .map(|p| {
+                p.path()
+                    .strip_prefix(&temp_path_as_root)
+                    .unwrap()
+                    .to_path_buf()
+            })
+            .collect();
+
+        // Assert the expected files are present
+        filtered_files.sort();
+
+        let expected = vec![
+            "../subdir/some_inner_source.cpp"
+                .parse::<PathBuf>()
+                .unwrap(),
+        ];
+        assert_eq!(filtered_files, expected);
+    }
+
+    #[test]
+    fn test_filters_with_just_a_file_glob() {
+        let temp_dir = tempdir().unwrap();
+        let root_path = temp_dir.path();
+
+        // Create files and directories
+        File::create(root_path.join("pixi.toml")).unwrap();
+
+        // Test globs: include all .txt but exclude exclude.txt
+        let filter_globs = GlobSet::create(vec!["pixi.toml", "!exclude.txt"]).unwrap();
+
+        // Filter directory and get results as strings
+        let mut filtered_files: Vec<_> = filter_globs
+            // pretend that we are in the workspace folder
+            // and our recipe yaml is living inside some folder
+            // that will point outside
+            .filter_directory(&root_path)
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap()
+            .into_iter()
+            .map(|p| p.path().strip_prefix(&root_path).unwrap().to_path_buf())
+            .collect();
+
+        // Assert the expected files are present
+        filtered_files.sort();
+
+        let expected = vec!["pixi.toml".parse::<PathBuf>().unwrap()];
         assert_eq!(filtered_files, expected);
     }
 }
