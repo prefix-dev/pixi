@@ -266,17 +266,21 @@ To install `pixi`, run:
 
 ## What Developers Say
 
-<div align="center" markdown="1">
-
-_**“I can’t stress enough how much I love using Pixi global as a package manager for my daily CLI tools.”**_
-
-*Matthew Feickert* [University of Wisconsin–Madison](https://www.wisc.edu/)
-
-
-_**“We are changing how we manage ROS dependencies on Windows.  We will be using Pixi to install and manage dependencies from conda. I'm pretty excited about how much easier it will be for users going forward.”**_
-
-*Michael Carroll* [Project Lead ROS](https://www.ros.org/)
-
+<div class="quote-scroll-wrapper">
+  <div class="quote-scroll">
+    <div class="quote-card">
+      <p>"Pixi is my tool of choice for Python environment management. It has significantly reduced boilerplate by offering seamless support for both PyPI and conda-forge indexes - a critical requirement in my workflow."</p>
+      <strong>Guillaume Lemaitre</strong> – <a href="https://scikit-learn.org">scikit-learn</a>
+    </div>
+    <div class="quote-card">
+      <p>"I can’t stress enough how much I love using Pixi global as a package manager for my daily CLI tools."</p>
+      <strong>Matthew Feickert</strong> – <a href="https://www.wisc.edu/">University of Wisconsin–Madison</a>
+    </div>
+    <div class="quote-card">
+      <p>"We are changing how we manage ROS dependencies on Windows. We will be using Pixi to install and manage dependencies from conda. I'm pretty excited about how much easier it will be for users going forward."</p>
+      <strong>Michael Carroll</strong> – <a href="https://www.ros.org/">Project Lead ROS</a>
+    </div>
+  </div>
 </div>
 
 ---

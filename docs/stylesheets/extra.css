@@ -137,3 +137,26 @@ table code {
     flex: 1 1 calc(50% - 1rem);
   }
 }
+
+.quote-scroll-wrapper {
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 1rem 0;
+}
+
+.quote-scroll {
+  display: flex;
+  gap: 1rem;
+  padding: 0 1rem;
+}
+.quote-card {
+  flex: 0 0 320px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 1rem;
+  font-style: italic;
+}
+
+.quote-card p {
+  margin-bottom: 0.5rem;
+}
