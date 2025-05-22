@@ -205,6 +205,8 @@ fn path_diff(path_before: &str, path_after: &str, prefix: &Prefix) -> miette::Re
     let prefix_path_entries = prefix_path_entries(prefix.root(), &Platform::current());
 
     // Calculate the PATH diff
+    // We start with the PATH after activation,
+    // and only keep entries that either weren't there before or are prefix path entries
     let path_diff = paths_after
         .iter()
         .filter(|p| !paths_before.contains(p) || prefix_path_entries.contains(p));

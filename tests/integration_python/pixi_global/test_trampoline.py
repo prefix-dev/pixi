@@ -431,6 +431,7 @@ def test_trampoline_extends_path(
             "dummy-trampoline-path",
         ],
         env=env,
+        reset_env=True,
     )
 
     if extend_path_prefix_entry:
@@ -443,12 +444,22 @@ def test_trampoline_extends_path(
     # PATH should be extended by the activation script
     # This is done by adding the diff before and after the activation script to the current PATH
     env["PATH"] = original_path
-    verify_cli_command([dummy_trampoline_path], stdout_contains=[path_diff, env["PATH"]], env=env)
+    verify_cli_command(
+        [dummy_trampoline_path],
+        stdout_contains=[path_diff, env["PATH"]],
+        env=env,
+        reset_env=True,
+    )
 
     # If we extend PATH, both new extension and path diff should be present
     path_change = "/another/test/path"
     env["PATH"] = os.pathsep.join([path_change, original_path])
-    verify_cli_command([dummy_trampoline_path], stdout_contains=[path_diff, env["PATH"]], env=env)
+    verify_cli_command(
+        [dummy_trampoline_path],
+        stdout_contains=[path_diff, env["PATH"]],
+        env=env,
+        reset_env=True,
+    )
 
     # If we set PIXI_BASE_PATH, the order will be different
     parts = env["PATH"].split(os.pathsep)
@@ -456,7 +467,10 @@ def test_trampoline_extends_path(
     base_path = os.pathsep.join(parts[1:])
     env["PIXI_BASE_PATH"] = base_path
     verify_cli_command(
-        [dummy_trampoline_path], stdout_contains=[extra_parts, path_diff, base_path], env=env
+        [dummy_trampoline_path],
+        stdout_contains=[extra_parts, path_diff, base_path],
+        env=env,
+        reset_env=True,
     )
 
 
