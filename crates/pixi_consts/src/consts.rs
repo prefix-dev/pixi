@@ -39,6 +39,9 @@ pub const CACHED_ENVS_DIR: &str = "cached-envs-v0";
 pub const _CACHED_BUILD_ENVS_DIR: &str = "cached-build-envs-v0";
 pub const CACHED_BUILD_TOOL_ENVS_DIR: &str = "cached-build-tool-envs-v0";
 pub const CACHED_GIT_DIR: &str = "git-cache-v0";
+pub const CACHED_BUILD_WORK_DIR: &str = "build-v0";
+pub const CACHED_BUILD_BACKENDS: &str = "build-backends-v1";
+pub const CACHED_PACKAGES: &str = "pkgs";
 
 /// The default config directory for pixi, typically at $XDG_CONFIG_HOME/$PIXI_CONFIG_DIR or $HOME/.config/$PIXI_CONFIG_DIR.
 pub const CONFIG_DIR: &str = match option_env!("PIXI_CONFIG_DIR") {

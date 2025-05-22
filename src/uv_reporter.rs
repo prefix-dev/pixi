@@ -138,8 +138,10 @@ impl UvReporter {
     pub(crate) fn on_checkout_start_warning_pb(&self) {
         // create the warning progress bar for ssh URL
         // and insert it before the current progress bar
-        let warning_pb = ProgressBar::hidden();
-        style_warning_pb(&warning_pb, GIT_SSH_CLONING_WARNING_MSG.to_string());
+        let warning_pb = style_warning_pb(
+            ProgressBar::hidden(),
+            GIT_SSH_CLONING_WARNING_MSG.to_string(),
+        );
         let original_pb = self.pb.clone();
         let pb =
             pixi_progress::global_multi_progress().insert_before(&original_pb, warning_pb.clone());
@@ -158,8 +160,10 @@ impl UvReporter {
     pub(crate) fn on_checkout_complete_warning_pb(&self) {
         // create the warning progress bar for ssh URL
         // and insert it before the current progress bar
-        let warning_pb = ProgressBar::hidden();
-        style_warning_pb(&warning_pb, GIT_SSH_CLONING_WARNING_MSG.to_string());
+        let warning_pb = style_warning_pb(
+            ProgressBar::hidden(),
+            GIT_SSH_CLONING_WARNING_MSG.to_string(),
+        );
         let original_pb = self.pb.clone();
         let pb =
             pixi_progress::global_multi_progress().insert_before(&original_pb, warning_pb.clone());
