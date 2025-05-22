@@ -229,8 +229,8 @@ mod tests {
         // Create files and directories
         File::create(root_path.join("pixi.toml")).unwrap();
 
-        // Test globs: include all .txt but exclude exclude.txt
-        let filter_globs = GlobSet::create(vec!["pixi.toml", "!exclude.txt"]).unwrap();
+        // Test globs: include pixi.toml
+        let filter_globs = GlobSet::create(vec!["pixi.toml"]).unwrap();
 
         // Filter directory and get results as strings
         let mut filtered_files: Vec<_> = filter_globs
