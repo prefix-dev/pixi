@@ -164,7 +164,6 @@ pub enum Command {
     #[clap(alias = "project")]
     Workspace(workspace::Args),
 }
-}
 
 #[derive(Parser, Debug, Default, Copy, Clone)]
 #[group(multiple = false)]
