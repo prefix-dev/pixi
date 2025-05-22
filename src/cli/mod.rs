@@ -125,55 +125,45 @@ impl Args {
 
 #[derive(Parser, Debug)]
 pub enum Command {
-    Init(init::Args),
-
-    // Installation commands
     #[clap(visible_alias = "a")]
     Add(add::Args),
-    #[clap(visible_alias = "rm")]
-    Remove(remove::Args),
-    #[clap(visible_alias = "i")]
-    Install(install::Args),
-    Reinstall(reinstall::Args),
-    Update(update::Args),
-    Upgrade(upgrade::Args),
-    Lock(lock::Args),
-
-    #[clap(visible_alias = "r")]
-    Run(run::Args),
+    Auth(rattler::cli::auth::Args),
+    Build(build::Args),
+    Clean(clean::Args),
+    Completion(completion::Args),
+    Config(config::Args),
     #[clap(visible_alias = "x")]
     Exec(exec::Args),
-    #[clap(visible_alias = "s")]
-    Shell(shell::Args),
-    ShellHook(shell_hook::Args),
-
-    // Workspace Manifest modification commands
-    #[clap(alias = "project")]
-    Workspace(workspace::Args),
-    Task(task::Args),
-
-    // Environment inspection
-    #[clap(visible_alias = "ls")]
-    List(list::Args),
-    #[clap(visible_alias = "t")]
-    Tree(tree::Args),
-
-    // Global level commands
     #[clap(visible_alias = "g")]
     Global(global::Args),
-    Auth(rattler::cli::auth::Args),
-    Config(config::Args),
     Info(info::Args),
-    Upload(upload::Args),
+    Init(init::Args),
+    #[clap(visible_alias = "i")]
+    Install(install::Args),
+    #[clap(visible_alias = "ls")]
+    List(list::Args),
+    Lock(lock::Args),
+    Reinstall(reinstall::Args),
+    #[clap(visible_alias = "rm")]
+    Remove(remove::Args),
+    #[clap(visible_alias = "r")]
+    Run(run::Args),
     Search(search::Args),
     #[cfg_attr(not(feature = "self_update"), clap(hide = true))]
     #[cfg_attr(feature = "self_update", clap(hide = false))]
     SelfUpdate(self_update::Args),
-    Clean(clean::Args),
-    Completion(completion::Args),
-
-    // Build
-    Build(build::Args),
+    #[clap(visible_alias = "s")]
+    Shell(shell::Args),
+    ShellHook(shell_hook::Args),
+    Task(task::Args),
+    #[clap(visible_alias = "t")]
+    Tree(tree::Args),
+    Update(update::Args),
+    Upgrade(upgrade::Args),
+    Upload(upload::Args),
+    #[clap(alias = "project")]
+    Workspace(workspace::Args),
+}
 }
 
 #[derive(Parser, Debug, Default, Copy, Clone)]
