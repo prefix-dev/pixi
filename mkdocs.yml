@@ -102,7 +102,7 @@ extra:
     provider: mike
 
 nav:
-  - Frontpage: index.md
+  - Home: index.md
   - Installation: installation.md
   - Getting Started: getting_started.md
   - Workspace:

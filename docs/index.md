@@ -1,6 +1,9 @@
-![pixi logo](assets/banner.svg)
+---
+title: Home
+template: home.html
+---
 
-**The next-generation package manager for reproducible, multi-language development.**
+![pixi logo](assets/banner.svg)
 
 ---
 
@@ -269,18 +272,15 @@ To install `pixi`, run:
 
 _**“I can’t stress enough how much I love using Pixi global as a package manager for my daily CLI tools. :)”**_
 
-[*Matthew Feickert*](https://www.matthewfeickert.com/)
+*Matthew Feickert* [University of Wisconsin–Madison](https://www.wisc.edu/)
 
-
-_**"Pixi is the unifying dev experience that I've been wanting for robotics"**_
-
-[*Audrow Nash*](https://x.com/audrow)
 
 _**“We are changing how we manage ROS dependencies on Windows.  We will be using Pixi to install and manage dependencies from conda. I'm pretty excited about how much easier it will be for users going forward.”**_
 
-[*Michael Carroll*](https://x.com/carromj)
+*Michael Carroll* [Project Lead ROS](https://www.ros.org/)
 
 </div>
+
 ---
 
 ## Useful Links
