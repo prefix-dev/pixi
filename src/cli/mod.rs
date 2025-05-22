@@ -125,6 +125,7 @@ impl Args {
 
 #[derive(Parser, Debug)]
 pub enum Command {
+    // Commands in alphabetical order
     #[clap(visible_alias = "a")]
     Add(add::Args),
     Auth(rattler::cli::auth::Args),
