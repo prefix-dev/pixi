@@ -103,8 +103,8 @@ extra:
 
 nav:
   - Home: index.md
-  - Installation: installation.md
   - Getting Started: getting_started.md
+  - Installation: installation.md
   - Workspace:
       - Environments: workspace/environment.md
       - Tasks: workspace/advanced_tasks.md
