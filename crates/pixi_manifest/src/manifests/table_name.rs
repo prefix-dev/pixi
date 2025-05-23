@@ -2,6 +2,7 @@ use std::fmt::{self, Display, Formatter};
 
 use rattler_conda_types::Platform;
 
+use crate::utils::toml_utils::escape_toml_key;
 use crate::FeatureName;
 
 /// Struct that is used to access a table in `pixi.toml` or `pyproject.toml`.
@@ -64,30 +65,31 @@ impl TableName<'_> {
     fn to_toml_table_name(&self) -> String {
         let mut parts = Vec::new();
 
+        let escaped_feature;
+
         if self.prefix.is_some() {
             parts.push(self.prefix.unwrap());
         }
 
-        if self
-            .feature_name
-            .as_ref()
-            .is_some_and(|feature_name| !feature_name.is_default())
-        {
-            parts.push("feature");
-            parts.push(
-                self.feature_name
-                    .as_ref()
-                    .expect("we already verified")
-                    .as_str(),
-            );
+        if let Some(feature_name) = self.feature_name.as_ref() {
+            if !feature_name.is_default() {
+                parts.push("feature");
+                let feature_str = feature_name.as_str();
+
+                escaped_feature = escape_toml_key(feature_str);
+                parts.push(&escaped_feature);
+            }
         }
+
         if let Some(platform) = self.platform {
             parts.push("target");
             parts.push(platform.as_str());
         }
+
         if let Some(table) = self.table {
             parts.push(table);
         }
+
         parts.join(".")
     }
 }
@@ -165,6 +167,16 @@ mod tests {
             TableName::new()
                 .with_feature_name(Some(&feature_name))
                 .with_platform(Some(&Platform::Linux64))
+                .with_table(Some("dependencies"))
+                .to_string()
+        );
+
+        // Test feature name with dot
+        let feature_name = FeatureName::from("test.test");
+        assert_eq!(
+            "feature.\"test.test\".dependencies".to_string(),
+            TableName::new()
+                .with_feature_name(Some(&feature_name))
                 .with_table(Some("dependencies"))
                 .to_string()
         );
