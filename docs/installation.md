@@ -140,18 +140,16 @@ its [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try).
 
     The installation script has several options that can be manipulated through environment variables.
 
-    | Variable         | Environment variable | Description                                                                       | Default Value               |
-    |------------------|----------------------|-----------------------------------------------------------------------------------|-----------------------------|
-    | `PixiVersion`    | `PIXI_VERSION`       |The version of Pixi getting installed, can be used to up- or down-grade.           | `latest`                    |
-    | `PixiHome`       | `PIXI_HOME`          | The location of the installation.                                                 | `$Env:USERPROFILE\.pixi`    |
-    | `NoPathUpdate`   |                      | If set, the `$PATH` will not be updated to add `pixi` to it.                      |                             |
+    | Environment variable | Description                                                                       | Default Value               |
+    |----------------------|-----------------------------------------------------------------------------------|-----------------------------|
+    | `PIXI_VERSION`       |The version of Pixi getting installed, can be used to up- or down-grade.           | `latest`                    |
+    | `PIXI_HOME`          | The location of the installation.                                                 | `$Env:USERPROFILE\.pixi`    |
+    | `PIXI_NO_PATH_UPDATE`| If set, the `$PATH` will not be updated to add `pixi` to it.                      | `false`                     |
 
-    For example, set the version using:
-
+    For example, set the version:
     ```powershell
-    iwr -useb https://pixi.sh/install.ps1 | iex -Args "-PixiVersion v0.18.0"
+    $env:PIXI_VERSION='v0.18.0'; powershell -ExecutionPolicy Bypass -Command "iwr -useb https://pixi.sh/install.ps1 | iex"
     ```
-
 
 ## Autocompletion
 
