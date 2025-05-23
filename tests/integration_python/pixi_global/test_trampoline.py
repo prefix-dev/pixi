@@ -460,6 +460,51 @@ def test_trampoline_extends_path(
     )
 
 
+@pytest.mark.skipif(
+    platform.system() != "Windows",
+    reason="We want to explicitly test case-preserving environment variable names on Windows",
+)
+def test_trampoline_windows_lowercase_path(
+    pixi: Path,
+    tmp_pixi_workspace: Path,
+    trampoline_path_channel: str,
+) -> None:
+    """We had the case that Pixi couldn't deal with `Path` instead of `PATH` on Windows.
+
+    This test makes sure that we don't regress.
+    """
+
+    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+
+    dummy_trampoline_path = tmp_pixi_workspace / "bin" / exec_extension("dummy-trampoline-path")
+
+    original_path = os.environ["Path"]
+    env["Path"] = original_path
+    path_diff = "C:\\test\\path"
+
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            trampoline_path_channel,
+            "dummy-trampoline-path",
+        ],
+        env=env,
+    )
+
+    # PATH should be extended by the activation script
+    # This is done by adding the diff before and after the activation script to the current PATH
+    env["Path"] = original_path
+    verify_cli_command([dummy_trampoline_path], stdout_contains=[path_diff, env["Path"]], env=env)
+
+    # If we extend PATH, both new extension and path diff should be present
+    path_change = "C:\\another\\test\\path"
+    env["Path"] = os.pathsep.join([path_change, original_path])
+    verify_cli_command([dummy_trampoline_path], stdout_contains=[path_diff, env["Path"]], env=env)
+
+
 def test_trampoline_removes_trampolines_not_in_manifest(
     pixi: Path, tmp_pixi_workspace: Path, trampoline_channel: str
 ) -> None:
