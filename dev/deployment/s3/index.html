@@ -2818,10 +2818,9 @@ Here is an example policy for AWS S3:</p>
 <p>Many other cloud providers offer S3-compatible storage APIs.
 You can use them with Pixi by specifying the <code>s3-options</code> in your manifest file.</p>
 <h3 id="minio">MinIO<a class="headerlink" href="#minio" title="Permanent link">#</a></h3>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[workspace.s3-options]</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">endpoint-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://minio.example.com&quot;</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">region</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;us-east-1&quot;</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="n">force-path-style</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">endpoint-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://minio.example.com&quot;</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">region</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;us-east-1&quot;</span>
+</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">force-path-style</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
 </span></code></pre></div>
 <h3 id="cloudflare-r2">Cloudflare R2<a class="headerlink" href="#cloudflare-r2" title="Permanent link">#</a></h3>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="n">endpoint-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://&lt;account-id&gt;.eu.r2.cloudflarestorage.com&quot;</span>
