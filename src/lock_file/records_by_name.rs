@@ -195,17 +195,10 @@ impl PixiRecordsByName {
         self.records
             .iter()
             .enumerate()
-            .filter_map(|(idx, record)| match record {
-                PixiRecord::Binary(repodata_record) => {
-                    PypiPackageIdentifier::from_repodata_record(repodata_record)
-                        .ok()
-                        .map(move |identifiers| (idx, record, identifiers))
-                }
-                PixiRecord::Source(source_record) => {
-                    PypiPackageIdentifier::from_package_record(&source_record.package_record)
-                        .ok()
-                        .map(move |identifiers| (idx, record, identifiers))
-                }
+            .filter_map(|(idx, record)| {
+                PypiPackageIdentifier::from_pixi_record(record)
+                    .ok()
+                    .map(|identifiers| (idx, record, identifiers))
             })
             .flat_map(|(idx, record, identifiers)| {
                 identifiers.into_iter().map(move |identifier| {

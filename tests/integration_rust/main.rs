@@ -1,5 +1,6 @@
 mod add_tests;
 mod common;
+mod conflict_tests;
 mod init_tests;
 mod install_tests;
 mod project_tests;
