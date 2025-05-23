@@ -1,0 +1,5 @@
+[workspace]
+channels = ["https://prefix.dev/pixi-build-backends"]
+preview = ["pixi-build"]
+name = "simple"
+version = "0.1.0"

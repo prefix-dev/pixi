@@ -4541,7 +4541,6 @@ dependencies = [
  "rattler_solve",
  "rattler_virtual_packages",
  "reqwest-middleware",
- "rstest",
  "serde",
  "serde_json",
  "tempfile",

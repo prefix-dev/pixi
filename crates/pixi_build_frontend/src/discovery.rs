@@ -2,7 +2,7 @@ use std::{
     ffi::OsStr,
     path::{Path, PathBuf},
 };
-
+use itertools::Itertools;
 use crate::{
     BackendSpec,
     backend_spec::{CommandSpec, EnvironmentSpec, JsonRpcBackendSpec},
@@ -23,7 +23,8 @@ const VALID_RECIPE_NAMES: [&str; 2] = ["recipe.yaml", "recipe.yml"];
 const VALID_RECIPE_DIRS: [&str; 2] = ["", "recipe"];
 
 /// Describes a backend discovered for a given source location.
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct DiscoveredBackend {
     /// The specification of the backend. This is used to instantiate the build
     /// backend.
@@ -34,7 +35,8 @@ pub struct DiscoveredBackend {
 }
 
 /// The parameters used to initialize a build backend
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct BackendInitializationParams {
     /// The directory that contains the source code.
     pub source_dir: PathBuf,
@@ -96,7 +98,7 @@ pub enum DiscoveryError {
 
     #[error("the source directory does not contain a supported manifest")]
     #[diagnostic(help(
-        "Ensure that the source directory contains a valid pixi.toml or meta.yaml file."
+        "Ensure that the source directory contains a valid pixi.toml or recipe.yaml file."
     ))]
     FailedToDiscover,
 }
@@ -108,9 +110,9 @@ impl DiscoveredBackend {
         channel_config: &ChannelConfig,
         enabled_protocols: &EnabledProtocols,
     ) -> Result<Self, DiscoveryError> {
-        if !source_path.exists() {
+        let Ok(source_path) = dunce::canonicalize(source_path) else {
             return Err(DiscoveryError::NotFound(source_path.to_path_buf()));
-        }
+        };
 
         // If the user explicitly asked for a recipe.yaml file
         let source_file_name = source_path.file_name().and_then(OsStr::to_str);
@@ -124,13 +126,17 @@ impl DiscoveredBackend {
                 let source_dir = source_path
                     .parent()
                     .expect("the recipe must live somewhere");
-                return Self::from_recipe(source_dir, Path::new(source_file_name), channel_config);
+                return Self::from_recipe(
+                    source_dir.to_path_buf(),
+                    PathBuf::from(source_file_name),
+                    channel_config,
+                );
             }
         }
 
         // Try to discover a pixi project.
         if enabled_protocols.enable_pixi {
-            if let Some(pixi) = Self::discover_pixi(source_path, channel_config)? {
+            if let Some(pixi) = Self::discover_pixi(source_path.clone(), channel_config)? {
                 return Ok(pixi);
             }
         }
@@ -148,8 +154,8 @@ impl DiscoveredBackend {
     /// Construct a new instance based on a specific `recipe.yaml` file in the
     /// source directory.
     fn from_recipe(
-        source_dir: &Path,
-        recipe_relative_path: &Path,
+        source_dir: PathBuf,
+        recipe_relative_path: PathBuf,
         channel_config: &ChannelConfig,
     ) -> Result<Self, DiscoveryError> {
         Ok(Self {
@@ -157,8 +163,8 @@ impl DiscoveredBackend {
                 channel_config,
             )),
             init_params: BackendInitializationParams {
-                source_dir: source_dir.to_path_buf(),
-                manifest_path: recipe_relative_path.to_path_buf(),
+                source_dir,
+                manifest_path: recipe_relative_path,
                 project_model: None,
                 configuration: None,
             },
@@ -167,22 +173,21 @@ impl DiscoveredBackend {
 
     /// Try to discover a pixi.yoml file in the source directory.
     fn discover_pixi(
-        source_path: &Path,
+        source_path: PathBuf,
         channel_config: &ChannelConfig,
     ) -> Result<Option<Self>, DiscoveryError> {
-        let manifests = match WorkspaceDiscoverer::new(DiscoveryStart::ExplicitManifest(
-            source_path.to_path_buf(),
-        ))
-        .with_closest_package(true)
-        .discover()
-        {
-            Ok(None)
-            | Err(WorkspaceDiscoveryError::ExplicitManifestError(
-                ExplicitManifestError::InvalidManifest(_),
-            )) => return Ok(None),
-            Err(e) => return Err(DiscoveryError::FailedToDiscoverPackage(e)),
-            Ok(Some(workspace)) => workspace.value,
-        };
+        let manifests =
+            match WorkspaceDiscoverer::new(DiscoveryStart::ExplicitManifest(source_path.clone()))
+                .with_closest_package(true)
+                .discover()
+            {
+                Ok(None)
+                | Err(WorkspaceDiscoveryError::ExplicitManifestError(
+                    ExplicitManifestError::InvalidManifest(_),
+                )) => return Ok(None),
+                Err(e) => return Err(DiscoveryError::FailedToDiscoverPackage(e)),
+                Ok(Some(workspace)) => workspace.value,
+            };
 
         // Make sure the manifest describes a package.
         let Some(WithProvenance {
@@ -239,7 +244,7 @@ impl DiscoveredBackend {
                 .expect("a file has a parent")
                 .to_path_buf()
         } else {
-            source_path.to_path_buf()
+            source_path
         };
 
         Ok(Some(Self {
@@ -270,15 +275,15 @@ impl DiscoveredBackend {
 
     /// Try to discover a rattler build recipe in the repository.
     fn discover_rattler_build(
-        source_dir: &Path,
+        source_dir: PathBuf,
         channel_config: &ChannelConfig,
     ) -> Result<Option<Self>, DiscoveryError> {
-        for (&recipe_dir, &recipe_file) in VALID_RECIPE_DIRS.iter().zip(VALID_RECIPE_NAMES.iter()) {
-            let recipe_path = source_dir.join(recipe_dir).join(recipe_file);
-            if recipe_path.is_file() {
+        for (&recipe_dir, &recipe_file) in VALID_RECIPE_DIRS.iter().cartesian_product(VALID_RECIPE_NAMES.iter()) {
+            let recipe_path = Path::new(recipe_dir).join(recipe_file);
+            if source_dir.join(&recipe_path).is_file() {
                 return Ok(Some(Self::from_recipe(
                     source_dir,
-                    &recipe_path,
+                    recipe_path,
                     channel_config,
                 )?));
             }

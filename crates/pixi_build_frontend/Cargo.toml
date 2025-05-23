@@ -11,6 +11,7 @@ version = "0.1.0"
 
 [dependencies]
 dashmap = { workspace = true }
+dunce = { workspace = true }
 fs-err = { workspace = true, features = ["tokio"] }
 futures = { workspace = true }
 itertools = { workspace = true }
@@ -46,8 +47,7 @@ which = { workspace = true }
 [dev-dependencies]
 bytes = { workspace = true }
 dunce = { workspace = true }
-insta = { workspace = true, features = ["yaml", "filters", "json"] }
-rstest = { workspace = true }
+insta = { workspace = true, features = ["yaml", "filters", "json", "glob"] }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = [
   "process",

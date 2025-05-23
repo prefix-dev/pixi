@@ -1,0 +1,7 @@
+---
+source: crates/pixi_build_frontend/tests/integration/discovery.rs
+expression: error_to_snapshot(& err)
+input_file: tests/data/discovery/nested/TEST-CASE
+---
+  × the pixi.toml does not describe a package
+  help: A [package] section is missing in the manifest

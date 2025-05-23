@@ -1,8 +1,0 @@
----
-source: crates/pixi_build_frontend/tests/diagnostics.rs
-expression: error_to_snapshot(&err)
----
-  × failed to setup communication with the build-backend
-  ╰─▶   × the build backend executable 'empty-backend' appears to be missing
-      
-  help: This is often caused by a broken build-backend. Try upgrading or downgrading the build backend.

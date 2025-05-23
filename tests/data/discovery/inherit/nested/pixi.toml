@@ -1,0 +1,2 @@
+[package.build]
+backend = { name = "pixi_build_backend", version="*"}
