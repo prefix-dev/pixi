@@ -474,12 +474,13 @@ def test_trampoline_windows_lowercase_path(
     This test makes sure that we don't regress.
     """
 
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
-
     dummy_trampoline_path = tmp_pixi_workspace / "bin" / exec_extension("dummy-trampoline-path")
 
+    original_env = dict(os.environ) | {"PIXI_HOME": str(tmp_pixi_workspace)}
     original_path = os.environ["Path"]
+    env = original_env.copy()
     env["Path"] = original_path
+    env.pop("PATH", None)
     path_diff = "C:\\test\\path"
 
     verify_cli_command(
@@ -492,17 +493,21 @@ def test_trampoline_windows_lowercase_path(
             "dummy-trampoline-path",
         ],
         env=env,
+        reset_env=True,
     )
 
     # PATH should be extended by the activation script
     # This is done by adding the diff before and after the activation script to the current PATH
-    env["Path"] = original_path
-    verify_cli_command([dummy_trampoline_path], stdout_contains=[path_diff, env["Path"]], env=env)
+    verify_cli_command(
+        [dummy_trampoline_path], stdout_contains=[path_diff, env["Path"]], env=env, reset_env=True
+    )
 
     # If we extend PATH, both new extension and path diff should be present
     path_change = "C:\\another\\test\\path"
     env["Path"] = os.pathsep.join([path_change, original_path])
-    verify_cli_command([dummy_trampoline_path], stdout_contains=[path_diff, env["Path"]], env=env)
+    verify_cli_command(
+        [dummy_trampoline_path], stdout_contains=[path_diff, env["Path"]], env=env, reset_env=True
+    )
 
 
 def test_trampoline_removes_trampolines_not_in_manifest(
