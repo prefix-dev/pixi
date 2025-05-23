@@ -2606,8 +2606,8 @@
 <li><strong>Fixed lock files</strong>: It's crucial to preserve fixed lock files for consistency and predictability. Solutions must ensure reliability not just for authors but also for end-users, particularly at the time of lock file creation.</li>
 </ol>
 <h3 id="feature-environment-set-definitions">Feature &amp; Environment Set Definitions<a class="headerlink" href="#feature-environment-set-definitions" title="Permanent link">#</a></h3>
-<p>Introduce environment sets into the <code>pixi.toml</code> this describes environments based on <code>feature</code>'s. Introduce features into the <code>pixi.toml</code> that can describe parts of environments.
-As an environment goes beyond just <code>dependencies</code> the <code>features</code> should be described including the following fields:</p>
+<p>Introduce environment sets into the <code>pixi.toml</code> this describes environments based on features. Introduce features into the <code>pixi.toml</code> that can describe parts of environments.
+As an environment goes beyond just <code>dependencies</code> the <code>feature</code> fields can be described by including the following fields:</p>
 <ul>
 <li><code>dependencies</code>: The conda package dependencies</li>
 <li><code>pypi-dependencies</code>: The pypi package dependencies</li>
