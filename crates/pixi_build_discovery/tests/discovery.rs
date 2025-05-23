@@ -1,8 +1,19 @@
-use super::error_to_snapshot;
 use insta::{assert_snapshot, assert_yaml_snapshot, glob};
-use pixi_build_frontend::{DiscoveredBackend, EnabledProtocols};
+use pixi_build_discovery::{DiscoveredBackend, EnabledProtocols};
 use rattler_conda_types::ChannelConfig;
 use std::path::{Path, PathBuf};
+
+use miette::{Diagnostic, GraphicalReportHandler, GraphicalTheme};
+
+fn error_to_snapshot(diag: &impl Diagnostic) -> String {
+    let mut report_str = String::new();
+    GraphicalReportHandler::new_themed(GraphicalTheme::unicode_nocolor())
+        .without_syntax_highlighting()
+        .with_width(160)
+        .render_report(&mut report_str, diag)
+        .unwrap();
+    report_str
+}
 
 fn discovery_directory() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/discovery")
@@ -32,7 +43,7 @@ macro_rules! assert_discover_snapshot {
 /// test case.
 #[test]
 fn test_discovery() {
-    glob!("../../../../tests/data/discovery", "**/TEST-CASE", |path| {
+    glob!("../../../tests/data/discovery", "**/TEST-CASE", |path| {
         let path = dunce::canonicalize(path.parent().unwrap()).unwrap();
         let new_suffix = insta::Settings::clone_current()
             .snapshot_suffix()

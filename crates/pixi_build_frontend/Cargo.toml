@@ -11,21 +11,19 @@ version = "0.1.0"
 
 [dependencies]
 dashmap = { workspace = true }
-dunce = { workspace = true }
 fs-err = { workspace = true, features = ["tokio"] }
 futures = { workspace = true }
 itertools = { workspace = true }
 jsonrpsee = { workspace = true, features = ["client"] }
 miette = { workspace = true, features = ["fancy-no-backtrace", "serde"] }
-pathdiff = { workspace = true }
 pixi_build_type_conversions = { workspace = true }
-pixi_build_types = { path = "../pixi_build_types" }
+pixi_build_types = { workspace = true }
+pixi_build_discovery = { workspace = true }
 pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_manifest = { workspace = true }
 pixi_progress = { workspace = true }
 pixi_spec = { workspace = true }
-pixi_spec_containers = { workspace = true }
 pixi_utils = { workspace = true, features = ["rustls-tls"] }
 rattler = { workspace = true }
 rattler_conda_types = { workspace = true }

@@ -1,5 +1,5 @@
 ---
-source: crates/pixi_build_frontend/tests/integration/discovery.rs
+source: crates/pixi_build_discovery/tests/discovery.rs
 expression: backend
 input_file: tests/data/discovery/recipe_yaml/TEST-CASE
 ---

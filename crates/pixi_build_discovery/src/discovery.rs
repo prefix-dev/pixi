@@ -23,8 +23,9 @@ const VALID_RECIPE_NAMES: [&str; 2] = ["recipe.yaml", "recipe.yml"];
 const VALID_RECIPE_DIRS: [&str; 2] = ["", "recipe"];
 
 /// Describes a backend discovered for a given source location.
-#[derive(Debug, serde::Serialize)]
-#[serde(rename_all = "kebab-case")]
+#[derive(Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub struct DiscoveredBackend {
     /// The specification of the backend. This is used to instantiate the build
     /// backend.
@@ -35,8 +36,9 @@ pub struct DiscoveredBackend {
 }
 
 /// The parameters used to initialize a build backend
-#[derive(Debug, serde::Serialize)]
-#[serde(rename_all = "kebab-case")]
+#[derive(Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub struct BackendInitializationParams {
     /// The directory that contains the source code.
     pub source_dir: PathBuf,
@@ -52,8 +54,9 @@ pub struct BackendInitializationParams {
 }
 
 /// Configuration to enable or disable certain protocols discovery.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize)]
-#[serde(rename_all = "kebab-case")]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub struct EnabledProtocols {
     /// Enable the rattler-build protocol.
     pub enable_rattler_build: bool,

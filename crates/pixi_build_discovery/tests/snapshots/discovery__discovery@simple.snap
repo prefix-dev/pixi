@@ -1,7 +1,7 @@
 ---
-source: crates/pixi_build_frontend/tests/integration/discovery.rs
+source: crates/pixi_build_discovery/tests/discovery.rs
 expression: backend
-input_file: tests/data/discovery/inherit/nested/TEST-CASE
+input_file: tests/data/discovery/simple/TEST-CASE
 ---
 backend-spec:
   type: json-rpc

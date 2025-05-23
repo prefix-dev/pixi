@@ -4,9 +4,6 @@ use std::{
     sync::Arc,
 };
 
-use rattler_conda_types::ChannelConfig;
-
-use crate::discovery::EnabledProtocols;
 use crate::{
     BuildFrontendError, ToolContext,
     backend_override::BackendOverride,
@@ -15,6 +12,8 @@ use crate::{
     protocols::JsonRPCBuildProtocol,
     rattler_build_protocol,
 };
+use pixi_build_discovery::EnabledProtocols;
+use rattler_conda_types::ChannelConfig;
 
 #[derive(Debug)]
 // for some reason, the clippy calculates wrong the size

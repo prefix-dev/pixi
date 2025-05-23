@@ -4559,6 +4559,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixi_build_discovery"
+version = "0.1.0"
+dependencies = [
+ "dunce",
+ "insta",
+ "itertools 0.14.0",
+ "miette 7.5.0",
+ "pathdiff",
+ "pixi_build_discovery",
+ "pixi_build_type_conversions",
+ "pixi_build_types",
+ "pixi_manifest",
+ "pixi_spec",
+ "pixi_spec_containers",
+ "rattler_conda_types",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.12",
+ "url",
+]
+
+[[package]]
 name = "pixi_build_frontend"
 version = "0.1.0"
 dependencies = [
@@ -4571,7 +4593,7 @@ dependencies = [
  "itertools 0.14.0",
  "jsonrpsee",
  "miette 7.5.0",
- "pathdiff",
+ "pixi_build_discovery",
  "pixi_build_type_conversions",
  "pixi_build_types",
  "pixi_config",
@@ -4579,7 +4601,6 @@ dependencies = [
  "pixi_manifest",
  "pixi_progress",
  "pixi_spec",
- "pixi_spec_containers",
  "pixi_utils",
  "rattler",
  "rattler_conda_types",
@@ -4639,6 +4660,7 @@ dependencies = [
  "insta",
  "itertools 0.14.0",
  "miette 7.5.0",
+ "pixi_build_discovery",
  "pixi_build_frontend",
  "pixi_config",
  "pixi_consts",

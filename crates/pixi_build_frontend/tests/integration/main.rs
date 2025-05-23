@@ -1,7 +1,6 @@
 use miette::{Diagnostic, GraphicalReportHandler, GraphicalTheme};
 
 mod diagnostics;
-mod discovery;
 
 fn error_to_snapshot(diag: &impl Diagnostic) -> String {
     let mut report_str = String::new();

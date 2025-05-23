@@ -12,8 +12,6 @@ pub use protocols::{
 };
 
 mod backend;
-mod backend_spec;
-mod discovery;
 pub mod error;
 mod protocol_builder;
 mod reporters;
@@ -25,13 +23,7 @@ use std::path::PathBuf;
 
 pub use backend::{Backend, json_rpc};
 pub use backend_override::BackendOverride;
-pub use backend_spec::{
-    BackendSpec, CommandSpec, EnvironmentSpec, JsonRpcBackendSpec, SystemCommandSpec,
-};
 pub use build_frontend::{BuildFrontend, BuildFrontendError};
-pub use discovery::{
-    BackendInitializationParams, DiscoveredBackend, DiscoveryError, EnabledProtocols,
-};
 pub use reporters::{
     CondaBuildReporter, CondaMetadataReporter, NoopCondaBuildReporter, NoopCondaMetadataReporter,
 };

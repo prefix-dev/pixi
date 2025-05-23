@@ -1,7 +1,6 @@
 ---
-source: crates/pixi_build_frontend/tests/integration/discovery.rs
+source: crates/pixi_build_discovery/tests/discovery.rs
 expression: backend
-input_file: tests/data/discovery/recipe_yml/TEST-CASE
 ---
 backend-spec:
   type: json-rpc
@@ -16,6 +15,6 @@ backend-spec:
       - "https://prefix.dev/pixi-build-backends"
 init-params:
   source-dir: "[SOURCE_PATH]"
-  manifest-path: recipe.yml
+  manifest-path: recipe.yaml
   project-model: ~
   configuration: ~
