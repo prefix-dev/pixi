@@ -14,7 +14,7 @@ backend-spec:
       - "https://conda.anaconda.org/conda-forge"
       - "https://prefix.dev/pixi-build-backends"
 init-params:
-  source-dir: "file://<ROOT>"
+  source-dir: "[SOURCE_PATH]"
   manifest-path: recipe.yaml
   project-model: ~
   configuration: ~

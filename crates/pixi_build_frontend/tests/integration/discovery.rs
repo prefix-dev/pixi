@@ -14,7 +14,9 @@ macro_rules! assert_discover_snapshot {
         let channel_config = ChannelConfig::default_with_root_dir(file_path.to_owned());
         match DiscoveredBackend::discover($path, &channel_config, &EnabledProtocols::default()) {
             Ok(backend) => {
-                assert_yaml_snapshot!(backend);
+                assert_yaml_snapshot!(backend, {
+                    "[\"init-params\"][\"source-dir\"]" => "[SOURCE_PATH]",
+                });
             }
             Err(err) => {
                 assert_snapshot!(error_to_snapshot(&err));
@@ -39,12 +41,10 @@ fn test_discovery() {
             .unwrap()
             .trim_end_matches(['/', '\\'])
             .to_owned();
-        let source_path_regex = path.to_string_lossy().replace(r"\", r"\\\\");
-        let source_path_regex_single = path.to_string_lossy().replace(r"\", r"\\");
+        let source_path_regex = path.to_string_lossy().replace(r"\", r"\\");
         insta::with_settings!({
             filters => vec![
                 (source_path_regex.as_str(), "file://<ROOT>"),
-                (source_path_regex_single.as_str(), "file://<ROOT>"),
                 (r"\\", r"/"),
             ],
             snapshot_suffix => new_suffix}, {
