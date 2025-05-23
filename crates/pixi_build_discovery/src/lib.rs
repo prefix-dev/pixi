@@ -25,7 +25,7 @@
 //! ```
 //!
 //! This crate provides types and logic to identify and describe build backends for projects
-//! using Pixi, Conda, or Rattler-based workflows. It supports discovery from both `pixi.toml`
+//! using pixi, or rattler-build based workflows. It supports discovery from both `pixi.toml`
 //! and `recipe.yaml` manifests, and can be extended to support additional protocols.
 
 mod backend_spec;

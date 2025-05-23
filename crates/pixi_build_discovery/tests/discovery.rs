@@ -19,13 +19,20 @@ fn discovery_directory() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/discovery")
 }
 
+/// This macro is used to assert the discovery of a backend and compare it with a snapshot.
+///
+/// Errors are also handled and compared with a snapshot.
 macro_rules! assert_discover_snapshot {
     ($path:expr) => {
         let file_path = Path::new(file!()).parent().unwrap();
         let channel_config = ChannelConfig::default_with_root_dir(file_path.to_owned());
+
+        // Run the discovery on the input path
         match DiscoveredBackend::discover($path, &channel_config, &EnabledProtocols::default()) {
             Ok(backend) => {
-                assert_yaml_snapshot!(backend, {
+                assert_yaml_snapshot!(backend,
+                // Perform some redaction on fields that contain paths. We need to make them cross-platform compatible.
+                {
                     "[\"init-params\"][\"manifest-path\"]" => insta::dynamic_redaction(|value, _path| {
                         value.as_str().unwrap().replace("\\", "/")
                      }),
