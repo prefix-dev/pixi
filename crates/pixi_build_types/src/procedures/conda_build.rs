@@ -1,4 +1,7 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::{BTreeSet, HashMap},
+    path::PathBuf,
+};
 
 use rattler_conda_types::GenericVirtualPackage;
 use serde::{Deserialize, Serialize};
@@ -32,7 +35,7 @@ pub struct CondaBuildParams {
     /// returned from a call to `conda/getMetadata`. Pass `None` to build all
     /// outputs.
     #[serde(default)]
-    pub outputs: Option<Vec<CondaOutputIdentifier>>,
+    pub outputs: Option<BTreeSet<CondaOutputIdentifier>>,
 
     /// The variants that we want to build
     pub variant_configuration: Option<HashMap<String, Vec<String>>>,
@@ -50,7 +53,7 @@ pub struct CondaBuildParams {
 }
 
 /// Identifier of an output.
-#[derive(Default, Debug, Serialize, Deserialize, Clone)]
+#[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct CondaOutputIdentifier {
     pub name: Option<String>,
     pub version: Option<String>,

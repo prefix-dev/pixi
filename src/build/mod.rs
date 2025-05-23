@@ -2,7 +2,7 @@ mod cache;
 pub mod source_metadata_collector;
 
 use std::{
-    collections::HashMap,
+    collections::{BTreeSet, HashMap},
     ffi::OsStr,
     hash::{Hash, Hasher},
     ops::Not,
@@ -284,6 +284,14 @@ impl BuildContext {
 
         let protocol = self.setup_protocol(&source_checkout, build_id).await?;
 
+        let mut outputs = BTreeSet::new();
+        outputs.insert(CondaOutputIdentifier {
+            name: Some(source_spec.package_record.name.as_normalized().to_string()),
+            version: Some(source_spec.package_record.version.version().to_string()),
+            build: Some(source_spec.package_record.build.clone()),
+            subdir: Some(source_spec.package_record.subdir.clone()),
+        });
+
         // Build the package
         let build_result = protocol
             .conda_build(
@@ -299,12 +307,7 @@ impl BuildContext {
                     },
                     // only use editable for build path dependencies
                     editable: source_spec.source.as_path().is_some(),
-                    outputs: Some(vec![CondaOutputIdentifier {
-                        name: Some(source_spec.package_record.name.as_normalized().to_string()),
-                        version: Some(source_spec.package_record.version.version().to_string()),
-                        build: Some(source_spec.package_record.build.clone()),
-                        subdir: Some(source_spec.package_record.subdir.clone()),
-                    }]),
+                    outputs: Some(outputs),
                     work_directory: self.work_dir.join(
                         WorkDirKey {
                             source: source_checkout.clone(),
