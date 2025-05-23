@@ -46,7 +46,7 @@ pub struct SystemCommandSpec {
 /// Describes a conda environment that should be set up in which the backend is
 /// run.
 #[derive(Debug, serde::Serialize)]
-#[serde( rename_all = "kebab-case")]
+#[serde(rename_all = "kebab-case")]
 pub struct EnvironmentSpec {
     /// The main requirement
     pub requirement: (rattler_conda_types::PackageName, NamelessMatchSpec),

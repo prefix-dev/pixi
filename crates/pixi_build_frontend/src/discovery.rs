@@ -1,12 +1,8 @@
-use std::{
-    ffi::OsStr,
-    path::{Path, PathBuf},
-};
-use itertools::Itertools;
 use crate::{
     BackendSpec,
     backend_spec::{CommandSpec, EnvironmentSpec, JsonRpcBackendSpec},
 };
+use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_build_type_conversions::to_project_model_v1;
 use pixi_build_types::ProjectModelV1;
@@ -17,6 +13,10 @@ use pixi_manifest::{
 use pixi_spec::SpecConversionError;
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{ChannelConfig, ParseChannelError};
+use std::{
+    ffi::OsStr,
+    path::{Path, PathBuf},
+};
 use thiserror::Error;
 
 const VALID_RECIPE_NAMES: [&str; 2] = ["recipe.yaml", "recipe.yml"];
@@ -278,7 +278,10 @@ impl DiscoveredBackend {
         source_dir: PathBuf,
         channel_config: &ChannelConfig,
     ) -> Result<Option<Self>, DiscoveryError> {
-        for (&recipe_dir, &recipe_file) in VALID_RECIPE_DIRS.iter().cartesian_product(VALID_RECIPE_NAMES.iter()) {
+        for (&recipe_dir, &recipe_file) in VALID_RECIPE_DIRS
+            .iter()
+            .cartesian_product(VALID_RECIPE_NAMES.iter())
+        {
             let recipe_path = Path::new(recipe_dir).join(recipe_file);
             if source_dir.join(&recipe_path).is_file() {
                 return Ok(Some(Self::from_recipe(

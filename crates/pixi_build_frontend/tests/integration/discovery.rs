@@ -20,7 +20,7 @@ macro_rules! assert_discover_snapshot {
                 assert_snapshot!(error_to_snapshot(&err));
             }
         }
-    }
+    };
 }
 
 /// A test to check what discovery looks like for different use cases.
@@ -59,7 +59,11 @@ fn test_non_existing() {
 #[test]
 fn test_direct_recipe() {
     let path = dunce::canonicalize(discovery_directory().join("recipe_yaml/recipe.yaml")).unwrap();
-    let source_path_regex = path.parent().unwrap().to_string_lossy().replace(r"\", r"\\\\");
+    let source_path_regex = path
+        .parent()
+        .unwrap()
+        .to_string_lossy()
+        .replace(r"\", r"\\\\");
     insta::with_settings!({
         filters => vec![
             (source_path_regex.as_str(), "file://<ROOT>"),

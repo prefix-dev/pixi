@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use super::error_to_snapshot;
 use bytes::Bytes;
 use futures::{SinkExt, StreamExt};
 use pixi_build_frontend::{BuildFrontend, InProcessBackend, SetupRequest, ToolContext};
@@ -16,7 +17,6 @@ use tokio_util::{
     io::{CopyToBytes, SinkWriter, StreamReader},
     sync::PollSender,
 };
-use super::error_to_snapshot;
 
 fn test_data_dir() -> PathBuf {
     let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
