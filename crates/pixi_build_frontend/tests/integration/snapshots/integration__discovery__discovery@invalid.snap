@@ -4,7 +4,7 @@ expression: error_to_snapshot(& err)
 input_file: tests/data/discovery/invalid/TEST-CASE
 ---
   × missing field 'channels' in table
-   ╭─[D:/projects/pixi/tests/data/discovery/invalid/pixi.toml:1:1]
+   ╭─[file://<ROOT>/pixi.toml:1:1]
  1 │ [workspace]
-   · ───────────
+   · ────────────
    ╰────
