@@ -4368,6 +4368,7 @@ name = "pixi_build_frontend"
 version = "0.1.0"
 dependencies = [
  "dashmap",
+ "dunce",
  "fs-err",
  "futures",
  "itertools 0.14.0",
