@@ -2522,96 +2522,16 @@
 </thead>
 <tbody>
 <tr>
-<td><a href="init/"><code>init</code></a></td>
-<td>Creates a new workspace</td>
-</tr>
-<tr>
 <td><a href="add/"><code>add</code></a></td>
 <td>Adds dependencies to the workspace</td>
-</tr>
-<tr>
-<td><a href="remove/"><code>remove</code></a></td>
-<td>Removes dependencies from the workspace</td>
-</tr>
-<tr>
-<td><a href="install/"><code>install</code></a></td>
-<td>Install an environment, both updating the lockfile and installing the environment</td>
-</tr>
-<tr>
-<td><a href="reinstall/"><code>reinstall</code></a></td>
-<td>Re-install an environment, both updating the lockfile and re-installing the environment</td>
-</tr>
-<tr>
-<td><a href="update/"><code>update</code></a></td>
-<td>The <code>update</code> command checks if there are newer versions of the dependencies and updates the <code>pixi.lock</code> file and environments accordingly</td>
-</tr>
-<tr>
-<td><a href="upgrade/"><code>upgrade</code></a></td>
-<td>Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file</td>
-</tr>
-<tr>
-<td><a href="lock/"><code>lock</code></a></td>
-<td>Solve environment and update the lock file without installing the environments</td>
-</tr>
-<tr>
-<td><a href="run/"><code>run</code></a></td>
-<td>Runs task in the pixi environment</td>
-</tr>
-<tr>
-<td><a href="exec/"><code>exec</code></a></td>
-<td>Run a command and install it in a temporary environment</td>
-</tr>
-<tr>
-<td><a href="shell/"><code>shell</code></a></td>
-<td>Start a shell in a pixi environment, run <code>exit</code> to leave the shell</td>
-</tr>
-<tr>
-<td><a href="shell-hook/"><code>shell-hook</code></a></td>
-<td>Print the pixi environment activation script</td>
-</tr>
-<tr>
-<td><a href="workspace/"><code>workspace</code></a></td>
-<td>Modify the workspace configuration file through the command line</td>
-</tr>
-<tr>
-<td><a href="task/"><code>task</code></a></td>
-<td>Interact with tasks in the workspace</td>
-</tr>
-<tr>
-<td><a href="list/"><code>list</code></a></td>
-<td>List workspace's packages</td>
-</tr>
-<tr>
-<td><a href="tree/"><code>tree</code></a></td>
-<td>Show a tree of workspace dependencies</td>
-</tr>
-<tr>
-<td><a href="global/"><code>global</code></a></td>
-<td>Subcommand for global package management actions</td>
 </tr>
 <tr>
 <td><a href="auth/"><code>auth</code></a></td>
 <td>Login to prefix.dev or anaconda.org servers to access private channels</td>
 </tr>
 <tr>
-<td><a href="config/"><code>config</code></a></td>
-<td>Configuration management</td>
-</tr>
-<tr>
-<td><a href="info/"><code>info</code></a></td>
-<td>Information about the system, workspace and environments for the current machine</td>
-</tr>
-<tr>
-<td><a href="upload/"><code>upload</code></a></td>
-<td>Upload a conda package</td>
-</tr>
-<tr>
-<td><a href="search/"><code>search</code></a></td>
-<td>Search a conda package</td>
-</tr>
-<tr>
-<td><a href="self-update/"><code>self-update</code></a></td>
-<td>Update pixi to the latest version or a specific version</td>
+<td><a href="build/"><code>build</code></a></td>
+<td>Workspace configuration</td>
 </tr>
 <tr>
 <td><a href="clean/"><code>clean</code></a></td>
@@ -2622,8 +2542,88 @@
 <td>Generates a completion script for a shell</td>
 </tr>
 <tr>
-<td><a href="build/"><code>build</code></a></td>
-<td>Workspace configuration</td>
+<td><a href="config/"><code>config</code></a></td>
+<td>Configuration management</td>
+</tr>
+<tr>
+<td><a href="exec/"><code>exec</code></a></td>
+<td>Run a command and install it in a temporary environment</td>
+</tr>
+<tr>
+<td><a href="global/"><code>global</code></a></td>
+<td>Subcommand for global package management actions</td>
+</tr>
+<tr>
+<td><a href="info/"><code>info</code></a></td>
+<td>Information about the system, workspace and environments for the current machine</td>
+</tr>
+<tr>
+<td><a href="init/"><code>init</code></a></td>
+<td>Creates a new workspace</td>
+</tr>
+<tr>
+<td><a href="install/"><code>install</code></a></td>
+<td>Install an environment, both updating the lockfile and installing the environment</td>
+</tr>
+<tr>
+<td><a href="list/"><code>list</code></a></td>
+<td>List workspace's packages</td>
+</tr>
+<tr>
+<td><a href="lock/"><code>lock</code></a></td>
+<td>Solve environment and update the lock file without installing the environments</td>
+</tr>
+<tr>
+<td><a href="reinstall/"><code>reinstall</code></a></td>
+<td>Re-install an environment, both updating the lockfile and re-installing the environment</td>
+</tr>
+<tr>
+<td><a href="remove/"><code>remove</code></a></td>
+<td>Removes dependencies from the workspace</td>
+</tr>
+<tr>
+<td><a href="run/"><code>run</code></a></td>
+<td>Runs task in the pixi environment</td>
+</tr>
+<tr>
+<td><a href="search/"><code>search</code></a></td>
+<td>Search a conda package</td>
+</tr>
+<tr>
+<td><a href="self-update/"><code>self-update</code></a></td>
+<td>Update pixi to the latest version or a specific version</td>
+</tr>
+<tr>
+<td><a href="shell/"><code>shell</code></a></td>
+<td>Start a shell in a pixi environment, run <code>exit</code> to leave the shell</td>
+</tr>
+<tr>
+<td><a href="shell-hook/"><code>shell-hook</code></a></td>
+<td>Print the pixi environment activation script</td>
+</tr>
+<tr>
+<td><a href="task/"><code>task</code></a></td>
+<td>Interact with tasks in the workspace</td>
+</tr>
+<tr>
+<td><a href="tree/"><code>tree</code></a></td>
+<td>Show a tree of workspace dependencies</td>
+</tr>
+<tr>
+<td><a href="update/"><code>update</code></a></td>
+<td>The <code>update</code> command checks if there are newer versions of the dependencies and updates the <code>pixi.lock</code> file and environments accordingly</td>
+</tr>
+<tr>
+<td><a href="upgrade/"><code>upgrade</code></a></td>
+<td>Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file</td>
+</tr>
+<tr>
+<td><a href="upload/"><code>upload</code></a></td>
+<td>Upload a conda package</td>
+</tr>
+<tr>
+<td><a href="workspace/"><code>workspace</code></a></td>
+<td>Modify the workspace configuration file through the command line</td>
 </tr>
 </tbody>
 </table>
