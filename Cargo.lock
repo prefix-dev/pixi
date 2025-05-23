@@ -4735,6 +4735,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixi_exec_utils"
+version = "0.1.0"
+dependencies = [
+ "rstest",
+ "tracing",
+]
+
+[[package]]
 name = "pixi_git"
 version = "0.0.1"
 dependencies = [

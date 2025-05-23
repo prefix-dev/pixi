@@ -1,6 +1,9 @@
 import subprocess
 from pathlib import Path
 import argparse
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 
 def get_default_target() -> str:
@@ -42,8 +45,11 @@ def compress_binary(target: str, target_dir: Path) -> None:
 
 def main(target: str) -> None:
     target_dir = Path("target/trampoline")
+    logging.info("Building trampoline binary...")
     build_trampoline_binary(target, target_dir)
+    logging.info("Compressing binary...")
     compress_binary(target, target_dir)
+    logging.info("Done.")
 
 
 if __name__ == "__main__":
