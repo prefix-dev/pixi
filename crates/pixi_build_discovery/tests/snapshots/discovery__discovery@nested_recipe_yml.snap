@@ -16,6 +16,6 @@ backend-spec:
       - "https://prefix.dev/pixi-build-backends"
 init-params:
   source-dir: "[SOURCE_PATH]"
-  manifest-path: "recipe//recipe.yml"
+  manifest-path: recipe/recipe.yml
   project-model: ~
   configuration: ~

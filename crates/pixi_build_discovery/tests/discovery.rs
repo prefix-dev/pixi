@@ -26,6 +26,9 @@ macro_rules! assert_discover_snapshot {
         match DiscoveredBackend::discover($path, &channel_config, &EnabledProtocols::default()) {
             Ok(backend) => {
                 assert_yaml_snapshot!(backend, {
+                    "[\"init-params\"][\"manifest-path\"]" => insta::dynamic_redaction(|value, _path| {
+                        value.as_str().unwrap().replace("\\", "/")
+                     }),
                     "[\"init-params\"][\"source-dir\"]" => "[SOURCE_PATH]",
                 });
             }
@@ -83,6 +86,6 @@ fn test_direct_recipe() {
             (r"\\", r"/"),
         ],
     }, {
-        assert_discover_snapshot!(&path);
+        assert_discover_snapshot ! ( & path);
     });
 }
