@@ -1,8 +1,10 @@
 use pixi_git::resolver::RepositoryReference;
 use serde::Serialize;
 
+use crate::instantiate_tool_env::InstantiateToolEnvironmentSpec;
 use crate::{
-    PixiEnvironmentSpec, SolveCondaEnvironmentSpec, install_pixi::InstallPixiEnvironmentSpec,
+    PixiEnvironmentSpec, SolveCondaEnvironmentSpec, SourceMetadataSpec,
+    install_pixi::InstallPixiEnvironmentSpec,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
@@ -104,29 +106,89 @@ pub trait GitCheckoutReporter {
     fn on_checkout_finished(&mut self, checkout_id: GitCheckoutId);
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(transparent)]
+pub struct InstantiateToolEnvId(pub usize);
+
+pub trait InstantiateToolEnvironmentReporter {
+    /// Called when an operation was queued on the [`crate::CommandDispatcher`].
+    fn on_queued(
+        &mut self,
+        reason: Option<ReporterContext>,
+        env: &InstantiateToolEnvironmentSpec,
+    ) -> InstantiateToolEnvId;
+
+    /// Called when the operation has started.
+    fn on_started(&mut self, id: InstantiateToolEnvId);
+
+    /// Called when the operation has finished.
+    fn on_finished(&mut self, id: InstantiateToolEnvId);
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(transparent)]
+pub struct SourceMetadataId(pub usize);
+
+pub trait SourceMetadataReporter {
+    /// Called when an operation was queued on the [`crate::CommandDispatcher`].
+    fn on_queued(
+        &mut self,
+        reason: Option<ReporterContext>,
+        env: &SourceMetadataSpec,
+    ) -> SourceMetadataId;
+
+    /// Called when the operation has started.
+    fn on_started(&mut self, id: SourceMetadataId);
+
+    /// Called when the operation has finished.
+    fn on_finished(&mut self, id: SourceMetadataId);
+}
+
 /// A trait that is used to report the progress of the [`crate::CommandDispatcher`].
 ///
 /// The reporter has to be `Send` but does not require `Sync`.
 pub trait Reporter: Send {
     /// Returns a mutable reference to a reporter that reports on any git
     /// progress.
-    fn as_git_reporter(&mut self) -> Option<&mut dyn GitCheckoutReporter>;
+    fn as_git_reporter(&mut self) -> Option<&mut dyn GitCheckoutReporter> {
+        None
+    }
     /// Returns a mutable reference to a reporter that reports on conda solve
     /// progress.
-    fn as_conda_solve_reporter(&mut self) -> Option<&mut dyn CondaSolveReporter>;
+    fn as_conda_solve_reporter(&mut self) -> Option<&mut dyn CondaSolveReporter> {
+        None
+    }
     /// Returns a mutable reference to a reporter that reports on an entire pixi
     /// solve progress. so that can mean solves for multiple ecosystems for
     /// an environment.
-    fn as_pixi_solve_reporter(&mut self) -> Option<&mut dyn PixiSolveReporter>;
+    fn as_pixi_solve_reporter(&mut self) -> Option<&mut dyn PixiSolveReporter> {
+        None
+    }
     /// Returns a mutable reference to a reporter that reports on the progress
     /// of actual package installation.
-    fn as_pixi_install_reporter(&mut self) -> Option<&mut dyn PixiInstallReporter>;
+    fn as_pixi_install_reporter(&mut self) -> Option<&mut dyn PixiInstallReporter> {
+        None
+    }
+    /// Returns a mutable reference to a reporter that reports on the progress
+    /// of instantiating a tool environment.
+    fn as_instantiate_tool_environment_reporter(
+        &mut self,
+    ) -> Option<&mut dyn InstantiateToolEnvironmentReporter> {
+        None
+    }
+    /// Returns a mutable reference to a reporter that reports on the progress
+    /// of fetching source metadata.
+    fn as_source_metadata_reporter(&mut self) -> Option<&mut dyn SourceMetadataReporter> {
+        None
+    }
 }
 
-#[derive(Debug, Clone, Copy, Serialize)]
+#[derive(Debug, Clone, Copy, Serialize, derive_more::From)]
 #[serde(rename_all = "kebab-case")]
 pub enum ReporterContext {
     SolvePixi(PixiSolveId),
     SolveConda(CondaSolveId),
     InstallPixi(PixiInstallId),
+    SourceMetadata(SourceMetadataId),
+    InstantiateToolEnv(InstantiateToolEnvId),
 }

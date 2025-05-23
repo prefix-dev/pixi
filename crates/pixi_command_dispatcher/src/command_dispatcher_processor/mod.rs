@@ -73,11 +73,14 @@ pub(crate) struct CommandDispatcherProcessor {
 
     /// A mapping of source metadata to the metadata id that
     source_metadata: HashMap<SourceMetadataId, PendingSourceMetadata>,
+    source_metadata_reporters: HashMap<SourceMetadataId, reporter::SourceMetadataId>,
     source_metadata_ids: HashMap<SourceMetadataSpec, SourceMetadataId>,
 
     /// A mapping of instantiated tool environments
     instantiated_tool_envs:
         HashMap<InstantiatedToolEnvId, PendingDeduplicatingTask<InstantiateToolEnvironmentSpec>>,
+    instantiated_tool_envs_reporters:
+        HashMap<InstantiatedToolEnvId, reporter::InstantiateToolEnvId>,
     instantiated_tool_cache_keys: HashMap<String, InstantiatedToolEnvId>,
 
     /// Git checkouts in the process of being checked out, or already checked
@@ -253,8 +256,10 @@ impl CommandDispatcherProcessor {
                 solve_pixi_environments: slotmap::SlotMap::default(),
                 install_pixi_environment: slotmap::SlotMap::default(),
                 source_metadata: HashMap::default(),
+                source_metadata_reporters: HashMap::default(),
                 source_metadata_ids: HashMap::default(),
                 instantiated_tool_envs: HashMap::default(),
+                instantiated_tool_envs_reporters: HashMap::default(),
                 instantiated_tool_cache_keys: HashMap::default(),
                 git_checkouts: HashMap::default(),
                 pending_futures: ExecutorFutures::new(executor),
@@ -356,27 +361,47 @@ impl CommandDispatcherProcessor {
                         .reporter_id
                         .map(reporter::ReporterContext::SolvePixi);
                 }
-                CommandDispatcherContext::SourceMetadata(id) => self
-                    .source_metadata
-                    .get(&id)
-                    .and_then(|pending| match pending {
-                        PendingSourceMetadata::Pending(_, context) => Some(*context),
-                        PendingSourceMetadata::Result(_, context) => Some(*context),
-                        PendingSourceMetadata::Errored => None,
-                    })?,
+                CommandDispatcherContext::SourceMetadata(id) => {
+                    if let Some(context) = self
+                        .source_metadata_reporters
+                        .get(&id)
+                        .copied()
+                        .map(reporter::ReporterContext::SourceMetadata)
+                    {
+                        return Some(context);
+                    }
+
+                    self.source_metadata
+                        .get(&id)
+                        .and_then(|pending| match pending {
+                            PendingSourceMetadata::Pending(_, context) => Some(*context),
+                            PendingSourceMetadata::Result(_, context) => Some(*context),
+                            PendingSourceMetadata::Errored => None,
+                        })?
+                }
                 CommandDispatcherContext::InstallPixiEnvironment(id) => {
                     return self.install_pixi_environment[id]
                         .reporter_id
                         .map(reporter::ReporterContext::InstallPixi);
                 }
-                CommandDispatcherContext::InstantiateToolEnv(id) => self
-                    .instantiated_tool_envs
-                    .get(&id)
-                    .and_then(|pending| match pending {
-                        PendingDeduplicatingTask::Pending(_, context) => Some(*context),
-                        PendingDeduplicatingTask::Result(_, context) => Some(*context),
-                        PendingDeduplicatingTask::Errored => None,
-                    })?,
+                CommandDispatcherContext::InstantiateToolEnv(id) => {
+                    if let Some(context) = self
+                        .instantiated_tool_envs_reporters
+                        .get(&id)
+                        .copied()
+                        .map(reporter::ReporterContext::InstantiateToolEnv)
+                    {
+                        return Some(context);
+                    }
+
+                    self.instantiated_tool_envs
+                        .get(&id)
+                        .and_then(|pending| match pending {
+                            PendingDeduplicatingTask::Pending(_, context) => Some(*context),
+                            PendingDeduplicatingTask::Result(_, context) => Some(*context),
+                            PendingDeduplicatingTask::Errored => None,
+                        })?
+                }
             };
         }
 

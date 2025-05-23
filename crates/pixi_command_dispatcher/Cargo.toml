@@ -48,4 +48,5 @@ pixi_utils = { workspace = true }
 [dev-dependencies]
 insta = { workspace = true, features = ["json"] }
 pixi_config = { workspace = true }
+text_trees = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }

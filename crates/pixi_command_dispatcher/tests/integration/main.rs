@@ -1,12 +1,15 @@
 mod event_reporter;
+mod event_tree;
 
-use event_reporter::{Event, EventReporter};
-use itertools::Itertools;
+use std::str::FromStr;
+
+use event_reporter::EventReporter;
 use pixi_command_dispatcher::{CacheDirs, CommandDispatcher, Executor, PixiEnvironmentSpec};
 use pixi_spec::{GitReference, GitSpec};
 use pixi_spec_containers::DependencyMap;
-use std::str::FromStr;
 use url::Url;
+
+use crate::event_tree::EventTree;
 
 /// Returns a default set of cache directories for the test.
 fn default_cache_dirs() -> CacheDirs {
@@ -47,12 +50,6 @@ pub async fn simple_test() {
         .await
         .unwrap();
 
-    let events = events
-        .lock()
-        .unwrap()
-        .iter()
-        .map(Event::event_type)
-        .collect_vec();
-
-    insta::assert_json_snapshot!(events);
+    let event_tree = EventTree::new(events.lock().unwrap().iter());
+    insta::assert_snapshot!(event_tree.to_string());
 }

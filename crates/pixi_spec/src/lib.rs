@@ -340,6 +340,12 @@ impl SourceSpec {
     pub fn is_git(&self) -> bool {
         matches!(self, Self::Git(_))
     }
+
+    /// Converts this instance into a [`toml_edit::Value`].
+    pub fn to_toml_value(&self) -> toml_edit::Value {
+        ::serde::Serialize::serialize(self, toml_edit::ser::ValueSerializer::new())
+            .expect("conversion to toml cannot fail")
+    }
 }
 
 impl From<SourceSpec> for PixiSpec {
