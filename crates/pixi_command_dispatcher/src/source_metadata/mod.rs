@@ -126,19 +126,10 @@ impl SourceMetadataSpec {
         let input_hash = if source.pinned.is_immutable() {
             None
         } else {
-            let input_globs = metadata
-                .input_globs
-                .clone()
-                .into_iter()
-                .flat_map(|glob| glob.into_iter())
-                .collect::<Vec<_>>();
-
+            let input_globs = metadata.input_globs.clone().unwrap_or_default();
             let input_hash = command_queue
                 .glob_hash_cache()
-                .compute_hash(GlobHashKey {
-                    root: source.path.clone(),
-                    globs: input_globs.clone(),
-                })
+                .compute_hash(GlobHashKey::new(&source.path, input_globs.clone()))
                 .await
                 .map_err(SourceMetadataError::GlobHash)?;
 

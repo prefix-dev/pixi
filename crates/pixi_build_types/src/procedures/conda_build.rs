@@ -75,7 +75,7 @@ pub struct CondaBuiltPackage {
 
     /// The globs that were used as input to the build. Use these for
     /// re-verifying the build.
-    pub input_globs: Vec<String>,
+    pub input_globs: BTreeSet<String>,
 
     /// The name of the package.
     pub name: String,
