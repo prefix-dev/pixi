@@ -25,4 +25,7 @@ pixi self-update [OPTIONS]
 :  Skip printing the release notes
 <br>**default**: `false`
 
+- <a id="arg---url" href="#arg---url">`--url <URL>`</a>
+:  Take a fixed version of pixi from the specified URL. The URL must point to a pixi binary
+
 --8<-- "docs/reference/cli/pixi/self-update_extender:example"

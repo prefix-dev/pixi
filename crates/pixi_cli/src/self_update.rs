@@ -38,6 +38,10 @@ pub struct Args {
     /// Skip printing the release notes.
     #[clap(long, default_value_t = false)]
     no_release_note: bool,
+
+    /// Take a fixed version of pixi from the specified URL. The URL must point to a pixi binary.
+    #[clap(long, conflicts_with = "version")]
+    url: Option<Url>,
 }
 
 /// Response from the Github API when fetching a release by tag.
@@ -183,165 +187,28 @@ async fn fetch_release_notes(version: &Option<Version>) -> miette::Result<String
     }
 }
 
-/// Executes the self-update command.
-///
-/// # Arguments
-/// * `args` - The self-update specific arguments.
-/// * `global_options` - Reference to the global CLI options.
-pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Result<()> {
-    let is_quiet = global_options.quiet > 0;
-    // Get the target version, without 'v' prefix, None for force latest version
-    let target_version = match &args.version {
-        Some(version) => {
-            // Remove leading 'v' if present and inform the user
-            if version.to_string().starts_with('v') {
-                if !is_quiet {
-                    eprintln!(
-                        "{}Warning: Leading 'v' removed from version {}",
-                        console::style(console::Emoji("⚠️ ", "")).yellow(),
-                        version
-                    );
-                }
-                Some(Version::from_str(&version.to_string()[1..]).into_diagnostic()?)
-            } else {
-                Some(version.clone())
-            }
-        }
-        None => {
-            if args.force {
-                None
-            } else {
-                Some(latest_version().await?)
-            }
-        }
-    };
-
-    // Get the current version of the pixi binary
-    let current_version = Version::from_str(consts::PIXI_VERSION).into_diagnostic()?;
-
-    let up_to_date = target_version
-        .as_ref()
-        .is_some_and(|t| *t == current_version);
-
-    let fetch_release_warning = if args.no_release_note || up_to_date || is_quiet {
-        None
-    } else {
-        match fetch_release_notes(&target_version).await {
-            Ok(release_notes) => {
-                // Print release notes
-                eprintln!(
-                    "{}{}",
-                    console::style(console::Emoji("📝 ", "")).yellow(),
-                    format_release_notes(&release_notes)
-                );
-                None
-            }
-            Err(err) => {
-                // Failure to fetch release notes must not prevent self-update, especially if format changes
-                let release_url = if let Some(ref target_version) = target_version {
-                    format!("{}/v{}", consts::RELEASES_URL, target_version)
-                } else {
-                    format!("{}/latest", consts::RELEASES_URL)
-                };
-                Some(format!(
-                    "{}Failed to fetch release notes ({}). Check the release page for more information: {}",
-                    console::style(console::Emoji("⚠️ ", "")).yellow(),
-                    err,
-                    release_url
-                ))
-            }
-        }
-    };
-
-    // Don't actually update the binary if `--dry-run` is passed
-    if args.dry_run {
-        if !is_quiet {
-            let target_version = match target_version {
-                Some(target_version) => target_version,
-                None => latest_version().await?,
-            };
-            eprintln!("{}", get_dry_run_message(&current_version, &target_version));
-        }
-        return Ok(());
-    }
-
-    // Stop here if the target version is the same as the current version
-    if up_to_date {
-        if !is_quiet {
-            eprintln!(
-                "{}pixi is already up-to-date (version {})",
-                console::style(console::Emoji("✔ ", "")).green(),
-                current_version
-            );
-        }
-        return Ok(());
-    }
-
-    let action = if !args.force
-        && target_version
-            .as_ref()
-            .is_some_and(|t| *t < current_version)
-    {
-        if args.version.is_none() {
-            // Ask if --version was not passed
-            let confirmation = dialoguer::Confirm::new()
-                .with_prompt(format!(
-                        "\nCurrent version ({}) is more recent than remote ({}). Do you want to downgrade?",
-                        current_version, target_version.as_ref().expect("target_version is not resolved")
-                ))
-                .default(false)
-                .show_default(true)
-                .interact()
-                .into_diagnostic()?;
-            if !confirmation {
-                return Ok(());
-            };
-        };
-        "downgraded"
-    } else {
-        "updated"
-    };
-
-    if !args.force && !is_quiet {
-        eprintln!(
-            "{}Pixi will be {} from {} to {}",
-            console::style(console::Emoji("✔ ", "")).green(),
-            action,
-            current_version,
-            target_version
-                .as_ref()
-                .expect("target_version is not resolved")
-        );
-    }
-
-    // Get the name of the binary to download and install based on the current platform
-    let archive_name = default_archive_name()
-        .expect("Could not find the default archive name for the current platform");
-
-    let download_url = if let Some(ref target_version) = target_version {
-        format!(
-            "{}/download/v{}/{}",
-            consts::RELEASES_URL,
-            target_version,
-            archive_name
-        )
-    } else {
-        format!("{}/latest/download/{}", consts::RELEASES_URL, archive_name)
-    };
+/// Downloads the target of an URL into a temporary file.
+async fn download<U>(url: U) -> miette::Result<NamedTempFile>
+where
+    U: reqwest::IntoUrl + std::fmt::Display,
+{
+    let url_as_str = url.as_str().to_owned();
+    // Create a temp file to download the archive
+    let archived_tempfile = tempfile::NamedTempFile::new().into_diagnostic()?;
 
     // Create a temp file to download the archive
     let mut archived_tempfile = NamedTempFile::new().into_diagnostic()?;
 
     let client = build_reqwest_clients(None, None)?.1;
     let mut res = client
-        .get(&download_url)
+        .get(url)
         .header("User-Agent", user_agent())
         .send()
         .await
         .expect("Failed to download the archive");
 
     if res.status() != reqwest::StatusCode::OK {
-        miette::bail!(format!("URL {} returned {}", download_url, res.status()));
+        miette::bail!(format!("URL {} returned {}", url_as_str, res.status()));
     } else {
         // Download the archive
         while let Some(chunk) = res.chunk().await.into_diagnostic()? {
@@ -352,65 +219,238 @@ pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Resu
         }
     }
 
-    if !is_quiet {
-        eprintln!(
-            "{}Pixi archive downloaded.",
-            console::style(console::Emoji("✔ ", "")).green(),
-        );
-    }
+    Ok(archived_tempfile)
+}
 
+/// Unpacks a pixi archive (typically downloaded from GitHub releases) into a temporary directory.
+async fn unpack_release_archive(
+    mut archived_tempfile: NamedTempFile,
+    archive_name: &str,
+) -> miette::Result<TempDir> {
     // Seek to the beginning of the file before uncompressing it
     archived_tempfile
         .rewind()
         .expect("Failed to rewind the archive file");
 
     // Create a temporary directory to unpack the archive
-    let binary_tempdir = &tempfile::tempdir().into_diagnostic()?;
+    let binary_tempdir = tempfile::tempdir().into_diagnostic()?;
 
     // Uncompress the archive
     if archive_name.ends_with(".tar.gz") {
-        unpack_tar_gz(&archived_tempfile, binary_tempdir)?;
+        unpack_tar_gz(&archived_tempfile, &binary_tempdir)?;
     } else if archive_name.ends_with(".zip") {
         let mut archive = zip::ZipArchive::new(archived_tempfile.as_file()).into_diagnostic()?;
-        archive.extract(binary_tempdir).into_diagnostic()?;
+        archive.extract(&binary_tempdir).into_diagnostic()?;
     } else {
         let error_message = format!("Unsupported archive format: {archive_name}");
         Err(miette::miette!(error_message))?
     }
 
-    if !is_quiet {
-        eprintln!(
-            "{}Pixi archive uncompressed.",
-            console::style(console::Emoji("✔ ", "")).green(),
-        );
-    }
+    Ok(binary_tempdir)
+}
 
-    // Get the new binary path used for self-replacement
-    let new_binary_path = binary_tempdir.path().join(pixi_binary_name());
+pub async fn execute(args: Args) -> miette::Result<()> {
+    let is_quiet = global_options.quiet > 0;
 
-    // Replace the current binary with the new binary
-    self_replace::self_replace(new_binary_path).into_diagnostic()?;
+    if let Some(url) = args.url {
+        // If a URL is provided, download the archive from the URL
+        let new_binary_path = download(url).await?;
+        self_replace::self_replace(new_binary_path).into_diagnostic()?;
 
-    if !is_quiet {
-        if let Some(ref target_version) = target_version {
+        if !is_quiet {
             eprintln!(
-                "{}Pixi has been updated to version {}.",
-                console::style(console::Emoji("✔ ", "")).green(),
-                target_version
-            );
-        } else {
-            eprintln!(
-                "{}Pixi has been updated to latest release.",
+                "{}Pixi has been updated.",
                 console::style(console::Emoji("✔ ", "")).green(),
             );
         }
-    }
 
-    if let Some(fetch_release_warning) = fetch_release_warning {
-        tracing::warn!(fetch_release_warning);
-    }
+        Ok(())
+    } else {
+        // Get the target version, without 'v' prefix, None for force latest version
+        let target_version = match &args.version {
+            Some(version) => {
+                // Remove leading 'v' if present and inform the user
+                if version.to_string().starts_with('v') {
+                    if !is_quiet {
+                        eprintln!(
+                            "{}Warning: Leading 'v' removed from version {}",
+                            console::style(console::Emoji("⚠️ ", "")).yellow(),
+                            version
+                        );
+                    }
+                    Some(Version::from_str(&version.to_string()[1..]).into_diagnostic()?)
+                } else {
+                    Some(version.clone())
+                }
+            }
+            None => {
+                if args.force {
+                    None
+                } else {
+                    Some(latest_version().await?)
+                }
+            }
+        };
 
-    Ok(())
+        // Get the current version of the pixi binary
+        let current_version = Version::from_str(consts::PIXI_VERSION).into_diagnostic()?;
+
+        let up_to_date = target_version
+            .as_ref()
+            .is_some_and(|t| *t == current_version);
+
+        let fetch_release_warning = if args.no_release_note || up_to_date || is_quiet {
+            None
+        } else {
+            match fetch_release_notes(&target_version).await {
+                Ok(release_notes) => {
+                    // Print release notes
+                    eprintln!(
+                        "{}{}",
+                        console::style(console::Emoji("📝 ", "")).yellow(),
+                        format_release_notes(&release_notes)
+                    );
+                    None
+                }
+                Err(err) => {
+                    // Failure to fetch release notes must not prevent self-update, especially if format changes
+                    let release_url = if let Some(ref target_version) = target_version {
+                        format!("{}/v{}", consts::RELEASES_URL, target_version)
+                    } else {
+                        format!("{}/latest", consts::RELEASES_URL)
+                    };
+                    Some(format!(
+                        "{}Failed to fetch release notes ({}). Check the release page for more information: {}",
+                        console::style(console::Emoji("⚠️ ", "")).yellow(),
+                        err,
+                        release_url
+                    ))
+                }
+            }
+        };
+
+        // Don't actually update the binary if `--dry-run` is passed
+        if args.dry_run {
+            if !is_quiet {
+                let target_version = match target_version {
+                    Some(target_version) => target_version,
+                    None => latest_version().await?,
+                };
+                eprintln!("{}", get_dry_run_message(&current_version, &target_version));
+            }
+            return Ok(());
+        }
+
+        // Stop here if the target version is the same as the current version
+        if up_to_date {
+            if !is_quiet {
+                eprintln!(
+                    "{}pixi is already up-to-date (version {})",
+                    console::style(console::Emoji("✔ ", "")).green(),
+                    current_version
+                );
+            }
+            return Ok(());
+        }
+
+        let action = if !args.force
+            && target_version
+                .as_ref()
+                .is_some_and(|t| *t < current_version)
+        {
+            if args.version.is_none() {
+                // Ask if --version was not passed
+                let confirmation = dialoguer::Confirm::new()
+                .with_prompt(format!(
+                        "\nCurrent version ({}) is more recent than remote ({}). Do you want to downgrade?",
+                        current_version, target_version.as_ref().expect("target_version is not resolved")
+                ))
+                .default(false)
+                .show_default(true)
+                .interact()
+                .into_diagnostic()?;
+                if !confirmation {
+                    return Ok(());
+                };
+            };
+            "downgraded"
+        } else {
+            "updated"
+        };
+
+        if !args.force && !is_quiet {
+            eprintln!(
+                "{}Pixi will be {} from {} to {}",
+                console::style(console::Emoji("✔ ", "")).green(),
+                action,
+                current_version,
+                target_version
+                    .as_ref()
+                    .expect("target_version is not resolved")
+            );
+        }
+
+        // Get the name of the binary to download and install based on the current platform
+        let archive_name = default_archive_name()
+            .expect("Could not find the default archive name for the current platform");
+
+        let download_url = if let Some(ref target_version) = target_version {
+            format!(
+                "{}/download/v{}/{}",
+                consts::RELEASES_URL,
+                target_version,
+                archive_name
+            )
+        } else {
+            format!("{}/latest/download/{}", consts::RELEASES_URL, archive_name)
+        };
+
+        // Otherwise, download the latest pixi archive from the default releases repos
+        let archive = download(download_url).await?;
+
+        if !is_quiet {
+            eprintln!(
+                "{}Pixi archive downloaded.",
+                console::style(console::Emoji("✔ ", "")).green(),
+            );
+        }
+
+        let binary_tempdir = unpack_release_archive(archive, &archive_name).await?;
+
+        if !is_quiet {
+            eprintln!(
+                "{}Pixi archive uncompressed.",
+                console::style(console::Emoji("✔ ", "")).green(),
+            );
+        }
+
+        // Get the new binary path used for self-replacement
+        let new_binary_path = binary_tempdir.path().join(pixi_binary_name());
+
+        // Replace the current binary with the new binary
+        self_replace::self_replace(new_binary_path).into_diagnostic()?;
+
+        if !is_quiet {
+            if let Some(ref target_version) = target_version {
+                eprintln!(
+                    "{}Pixi has been updated to version {}.",
+                    console::style(console::Emoji("✔ ", "")).green(),
+                    target_version
+                );
+            } else {
+                eprintln!(
+                    "{}Pixi has been updated to latest release.",
+                    console::style(console::Emoji("✔ ", "")).green(),
+                );
+            }
+        }
+
+        if let Some(fetch_release_warning) = fetch_release_warning {
+            tracing::warn!(fetch_release_warning);
+        }
+
+        Ok(())
+    }
 }
 
 /// Return the message that should be shown to users when executing with `--dry-run`.
