@@ -1,4 +1,4 @@
-use std::io::{Seek, Write};
+use std::io::{Read, Seek, Write};
 
 use flate2::read::GzDecoder;
 use tar::Archive;
@@ -7,9 +7,10 @@ use miette::IntoDiagnostic;
 use pixi_config::Config;
 use pixi_consts::consts;
 use reqwest::Client;
+use reqwest::IntoUrl;
 use reqwest::redirect::Policy;
 
-use tempfile::{NamedTempFile, TempDir};
+use tempfile::TempDir;
 use url::Url;
 
 use rattler_conda_types::Version;
@@ -118,7 +119,7 @@ async fn latest_version() -> miette::Result<Version> {
 /// Downloads the target of an URL into a temporary file.
 async fn download<U>(url: U, dest: &mut impl Write) -> miette::Result<()>
 where
-    U: reqwest::IntoUrl + Display,
+    U: IntoUrl + Display,
 {
     let url_as_str = url.as_str().to_owned();
 
@@ -148,21 +149,21 @@ where
 }
 
 /// Unpacks a pixi archive (typically downloaded from GitHub releases) into a temporary directory.
-async fn unpack_release_archive(
-    mut archived_tempfile: NamedTempFile,
-    archive_name: &str,
-) -> miette::Result<TempDir> {
+async fn unpack_release_archive<R>(mut archive: R, archive_name: &str) -> miette::Result<TempDir>
+where
+    R: Read + Seek,
+{
     // Seek to the beginning of the file before uncompressing it
-    let _ = archived_tempfile.rewind();
+    let _ = archive.rewind();
 
     // Create a temporary directory to unpack the archive
     let binary_tempdir = tempfile::tempdir().into_diagnostic()?;
 
     // Uncompress the archive
     if archive_name.ends_with(".tar.gz") {
-        unpack_tar_gz(&archived_tempfile, &binary_tempdir)?;
+        unpack_tar_gz(archive, &binary_tempdir)?;
     } else if archive_name.ends_with(".zip") {
-        let mut archive = zip::ZipArchive::new(archived_tempfile.as_file()).into_diagnostic()?;
+        let mut archive = zip::ZipArchive::new(archive).into_diagnostic()?;
         archive.extract(&binary_tempdir).into_diagnostic()?;
     } else {
         let error_message = format!("Unsupported archive format: {}", archive_name);
@@ -254,7 +255,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             console::style(console::Emoji("✔ ", "")).green(),
         );
 
-        let binary_tempdir = unpack_release_archive(archive, &archive_name).await?;
+        let binary_tempdir = unpack_release_archive(archive.as_file(), &archive_name).await?;
 
         eprintln!(
             "{}Pixi archive uncompressed.",
@@ -278,11 +279,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 }
 
 /// Unpack files from a tar.gz archive to a target directory.
-fn unpack_tar_gz(
-    archived_tempfile: &NamedTempFile,
-    binary_tempdir: &TempDir,
-) -> miette::Result<()> {
-    let mut archive = Archive::new(GzDecoder::new(archived_tempfile.as_file()));
+fn unpack_tar_gz<R>(archive: R, binary_tempdir: &TempDir) -> miette::Result<()>
+where
+    R: Read + Seek,
+{
+    let mut archive = Archive::new(GzDecoder::new(archive));
 
     for entry in archive.entries().into_diagnostic()? {
         let mut entry = entry.into_diagnostic()?;
