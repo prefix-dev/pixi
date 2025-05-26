@@ -160,6 +160,25 @@ def get_manifest(directory: Path) -> Path:
     else:
         raise ValueError("Neither pixi.toml nor pyproject.toml found")
 
+# This function mimics cli::self_update::default_archive_name(), but for
+# pre-built binaries instead of source archives.
+def binary_release_name() -> str:
+    match current_platform():
+        case "linux-64":
+            return "pixi-x86_64-unknown-linux-musl"
+        case "linux-aarch64":
+            return "pixi-aarch64-unknown-linux-musl"
+        case "osx-64":
+            return "pixi-x86_64-apple-darwin"
+        case "osx-arm64":
+            return "pixi-aarch64-apple-darwin"
+        case "win-64":
+            return "pixi-x86_64-pc-windows-msvc.exe"
+        case _:
+            raise ValueError(f"Self-update test requires the existence of a pre-built binary on GitHub releases, but no one is provided for {current_platform}")
+
+def binary_github_release_url(version: str) -> str:
+    return f"https://github.com/prefix-dev/pixi/releases/download/v{version}/{binary_release_name()}"
 
 def run_and_get_env(pixi: Path, *args: str, env_var: str) -> tuple[str | None, Output]:
     if sys.platform.startswith("win"):
