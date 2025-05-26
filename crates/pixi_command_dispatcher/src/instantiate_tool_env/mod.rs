@@ -23,30 +23,35 @@ use xxhash_rust::xxh3::Xxh3;
 
 /// Specification for a tool environment. Tool environments are cached between
 /// runs.
-#[derive(Debug)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct InstantiateToolEnvironmentSpec {
     /// The main requirement of the tool environment.
     pub requirement: (rattler_conda_types::PackageName, PixiSpec),
 
     /// The requirements of the tool environment.
+    #[serde(skip_serializing_if = "DependencyMap::is_empty")]
     pub additional_requirements: DependencyMap<rattler_conda_types::PackageName, PixiSpec>,
 
     /// Additional constraints applied to the environment.
+    #[serde(skip_serializing_if = "DependencyMap::is_empty")]
     pub constraints: DependencyMap<rattler_conda_types::PackageName, NamelessMatchSpec>,
 
     /// The platform to instantiate the tool environment for.
     pub build_environment: BuildEnvironment,
 
     /// The channels to use for solving
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub channels: Vec<ChannelUrl>,
 
     /// Exclude any packages after the first cut-off date.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub exclude_newer: Option<DateTime<Utc>>,
 
     /// The channel configuration to use for this environment.
     pub channel_config: ChannelConfig,
 
     /// The protocols that are enabled for source packages
+    #[serde(skip_serializing_if = "crate::is_default")]
     pub enabled_protocols: EnabledProtocols,
 }
 
