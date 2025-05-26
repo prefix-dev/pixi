@@ -2872,7 +2872,6 @@ Or set the version
 <table>
 <thead>
 <tr>
-<th>Variable</th>
 <th>Environment variable</th>
 <th>Description</th>
 <th>Default Value</th>
@@ -2880,28 +2879,25 @@ Or set the version
 </thead>
 <tbody>
 <tr>
-<td><code>PixiVersion</code></td>
 <td><code>PIXI_VERSION</code></td>
 <td>The version of Pixi getting installed, can be used to up- or down-grade.</td>
 <td><code>latest</code></td>
 </tr>
 <tr>
-<td><code>PixiHome</code></td>
 <td><code>PIXI_HOME</code></td>
 <td>The location of the installation.</td>
 <td><code>$Env:USERPROFILE\.pixi</code></td>
 </tr>
 <tr>
-<td><code>NoPathUpdate</code></td>
-<td></td>
+<td><code>PIXI_NO_PATH_UPDATE</code></td>
 <td>If set, the <code>$PATH</code> will not be updated to add <code>pixi</code> to it.</td>
-<td></td>
+<td><code>false</code></td>
 </tr>
 </tbody>
 </table>
-<p>For example, set the version using:</p>
-<div class="language-powershell highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nb">iwr </span><span class="n">-useb</span> <span class="n">https</span><span class="p">://</span><span class="n">pixi</span><span class="p">.</span><span class="n">sh</span><span class="p">/</span><span class="n">install</span><span class="p">.</span><span class="n">ps1</span> <span class="p">|</span> <span class="nb">iex </span><span class="n">-Args</span> <span class="s2">&quot;-PixiVersion v0.18.0&quot;</span>
-</span></code></pre></div>
+<p>For example, set the version:
+<div class="language-powershell highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nv">$env:PIXI_VERSION</span><span class="p">=</span><span class="s1">&#39;v0.18.0&#39;</span><span class="p">;</span> <span class="n">powershell</span> <span class="n">-ExecutionPolicy</span> <span class="n">Bypass</span> <span class="n">-Command</span> <span class="s2">&quot;iwr -useb https://pixi.sh/install.ps1 | iex&quot;</span>
+</span></code></pre></div></p>
 </div>
 </div>
 </div>
