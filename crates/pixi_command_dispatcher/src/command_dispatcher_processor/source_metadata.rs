@@ -4,7 +4,7 @@ use futures::FutureExt;
 
 use super::{CommandDispatcherProcessor, PendingSourceMetadata, TaskResult};
 use crate::{
-    CommandDispatcherError, CommandDispatcherErrorResultExt,
+    CommandDispatcherError, CommandDispatcherErrorResultExt, Reporter,
     command_dispatcher::{CommandDispatcherContext, SourceMetadataId, SourceMetadataTask},
     source_metadata::{SourceMetadata, SourceMetadataError},
 };
@@ -41,6 +41,28 @@ impl CommandDispatcherProcessor {
             Entry::Vacant(entry) => {
                 entry.insert(PendingSourceMetadata::Pending(vec![task.tx], task.parent));
 
+                // Notify the reporter that a new solve has been queued and started.
+                let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
+                let reporter_id = self
+                    .reporter
+                    .as_deref_mut()
+                    .and_then(Reporter::as_source_metadata_reporter)
+                    .map(|reporter| reporter.on_queued(parent_context, &task.spec));
+
+                if let Some(reporter_id) = reporter_id {
+                    self.source_metadata_reporters
+                        .insert(source_metadata_id, reporter_id);
+                }
+
+                if let Some((reporter, reporter_id)) = self
+                    .reporter
+                    .as_deref_mut()
+                    .and_then(Reporter::as_source_metadata_reporter)
+                    .zip(reporter_id)
+                {
+                    reporter.on_started(reporter_id)
+                }
+
                 let dispatcher = self.create_task_command_dispatcher(
                     CommandDispatcherContext::SourceMetadata(source_metadata_id),
                 );
@@ -66,6 +88,15 @@ impl CommandDispatcherProcessor {
         id: SourceMetadataId,
         result: Result<Arc<SourceMetadata>, CommandDispatcherError<SourceMetadataError>>,
     ) {
+        if let Some((reporter, reporter_id)) = self
+            .reporter
+            .as_deref_mut()
+            .and_then(Reporter::as_source_metadata_reporter)
+            .zip(self.source_metadata_reporters.remove(&id))
+        {
+            reporter.on_finished(reporter_id);
+        }
+
         let Some(PendingSourceMetadata::Pending(pending, context)) =
             self.source_metadata.get_mut(&id)
         else {

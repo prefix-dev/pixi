@@ -55,6 +55,7 @@ pub use command_dispatcher::{
 };
 pub use executor::Executor;
 pub use install_pixi::{InstallPixiEnvironmentError, InstallPixiEnvironmentSpec};
+pub use instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec};
 pub use limits::Limits;
 pub use reporter::{
     CondaSolveReporter, GitCheckoutReporter, PixiInstallReporter, PixiSolveReporter, Reporter,
