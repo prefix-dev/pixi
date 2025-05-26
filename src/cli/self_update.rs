@@ -25,7 +25,7 @@ pub struct Args {
 
     /// Only show release notes, do not modify the binary.
     #[clap(long)]
-    release_notes_only: bool,
+    dry_run: bool,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -265,10 +265,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         ),
         Err(err) => {
             let release_url = format!("{}/v{}", consts::RELEASES_URL, target_version);
-            format!("{}Failed to fetch release notes ({}). Check the release page for more information: {}",
+            format!(
+                "{}Failed to fetch release notes ({}). Check the release page for more information: {}",
                 console::style(console::Emoji("⚠️ ", "")).yellow(),
                 err,
-                release_url)
+                release_url
+            )
         }
     };
 
@@ -276,7 +278,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     eprintln!("{}", release_notes);
 
     // If the user only wants to see the release notes, print them and exit
-    if args.release_notes_only {
+    if args.dry_run {
         eprintln!(
             "{}To update to this version, run `pixi self-update --version {}`",
             console::style(console::Emoji("ℹ️ ", "")).yellow(),

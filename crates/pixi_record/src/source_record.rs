@@ -54,7 +54,7 @@ impl From<SourceRecord> for CondaPackageData {
             input: value.input_hash.map(|i| rattler_lock::InputHash {
                 hash: i.hash,
                 // TODO: fix this in rattler
-                globs: Vec::from_iter(i.globs.into_iter()),
+                globs: Vec::from_iter(i.globs),
             }),
             sources: value
                 .sources
@@ -74,7 +74,7 @@ impl TryFrom<CondaSourceData> for SourceRecord {
             source: value.location.try_into()?,
             input_hash: value.input.map(|hash| InputHash {
                 hash: hash.hash,
-                globs: BTreeSet::from_iter(hash.globs.into_iter()),
+                globs: BTreeSet::from_iter(hash.globs),
             }),
             sources: value
                 .sources
