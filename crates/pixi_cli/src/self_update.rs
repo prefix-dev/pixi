@@ -241,18 +241,18 @@ where
     Ok(binary_tempdir)
 }
 
-pub async fn execute(args: Args, global_options: GlobalOptions) -> miette::Result<()> {
+pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Result<()> {
     let is_quiet = global_options.quiet > 0;
 
     if let Some(url) = args.url {
         let mut tempfile = tempfile::NamedTempFile::new().into_diagnostic()?;
         // If a URL is provided, download the archive from the URL
-        download(url, &mut tempfile).await?;
+        download(url.clone(), &mut tempfile).await?;
         self_replace::self_replace(tempfile).into_diagnostic()?;
 
         if !is_quiet {
             eprintln!(
-                "{}Pixi has been updated.",
+                "{}Pixi has been updated from URL {url}",
                 console::style(console::Emoji("✔ ", "")).green(),
             );
         }
