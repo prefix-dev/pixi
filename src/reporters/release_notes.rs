@@ -9,6 +9,9 @@ pub fn format_release_notes(markdown: &str) -> String {
     let mut discard_section = false;
 
     for line in markdown.lines() {
+        if line.contains("## Release Notes") {
+            continue;
+        }
         let section_name = extract_section_name(line);
 
         if let Some(section_name) = section_name {

@@ -181,7 +181,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Get the current version of the pixi binary
     let current_version = Version::from_str(consts::PIXI_VERSION).into_diagnostic()?;
 
-    match fetch_release_notes(&target_version).await {
+    let fetch_release_warning = match fetch_release_notes(&target_version).await {
         Ok(release_notes) => {
             // Print release notes
             eprintln!(
@@ -189,16 +189,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 console::style(console::Emoji("📝 ", "")).yellow(),
                 format_release_notes(&release_notes)
             );
+            None
         }
         Err(err) => {
             // Failure to fetch release notes must not prevent self-update, especially if format changes
             let release_url = format!("{}/v{}", consts::RELEASES_URL, target_version);
-            tracing::warn!(
+            Some(format!(
                 "{}Failed to fetch release notes ({}). Check the release page for more information: {}",
                 console::style(console::Emoji("⚠️ ", "")).yellow(),
                 err,
                 release_url
-            )
+            ))
         }
     };
 
@@ -273,11 +274,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .expect("Failed to download the archive");
 
     if res.status() != reqwest::StatusCode::OK {
-        return Err(miette::miette!(format!(
-            "URL {} returned {}",
-            download_url,
-            res.status()
-        )));
+        miette::bail!(format!("URL {} returned {}", download_url, res.status()));
     } else {
         // Download the archive
         while let Some(chunk) = res.chunk().await.into_diagnostic()? {
@@ -328,6 +325,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         console::style(console::Emoji("✔ ", "")).green(),
         target_version
     );
+
+    if let Some(fetch_release_warning) = fetch_release_warning {
+        tracing::warn!(fetch_release_warning);
+    }
 
     Ok(())
 }
