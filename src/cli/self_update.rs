@@ -69,9 +69,10 @@ impl ReleaseNotesFormatter {
 
     /// Check if the line starts a new markdown section.
     fn extract_section_name(line: &str) -> Option<&str> {
-        let header_pattern =
-            regex::Regex::new(r"^ {0,3}#+\s+(.+)$").expect("Invalid regex pattern");
-        header_pattern
+        static HEADER_PATTERN: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+            regex::Regex::new(r"^ {0,3}#+\s+(.+)$").expect("Invalid regex pattern")
+        });
+        HEADER_PATTERN
             .captures(line)
             .and_then(|captures| captures.get(1).map(|m| m.as_str()))
     }
