@@ -1,18 +1,17 @@
 use std::sync::Arc;
 
-use futures::{StreamExt, stream::FuturesUnordered};
-use miette::Diagnostic;
-use pixi_build_frontend::EnabledProtocols;
-use pixi_record::{PinnedSourceSpec, SourceRecord};
-use pixi_spec::{SourceAnchor, SourceSpec};
-use rattler_conda_types::{ChannelConfig, ChannelUrl, MatchSpec, ParseStrictness};
-use thiserror::Error;
-
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
     SourceMetadataSpec,
     source_metadata::{SourceMetadata, SourceMetadataError},
 };
+use futures::{StreamExt, stream::FuturesUnordered};
+use miette::Diagnostic;
+use pixi_build_discovery::EnabledProtocols;
+use pixi_record::{PinnedSourceSpec, SourceRecord};
+use pixi_spec::{SourceAnchor, SourceSpec};
+use rattler_conda_types::{ChannelConfig, ChannelUrl, MatchSpec, ParseStrictness};
+use thiserror::Error;
 
 /// An object that is responsible for recursively collecting metadata of source
 /// dependencies.

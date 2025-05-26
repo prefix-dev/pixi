@@ -1,7 +1,6 @@
 ---
-source: crates/pixi_build_frontend/tests/diagnostics.rs
+source: crates/pixi_build_frontend/tests/integration/diagnostics.rs
 expression: snapshot
-snapshot_kind: text
 ---
   × missing field 'channels' in table
    ╭─[[SOURCE_DIR]/pixi.toml:1:1]

@@ -2,10 +2,17 @@ mod source_metadata_collector;
 
 use std::{path::PathBuf, time::Instant};
 
+use crate::{
+    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
+    SolveCondaEnvironmentSpec,
+    solve_pixi::source_metadata_collector::{
+        CollectSourceMetadataError, CollectedSourceMetadata, SourceMetadataCollector,
+    },
+};
 use chrono::{DateTime, Utc};
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
-use pixi_build_frontend::EnabledProtocols;
+use pixi_build_discovery::EnabledProtocols;
 use pixi_record::PixiRecord;
 use pixi_spec::{PixiSpec, SourceSpec};
 use pixi_spec_containers::DependencyMap;
@@ -14,14 +21,6 @@ use rattler_repodata_gateway::RepoData;
 use rattler_solve::{ChannelPriority, SolveStrategy};
 use serde::Serialize;
 use thiserror::Error;
-
-use crate::{
-    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    SolveCondaEnvironmentSpec,
-    solve_pixi::source_metadata_collector::{
-        CollectSourceMetadataError, CollectedSourceMetadata, SourceMetadataCollector,
-    },
-};
 
 /// Contains all information that describes the input of a pixi environment.
 ///

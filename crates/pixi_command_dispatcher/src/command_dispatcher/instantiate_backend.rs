@@ -4,9 +4,12 @@ use crate::instantiate_tool_env::{
 };
 use crate::{BuildEnvironment, CommandDispatcher, CommandDispatcherErrorResultExt};
 use miette::Diagnostic;
+use pixi_build_discovery::{
+    BackendInitializationParams, BackendSpec, CommandSpec, EnabledProtocols,
+};
 use pixi_build_frontend::tool::IsolatedTool;
 use pixi_build_frontend::{
-    Backend, BackendInitializationParams, BackendSpec, CommandSpec, EnabledProtocols, json_rpc,
+    Backend, json_rpc,
     json_rpc::JsonRpcBackend,
     tool::{SystemTool, Tool},
 };

@@ -1,8 +1,8 @@
 use std::path::{Path, PathBuf};
 
+use super::error_to_snapshot;
 use bytes::Bytes;
 use futures::{SinkExt, StreamExt};
-use miette::{Diagnostic, GraphicalReportHandler, GraphicalTheme};
 use pixi_build_frontend::{BuildFrontend, InProcessBackend, SetupRequest, ToolContext};
 use pixi_manifest::{
     BuildBackend, KnownPreviewFeature, Package, PackageBuild, PackageManifest, Preview, Workspace,
@@ -17,16 +17,6 @@ use tokio_util::{
     io::{CopyToBytes, SinkWriter, StreamReader},
     sync::PollSender,
 };
-
-fn error_to_snapshot(diag: &impl Diagnostic) -> String {
-    let mut report_str = String::new();
-    GraphicalReportHandler::new_themed(GraphicalTheme::unicode_nocolor())
-        .without_syntax_highlighting()
-        .with_width(160)
-        .render_report(&mut report_str, diag)
-        .unwrap();
-    report_str
-}
 
 fn test_data_dir() -> PathBuf {
     let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"))

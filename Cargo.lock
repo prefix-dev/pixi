@@ -3097,6 +3097,8 @@ dependencies = [
  "globset",
  "linked-hash-map",
  "once_cell",
+ "pest",
+ "pest_derive",
  "pin-project",
  "regex",
  "serde",
@@ -4273,6 +4275,51 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 
 [[package]]
+name = "pest"
+version = "2.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "198db74531d58c70a361c42201efde7e2591e976d518caf7662a47dc5720e7b6"
+dependencies = [
+ "memchr",
+ "thiserror 2.0.12",
+ "ucd-trie",
+]
+
+[[package]]
+name = "pest_derive"
+version = "2.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d725d9cfd79e87dccc9341a2ef39d1b6f6353d68c4b33c177febbe1a402c97c5"
+dependencies = [
+ "pest",
+ "pest_generator",
+]
+
+[[package]]
+name = "pest_generator"
+version = "2.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db7d01726be8ab66ab32f9df467ae8b1148906685bbe75c82d1e65d7f5b3f841"
+dependencies = [
+ "pest",
+ "pest_meta",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "pest_meta"
+version = "2.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f9f832470494906d1fca5329f8ab5791cc60beb230c74815dff541cbd2b5ca0"
+dependencies = [
+ "once_cell",
+ "pest",
+ "sha2",
+]
+
+[[package]]
 name = "petgraph"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4512,6 +4559,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixi_build_discovery"
+version = "0.1.0"
+dependencies = [
+ "dunce",
+ "insta",
+ "itertools 0.14.0",
+ "miette 7.5.0",
+ "pathdiff",
+ "pixi_build_discovery",
+ "pixi_build_type_conversions",
+ "pixi_build_types",
+ "pixi_manifest",
+ "pixi_spec",
+ "pixi_spec_containers",
+ "rattler_conda_types",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.12",
+ "url",
+]
+
+[[package]]
 name = "pixi_build_frontend"
 version = "0.1.0"
 dependencies = [
@@ -4524,7 +4593,7 @@ dependencies = [
  "itertools 0.14.0",
  "jsonrpsee",
  "miette 7.5.0",
- "pathdiff",
+ "pixi_build_discovery",
  "pixi_build_type_conversions",
  "pixi_build_types",
  "pixi_config",
@@ -4532,7 +4601,6 @@ dependencies = [
  "pixi_manifest",
  "pixi_progress",
  "pixi_spec",
- "pixi_spec_containers",
  "pixi_utils",
  "rattler",
  "rattler_conda_types",
@@ -4541,7 +4609,6 @@ dependencies = [
  "rattler_solve",
  "rattler_virtual_packages",
  "reqwest-middleware",
- "rstest",
  "serde",
  "serde_json",
  "tempfile",
@@ -4593,6 +4660,7 @@ dependencies = [
  "insta",
  "itertools 0.14.0",
  "miette 7.5.0",
+ "pixi_build_discovery",
  "pixi_build_frontend",
  "pixi_config",
  "pixi_consts",
@@ -7572,6 +7640,12 @@ name = "typenum"
 version = "1.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1dccffe3ce07af9386bfd29e80c0ab1a8205a2fc34e4bcd40364df902cfa8f3f"
+
+[[package]]
+name = "ucd-trie"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2896d95c02a80c6d6a5d6e953d479f5ddf2dfdb6a244441010e373ac0fb88971"
 
 [[package]]
 name = "uds_windows"

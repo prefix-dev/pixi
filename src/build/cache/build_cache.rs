@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeSet,
     hash::{Hash, Hasher},
     io::SeekFrom,
     path::PathBuf,
@@ -189,7 +190,7 @@ pub struct CachedBuild {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SourceInfo {
-    pub globs: Vec<String>,
+    pub globs: BTreeSet<String>,
 }
 
 /// A cache entry returned by [`BuildCache::entry`] which enables

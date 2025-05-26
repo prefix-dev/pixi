@@ -10,7 +10,7 @@ use chrono::{DateTime, Utc};
 use futures::TryFutureExt;
 use itertools::Itertools;
 use miette::Diagnostic;
-use pixi_build_frontend::EnabledProtocols;
+use pixi_build_discovery::EnabledProtocols;
 use pixi_spec::PixiSpec;
 use pixi_spec_containers::DependencyMap;
 use pixi_utils::AsyncPrefixGuard;

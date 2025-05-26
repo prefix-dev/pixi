@@ -1,9 +1,7 @@
 use std::{path::PathBuf, str::FromStr};
 
-use crate::{
-    SystemToolSpec, ToolSpec,
-    backend_spec::{CommandSpec, SystemCommandSpec},
-};
+use crate::{SystemToolSpec, ToolSpec};
+use pixi_build_discovery::{CommandSpec, SystemCommandSpec};
 
 /// A backend override that can be used to override the backend tools.
 #[derive(Debug)]

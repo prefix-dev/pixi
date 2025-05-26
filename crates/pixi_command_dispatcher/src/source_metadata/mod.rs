@@ -1,23 +1,19 @@
+use crate::{
+    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
+    InstantiateBackendError, InstantiateBackendSpec, SourceCheckout, SourceCheckoutError,
+    build::WorkDirKey,
+};
 use miette::Diagnostic;
-use pixi_build_frontend::{
-    DiscoveredBackend, EnabledProtocols,
-    types::{
-        ChannelConfiguration, CondaPackageMetadata, PlatformAndVirtualPackages,
-        SourcePackageSpecV1,
-        procedures::conda_metadata::{CondaMetadataParams, CondaMetadataResult},
-    },
+use pixi_build_discovery::{DiscoveredBackend, EnabledProtocols};
+use pixi_build_frontend::types::{
+    ChannelConfiguration, CondaPackageMetadata, PlatformAndVirtualPackages, SourcePackageSpecV1,
+    procedures::conda_metadata::{CondaMetadataParams, CondaMetadataResult},
 };
 use pixi_glob::GlobHashKey;
 use pixi_record::{InputHash, SourceRecord};
 use pixi_spec::SourceSpec;
 use rattler_conda_types::{ChannelConfig, ChannelUrl, PackageRecord};
 use thiserror::Error;
-
-use crate::{
-    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    InstantiateBackendError, InstantiateBackendSpec, SourceCheckout, SourceCheckoutError,
-    build::WorkDirKey,
-};
 
 /// Represents a request for source metadata.
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
@@ -130,19 +126,10 @@ impl SourceMetadataSpec {
         let input_hash = if source.pinned.is_immutable() {
             None
         } else {
-            let input_globs = metadata
-                .input_globs
-                .clone()
-                .into_iter()
-                .flat_map(|glob| glob.into_iter())
-                .collect::<Vec<_>>();
-
+            let input_globs = metadata.input_globs.clone().unwrap_or_default();
             let input_hash = command_queue
                 .glob_hash_cache()
-                .compute_hash(GlobHashKey {
-                    root: source.path.clone(),
-                    globs: input_globs.clone(),
-                })
+                .compute_hash(GlobHashKey::new(&source.path, input_globs.clone()))
                 .await
                 .map_err(SourceMetadataError::GlobHash)?;
 
@@ -257,7 +244,7 @@ pub enum SourceMetadataError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Discovery(#[from] pixi_build_frontend::DiscoveryError),
+    Discovery(#[from] pixi_build_discovery::DiscoveryError),
 
     #[error(transparent)]
     #[diagnostic(transparent)]

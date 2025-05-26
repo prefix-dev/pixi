@@ -6,6 +6,8 @@ use url::Url;
 
 /// Describes how a backend should be instantiated.
 #[derive(Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", serde(tag = "type", rename_all = "kebab-case"))]
 pub enum BackendSpec {
     /// Describes a backend that uses JSON-RPC to communicate with a backend.
     JsonRpc(JsonRpcBackendSpec),
@@ -14,6 +16,8 @@ pub enum BackendSpec {
 
 /// Describes a backend that uses JSON-RPC to communicate with an executable.
 #[derive(Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub struct JsonRpcBackendSpec {
     /// The name of the backend
     pub name: String,
@@ -25,6 +29,8 @@ pub struct JsonRpcBackendSpec {
 /// Describes a command that should be run by calling an executable in a certain
 /// environment.
 #[derive(Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", serde(tag = "type", rename_all = "kebab-case"))]
 pub enum CommandSpec {
     EnvironmentSpec(Box<EnvironmentSpec>),
     System(SystemCommandSpec),
@@ -33,6 +39,8 @@ pub enum CommandSpec {
 /// Describes a command that should be run by calling an executable on the
 /// system.
 #[derive(Debug, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub struct SystemCommandSpec {
     /// The command to run. If this is `None` the command should be inferred
     /// from the name of the backend.
@@ -42,14 +50,24 @@ pub struct SystemCommandSpec {
 /// Describes a conda environment that should be set up in which the backend is
 /// run.
 #[derive(Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub struct EnvironmentSpec {
     /// The main requirement
     pub requirement: (rattler_conda_types::PackageName, NamelessMatchSpec),
 
     /// The requirements for the environment.
+    #[cfg_attr(
+        feature = "serde",
+        serde(skip_serializing_if = "DependencyMap::is_empty")
+    )]
     pub additional_requirements: DependencyMap<rattler_conda_types::PackageName, NamelessMatchSpec>,
 
     /// Additional constraints to apply to the environment
+    #[cfg_attr(
+        feature = "serde",
+        serde(skip_serializing_if = "DependencyMap::is_empty")
+    )]
     pub constraints: DependencyMap<rattler_conda_types::PackageName, NamelessMatchSpec>,
 
     /// The channels to use for solving
@@ -57,6 +75,7 @@ pub struct EnvironmentSpec {
 
     /// The name of the command to invoke in the environment. If not specified,
     /// this should be derived from the name of the backend.
+    #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
     pub command: Option<String>,
 }
 

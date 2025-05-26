@@ -34,7 +34,8 @@ GitUrl = Annotated[
     str, StringConstraints(pattern=r"((git|ssh|http(s)?)|(git@[\w\.]+))(:(\/\/)?)([\w\.@:\/\\-~]+)")
 ]
 ExcludeNewer = Annotated[
-    str, StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2}))?$")
+    str,
+    StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2}))?$"),
 ]
 
 

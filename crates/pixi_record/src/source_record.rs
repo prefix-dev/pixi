@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 use pixi_spec::SourceSpec;
 use rattler_conda_types::{MatchSpec, Matches, NamelessMatchSpec, PackageRecord};
@@ -35,12 +35,15 @@ pub struct SourceRecord {
 /// hash, the metadata is considered invalid.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InputHash {
+    /// The hash of the input files that matched the globs.
     #[serde(
         serialize_with = "rattler_digest::serde::serialize::<_, Sha256>",
         deserialize_with = "rattler_digest::serde::deserialize::<_, Sha256>"
     )]
     pub hash: Sha256Hash,
-    pub globs: Vec<String>,
+
+    /// The globs that were used to compute the hash.
+    pub globs: BTreeSet<String>,
 }
 
 impl From<SourceRecord> for CondaPackageData {
@@ -50,7 +53,8 @@ impl From<SourceRecord> for CondaPackageData {
             location: value.source.into(),
             input: value.input_hash.map(|i| rattler_lock::InputHash {
                 hash: i.hash,
-                globs: i.globs,
+                // TODO: fix this in rattler
+                globs: Vec::from_iter(i.globs.into_iter()),
             }),
             sources: value
                 .sources
@@ -70,7 +74,7 @@ impl TryFrom<CondaSourceData> for SourceRecord {
             source: value.location.try_into()?,
             input_hash: value.input.map(|hash| InputHash {
                 hash: hash.hash,
-                globs: hash.globs,
+                globs: BTreeSet::from_iter(hash.globs.into_iter()),
             }),
             sources: value
                 .sources

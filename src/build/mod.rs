@@ -376,7 +376,7 @@ impl BuildContext {
                             .manifests()
                             .into_iter()
                             .chain(build_result.input_globs)
-                            .collect_vec(),
+                            .collect(),
                     }),
                 record: record.clone(),
             })
@@ -419,10 +419,10 @@ impl BuildContext {
             if let Some(input_globs) = &metadata.input_hash {
                 let new_hash = self
                     .glob_hash_cache
-                    .compute_hash(GlobHashKey {
-                        root: source.path.clone(),
-                        globs: input_globs.globs.clone(),
-                    })
+                    .compute_hash(GlobHashKey::new(
+                        source.path.clone(),
+                        input_globs.globs.clone(),
+                    ))
                     .await?;
                 if new_hash.hash == input_globs.hash {
                     tracing::debug!("found up-to-date cached metadata.");
@@ -493,14 +493,11 @@ impl BuildContext {
                         .into_iter()
                         .flat_map(|glob| glob.into_iter()),
                 )
-                .collect_vec();
+                .collect::<BTreeSet<_>>();
 
             let input_hash = self
                 .glob_hash_cache
-                .compute_hash(GlobHashKey {
-                    root: source.path.clone(),
-                    globs: input_globs.clone(),
-                })
+                .compute_hash(GlobHashKey::new(&source.path, input_globs.clone()))
                 .await?;
             Some(InputHash {
                 hash: input_hash.hash,

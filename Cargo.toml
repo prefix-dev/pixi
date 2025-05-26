@@ -159,6 +159,7 @@ zstd = { version = "0.13.3", default-features = false }
 
 fancy_display = { path = "crates/fancy_display" }
 pixi_allocator = { path = "crates/pixi_allocator" }
+pixi_build_discovery = { path = "crates/pixi_build_discovery" }
 pixi_build_frontend = { path = "crates/pixi_build_frontend" }
 pixi_build_type_conversions = { path = "crates/pixi_build_type_conversions" }
 pixi_build_types = { path = "crates/pixi_build_types" }
