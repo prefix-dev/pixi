@@ -459,6 +459,7 @@ def test_trampoline_extends_path(
         [dummy_trampoline_path], stdout_contains=[extra_parts, path_diff, base_path], env=env
     )
 
+
 def test_trampoline_removes_trampolines_not_in_manifest(
     pixi: Path, tmp_pixi_workspace: Path, trampoline_channel: str
 ) -> None:
