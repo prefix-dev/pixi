@@ -10,6 +10,7 @@ use std::{
 };
 
 use clap::Parser;
+use deno_task_shell::{KillSignal, SignalKind};
 use dialoguer::theme::ColorfulTheme;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
@@ -18,6 +19,8 @@ use pixi_config::{ConfigCli, ConfigCliActivation};
 use pixi_manifest::TaskName;
 use rattler_conda_types::Platform;
 use thiserror::Error;
+use tokio::{signal, task::spawn_blocking};
+use tokio_util::sync::CancellationToken;
 use tracing::Level;
 
 use crate::{
@@ -140,13 +143,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let ctrlc_should_exit_process = Arc::new(AtomicBool::new(true));
     let ctrlc_should_exit_process_clone = Arc::clone(&ctrlc_should_exit_process);
 
-    ctrlc::set_handler(move || {
-        reset_cursor();
-        if ctrlc_should_exit_process_clone.load(Ordering::Relaxed) {
-            exit_process_on_sigint();
-        }
-    })
-    .into_diagnostic()?;
+    // ctrlc::set_handler(move || {
+    //     reset_cursor();
+    //     if ctrlc_should_exit_process_clone.load(Ordering::Relaxed) {
+    //         exit_process_on_sigint();
+    //     }
+    // })
+    // .into_diagnostic()?;
 
     // Construct a task graph from the input arguments
     let search_environment = SearchEnvironments::from_opt_env(
@@ -371,6 +374,75 @@ enum TaskExecutionError {
     UnsupportedPlatformError(#[from] UnsupportedPlatformError),
 }
 
+/// Runs a deno task future forwarding any signals received
+/// to the process.
+///
+/// Signal listeners and ctrl+c listening will be setup.
+pub async fn run_future_forwarding_signals<TOutput>(
+    kill_signal: KillSignal,
+    future: impl std::future::Future<Output = TOutput>,
+) -> TOutput {
+    fn spawn_future_with_cancellation(
+        future: impl std::future::Future<Output = ()> + 'static,
+        token: CancellationToken,
+    ) {
+        // Spawn the future with cancellation token
+        tokio::spawn(async move {
+            // Wait for the future to complete or the token to be cancelled
+            tokio::select! {
+                _ = future => {},
+                _ = token.cancelled() => {},
+            }
+        });
+    }
+
+
+    let token = CancellationToken::new();
+    let _token_drop_guard = token.clone().drop_guard();
+    let _drop_guard = kill_signal.clone().drop_guard();
+
+    //   spawn_future_with_cancellation(
+    //     listen_ctrl_c(kill_signal.clone()),
+    //     token.clone(),
+    //   );
+    #[cfg(unix)]
+    spawn_future_with_cancellation(listen_and_forward_all_signals(kill_signal), token);
+
+    future.await
+}
+
+#[cfg(unix)]
+async fn listen_and_forward_all_signals(kill_signal: KillSignal) {
+    // listen and forward every signal we support
+    use futures::FutureExt as _;
+    eprintln!("Listening for signals...");
+    use crate::cli::signals::SIGNAL_NUMS;
+    let mut futures = Vec::with_capacity(SIGNAL_NUMS.len());
+    for signo in SIGNAL_NUMS.iter().copied() {
+        if signo == libc::SIGKILL || signo == libc::SIGSTOP {
+            continue; // skip, can't listen to these
+        }
+
+        let kill_signal = kill_signal.clone();
+        futures.push(
+            async move {
+                println!("Listening for signal: {}", signo);
+                let Ok(mut stream) =
+                    tokio::signal::unix::signal(tokio::signal::unix::SignalKind::from_raw(signo))
+                else {
+                    return;
+                };
+                let signal_kind: deno_task_shell::SignalKind = signo.into();
+                while let Some(()) = stream.recv().await {
+                    kill_signal.send(signal_kind);
+                }
+            }
+            .boxed_local(),
+        )
+    }
+    futures::future::join_all(futures).await;
+}
+
 /// Called to execute a single command.
 ///
 /// This function is called from [`execute`].
@@ -383,12 +455,17 @@ async fn execute_task(
     };
     let cwd = task.working_directory()?;
 
+    // **Create a KillSignal for managing child processes**
+    let kill_signal = KillSignal::default();
+
+    listen_and_forward_all_signals(kill_signal.clone()).await;
+
     let status_code = deno_task_shell::execute(
         script,
         command_env.clone(),
         cwd,
         Default::default(),
-        Default::default(),
+        kill_signal,
     )
     .await;
 

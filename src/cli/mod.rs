@@ -32,6 +32,7 @@ pub mod search;
 pub mod self_update;
 pub mod shell;
 pub mod shell_hook;
+pub mod signals;
 pub mod task;
 pub mod tree;
 pub mod update;
