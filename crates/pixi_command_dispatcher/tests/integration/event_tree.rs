@@ -215,6 +215,8 @@ impl EventTreeBuilder {
             self.rootes.push(id);
         }
 
+        self.event_nodes.insert(event_id, id);
+
         id
     }
 
