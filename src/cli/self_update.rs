@@ -13,6 +13,7 @@ use tempfile::{NamedTempFile, TempDir};
 use url::Url;
 
 use rattler_conda_types::Version;
+use std::fmt::Display;
 use std::str::FromStr;
 
 /// Update pixi to the latest version or a specific version.
@@ -115,13 +116,11 @@ async fn latest_version() -> miette::Result<Version> {
 }
 
 /// Downloads the target of an URL into a temporary file.
-async fn download<U>(url: U) -> miette::Result<NamedTempFile>
+async fn download<U>(url: U, dest: &mut impl Write) -> miette::Result<()>
 where
-    U: reqwest::IntoUrl + std::fmt::Display,
+    U: reqwest::IntoUrl + Display,
 {
     let url_as_str = url.as_str().to_owned();
-    // Create a temp file to download the archive
-    let archived_tempfile = tempfile::NamedTempFile::new().into_diagnostic()?;
 
     // TODO proxy inject in https://github.com/prefix-dev/pixi/pull/3346
     let client = Client::new();
@@ -141,14 +140,11 @@ where
     } else {
         // Download the archive
         while let Some(chunk) = res.chunk().await.into_diagnostic()? {
-            archived_tempfile
-                .as_file()
-                .write_all(&chunk)
-                .into_diagnostic()?;
+            dest.write_all(&chunk).into_diagnostic()?;
         }
     }
 
-    Ok(archived_tempfile)
+    Ok(())
 }
 
 /// Unpacks a pixi archive (typically downloaded from GitHub releases) into a temporary directory.
@@ -178,9 +174,10 @@ async fn unpack_release_archive(
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     if let Some(url) = args.url {
+        let mut tempfile = tempfile::NamedTempFile::new().into_diagnostic()?;
         // If a URL is provided, download the archive from the URL
-        let new_binary_path = download(url).await?;
-        self_replace::self_replace(new_binary_path).into_diagnostic()?;
+        download(url, &mut tempfile).await?;
+        self_replace::self_replace(tempfile).into_diagnostic()?;
 
         eprintln!(
             "{}Pixi has been updated.",
@@ -248,8 +245,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             archive_name
         );
 
+        let mut archive = tempfile::NamedTempFile::new().into_diagnostic()?;
         // Otherwise, download the latest pixi archive from the default releases repos
-        let archive = download(download_url).await?;
+        download(download_url, &mut archive).await?;
 
         eprintln!(
             "{}Pixi archive downloaded.",
