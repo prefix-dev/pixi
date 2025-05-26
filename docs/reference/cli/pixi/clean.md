@@ -4,7 +4,7 @@
 ## About
 Cleanup the environments
 
---8<-- "docs/reference/cli/pixi/clean_extender.md:description"
+--8<-- "docs/reference/cli/pixi/clean_extender:description"
 
 ## Usage
 ```
@@ -35,4 +35,4 @@ This command removes the information in the .pixi folder. You can specify the en
 Use the `cache` subcommand to clean the cache.
 
 
---8<-- "docs/reference/cli/pixi/clean_extender.md:example"
+--8<-- "docs/reference/cli/pixi/clean_extender:example"

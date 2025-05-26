@@ -15,6 +15,8 @@ rustflags = [
 [env]
 # Required for `dist` to work with linux arm targets: https://github.com/axodotdev/cargo-dist/issues/74#issuecomment-2053680080
 CC_aarch64_unknown_linux_musl = "aarch64-linux-gnu-gcc"
+# Necessary to let `deno_task_shell` know that our executable is called `pixi` instead of `deno`
+DENO_EXECUTABLE_NAME = "pixi"
 
 [target.aarch64-unknown-linux-musl]
 linker = "aarch64-linux-gnu-gcc"

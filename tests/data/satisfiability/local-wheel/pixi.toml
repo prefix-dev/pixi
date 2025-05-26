@@ -1,0 +1,13 @@
+[workspace]
+channels = ["https://prefix.dev/conda-forge"]
+name = "installation-order"
+platforms = ["osx-arm64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+python = "3.13.*"
+
+[pypi-dependencies]
+foobar = { path = "../local-wheel/foobar-0.1.0-py3-none-any.whl" }

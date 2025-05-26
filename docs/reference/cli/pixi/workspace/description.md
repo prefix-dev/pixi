@@ -4,7 +4,7 @@
 ## About
 Commands to manage workspace description
 
---8<-- "docs/reference/cli/pixi/workspace/description_extender.md:description"
+--8<-- "docs/reference/cli/pixi/workspace/description_extender:description"
 
 ## Usage
 ```
@@ -22,4 +22,4 @@ pixi workspace description [OPTIONS] <COMMAND>
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
 :  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 
---8<-- "docs/reference/cli/pixi/workspace/description_extender.md:example"
+--8<-- "docs/reference/cli/pixi/workspace/description_extender:example"

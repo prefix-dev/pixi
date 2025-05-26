@@ -11,8 +11,8 @@ use rattler_shell::{
 use crate::lock_file::UpdateMode;
 use crate::workspace::get_activated_environment_variables;
 use crate::{
-    activation::CurrentEnvVarBehavior, environment::get_update_lock_file_and_prefix, prompt,
-    UpdateLockFileOptions, WorkspaceLocator,
+    UpdateLockFileOptions, WorkspaceLocator, activation::CurrentEnvVarBehavior,
+    environment::get_update_lock_file_and_prefix, prompt,
 };
 use crate::{
     cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
@@ -312,7 +312,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     tracing::info!("Starting shell: {:?}", interactive_shell);
 
     let prompt_hook = if workspace.config().change_ps1() {
-        let prompt_name = prompt::prompt_name(workspace.name(), environment.name());
+        let prompt_name = prompt::prompt_name(workspace.display_name(), environment.name());
         [
             prompt::shell_prompt(&interactive_shell, prompt_name.as_str()),
             prompt::shell_hook(&interactive_shell)
@@ -343,7 +343,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             ShellEnum::Bash(bash) => {
                 start_unix_shell(
                     bash,
-                    vec!["-l", "-i"],
+                    vec!["-i"],
                     env,
                     prompt_hook,
                     &prefix,
@@ -354,7 +354,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             ShellEnum::Zsh(zsh) => {
                 start_unix_shell(
                     zsh,
-                    vec!["-l", "-i"],
+                    vec!["-i"],
                     env,
                     prompt_hook,
                     &prefix,

@@ -4,7 +4,7 @@
 ## About
 Remove an environment from the manifest file
 
---8<-- "docs/reference/cli/pixi/workspace/environment/remove_extender.md:description"
+--8<-- "docs/reference/cli/pixi/workspace/environment/remove_extender:description"
 
 ## Usage
 ```
@@ -16,4 +16,4 @@ pixi workspace environment remove <NAME>
 :  The name of the environment to remove
 <br>**required**: `true`
 
---8<-- "docs/reference/cli/pixi/workspace/environment/remove_extender.md:example"
+--8<-- "docs/reference/cli/pixi/workspace/environment/remove_extender:example"

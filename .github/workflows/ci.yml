@@ -47,12 +47,14 @@ jobs:
     outputs:
       # Flag that is raised when any code is changed
       code: ${{ steps.changed.outputs.code_any_changed }}
+      unix_installer: ${{ steps.unix_installer_changed.outputs.code_any_changed }}
+      win_installer: ${{ steps.win_installer_changed.outputs.code_any_changed }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
           fetch-depth: 0
 
-      - uses: step-security/changed-files@3dbe17c78367e7d60f00d78ae6781a35be47b4a1 # v45
+      - uses: step-security/changed-files@95b56dadb92a30ca9036f16423fd3c088a71ee94 # v46
         id: changed
         with:
           files_yaml: |
@@ -64,6 +66,20 @@ jobs:
               - "!install/**"
               - "!assets/**"
               - "!**/*.md"
+
+      - uses: step-security/changed-files@95b56dadb92a30ca9036f16423fd3c088a71ee94 # v46
+        id: unix_installer_changed
+        with:
+          files_yaml: |
+            code:
+              - "install/install.sh"
+
+      - uses: step-security/changed-files@95b56dadb92a30ca9036f16423fd3c088a71ee94 # v46
+        id: win_installer_changed
+        with:
+          files_yaml: |
+            code:
+              - "install/install.ps1"
 
   pre-commit:
     runs-on: ubuntu-latest
@@ -84,7 +100,7 @@ jobs:
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: Swatinem/rust-cache@f0deed1e0edfc6a9be95417288c0e1099b1eeec3 # v2
+      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: |
@@ -111,7 +127,7 @@ jobs:
       - uses: prefix-dev/setup-pixi@main
         with:
           cache: ${{ github.ref == 'refs/heads/main' }}
-      - uses: Swatinem/rust-cache@f0deed1e0edfc6a9be95417288c0e1099b1eeec3 # v2
+      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
         with:
           workspaces: ". -> target/pixi"
           key: ${{ hashFiles('pixi.lock') }}
@@ -125,7 +141,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - uses: prefix-dev/setup-pixi@main
 
-      - uses: Swatinem/rust-cache@f0deed1e0edfc6a9be95417288c0e1099b1eeec3 # v2
+      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
         with:
           workspaces: ". -> target/pixi"
           key: ${{ hashFiles('pixi.lock') }}
@@ -166,7 +182,7 @@ jobs:
       - uses: prefix-dev/setup-pixi@main
         with:
           cache: ${{ github.ref == 'refs/heads/main' }}
-      - uses: Swatinem/rust-cache@f0deed1e0edfc6a9be95417288c0e1099b1eeec3 # v2
+      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
         with:
           workspaces: ". -> target/pixi"
           key: ${{ hashFiles('pixi.lock') }}
@@ -188,7 +204,7 @@ jobs:
       - uses: prefix-dev/setup-pixi@main
         with:
           cache: ${{ github.ref == 'refs/heads/main' }}
-      - uses: Swatinem/rust-cache@f0deed1e0edfc6a9be95417288c0e1099b1eeec3 # v2
+      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
         with:
           workspaces: ". -> target/pixi"
           key: ${{ hashFiles('pixi.lock') }}
@@ -210,7 +226,7 @@ jobs:
       - uses: prefix-dev/setup-pixi@main
         with:
           cache: ${{ github.ref == 'refs/heads/main' }}
-      - uses: Swatinem/rust-cache@f0deed1e0edfc6a9be95417288c0e1099b1eeec3 # v2
+      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
         with:
           workspaces: ". -> target/pixi"
           key: ${{ hashFiles('pixi.lock') }}
@@ -234,7 +250,7 @@ jobs:
       - uses: prefix-dev/setup-pixi@main
         with:
           cache: ${{ github.ref == 'refs/heads/main' }}
-      - uses: Swatinem/rust-cache@f0deed1e0edfc6a9be95417288c0e1099b1eeec3 # v2
+      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
         with:
           workspaces: ". -> target/pixi"
           key: ${{ hashFiles('pixi.lock') }}
@@ -256,12 +272,12 @@ jobs:
     name: "build binary | linux x86_64"
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: rui314/setup-mold@f80524ca6eeaa76759b57fb78ddce5d87a20c720 # v1
+      - uses: rui314/setup-mold@e16410e7f8d9e167b74ad5697a9089a35126eb50 # v1
       - name: "Setup musl"
         run: |
           sudo apt-get install musl-tools
           rustup target add x86_64-unknown-linux-musl
-      - uses: Swatinem/rust-cache@f0deed1e0edfc6a9be95417288c0e1099b1eeec3 # v2
+      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
       - name: "Build"
         run: >
           cargo build
@@ -270,7 +286,7 @@ jobs:
           --profile $CARGO_BUILD_PROFILE
           --features self_update
       - name: "Upload binary"
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: pixi-linux-x86_64-${{ github.sha }}
           path: ./target/x86_64-unknown-linux-musl/${{ env.CARGO_BUILD_PROFILE }}/pixi
@@ -283,8 +299,8 @@ jobs:
     name: "build binary | macos aarch64"
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: rui314/setup-mold@f80524ca6eeaa76759b57fb78ddce5d87a20c720 # v1
-      - uses: Swatinem/rust-cache@f0deed1e0edfc6a9be95417288c0e1099b1eeec3 # v2
+      - uses: rui314/setup-mold@e16410e7f8d9e167b74ad5697a9089a35126eb50 # v1
+      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
       - name: "Build"
         run: >
           cargo build
@@ -292,7 +308,7 @@ jobs:
           --profile $CARGO_BUILD_PROFILE
           --features self_update
       - name: "Upload binary"
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: pixi-macos-aarch64-${{ github.sha }}
           path: ./target/${{ env.CARGO_BUILD_PROFILE }}/pixi
@@ -305,8 +321,8 @@ jobs:
     name: "build binary | macos x86_64"
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: rui314/setup-mold@f80524ca6eeaa76759b57fb78ddce5d87a20c720 # v1
-      - uses: Swatinem/rust-cache@f0deed1e0edfc6a9be95417288c0e1099b1eeec3 # v2
+      - uses: rui314/setup-mold@e16410e7f8d9e167b74ad5697a9089a35126eb50 # v1
+      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
       - name: "Build"
         run: >
           cargo build
@@ -314,7 +330,7 @@ jobs:
           --profile $CARGO_BUILD_PROFILE
           --features self_update
       - name: "Upload binary"
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: pixi-macos-x86_64-${{ github.sha }}
           path: ./target/${{ env.CARGO_BUILD_PROFILE }}/pixi
@@ -332,7 +348,7 @@ jobs:
       - name: Copy Git Repo to Dev Drive
         run: |
           Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.PIXI_WORKSPACE }}" -Recurse
-      - uses: Swatinem/rust-cache@f0deed1e0edfc6a9be95417288c0e1099b1eeec3 # v2
+      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
         with:
           workspaces: ${{ env.PIXI_WORKSPACE }}
       - name: "Build"
@@ -343,7 +359,7 @@ jobs:
           --profile $env:CARGO_BUILD_PROFILE
           --features self_update
       - name: "Upload binary"
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: pixi-windows-x86_64-${{ github.sha }}
           path: ${{ env.PIXI_WORKSPACE }}/target/${{ env.CARGO_BUILD_PROFILE }}/pixi.exe
@@ -364,7 +380,7 @@ jobs:
           Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.PIXI_WORKSPACE }}" -Recurse
       - name: "Install Rust toolchain"
         run: rustup target add aarch64-pc-windows-msvc
-      - uses: Swatinem/rust-cache@f0deed1e0edfc6a9be95417288c0e1099b1eeec3 # v2
+      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
         with:
           workspaces: ${{ env.PIXI_WORKSPACE }}
       - name: "Build"
@@ -376,7 +392,7 @@ jobs:
           --profile $env:CARGO_BUILD_PROFILE
           --features self_update
       - name: "Upload binary"
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: pixi-windows-aarch64-${{ github.sha }}
           path: ${{ env.PIXI_WORKSPACE }}/target/aarch64-pc-windows-msvc/${{ env.CARGO_BUILD_PROFILE }}/pixi.exe
@@ -402,7 +418,7 @@ jobs:
           Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.PIXI_WORKSPACE }}" -Recurse
           echo "${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_RELEASE }}" | Out-File -Append -Encoding utf8 -FilePath $env:GITHUB_PATH
       - name: Download binary from build
-        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4
+        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4
         with:
           name: pixi-windows-x86_64-${{ github.sha }}
           path: ${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_RELEASE }}
@@ -424,7 +440,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - name: Download binary from build
-        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4
+        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4
         with:
           name: pixi-macos-aarch64-${{ github.sha }}
           path: ${{ env.TARGET_RELEASE }}
@@ -448,7 +464,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - name: Download binary from build
-        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4
+        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4
         with:
           name: pixi-linux-x86_64-${{ github.sha }}
           path: ${{ env.TARGET_RELEASE }}
@@ -479,7 +495,7 @@ jobs:
           Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.PIXI_WORKSPACE }}" -Recurse
           echo "${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_RELEASE }}" | Out-File -Append -Encoding utf8 -FilePath $env:GITHUB_PATH
       - name: Download binary from build
-        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4
+        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4
         with:
           name: pixi-windows-x86_64-${{ github.sha }}
           path: ${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_RELEASE }}
@@ -508,7 +524,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - name: Download binary from build
-        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4
+        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4
         with:
           name: pixi-macos-aarch64-${{ github.sha }}
           path: ${{ env.TARGET_RELEASE }}
@@ -542,7 +558,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - name: Download binary from build
-        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4
+        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4
         with:
           name: pixi-linux-x86_64-${{ github.sha }}
           path: ${{ env.TARGET_RELEASE }}
@@ -583,7 +599,7 @@ jobs:
           Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.PIXI_WORKSPACE }}" -Recurse
           echo "${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_RELEASE }}" | Out-File -Append -Encoding utf8 -FilePath $env:GITHUB_PATH
       - name: Download binary from build
-        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4
+        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4
         with:
           name: pixi-windows-x86_64-${{ github.sha }}
           path: ${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_RELEASE }}
@@ -634,7 +650,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - name: Download binary from build
-        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4
+        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4
         with:
           name: pixi-macos-aarch64-${{ github.sha }}
           path: ${{ env.TARGET_RELEASE }}
@@ -682,7 +698,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - name: Download binary from build
-        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4
+        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4
         with:
           name: pixi-linux-x86_64-${{ github.sha }}
           path: ${{ env.TARGET_RELEASE }}
@@ -761,3 +777,132 @@ jobs:
       sha: ${{ github.sha }}
       arch: macos-aarch64
       runs-on: macos-14
+
+  #
+  # Test unix installer on some platforms
+  #
+
+  test-install-sh-nix:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-14]
+    name: install.sh | ${{ matrix.os }}
+    needs:
+      - determine_changes
+    runs-on: ${{ matrix.os }}
+    if: ${{ needs.determine_changes.outputs.unix_installer == 'true' }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - name: "Install"
+        run: |
+          uname -a
+          test ! -e ~/.pixi/bin/pixi
+          sh < ./install/install.sh
+          ~/.pixi/bin/pixi --version
+
+  test-install-sh-alpine:
+    name: install.sh | alpine linux
+    needs:
+      - determine_changes
+    runs-on: ubuntu-latest
+    if: ${{ needs.determine_changes.outputs.unix_installer == 'true' }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - name: Setup latest Alpine Linux
+        uses: jirutka/setup-alpine@de807bada44fc7dce6bbd00672b92827aa5f3c99 # v1
+      - name: "Install"
+        run: |
+          uname -a
+          cat /etc/alpine-release
+          test ! -e ~/.pixi/bin/pixi
+          sh < ./install/install.sh
+          ~/.pixi/bin/pixi --version
+        shell: alpine.sh {0}
+
+  test-install-sh-without-tar:
+    name: install.sh | linux without tar
+    needs:
+      - determine_changes
+    runs-on: ubuntu-latest
+    if: ${{ needs.determine_changes.outputs.unix_installer == 'true' }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - name: Setup latest Alpine Linux
+        uses: jirutka/setup-alpine@cf5fddcea495dcc19c0f991c6f6fa6a7abf3d50a # v1
+      - name: "Install"
+        run: |
+          uname -a
+          cat /etc/alpine-release
+          test ! -e ~/.pixi/bin/pixi
+          mv $(which tar) $(which tar).bak
+          ! hash tar
+          sh < ./install/install.sh
+          ~/.pixi/bin/pixi --version
+        shell: alpine.sh --root {0}
+
+  test-install-sh-msys2:
+    name: install.sh | msys2
+    needs:
+      - determine_changes
+    runs-on: windows-latest
+    if: ${{ needs.determine_changes.outputs.unix_installer == 'true' }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - name: Setup ucrt64 msys2
+        uses: msys2/setup-msys2@61f9e5e925871ba6c9e3e8da24ede83ea27fa91f # v2
+        with:
+          msystem: UCRT64
+          install: unzip
+      - name: "Install"
+        run: |
+          uname -a
+          test ! -e ~/.pixi/bin/pixi.exe
+          sh < ./install/install.sh
+          ~/.pixi/bin/pixi.exe --version
+          ~/.pixi/bin/pixi --version
+        shell: msys2 {0}
+
+  test-install-sh-msys2-without-unzip:
+    name: install.sh | msys2 without unzip
+    needs:
+      - determine_changes
+    runs-on: windows-latest
+    if: ${{ needs.determine_changes.outputs.unix_installer == 'true' }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - name: Setup ucrt64 msys2
+        uses: msys2/setup-msys2@61f9e5e925871ba6c9e3e8da24ede83ea27fa91f # v2
+        with:
+          msystem: UCRT64
+      - name: "Install"
+        run: |
+          uname -a
+          test ! -e ~/.pixi/bin/pixi
+          sh < ./install/install.sh
+          ~/.pixi/bin/pixi --version
+        shell: msys2 {0}
+
+  test-install-ps1:
+    name: install.ps1
+    needs:
+      - determine_changes
+    runs-on: windows-latest
+    if: ${{ needs.determine_changes.outputs.win_installer == 'true' }}
+    env:
+      PIXI_REPOURL: "https://github.com/prefix-dev/pixi/"
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - name: Setup ucrt64 msys2
+        uses: msys2/setup-msys2@61f9e5e925871ba6c9e3e8da24ede83ea27fa91f # v2
+        with:
+          msystem: UCRT64
+      - name: "Before Install"
+        run: test ! -e $USERPROFILE/.pixi/bin/pixi.exe
+        shell: msys2 {0}
+
+      - name: "Install"
+        run: ${{ github.workspace }}/install/install.ps1
+
+      - name: "After Install"
+        run: $USERPROFILE/.pixi/bin/pixi.exe --version
+        shell: msys2 {0}

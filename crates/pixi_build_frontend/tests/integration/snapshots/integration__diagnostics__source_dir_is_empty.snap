@@ -1,0 +1,6 @@
+---
+source: crates/pixi_build_frontend/tests/integration/diagnostics.rs
+expression: snapshot
+---
+  × the source directory does not contain a supported manifest
+  help: Ensure that the source directory contains a valid pixi.toml or meta.yaml file.

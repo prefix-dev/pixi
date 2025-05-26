@@ -1,0 +1,12 @@
+[workspace]
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+name = "test_build_conda_package"
+platforms = ["linux-64"]
+preview = ["pixi-build"]
+version = "1.0.0"
+
+[dependencies.test_build_conda_package]
+path = "package"

@@ -1,4 +1,3 @@
-# Transitioning from the `conda` or `mamba` to `pixi`
 Welcome to the guide designed to ease your transition from `conda` or `mamba` to `pixi`.
 This document compares key commands and concepts between these tools, highlighting `pixi`'s unique approach to managing environments and packages.
 With `pixi`, you'll experience a workspace-based workflow, enhancing your development process, and allowing for easy sharing of your work.
@@ -77,7 +76,7 @@ This will create a new workspace with the dependencies from the `environment.yml
 ??? tip "Exporting your environment"
     If you are working with Conda users or systems, you can [export your environment to a `environment.yml`](../reference/cli/pixi/workspace/export.md) file to share them.
     ```shell
-    pixi project export conda-environment
+    pixi workspace export conda-environment
     ```
     Additionally you can export a [conda explicit specification](../reference/cli/pixi/workspace/export.md).
 

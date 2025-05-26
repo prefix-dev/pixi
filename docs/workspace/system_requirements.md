@@ -1,4 +1,3 @@
-# System Requirements in pixi
 **System requirements** tell Pixi the minimum system specifications needed to install and run your workspace’s environment.
 They ensure that the dependencies match the operating system and hardware of your machine.
 
@@ -80,7 +79,6 @@ cuda = "12"  # Replace "12" with the specific CUDA version you intend to use
 1. Can `system-requirements` enforce a specific CUDA runtime version?
     - No. The `system-requirements` field is used to specify the maximum supported CUDA version based on the host’s NVIDIA driver API.
 Adding this field ensures that packages depending on `__cuda >= {version}` are resolved correctly.
-2.
 
 ### Setting System Requirements environment specific
 This can be set per `feature` in the `the manifest` file.

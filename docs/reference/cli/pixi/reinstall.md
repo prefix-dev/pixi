@@ -4,7 +4,7 @@
 ## About
 Re-install an environment, both updating the lockfile and re-installing the environment
 
---8<-- "docs/reference/cli/pixi/reinstall_extender.md:description"
+--8<-- "docs/reference/cli/pixi/reinstall_extender:description"
 
 ## Usage
 ```
@@ -15,6 +15,13 @@ pixi reinstall [OPTIONS] [PACKAGE]...
 - <a id="arg-<PACKAGE>" href="#arg-<PACKAGE>">`<PACKAGE>`</a>
 :  Specifies the package that should be reinstalled. If no package is given, the whole environment will be reinstalled
 <br>May be provided more than once.
+
+## Options
+- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
+:  The environment to install
+<br>May be provided more than once.
+- <a id="arg---all" href="#arg---all">`--all (-a)`</a>
+:  Install all environments
 
 ## Config Options
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
@@ -36,11 +43,6 @@ pixi reinstall [OPTIONS] [PACKAGE]...
 - <a id="arg---locked" href="#arg---locked">`--locked`</a>
 :  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 <br>**env**: `PIXI_LOCKED`
-- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
-:  The environment to install
-<br>May be provided more than once.
-- <a id="arg---all" href="#arg---all">`--all (-a)`</a>
-:  Install all environments
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
@@ -56,4 +58,4 @@ This command reinstalls an environment, if the lockfile is not up-to-date it wil
 If you want to re-install all environments, you can use the `--all` flag.
 
 
---8<-- "docs/reference/cli/pixi/reinstall_extender.md:example"
+--8<-- "docs/reference/cli/pixi/reinstall_extender:example"

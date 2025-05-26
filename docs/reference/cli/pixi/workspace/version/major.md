@@ -4,11 +4,11 @@
 ## About
 Bump the workspace version to MAJOR
 
---8<-- "docs/reference/cli/pixi/workspace/version/major_extender.md:description"
+--8<-- "docs/reference/cli/pixi/workspace/version/major_extender:description"
 
 ## Usage
 ```
 pixi workspace version major
 ```
 
---8<-- "docs/reference/cli/pixi/workspace/version/major_extender.md:example"
+--8<-- "docs/reference/cli/pixi/workspace/version/major_extender:example"

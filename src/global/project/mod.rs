@@ -1,3 +1,25 @@
+use self::trampoline::{Configuration, ConfigurationParseError, Trampoline};
+use super::{
+    BinDir, EnvRoot, StateChange, StateChanges,
+    common::{EnvironmentUpdate, get_install_changes, shortcuts_sync_status},
+    install::find_binary_by_name,
+    trampoline::{self, GlobalExecutable},
+};
+use crate::{
+    global::{
+        EnvDir,
+        common::{
+            channel_url_to_prioritized_channel, expose_scripts_sync_status, find_package_records,
+        },
+        find_executables, find_executables_for_many_records,
+        install::{create_executable_trampolines, script_exec_mapping},
+        project::environment::environment_specs_in_sync,
+    },
+    prefix::{Executable, Prefix},
+    repodata::Repodata,
+    rlimit::try_increase_rlimit_to_sensible,
+};
+
 use std::{
     ffi::OsStr,
     fmt::{Debug, Formatter},
@@ -16,12 +38,12 @@ use indexmap::{IndexMap, IndexSet};
 use is_executable::IsExecutable;
 use itertools::Itertools;
 pub(crate) use manifest::{ExposedType, Manifest, Mapping};
-use miette::{miette, Context, IntoDiagnostic};
+use miette::{Context, IntoDiagnostic, miette};
 use once_cell::sync::OnceCell;
 use parsed_manifest::ParsedManifest;
 pub(crate) use parsed_manifest::{ExposedName, ParsedEnvironment};
-use pixi_config::{default_channel_config, pixi_home, Config};
-use pixi_consts::consts;
+use pixi_config::{Config, default_channel_config, pixi_home};
+use pixi_consts::consts::{self, CACHED_PACKAGES};
 use pixi_manifest::PrioritizedChannel;
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
 use pixi_utils::{executable_from_path, reqwest::build_reqwest_clients};
@@ -30,39 +52,17 @@ use rattler::{
     package_cache::PackageCache,
 };
 use rattler_conda_types::{
-    menuinst::MenuMode, ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform,
-    PrefixRecord,
+    ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, PrefixRecord,
+    menuinst::MenuMode,
 };
 use rattler_lock::Matches;
 use rattler_repodata_gateway::Gateway;
-use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
+use rattler_solve::{SolverImpl, SolverTask, resolvo::Solver};
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use reqwest_middleware::ClientWithMiddleware;
 use tokio::sync::Semaphore;
 use toml_edit::DocumentMut;
 use uv_configuration::RAYON_INITIALIZE;
-
-use self::trampoline::{Configuration, ConfigurationParseError, Trampoline};
-use super::{
-    common::{get_install_changes, shortcut_sync_status, EnvironmentUpdate},
-    install::find_binary_by_name,
-    trampoline::{self, GlobalExecutable},
-    BinDir, EnvRoot, StateChange, StateChanges,
-};
-use crate::{
-    global::{
-        common::{
-            channel_url_to_prioritized_channel, expose_scripts_sync_status, find_package_records,
-        },
-        find_executables, find_executables_for_many_records,
-        install::{create_executable_trampolines, script_exec_mapping},
-        project::environment::environment_specs_in_sync,
-        EnvDir,
-    },
-    prefix::{Executable, Prefix},
-    repodata::Repodata,
-    rlimit::try_increase_rlimit_to_sensible,
-};
 
 mod environment;
 mod manifest;
@@ -315,9 +315,9 @@ impl Project {
                 );
                 return Self::try_from_existing_installation(&manifest_path, env_root, bin_dir)
                     .await
-                    .wrap_err_with(|| {
-                        "Failed to create global manifest from existing installation"
-                    });
+                    .wrap_err_with(
+                        || "Failed to create global manifest from existing installation",
+                    );
             } else {
                 tracing::debug!("Create an empty global manifest.");
                 tokio_fs::File::create(&manifest_path)
@@ -580,7 +580,7 @@ impl Project {
         LazyLock::force(&RAYON_INITIALIZE);
 
         // Install the environment
-        let package_cache = PackageCache::new(pixi_config::get_cache_dir()?.join("pkgs"));
+        let package_cache = PackageCache::new(pixi_config::get_cache_dir()?.join(CACHED_PACKAGES));
         let prefix = self.environment_prefix(env_name).await?;
         let authenticated_client = self.authenticated_client()?.clone();
         let result = await_in_progress(
@@ -645,6 +645,13 @@ impl Project {
                 env_name,
                 StateChange::RemovedExposed(binary_path.exposed_name()),
             );
+        }
+
+        #[cfg(unix)] // Completions are only supported on unix-like systems
+        {
+            // Prune old completions
+            let completions_dir = super::completions::CompletionsDir::from_env().await?;
+            completions_dir.prune_old_completions()?;
         }
 
         state_changes.insert_change(env_name, StateChange::RemovedEnvironment);
@@ -858,10 +865,8 @@ impl Project {
         let env_dir =
             EnvDir::from_path(self.env_root.clone().path().join(env_name.clone().as_str()));
 
-        let prefix_records = self
-            .environment_prefix(env_name)
-            .await?
-            .find_installed_packages()?;
+        let prefix = self.environment_prefix(env_name).await?;
+        let prefix_records = prefix.find_installed_packages()?;
         let specs_in_sync =
             environment_specs_in_sync(&prefix_records, &specs, environment.platform).await?;
         if !specs_in_sync {
@@ -884,7 +889,7 @@ impl Project {
         tracing::debug!("Verify that the shortcuts are in sync with the environment");
         let shortcuts = environment.shortcuts.clone().unwrap_or_default();
         let (shortcuts_to_remove, shortcuts_to_add) =
-            shortcut_sync_status(shortcuts, prefix_records)?;
+            shortcuts_sync_status(shortcuts, prefix_records, prefix.root())?;
         if !shortcuts_to_remove.is_empty() || !shortcuts_to_add.is_empty() {
             tracing::debug!(
                 "Environment {} shortcuts are not in sync: to_remove: {}, to_add: {}",
@@ -1015,8 +1020,11 @@ impl Project {
         // Expose executables
         state_changes |= self.expose_executables_from_environment(env_name).await?;
 
-        // Install shortcuts
+        // Sync shortcuts
         state_changes |= self.sync_shortcuts(env_name).await?;
+
+        // Sync completions
+        state_changes |= self.sync_completions(env_name).await?;
 
         Ok(state_changes)
     }
@@ -1131,7 +1139,7 @@ impl Project {
 
         let shortcuts = environment.shortcuts.clone().unwrap_or_default();
         let (records_to_install, records_to_uninstall) =
-            shortcut_sync_status(shortcuts, prefix_records)?;
+            shortcuts_sync_status(shortcuts, prefix_records, prefix.root())?;
 
         for record in records_to_install {
             rattler_menuinst::install_menuitems_for_record(
@@ -1199,6 +1207,60 @@ impl Project {
         Ok(state_changes)
     }
 
+    #[cfg(unix)] // Completions are only supported on unix like systems
+    pub async fn sync_completions(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<StateChanges> {
+        let mut state_changes = StateChanges::default();
+
+        let environment = self.environment(env_name).ok_or(miette::miette!(
+            "Environment {} not found in manifest.",
+            env_name.fancy_display()
+        ))?;
+        let prefix = self.environment_prefix(env_name).await?;
+        let execs_all = self
+            .executables_of_all_dependencies(env_name)
+            .await?
+            .into_iter()
+            .map(|exec| exec.name)
+            .collect();
+
+        let completions_dir = crate::global::completions::CompletionsDir::from_env().await?;
+        let (completions_to_remove, completions_to_add) =
+            super::completions::completions_sync_status(
+                environment.exposed.clone(),
+                execs_all,
+                prefix.root(),
+                &completions_dir,
+            )
+            .await?;
+
+        for completion_to_remove in completions_to_remove {
+            let state_change = completion_to_remove.remove().await?;
+            state_changes.insert_change(env_name, state_change);
+        }
+
+        for completion_to_add in completions_to_add {
+            let Some(state_change) = completion_to_add.install().await? else {
+                continue;
+            };
+
+            state_changes.insert_change(env_name, state_change);
+        }
+
+        Ok(state_changes)
+    }
+
+    #[cfg(not(unix))]
+    pub async fn sync_completions(
+        &self,
+        _env_name: &EnvironmentName,
+    ) -> miette::Result<StateChanges> {
+        let state_changes = StateChanges::default();
+        Ok(state_changes)
+    }
+
     /// Returns a semaphore than can be used to limit the number of concurrent
     /// according to the user configuration.
     fn concurrent_downloads_semaphore(&self) -> Arc<Semaphore> {
@@ -1231,7 +1293,7 @@ impl Repodata for Project {
 mod tests {
     use std::{collections::HashMap, io::Write};
 
-    use fake::{faker::filesystem::zh_tw::FilePath, Fake};
+    use fake::{Fake, faker::filesystem::en::FilePath};
     use itertools::Itertools;
     use rattler_conda_types::{
         NamedChannelOrUrl, PackageRecord, Platform, RepoDataRecord, VersionWithSource,

@@ -1,0 +1,5 @@
+---
+source: crates/pixi_build_frontend/tests/integration/diagnostics.rs
+expression: error_to_snapshot(&err)
+---
+  × failed to discover a valid project manifest, the source path 'non/existing/path' could not be found

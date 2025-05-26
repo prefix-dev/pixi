@@ -4,7 +4,7 @@
 ## About
 Information about the system, workspace and environments for the current machine
 
---8<-- "docs/reference/cli/pixi/info_extender.md:description"
+--8<-- "docs/reference/cli/pixi/info_extender:description"
 
 ## Usage
 ```
@@ -21,4 +21,4 @@ pixi info [OPTIONS]
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
 :  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 
---8<-- "docs/reference/cli/pixi/info_extender.md:example"
+--8<-- "docs/reference/cli/pixi/info_extender:example"

@@ -1,7 +1,7 @@
 [workspace]
 channels = ["https://prefix.dev/conda-forge"]
 name = "test-example"
-platforms = ["linux-64"]
+platforms = ["CURRENT_PLATFORM"]
 preview = ["pixi-build"]
 
 

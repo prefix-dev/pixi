@@ -4,8 +4,8 @@ use itertools::Itertools;
 use miette::{Diagnostic, NamedSource, Report};
 use pixi_consts::consts;
 use pixi_manifest::{
-    utils::WithSourceCode, ExplicitManifestError, LoadManifestsError, Manifests, TomlError,
-    WarningWithSource, WithWarnings, WorkspaceDiscoveryError,
+    ExplicitManifestError, LoadManifestsError, Manifests, TomlError, WarningWithSource,
+    WithWarnings, WorkspaceDiscoveryError, utils::WithSourceCode,
 };
 use thiserror::Error;
 
@@ -40,6 +40,7 @@ pub struct WorkspaceLocator {
     with_closest_package: bool,
     emit_warnings: bool,
     consider_environment: bool,
+    ignore_pixi_version_check: bool,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -118,6 +119,15 @@ impl WorkspaceLocator {
         }
     }
 
+    /// When the current version conflicts with the workspace requirement,
+    /// whether to generate an error.
+    pub fn with_ignore_pixi_version_check(self, ignore_pixi_version_check: bool) -> Self {
+        Self {
+            ignore_pixi_version_check,
+            ..self
+        }
+    }
+
     /// Called to locate the workspace or error out if none could be located.
     pub fn locate(self) -> Result<Workspace, WorkspaceLocatorError> {
         // Determine the search root
@@ -140,14 +150,14 @@ impl WorkspaceLocator {
         {
             Ok(manifests) => manifests,
             Err(WorkspaceDiscoveryError::Toml(err)) => {
-                return Err(WorkspaceLocatorError::Toml(err))
+                return Err(WorkspaceLocatorError::Toml(err));
             }
             Err(WorkspaceDiscoveryError::Io(err)) => return Err(WorkspaceLocatorError::Io(err)),
             Err(WorkspaceDiscoveryError::ExplicitManifestError(err)) => {
-                return Err(WorkspaceLocatorError::ExplicitManifestError(err))
+                return Err(WorkspaceLocatorError::ExplicitManifestError(err));
             }
             Err(WorkspaceDiscoveryError::Canonicalize(source, path)) => {
-                return Err(WorkspaceLocatorError::Canonicalize { path, source })
+                return Err(WorkspaceLocatorError::Canonicalize { path, source });
             }
         };
 
@@ -191,7 +201,13 @@ impl WorkspaceLocator {
             );
         }
 
-        Ok(Workspace::from_manifests(discovered_manifests))
+        let workspace = Workspace::from_manifests(discovered_manifests);
+
+        if !self.ignore_pixi_version_check {
+            workspace.verify_current_pixi_meets_requirement()?;
+        }
+
+        Ok(workspace)
     }
 
     /// Apply any environment overrides to a potentially discovered workspace.
@@ -210,10 +226,10 @@ impl WorkspaceLocator {
             if let Some(env_manifest_path) = env_manifest_path {
                 if &env_manifest_path != discovered_manifest_path && in_shell && emit_warnings {
                     tracing::warn!(
-                            "Using local manifest {} rather than {} from environment variable `PIXI_PROJECT_MANIFEST`",
-                            discovered_manifest_path.display(),
-                            env_manifest_path.display(),
-                        );
+                        "Using local manifest {} rather than {} from environment variable `PIXI_PROJECT_MANIFEST`",
+                        discovered_manifest_path.display(),
+                        env_manifest_path.display(),
+                    );
                 }
             }
         // Else, if we didn't find a workspace manifest, but we there is an
@@ -226,7 +242,7 @@ impl WorkspaceLocator {
                 Err(LoadManifestsError::ProvenanceError(err)) => {
                     return Err(WorkspaceLocatorError::ExplicitManifestError(
                         ExplicitManifestError::InvalidManifest(err),
-                    ))
+                    ));
                 }
             }
         }

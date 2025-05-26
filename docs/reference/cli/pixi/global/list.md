@@ -4,7 +4,7 @@
 ## About
 Lists all packages previously installed into a globally accessible location via `pixi global install`.
 
---8<-- "docs/reference/cli/pixi/global/list_extender.md:description"
+--8<-- "docs/reference/cli/pixi/global/list_extender:description"
 
 ## Usage
 ```
@@ -51,4 +51,4 @@ Per environment:
 - Green: packages that are explicitly installed.
 
 
---8<-- "docs/reference/cli/pixi/global/list_extender.md:example"
+--8<-- "docs/reference/cli/pixi/global/list_extender:example"

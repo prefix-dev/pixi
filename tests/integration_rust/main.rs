@@ -9,3 +9,4 @@ mod solve_group_tests;
 mod task_tests;
 mod test_activation;
 mod update_tests;
+mod upgrade_tests;

@@ -1,6 +1,3 @@
-
-# Environments
-
 Pixi is a tool to manage virtual environments.
 This document explains what an environment looks like and how to use it.
 
@@ -136,62 +133,8 @@ $ (default) which python
 !!! warning
     It is not encouraged to use the traditional `conda activate`-like activation, as deactivating the environment is not really possible. Use `pixi shell` instead.
 
-### Using `pixi` with `direnv`
-
-??? note "Installing direnv"
-
-    Of course you can use `pixi` to install `direnv` globally. We recommend to run
-
-    ```
-    pixi global install direnv
-    ```
-
-    to install the latest version of `direnv` on your computer.
-
-This allows you to use `pixi` in combination with `direnv`.
-Enter the following into your `.envrc` file:
-
-```shell title=".envrc"
-watch_file pixi.lock # (1)!
-eval "$(pixi shell-hook)" # (2)!
-```
-
-1. This ensures that every time your `pixi.lock` changes, `direnv` invokes the shell-hook again.
-2. This installs if needed, and activates the environment. `direnv` ensures that the environment is deactivated when you leave the directory.
-
-```shell
-$ cd my-project
-direnv: error /my-project/.envrc is blocked. Run `direnv allow` to approve its content
-$ direnv allow
-direnv: loading /my-project/.envrc
-✔ Project in /my-project is ready to use!
-direnv: export +CONDA_DEFAULT_ENV +CONDA_PREFIX +PIXI_ENVIRONMENT_NAME +PIXI_ENVIRONMENT_PLATFORMS +PIXI_PROJECT_MANIFEST +PIXI_PROJECT_NAME +PIXI_PROJECT_ROOT +PIXI_PROJECT_VERSION +PIXI_PROMPT ~PATH
-$ which python
-/my-project/.pixi/envs/default/bin/python
-$ cd ..
-direnv: unloading
-$ which python
-python not found
-```
-
-## Environment variables
-
-The following environment variables are set by pixi, when using the `pixi run`, `pixi shell`, or `pixi shell-hook` command:
-
-- `PIXI_PROJECT_ROOT`: The root directory of the project.
-- `PIXI_PROJECT_NAME`: The name of the project.
-- `PIXI_PROJECT_MANIFEST`: The path to the manifest file (`pixi.toml`).
-- `PIXI_PROJECT_VERSION`: The version of the project.
-- `PIXI_PROMPT`: The prompt to use in the shell, also used by `pixi shell` itself.
-- `PIXI_ENVIRONMENT_NAME`: The name of the environment, defaults to `default`.
-- `PIXI_ENVIRONMENT_PLATFORMS`: Comma separated list of platforms supported by the project.
-- `CONDA_PREFIX`: The path to the environment. (Used by multiple tools that already understand conda environments)
-- `CONDA_DEFAULT_ENV`: The name of the environment. (Used by multiple tools that already understand conda environments)
-- `PATH`: We prepend the `bin` directory of the environment to the `PATH` variable, so you can use the tools installed in the environment directly.
-- `INIT_CWD`: ONLY IN `pixi run`: The directory where the command was run from.
-
-!!! note
-    Even though the variables are environment variables these cannot be overridden. E.g. you can not change the root of the project by setting `PIXI_PROJECT_ROOT` in the environment.
+!!! tip ""
+    See our [direnv page](../integration/third_party/direnv.md) on how to leverage `pixi shell-hook` to integrate with direnv.
 
 ## Solving environments
 
@@ -206,7 +149,7 @@ If you want to learn more about the solving process, you can read these:
 
 Pixi solves both the `conda` and `PyPI` dependencies, where the `PyPI` dependencies use the conda packages as a base, so you can be sure that the packages are compatible with each other.
 These solvers are split between the [`rattler`](https://github.com/conda/rattler) and [`uv`](https://github.com/astral-sh/uv) library, these control the heavy lifting of the solving process, which is executed by our custom SAT solver: [`resolvo`](https://github.com/mamba-org/resolvo).
-`resolve` is able to solve multiple ecosystem like `conda` and `PyPI`. It implements the lazy solving process for `PyPI` packages, which means that it only downloads the metadata of the packages that are needed to solve the environment.
+`resolvo` is able to solve multiple ecosystem like `conda` and `PyPI`. It implements the lazy solving process for `PyPI` packages, which means that it only downloads the metadata of the packages that are needed to solve the environment.
 It also supports the `conda` way of solving, which means that it downloads the metadata of all the packages at once and then solves in one go.
 
 For the `[pypi-dependencies]`, `uv` implements `sdist` building to retrieve the metadata of the packages, and `wheel` building to install the packages.

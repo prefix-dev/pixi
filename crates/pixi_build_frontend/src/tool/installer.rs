@@ -8,7 +8,7 @@ use rattler_shell::{
     activation::{ActivationVariables, Activator},
     shell::ShellEnum,
 };
-use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
+use rattler_solve::{SolverImpl, SolverTask, resolvo::Solver};
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use reqwest_middleware::ClientWithMiddleware;
 use std::fmt::Debug;
@@ -16,10 +16,10 @@ use std::future::Future;
 use std::path::PathBuf;
 
 use super::{
-    cache::ToolCache, IsolatedTool, IsolatedToolSpec, SystemTool, Tool, ToolCacheError, ToolSpec,
+    IsolatedTool, IsolatedToolSpec, SystemTool, Tool, ToolCacheError, ToolSpec, cache::ToolCache,
 };
 
-use miette::{miette, IntoDiagnostic};
+use miette::{IntoDiagnostic, miette};
 
 /// A trait that is responsible for installing tools.
 pub trait ToolInstaller {

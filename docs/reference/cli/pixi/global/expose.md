@@ -4,7 +4,7 @@
 ## About
 Interact with the exposure of binaries in the global environment
 
---8<-- "docs/reference/cli/pixi/global/expose_extender.md:description"
+--8<-- "docs/reference/cli/pixi/global/expose_extender:description"
 
 ## Usage
 ```
@@ -26,4 +26,4 @@ Interact with the exposure of binaries in the global environment
 `pixi global expose remove python310 --environment myenv` will remove the exposed name `python310` from the environment `myenv`
 
 
---8<-- "docs/reference/cli/pixi/global/expose_extender.md:example"
+--8<-- "docs/reference/cli/pixi/global/expose_extender:example"

@@ -2,6 +2,8 @@ from pathlib import Path
 
 import pytest
 
+from .common import exec_extension
+
 
 def pytest_addoption(parser: pytest.Parser) -> None:
     parser.addoption(
@@ -15,7 +17,8 @@ def pytest_addoption(parser: pytest.Parser) -> None:
 @pytest.fixture
 def pixi(request: pytest.FixtureRequest) -> Path:
     pixi_build = request.config.getoption("--pixi-build")
-    return Path(__file__).parent.joinpath(f"../../target/pixi/{pixi_build}/pixi")
+    pixi_path = Path(__file__).parent.joinpath(f"../../target/pixi/{pixi_build}/pixi")
+    return Path(exec_extension(str(pixi_path)))
 
 
 @pytest.fixture
@@ -47,6 +50,22 @@ disable-sharded = false
 @pytest.fixture
 def test_data() -> Path:
     return Path(__file__).parents[1].joinpath("data").resolve()
+
+
+@pytest.fixture
+def pypi_data(test_data: Path) -> Path:
+    """
+    Returns the pixi pypi test data
+    """
+    return test_data.joinpath("pypi")
+
+
+@pytest.fixture
+def pixi_tomls(test_data: Path) -> Path:
+    """
+    Returns the pixi pypi test data
+    """
+    return test_data.joinpath("pixi_tomls")
 
 
 @pytest.fixture
@@ -94,5 +113,21 @@ def shortcuts_channel_1(channels: Path) -> str:
     return channels.joinpath("shortcuts_channel_1").as_uri()
 
 
+@pytest.fixture
+def post_link_script_channel(channels: Path) -> str:
+    return channels.joinpath("post_link_script_channel").as_uri()
+
+
+@pytest.fixture
+def deno_channel(channels: Path) -> str:
+    return channels.joinpath("deno_channel").as_uri()
+
+
+@pytest.fixture
+def completions_channel_1(channels: Path) -> str:
+    return channels.joinpath("completions_channel_1").as_uri()
+
+
+@pytest.fixture
 def doc_pixi_workspaces() -> Path:
     return Path(__file__).parents[2].joinpath("docs", "source_files", "pixi_workspaces")

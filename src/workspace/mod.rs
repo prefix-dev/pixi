@@ -15,6 +15,7 @@ use std::{
     fmt::{Debug, Formatter},
     hash::Hash,
     path::{Path, PathBuf},
+    str::FromStr,
     sync::Arc,
 };
 
@@ -27,17 +28,19 @@ use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use once_cell::sync::OnceCell;
 use pep508_rs::Requirement;
+use pixi_command_dispatcher::{CacheDirs, CommandDispatcher, CommandDispatcherBuilder, Limits};
 use pixi_config::Config;
-use pixi_consts::consts;
+use pixi_consts::consts::{self, CACHED_BUILD_WORK_DIR};
 use pixi_manifest::{
-    pypi::PyPiPackageName, AssociateProvenance, EnvironmentName, Environments,
+    AssociateProvenance, EnvironmentName, Environments, ExplicitManifestError,
     HasWorkspaceManifest, LoadManifestsError, ManifestProvenance, Manifests, PackageManifest,
     SpecType, WithProvenance, WithWarnings, WorkspaceManifest,
 };
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::SourceSpec;
 use pixi_utils::reqwest::build_reqwest_clients;
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
-use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform};
+use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform, Version};
 use rattler_lock::{LockFile, LockedPackageRef};
 use rattler_networking::s3_middleware;
 use rattler_repodata_gateway::Gateway;
@@ -49,7 +52,7 @@ pub use workspace_mut::WorkspaceMut;
 use xxhash_rust::xxh3::xxh3_64;
 
 use crate::{
-    activation::{initialize_env_variables, CurrentEnvVarBehavior},
+    activation::{CurrentEnvVarBehavior, initialize_env_variables},
     diff::LockFileDiff,
     lock_file::filter_lock_file,
 };
@@ -127,6 +130,11 @@ pub struct Workspace {
     /// Root folder of the workspace
     root: PathBuf,
 
+    /// The name of the workspace based on the location of the workspace.
+    /// This is used to determine the name of the workspace when no name is
+    /// specified.
+    manifest_location_name: Option<String>,
+
     /// Reqwest client shared for this workspace.
     /// This is wrapped in a `OnceLock` to allow for lazy initialization.
     // TODO: once https://github.com/rust-lang/rust/issues/109737 is stabilized, switch to OnceLock
@@ -173,8 +181,12 @@ impl Debug for Workspace {
 }
 
 pub type PypiDeps = indexmap::IndexMap<
-    PyPiPackageName,
-    (Requirement, Option<pixi_manifest::PypiDependencyLocation>),
+    PypiPackageName,
+    (
+        Requirement,
+        Option<PixiPypiSpec>,
+        Option<pixi_manifest::PypiDependencyLocation>,
+    ),
 >;
 
 pub type MatchSpecs = indexmap::IndexMap<PackageName, (MatchSpec, SpecType)>;
@@ -193,6 +205,9 @@ impl Workspace {
             .parent()
             .expect("manifest path should always have a parent")
             .to_owned();
+
+        // Determine the name of the workspace based on the location of the manifest.
+        let manifest_location_name = root.file_name().map(|p| p.to_string_lossy().into_owned());
 
         let s3_options = manifest.workspace.value.workspace.s3_options.clone();
         let s3_config = s3_options
@@ -213,6 +228,7 @@ impl Workspace {
         let config = Config::load(&root);
         Self {
             root,
+            manifest_location_name,
             client: Default::default(),
             workspace: manifest.workspace,
             package: manifest.package,
@@ -268,9 +284,22 @@ impl Workspace {
         WorkspaceMut::new(self)
     }
 
-    /// Returns the name of the workspace
-    pub fn name(&self) -> &str {
-        &self.workspace.value.workspace.name
+    /// Returns the display name of the workspace. This name should be used to
+    /// provide context to a user.
+    ///
+    /// This is the name of the workspace as defined in the manifest, or if no
+    /// name is specified the name of the root directory of the workspace.
+    ///
+    /// If the name of the root directory could not be determined, "workspace"
+    /// is used as a fallback.
+    pub fn display_name(&self) -> &str {
+        self.workspace
+            .value
+            .workspace
+            .name
+            .as_deref()
+            .or(self.manifest_location_name.as_deref())
+            .unwrap_or("workspace")
     }
 
     /// Returns the root directory of the workspace
@@ -289,7 +318,7 @@ impl Workspace {
         if let Ok(Some(detached_environments_path)) = self.config().detached_environments().path() {
             Some(detached_environments_path.join(format!(
                 "{}-{}",
-                self.name(),
+                self.display_name(),
                 xxh3_64(self.root.to_string_lossy().as_bytes())
             )))
         } else {
@@ -455,6 +484,20 @@ impl Workspace {
             .clone()
     }
 
+    /// Returns a pre-filled command dispatcher builder that can be used to
+    /// construct a [`pixi_command_dispatcher::CommandDispatcher`].
+    pub fn command_dispatcher_builder(&self) -> miette::Result<CommandDispatcherBuilder> {
+        let cache_dirs = CacheDirs::new(pixi_config::get_cache_dir()?)
+            .with_working_dirs(self.pixi_dir().join(CACHED_BUILD_WORK_DIR));
+        Ok(CommandDispatcher::builder()
+            .with_cache_dirs(cache_dirs)
+            .with_root_dir(self.root().to_path_buf())
+            .with_download_client(self.authenticated_client()?.clone())
+            .with_limits(Limits {
+                max_concurrent_solves: self.config().max_concurrent_solves().into(),
+            }))
+    }
+
     fn client_and_authenticated_client(
         &self,
     ) -> miette::Result<&(reqwest::Client, ClientWithMiddleware)> {
@@ -561,7 +604,7 @@ impl Workspace {
                                     Err(err) => {
                                         return Err(err).into_diagnostic().context(format!(
                                             "Could not convert {mapping_location} to URL"
-                                        ))
+                                        ));
                                     }
                                 }
                             } else {
@@ -612,6 +655,18 @@ impl Workspace {
                 true
             }
         })
+    }
+
+    /// Verify the pixi version requirement.
+    pub fn verify_current_pixi_meets_requirement(&self) -> Result<(), ExplicitManifestError> {
+        if let Some(ref requires_pixi) = self.workspace.value.workspace.requires_pixi {
+            if !requires_pixi.matches(&Version::from_str(consts::PIXI_VERSION)?) {
+                return Err(ExplicitManifestError::SelfVersionMatchError {
+                    requires_pixi: requires_pixi.clone(),
+                });
+            }
+        }
+        Ok(())
     }
 }
 
@@ -821,6 +876,57 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_workspace_name_when_specified() {
+        const WORKSPACE_STR: &str = r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        "#;
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let workspace = Workspace::from_str(
+            &temp_dir.path().join(consts::WORKSPACE_MANIFEST),
+            WORKSPACE_STR,
+        )
+        .unwrap();
+        assert_eq!(workspace.display_name(), "foo");
+    }
+
+    #[test]
+    fn test_workspace_name_when_unspecified() {
+        const WORKSPACE_STR: &str = r#"
+        [workspace]
+        channels = []
+        "#;
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let workspace = Workspace::from_str(
+            &temp_dir
+                .path()
+                .join("foobar")
+                .join(consts::WORKSPACE_MANIFEST),
+            WORKSPACE_STR,
+        )
+        .unwrap();
+        assert_eq!(workspace.display_name(), "foobar");
+    }
+
+    #[test]
+    fn test_workspace_name_when_undefined() {
+        const WORKSPACE_STR: &str = r#"
+        [workspace]
+        channels = []
+        "#;
+
+        let workspace = Workspace::from_str(
+            &Path::new("/").join(consts::WORKSPACE_MANIFEST),
+            WORKSPACE_STR,
+        )
+        .unwrap();
+        assert_eq!(workspace.display_name(), "workspace");
+    }
+
     fn format_dependencies(deps: pixi_manifest::CondaDependencies) -> String {
         deps.iter_specs()
             .map(|(name, spec)| format!("{} = {}", name.as_source(), spec.to_toml_value()))
@@ -991,21 +1097,27 @@ mod tests {
         )
         .unwrap();
 
-        assert_debug_snapshot!(workspace
-            .workspace
-            .value
-            .tasks(Some(Platform::Osx64), &FeatureName::Default)
-            .unwrap());
-        assert_debug_snapshot!(workspace
-            .workspace
-            .value
-            .tasks(Some(Platform::Win64), &FeatureName::Default)
-            .unwrap());
-        assert_debug_snapshot!(workspace
-            .workspace
-            .value
-            .tasks(Some(Platform::Linux64), &FeatureName::Default)
-            .unwrap());
+        assert_debug_snapshot!(
+            workspace
+                .workspace
+                .value
+                .tasks(Some(Platform::Osx64), &FeatureName::DEFAULT)
+                .unwrap()
+        );
+        assert_debug_snapshot!(
+            workspace
+                .workspace
+                .value
+                .tasks(Some(Platform::Win64), &FeatureName::DEFAULT)
+                .unwrap()
+        );
+        assert_debug_snapshot!(
+            workspace
+                .workspace
+                .value
+                .tasks(Some(Platform::Linux64), &FeatureName::DEFAULT)
+                .unwrap()
+        );
     }
 
     #[test]

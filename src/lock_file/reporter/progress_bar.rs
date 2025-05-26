@@ -7,7 +7,8 @@ use pypi_mapping::Reporter;
 use rattler_conda_types::Platform;
 
 use super::PurlAmendReporter;
-use crate::{build::BuildMetadataReporter, workspace::grouped_environment::GroupedEnvironmentName};
+use crate::reporters::BuildMetadataReporter;
+use crate::workspace::grouped_environment::GroupedEnvironmentName;
 
 /// A helper struct that manages a progress-bar for solving an environment.
 #[derive(Clone)]
@@ -153,13 +154,13 @@ impl CondaMetadataProgress {
 }
 
 impl CondaMetadataReporter for CondaMetadataProgress {
-    fn on_metadata_start(&self, _build_id: usize) -> usize {
+    fn on_metadata_start(&self, build_id: usize) -> usize {
         // Started metadata extraction
         self.progress_bar.set_message("extracting");
-        0
+        build_id
     }
 
-    fn on_metadata_end(&self, _operation: usize) {
+    fn on_metadata_end(&self, _build_id: usize) {
         // Finished metadata extraction
         self.increment();
     }

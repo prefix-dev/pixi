@@ -1,0 +1,44 @@
+#
+# This is a manually modified pixi.lock file to remove a number of packages and dependencies to
+# reduce the size of the example.
+#
+# This fabricated test should show that the conda packages are out of date as `flask` is removed
+# from the conda dependencies. Before fixing this, the test would fail saying that pypi packages
+# were out-of-date. This causes the solver to only solve for pypi packages whereas the conda
+# packages should also be re-solved.
+#
+
+version: 6
+environments:
+  default:
+    channels:
+    - url: https://prefix.dev/conda-forge/
+    indexes:
+    - https://pypi.org/simple
+    packages:
+      win-64:
+      - conda: https://prefix.dev/conda-forge/noarch/flask-3.1.0-pyhd8ed1ab_1.conda
+      - conda: https://prefix.dev/conda-forge/win-64/python-3.13.3-h261c0b1_101.conda
+      - pypi: https://files.pythonhosted.org/packages/45/7f/0e961cf3908bc4c1c3e027de2794f867c6c89fb4916fc7dba295a0e80a2d/boltons-25.0.0-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/e0/71/020fc6513cf4ef13b6d8ccea836c72828add6bbfecd344c59e26a6dc841b/sdist-0.0.0.tar.gz
+packages:
+- pypi: https://files.pythonhosted.org/packages/45/7f/0e961cf3908bc4c1c3e027de2794f867c6c89fb4916fc7dba295a0e80a2d/boltons-25.0.0-py3-none-any.whl
+  name: boltons
+  version: 25.0.0
+  sha256: dc9fb38bf28985715497d1b54d00b62ea866eca3938938ea9043e254a3a6ca62
+  requires_python: '>=3.7'
+- conda: https://prefix.dev/conda-forge/noarch/flask-3.1.0-pyhd8ed1ab_1.conda
+  sha256: 4dc950e0c4edf552d5375656bc4ba6239db64382decf3b19f851a097d1b292c6
+  md5: 2da939620e3a741f61fc1cb136df66fb
+  depends:
+  - python >=3.9
+  purls:
+  - pkg:pypi/flask?source=compressed-mapping
+- conda: https://prefix.dev/conda-forge/win-64/python-3.13.3-h261c0b1_101.conda
+  sha256: 25cf0113c0e4fa42d31b0ff85349990dc454f1237638ba4642b009b451352cdf
+  md5: 4784d7aecc8996babe9681d017c81b8a
+  depends: []
+- pypi: https://files.pythonhosted.org/packages/e0/71/020fc6513cf4ef13b6d8ccea836c72828add6bbfecd344c59e26a6dc841b/sdist-0.0.0.tar.gz
+  name: sdist
+  version: 0.0.0
+  sha256: c69b35cd5dc5c159a7a7d144d3ea0daad6c1e35f86a7354c219810e3f380c85b

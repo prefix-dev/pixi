@@ -4,9 +4,10 @@ use flate2::read::GzDecoder;
 use tar::Archive;
 
 use miette::IntoDiagnostic;
+use pixi_config::Config;
 use pixi_consts::consts;
-use reqwest::redirect::Policy;
 use reqwest::Client;
+use reqwest::redirect::Policy;
 
 use tempfile::{NamedTempFile, TempDir};
 use url::Url;
@@ -150,10 +151,11 @@ async fn latest_version() -> miette::Result<Version> {
     let url = format!("{}/latest", consts::RELEASES_URL);
 
     // Create a client with a redirect policy
-    let no_redirect_client = Client::builder()
-        .redirect(Policy::none()) // Prevent automatic redirects
-        .build()
-        .into_diagnostic()?;
+    let mut no_redirect_client_builder = Client::builder().redirect(Policy::none()); // Prevent automatic redirects
+    for p in Config::load_global().get_proxies().into_diagnostic()? {
+        no_redirect_client_builder = no_redirect_client_builder.proxy(p);
+    }
+    let no_redirect_client = no_redirect_client_builder.build().into_diagnostic()?;
 
     let version: String = match no_redirect_client
         .head(&url)
@@ -170,7 +172,7 @@ async fn latest_version() -> miette::Result<Version> {
                         .ok_or_else(|| {
                             miette::miette!("Could not get segments from Location header")
                         })?
-                        .last()
+                        .next_back()
                         .ok_or_else(|| {
                             miette::miette!("Could not get version from Location header")
                         })?
@@ -335,6 +337,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Create a temp file to download the archive
     let mut archived_tempfile = NamedTempFile::new().into_diagnostic()?;
 
+    // TODO proxy inject in https://github.com/prefix-dev/pixi/pull/3346
     let client = Client::new();
     let mut res = client
         .get(&download_url)

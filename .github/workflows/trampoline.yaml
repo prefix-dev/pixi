@@ -36,6 +36,10 @@ jobs:
             target: powerpc64le-unknown-linux-gnu
             os: ubuntu-latest
 
+          - name: "Linux-riscv64"
+            target: riscv64gc-unknown-linux-gnu
+            os: ubuntu-latest
+
           - name: "macOS-x86"
             target: x86_64-apple-darwin
             os: macos-13
@@ -59,7 +63,7 @@ jobs:
           fetch-depth: 0 # Fetch full history so we have branch information
 
       - name: Set up Rust
-        uses: taiki-e/setup-cross-toolchain-action@0d2c6fcce937ba2ba77abf40e06449b74d60fa04 # v1
+        uses: taiki-e/setup-cross-toolchain-action@0123528f956f923e7a476f4cc04882bc005e7c89 # v1
         with:
           target: ${{ matrix.target }}
 
@@ -72,7 +76,7 @@ jobs:
         run: pixi run build-trampoline --target ${{ matrix.target }}
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: trampoline-${{ matrix.target }}
           path: trampoline/binaries/pixi-trampoline-${{ matrix.target }}${{ matrix.os == 'windows-latest' && '.exe' || '' }}.zst
@@ -85,7 +89,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
       - name: Download all binaries
-        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4
+        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4
         with:
           path: trampoline/binaries/
           merge-multiple: true
@@ -94,7 +98,7 @@ jobs:
         run: ls -R trampoline/binaries/
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: trampolines
           path: trampoline/binaries/

@@ -1,5 +1,3 @@
-# Bringing Pixi to Production
-
 One way to bring a Pixi package into production is to containerize it using tools like Docker or Podman.
 
 <!-- Keep in sync with https://github.com/prefix-dev/pixi-docker/blob/main/README.md -->
@@ -18,6 +16,10 @@ There are different tags for different base images available:
 
 !!!tip "All tags"
     For all tags, take a look at the [build script](https://github.com/prefix-dev/pixi-docker/blob/main/.github/workflows/build.yml).
+
+!!!tip "Best practices for docker with pixi"
+    [@pavelzw](https://github.com/pavelzw) wrote a blog post about [shipping conda environments to production using pixi](https://tech.quantco.com/blog/pixi-production).
+    If you want to know more about best practices using docker with pixi, feel free to check out their blog post.
 
 ### Example Usage
 

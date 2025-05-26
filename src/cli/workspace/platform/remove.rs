@@ -4,9 +4,9 @@ use pixi_manifest::FeatureName;
 use rattler_conda_types::Platform;
 
 use crate::{
-    environment::{get_update_lock_file_and_prefix, LockFileUsage},
-    lock_file::{ReinstallPackages, UpdateMode},
     UpdateLockFileOptions, Workspace,
+    environment::{LockFileUsage, get_update_lock_file_and_prefix},
+    lock_file::{ReinstallPackages, UpdateMode},
 };
 
 #[derive(Parser, Debug, Default)]
@@ -28,7 +28,7 @@ pub struct Args {
 pub async fn execute(workspace: Workspace, args: Args) -> miette::Result<()> {
     let feature_name = args
         .feature
-        .map_or(FeatureName::Default, FeatureName::Named);
+        .map_or_else(FeatureName::default, FeatureName::from);
 
     let mut workspace = workspace.modify()?;
 
@@ -55,10 +55,10 @@ pub async fn execute(workspace: Workspace, args: Args) -> miette::Result<()> {
         eprintln!(
             "{}Removed {}",
             console::style(console::Emoji("✔ ", "")).green(),
-            match &feature_name {
-                FeatureName::Default => platform.to_string(),
-                FeatureName::Named(name) => format!("{} from the feature {}", platform, name),
-            },
+            &feature_name.non_default().map_or_else(
+                || platform.to_string(),
+                |name| format!("{} from the feature {}", platform, name)
+            )
         );
     }
 

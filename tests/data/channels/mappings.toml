@@ -1,3 +1,5 @@
+"completions_channel_1.yaml" = "completions_channel_1"
+"deno_channel.yaml" = "deno_channel"
 "dummy_channel_1.yaml" = "dummy_channel_1"
 "dummy_channel_2.yaml" = "dummy_channel_2"
 "multiple_versions_channel_1_010.yaml" = "multiple_versions_channel_1"
@@ -5,6 +7,7 @@
 "non_self_expose_channel_1.yaml" = "non_self_expose_channel_1"
 "non_self_expose_channel_2.yaml" = "non_self_expose_channel_2"
 "pixi-editor/recipe.yaml" = "shortcuts_channel_1"
+"post_link_script_package/recipe.yaml" = "post_link_script_channel"
 "trampoline/trampoline_1.yaml" = "trampoline_channel"
 "trampoline/trampoline_2.yaml" = "trampoline_channel"
 "trampoline/trampoline_path.yaml" = "trampoline_path_channel"

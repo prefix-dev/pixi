@@ -1,0 +1,78 @@
+---
+source: crates/pixi_command_dispatcher/tests/integration/main.rs
+expression: events
+---
+[
+  {
+    "type": "pixi-solve-queued",
+    "id": 0
+  },
+  {
+    "type": "pixi-solve-started",
+    "id": 0
+  },
+  {
+    "type": "git-checkout-queued",
+    "id": 0
+  },
+  {
+    "type": "git-checkout-started",
+    "id": 0
+  },
+  {
+    "type": "git-checkout-finished",
+    "id": 0
+  },
+  {
+    "type": "pixi-solve-queued",
+    "id": 1
+  },
+  {
+    "type": "pixi-solve-started",
+    "id": 1
+  },
+  {
+    "type": "conda-solve-queued",
+    "id": 0
+  },
+  {
+    "type": "conda-solve-started",
+    "id": 0
+  },
+  {
+    "type": "conda-solve-finished",
+    "id": 0
+  },
+  {
+    "type": "pixi-solve-finished",
+    "id": 1
+  },
+  {
+    "type": "pixi-install-queued",
+    "id": 0
+  },
+  {
+    "type": "pixi-install-started",
+    "id": 0
+  },
+  {
+    "type": "pixi-install-finished",
+    "id": 0
+  },
+  {
+    "type": "conda-solve-queued",
+    "id": 1
+  },
+  {
+    "type": "conda-solve-started",
+    "id": 1
+  },
+  {
+    "type": "conda-solve-finished",
+    "id": 1
+  },
+  {
+    "type": "pixi-solve-finished",
+    "id": 0
+  }
+]

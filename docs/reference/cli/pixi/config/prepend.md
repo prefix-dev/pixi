@@ -4,7 +4,7 @@
 ## About
 Prepend a value to a list configuration key
 
---8<-- "docs/reference/cli/pixi/config/prepend_extender.md:description"
+--8<-- "docs/reference/cli/pixi/config/prepend_extender:description"
 
 ## Usage
 ```
@@ -37,4 +37,4 @@ Prepend a value to a list configuration key
 Example: `pixi config prepend default-channels bioconda`
 
 
---8<-- "docs/reference/cli/pixi/config/prepend_extender.md:example"
+--8<-- "docs/reference/cli/pixi/config/prepend_extender:example"

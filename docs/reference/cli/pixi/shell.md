@@ -4,12 +4,16 @@
 ## About
 Start a shell in a pixi environment, run `exit` to leave the shell
 
---8<-- "docs/reference/cli/pixi/shell_extender.md:description"
+--8<-- "docs/reference/cli/pixi/shell_extender:description"
 
 ## Usage
 ```
 pixi shell [OPTIONS]
 ```
+
+## Options
+- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
+:  The environment to activate in the shell
 
 ## Config Options
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
@@ -28,9 +32,8 @@ pixi shell [OPTIONS]
 <br>**options**: `true`, `false`
 - <a id="arg---force-activate" href="#arg---force-activate">`--force-activate`</a>
 :  Do not use the environment activation cache. (default: true except in experimental mode)
-- <a id="arg---no-completion" href="#arg---no-completion">`--no-completion <NO_COMPLETION>`</a>
+- <a id="arg---no-completions" href="#arg---no-completions">`--no-completions`</a>
 :  Do not source the autocompletion scripts from the environment
-<br>**options**: `true`, `false`
 
 ## Update Options
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
@@ -45,11 +48,9 @@ pixi shell [OPTIONS]
 - <a id="arg---locked" href="#arg---locked">`--locked`</a>
 :  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 <br>**env**: `PIXI_LOCKED`
-- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
-:  The environment to activate in the shell
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
 :  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 
---8<-- "docs/reference/cli/pixi/shell_extender.md:example"
+--8<-- "docs/reference/cli/pixi/shell_extender:example"

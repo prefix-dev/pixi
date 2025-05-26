@@ -4,7 +4,7 @@
 ## About
 Upload a conda package
 
---8<-- "docs/reference/cli/pixi/upload_extender.md:description"
+--8<-- "docs/reference/cli/pixi/upload_extender:description"
 
 ## Usage
 ```
@@ -27,4 +27,4 @@ With this command, you can upload a conda package to a channel. Example: `pixi u
 Use `pixi auth login` to authenticate with the server.
 
 
---8<-- "docs/reference/cli/pixi/upload_extender.md:example"
+--8<-- "docs/reference/cli/pixi/upload_extender:example"

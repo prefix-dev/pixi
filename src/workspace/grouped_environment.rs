@@ -7,14 +7,14 @@ use pixi_manifest::{
     EnvironmentName, Feature, HasFeaturesIter, HasWorkspaceManifest, SystemRequirements,
     WorkspaceManifest,
 };
-use rattler_conda_types::{GenericVirtualPackage, Platform};
+use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, Platform};
 
 use crate::{
+    Workspace,
     prefix::Prefix,
     workspace::{
-        virtual_packages::get_minimal_virtual_packages, Environment, HasWorkspaceRef, SolveGroup,
+        Environment, HasWorkspaceRef, SolveGroup, virtual_packages::get_minimal_virtual_packages,
     },
-    Workspace,
 };
 
 /// Either a solve group or an individual environment without a solve group.
@@ -114,6 +114,11 @@ impl<'p> GroupedEnvironment<'p> {
             .into_iter()
             .map(GenericVirtualPackage::from)
             .collect()
+    }
+
+    /// Returns the channel configuration for this grouped environment
+    pub fn channel_config(&self) -> ChannelConfig {
+        self.workspace().channel_config()
     }
 }
 

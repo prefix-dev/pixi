@@ -10,7 +10,7 @@ use clap::Parser;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, Report};
-use pixi_config::{default_channel_config, Config};
+use pixi_config::{Config, default_channel_config};
 use pixi_progress::await_in_progress;
 use pixi_utils::reqwest::build_reqwest_clients;
 use rattler_conda_types::{MatchSpec, PackageName, Platform, RepoDataRecord};
@@ -21,8 +21,7 @@ use tracing::{debug, error};
 use url::Url;
 
 use super::cli_config::ChannelsConfig;
-use crate::workspace::WorkspaceLocatorError;
-use crate::{cli::cli_config::WorkspaceConfig, WorkspaceLocator};
+use crate::{WorkspaceLocator, cli::cli_config::WorkspaceConfig, workspace::WorkspaceLocatorError};
 
 /// Search a conda package
 ///
@@ -243,7 +242,9 @@ where
 
     if packages.is_empty() {
         let normalized_package_name = package_name.as_normalized();
-        return Err(miette::miette!("Package {normalized_package_name} not found, please use a wildcard '*' in the search name for a broader result."));
+        return Err(miette::miette!(
+            "Package {normalized_package_name} not found, please use a wildcard '*' in the search name for a broader result."
+        ));
     }
 
     let newest_package = packages.last();
@@ -389,6 +390,26 @@ fn print_package_info<W: Write>(
     writeln!(out, "\nDependencies:")?;
     for dependency in package.package_record.depends {
         writeln!(out, " - {}", dependency)?;
+    }
+
+    if let Some(run_exports) = package.package_record.run_exports.as_ref() {
+        writeln!(out, "\nRun exports:")?;
+        let mut print_run_exports = |name: &str, run_exports: &[String]| {
+            if !run_exports.is_empty() {
+                writeln!(out, "  {name}:")?;
+                for run_export in run_exports {
+                    writeln!(out, "   - {}", run_export)?;
+                }
+            }
+            Ok::<(), std::io::Error>(())
+        };
+        print_run_exports("noarch", &run_exports.noarch)?;
+        print_run_exports("strong", &run_exports.strong)?;
+        print_run_exports("weak", &run_exports.weak)?;
+        print_run_exports("strong constrains", &run_exports.strong_constrains)?;
+        print_run_exports("weak constrains", &run_exports.weak_constrains)?;
+    } else {
+        writeln!(out, "\nRun exports: not available in repodata")?;
     }
 
     // Print summary of older versions for package

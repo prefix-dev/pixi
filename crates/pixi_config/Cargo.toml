@@ -20,7 +20,9 @@ pixi_consts = { workspace = true }
 rattler = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_networking = { workspace = true, features = ["s3"] }
+rattler_package_streaming = { workspace = true }
 rattler_repodata_gateway = { workspace = true, features = ["gateway"] }
+reqwest = { workspace = true }
 serde = { workspace = true }
 serde_ignored = { workspace = true }
 serde_json = { workspace = true }

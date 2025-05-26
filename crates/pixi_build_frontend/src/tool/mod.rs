@@ -24,7 +24,7 @@ pub struct SystemTool {
 
 impl SystemTool {
     /// Construct a new instance from a command.
-    pub(crate) fn new(command: impl Into<String>) -> Self {
+    pub fn new(command: impl Into<String>) -> Self {
         Self {
             command: command.into(),
         }
@@ -56,7 +56,7 @@ pub struct IsolatedTool {
 
 impl IsolatedTool {
     /// Construct a new instance from a command and prefix.
-    pub(crate) fn new(
+    pub fn new(
         command: impl Into<String>,
         prefix: impl Into<PathBuf>,
         activation: HashMap<String, String>,
@@ -98,6 +98,7 @@ impl Tool {
     }
 
     /// Construct a new command that enables invocation of the tool.
+    /// TODO: whether to inject proxy config
     pub fn command(&self) -> std::process::Command {
         match self {
             Tool::Isolated(tool) => {

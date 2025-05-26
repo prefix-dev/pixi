@@ -1,5 +1,3 @@
-# Multi Environment Support
-
 ### Motivating Example
 
 There are multiple scenarios where multiple environments are useful.
@@ -25,8 +23,8 @@ There are a few things we wanted to keep in mind in the design:
 
 ### Feature & Environment Set Definitions
 
-Introduce environment sets into the `pixi.toml` this describes environments based on `feature`'s. Introduce features into the `pixi.toml` that can describe parts of environments.
-As an environment goes beyond just `dependencies` the `features` should be described including the following fields:
+Introduce environment sets into the `pixi.toml` this describes environments based on features. Introduce features into the `pixi.toml` that can describe parts of environments.
+As an environment goes beyond just `dependencies` the `feature` fields can be described by including the following fields:
 
 - `dependencies`: The conda package dependencies
 - `pypi-dependencies`: The pypi package dependencies

@@ -1,5 +1,3 @@
-# Community
-
 When you want to show your users and contributors that they can use Pixi in your repo, you can use the following badge:
 
 [![Pixi Badge](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/prefix-dev/pixi/main/assets/badge/v0.json)](https://pixi.sh)
@@ -43,7 +41,6 @@ When you want to show your users and contributors that they can use Pixi in your
   - [slim-trees](https://github.com/quantco/slim-trees): Pickle your ML models more efficiently for deployment 🚀
   - [sqlcompyre](https://github.com/quantco/sqlcompyre): Compare SQL tables and databases
   - [metalearners](https://github.com/quantco/metalearners): MetaLearners for CATE estimation
-  - [ndonnx](https://github.com/quantco/ndonnx): ONNX-backed array library that is compliant with the Array API standard
   - [tabulardelta](https://github.com/quantco/tabulardelta): Simplify table comparisons
   - [pydiverse.pipedag](https://github.com/pydiverse/pydiverse.pipedag): A library for data pipeline orchestration optimizing high development iteration speed
   - [pydiverse.transform](https://github.com/pydiverse/pydiverse.transform): Pipe based dataframe manipulation library that can also transform data on SQL databases
@@ -64,3 +61,6 @@ When you want to show your users and contributors that they can use Pixi in your
 Masked versions of Python array API standard compatible arrays.
 - [quantity-array](https://github.com/quantity-dev/quantity-array): Quantities with Python array API standard arrays.
 - [Bodo](https://github.com/bodo-ai/bodo):  High-Performance Python Compute Engine for Data and AI.
+- [metrology-apis](https://github.com/quantity-dev/metrology-apis): Standardised Metrology APIs in Python.
+- [xsf](https://github.com/scipy/xsf): Special function implementations.
+- [pyfixest](https://github.com/py-econometrics/pyfixest):  Fast High-Dimensional Fixed Effects Regression in Python following fixest-syntax.

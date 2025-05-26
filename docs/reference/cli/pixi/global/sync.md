@@ -4,7 +4,7 @@
 ## About
 Sync global manifest with installed environments
 
---8<-- "docs/reference/cli/pixi/global/sync_extender.md:description"
+--8<-- "docs/reference/cli/pixi/global/sync_extender:description"
 
 ## Usage
 ```
@@ -24,4 +24,4 @@ pixi global sync [OPTIONS]
 - <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
 :  Max concurrent network requests, default is `50`
 
---8<-- "docs/reference/cli/pixi/global/sync_extender.md:example"
+--8<-- "docs/reference/cli/pixi/global/sync_extender:example"

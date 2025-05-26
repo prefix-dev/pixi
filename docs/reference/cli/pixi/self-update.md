@@ -4,7 +4,7 @@
 ## About
 Update pixi to the latest version or a specific version
 
---8<-- "docs/reference/cli/pixi/self-update_extender.md:description"
+--8<-- "docs/reference/cli/pixi/self-update_extender:description"
 
 ## Usage
 ```
@@ -17,4 +17,4 @@ pixi self-update [OPTIONS]
 - <a id="arg---release-notes-only" href="#arg---release-notes-only">`--release-notes-only`</a>
 :  Only show release notes, do not modify the binary
 
---8<-- "docs/reference/cli/pixi/self-update_extender.md:example"
+--8<-- "docs/reference/cli/pixi/self-update_extender:example"

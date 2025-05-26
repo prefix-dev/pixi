@@ -10,11 +10,10 @@ use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 use crate::{
     cli::{global::revert_environment_after_error, has_specs::HasSpecs},
     global::{
-        self,
-        common::{contains_menuinst_document, NotChangedReason},
+        self, EnvChanges, EnvState, EnvironmentName, Mapping, Project, StateChange, StateChanges,
+        common::{NotChangedReason, contains_menuinst_document},
         list::list_all_global_environments,
         project::ExposedType,
-        EnvChanges, EnvState, EnvironmentName, Mapping, Project, StateChange, StateChanges,
     },
 };
 use pixi_config::{self, Config, ConfigCli};
@@ -158,6 +157,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         Some(env_names),
         Some(&env_changes),
         None,
+        false,
     )
     .await?;
 
@@ -230,7 +230,7 @@ async fn setup_environment(
         let prefix = project.environment_prefix(env_name).await?;
         for (package_name, _) in specs.iter() {
             let prefix_record = prefix.find_designated_package(package_name).await?;
-            if contains_menuinst_document(&prefix_record) {
+            if contains_menuinst_document(&prefix_record, prefix.root()) {
                 project.manifest.add_shortcut(env_name, package_name)?;
             }
         }
@@ -244,6 +244,9 @@ async fn setup_environment(
     state_changes |= project
         .expose_executables_from_environment(env_name)
         .await?;
+
+    // Sync completions
+    state_changes |= project.sync_completions(env_name).await?;
 
     project.manifest.save().await?;
     Ok(state_changes)

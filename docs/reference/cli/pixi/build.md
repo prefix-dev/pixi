@@ -4,7 +4,7 @@
 ## About
 Workspace configuration
 
---8<-- "docs/reference/cli/pixi/build_extender.md:description"
+--8<-- "docs/reference/cli/pixi/build_extender:description"
 
 ## Usage
 ```
@@ -16,10 +16,12 @@ pixi build [OPTIONS]
 :  The target platform to build for (defaults to the current platform)
 <br>**default**: `current_platform`
 - <a id="arg---output-dir" href="#arg---output-dir">`--output-dir (-o) <OUTPUT_DIR>`</a>
-:  The output directory to place the build artifacts
+:  The output directory to place the built artifacts
 <br>**default**: `.`
 - <a id="arg---no-incremental" href="#arg---no-incremental">`--no-incremental (-n)`</a>
 :  Whether to build incrementally if possible
+- <a id="arg---build-dir" href="#arg---build-dir">`--build-dir (-b) <BUILD_DIR>`</a>
+:  The directory to use for incremental builds artifacts
 
 ## Config Options
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
@@ -38,4 +40,4 @@ pixi build [OPTIONS]
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
 :  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 
---8<-- "docs/reference/cli/pixi/build_extender.md:example"
+--8<-- "docs/reference/cli/pixi/build_extender:example"

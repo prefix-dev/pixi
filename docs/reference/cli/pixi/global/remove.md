@@ -4,7 +4,7 @@
 ## About
 Removes dependencies from an environment
 
---8<-- "docs/reference/cli/pixi/global/remove_extender.md:description"
+--8<-- "docs/reference/cli/pixi/global/remove_extender:description"
 
 ## Usage
 ```
@@ -42,4 +42,4 @@ Use `pixi global uninstall` to remove the whole environment
 Example: `pixi global remove --environment python numpy`
 
 
---8<-- "docs/reference/cli/pixi/global/remove_extender.md:example"
+--8<-- "docs/reference/cli/pixi/global/remove_extender:example"

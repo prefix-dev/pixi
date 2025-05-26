@@ -4,7 +4,7 @@
 ## About
 Add a shortcut from an environment to your machine.
 
---8<-- "docs/reference/cli/pixi/global/shortcut/add_extender.md:description"
+--8<-- "docs/reference/cli/pixi/global/shortcut/add_extender:description"
 
 ## Usage
 ```
@@ -34,4 +34,4 @@ pixi global shortcut add [OPTIONS] --environment <ENVIRONMENT> [PACKAGE]...
 - <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
 :  Max concurrent network requests, default is `50`
 
---8<-- "docs/reference/cli/pixi/global/shortcut/add_extender.md:example"
+--8<-- "docs/reference/cli/pixi/global/shortcut/add_extender:example"

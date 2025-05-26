@@ -5,20 +5,23 @@ use indicatif::ProgressBar;
 use miette::{Context, IntoDiagnostic};
 use pixi_build_frontend::{BackendOverride, CondaBuildReporter, SetupRequest};
 use pixi_build_types::{
-    procedures::conda_build::CondaBuildParams, ChannelConfiguration, PlatformAndVirtualPackages,
+    ChannelConfiguration, PlatformAndVirtualPackages, procedures::conda_build::CondaBuildParams,
 };
+use pixi_command_dispatcher::SourceCheckout;
 use pixi_config::ConfigCli;
 use pixi_manifest::FeaturesExt;
+use pixi_progress::global_multi_progress;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use typed_path::Utf8TypedPath;
 
 use crate::{
-    build::{BuildContext, SourceCheckout, WorkDirKey},
+    WorkspaceLocator,
+    build::{BuildContext, WorkDirKey},
     cli::cli_config::WorkspaceConfig,
     repodata::Repodata,
-    utils::{move_file, MoveError},
-    WorkspaceLocator,
+    reporters::TopLevelProgress,
+    utils::{MoveError, move_file},
 };
 
 #[derive(Parser, Debug)]
@@ -34,13 +37,17 @@ pub struct Args {
     #[clap(long, short, default_value_t = Platform::current())]
     pub target_platform: Platform,
 
-    /// The output directory to place the build artifacts
+    /// The output directory to place the built artifacts
     #[clap(long, short, default_value = ".")]
     pub output_dir: PathBuf,
 
     /// Whether to build incrementally if possible
     #[clap(long, short)]
     pub no_incremental: bool,
+
+    /// The directory to use for incremental builds artifacts
+    #[clap(long, short)]
+    pub build_dir: Option<PathBuf>,
 }
 
 struct ProgressReporter {
@@ -86,6 +93,7 @@ impl CondaBuildReporter for ProgressReporter {
 pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.project_config.workspace_locator_start())
+        .with_closest_package(true)
         .locate()?
         .with_cli_config(args.config_cli);
 
@@ -130,13 +138,27 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             )
         })?;
 
+    // Create the build directory if it does not exist
+    if let Some(build_dir) = args.build_dir.as_ref() {
+        tokio::fs::create_dir_all(build_dir)
+            .await
+            .into_diagnostic()
+            .with_context(|| {
+                format!(
+                    "failed to create the build directory at '{}'",
+                    build_dir.display()
+                )
+            })?;
+    }
+
     let incremental = !args.no_incremental;
+    let build_dir = args.build_dir.unwrap_or_else(|| workspace.pixi_dir());
     // Determine if we want to re-use existing build data
     let (_tmp, work_dir) = if incremental {
-        // Specify the cache directory
+        // Specify the build directory
         let key = WorkDirKey::new(
             SourceCheckout::new(
-                workspace.root().to_path_buf(),
+                workspace.root(),
                 PinnedSourceSpec::Path(PinnedPathSpec {
                     path: Utf8TypedPath::derive(&workspace.root().to_string_lossy()).to_path_buf(),
                 }),
@@ -145,20 +167,21 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             protocol.backend_identifier().to_string(),
         )
         .key();
-        (None, workspace.pixi_dir().join(key))
+
+        (None, build_dir.join(key))
     } else {
         // Construct a temporary directory to build the package in. This path is also
         // automatically removed after the build finishes.
         let tmp = tempfile::Builder::new()
             .prefix("pixi-build-")
-            .tempdir_in(workspace.pixi_dir())
+            .tempdir_in(build_dir)
             .into_diagnostic()
             .context("failed to create temporary working directory in the .pixi directory")?;
         let work_dir = tmp.path().to_path_buf();
         (Some(tmp), work_dir)
     };
 
-    let progress = ProgressReporter::new(workspace.name());
+    let progress = ProgressReporter::new(workspace.display_name());
 
     // Build platform virtual packages
     let build_platform_virtual_packages: Vec<GenericVirtualPackage> = workspace
@@ -176,7 +199,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .map(GenericVirtualPackage::from)
         .collect();
 
-    let build_context = BuildContext::from_workspace(&workspace)?;
+    let multi_progress = global_multi_progress();
+    let anchor_pb = multi_progress.add(ProgressBar::hidden());
+    let command_dispatcher = workspace
+        .command_dispatcher_builder()?
+        .with_reporter(TopLevelProgress::new(global_multi_progress(), anchor_pb))
+        .finish();
+
+    let build_context = BuildContext::from_workspace(&workspace, command_dispatcher)?;
 
     // Build the individual packages.
     let result = protocol
@@ -253,7 +283,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                             package.output_file.display(),
                             dest.display()
                         )
-                    })
+                    });
                 }
             }
         }

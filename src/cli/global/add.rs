@@ -46,7 +46,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_cli_config(config.clone());
 
     if project_original.environment(&args.environment).is_none() {
-        miette::bail!("Environment {} doesn't exist. You can create a new environment with `pixi global install`.", &args.environment);
+        miette::bail!(
+            "Environment {} doesn't exist. You can create a new environment with `pixi global install`.",
+            &args.environment
+        );
     }
 
     async fn apply_changes(
@@ -76,6 +79,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         // Figure out added packages and their corresponding versions
         state_changes |= project.added_packages(specs, env_name).await?;
+
+        state_changes |= project.sync_completions(env_name).await?;
 
         project.manifest.save().await?;
 

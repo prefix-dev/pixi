@@ -4,7 +4,7 @@
 ## About
 Search a conda package
 
---8<-- "docs/reference/cli/pixi/search_extender.md:description"
+--8<-- "docs/reference/cli/pixi/search_extender:description"
 
 ## Usage
 ```
@@ -36,4 +36,4 @@ Search a conda package
 Its output will list the latest version of package.
 
 
---8<-- "docs/reference/cli/pixi/search_extender.md:example"
+--8<-- "docs/reference/cli/pixi/search_extender:example"

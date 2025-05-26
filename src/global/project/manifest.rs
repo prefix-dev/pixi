@@ -10,7 +10,7 @@ use indexmap::IndexSet;
 use miette::IntoDiagnostic;
 use pixi_config::Config;
 use pixi_consts::consts;
-use pixi_manifest::{toml::TomlDocument, PrioritizedChannel};
+use pixi_manifest::{PrioritizedChannel, toml::TomlDocument};
 use pixi_spec::PixiSpec;
 use pixi_toml::TomlIndexMap;
 use pixi_utils::{executable_from_path, strip_executable_extension};
@@ -19,8 +19,8 @@ use toml_edit::{DocumentMut, Item};
 use toml_span::{DeserError, Value};
 
 use super::{
-    parsed_manifest::{ManifestParsingError, ManifestVersion, ParsedManifest},
     EnvironmentName, ExposedName,
+    parsed_manifest::{ManifestParsingError, ManifestVersion, ParsedManifest},
 };
 use crate::global::project::ParsedEnvironment;
 
@@ -359,7 +359,7 @@ impl Manifest {
         // Update self.document
         self.document.insert_into_inline_table(
             &format!("envs.{env_name}.exposed"),
-            &mapping.exposed_name.to_string(),
+            mapping.exposed_name.as_ref(),
             toml_edit::Value::from(mapping.executable_relname.clone()),
         )?;
 
@@ -391,7 +391,7 @@ impl Manifest {
         // Remove from the document
         self.document
             .get_or_insert_nested_table(&format!("envs.{env_name}.exposed"))?
-            .remove(&exposed_name.to_string())
+            .remove(exposed_name.as_ref())
             .ok_or_else(|| miette::miette!("The exposed name {exposed_name} doesn't exist"))?;
 
         tracing::debug!("Removed exposed mapping {exposed_name} from toml document");
@@ -714,7 +714,7 @@ mod tests {
             .document
             .get_or_insert_nested_table(&format!("envs.{}.exposed", env_name))
             .unwrap()
-            .get(&exposed_name.to_string())
+            .get(exposed_name.as_ref())
             .unwrap()
             .as_str()
             .unwrap();
@@ -757,7 +757,7 @@ mod tests {
             .document
             .get_or_insert_nested_table(&format!("envs.{env_name}.exposed"))
             .unwrap()
-            .get(&exposed_name1.to_string())
+            .get(exposed_name1.as_ref())
             .unwrap()
             .as_str()
             .unwrap();
@@ -782,7 +782,7 @@ mod tests {
             .document
             .get_or_insert_nested_table(&format!("envs.{env_name}.exposed"))
             .unwrap()
-            .get(&exposed_name2.to_string())
+            .get(exposed_name2.as_ref())
             .unwrap()
             .as_str()
             .unwrap();
@@ -824,18 +824,20 @@ mod tests {
             .document
             .get_or_insert_nested_table(&format!("envs.{env_name}.exposed"))
             .unwrap()
-            .get(&exposed_name.to_string());
+            .get(exposed_name.as_ref());
         assert!(actual_value.is_none());
 
         // Check parsed
-        assert!(!manifest
-            .parsed
-            .envs
-            .get(&env_name)
-            .unwrap()
-            .exposed
-            .iter()
-            .any(|map| map.exposed_name() == &exposed_name));
+        assert!(
+            !manifest
+                .parsed
+                .envs
+                .get(&env_name)
+                .unwrap()
+                .exposed
+                .iter()
+                .any(|map| map.exposed_name() == &exposed_name)
+        );
     }
 
     #[test]
@@ -1170,10 +1172,12 @@ dependencies = { "python" = "*", pytest = "*"}
         manifest.remove_dependency(&env_name, &match_spec).unwrap();
 
         // Check document
-        assert!(!manifest
-            .document
-            .to_string()
-            .contains(match_spec.name.clone().unwrap().as_normalized()));
+        assert!(
+            !manifest
+                .document
+                .to_string()
+                .contains(match_spec.name.clone().unwrap().as_normalized())
+        );
 
         // Check parsed
         let actual_value = manifest

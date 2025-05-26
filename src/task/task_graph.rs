@@ -1,27 +1,27 @@
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
-    env, fmt,
-    fmt::Display,
+    env,
+    fmt::{self, Display},
     ops::Index,
 };
 
 use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_manifest::{
-    task::{CmdArgs, Custom},
-    Task, TaskName,
+    EnvironmentName, Task, TaskName,
+    task::{ArgValues, CmdArgs, Custom, TaskArg, TemplateStringError, TypedArg, TypedDependency},
 };
 use thiserror::Error;
 
 use crate::{
+    Workspace,
     task::{
+        TaskDisambiguation,
         error::{AmbiguousTaskError, MissingTaskError},
         task_environment::{FindTaskError, FindTaskSource, SearchEnvironments},
-        TaskDisambiguation,
     },
     workspace::Environment,
-    Workspace,
 };
 
 /// A task ID is a unique identifier for a [`TaskNode`] in a [`TaskGraph`].
@@ -29,6 +29,16 @@ use crate::{
 /// To get a task from a [`TaskGraph`], you can use the [`TaskId`] as an index.
 #[derive(Debug, Clone, Copy, Eq, PartialOrd, PartialEq, Ord, Hash)]
 pub struct TaskId(usize);
+
+/// A dependency is a task name and a list of arguments along with the environment to run the task in.
+#[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
+pub struct GraphDependency(TaskId, Option<Vec<String>>, Option<EnvironmentName>);
+
+impl GraphDependency {
+    pub fn task_id(&self) -> TaskId {
+        self.0
+    }
+}
 
 /// A node in the [`TaskGraph`].
 #[derive(Debug)]
@@ -44,23 +54,34 @@ pub struct TaskNode<'p> {
 
     /// Additional arguments to pass to the command. These arguments are passed
     /// verbatim, e.g. they will not be interpreted by deno.
-    pub additional_args: Vec<String>,
+    pub args: Option<ArgValues>,
 
     /// The id's of the task that this task depends on.
-    pub dependencies: Vec<TaskId>,
+    pub dependencies: Vec<GraphDependency>,
 }
+
 impl fmt::Display for TaskNode<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "task: {}, environment: {}, command: `{}`, additional arguments: `{}`, depends-on: `{}`",
-            self.name.clone().unwrap_or("CUSTOM COMMAND".into()),
-            self.run_environment.name(),
-            self.task.as_single_command().unwrap_or(Cow::Owned("".to_string())),
-            self.format_additional_args(),
+            "task: {}",
+            self.name.clone().unwrap_or("CUSTOM COMMAND".into())
+        )?;
+        write!(f, ", environment: {}", self.run_environment.name())?;
+        if let Ok(Some(command)) = self.task.as_single_command(self.args.as_ref()) {
+            write!(f, "command: `{command}`,",)?;
+        }
+        write!(
+            f,
+            ", additional arguments: `{}`",
+            self.format_additional_args()
+        )?;
+        write!(
+            f,
+            ", depends-on: `{}`",
             self.dependencies
                 .iter()
-                .map(|id| id.0.to_string())
+                .map(|id| format!("{:?}", id.task_id()))
                 .collect::<Vec<String>>()
                 .join(", ")
         )
@@ -75,22 +96,38 @@ impl TaskNode<'_> {
     /// This function returns `None` if the task does not define a command to
     /// execute. This is the case for alias only commands.
     #[cfg(test)]
-    pub(crate) fn full_command(&self) -> Option<String> {
-        let mut cmd = self.task.as_single_command()?.to_string();
+    pub(crate) fn full_command(&self) -> miette::Result<Option<String>> {
+        let mut cmd = self.task.as_single_command(self.args.as_ref())?;
 
-        if !self.additional_args.is_empty() {
-            // Pass each additional argument varbatim by wrapping it in single quotes
-            cmd.push_str(&format!(" {}", self.format_additional_args()));
+        if let Some(ArgValues::FreeFormArgs(additional_args)) = &self.args {
+            if !additional_args.is_empty() {
+                // Pass each additional argument varbatim by wrapping it in single quotes
+                let formatted_args = format!(" {}", self.format_additional_args());
+                cmd = match cmd {
+                    Some(Cow::Borrowed(s)) => Some(Cow::Owned(format!("{}{}", s, formatted_args))),
+                    Some(Cow::Owned(mut s)) => {
+                        s.push_str(&formatted_args);
+                        Some(Cow::Owned(s))
+                    }
+                    None => None,
+                };
+            }
         }
 
-        Some(cmd)
+        Ok(cmd.map(|c| c.into_owned()))
     }
 
     /// Format the additional arguments passed to this command
-    fn format_additional_args(&self) -> impl Display + '_ {
-        self.additional_args
-            .iter()
-            .format_with(" ", |arg, f| f(&format_args!("'{}'", arg)))
+    fn format_additional_args(&self) -> Box<dyn Display + '_> {
+        if let Some(ArgValues::FreeFormArgs(additional_args)) = &self.args {
+            Box::new(
+                additional_args
+                    .iter()
+                    .format_with(" ", |arg, f| f(&format_args!("'{}'", arg))),
+            )
+        } else {
+            Box::new("".to_string())
+        }
     }
 }
 
@@ -149,10 +186,11 @@ impl<'p> TaskGraph<'p> {
         };
 
         if let Some(name) = args.first() {
-            match search_envs.find_task(TaskName::from(name.clone()), FindTaskSource::CmdArgs) {
+            match search_envs.find_task(TaskName::from(name.clone()), FindTaskSource::CmdArgs, None)
+            {
                 Err(FindTaskError::MissingTask(_)) => {}
                 Err(FindTaskError::AmbiguousTask(err)) => {
-                    return Err(TaskGraphError::AmbiguousTask(err))
+                    return Err(TaskGraphError::AmbiguousTask(err));
                 }
                 Ok((task_env, task)) => {
                     // If an explicit environment was specified and the task is from the default
@@ -161,28 +199,48 @@ impl<'p> TaskGraph<'p> {
                         Some(explicit_env) if task_env.is_default() => explicit_env,
                         _ => task_env,
                     };
+
+                    let task_name = args.remove(0);
+
+                    let arg_values = if let Some(task_arguments) = task.args() {
+                        // Check if we don't have more arguments than the task expects
+                        if args.len() > task_arguments.len() {
+                            return Err(TaskGraphError::TooManyArguments(task_name.to_string()));
+                        }
+
+                        Some(Self::merge_args(
+                            &TaskName::from(task_name.clone()),
+                            Some(&task_arguments.to_vec()),
+                            Some(&args),
+                        )?)
+                    } else {
+                        Some(ArgValues::FreeFormArgs(args.clone()))
+                    };
+
                     if skip_deps {
                         return Ok(Self {
                             project,
                             nodes: vec![TaskNode {
-                                name: Some(args.remove(0).into()),
+                                name: Some(task_name.into()),
                                 task: Cow::Borrowed(task),
                                 run_environment: run_env,
-                                additional_args: args,
+                                args: arg_values,
                                 dependencies: vec![],
                             }],
                         });
                     }
+
                     return Self::from_root(
                         project,
                         search_envs,
                         TaskNode {
-                            name: Some(args.remove(0).into()),
+                            name: Some(task_name.into()),
                             task: Cow::Borrowed(task),
                             run_environment: run_env,
-                            additional_args: args,
+                            args: arg_values,
                             dependencies: vec![],
                         },
+                        Some(args),
                     );
                 }
             }
@@ -199,11 +257,14 @@ impl<'p> TaskGraph<'p> {
         let (cmd, additional_args) = if verbatim {
             let mut args = args.into_iter();
             (
-                CmdArgs::Single(args.next().expect("must be at least one argument")),
+                CmdArgs::Single(args.next().expect("must be at least one argument").into()),
                 args.collect(),
             )
         } else {
-            (CmdArgs::Multiple(args), vec![])
+            (
+                CmdArgs::Multiple(args.into_iter().map(|arg| arg.into()).collect()),
+                vec![],
+            )
         };
 
         Self::from_root(
@@ -219,9 +280,10 @@ impl<'p> TaskGraph<'p> {
                     .into(),
                 ),
                 run_environment,
-                additional_args,
+                args: Some(ArgValues::FreeFormArgs(additional_args)),
                 dependencies: vec![],
             },
+            None,
         )
     }
 
@@ -230,66 +292,102 @@ impl<'p> TaskGraph<'p> {
         project: &'p Workspace,
         search_environments: &SearchEnvironments<'p, D>,
         root: TaskNode<'p>,
+        root_args: Option<Vec<String>>,
     ) -> Result<Self, TaskGraphError> {
-        let mut task_name_to_node: HashMap<TaskName, TaskId> =
-            HashMap::from_iter(root.name.clone().into_iter().map(|name| (name, TaskId(0))));
+        let mut task_name_with_args_to_node: HashMap<TypedDependency, TaskId> =
+            HashMap::from_iter(root.name.clone().into_iter().map(|name| {
+                (
+                    TypedDependency {
+                        task_name: name,
+                        args: root_args.clone(),
+                        environment: None,
+                    },
+                    TaskId(0),
+                )
+            }));
         let mut nodes = vec![root];
 
         // Iterate over all the nodes in the graph and add them to the graph.
         let mut next_node_to_visit = 0;
         while next_node_to_visit < nodes.len() {
-            let dependency_names =
-                Vec::from_iter(nodes[next_node_to_visit].task.depends_on().iter().cloned());
+            let node = &nodes[next_node_to_visit];
+            let dependencies = Vec::from_iter(node.task.depends_on().iter().cloned());
+
+            // Collect all dependency data before modifying nodes
+            let mut deps_to_process: Vec<(TypedDependency, Environment<'p>, &Task)> = Vec::new();
 
             // Iterate over all the dependencies of the node and add them to the graph.
-            let mut node_dependencies = Vec::with_capacity(dependency_names.len());
-            for dependency in dependency_names {
+            let mut node_dependencies = Vec::with_capacity(dependencies.len());
+            for dependency in dependencies {
+                let dependency = TypedDependency::from_dependency(&dependency, node.args.as_ref())?;
                 // Check if we visited this node before already.
-                if let Some(&task_id) = task_name_to_node.get(&dependency) {
-                    node_dependencies.push(task_id);
+                if let Some(&task_id) = task_name_with_args_to_node.get(&dependency) {
+                    node_dependencies.push(GraphDependency(
+                        task_id,
+                        dependency.args.clone(),
+                        dependency.environment.clone(),
+                    ));
                     continue;
                 }
 
-                // Find the task in the project
-                let node = &nodes[next_node_to_visit];
+                // Clone what we need before modifying nodes
+                let node_name = node
+                    .name
+                    .clone()
+                    .expect("only named tasks can have dependencies");
+                let task_ref = match &node.task {
+                    Cow::Borrowed(task) => task,
+                    Cow::Owned(_) => unreachable!("only named tasks can have dependencies"),
+                };
+
+                let task_specific_environment = dependency
+                    .environment
+                    .clone()
+                    .and_then(|environment| project.environment(&environment));
+
                 let (task_env, task_dependency) = match search_environments.find_task(
-                    dependency.clone(),
-                    FindTaskSource::DependsOn(
-                        node.name
-                            .clone()
-                            .expect("only named tasks can have dependencies"),
-                        match &node.task {
-                            Cow::Borrowed(task) => task,
-                            Cow::Owned(_) => {
-                                unreachable!("only named tasks can have dependencies")
-                            }
-                        },
-                    ),
+                    dependency.task_name.clone(),
+                    FindTaskSource::DependsOn(node_name, task_ref),
+                    task_specific_environment,
                 ) {
                     Err(FindTaskError::MissingTask(err)) => {
-                        return Err(TaskGraphError::MissingTask(err))
+                        return Err(TaskGraphError::MissingTask(err));
                     }
                     Err(FindTaskError::AmbiguousTask(err)) => {
-                        return Err(TaskGraphError::AmbiguousTask(err))
+                        return Err(TaskGraphError::AmbiguousTask(err));
                     }
                     Ok(result) => result,
                 };
 
+                // Store the dependency data for processing later
+                deps_to_process.push((dependency, task_env, task_dependency));
+            }
+
+            // Process all dependencies after collecting them
+            for (dependency, task_env, task_dependency) in deps_to_process {
                 // Add the node to the graph
                 let task_id = TaskId(nodes.len());
                 nodes.push(TaskNode {
-                    name: Some(dependency.clone()),
+                    name: Some(dependency.task_name.clone()),
                     task: Cow::Borrowed(task_dependency),
                     run_environment: task_env,
-                    additional_args: Vec::new(),
+                    args: Some(Self::merge_args(
+                        &dependency.task_name,
+                        task_dependency.args().map(|args| args.to_vec()).as_ref(),
+                        dependency.args.as_ref(),
+                    )?),
                     dependencies: Vec::new(),
                 });
 
                 // Store the task id in the map to be able to look up the name later
-                task_name_to_node.insert(dependency.clone(), task_id);
+                task_name_with_args_to_node.insert(dependency.clone(), task_id);
 
                 // Add the dependency to the node
-                node_dependencies.push(task_id);
+                node_dependencies.push(GraphDependency(
+                    task_id,
+                    dependency.args.clone(),
+                    dependency.environment.clone(),
+                ));
             }
 
             nodes[next_node_to_visit].dependencies = node_dependencies;
@@ -297,6 +395,44 @@ impl<'p> TaskGraph<'p> {
         }
 
         Ok(Self { project, nodes })
+    }
+
+    fn merge_args(
+        task_name: &TaskName,
+        task_arguments: Option<&Vec<TaskArg>>,
+        arg_values: Option<&Vec<String>>,
+    ) -> Result<ArgValues, TaskGraphError> {
+        let task_arguments = match task_arguments {
+            Some(args) => args,
+            None => &Vec::new(),
+        };
+
+        let arg_values = match arg_values {
+            Some(values) => values,
+            None => &Vec::new(),
+        };
+
+        let mut typed_args = Vec::with_capacity(task_arguments.len());
+
+        for (i, arg) in task_arguments.iter().enumerate() {
+            let value = if i < arg_values.len() {
+                arg_values[i].clone()
+            } else if let Some(default) = &arg.default {
+                default.clone()
+            } else {
+                return Err(TaskGraphError::MissingArgument(
+                    arg.name.as_str().to_owned(),
+                    task_name.to_string(),
+                ));
+            };
+
+            typed_args.push(TypedArg {
+                name: arg.name.as_str().to_owned(),
+                value,
+            });
+        }
+
+        Ok(ArgValues::TypedArgs(typed_args))
     }
 
     /// Returns the topological order of the tasks in the graph.
@@ -325,7 +461,7 @@ impl<'p> TaskGraph<'p> {
             }
 
             for dependency in nodes[id.0].dependencies.iter() {
-                visit(*dependency, nodes, visited, order);
+                visit(dependency.task_id(), nodes, visited, order);
             }
 
             order.push(id);
@@ -344,6 +480,16 @@ pub enum TaskGraphError {
 
     #[error("could not split task, assuming non valid task")]
     InvalidTask,
+
+    #[error("task '{0}' received more arguments than expected")]
+    TooManyArguments(String),
+
+    #[error("no value provided for argument '{0}' for task '{1}'")]
+    MissingArgument(String, String),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    TemplateStringError(#[from] TemplateStringError),
 }
 
 #[cfg(test)]
@@ -354,8 +500,8 @@ mod test {
     use rattler_conda_types::Platform;
 
     use crate::{
-        task::{task_environment::SearchEnvironments, task_graph::TaskGraph},
         Workspace,
+        task::{task_environment::SearchEnvironments, task_graph::TaskGraph},
     };
 
     fn commands_in_order(
@@ -382,7 +528,7 @@ mod test {
             .topological_order()
             .into_iter()
             .map(|task| &graph[task])
-            .filter_map(|task| task.full_command())
+            .filter_map(|task| task.full_command().ok().flatten())
             .collect()
     }
 

@@ -4,7 +4,7 @@
 ## About
 Commands to export workspaces to other formats
 
---8<-- "docs/reference/cli/pixi/workspace/export_extender.md:description"
+--8<-- "docs/reference/cli/pixi/workspace/export_extender:description"
 
 ## Usage
 ```
@@ -18,4 +18,4 @@ pixi workspace export <COMMAND>
 | [`conda-environment`](export/conda-environment.md) | Export workspace environment to a conda environment.yaml file |
 
 
---8<-- "docs/reference/cli/pixi/workspace/export_extender.md:example"
+--8<-- "docs/reference/cli/pixi/workspace/export_extender:example"

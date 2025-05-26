@@ -4,7 +4,7 @@
 ## About
 Upgrade specific package which is installed globally. This command has been removed, please use `pixi global update` instead
 
---8<-- "docs/reference/cli/pixi/global/upgrade_extender.md:description"
+--8<-- "docs/reference/cli/pixi/global/upgrade_extender:description"
 
 ## Usage
 ```
@@ -24,4 +24,4 @@ pixi global upgrade [OPTIONS] [SPECS]...
 :  The platform to install the package for
 <br>**default**: `current_platform`
 
---8<-- "docs/reference/cli/pixi/global/upgrade_extender.md:example"
+--8<-- "docs/reference/cli/pixi/global/upgrade_extender:example"

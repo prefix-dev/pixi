@@ -1,10 +1,11 @@
 use std::{
-    collections::{hash_map::Entry, HashMap, HashSet},
+    collections::{HashMap, HashSet, hash_map::Entry},
     convert::identity,
+    ffi::OsString,
     string::String,
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc,
+        atomic::{AtomicBool, Ordering},
     },
 };
 
@@ -15,19 +16,20 @@ use itertools::Itertools;
 use miette::{Diagnostic, IntoDiagnostic};
 use pixi_config::{ConfigCli, ConfigCliActivation};
 use pixi_manifest::TaskName;
+use rattler_conda_types::Platform;
 use thiserror::Error;
 use tracing::Level;
 
 use crate::{
+    Workspace, WorkspaceLocator,
     cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
     environment::sanity_check_project,
     lock_file::{ReinstallPackages, UpdateLockFileOptions},
     task::{
-        get_task_env, AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript,
-        InvalidWorkingDirectory, SearchEnvironments, TaskAndEnvironment, TaskGraph,
+        AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
+        SearchEnvironments, TaskAndEnvironment, TaskGraph, get_task_env,
     },
-    workspace::{errors::UnsupportedPlatformError, Environment},
-    Workspace, WorkspaceLocator,
+    workspace::{Environment, errors::UnsupportedPlatformError},
 };
 
 use super::cli_config::LockFileUpdateConfig;
@@ -190,6 +192,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 // Add a newline between task outputs
                 eprintln!();
             }
+
+            let display_command = executable_task.display_command().to_string();
+
             eprintln!(
                 "{}{}{}{}{}{}{}",
                 console::Emoji("✨ ", ""),
@@ -207,7 +212,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     "".to_string()
                 },
                 console::style("): ").bold(),
-                executable_task.display_command(),
+                display_command,
                 if let Some(description) = executable_task.task().description() {
                     console::style(format!(": ({})", description)).yellow()
                 } else {
@@ -230,9 +235,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         {
             CanSkip::No(cache) => cache,
             CanSkip::Yes => {
+                let args_text = if !executable_task.args().is_empty() {
+                    format!(
+                        " with args {}",
+                        console::style(executable_task.args()).bold()
+                    )
+                } else {
+                    String::new()
+                };
+
                 eprintln!(
-                    "Task '{}' can be skipped (cache hit) 🚀",
-                    console::style(executable_task.name().unwrap_or("")).bold()
+                    "Task '{}'{args_text} can be skipped (cache hit) 🚀",
+                    console::style(executable_task.name().unwrap_or("")).bold(),
                 );
                 task_idx += 1;
                 continue;
@@ -268,10 +282,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         ctrlc_should_exit_process.store(false, Ordering::Relaxed);
 
+        let task_env = task_env
+            .iter()
+            .map(|(k, v)| (OsString::from(k), OsString::from(v)))
+            .collect();
+
         // Execute the task itself within the command environment. If one of the tasks
         // failed with a non-zero exit code, we exit this parent process with
         // the same code.
-        match execute_task(&executable_task, task_env).await {
+        match execute_task(&executable_task, &task_env).await {
             Ok(_) => {
                 task_idx += 1;
             }
@@ -321,6 +340,19 @@ fn command_not_found<'p>(workspace: &'p Workspace, explicit_environment: Option<
                 })
         );
     }
+
+    // Help user when there is no task available because the platform is not supported
+    if workspace
+        .environments()
+        .iter()
+        .any(|env| env.best_platform() == Platform::current())
+    {
+        eprintln!(
+            "\nHelp: This platform ({}) is not supported. Please run the following command to add this platform to the workspace:\n\n\tpixi workspace platform add {}",
+            Platform::current(),
+            Platform::current(),
+        )
+    }
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -329,6 +361,7 @@ enum TaskExecutionError {
     NonZeroExitCode(i32),
 
     #[error(transparent)]
+    #[diagnostic(transparent)]
     FailedToParseShellScript(#[from] FailedToParseShellScript),
 
     #[error(transparent)]
@@ -343,7 +376,7 @@ enum TaskExecutionError {
 /// This function is called from [`execute`].
 async fn execute_task(
     task: &ExecutableTask<'_>,
-    command_env: &HashMap<String, String>,
+    command_env: &HashMap<OsString, OsString>,
 ) -> Result<(), TaskExecutionError> {
     let Some(script) = task.as_deno_script()? else {
         return Ok(());
@@ -353,7 +386,7 @@ async fn execute_task(
     let status_code = deno_task_shell::execute(
         script,
         command_env.clone(),
-        &cwd,
+        cwd,
         Default::default(),
         Default::default(),
     )

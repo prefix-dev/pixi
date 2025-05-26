@@ -13,11 +13,12 @@ version = "0.1.0"
 file_url = { workspace = true }
 miette = { workspace = true }
 pixi_git = { workspace = true }
-pixi_spec = { workspace = true }
+pixi_spec = { workspace = true, features = ["rattler_lock"] }
 rattler_conda_types = { workspace = true }
-rattler_digest = { workspace = true }
+rattler_digest = { workspace = true, features = ["serde"] }
 rattler_lock = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
+serde_with = { workspace = true }
 thiserror = { workspace = true }
 typed-path = { workspace = true }
 url = { workspace = true }

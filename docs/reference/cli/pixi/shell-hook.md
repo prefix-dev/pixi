@@ -4,7 +4,7 @@
 ## About
 Print the pixi environment activation script
 
---8<-- "docs/reference/cli/pixi/shell-hook_extender.md:description"
+--8<-- "docs/reference/cli/pixi/shell-hook_extender:description"
 
 ## Usage
 ```
@@ -14,6 +14,11 @@ pixi shell-hook [OPTIONS]
 ## Options
 - <a id="arg---shell" href="#arg---shell">`--shell (-s) <SHELL>`</a>
 :  Sets the shell, options: [`bash`,  `zsh`,  `xonsh`,  `cmd`, `powershell`,  `fish`,  `nushell`]
+- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
+:  The environment to activate in the script
+- <a id="arg---json" href="#arg---json">`--json`</a>
+:  Emit the environment variables set by running the activation as JSON
+<br>**default**: `false`
 
 ## Config Options
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
@@ -29,9 +34,8 @@ pixi shell-hook [OPTIONS]
 :  Max concurrent network requests, default is `50`
 - <a id="arg---force-activate" href="#arg---force-activate">`--force-activate`</a>
 :  Do not use the environment activation cache. (default: true except in experimental mode)
-- <a id="arg---no-completion" href="#arg---no-completion">`--no-completion <NO_COMPLETION>`</a>
+- <a id="arg---no-completions" href="#arg---no-completions">`--no-completions`</a>
 :  Do not source the autocompletion scripts from the environment
-<br>**options**: `true`, `false`
 - <a id="arg---change-ps1" href="#arg---change-ps1">`--change-ps1 <CHANGE_PS1>`</a>
 :  Do not change the PS1 variable when starting a prompt
 <br>**options**: `true`, `false`
@@ -49,11 +53,6 @@ pixi shell-hook [OPTIONS]
 - <a id="arg---locked" href="#arg---locked">`--locked`</a>
 :  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 <br>**env**: `PIXI_LOCKED`
-- <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
-:  The environment to activate in the script
-- <a id="arg---json" href="#arg---json">`--json`</a>
-:  Emit the environment variables set by running the activation as JSON
-<br>**default**: `false`
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
@@ -65,4 +64,4 @@ Print the pixi environment activation script.
 You can source the script to activate the environment without needing pixi itself.
 
 
---8<-- "docs/reference/cli/pixi/shell-hook_extender.md:example"
+--8<-- "docs/reference/cli/pixi/shell-hook_extender:example"

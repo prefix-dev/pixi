@@ -1,6 +1,6 @@
+use crate::WorkspaceLocator;
 use crate::cli::cli_config::WorkspaceConfig;
 use crate::workspace::WorkspaceLocatorError;
-use crate::WorkspaceLocator;
 use clap::Parser;
 use miette::{IntoDiagnostic, WrapErr};
 use pixi_config;
@@ -198,6 +198,7 @@ fn determine_project_root(common_args: &CommonArgs) -> miette::Result<Option<Pat
         .with_emit_warnings(false) // No reason to emit warnings
         .with_consider_environment(true)
         .with_search_start(common_args.workspace_config.workspace_locator_start())
+        .with_ignore_pixi_version_check(true)
         .locate();
     match workspace {
         Err(WorkspaceLocatorError::WorkspaceNotFound(_)) => {
@@ -331,6 +332,7 @@ fn partial_config(config: &mut Config, key: &str) -> miette::Result<()> {
         "mirrors" => new.mirrors = config.mirrors.clone(),
         "repodata-config" => new.repodata_config = config.repodata_config.clone(),
         "pypi-config" => new.pypi_config = config.pypi_config.clone(),
+        "proxy-config" => new.proxy_config = config.proxy_config.clone(),
         _ => {
             let keys = [
                 "default-channels",
@@ -339,6 +341,7 @@ fn partial_config(config: &mut Config, key: &str) -> miette::Result<()> {
                 "mirrors",
                 "repodata-config",
                 "pypi-config",
+                "proxy-config",
             ];
             return Err(miette::miette!("key must be one of: {}", keys.join(", ")));
         }

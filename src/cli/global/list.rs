@@ -1,5 +1,5 @@
 use crate::global::list::{
-    list_all_global_environments, list_specific_global_environment, GlobalSortBy,
+    GlobalSortBy, list_all_global_environments, list_specific_global_environment,
 };
 use crate::global::{EnvironmentName, Project};
 use clap::Parser;
@@ -49,16 +49,21 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let env_name = EnvironmentName::from_str(environment.as_str())?;
         // Verify that the environment is in sync with the manifest and report to the user otherwise
         if !project.environment_in_sync(&env_name).await? {
-            tracing::warn!("The environment {} is not in sync with the manifest, to sync run\n\tpixi global sync", env_name.fancy_display());
+            tracing::warn!(
+                "The environment {} is not in sync with the manifest, to sync run\n\tpixi global sync",
+                env_name.fancy_display()
+            );
         }
 
         list_specific_global_environment(&project, &env_name, args.sort_by, args.regex).await?;
     } else {
         // Verify that the environments are in sync with the manifest and report to the user otherwise
         if !project.environments_in_sync().await? {
-            tracing::warn!("The environments are not in sync with the manifest, to sync run\n\tpixi global sync");
+            tracing::warn!(
+                "The environments are not in sync with the manifest, to sync run\n\tpixi global sync"
+            );
         }
-        list_all_global_environments(&project, None, None, args.regex).await?;
+        list_all_global_environments(&project, None, None, args.regex, true).await?;
     }
 
     Ok(())

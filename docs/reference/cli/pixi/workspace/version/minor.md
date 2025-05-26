@@ -4,11 +4,11 @@
 ## About
 Bump the workspace version to MINOR
 
---8<-- "docs/reference/cli/pixi/workspace/version/minor_extender.md:description"
+--8<-- "docs/reference/cli/pixi/workspace/version/minor_extender:description"
 
 ## Usage
 ```
 pixi workspace version minor
 ```
 
---8<-- "docs/reference/cli/pixi/workspace/version/minor_extender.md:example"
+--8<-- "docs/reference/cli/pixi/workspace/version/minor_extender:example"

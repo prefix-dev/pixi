@@ -1,7 +1,9 @@
 use std::{collections::HashSet, hash::Hash, path::PathBuf};
 
 use indexmap::IndexSet;
-use serde::Serialize;
+use pep508_rs::PackageName;
+use serde::ser::SerializeSeq;
+use serde::{Serialize, Serializer};
 use thiserror::Error;
 use url::Url;
 
@@ -94,7 +96,7 @@ pub struct PypiOptions {
     /// These are flat listings of distributions
     pub find_links: Option<Vec<FindLinksUrlOrPath>>,
     /// Disable isolated builds
-    pub no_build_isolation: Option<Vec<String>>,
+    pub no_build_isolation: NoBuildIsolation,
     /// The strategy to use when resolving against multiple index URLs.
     pub index_strategy: Option<IndexStrategy>,
     /// Don't build sdist for all or certain packages
@@ -119,7 +121,7 @@ impl PypiOptions {
         index: Option<Url>,
         extra_indexes: Option<Vec<Url>>,
         flat_indexes: Option<Vec<FindLinksUrlOrPath>>,
-        no_build_isolation: Option<Vec<String>>,
+        no_build_isolation: NoBuildIsolation,
         index_strategy: Option<IndexStrategy>,
         no_build: Option<NoBuild>,
     ) -> Self {
@@ -216,17 +218,15 @@ impl PypiOptions {
             })
             .or_else(|| other.find_links.clone());
 
-        // Merge all the no build isolation packages
-        let no_build_isolation = self
-            .no_build_isolation
-            .as_ref()
-            .map(|no_build_isolation| {
-                clone_and_deduplicate(
-                    no_build_isolation.iter(),
-                    other.no_build_isolation.clone().unwrap_or_default().iter(),
-                )
-            })
-            .or_else(|| other.no_build_isolation.clone());
+        // Merge all the no build isolation packages. We take the union.
+        let no_build_isolation = match (&self.no_build_isolation, &other.no_build_isolation) {
+            (NoBuildIsolation::All, _) | (_, NoBuildIsolation::All) => NoBuildIsolation::All,
+            (NoBuildIsolation::Packages(a), NoBuildIsolation::Packages(b)) => {
+                let mut packages = a.clone();
+                packages.extend(b.iter().cloned());
+                NoBuildIsolation::Packages(packages)
+            }
+        };
 
         // Set the no-build option
         let no_build = match (self.no_build.as_ref(), other.no_build.as_ref()) {
@@ -306,6 +306,73 @@ pub enum PypiOptionsMergeError {
     MultipleIndexStrategies { first: String, second: String },
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum NoBuildIsolation {
+    /// Don't use build isolation for any package.
+    All,
+
+    /// Do not use build isolation for a specific set of package.
+    Packages(IndexSet<pep508_rs::PackageName>),
+}
+
+impl Serialize for NoBuildIsolation {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            NoBuildIsolation::All => serializer.serialize_bool(true),
+            NoBuildIsolation::Packages(packages) => {
+                let mut seq = serializer.serialize_seq(Some(packages.len()))?;
+                for package in packages {
+                    seq.serialize_element(package)?;
+                }
+                seq.end()
+            }
+        }
+    }
+}
+
+impl Default for NoBuildIsolation {
+    fn default() -> Self {
+        NoBuildIsolation::none()
+    }
+}
+
+impl NoBuildIsolation {
+    /// Create a new `NoBuildIsolation` where all packages are build isolated.
+    pub fn none() -> Self {
+        NoBuildIsolation::Packages(IndexSet::new())
+    }
+
+    /// Returns the union of two `NoBuildIsolation` values.
+    pub fn union(&self, other: &NoBuildIsolation) -> NoBuildIsolation {
+        match (self, other) {
+            (NoBuildIsolation::All, _) | (_, NoBuildIsolation::All) => NoBuildIsolation::All,
+            (NoBuildIsolation::Packages(a), NoBuildIsolation::Packages(b)) => {
+                let mut packages = a.clone();
+                packages.extend(b.iter().cloned());
+                NoBuildIsolation::Packages(packages)
+            }
+        }
+    }
+
+    /// Returns true if the given package is in the set of packages that should
+    /// *not* use build isolation.
+    pub fn contains(&self, package: &pep508_rs::PackageName) -> bool {
+        match self {
+            NoBuildIsolation::All => true,
+            NoBuildIsolation::Packages(packages) => packages.contains(package),
+        }
+    }
+}
+
+impl FromIterator<pep508_rs::PackageName> for NoBuildIsolation {
+    fn from_iter<T: IntoIterator<Item = PackageName>>(iter: T) -> Self {
+        NoBuildIsolation::Packages(iter.into_iter().collect())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use url::Url;
@@ -323,7 +390,10 @@ mod tests {
                 FindLinksUrlOrPath::Path("/path/to/flat/index".into()),
                 FindLinksUrlOrPath::Url(Url::parse("https://flat.index").unwrap()),
             ]),
-            no_build_isolation: Some(vec!["foo".to_string(), "bar".to_string()]),
+            no_build_isolation: NoBuildIsolation::from_iter([
+                "foo".parse().unwrap(),
+                "bar".parse().unwrap(),
+            ]),
             index_strategy: None,
             no_build: None,
         };
@@ -336,7 +406,7 @@ mod tests {
                 FindLinksUrlOrPath::Path("/path/to/flat/index2".into()),
                 FindLinksUrlOrPath::Url(Url::parse("https://flat.index2").unwrap()),
             ]),
-            no_build_isolation: Some(vec!["foo".to_string()]),
+            no_build_isolation: NoBuildIsolation::from_iter(["foo".parse().unwrap()]),
             index_strategy: None,
             no_build: Some(NoBuild::All),
         };
@@ -392,7 +462,7 @@ mod tests {
             index_url: Some(Url::parse("https://example.com/pypi").unwrap()),
             extra_index_urls: None,
             find_links: None,
-            no_build_isolation: None,
+            no_build_isolation: NoBuildIsolation::default(),
             index_strategy: None,
             no_build: Default::default(),
         };
@@ -402,7 +472,7 @@ mod tests {
             index_url: Some(Url::parse("https://example.com/pypi2").unwrap()),
             extra_index_urls: None,
             find_links: None,
-            no_build_isolation: None,
+            no_build_isolation: NoBuildIsolation::default(),
             index_strategy: None,
             no_build: Default::default(),
         };
@@ -420,7 +490,7 @@ mod tests {
             index_url: None,
             extra_index_urls: None,
             find_links: None,
-            no_build_isolation: None,
+            no_build_isolation: NoBuildIsolation::default(),
             index_strategy: Some(IndexStrategy::FirstIndex),
             no_build: Default::default(),
         };
@@ -430,7 +500,7 @@ mod tests {
             index_url: None,
             extra_index_urls: None,
             find_links: None,
-            no_build_isolation: None,
+            no_build_isolation: NoBuildIsolation::default(),
             index_strategy: Some(IndexStrategy::UnsafeBestMatch),
             no_build: Default::default(),
         };

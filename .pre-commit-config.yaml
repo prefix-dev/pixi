@@ -35,6 +35,13 @@ repos:
         types_or: [python, pyi]
         require_serial: true
         stages: [pre-commit, manual]
+      # shfmt
+      - id: shfmt
+        name: Format shell scripts
+        entry: pixi run --environment=lint shell-format
+        language: system
+        types: [shell]
+        stages: [pre-commit, manual]
       # Shellcheck
       - id: shellcheck
         name: Check shell scripts
@@ -99,4 +106,4 @@ repos:
         types: [file, rust]
         entry: pixi run --environment=lint cargo-clippy
         pass_filenames: false
-        stages: [pre-commit, manual]
+        stages: [pre-push, manual]
