@@ -18,7 +18,7 @@ impl CommandDispatcherProcessor {
             .reporter
             .as_deref_mut()
             .and_then(Reporter::as_pixi_install_reporter)
-            .map(|reporter| reporter.on_install_queued(parent_context, &task.spec));
+            .map(|reporter| reporter.on_queued(parent_context, &task.spec));
 
         // Store information about the pending environment.
         let pending_env_id = self
@@ -35,7 +35,7 @@ impl CommandDispatcherProcessor {
             .and_then(Reporter::as_pixi_install_reporter)
             .zip(reporter_id)
         {
-            reporter.on_install_start(id)
+            reporter.on_start(id)
         }
 
         // Add the task to the list of pending futures.
@@ -72,7 +72,7 @@ impl CommandDispatcherProcessor {
             .and_then(Reporter::as_pixi_install_reporter)
             .zip(env.reporter_id)
         {
-            reporter.on_install_finished(id)
+            reporter.on_finished(id)
         }
 
         let Some(result) = result.into_ok_or_failed() else {

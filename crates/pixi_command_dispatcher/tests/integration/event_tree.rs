@@ -1,3 +1,20 @@
+//! Implements [`EventTree`] which enables outputting the hierarchy of the
+//! operations that took place for a
+//! [`pixi_command_dispatcher::CommandDispatcher`].
+//!
+//! For example, this could be the output:
+//!
+//! ```
+//! Pixi solve (boost-check)
+//! ├── Source metadata ({ git = "https://github.com/wolfv/pixi-build-examples.git", rev = "a4c27e86a4a5395759486552abb3df8a47d50172", subdirectory = "boost-check" })
+//! │   ├── Git Checkout (https://github.com/wolfv/pixi-build-examples@a4c27e86a4a5395759486552abb3df8a47d50172)
+//! │   └── Instantiate tool environment (pixi-build-cmake)
+//! │       ├── Pixi solve (pixi-build-cmake)
+//! │       │   └── Conda solve #0
+//! │       └── Pixi install #0
+//! └── Conda solve #1
+//! ```
+
 use std::{collections::HashMap, fmt::Display};
 
 use itertools::Itertools;
@@ -14,41 +31,42 @@ use text_trees::{FormatCharacters, StringTreeNode, TreeFormatting};
 
 use crate::event_reporter::Event;
 
-slotmap::new_key_type! {
-    pub struct NodeId;
-}
-
-pub struct Node {
-    label: String,
-    children: Vec<NodeId>,
-}
-
+/// An [`EventTree`] is a hierarchical representation of the events that
+/// occurred in a [`pixi_command_dispatcher::CommandDispatcher`].
 pub struct EventTree {
     rootes: Vec<NodeId>,
     nodes: slotmap::SlotMap<NodeId, Node>,
 }
 
+slotmap::new_key_type! {
+    pub struct NodeId;
+}
+
+struct Node {
+    label: String,
+    children: Vec<NodeId>,
+}
+
 impl EventTree {
     pub fn new<'i>(events: impl IntoIterator<Item = &'i Event>) -> Self {
-        let mut builder = EventTreeBuilder::new();
+        let mut builder = EventTreeBuilder::default();
 
-        let mut checkout_name = HashMap::new();
-        let mut pixi_solve_name = HashMap::new();
-        let mut source_metadata_name = HashMap::new();
-        let mut instantiate_tool_env_name = HashMap::new();
+        let mut checkout_label = HashMap::new();
+        let mut pixi_solve_label = HashMap::new();
+        let mut source_metadata_label = HashMap::new();
+        let mut instantiate_tool_env_label = HashMap::new();
 
         for event in events {
             match event {
                 Event::CondaSolveQueued { id, context, .. } => {
-                    builder.set_event_context((*id).into(), *context);
+                    builder.set_event_parent((*id).into(), *context);
                 }
                 Event::CondaSolveStarted { id } => {
-                    let node = builder.alloc_node(format!("Conda solve #{}", id.0));
-                    builder.set_context_node((*id).into(), node);
+                    builder.alloc_node((*id).into(), format!("Conda solve #{}", id.0));
                 }
                 Event::CondaSolveFinished { .. } => {}
                 Event::PixiSolveQueued { id, context, spec } => {
-                    pixi_solve_name.insert(
+                    pixi_solve_label.insert(
                         *id,
                         spec.dependencies
                             .names()
@@ -56,20 +74,20 @@ impl EventTree {
                             .format(", ")
                             .to_string(),
                     );
-                    builder.set_event_context((*id).into(), *context);
+                    builder.set_event_parent((*id).into(), *context);
                 }
                 Event::PixiSolveStarted { id } => {
-                    let node = builder
-                        .alloc_node(format!("Pixi solve ({})", pixi_solve_name.get(id).unwrap()));
-                    builder.set_context_node((*id).into(), node);
+                    builder.alloc_node(
+                        (*id).into(),
+                        format!("Pixi solve ({})", pixi_solve_label.get(id).unwrap()),
+                    );
                 }
                 Event::PixiSolveFinished { .. } => {}
                 Event::PixiInstallQueued { id, context, .. } => {
-                    builder.set_event_context((*id).into(), *context);
+                    builder.set_event_parent((*id).into(), *context);
                 }
                 Event::PixiInstallStarted { id } => {
-                    let node = builder.alloc_node(format!("Pixi install #{}", id.0));
-                    builder.set_context_node((*id).into(), node);
+                    builder.alloc_node((*id).into(), format!("Pixi install #{}", id.0));
                 }
                 Event::PixiInstallFinished { .. } => {}
                 Event::GitCheckoutQueued {
@@ -77,41 +95,46 @@ impl EventTree {
                     context,
                     reference,
                 } => {
-                    checkout_name.insert(
+                    checkout_label.insert(
                         *id,
                         format!("{}@{}", reference.url.as_url(), reference.reference),
                     );
-                    builder.set_event_context((*id).into(), *context);
+                    builder.set_event_parent((*id).into(), *context);
                 }
                 Event::GitCheckoutStarted { id } => {
-                    let node = builder
-                        .alloc_node(format!("Git Checkout ({})", checkout_name.get(id).unwrap()));
-                    builder.set_context_node((*id).into(), node);
+                    builder.alloc_node(
+                        (*id).into(),
+                        format!("Git Checkout ({})", checkout_label.get(id).unwrap()),
+                    );
                 }
                 Event::GitCheckoutFinished { .. } => {}
                 Event::SourceMetadataQueued { id, context, spec } => {
-                    source_metadata_name.insert(*id, spec.source_spec.to_toml_value().to_string());
-                    builder.set_event_context((*id).into(), *context);
+                    source_metadata_label.insert(*id, spec.source_spec.to_toml_value().to_string());
+                    builder.set_event_parent((*id).into(), *context);
                 }
                 Event::SourceMetadataStarted { id } => {
-                    let node = builder.alloc_node(format!(
-                        "Source metadata ({})",
-                        source_metadata_name.get(id).unwrap()
-                    ));
-                    builder.set_context_node((*id).into(), node);
+                    builder.alloc_node(
+                        (*id).into(),
+                        format!(
+                            "Source metadata ({})",
+                            source_metadata_label.get(id).unwrap()
+                        ),
+                    );
                 }
                 Event::SourceMetadataFinished { .. } => {}
                 Event::InstantiateToolEnvQueued { id, context, spec } => {
-                    instantiate_tool_env_name
+                    instantiate_tool_env_label
                         .insert(*id, spec.requirement.0.as_source().to_string());
-                    builder.set_event_context((*id).into(), *context);
+                    builder.set_event_parent((*id).into(), *context);
                 }
                 Event::InstantiateToolEnvStarted { id } => {
-                    let node = builder.alloc_node(format!(
-                        "Instantiate tool environment ({})",
-                        instantiate_tool_env_name.get(id).unwrap()
-                    ));
-                    builder.set_context_node((*id).into(), node);
+                    builder.alloc_node(
+                        (*id).into(),
+                        format!(
+                            "Instantiate tool environment ({})",
+                            instantiate_tool_env_label.get(id).unwrap()
+                        ),
+                    );
                 }
                 Event::InstantiateToolEnvFinished { .. } => {}
             }
@@ -123,11 +146,11 @@ impl EventTree {
 
 impl Display for EventTree {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        fn make_node(nodes: &slotmap::SlotMap<NodeId, Node>, id: NodeId) -> StringTreeNode {
+        fn make_tree_node(nodes: &slotmap::SlotMap<NodeId, Node>, id: NodeId) -> StringTreeNode {
             let node = &nodes[id];
             let mut tree = StringTreeNode::new(node.label.clone());
             for child in &node.children {
-                tree.push_node(make_node(nodes, *child))
+                tree.push_node(make_tree_node(nodes, *child))
             }
             tree
         }
@@ -137,7 +160,7 @@ impl Display for EventTree {
             write!(
                 f,
                 "{}",
-                make_node(&self.nodes, *root)
+                make_tree_node(&self.nodes, *root)
                     .to_string_with_format(&format)
                     .unwrap()
             )?;
@@ -147,6 +170,8 @@ impl Display for EventTree {
     }
 }
 
+/// A helper struct that aids in the construction of an [`EventTree`].
+#[derive(Default)]
 struct EventTreeBuilder {
     nodes: SlotMap<NodeId, Node>,
     rootes: Vec<NodeId>,
@@ -177,23 +202,24 @@ impl From<ReporterContext> for EventId {
 }
 
 impl EventTreeBuilder {
-    fn new() -> Self {
-        Self {
-            nodes: SlotMap::default(),
-            rootes: Vec::new(),
-            event_parent_nodes: HashMap::new(),
-            event_nodes: Default::default(),
-        }
-    }
-
-    fn alloc_node(&mut self, label: String) -> NodeId {
-        self.nodes.insert(Node {
+    /// Allocate a node in the tree
+    fn alloc_node(&mut self, event_id: EventId, label: String) -> NodeId {
+        let id = self.nodes.insert(Node {
             label,
             children: Vec::new(),
-        })
+        });
+
+        if let Some(parent) = self.event_parent_nodes.get(&event_id) {
+            self.nodes[*parent].children.push(id);
+        } else {
+            self.rootes.push(id);
+        }
+
+        id
     }
 
-    fn set_event_context(&mut self, id: EventId, context: Option<ReporterContext>) {
+    /// Set the parent for the node with the given [`EventId`].
+    fn set_event_parent(&mut self, id: EventId, context: Option<ReporterContext>) {
         if let Some(context) = context
             .and_then(|context| self.event_nodes.get(&context.into()))
             .copied()
@@ -202,15 +228,7 @@ impl EventTreeBuilder {
         }
     }
 
-    fn set_context_node(&mut self, id: EventId, node: NodeId) {
-        self.event_nodes.insert(id, node);
-        if let Some(parent) = self.event_parent_nodes.get(&id) {
-            self.nodes[*parent].children.push(node);
-        } else {
-            self.rootes.push(node);
-        }
-    }
-
+    /// Finish the construction of the tree
     fn finish(self) -> EventTree {
         EventTree {
             rootes: self.rootes,

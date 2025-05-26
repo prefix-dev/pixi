@@ -18,17 +18,17 @@ pub trait PixiInstallReporter {
     /// This function should return an identifier which is used to identify this
     /// particular installation. Other functions in this trait will use this
     /// identifier to link the events to the particular solve.
-    fn on_install_queued(
+    fn on_queued(
         &mut self,
         reason: Option<ReporterContext>,
         env: &InstallPixiEnvironmentSpec,
     ) -> PixiInstallId;
 
     /// Called when solving of the specified environment has started.
-    fn on_install_start(&mut self, solve_id: PixiInstallId);
+    fn on_start(&mut self, solve_id: PixiInstallId);
 
     /// Called when solving of the specified environment has finished.
-    fn on_install_finished(&mut self, solve_id: PixiInstallId);
+    fn on_finished(&mut self, solve_id: PixiInstallId);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
@@ -46,17 +46,17 @@ pub trait PixiSolveReporter {
     /// This function should return an identifier which is used to identify this
     /// particular solve. Other functions in this trait will use this identifier
     /// to link the events to the particular solve.
-    fn on_solve_queued(
+    fn on_queued(
         &mut self,
         reason: Option<ReporterContext>,
         env: &PixiEnvironmentSpec,
     ) -> PixiSolveId;
 
     /// Called when solving of the specified environment has started.
-    fn on_solve_start(&mut self, solve_id: PixiSolveId);
+    fn on_start(&mut self, solve_id: PixiSolveId);
 
     /// Called when solving of the specified environment has finished.
-    fn on_solve_finished(&mut self, solve_id: PixiSolveId);
+    fn on_finished(&mut self, solve_id: PixiSolveId);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
@@ -74,17 +74,17 @@ pub trait CondaSolveReporter {
     /// This function should return an identifier which is used to identify this
     /// particular solve. Other functions in this trait will use this identifier
     /// to link the events to the particular solve.
-    fn on_solve_queued(
+    fn on_queued(
         &mut self,
         reason: Option<ReporterContext>,
         env: &SolveCondaEnvironmentSpec,
     ) -> CondaSolveId;
 
     /// Called when solving of the specified environment has started.
-    fn on_solve_start(&mut self, solve_id: CondaSolveId);
+    fn on_start(&mut self, solve_id: CondaSolveId);
 
     /// Called when solving of the specified environment has finished.
-    fn on_solve_finished(&mut self, solve_id: CondaSolveId);
+    fn on_finished(&mut self, solve_id: CondaSolveId);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
@@ -93,17 +93,17 @@ pub struct GitCheckoutId(pub usize);
 
 pub trait GitCheckoutReporter {
     /// Called when a git checkout was queued on the [`crate::CommandDispatcher`].
-    fn on_checkout_queued(
+    fn on_queued(
         &mut self,
         reason: Option<ReporterContext>,
         env: &RepositoryReference,
     ) -> GitCheckoutId;
 
     /// Called when the git checkout has started.
-    fn on_checkout_start(&mut self, checkout_id: GitCheckoutId);
+    fn on_start(&mut self, checkout_id: GitCheckoutId);
 
     /// Called when the git checkout has finished.
-    fn on_checkout_finished(&mut self, checkout_id: GitCheckoutId);
+    fn on_finished(&mut self, checkout_id: GitCheckoutId);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]

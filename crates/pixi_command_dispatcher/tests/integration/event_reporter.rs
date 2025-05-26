@@ -129,7 +129,7 @@ impl EventReporter {
 }
 
 impl CondaSolveReporter for EventReporter {
-    fn on_solve_queued(
+    fn on_queued(
         &mut self,
         context: Option<ReporterContext>,
         env: &SolveCondaEnvironmentSpec,
@@ -147,13 +147,13 @@ impl CondaSolveReporter for EventReporter {
         next_id
     }
 
-    fn on_solve_start(&mut self, solve_id: CondaSolveId) {
+    fn on_start(&mut self, solve_id: CondaSolveId) {
         let event = Event::CondaSolveStarted { id: solve_id };
         println!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.lock().unwrap().push(event);
     }
 
-    fn on_solve_finished(&mut self, solve_id: CondaSolveId) {
+    fn on_finished(&mut self, solve_id: CondaSolveId) {
         let event = Event::CondaSolveFinished { id: solve_id };
         println!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.lock().unwrap().push(event);
@@ -161,7 +161,7 @@ impl CondaSolveReporter for EventReporter {
 }
 
 impl PixiSolveReporter for EventReporter {
-    fn on_solve_queued(
+    fn on_queued(
         &mut self,
         context: Option<ReporterContext>,
         env: &PixiEnvironmentSpec,
@@ -179,13 +179,13 @@ impl PixiSolveReporter for EventReporter {
         next_id
     }
 
-    fn on_solve_start(&mut self, solve_id: PixiSolveId) {
+    fn on_start(&mut self, solve_id: PixiSolveId) {
         let event = Event::PixiSolveStarted { id: solve_id };
         println!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.lock().unwrap().push(event);
     }
 
-    fn on_solve_finished(&mut self, solve_id: PixiSolveId) {
+    fn on_finished(&mut self, solve_id: PixiSolveId) {
         let event = Event::PixiSolveFinished { id: solve_id };
         println!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.lock().unwrap().push(event);
@@ -193,7 +193,7 @@ impl PixiSolveReporter for EventReporter {
 }
 
 impl PixiInstallReporter for EventReporter {
-    fn on_install_queued(
+    fn on_queued(
         &mut self,
         context: Option<ReporterContext>,
         env: &InstallPixiEnvironmentSpec,
@@ -211,13 +211,13 @@ impl PixiInstallReporter for EventReporter {
         next_id
     }
 
-    fn on_install_start(&mut self, solve_id: PixiInstallId) {
+    fn on_start(&mut self, solve_id: PixiInstallId) {
         let event = Event::PixiInstallStarted { id: solve_id };
         println!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.lock().unwrap().push(event);
     }
 
-    fn on_install_finished(&mut self, solve_id: PixiInstallId) {
+    fn on_finished(&mut self, solve_id: PixiInstallId) {
         let event = Event::PixiInstallFinished { id: solve_id };
         println!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.lock().unwrap().push(event);
@@ -225,7 +225,7 @@ impl PixiInstallReporter for EventReporter {
 }
 
 impl GitCheckoutReporter for EventReporter {
-    fn on_checkout_queued(
+    fn on_queued(
         &mut self,
         context: Option<ReporterContext>,
         env: &RepositoryReference,
@@ -243,13 +243,13 @@ impl GitCheckoutReporter for EventReporter {
         next_id
     }
 
-    fn on_checkout_start(&mut self, checkout_id: GitCheckoutId) {
+    fn on_start(&mut self, checkout_id: GitCheckoutId) {
         let event = Event::GitCheckoutStarted { id: checkout_id };
         println!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.lock().unwrap().push(event);
     }
 
-    fn on_checkout_finished(&mut self, checkout_id: GitCheckoutId) {
+    fn on_finished(&mut self, checkout_id: GitCheckoutId) {
         let event = Event::GitCheckoutFinished { id: checkout_id };
         println!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.lock().unwrap().push(event);
@@ -337,13 +337,13 @@ impl Reporter for EventReporter {
         Some(self)
     }
 
-    fn as_source_metadata_reporter(&mut self) -> Option<&mut dyn SourceMetadataReporter> {
-        Some(self)
-    }
-
     fn as_instantiate_tool_environment_reporter(
         &mut self,
     ) -> Option<&mut dyn InstantiateToolEnvironmentReporter> {
+        Some(self)
+    }
+
+    fn as_source_metadata_reporter(&mut self) -> Option<&mut dyn SourceMetadataReporter> {
         Some(self)
     }
 }
