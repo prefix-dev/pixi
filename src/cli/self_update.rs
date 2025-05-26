@@ -21,6 +21,9 @@ pub struct Args {
     /// The desired version (to downgrade or upgrade to).
     #[clap(long)]
     version: Option<Version>,
+    /// Take a fixed version of pixi from the specified URL. The URL must point to a pixi binary.
+    #[clap(long, conflicts_with = "version")]
+    url: Option<Url>,
 }
 
 fn user_agent() -> String {
@@ -111,71 +114,19 @@ async fn latest_version() -> miette::Result<Version> {
     }
 }
 
-pub async fn execute(args: Args) -> miette::Result<()> {
-    // Get the target version, without 'v' prefix
-    let target_version = match &args.version {
-        Some(version) => version,
-        None => &latest_version().await?,
-    };
-    // Get the current version of the pixi binary
-    let current_version = Version::from_str(consts::PIXI_VERSION).into_diagnostic()?;
-
-    // Stop here if the target version is the same as the current version
-    if *target_version == current_version {
-        eprintln!(
-            "{}pixi is already up-to-date (version {})",
-            console::style(console::Emoji("✔ ", "")).green(),
-            current_version
-        );
-        return Ok(());
-    }
-
-    let action = if *target_version < current_version {
-        if args.version.is_none() {
-            // Ask if --version was not passed
-            let confirmation = dialoguer::Confirm::new()
-                .with_prompt(format!(
-                    "\nCurrent version ({}) is more recent than remote ({}). Do you want to downgrade?",
-                    current_version, target_version
-                ))
-                .default(false)
-                .show_default(true)
-                .interact()
-                .into_diagnostic()?;
-            if !confirmation {
-                return Ok(());
-            };
-        };
-        "downgraded"
-    } else {
-        "updated"
-    };
-
-    eprintln!(
-        "{}Pixi will be {} from {} to {}",
-        console::style(console::Emoji("✔ ", "")).green(),
-        action,
-        current_version,
-        target_version
-    );
-
-    // Get the name of the binary to download and install based on the current platform
-    let archive_name = default_archive_name()
-        .expect("Could not find the default archive name for the current platform");
-
-    let download_url = format!(
-        "{}/download/v{}/{}",
-        consts::RELEASES_URL,
-        target_version,
-        archive_name
-    );
+/// Downloads the target of an URL into a temporary file.
+async fn download<U>(url: U) -> miette::Result<NamedTempFile>
+where
+    U: reqwest::IntoUrl + std::fmt::Display,
+{
+    let url_as_str = url.as_str().to_owned();
     // Create a temp file to download the archive
-    let mut archived_tempfile = tempfile::NamedTempFile::new().into_diagnostic()?;
+    let archived_tempfile = tempfile::NamedTempFile::new().into_diagnostic()?;
 
     // TODO proxy inject in https://github.com/prefix-dev/pixi/pull/3346
     let client = Client::new();
     let mut res = client
-        .get(&download_url)
+        .get(url)
         .header("User-Agent", user_agent())
         .send()
         .await
@@ -184,7 +135,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     if res.status() != reqwest::StatusCode::OK {
         return Err(miette::miette!(format!(
             "URL {} returned {}",
-            download_url,
+            url_as_str,
             res.status()
         )));
     } else {
@@ -197,46 +148,135 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     }
 
-    eprintln!(
-        "{}Pixi archive downloaded.",
-        console::style(console::Emoji("✔ ", "")).green(),
-    );
+    Ok(archived_tempfile)
+}
 
+/// Unpacks a pixi archive (typically downloaded from GitHub releases) into a temporary directory.
+async fn unpack_release_archive(
+    mut archived_tempfile: NamedTempFile,
+    archive_name: &str,
+) -> miette::Result<TempDir> {
     // Seek to the beginning of the file before uncompressing it
     let _ = archived_tempfile.rewind();
 
     // Create a temporary directory to unpack the archive
-    let binary_tempdir = &tempfile::tempdir().into_diagnostic()?;
+    let binary_tempdir = tempfile::tempdir().into_diagnostic()?;
 
     // Uncompress the archive
     if archive_name.ends_with(".tar.gz") {
-        unpack_tar_gz(&archived_tempfile, binary_tempdir)?;
+        unpack_tar_gz(&archived_tempfile, &binary_tempdir)?;
     } else if archive_name.ends_with(".zip") {
         let mut archive = zip::ZipArchive::new(archived_tempfile.as_file()).into_diagnostic()?;
-        archive.extract(binary_tempdir).into_diagnostic()?;
+        archive.extract(&binary_tempdir).into_diagnostic()?;
     } else {
         let error_message = format!("Unsupported archive format: {}", archive_name);
         Err(miette::miette!(error_message))?
     }
 
-    eprintln!(
-        "{}Pixi archive uncompressed.",
-        console::style(console::Emoji("✔ ", "")).green(),
-    );
+    Ok(binary_tempdir)
+}
 
-    // Get the new binary path used for self-replacement
-    let new_binary_path = binary_tempdir.path().join(pixi_binary_name());
+pub async fn execute(args: Args) -> miette::Result<()> {
+    if let Some(url) = args.url {
+        // If a URL is provided, download the archive from the URL
+        let new_binary_path = download(url).await?;
+        self_replace::self_replace(new_binary_path).into_diagnostic()?;
 
-    // Replace the current binary with the new binary
-    self_replace::self_replace(new_binary_path).into_diagnostic()?;
+        eprintln!(
+            "{}Pixi has been updated.",
+            console::style(console::Emoji("✔ ", "")).green(),
+        );
 
-    eprintln!(
-        "{}Pixi has been updated to version {}.",
-        console::style(console::Emoji("✔ ", "")).green(),
-        target_version
-    );
+        Ok(())
+    } else {
+        // Get the target version, without 'v' prefix
+        let target_version = match &args.version {
+            Some(version) => version,
+            None => &latest_version().await?,
+        };
 
-    Ok(())
+        // Get the current version of the pixi binary
+        let current_version = Version::from_str(consts::PIXI_VERSION).into_diagnostic()?;
+
+        // Stop here if the target version is the same as the current version
+        if *target_version == current_version {
+            eprintln!(
+                "{}pixi is already up-to-date (version {})",
+                console::style(console::Emoji("✔ ", "")).green(),
+                current_version
+            );
+            return Ok(());
+        }
+
+        let action = if *target_version < current_version {
+            if args.version.is_none() {
+                // Ask if --version was not passed
+                let confirmation = dialoguer::Confirm::new()
+                .with_prompt(format!(
+                    "\nCurrent version ({}) is more recent than remote ({}). Do you want to downgrade?",
+                    current_version, target_version
+                ))
+                .default(false)
+                .show_default(true)
+                .interact()
+                .into_diagnostic()?;
+                if !confirmation {
+                    return Ok(());
+                };
+            };
+            "downgraded"
+        } else {
+            "updated"
+        };
+
+        // Get the name of the binary to download and install based on the current platform
+        let archive_name = default_archive_name()
+            .expect("Could not find the default archive name for the current platform");
+
+        eprintln!(
+            "{}Pixi will be {} from {} to {}",
+            console::style(console::Emoji("✔ ", "")).green(),
+            action,
+            current_version,
+            target_version
+        );
+
+        let download_url = format!(
+            "{}/download/v{}/{}",
+            consts::RELEASES_URL,
+            target_version,
+            archive_name
+        );
+
+        // Otherwise, download the latest pixi archive from the default releases repos
+        let archive = download(download_url).await?;
+
+        eprintln!(
+            "{}Pixi archive downloaded.",
+            console::style(console::Emoji("✔ ", "")).green(),
+        );
+
+        let binary_tempdir = unpack_release_archive(archive, &archive_name).await?;
+
+        eprintln!(
+            "{}Pixi archive uncompressed.",
+            console::style(console::Emoji("✔ ", "")).green(),
+        );
+
+        // Get the new binary path used for self-replacement
+        let new_binary_path = binary_tempdir.path().join(pixi_binary_name());
+
+        // Replace the current binary with the new binary
+        self_replace::self_replace(new_binary_path).into_diagnostic()?;
+
+        eprintln!(
+            "{}Pixi has been updated to version {}.",
+            console::style(console::Emoji("✔ ", "")).green(),
+            target_version
+        );
+
+        Ok(())
+    }
 }
 
 /// Unpack files from a tar.gz archive to a target directory.
