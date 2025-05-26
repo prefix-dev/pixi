@@ -1,6 +1,9 @@
 mod git;
+mod release_notes;
 
 use std::sync::Arc;
+
+pub use release_notes::format_release_notes;
 
 use git::GitCheckoutProgress;
 use indicatif::{MultiProgress, ProgressBar};
