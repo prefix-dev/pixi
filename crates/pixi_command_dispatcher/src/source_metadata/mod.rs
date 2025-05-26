@@ -1,8 +1,5 @@
-use crate::{
-    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    InstantiateBackendError, InstantiateBackendSpec, SourceCheckout, SourceCheckoutError,
-    build::WorkDirKey,
-};
+use std::collections::{BTreeMap};
+
 use miette::Diagnostic;
 use pixi_build_discovery::{DiscoveredBackend, EnabledProtocols};
 use pixi_build_frontend::types::{
@@ -14,6 +11,12 @@ use pixi_record::{InputHash, SourceRecord};
 use pixi_spec::SourceSpec;
 use rattler_conda_types::{ChannelConfig, ChannelUrl, PackageRecord};
 use thiserror::Error;
+
+use crate::{
+    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
+    InstantiateBackendError, InstantiateBackendSpec, SourceCheckout, SourceCheckoutError,
+    build::WorkDirKey,
+};
 
 /// Represents a request for source metadata.
 #[derive(Debug, Clone, Hash, Eq, PartialEq, serde::Serialize)]
@@ -30,6 +33,9 @@ pub struct SourceMetadataSpec {
 
     /// Information about the build environment.
     pub build_environment: BuildEnvironment,
+
+    /// Variant configuration
+    pub variants: Option<BTreeMap<String, Vec<String>>>,
 
     /// The protocols that are enabled for this source
     #[serde(skip_serializing_if = "crate::is_default")]
@@ -97,7 +103,7 @@ impl SourceMetadataSpec {
                 channel_configuration: ChannelConfiguration {
                     base_url: self.channel_config.channel_alias.clone(),
                 },
-                variant_configuration: None,
+                variant_configuration: self.variants.map(|variants| variants.into_iter().collect()),
                 work_directory: command_queue.cache_dirs().working_dirs().join(
                     WorkDirKey {
                         source: source.clone(),

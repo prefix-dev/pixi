@@ -86,6 +86,7 @@ impl CommandDispatcher {
                         build_environment: spec.build_environment,
                         channels: env_spec.channels,
                         exclude_newer: None,
+                        variants: None,
                         channel_config: spec.channel_config,
                         enabled_protocols: spec.enabled_protocols,
                     })

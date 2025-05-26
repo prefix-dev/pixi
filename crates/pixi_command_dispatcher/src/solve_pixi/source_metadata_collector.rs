@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use crate::{
@@ -21,6 +22,7 @@ pub struct SourceMetadataCollector {
     channels: Vec<ChannelUrl>,
     build_environment: BuildEnvironment,
     enabled_protocols: EnabledProtocols,
+    variants: Option<BTreeMap<String, Vec<String>>>,
 }
 
 #[derive(Default)]
@@ -58,6 +60,7 @@ impl SourceMetadataCollector {
         channel_urls: Vec<ChannelUrl>,
         channel_config: ChannelConfig,
         build_environment: BuildEnvironment,
+        variants: Option<BTreeMap<String, Vec<String>>>,
         enabled_protocols: EnabledProtocols,
     ) -> Self {
         Self {
@@ -66,6 +69,7 @@ impl SourceMetadataCollector {
             build_environment,
             enabled_protocols,
             channel_config,
+            variants
         }
     }
 
@@ -131,6 +135,7 @@ impl SourceMetadataCollector {
                 channel_config: self.channel_config.clone(),
                 channels: self.channels.clone(),
                 build_environment: self.build_environment.clone(),
+                variants: self.variants.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
             })
             .await

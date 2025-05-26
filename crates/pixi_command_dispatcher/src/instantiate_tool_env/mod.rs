@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use crate::install_pixi::{InstallPixiEnvironmentError, InstallPixiEnvironmentSpec};
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
@@ -50,6 +51,9 @@ pub struct InstantiateToolEnvironmentSpec {
     /// The channel configuration to use for this environment.
     pub channel_config: ChannelConfig,
 
+    /// Variants
+    pub variants: Option<BTreeMap<String, Vec<String>>>,
+
     /// The protocols that are enabled for source packages
     #[serde(skip_serializing_if = "crate::is_default")]
     pub enabled_protocols: EnabledProtocols,
@@ -66,6 +70,7 @@ impl Hash for InstantiateToolEnvironmentSpec {
             exclude_newer,
             channel_config,
             enabled_protocols,
+            variants,
         } = self;
         name.hash(state);
         requirement.hash(state);
@@ -88,6 +93,7 @@ impl Hash for InstantiateToolEnvironmentSpec {
         exclude_newer.hash(state);
         channel_config.hash(state);
         enabled_protocols.hash(state);
+        variants.hash(state);
     }
 }
 
@@ -103,6 +109,7 @@ impl InstantiateToolEnvironmentSpec {
             exclude_newer: None,
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from(".")),
             enabled_protocols: EnabledProtocols::default(),
+            variants: None,
         }
     }
 
@@ -182,6 +189,7 @@ impl InstantiateToolEnvironmentSpec {
                 enabled_protocols: self.enabled_protocols,
                 installed: Vec::new(), // Install from scratch
                 channel_priority: ChannelPriority::default(),
+                variants: self.variants,
                 strategy: SolveStrategy::default(),
             })
             .await

@@ -38,7 +38,7 @@ use tokio::sync::Semaphore;
 use tracing::Instrument;
 use uv_configuration::RAYON_INITIALIZE;
 use uv_normalize::ExtraName;
-
+use pixi_command_dispatcher::BuildEnvironment;
 use super::{
     CondaPrefixUpdater, PixiRecordsByName, PypiRecordsByName, UvResolutionContext,
     outdated::OutdatedEnvironments, utils::IoConcurrencyLimit,
@@ -47,7 +47,7 @@ use crate::{
     Workspace,
     activation::CurrentEnvVarBehavior,
     build::{
-        BuildContext, BuildEnvironment, GlobHashCache,
+        BuildContext, GlobHashCache,
         source_metadata_collector::{CollectedSourceMetadata, SourceMetadataCollector},
     },
     environment::{
