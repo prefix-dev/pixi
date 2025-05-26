@@ -1,0 +1,6 @@
+---
+source: crates/pixi_build_frontend/tests/integration/diagnostics.rs
+expression: snapshot
+---
+  × the pixi.toml does not describe a package
+  help: A [package] section is missing in the manifest

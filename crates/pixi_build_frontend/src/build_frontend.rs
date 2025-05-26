@@ -1,14 +1,13 @@
 //! This module is the main entry
 use std::{path::PathBuf, sync::Arc};
 
-use miette::Diagnostic;
-use rattler_conda_types::ChannelConfig;
-
 use crate::{
-    SetupRequest, ToolContext, protocol,
-    protocol_builder::{EnabledProtocols, ProtocolBuilder},
+    SetupRequest, ToolContext, protocol, protocol_builder::ProtocolBuilder,
     protocols::JsonRPCBuildProtocol,
 };
+use miette::Diagnostic;
+use pixi_build_discovery::EnabledProtocols;
+use rattler_conda_types::ChannelConfig;
 
 /// The frontend for building packages.
 pub struct BuildFrontend {

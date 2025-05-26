@@ -1,20 +1,21 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, hash_map::Entry},
     path::{Path, PathBuf},
 };
 
-use super::{models::PyPIRemovals, reasons, validation::NeedsReinstallError};
+use super::{reasons, validation::NeedsReinstallError};
+use itertools::{Either, Itertools};
 use pixi_consts::consts;
 use pixi_uv_conversions::to_uv_version;
 use rattler_lock::PypiPackageData;
 use std::collections::HashSet;
 use uv_cache::Cache;
-use uv_distribution_types::{CachedDist, Dist, Name};
+use uv_distribution_types::{CachedDist, Dist, InstalledDist, Name};
 
 use crate::install_pypi::conversions::{ConvertToUvDistError, convert_to_dist};
 
 use super::{
-    InstallReason, NeedReinstall, PyPIInstalls,
+    InstallReason, NeedReinstall, PyPIInstallationPlan,
     models::ValidateCurrentInstall,
     providers::{CachedDistProvider, InstalledDistProvider},
     reasons::OperationToReason,
@@ -105,53 +106,17 @@ impl InstallPlanner {
         Ok(())
     }
 
-    /// Plan for any packages that need removal
-    pub fn plan_removals<'a, Installed: InstalledDistProvider<'a>>(
-        &self,
-        site_packages: &'a Installed,
-        required_pkgs: &'a HashMap<uv_normalize::PackageName, &PypiPackageData>,
-    ) -> Result<PyPIRemovals, InstallPlannerError> {
-        let mut extraneous = vec![];
-
-        // Walk over all installed packages and check if they are required
-        for dist in site_packages.iter() {
-            let pkg = required_pkgs.get(dist.name());
-            let installer = dist
-                .installer()
-                .map_or(String::new(), |f| f.unwrap_or_default());
-
-            match pkg {
-                // Apparently we need this packages
-                Some(_) => {}
-                // Ignore packages not managed by pixi
-                None if installer != consts::PIXI_UV_INSTALLER => {
-                    continue;
-                }
-                // Uninstall unneeded packages
-                None => {
-                    extraneous.push(dist.clone());
-                }
-            }
-        }
-
-        Ok(PyPIRemovals { extraneous })
-    }
-
     /// Figure out what we can link from the cache locally
     /// and what we need to download from the registry.
     ///
     /// All the 'a lifetimes are to to make sure that the names provided to the CachedDistProvider
     /// are valid for the lifetime of the CachedDistProvider and what is passed to the method
-    pub fn plan_install<
-        'a,
-        Installed: InstalledDistProvider<'a>,
-        Cached: CachedDistProvider<'a> + 'a,
-    >(
+    pub fn plan<'a, Installed: InstalledDistProvider<'a>, Cached: CachedDistProvider<'a> + 'a>(
         &self,
         site_packages: &'a Installed,
         mut dist_cache: Cached,
         required_pkgs: &'a HashMap<uv_normalize::PackageName, &PypiPackageData>,
-    ) -> Result<PyPIInstalls, InstallPlannerError> {
+    ) -> Result<PyPIInstallationPlan, InstallPlannerError> {
         // Packages to be installed directly from the cache
         let mut local = vec![];
         // Try to install from the registry or direct url or w/e
@@ -235,10 +200,86 @@ impl InstallPlanner {
             )?;
         }
 
-        Ok(PyPIInstalls {
+        #[derive(Debug)]
+        enum Extraneous<'a> {
+            Ours(&'a InstalledDist),
+            Theirs,
+        }
+
+        // Walk over all installed packages and check if they are required
+        let mut extraneous = HashMap::new();
+        for dist in site_packages.iter() {
+            let pkg = required_pkgs.get(dist.name());
+            let installer = dist
+                .installer()
+                .map_or(String::new(), |f| f.unwrap_or_default());
+
+            match pkg {
+                // Apparently we need this package
+                // and we have installed
+                Some(_) => {}
+                // Ignore packages not managed by pixi
+                None if installer != consts::PIXI_UV_INSTALLER => {
+                    // Do check for doubles though
+                    extraneous
+                        .entry(dist.name())
+                        .or_insert(Vec::new())
+                        .push(Extraneous::Theirs);
+                }
+                // Uninstall unneeded packages
+                None => {
+                    match extraneous.entry(dist.name()) {
+                        // We have already seen this package
+                        Entry::Occupied(mut occupied_entry) => {
+                            occupied_entry.get_mut().push(Extraneous::Ours(dist));
+                        }
+                        // This is a new package
+                        Entry::Vacant(vacant_entry) => {
+                            vacant_entry.insert(vec![Extraneous::Ours(dist)]);
+                        }
+                    };
+                }
+            }
+        }
+        // So it may happen that both conda and PyPI have installed a package with the same name
+        // but different versions, in that case, we want to split into extraneous and duplicates
+        let (extraneous, duplicates): (Vec<_>, Vec<_>) =
+            extraneous.into_iter().partition_map(|(_, dists)| {
+                if dists.len() > 1 {
+                    Either::Right(
+                        dists
+                            .into_iter()
+                            .filter_map(|d| {
+                                if let Extraneous::Ours(dist) = d {
+                                    Some(dist.clone())
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect::<Vec<_>>(),
+                    )
+                } else {
+                    Either::Left(
+                        dists
+                            .into_iter()
+                            .filter_map(|d| {
+                                if let Extraneous::Ours(dist) = d {
+                                    Some(dist.clone())
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect::<Vec<_>>(),
+                    )
+                }
+            });
+
+        Ok(PyPIInstallationPlan {
             local,
             remote,
             reinstalls,
+            extraneous: extraneous.into_iter().flatten().collect(),
+            duplicates: duplicates.into_iter().flatten().collect(),
         })
     }
 }

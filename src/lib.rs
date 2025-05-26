@@ -13,6 +13,8 @@ pub(crate) mod repodata;
 pub mod task;
 pub mod workspace;
 
+mod reporters;
+
 mod uv_reporter;
 
 pub mod build;

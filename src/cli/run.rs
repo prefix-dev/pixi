@@ -16,6 +16,7 @@ use itertools::Itertools;
 use miette::{Diagnostic, IntoDiagnostic};
 use pixi_config::{ConfigCli, ConfigCliActivation};
 use pixi_manifest::TaskName;
+use rattler_conda_types::Platform;
 use thiserror::Error;
 use tracing::Level;
 
@@ -234,9 +235,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         {
             CanSkip::No(cache) => cache,
             CanSkip::Yes => {
+                let args_text = if !executable_task.args().is_empty() {
+                    format!(
+                        " with args {}",
+                        console::style(executable_task.args()).bold()
+                    )
+                } else {
+                    String::new()
+                };
+
                 eprintln!(
-                    "Task '{}' can be skipped (cache hit) 🚀",
-                    console::style(executable_task.name().unwrap_or("")).bold()
+                    "Task '{}'{args_text} can be skipped (cache hit) 🚀",
+                    console::style(executable_task.name().unwrap_or("")).bold(),
                 );
                 task_idx += 1;
                 continue;
@@ -329,6 +339,19 @@ fn command_not_found<'p>(workspace: &'p Workspace, explicit_environment: Option<
                     f(&format_args!("\t{}", name.fancy_display().bold()))
                 })
         );
+    }
+
+    // Help user when there is no task available because the platform is not supported
+    if workspace
+        .environments()
+        .iter()
+        .any(|env| env.best_platform() == Platform::current())
+    {
+        eprintln!(
+            "\nHelp: This platform ({}) is not supported. Please run the following command to add this platform to the workspace:\n\n\tpixi workspace platform add {}",
+            Platform::current(),
+            Platform::current(),
+        )
     }
 }
 

@@ -70,6 +70,11 @@ impl TomlManifest {
         self.workspace.is_some()
     }
 
+    /// Returns true if the manifest contains a package.
+    pub fn has_package(&self) -> bool {
+        self.package.is_some()
+    }
+
     /// Assume that the manifest is a workspace manifest and convert it as such.
     ///
     /// If the manifest also contains a package section that will be converted
@@ -428,23 +433,11 @@ impl TomlManifest {
                 .into());
             }
 
-            let workspace = &workspace_manifest.workspace;
             let WithWarnings {
                 value: package_manifest,
                 warnings: mut package_warnings,
             } = package.into_manifest(
-                ExternalPackageProperties {
-                    name: workspace.name.clone(),
-                    version: workspace.version.clone(),
-                    description: workspace.description.clone(),
-                    authors: workspace.authors.clone(),
-                    license: workspace.license.clone(),
-                    license_file: workspace.license_file.clone(),
-                    readme: workspace.readme.clone(),
-                    homepage: workspace.homepage.clone(),
-                    repository: workspace.repository.clone(),
-                    documentation: workspace.documentation.clone(),
-                },
+                workspace_manifest.derived_external_package_properties(),
                 &workspace_manifest.workspace.preview,
                 root_directory,
             )?;

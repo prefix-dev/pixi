@@ -1,6 +1,6 @@
 #!/bin/sh
 set -eu
-# Version: v0.46.0
+# Version: v0.47.0
 
 __wrap__() {
     VERSION="${PIXI_VERSION:-latest}"
@@ -46,8 +46,33 @@ __wrap__() {
 
     printf "This script will automatically download and install Pixi (%s) for you.\nGetting it from this url: %s\n" "$VERSION" "$DOWNLOAD_URL"
 
-    if ! hash curl 2>/dev/null && ! hash wget 2>/dev/null; then
+    HAVE_CURL=false
+    HAVE_CURL_8_8_0=false
+    if hash curl 2>/dev/null; then
+        # Check that the curl version is not 8.8.0, which is broken for --write-out
+        # https://github.com/curl/curl/issues/13845
+        if [ "$(curl --version | (
+            IFS=' ' read -r _ v _
+            printf %s "${v-}"
+        ))" = "8.8.0" ]; then
+            HAVE_CURL_8_8_0=true
+        else
+            HAVE_CURL=true
+        fi
+    fi
+
+    HAVE_WGET=true
+    hash wget 2>/dev/null || HAVE_WGET=false
+
+    if ! $HAVE_CURL && ! $HAVE_WGET; then
         echo "error: you need either 'curl' or 'wget' installed for this script." >&2
+        if $HAVE_CURL_8_8_0; then
+            echo "error: curl 8.8.0 is known to be broken, please use a different version" >&2
+            if $IS_MSYS; then
+                echo "A common way to get an updated version of curl is to upgrade Git for Windows:" >&2
+                echo "      https://gitforwindows.org/" >&2
+            fi
+        fi
         exit 1
     fi
 
@@ -68,27 +93,34 @@ __wrap__() {
         WGET_OPTIONS="--show-progress"
     fi
 
-    if hash curl 2>/dev/null; then
-        # Check that the curl version is not 8.8.0, which is broken for --write-out
-        # https://github.com/curl/curl/issues/13845
-        if [ "$(curl --version | head -n 1 | cut -d ' ' -f 2)" = "8.8.0" ]; then
-            echo "error: curl 8.8.0 is known to be broken, please use a different version" >&2
-            if $IS_MSYS; then
-                echo "A common way to get an updated version of curl is to upgrade Git for Windows:" >&2
-                echo "      https://gitforwindows.org/" >&2
+    if $HAVE_CURL; then
+        CURL_ERR=0
+        HTTP_CODE="$(curl -SL $CURL_OPTIONS "$DOWNLOAD_URL" --output "$TEMP_FILE" --write-out "%{http_code}")" || CURL_ERR=$?
+        case "$CURL_ERR" in
+        35 | 53 | 54 | 59 | 66 | 77)
+            if ! $HAVE_WGET; then
+                echo "error: when download '${DOWNLOAD_URL}', curl has some local ssl problems with error $CURL_ERR" >&2
+                exit 1
             fi
+            # fallback to wget
+            ;;
+        0)
+            if [ "${HTTP_CODE}" -lt 200 ] || [ "${HTTP_CODE}" -gt 299 ]; then
+                echo "error: '${DOWNLOAD_URL}' is not available" >&2
+                exit 1
+            fi
+            HAVE_WGET=false # download success, skip wget
+            ;;
+        *)
+            echo "error: when download '${DOWNLOAD_URL}', curl fails with with error $CURL_ERR" >&2
             exit 1
-        fi
-        HTTP_CODE="$(curl -SL $CURL_OPTIONS "$DOWNLOAD_URL" --output "$TEMP_FILE" --write-out "%{http_code}")"
-        if [ "${HTTP_CODE}" -lt 200 ] || [ "${HTTP_CODE}" -gt 299 ]; then
-            echo "error: '${DOWNLOAD_URL}' is not available" >&2
-            exit 1
-        fi
-    elif hash wget 2>/dev/null; then
-        if ! wget $WGET_OPTIONS --output-document="$TEMP_FILE" "$DOWNLOAD_URL"; then
-            echo "error: '${DOWNLOAD_URL}' is not available" >&2
-            exit 1
-        fi
+            ;;
+        esac
+    fi
+
+    if $HAVE_WGET && ! wget $WGET_OPTIONS --output-document="$TEMP_FILE" "$DOWNLOAD_URL"; then
+        echo "error: '${DOWNLOAD_URL}' is not available" >&2
+        exit 1
     fi
 
     # Check that file was correctly created (https://github.com/prefix-dev/pixi/issues/446)

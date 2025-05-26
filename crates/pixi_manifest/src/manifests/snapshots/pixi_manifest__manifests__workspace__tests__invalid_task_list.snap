@@ -1,0 +1,11 @@
+---
+source: crates/pixi_manifest/src/manifests/workspace.rs
+expression: "format_parse_error(&source, error)"
+---
+  × expected table, found string
+    ╭─[pixi.toml:10:22]
+  9 │             [tasks]
+ 10 │             test = ["invalid", "task"]
+    ·                      ───────
+ 11 │
+    ╰────

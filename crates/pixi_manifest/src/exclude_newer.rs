@@ -56,5 +56,11 @@ mod test {
             ExcludeNewer::from_str("2006-12-02").unwrap(),
             ExcludeNewer::from_str("2006-12-03T00:00:00Z").unwrap(),
         );
+
+        // A more readable case that RFC3339 allowed
+        assert_eq!(
+            ExcludeNewer::from_str("2006-12-02T00:00:00Z").unwrap(),
+            ExcludeNewer::from_str("2006-12-02 00:00:00Z").unwrap(),
+        );
     }
 }

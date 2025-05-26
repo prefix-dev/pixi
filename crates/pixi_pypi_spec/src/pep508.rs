@@ -109,3 +109,26 @@ impl TryFrom<pep508_rs::Requirement> for PixiPypiSpec {
         Ok(converted)
     }
 }
+
+impl TryFrom<(pep508_rs::Requirement, Option<PixiPypiSpec>)> for PixiPypiSpec {
+    type Error = Pep508ToPyPiRequirementError;
+    fn try_from(
+        (req, pixi_req): (pep508_rs::Requirement, Option<PixiPypiSpec>),
+    ) -> Result<Self, Self::Error> {
+        let mut converted = req.try_into()?;
+
+        if let Some(pixi_req) = pixi_req {
+            if let (
+                PixiPypiSpec::Version {
+                    index: conv_index, ..
+                },
+                PixiPypiSpec::Version { index, .. },
+            ) = (&mut converted, &pixi_req)
+            {
+                *conv_index = index.clone()
+            }
+        }
+
+        Ok(converted)
+    }
+}

@@ -3,7 +3,6 @@ The `pixi.toml` is the workspace manifest, also known as the Pixi workspace conf
 
 A `toml` file is structured in different tables.
 This document will explain the usage of the different tables.
-For more technical documentation check Pixi on [docs.rs](https://docs.rs/pixi/latest/pixi/workspace/manifest/struct.ProjectManifest.html).
 
 !!! tip
     We also support the `pyproject.toml` file. It has the same structure as the `pixi.toml` file. except that you need to prepend the tables with `tool.pixi` instead of just the table name.
@@ -559,6 +558,10 @@ click = { url = "https://github.com/pallets/click/releases/download/8.1.7/click-
 # You can also just the default git repo, it will checkout the default branch
 pytest = { git = "https://github.com/pytest-dev/pytest.git"}
 ```
+
+!!! warning "Using git SSH URLs"
+    When using SSH URLs in git dependencies, make sure to have your SSH key added to your SSH agent.
+    You can do this by running `ssh-add` which will prompt you for your SSH key passphrase. Make sure that the `ssh-add` agent or service is running and you have a generated public/private SSH key. For more details on how to do this, check the [Github SSH documentation](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent).
 
 #### Full specification
 

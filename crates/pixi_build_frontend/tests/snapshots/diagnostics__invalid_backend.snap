@@ -1,7 +1,0 @@
----
-source: crates/pixi_build_frontend/tests/diagnostics.rs
-expression: snapshot
----
-  × failed to communicate with the build backend (<IPC>)
-  ╰─▶ The background task closed broken pipe; restart required
-  help: Ensure that the build backend implements the JSON-RPC protocol correctly.

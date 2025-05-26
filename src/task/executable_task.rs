@@ -19,7 +19,7 @@ use rattler_lock::LockFile;
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
-use super::task_hash::{InputHashesError, TaskCache, TaskHash};
+use super::task_hash::{InputHashesError, NameHash, TaskCache, TaskHash};
 use crate::{
     Workspace,
     activation::CurrentEnvVarBehavior,
@@ -87,7 +87,7 @@ pub enum CanSkip {
 /// A task that contains enough information to be able to execute it. The
 /// lifetime [`'p`] refers to the lifetime of the project that contains the
 /// tasks.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ExecutableTask<'p> {
     pub workspace: &'p Workspace,
     pub name: Option<TaskName>,
@@ -274,11 +274,14 @@ impl<'p> ExecutableTask<'p> {
     /// We store the hashes of the inputs and the outputs of the task in a file
     /// in the cache. The current name is something like
     /// `run_environment-task_name.json`.
-    pub(crate) fn cache_name(&self) -> String {
+    pub(crate) fn cache_name(&self, args_cache: Option<NameHash>) -> String {
         format!(
-            "{}-{}.json",
+            "{}-{}-{}.json",
             self.run_environment.name(),
-            self.name().unwrap_or("default")
+            self.name().unwrap_or("default"),
+            args_cache
+                .map(|hash| hash.to_string())
+                .unwrap_or("".to_string())
         )
     }
 
@@ -289,7 +292,8 @@ impl<'p> ExecutableTask<'p> {
     /// quickly.
     pub(crate) async fn can_skip(&self, lock_file: &LockFile) -> Result<CanSkip, std::io::Error> {
         tracing::info!("Checking if task can be skipped");
-        let cache_name = self.cache_name();
+        let args_hash = TaskHash::task_args_hash(self).unwrap_or_default();
+        let cache_name = self.cache_name(args_hash);
         let cache_file = self.project().task_cache_folder().join(cache_name);
         if cache_file.exists() {
             let cache = tokio_fs::read_to_string(&cache_file).await?;
@@ -315,7 +319,8 @@ impl<'p> ExecutableTask<'p> {
         previous_hash: Option<TaskHash>,
     ) -> Result<(), CacheUpdateError> {
         let task_cache_folder = self.project().task_cache_folder();
-        let cache_file = task_cache_folder.join(self.cache_name());
+        let args_cache = TaskHash::task_args_hash(self)?;
+        let cache_file = task_cache_folder.join(self.cache_name(args_cache));
         let new_hash = if let Some(mut previous_hash) = previous_hash {
             previous_hash.update_output(self).await?;
             previous_hash

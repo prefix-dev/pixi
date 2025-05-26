@@ -159,6 +159,7 @@ pub fn locked_indexes_to_index_locations(
     Ok(IndexLocations::new(indexes, flat_index, no_index))
 }
 
+#[derive(Clone)]
 pub enum BuildIsolation {
     /// No build isolation
     Isolated,

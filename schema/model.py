@@ -34,7 +34,8 @@ GitUrl = Annotated[
     str, StringConstraints(pattern=r"((git|ssh|http(s)?)|(git@[\w\.]+))(:(\/\/)?)([\w\.@:\/\\-~]+)")
 ]
 ExcludeNewer = Annotated[
-    str, StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2}))?$")
+    str,
+    StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2}))?$"),
 ]
 
 
@@ -324,7 +325,7 @@ class TaskArgs(StrictBaseModel):
     """The arguments of a task."""
 
     arg: NonEmptyStr
-    default: NonEmptyStr | None = Field(None, description="The default value of the argument")
+    default: str | None = Field(None, description="The default value of the argument")
 
 
 class DependsOn(StrictBaseModel):

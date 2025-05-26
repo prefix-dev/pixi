@@ -3,14 +3,12 @@ use std::sync::Arc;
 use futures::{StreamExt, stream::FuturesUnordered};
 use miette::Diagnostic;
 use pixi_record::PinnedSourceSpec;
-use pixi_spec::SourceSpec;
+use pixi_spec::{SourceAnchor, SourceSpec};
 use rattler_conda_types::{ChannelUrl, MatchSpec, ParseStrictness};
 use thiserror::Error;
 
-use crate::build::{
-    BuildContext, BuildEnvironment, BuildError, BuildMetadataReporter, SourceMetadata,
-    reporters::SourceReporter, source_anchor::SourceAnchor,
-};
+use crate::build::{BuildContext, BuildEnvironment, BuildError, SourceMetadata};
+use crate::reporters::BuildMetadataReporter;
 
 /// An object that is responsible for recursively collecting metadata of source
 /// dependencies.
@@ -19,7 +17,6 @@ pub struct SourceMetadataCollector {
     channel_urls: Vec<ChannelUrl>,
     build_env: BuildEnvironment,
     metadata_reporter: Arc<dyn BuildMetadataReporter>,
-    source_checkout_reporter: Option<Arc<dyn SourceReporter>>,
 }
 
 #[derive(Default)]
@@ -57,14 +54,12 @@ impl SourceMetadataCollector {
         channel_urls: Vec<ChannelUrl>,
         build_env: BuildEnvironment,
         metadata_reporter: Arc<dyn BuildMetadataReporter>,
-        source_checkout_reporter: Option<Arc<dyn SourceReporter>>,
     ) -> Self {
         Self {
             build_context,
             channel_urls,
             build_env,
             metadata_reporter,
-            source_checkout_reporter,
         }
     }
 
@@ -95,7 +90,7 @@ impl SourceMetadataCollector {
 
             // Process transitive dependencies
             for record in &source_metadata.records {
-                let anchor = SourceAnchor::from(record.source.clone());
+                let anchor = SourceAnchor::from(SourceSpec::from(record.source.clone()));
                 for depend in &record.package_record.depends {
                     if let Ok(spec) = MatchSpec::from_str(depend, ParseStrictness::Lenient) {
                         if let Some((name, source_spec)) = spec.name.as_ref().and_then(|name| {
@@ -134,7 +129,6 @@ impl SourceMetadataCollector {
                 &self.channel_urls,
                 self.build_env.clone(),
                 self.metadata_reporter.clone(),
-                self.source_checkout_reporter.clone(),
                 build_id,
             )
             .await

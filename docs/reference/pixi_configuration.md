@@ -20,11 +20,12 @@ The configuration is loaded in the following order:
 
     | **Priority** | **Location**                                                           | **Comments**                                          |
     |--------------|------------------------------------------------------------------------|-------------------------------------------------------|
-    | 6            | Command line arguments (`--tls-no-verify`, `--change-ps1=false`, etc.) | Configuration via command line arguments              |
-    | 5            | `your_project/.pixi/config.toml`                                       | Project-specific configuration                        |
-    | 4            | `$PIXI_HOME/config.toml`                                               | Global configuration in `PIXI_HOME`.                  |
-    | 3            | `$HOME/.pixi/config.toml`                                              | Global configuration in the user home directory.      |
-    | 2            | `$HOME/Library/Application Support/pixi/config.toml`                   | User-specific configuration                           |
+    | 7            | Command line arguments (`--tls-no-verify`, `--change-ps1=false`, etc.) | Configuration via command line arguments              |
+    | 6            | `your_project/.pixi/config.toml`                                       | Project-specific configuration                        |
+    | 5            | `$PIXI_HOME/config.toml`                                               | Global configuration in `PIXI_HOME`.                  |
+    | 4            | `$HOME/.pixi/config.toml`                                              | Global configuration in the user home directory.      |
+    | 3            | `$HOME/Library/Application Support/pixi/config.toml`                   | User-specific configuration                           |
+    | 2            | `$XDG_CONFIG_HOME/pixi/config.toml`                                    | XDG compliant user-specific configuration             |
     | 1            | `/etc/pixi/config.toml`                                                | System-wide configuration                             |
 
 === "Windows"

@@ -63,6 +63,10 @@ We need to add our package `python_rich` as source dependency to the workspace.
 
 Source dependencies can be specified either by providing a local path to the directory containing the package or a `git` dependency. When using `git`, you can optionally define a `branch`, `tag`, or `rev` to pin the dependency. If none are specified, the latest commit on the default branch is used. Additionally, a `subdirectory` can be specified to indicate the package’s location within the repository.
 
+!!! warning "Using git SSH URLs"
+    When using SSH URLs in git dependencies, make sure to have your SSH key added to your SSH agent.
+    You can do this by running `ssh-add` which will prompt you for your SSH key passphrase. Make sure that the `ssh-add` agent or service is running and you have a generated public/private SSH key. For more details on how to do this, check the [Github SSH documentation](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent).
+
 Source dependencies are defined in one of two ways:
 
 * `Pixi`-based dependencies are built using the backend specified in the `[package.build]` section of pixi.toml.

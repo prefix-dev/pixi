@@ -9,13 +9,33 @@ use toml_span::{
 
 use crate::{
     EnvironmentName, Task, TaskName, WithWarnings,
-    task::{Alias, ArgName, CmdArgs, Dependency, Execute, TaskArg, TemplateString},
+    task::{Alias, ArgName, CmdArgs, Dependency, Execute, GlobPatterns, TaskArg, TemplateString},
     warning::Deprecation,
 };
 
 impl<'de> toml_span::Deserialize<'de> for TemplateString {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         Ok(TemplateString::new(value.take_string(None)?.into_owned()))
+    }
+}
+
+impl<'de> toml_span::Deserialize<'de> for GlobPatterns {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        match value.take() {
+            ValueInner::Array(array) => {
+                let mut args: Vec<TemplateString> = Vec::with_capacity(array.len());
+                for mut value in array {
+                    args.push(TemplateString::new(value.take_string(None)?.into_owned()));
+                }
+                Ok(GlobPatterns::new(args))
+            }
+            _ => Err(expected(
+                "an array of args e.g. [\"main.py\", \"tests_*\"]",
+                value.take(),
+                value.span,
+            )
+            .into()),
+        }
     }
 }
 
@@ -70,7 +90,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
 
                             deps.push(Dependency::new(&name, args, environment));
                         }
-                        _ => return Err(expected("table", item.take(), item.span).into()),
+                        value => return Err(expected("table", value, item.span).into()),
                     }
                 }
                 return Ok(Task::Alias(Alias {
@@ -162,7 +182,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
         let task = if let Some(cmd) = cmd {
             let inputs = th.optional("inputs");
             let outputs = th.optional("outputs");
-            let depends_on = depends_on(&mut th).unwrap_or_default();
+            let depends_on = depends_on(&mut th)?;
             let cwd = th
                 .optional::<TomlFromStr<_>>("cwd")
                 .map(TomlFromStr::into_inner);
@@ -202,7 +222,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                 args,
             }))
         } else {
-            let depends_on = depends_on(&mut th).unwrap_or_default();
+            let depends_on = depends_on(&mut th)?;
             let description = th.optional("description");
             let args = th.optional::<Vec<TaskArg>>("args");
             th.finalize(None)?;
@@ -248,6 +268,13 @@ mod test {
     use crate::toml::FromTomlStr;
     use pixi_test_utils::format_parse_error;
 
+    fn expect_parse_failure(pixi_toml: &str) -> String {
+        let parse_error = <TomlTask as crate::toml::FromTomlStr>::from_toml_str(pixi_toml)
+            .expect_err("parsing should fail");
+
+        format_parse_error(pixi_toml, parse_error)
+    }
+
     #[test]
     fn test_depends_on_deprecation() {
         let input = r#"
@@ -258,5 +285,25 @@ mod test {
         let mut parsed = TomlTask::from_toml_str(input).unwrap();
         assert_eq!(parsed.warnings.len(), 1);
         insta::assert_snapshot!(format_parse_error(input, parsed.warnings.remove(0)));
+    }
+
+    #[test]
+    fn test_additional_task_keys() {
+        insta::assert_snapshot!(expect_parse_failure(
+            r#"
+            cmd = "test"
+            depends = ["a", "b"]
+        "#
+        ));
+    }
+
+    #[test]
+    fn test_depends_on_is_list() {
+        insta::assert_snapshot!(expect_parse_failure(
+            r#"
+            cmd = "test"
+            depends-on = { task = "z" }
+        "#
+        ));
     }
 }

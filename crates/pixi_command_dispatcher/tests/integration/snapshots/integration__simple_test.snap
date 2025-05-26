@@ -1,0 +1,12 @@
+---
+source: crates/pixi_command_dispatcher/tests/integration/main.rs
+expression: event_tree.to_string()
+---
+Pixi solve (boost-check)
+├── Source metadata ({ git = "https://github.com/wolfv/pixi-build-examples.git", rev = "a4c27e86a4a5395759486552abb3df8a47d50172", subdirectory = "boost-check" })
+│   ├── Git Checkout (https://github.com/wolfv/pixi-build-examples@a4c27e86a4a5395759486552abb3df8a47d50172)
+│   └── Instantiate tool environment (pixi-build-cmake)
+│       ├── Pixi solve (pixi-build-cmake)
+│       │   └── Conda solve #0
+│       └── Pixi install #0
+└── Conda solve #1

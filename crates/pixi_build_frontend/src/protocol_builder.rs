@@ -4,8 +4,6 @@ use std::{
     sync::Arc,
 };
 
-use rattler_conda_types::ChannelConfig;
-
 use crate::{
     BuildFrontendError, ToolContext,
     backend_override::BackendOverride,
@@ -14,25 +12,8 @@ use crate::{
     protocols::JsonRPCBuildProtocol,
     rattler_build_protocol,
 };
-
-/// Configuration to enable or disable certain protocols discovery.
-#[derive(Debug)]
-pub struct EnabledProtocols {
-    /// Enable the rattler-build protocol.
-    pub enable_rattler_build: bool,
-    /// Enable the pixi protocol.
-    pub enable_pixi: bool,
-}
-
-impl Default for EnabledProtocols {
-    /// Create a new `EnabledProtocols` with all protocols enabled.
-    fn default() -> Self {
-        Self {
-            enable_rattler_build: true,
-            enable_pixi: true,
-        }
-    }
-}
+use pixi_build_discovery::EnabledProtocols;
+use rattler_conda_types::ChannelConfig;
 
 #[derive(Debug)]
 // for some reason, the clippy calculates wrong the size

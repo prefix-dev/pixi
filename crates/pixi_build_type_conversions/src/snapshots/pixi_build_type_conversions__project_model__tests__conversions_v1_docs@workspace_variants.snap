@@ -33,6 +33,13 @@ expression: project_model
         },
         "buildDependencies": {},
         "runDependencies": {
+          "cpp_math": {
+            "source": {
+              "Path": {
+                "path": "packages/cpp_math"
+              }
+            }
+          },
           "rich": {
             "binary": {
               "version": ">=13.9.4,<14",
