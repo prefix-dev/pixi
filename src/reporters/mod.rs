@@ -107,7 +107,7 @@ impl pixi_command_dispatcher::Reporter for TopLevelProgress {
 }
 
 impl pixi_command_dispatcher::PixiInstallReporter for TopLevelProgress {
-    fn on_install_queued(
+    fn on_queued(
         &mut self,
         _reason: Option<ReporterContext>,
         _env: &InstallPixiEnvironmentSpec,
@@ -119,7 +119,7 @@ impl pixi_command_dispatcher::PixiInstallReporter for TopLevelProgress {
         PixiInstallId(0)
     }
 
-    fn on_install_start(&mut self, _solve_id: PixiInstallId) {}
+    fn on_start(&mut self, _solve_id: PixiInstallId) {}
 
-    fn on_install_finished(&mut self, _solve_id: PixiInstallId) {}
+    fn on_finished(&mut self, _solve_id: PixiInstallId) {}
 }
