@@ -142,7 +142,7 @@ its [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try).
 
     | Environment variable | Description                                                                       | Default Value               |
     |----------------------|-----------------------------------------------------------------------------------|-----------------------------|
-    | `PIXI_VERSION`       |The version of Pixi getting installed, can be used to up- or down-grade.           | `latest`                    |
+    | `PIXI_VERSION`       | The version of Pixi getting installed, can be used to up- or down-grade.          | `latest`                    |
     | `PIXI_HOME`          | The location of the installation.                                                 | `$Env:USERPROFILE\.pixi`    |
     | `PIXI_NO_PATH_UPDATE`| If set, the `$PATH` will not be updated to add `pixi` to it.                      | `false`                     |
 
