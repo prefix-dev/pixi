@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use ahash::HashMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
@@ -7,6 +6,7 @@ use pixi_record::{PixiRecord, SourceRecord};
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, RepoDataRecord};
 use rattler_repodata_gateway::RepoData;
 use rattler_solve::{SolveStrategy, SolverImpl, resolvo};
+use std::sync::Arc;
 use url::Url;
 
 use crate::lock_file::LockedCondaPackages;
@@ -31,7 +31,7 @@ pub async fn resolve_conda(
         let mut url_to_source_package = HashMap::default();
         for source_metadata in available_source_packages.iter() {
             for record in source_metadata.records.iter() {
-                let url = unique_url(&source_metadata.source, &record);
+                let url = unique_url(&source_metadata.source, record);
                 let repodata_record = RepoDataRecord {
                     package_record: record.package_record.clone(),
                     url: url.clone(),

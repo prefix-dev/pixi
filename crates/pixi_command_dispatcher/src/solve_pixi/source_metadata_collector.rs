@@ -1,11 +1,5 @@
-use std::collections::BTreeMap;
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
-use crate::{
-    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    SourceMetadataSpec,
-    source_metadata::{SourceMetadata, SourceMetadataError},
-};
 use futures::{StreamExt, stream::FuturesUnordered};
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
@@ -13,6 +7,12 @@ use pixi_record::{PinnedSourceSpec, SourceRecord};
 use pixi_spec::{SourceAnchor, SourceSpec};
 use rattler_conda_types::{ChannelConfig, ChannelUrl, MatchSpec, ParseStrictness};
 use thiserror::Error;
+
+use crate::{
+    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
+    SourceCheckoutError, SourceMetadataSpec,
+    source_metadata::{SourceMetadata, SourceMetadataError},
+};
 
 /// An object that is responsible for recursively collecting metadata of source
 /// dependencies.
@@ -52,6 +52,13 @@ pub enum CollectSourceMetadataError {
         #[help]
         help: String,
     },
+    #[error("failed to checkout source for package '{name}'")]
+    SourceCheckoutError {
+        name: String,
+        #[source]
+        #[diagnostic_source]
+        error: CommandDispatcherError<SourceCheckoutError>,
+    },
 }
 
 impl SourceMetadataCollector {
@@ -69,7 +76,7 @@ impl SourceMetadataCollector {
             build_environment,
             enabled_protocols,
             channel_config,
-            variants
+            variants,
         }
     }
 
@@ -127,11 +134,21 @@ impl SourceMetadataCollector {
         name: rattler_conda_types::PackageName,
         spec: SourceSpec,
     ) -> Result<Arc<SourceMetadata>, CommandDispatcherError<CollectSourceMetadataError>> {
+        // Get the source for the particular package.
+        let source = self
+            .command_queue
+            .pin_and_checkout(spec)
+            .await
+            .map_err(|err| CollectSourceMetadataError::SourceCheckoutError {
+                name: name.as_source().to_string(),
+                error: err,
+            })?;
+
         // Extract information for the particular source spec.
         let source_metadata = self
             .command_queue
             .source_metadata(SourceMetadataSpec {
-                source_spec: spec.clone(),
+                source,
                 channel_config: self.channel_config.clone(),
                 channels: self.channels.clone(),
                 build_environment: self.build_environment.clone(),

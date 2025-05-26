@@ -17,22 +17,21 @@ use itertools::Itertools;
 use miette::{Diagnostic, IntoDiagnostic};
 use pixi_build_frontend::{BackendOverride, JsonRPCBuildProtocol, SetupRequest, ToolContext};
 use pixi_build_types::{
-    ChannelConfiguration, CondaPackageMetadata, PlatformAndVirtualPackages, SourcePackageSpecV1,
+    ChannelConfiguration, PlatformAndVirtualPackages, SourcePackageSpecV1,
     procedures::conda_build::{CondaBuildParams, CondaOutputIdentifier},
 };
 use pixi_command_dispatcher::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, SourceCheckout,
     SourceCheckoutError, SourceMetadata, SourceMetadataSpec,
 };
-use pixi_config::get_cache_dir;
 use pixi_git::GitError;
 pub use pixi_glob::{GlobHashCache, GlobHashError};
 use pixi_glob::{GlobModificationTime, GlobModificationTimeError};
 use pixi_manifest::Targets;
-use pixi_record::{InputHash, SourceRecord};
+use pixi_record::SourceRecord;
 use pixi_spec::SourceSpec;
 use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, GenericVirtualPackage, PackageRecord, Platform, RepoDataRecord,
+    ChannelConfig, ChannelUrl, GenericVirtualPackage, Platform, RepoDataRecord,
 };
 use rattler_digest::Sha256;
 use thiserror::Error;
@@ -44,7 +43,7 @@ use xxhash_rust::xxh3::Xxh3;
 
 use crate::{
     Workspace,
-    build::cache::{BuildCache, BuildInput, CachedBuild, SourceInfo, SourceMetadataCache},
+    build::cache::{BuildCache, BuildInput, CachedBuild, SourceInfo},
     reporters::{BuildMetadataReporter, BuildReporter},
 };
 
@@ -57,7 +56,6 @@ const DEFAULT_BUILD_IGNORE_GLOBS: &[&str] = &["!.pixi/**"];
 #[derive(Clone)]
 pub struct BuildContext {
     channel_config: ChannelConfig,
-    source_metadata_cache: SourceMetadataCache,
     build_cache: BuildCache,
     work_dir: PathBuf,
     tool_context: Arc<ToolContext>,
@@ -107,9 +105,6 @@ pub enum BuildError {
     GlobModificationError(#[from] GlobModificationTimeError),
 
     #[error(transparent)]
-    SourceMetadataError(#[from] cache::SourceMetadataError),
-
-    #[error(transparent)]
     BuildCacheError(#[from] cache::BuildCacheError),
 
     #[error(transparent)]
@@ -124,18 +119,21 @@ pub enum BuildError {
 
 impl BuildContext {
     pub fn new(
-        cache_dir: PathBuf,
         channel_config: ChannelConfig,
         variant_config: Targets<Option<HashMap<String, Vec<String>>>>,
-        tool_context: Arc<ToolContext>,
         command_dispatcher: CommandDispatcher,
     ) -> Result<Self, std::io::Error> {
         Ok(Self {
             channel_config,
-            source_metadata_cache: SourceMetadataCache::new(cache_dir.clone()),
-            build_cache: BuildCache::new(cache_dir.clone()),
+            build_cache: BuildCache::new(command_dispatcher.cache_dirs().source_builds()),
             work_dir: command_dispatcher.cache_dirs().working_dirs(),
-            tool_context,
+            tool_context: Arc::new(
+                ToolContext::builder()
+                    .with_cache_dir(command_dispatcher.cache_dirs().build_backends())
+                    .with_client(command_dispatcher.download_client().clone())
+                    .with_gateway(command_dispatcher.gateway().clone())
+                    .build(),
+            ),
             variant_config,
             command_dispatcher,
         })
@@ -146,15 +144,11 @@ impl BuildContext {
         command_dispatcher: CommandDispatcher,
     ) -> miette::Result<Self> {
         let variant = workspace.workspace.value.workspace.build_variants.clone();
+        Self::new(workspace.channel_config(), variant, command_dispatcher).into_diagnostic()
+    }
 
-        Self::new(
-            get_cache_dir()?,
-            workspace.channel_config(),
-            variant,
-            Arc::new(ToolContext::default()),
-            command_dispatcher,
-        )
-        .into_diagnostic()
+    pub fn command_dispatcher(&self) -> &CommandDispatcher {
+        &self.command_dispatcher
     }
 
     pub fn with_tool_context(self, tool_context: Arc<ToolContext>) -> Self {
@@ -191,12 +185,22 @@ impl BuildContext {
         _metadata_reporter: Arc<dyn BuildMetadataReporter>,
         _build_id: usize,
     ) -> Result<Arc<SourceMetadata>, BuildError> {
+        let source = self
+            .command_dispatcher
+            .pin_and_checkout(source_spec.clone())
+            .await
+            .map_err(BuildError::SourceCheckoutError)?;
+
         self.command_dispatcher
             .source_metadata(SourceMetadataSpec {
-                source_spec: source_spec.clone(),
+                source,
                 channel_config: self.channel_config.clone(),
                 channels: channels.to_vec(),
-                variants: Some(self.resolve_variant(build_environment.host_platform).into_iter().collect()),
+                variants: Some(
+                    self.resolve_variant(build_environment.host_platform)
+                        .into_iter()
+                        .collect(),
+                ),
                 build_environment,
                 enabled_protocols: Default::default(),
             })
@@ -356,110 +360,6 @@ impl BuildContext {
 
         Ok(updated_record)
     }
-
-    // /// Extracts the metadata from a package whose source is located at the
-    // /// given path.
-    // #[instrument(skip_all, fields(source = %source.pinned, platform =
-    // %build_env.host_platform))] #[allow(clippy::too_many_arguments)]
-    // async fn extract_records(
-    //     &self,
-    //     source: &SourceCheckout,
-    //     channels: &[ChannelUrl],
-    //     build_env: BuildEnvironment,
-    //     metadata_reporter: Arc<dyn BuildMetadataReporter>,
-    //     build_id: usize,
-    // ) -> Result<Vec<SourceRecord>, BuildError> {
-    //     let channel_urls =
-    // channels.iter().cloned().map(Into::into).collect::<Vec<_>>();
-    //     let variant_configuration =
-    // self.resolve_variant(build_env.host_platform);
-    //
-    //     let (cached_metadata, cache_entry) = self
-    //         .source_metadata_cache
-    //         .entry(
-    //             source,
-    //             &SourceMetadataInput {
-    //                 channel_urls: channel_urls.clone(),
-    //                 build_platform: build_env.build_platform,
-    //                 build_virtual_packages:
-    // build_env.build_virtual_packages.clone(),                 host_platform:
-    // build_env.host_platform,                 host_virtual_packages:
-    // build_env.host_virtual_packages.clone(),                 build_variants:
-    // variant_configuration.clone().into_iter().collect(),             },
-    //         )
-    //         .await?;
-    //     if let Some(metadata) = cached_metadata {
-    //         // Check if the input hash is still valid.
-    //         if let Some(input_globs) = &metadata.input_hash {
-    //             let new_hash = self
-    //                 .glob_hash_cache
-    //                 .compute_hash(GlobHashKey::new(
-    //                     source.path.clone(),
-    //                     input_globs.globs.clone(),
-    //                 ))
-    //                 .await?;
-    //             if new_hash.hash == input_globs.hash {
-    //                 tracing::debug!("found up-to-date cached metadata.");
-    //                 return Ok(source_metadata_to_records(
-    //                     source,
-    //                     metadata.packages,
-    //                     metadata.input_hash,
-    //                 ));
-    //             } else {
-    //                 tracing::debug!("found stale cached metadata.");
-    //             }
-    //         } else {
-    //             tracing::debug!("found cached metadata.");
-    //             metadata_reporter.on_metadata_cached(build_id);
-    //             // No input hash so just assume it is still valid.
-    //             return Ok(source_metadata_to_records(
-    //                 source,
-    //                 metadata.packages,
-    //                 metadata.input_hash,
-    //             ));
-    //         }
-    //     }
-    //
-    //     // Compute the input globs for the mutable source checkouts.
-    //     let input_hash = if source.pinned.is_immutable() {
-    //         None
-    //     } else {
-    //         let input_globs = protocol
-    //             .manifests()
-    //             .into_iter()
-    //             .chain(
-    //                 metadata
-    //                     .input_globs
-    //                     .clone()
-    //                     .into_iter()
-    //                     .flat_map(|glob| glob.into_iter()),
-    //             )
-    //             .collect::<BTreeSet<_>>();
-    //
-    //         let input_hash = self
-    //             .glob_hash_cache
-    //             .compute_hash(GlobHashKey::new(&source.path,
-    // input_globs.clone()))             .await?;
-    //         Some(InputHash {
-    //             hash: input_hash.hash,
-    //             globs: input_globs,
-    //         })
-    //     };
-    //
-    //     // Store in the cache
-    //     cache_entry
-    //         .insert(CachedCondaMetadata {
-    //             packages: metadata.packages.clone(),
-    //             input_hash: input_hash.clone(),
-    //         })
-    //         .await?;
-    //
-    //     Ok(source_metadata_to_records(
-    //         source,
-    //         metadata.packages,
-    //         input_hash,
-    //     ))
-    // }
 
     async fn setup_protocol(
         &self,

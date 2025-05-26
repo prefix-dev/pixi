@@ -1,7 +1,5 @@
 mod source_metadata_collector;
 
-use std::{path::PathBuf, time::Instant};
-use std::collections::BTreeMap;
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
     SolveCondaEnvironmentSpec,
@@ -20,6 +18,8 @@ use rattler_conda_types::{Channel, ChannelConfig, ChannelUrl, NamelessMatchSpec,
 use rattler_repodata_gateway::RepoData;
 use rattler_solve::{ChannelPriority, SolveStrategy};
 use serde::Serialize;
+use std::collections::BTreeMap;
+use std::{path::PathBuf, time::Instant};
 use thiserror::Error;
 
 /// Contains all information that describes the input of a pixi environment.

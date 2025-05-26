@@ -9,36 +9,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use barrier_cell::BarrierCell;
-use fancy_display::FancyDisplay;
-use futures::{FutureExt, StreamExt, stream::FuturesUnordered};
-use indexmap::{IndexMap, IndexSet};
-use indicatif::ProgressBar;
-use itertools::{Either, Itertools};
-use miette::{Diagnostic, IntoDiagnostic, MietteDiagnostic, Report, WrapErr};
-use pixi_build_frontend::ToolContext;
-use pixi_consts::consts;
-use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
-use pixi_progress::global_multi_progress;
-use pixi_record::{ParseLockFileError, PixiRecord};
-use pixi_uv_conversions::{
-    ConversionError, to_extra_name, to_marker_environment, to_normalize, to_uv_extra_name,
-    to_uv_normalize,
-};
-use pypi_mapping::{self, MappingClient};
-use pypi_modifiers::pypi_marker_env::determine_marker_environment;
-use rattler::package_cache::PackageCache;
-use rattler_conda_types::{Arch, MatchSpec, PackageName, Platform};
-use rattler_lock::{
-    LockFile, ParseCondaLockError, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData,
-};
-use rattler_repodata_gateway::{Gateway, RepoData};
-use thiserror::Error;
-use tokio::sync::Semaphore;
-use tracing::Instrument;
-use uv_configuration::RAYON_INITIALIZE;
-use uv_normalize::ExtraName;
-use pixi_command_dispatcher::BuildEnvironment;
 use super::{
     CondaPrefixUpdater, PixiRecordsByName, PypiRecordsByName, UvResolutionContext,
     outdated::OutdatedEnvironments, utils::IoConcurrencyLimit,
@@ -62,12 +32,41 @@ use crate::{
         virtual_packages::validate_system_meets_environment_requirements,
     },
     prefix::Prefix,
-    repodata::Repodata,
     workspace::{
         Environment, EnvironmentVars, HasWorkspaceRef, get_activated_environment_variables,
         grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
     },
 };
+use barrier_cell::BarrierCell;
+use fancy_display::FancyDisplay;
+use futures::{FutureExt, StreamExt, stream::FuturesUnordered};
+use indexmap::{IndexMap, IndexSet};
+use indicatif::ProgressBar;
+use itertools::{Either, Itertools};
+use miette::{Diagnostic, IntoDiagnostic, MietteDiagnostic, Report, WrapErr};
+use pixi_build_frontend::ToolContext;
+use pixi_command_dispatcher::BuildEnvironment;
+use pixi_consts::consts;
+use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
+use pixi_progress::global_multi_progress;
+use pixi_record::{ParseLockFileError, PixiRecord};
+use pixi_uv_conversions::{
+    ConversionError, to_extra_name, to_marker_environment, to_normalize, to_uv_extra_name,
+    to_uv_normalize,
+};
+use pypi_mapping::{self, MappingClient};
+use pypi_modifiers::pypi_marker_env::determine_marker_environment;
+use rattler::package_cache::PackageCache;
+use rattler_conda_types::{Arch, MatchSpec, PackageName, Platform};
+use rattler_lock::{
+    LockFile, ParseCondaLockError, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData,
+};
+use rattler_repodata_gateway::{Gateway, RepoData};
+use thiserror::Error;
+use tokio::sync::Semaphore;
+use tracing::Instrument;
+use uv_configuration::RAYON_INITIALIZE;
+use uv_normalize::ExtraName;
 
 impl Workspace {
     /// Ensures that the lock-file is up-to-date with the project.
@@ -1092,14 +1091,7 @@ impl<'p> UpdateContextBuilder<'p> {
             })
             .collect();
 
-        let gateway = project.repodata_gateway()?.clone();
         let client = project.authenticated_client()?.clone();
-
-        // tool context
-        let tool_context = ToolContext::builder()
-            .with_gateway(gateway)
-            .with_client(client.clone())
-            .build();
 
         // Construct a command dispatcher that will be used to run the tasks.
         let multi_progress = global_multi_progress();
@@ -1112,6 +1104,14 @@ impl<'p> UpdateContextBuilder<'p> {
                 anchor_pb.clone(),
             ))
             .finish();
+
+        let gateway = command_dispatcher.gateway().clone();
+
+        // tool context
+        let tool_context = ToolContext::builder()
+            .with_gateway(gateway)
+            .with_client(client.clone())
+            .build();
 
         let build_context = BuildContext::from_workspace(project, command_dispatcher)?
             .with_tool_context(Arc::new(tool_context));
@@ -1237,7 +1237,7 @@ impl<'p> UpdateContext<'p> {
                 let group_solve_task = spawn_solve_conda_environment_task(
                     source.clone(),
                     locked_group_records,
-                    project.repodata_gateway()?.clone(),
+                    self.build_context.command_dispatcher().gateway().clone(),
                     self.mapping_client.clone(),
                     platform,
                     self.conda_solve_semaphore.clone(),

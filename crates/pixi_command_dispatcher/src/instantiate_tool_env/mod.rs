@@ -1,12 +1,10 @@
-use std::collections::BTreeMap;
-use crate::install_pixi::{InstallPixiEnvironmentError, InstallPixiEnvironmentSpec};
-use crate::{
-    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    PixiEnvironmentSpec, SolvePixiEnvironmentError,
+use std::{
+    collections::BTreeMap,
+    hash::{Hash, Hasher},
+    path::PathBuf,
 };
-use base64::Engine;
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use base64::prelude::BASE64_URL_SAFE_NO_PAD;
+
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD, prelude::BASE64_URL_SAFE_NO_PAD};
 use chrono::{DateTime, Utc};
 use futures::TryFutureExt;
 use itertools::Itertools;
@@ -17,10 +15,14 @@ use pixi_spec_containers::DependencyMap;
 use pixi_utils::AsyncPrefixGuard;
 use rattler_conda_types::{ChannelConfig, ChannelUrl, NamelessMatchSpec, prefix::Prefix};
 use rattler_solve::{ChannelPriority, SolveStrategy};
-use std::hash::{Hash, Hasher};
-use std::path::PathBuf;
 use thiserror::Error;
 use xxhash_rust::xxh3::Xxh3;
+
+use crate::{
+    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
+    PixiEnvironmentSpec, SolvePixiEnvironmentError,
+    install_pixi::{InstallPixiEnvironmentError, InstallPixiEnvironmentSpec},
+};
 
 /// Specification for a tool environment. Tool environments are cached between
 /// runs.
@@ -144,6 +146,11 @@ impl InstantiateToolEnvironmentSpec {
         self,
         command_queue: CommandDispatcher,
     ) -> Result<Prefix, CommandDispatcherError<InstantiateToolEnvironmentError>> {
+        tracing::debug!(
+            "Installing tool env for: {}",
+            &self.requirement.0.as_source()
+        );
+
         // Determine the cache key for the environment.
         let cache_key = self.cache_key();
 
