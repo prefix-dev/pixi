@@ -17,14 +17,10 @@
       "enabled": false
     },
     {
-      "description": "Rust >=1.85 is needed to update the cargo-machete action",
-      "matchPackageNames": "bnjbvr/cargo-machete",
-      "matchManagers": ["github-actions"],
-      "enabled": false
-    },
-    {
       "groupName": "Pixi",
-      "matchManagers": ["pixi"]
+      "matchManagers": ["pixi"],
+      // We want to update Rust manually and keep it in sync with rust-toolchain
+      "excludePackagePatterns": ["rust"]
     },
     {
       "groupName": "Pixi-Lock",
@@ -32,31 +28,15 @@
       "matchUpdateTypes": ["lockFileMaintenance"]
     },
     {
-      "description": "We want to update Rust manually and keep it in sync with rust-toolchain",
-      "matchPackageNames": "rust",
-      "matchManagers": ["pixi"],
-      "enabled": false
-    },
-    {
       "groupName": "Cargo",
-      "matchManagers": ["cargo"]
+      "matchManagers": ["cargo"],
+      // We want to update rattler manually
+      "excludePackagePatterns": ["rattler*", "file_url"]
     },
     {
       "groupName": "Cargo-Lock",
       "matchManagers": ["cargo"],
       "matchUpdateTypes": ["lockFileMaintenance"]
-    },
-    {
-      "description": "We want a separate PR for rattler crates",
-      "matchPackageNames": ["rattler*", "file_url"],
-      "matchManagers": ["cargo"],
-      "separateMajorMinor": false
-    },
-    {
-      "description": "Rust >=1.85 is needed to update deno_task_shell",
-      "matchPackageNames": "deno_task_shell",
-      "matchManagers": ["cargo"],
-      "enabled": false
     }
   ]
 }
