@@ -137,9 +137,10 @@ The `--inject` option also supports wheels.
 pixi-pack pack --ignore-pypi-non-wheel --inject my_webserver-0.1.0-py3-none-any.whl
 ```
 
-> [!WARNING]
-> In contrast to injecting from conda packages,
-> we cannot verify that injected wheels are compatible with the target environment. Please make sure the packages are compatible.
+!!! warning
+
+    In contrast to injecting from conda packages,
+    we cannot verify that injected wheels are compatible with the target environment. Please make sure the packages are compatible.
 
 ### Mirror and S3 middleware
 
