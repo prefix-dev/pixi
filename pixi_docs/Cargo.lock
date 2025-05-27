@@ -4448,6 +4448,7 @@ dependencies = [
 name = "pixi_command_dispatcher"
 version = "0.1.0"
 dependencies = [
+ "async-fd-lock",
  "base64 0.22.1",
  "chrono",
  "derive_more",
@@ -4457,6 +4458,7 @@ dependencies = [
  "miette 7.5.0",
  "pixi_build_discovery",
  "pixi_build_frontend",
+ "pixi_build_types",
  "pixi_consts",
  "pixi_git",
  "pixi_glob",
