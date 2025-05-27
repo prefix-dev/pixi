@@ -28,6 +28,7 @@ use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use once_cell::sync::OnceCell;
 use pep508_rs::Requirement;
+use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{CacheDirs, CommandDispatcher, CommandDispatcherBuilder, Limits};
 use pixi_config::Config;
 use pixi_consts::consts;
@@ -496,7 +497,8 @@ impl Workspace {
             .with_max_download_concurrency(self.concurrent_downloads_semaphore())
             .with_limits(Limits {
                 max_concurrent_solves: self.config().max_concurrent_solves().into(),
-            }))
+            })
+            .with_backend_overrides(BackendOverride::from_env().unwrap_or_default()))
     }
 
     fn client_and_authenticated_client(

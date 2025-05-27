@@ -9,7 +9,7 @@ use console::Color;
 use fancy_display::FancyDisplay;
 use human_bytes::human_bytes;
 use itertools::Itertools;
-use miette::{IntoDiagnostic, miette};
+use miette::IntoDiagnostic;
 use pixi_consts::consts;
 use pixi_manifest::FeaturesExt;
 use pixi_uv_conversions::{
