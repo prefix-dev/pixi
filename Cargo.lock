@@ -1987,14 +1987,14 @@ dependencies = [
 
 [[package]]
 name = "file_url"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46ca1565923e8d9bcf962889abeeb2f15d4b73356689ce26ae7dd1f54b928498"
+checksum = "b6e6bbcc80ea90b1924156b36e41b1ac75170580fff3b26fb6724c306538312b"
 dependencies = [
  "itertools 0.14.0",
  "percent-encoding",
  "thiserror 2.0.12",
- "typed-path",
+ "typed-path 0.11.0",
  "url",
 ]
 
@@ -4519,7 +4519,7 @@ dependencies = [
  "toml_edit",
  "tracing",
  "tracing-subscriber",
- "typed-path",
+ "typed-path 0.10.0",
  "url",
  "uv-auth",
  "uv-build-frontend",
@@ -4685,7 +4685,7 @@ dependencies = [
  "thiserror 2.0.12",
  "tokio",
  "tracing",
- "typed-path",
+ "typed-path 0.10.0",
  "url",
  "xxhash-rust",
 ]
@@ -4882,7 +4882,7 @@ dependencies = [
  "serde",
  "serde_with",
  "thiserror 2.0.12",
- "typed-path",
+ "typed-path 0.10.0",
  "url",
 ]
 
@@ -4907,7 +4907,7 @@ dependencies = [
  "toml-span",
  "toml_edit",
  "tracing",
- "typed-path",
+ "typed-path 0.10.0",
  "url",
 ]
 
@@ -5532,7 +5532,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.12",
  "tracing",
- "typed-path",
+ "typed-path 0.10.0",
  "url",
 ]
 
@@ -5576,7 +5576,7 @@ dependencies = [
  "serde_with",
  "serde_yaml",
  "thiserror 2.0.12",
- "typed-path",
+ "typed-path 0.10.0",
  "url",
 ]
 
@@ -7646,6 +7646,12 @@ name = "typed-path"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "41713888c5ccfd99979fcd1afd47b71652e331b3d4a0e19d30769e80fec76cce"
+
+[[package]]
+name = "typed-path"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c462d18470a2857aa657d338af5fa67170bb48bcc80a296710ce3b0802a32566"
 
 [[package]]
 name = "typeid"
