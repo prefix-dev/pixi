@@ -4738,6 +4738,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixi_docs"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "fs-err",
+ "itertools 0.14.0",
+ "pixi",
+ "rattler_conda_types",
+]
+
+[[package]]
 name = "pixi_git"
 version = "0.0.1"
 dependencies = [

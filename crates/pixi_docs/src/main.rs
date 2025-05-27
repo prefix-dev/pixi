@@ -18,7 +18,7 @@ const MD_EXTENSION: &str = ".md";
 fn main() -> Result<(), Box<dyn Error>> {
     let command = get_command();
 
-    let output_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../docs/reference/cli");
+    let output_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../docs/reference/cli");
 
     println!("Generating CLI documentation in {}", output_dir.display());
 
