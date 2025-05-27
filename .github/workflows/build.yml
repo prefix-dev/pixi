@@ -25,7 +25,7 @@ jobs:
           locked: false
 
       - name: Build with Pixi with Pixi
-        run: time pixi build
+        run: pixi build
 
       - name: Upload artifact pixi-x.x.x-<os>.conda
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
