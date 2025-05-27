@@ -324,8 +324,10 @@ pub async fn store_credentials_from_project(project: &Workspace) -> miette::Resu
 /// Ensure that the `.pixi/` directory exists and contains a `.gitignore` file.
 /// If the directory doesn't exist, create it.
 /// If the `.gitignore` file doesn't exist, create it with a '*' pattern.
+/// Also creates a `.condapackageignore` file to exclude the `.pixi` directory from builds.
 async fn ensure_pixi_directory_and_gitignore(pixi_dir: &Path) -> miette::Result<()> {
     let gitignore_path = pixi_dir.join(".gitignore");
+    let condapackageignore_path = pixi_dir.join(".condapackageignore");
 
     // Create the `.pixi/` directory if it doesn't exist
     if !pixi_dir.exists() {
@@ -346,6 +348,17 @@ async fn ensure_pixi_directory_and_gitignore(pixi_dir: &Path) -> miette::Result<
             .wrap_err(format!(
                 "Failed to create .gitignore file at {}",
                 gitignore_path.display()
+            ))?;
+    }
+
+    // Create or check the .condapackageignore file
+    if !condapackageignore_path.exists() {
+        tokio::fs::write(&condapackageignore_path, ".pixi\n")
+            .await
+            .into_diagnostic()
+            .wrap_err(format!(
+                "Failed to create .condapackageignore file at {}",
+                condapackageignore_path.display()
             ))?;
     }
 
