@@ -1,6 +1,8 @@
 [build-system]
 build-backend = "scikit_build_core.build"
 requires = ["scikit-build-core", "pybind11"]
+[tool.uv]
+no-binary = true
 
 [project]
 classifiers = [
@@ -11,6 +13,14 @@ classifiers = [
   "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
+]
+dependencies = [
+  "arrow>=1.2.3",
+  "click>=8.1.8",
+  "numba>=0.56.4",
+  "numpy>=1.21.6",
+  "pytest>=7.4.4",
+  "scipy>=1.7.3",
 ]
 description = "A simple pybind11 example"
 name = "mysum"
