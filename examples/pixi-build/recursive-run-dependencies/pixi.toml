@@ -4,7 +4,7 @@ channels = [
   "https://prefix.dev/pixi-build-backends",
 ]
 name = "recursive-run-deps"
-platforms = ["win-64"]
+platforms = ["win-64", "osx-arm64", "linux-64"]
 preview = ["pixi-build"]
 
 [dependencies]
