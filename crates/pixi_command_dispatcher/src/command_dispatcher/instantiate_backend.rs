@@ -1,17 +1,11 @@
-use crate::command_dispatcher::error::CommandDispatcherError;
-use crate::instantiate_tool_env::{
-    InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec,
-};
-use crate::{BuildEnvironment, CommandDispatcher, CommandDispatcherErrorResultExt};
 use miette::Diagnostic;
 use pixi_build_discovery::{
     BackendInitializationParams, BackendSpec, CommandSpec, EnabledProtocols,
 };
-use pixi_build_frontend::tool::IsolatedTool;
 use pixi_build_frontend::{
     Backend, json_rpc,
     json_rpc::JsonRpcBackend,
-    tool::{SystemTool, Tool},
+    tool::{IsolatedTool, SystemTool, Tool},
 };
 use pixi_spec::PixiSpec;
 use rattler_conda_types::ChannelConfig;
@@ -21,6 +15,12 @@ use rattler_shell::{
 };
 use rattler_virtual_packages::DetectVirtualPackageError;
 use thiserror::Error;
+
+use crate::{
+    BuildEnvironment, CommandDispatcher, CommandDispatcherErrorResultExt,
+    command_dispatcher::error::CommandDispatcherError,
+    instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec},
+};
 
 #[derive(Debug)]
 pub struct InstantiateBackendSpec {
@@ -112,8 +112,17 @@ impl CommandDispatcher {
             }
         };
 
+        // The backend expects both the manifest path and the source directory to be
+        // absolute paths.
+        let manifest_path = spec
+            .init_params
+            .source_dir
+            .join(spec.init_params.manifest_path);
+        let source_dir = spec.init_params.source_dir;
+
         JsonRpcBackend::setup(
-            spec.init_params.manifest_path,
+            source_dir,
+            manifest_path,
             spec.init_params.project_model,
             spec.init_params.configuration,
             Some(self.cache_dirs().root().clone()),
