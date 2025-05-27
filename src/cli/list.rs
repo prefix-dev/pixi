@@ -293,8 +293,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     if packages_to_output.is_empty() {
         return Err(miette!(
-            "{}No packages found in '{}' environment for '{}' platform.",
-            console::style(console::Emoji("✘ ", "")).red(),
+            "No packages found in '{}' environment for '{}' platform.",
             environment.name().fancy_display(),
             consts::ENVIRONMENT_STYLE.apply_to(platform),
         ));

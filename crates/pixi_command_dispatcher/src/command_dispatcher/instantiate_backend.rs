@@ -34,9 +34,6 @@ pub struct InstantiateBackendSpec {
     /// backend.
     pub channel_config: ChannelConfig,
 
-    /// The platform to instantiate the backend for.
-    pub build_environment: BuildEnvironment,
-
     /// The protocols that are enabled for discovering source packages
     pub enabled_protocols: EnabledProtocols,
 }
@@ -59,7 +56,7 @@ impl CommandDispatcher {
                 system_spec.command.unwrap_or(backend_spec.name),
             )),
             CommandSpec::EnvironmentSpec(env_spec) => {
-                let target_platform = spec.build_environment.host_platform;
+                let (tool_platform, tool_platform_virtual_packages) = self.tool_platform();
                 let prefix = self
                     .instantiate_tool_environment(InstantiateToolEnvironmentSpec {
                         requirement: (
@@ -83,7 +80,12 @@ impl CommandDispatcher {
                             })
                             .collect(),
                         constraints: env_spec.constraints,
-                        build_environment: spec.build_environment,
+                        build_environment: BuildEnvironment {
+                            host_platform: tool_platform,
+                            build_platform: tool_platform,
+                            host_virtual_packages: tool_platform_virtual_packages.to_vec(),
+                            build_virtual_packages: tool_platform_virtual_packages.to_vec(),
+                        },
                         channels: env_spec.channels,
                         exclude_newer: None,
                         variants: None,
@@ -95,7 +97,7 @@ impl CommandDispatcher {
 
                 // Get the activation scripts
                 let activator =
-                    Activator::from_path(prefix.path(), ShellEnum::default(), target_platform)
+                    Activator::from_path(prefix.path(), ShellEnum::default(), tool_platform)
                         .map_err(InstantiateBackendError::from)?;
 
                 let activation_scripts = activator

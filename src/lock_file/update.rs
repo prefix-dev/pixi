@@ -9,34 +9,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use super::{
-    CondaPrefixUpdater, PixiRecordsByName, PypiRecordsByName, UvResolutionContext,
-    outdated::OutdatedEnvironments, utils::IoConcurrencyLimit,
-};
-use crate::{
-    Workspace,
-    activation::CurrentEnvVarBehavior,
-    build::{
-        BuildContext, GlobHashCache,
-        source_metadata_collector::{CollectedSourceMetadata, SourceMetadataCollector},
-    },
-    environment::{
-        self, CondaPrefixUpdated, CondaPrefixUpdaterBuilder, EnvironmentFile, LockFileUsage,
-        LockedEnvironmentHash, PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform,
-        PythonStatus, read_environment_file, write_environment_file,
-    },
-    lock_file::{
-        self, PypiRecord,
-        records_by_name::HasNameVersion,
-        reporter::{CondaMetadataProgress, GatewayProgressReporter, SolveProgressBar},
-        virtual_packages::validate_system_meets_environment_requirements,
-    },
-    prefix::Prefix,
-    workspace::{
-        Environment, EnvironmentVars, HasWorkspaceRef, get_activated_environment_variables,
-        grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
-    },
-};
 use barrier_cell::BarrierCell;
 use fancy_display::FancyDisplay;
 use futures::{FutureExt, StreamExt, stream::FuturesUnordered};
@@ -67,6 +39,35 @@ use tokio::sync::Semaphore;
 use tracing::Instrument;
 use uv_configuration::RAYON_INITIALIZE;
 use uv_normalize::ExtraName;
+
+use super::{
+    CondaPrefixUpdater, PixiRecordsByName, PypiRecordsByName, UvResolutionContext,
+    outdated::OutdatedEnvironments, utils::IoConcurrencyLimit,
+};
+use crate::{
+    Workspace,
+    activation::CurrentEnvVarBehavior,
+    build::{
+        BuildContext, GlobHashCache,
+        source_metadata_collector::{CollectedSourceMetadata, SourceMetadataCollector},
+    },
+    environment::{
+        self, CondaPrefixUpdated, CondaPrefixUpdaterBuilder, EnvironmentFile, LockFileUsage,
+        LockedEnvironmentHash, PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform,
+        PythonStatus, read_environment_file, write_environment_file,
+    },
+    lock_file::{
+        self, PypiRecord,
+        records_by_name::HasNameVersion,
+        reporter::{CondaMetadataProgress, GatewayProgressReporter, SolveProgressBar},
+        virtual_packages::validate_system_meets_environment_requirements,
+    },
+    prefix::Prefix,
+    workspace::{
+        Environment, EnvironmentVars, HasWorkspaceRef, get_activated_environment_variables,
+        grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
+    },
+};
 
 impl Workspace {
     /// Ensures that the lock-file is up-to-date with the project.
@@ -684,7 +685,8 @@ pub struct UpdateContext<'p> {
     /// Whether it is allowed to instantiate any prefix.
     no_install: bool,
 
-    /// The progress bar where all the command dispatcher progress will be placed.
+    /// The progress bar where all the command dispatcher progress will be
+    /// placed.
     dispatcher_progress_bar: ProgressBar,
 }
 
@@ -1811,14 +1813,16 @@ async fn spawn_solve_conda_environment_task(
                     &pb.pb,
                     source_specs.len() as u64,
                 ));
+
                 SourceMetadataCollector::new(
                     build_context.clone(),
                     channel_urls.clone(),
+                    // We want to get the dependencies when compiling from `platform` to `platform`.
                     BuildEnvironment {
-                        build_platform: platform,
-                        build_virtual_packages: virtual_packages.clone(),
                         host_platform: platform,
                         host_virtual_packages: virtual_packages.clone(),
+                        build_platform: platform,
+                        build_virtual_packages: virtual_packages.clone(),
                     },
                     metadata_reporter,
                 )

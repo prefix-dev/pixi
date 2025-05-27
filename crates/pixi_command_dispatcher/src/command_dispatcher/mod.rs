@@ -21,7 +21,9 @@ use pixi_record::{PinnedPathSpec, PinnedSourceSpec, PixiRecord};
 use pixi_spec::SourceSpec;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::prefix::Prefix;
+use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_repodata_gateway::{Gateway, MaxConcurrency};
+use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use reqwest_middleware::ClientWithMiddleware;
 use tokio::sync::{mpsc, oneshot};
 use typed_path::Utf8TypedPath;
@@ -85,6 +87,10 @@ pub(crate) struct CommandDispatcherData {
 
     /// The package cache used to store packages.
     pub package_cache: PackageCache,
+
+    /// The platform (and virtual packages) to use for tools that should run on the current system.
+    /// Usually this is the current platform, but it can be a different platform.
+    pub tool_platform: (Platform, Vec<GenericVirtualPackage>),
 }
 
 /// A channel through which to send any messages to the command_dispatcher. Some
@@ -240,6 +246,11 @@ impl CommandDispatcher {
     /// Returns the package cache used by the command dispatcher.
     pub fn package_cache(&self) -> &PackageCache {
         &self.data.package_cache
+    }
+
+    /// Returns the platform and virtual packages used for tool environments.
+    pub fn tool_platform(&self) -> (Platform, &[GenericVirtualPackage]) {
+        (self.data.tool_platform.0, &self.data.tool_platform.1)
     }
 
     /// Sends a task to the command dispatcher and waits for the result.
@@ -481,6 +492,7 @@ pub struct CommandDispatcherBuilder {
     max_download_concurrency: MaxConcurrency,
     limits: Limits,
     executor: Executor,
+    tool_platform: Option<(Platform, Vec<GenericVirtualPackage>)>,
 }
 
 impl CommandDispatcherBuilder {
@@ -540,6 +552,19 @@ impl CommandDispatcherBuilder {
         }
     }
 
+    /// Sets the tool platform and virtual packages associated with it. This is used when
+    /// instantiating tool environments and defaults to the current platform.
+    pub fn with_tool_platform(
+        self,
+        platform: Platform,
+        virtual_packages: Vec<GenericVirtualPackage>,
+    ) -> Self {
+        Self {
+            tool_platform: Some((platform, virtual_packages)),
+            ..self
+        }
+    }
+
     /// Set the limits to which this instance should adhere.
     pub fn with_limits(self, limits: Limits) -> Self {
         Self { limits, ..self }
@@ -572,6 +597,15 @@ impl CommandDispatcherBuilder {
 
         let git_resolver = self.git_resolver.unwrap_or_default();
         let source_metadata_cache = SourceMetadataCache::new(cache_dirs.source_metadata());
+        let tool_platform = self.tool_platform.unwrap_or_else(|| {
+            let platform = Platform::current();
+            let virtual_packages =
+                VirtualPackages::detect(&VirtualPackageOverrides::default()).unwrap_or_default();
+            (
+                platform,
+                virtual_packages.into_generic_virtual_packages().collect(),
+            )
+        });
 
         let data = Arc::new(CommandDispatcherData {
             gateway,
@@ -584,6 +618,7 @@ impl CommandDispatcherBuilder {
             glob_hash_cache: GlobHashCache::default(),
             limits: ResolvedLimits::from(self.limits),
             package_cache,
+            tool_platform,
         });
 
         let sender = CommandDispatcherProcessor::spawn(data.clone(), self.reporter, self.executor);

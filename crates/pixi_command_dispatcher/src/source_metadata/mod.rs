@@ -136,42 +136,37 @@ impl SourceMetadataSpec {
                 backend_spec: discovered_backend.backend_spec,
                 init_params: discovered_backend.init_params,
                 channel_config: self.channel_config.clone(),
-                build_environment: BuildEnvironment {
-                    host_platform: self.build_environment.build_platform,
-                    host_virtual_packages: self.build_environment.build_virtual_packages.clone(),
-                    build_platform: self.build_environment.build_platform,
-                    build_virtual_packages: self.build_environment.build_virtual_packages.clone(),
-                },
                 enabled_protocols: self.enabled_protocols,
             })
             .await
             .map_err_with(SourceMetadataError::Initialize)?;
 
         // Query the backend for metadata.
+        let params = CondaMetadataParams {
+            build_platform: Some(PlatformAndVirtualPackages {
+                platform: self.build_environment.build_platform,
+                virtual_packages: Some(self.build_environment.build_virtual_packages),
+            }),
+            host_platform: Some(PlatformAndVirtualPackages {
+                platform: self.build_environment.host_platform,
+                virtual_packages: Some(self.build_environment.host_virtual_packages),
+            }),
+            channel_base_urls: Some(self.channels.into_iter().map(Into::into).collect()),
+            channel_configuration: ChannelConfiguration {
+                base_url: self.channel_config.channel_alias.clone(),
+            },
+            variant_configuration: self.variants.map(|variants| variants.into_iter().collect()),
+            work_directory: command_queue.cache_dirs().working_dirs().join(
+                WorkDirKey {
+                    source: self.source.clone(),
+                    host_platform: self.build_environment.host_platform,
+                    build_backend: backend.identifier().to_string(),
+                }
+                .key(),
+            ),
+        };
         let metadata = backend
-            .conda_get_metadata(&CondaMetadataParams {
-                build_platform: Some(PlatformAndVirtualPackages {
-                    platform: self.build_environment.build_platform,
-                    virtual_packages: Some(self.build_environment.build_virtual_packages),
-                }),
-                host_platform: Some(PlatformAndVirtualPackages {
-                    platform: self.build_environment.host_platform,
-                    virtual_packages: Some(self.build_environment.host_virtual_packages),
-                }),
-                channel_base_urls: Some(self.channels.into_iter().map(Into::into).collect()),
-                channel_configuration: ChannelConfiguration {
-                    base_url: self.channel_config.channel_alias.clone(),
-                },
-                variant_configuration: self.variants.map(|variants| variants.into_iter().collect()),
-                work_directory: command_queue.cache_dirs().working_dirs().join(
-                    WorkDirKey {
-                        source: self.source.clone(),
-                        host_platform: self.build_environment.host_platform,
-                        build_backend: backend.identifier().to_string(),
-                    }
-                    .key(),
-                ),
-            })
+            .conda_get_metadata(&params)
             .await
             .map_err(SourceMetadataError::Communication)?;
 
