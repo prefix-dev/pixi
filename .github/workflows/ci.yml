@@ -272,7 +272,7 @@ jobs:
     name: "build binary | linux x86_64"
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: rui314/setup-mold@e16410e7f8d9e167b74ad5697a9089a35126eb50 # v1
+      - uses: rui314/setup-mold@67424c1b3680e35255d95971cbd5de0047bf31c3 # v1
       - name: "Setup musl"
         run: |
           sudo apt-get install musl-tools
@@ -299,7 +299,7 @@ jobs:
     name: "build binary | macos aarch64"
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: rui314/setup-mold@e16410e7f8d9e167b74ad5697a9089a35126eb50 # v1
+      - uses: rui314/setup-mold@67424c1b3680e35255d95971cbd5de0047bf31c3 # v1
       - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
       - name: "Build"
         run: >
@@ -321,7 +321,7 @@ jobs:
     name: "build binary | macos x86_64"
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: rui314/setup-mold@e16410e7f8d9e167b74ad5697a9089a35126eb50 # v1
+      - uses: rui314/setup-mold@67424c1b3680e35255d95971cbd5de0047bf31c3 # v1
       - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
       - name: "Build"
         run: >
@@ -418,7 +418,7 @@ jobs:
           Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.PIXI_WORKSPACE }}" -Recurse
           echo "${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_RELEASE }}" | Out-File -Append -Encoding utf8 -FilePath $env:GITHUB_PATH
       - name: Download binary from build
-        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: pixi-windows-x86_64-${{ github.sha }}
           path: ${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_RELEASE }}
@@ -440,7 +440,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - name: Download binary from build
-        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: pixi-macos-aarch64-${{ github.sha }}
           path: ${{ env.TARGET_RELEASE }}
@@ -464,7 +464,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - name: Download binary from build
-        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: pixi-linux-x86_64-${{ github.sha }}
           path: ${{ env.TARGET_RELEASE }}
@@ -495,7 +495,7 @@ jobs:
           Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.PIXI_WORKSPACE }}" -Recurse
           echo "${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_RELEASE }}" | Out-File -Append -Encoding utf8 -FilePath $env:GITHUB_PATH
       - name: Download binary from build
-        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: pixi-windows-x86_64-${{ github.sha }}
           path: ${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_RELEASE }}
@@ -524,7 +524,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - name: Download binary from build
-        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: pixi-macos-aarch64-${{ github.sha }}
           path: ${{ env.TARGET_RELEASE }}
@@ -558,7 +558,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - name: Download binary from build
-        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: pixi-linux-x86_64-${{ github.sha }}
           path: ${{ env.TARGET_RELEASE }}
@@ -599,7 +599,7 @@ jobs:
           Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.PIXI_WORKSPACE }}" -Recurse
           echo "${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_RELEASE }}" | Out-File -Append -Encoding utf8 -FilePath $env:GITHUB_PATH
       - name: Download binary from build
-        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: pixi-windows-x86_64-${{ github.sha }}
           path: ${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_RELEASE }}
@@ -650,7 +650,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - name: Download binary from build
-        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: pixi-macos-aarch64-${{ github.sha }}
           path: ${{ env.TARGET_RELEASE }}
@@ -698,7 +698,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - name: Download binary from build
-        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: pixi-linux-x86_64-${{ github.sha }}
           path: ${{ env.TARGET_RELEASE }}

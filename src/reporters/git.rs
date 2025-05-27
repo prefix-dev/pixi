@@ -70,7 +70,7 @@ impl GitCheckoutProgress {
 
 impl pixi_command_dispatcher::GitCheckoutReporter for GitCheckoutProgress {
     /// Called when a git checkout was queued on the [`CommandQueue`].
-    fn on_checkout_queued(
+    fn on_queued(
         &mut self,
         _context: Option<ReporterContext>,
         env: &RepositoryReference,
@@ -80,7 +80,7 @@ impl pixi_command_dispatcher::GitCheckoutReporter for GitCheckoutProgress {
         checkout_id
     }
 
-    fn on_checkout_start(&mut self, checkout_id: GitCheckoutId) {
+    fn on_start(&mut self, checkout_id: GitCheckoutId) {
         let pb = self.multi_progress.insert_after(
             self.last_progress_bar().unwrap_or(&self.anchor),
             ProgressBar::hidden(),
@@ -114,7 +114,7 @@ impl pixi_command_dispatcher::GitCheckoutReporter for GitCheckoutProgress {
         self.bars.insert(checkout_id, pb);
     }
 
-    fn on_checkout_finished(&mut self, checkout_id: GitCheckoutId) {
+    fn on_finished(&mut self, checkout_id: GitCheckoutId) {
         let removed_pb = self
             .bars
             .shift_remove(&checkout_id)

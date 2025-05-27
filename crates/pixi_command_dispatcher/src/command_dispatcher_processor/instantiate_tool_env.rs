@@ -3,7 +3,7 @@ use crate::command_dispatcher::{InstantiatedToolEnvId, Task};
 use crate::instantiate_tool_env::{
     InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec,
 };
-use crate::{CommandDispatcherError, command_dispatcher::CommandDispatcherContext};
+use crate::{CommandDispatcherError, Reporter, command_dispatcher::CommandDispatcherContext};
 use futures::FutureExt;
 use rattler_conda_types::prefix::Prefix;
 use std::collections::hash_map::Entry;
@@ -41,6 +41,28 @@ impl CommandDispatcherProcessor {
                     task.parent,
                 ));
 
+                // Notify the reporter that a new solve has been queued and started.
+                let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
+                let reporter_id = self
+                    .reporter
+                    .as_deref_mut()
+                    .and_then(Reporter::as_instantiate_tool_environment_reporter)
+                    .map(|reporter| reporter.on_queued(parent_context, &task.spec));
+
+                if let Some(reporter_id) = reporter_id {
+                    self.instantiated_tool_envs_reporters
+                        .insert(id, reporter_id);
+                }
+
+                if let Some((reporter, reporter_id)) = self
+                    .reporter
+                    .as_deref_mut()
+                    .and_then(Reporter::as_instantiate_tool_environment_reporter)
+                    .zip(reporter_id)
+                {
+                    reporter.on_started(reporter_id)
+                }
+
                 let command_queue = self.create_task_command_dispatcher(
                     CommandDispatcherContext::InstantiateToolEnv(id),
                 );
@@ -64,6 +86,15 @@ impl CommandDispatcherProcessor {
         id: InstantiatedToolEnvId,
         result: Result<Prefix, CommandDispatcherError<InstantiateToolEnvironmentError>>,
     ) {
+        if let Some((reporter, reporter_id)) = self
+            .reporter
+            .as_deref_mut()
+            .and_then(Reporter::as_instantiate_tool_environment_reporter)
+            .zip(self.instantiated_tool_envs_reporters.remove(&id))
+        {
+            reporter.on_finished(reporter_id);
+        }
+
         self.instantiated_tool_envs
             .get_mut(&id)
             .expect("cannot find instantiated tool env")

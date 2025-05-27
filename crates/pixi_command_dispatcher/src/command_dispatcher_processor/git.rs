@@ -29,10 +29,7 @@ impl CommandDispatcherProcessor {
                     .as_deref_mut()
                     .and_then(Reporter::as_git_reporter)
                     .map(|reporter| {
-                        reporter.on_checkout_queued(
-                            parent_context,
-                            &RepositoryReference::from(&task.spec),
-                        )
+                        reporter.on_queued(parent_context, &RepositoryReference::from(&task.spec))
                     });
 
                 entry.insert(PendingGitCheckout::Pending(reporter_id, vec![task.tx]));
@@ -44,7 +41,7 @@ impl CommandDispatcherProcessor {
                     .and_then(Reporter::as_git_reporter)
                     .zip(reporter_id)
                 {
-                    reporter.on_checkout_start(id)
+                    reporter.on_start(id)
                 }
 
                 let resolver = self.inner.git_resolver.clone();
@@ -78,7 +75,7 @@ impl CommandDispatcherProcessor {
             .and_then(Reporter::as_git_reporter)
             .zip(*reporter_id)
         {
-            reporter.on_checkout_finished(id)
+            reporter.on_finished(id)
         }
 
         match result {

@@ -16,7 +16,7 @@ use rattler_conda_types::{ChannelConfig, ChannelUrl, PackageRecord};
 use thiserror::Error;
 
 /// Represents a request for source metadata.
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, serde::Serialize)]
 pub struct SourceMetadataSpec {
     /// The source specification
     pub source_spec: SourceSpec,
@@ -25,12 +25,14 @@ pub struct SourceMetadataSpec {
     pub channel_config: ChannelConfig,
 
     /// The channels to use for solving.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub channels: Vec<ChannelUrl>,
 
     /// Information about the build environment.
     pub build_environment: BuildEnvironment,
 
     /// The protocols that are enabled for this source
+    #[serde(skip_serializing_if = "crate::is_default")]
     pub enabled_protocols: EnabledProtocols,
 }
 
@@ -126,19 +128,10 @@ impl SourceMetadataSpec {
         let input_hash = if source.pinned.is_immutable() {
             None
         } else {
-            let input_globs = metadata
-                .input_globs
-                .clone()
-                .into_iter()
-                .flat_map(|glob| glob.into_iter())
-                .collect::<Vec<_>>();
-
+            let input_globs = metadata.input_globs.clone().unwrap_or_default();
             let input_hash = command_queue
                 .glob_hash_cache()
-                .compute_hash(GlobHashKey {
-                    root: source.path.clone(),
-                    globs: input_globs.clone(),
-                })
+                .compute_hash(GlobHashKey::new(&source.path, input_globs.clone()))
                 .await
                 .map_err(SourceMetadataError::GlobHash)?;
 

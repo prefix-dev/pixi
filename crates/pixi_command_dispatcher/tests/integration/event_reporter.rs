@@ -1,29 +1,16 @@
 use std::sync::{Arc, Mutex};
 
 use pixi_command_dispatcher::{
-    CondaSolveReporter, GitCheckoutReporter, InstallPixiEnvironmentSpec, PixiEnvironmentSpec,
-    PixiInstallReporter, PixiSolveReporter, Reporter, ReporterContext, SolveCondaEnvironmentSpec,
-    reporter::{CondaSolveId, GitCheckoutId, PixiInstallId, PixiSolveId},
+    CondaSolveReporter, GitCheckoutReporter, InstallPixiEnvironmentSpec,
+    InstantiateToolEnvironmentSpec, PixiEnvironmentSpec, PixiInstallReporter, PixiSolveReporter,
+    Reporter, ReporterContext, SolveCondaEnvironmentSpec, SourceMetadataSpec,
+    reporter::{
+        CondaSolveId, GitCheckoutId, InstantiateToolEnvId, InstantiateToolEnvironmentReporter,
+        PixiInstallId, PixiSolveId, SourceMetadataId, SourceMetadataReporter,
+    },
 };
 use pixi_git::resolver::RepositoryReference;
 use serde::Serialize;
-
-#[derive(Debug, Serialize)]
-#[serde(tag = "type", rename_all = "kebab-case")]
-pub enum EventType {
-    CondaSolveQueued { id: CondaSolveId },
-    CondaSolveStarted { id: CondaSolveId },
-    CondaSolveFinished { id: CondaSolveId },
-    PixiSolveQueued { id: PixiSolveId },
-    PixiSolveStarted { id: PixiSolveId },
-    PixiSolveFinished { id: PixiSolveId },
-    PixiInstallQueued { id: PixiInstallId },
-    PixiInstallStarted { id: PixiInstallId },
-    PixiInstallFinished { id: PixiInstallId },
-    GitCheckoutQueued { id: GitCheckoutId },
-    GitCheckoutStarted { id: GitCheckoutId },
-    GitCheckoutFinished { id: GitCheckoutId },
-}
 
 #[derive(Debug, Serialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
@@ -83,25 +70,34 @@ pub enum Event {
     GitCheckoutFinished {
         id: GitCheckoutId,
     },
-}
 
-impl Event {
-    pub fn event_type(&self) -> EventType {
-        match self {
-            Event::CondaSolveQueued { id, .. } => EventType::CondaSolveQueued { id: *id },
-            Event::CondaSolveStarted { id, .. } => EventType::CondaSolveStarted { id: *id },
-            Event::CondaSolveFinished { id, .. } => EventType::CondaSolveFinished { id: *id },
-            Event::PixiSolveQueued { id, .. } => EventType::PixiSolveQueued { id: *id },
-            Event::PixiSolveStarted { id, .. } => EventType::PixiSolveStarted { id: *id },
-            Event::PixiSolveFinished { id, .. } => EventType::PixiSolveFinished { id: *id },
-            Event::PixiInstallQueued { id, .. } => EventType::PixiInstallQueued { id: *id },
-            Event::PixiInstallStarted { id, .. } => EventType::PixiInstallStarted { id: *id },
-            Event::PixiInstallFinished { id, .. } => EventType::PixiInstallFinished { id: *id },
-            Event::GitCheckoutQueued { id, .. } => EventType::GitCheckoutQueued { id: *id },
-            Event::GitCheckoutStarted { id, .. } => EventType::GitCheckoutStarted { id: *id },
-            Event::GitCheckoutFinished { id, .. } => EventType::GitCheckoutFinished { id: *id },
-        }
-    }
+    SourceMetadataQueued {
+        id: SourceMetadataId,
+        #[serde(flatten)]
+        spec: SourceMetadataSpec,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        context: Option<ReporterContext>,
+    },
+    SourceMetadataStarted {
+        id: SourceMetadataId,
+    },
+    SourceMetadataFinished {
+        id: SourceMetadataId,
+    },
+
+    InstantiateToolEnvQueued {
+        id: InstantiateToolEnvId,
+        #[serde(flatten)]
+        spec: InstantiateToolEnvironmentSpec,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        context: Option<ReporterContext>,
+    },
+    InstantiateToolEnvStarted {
+        id: InstantiateToolEnvId,
+    },
+    InstantiateToolEnvFinished {
+        id: InstantiateToolEnvId,
+    },
 }
 
 pub struct EventReporter {
@@ -110,6 +106,8 @@ pub struct EventReporter {
     next_pixi_solve_id: usize,
     next_pixi_install_id: usize,
     next_git_checkout_id: usize,
+    next_source_metadata_id: usize,
+    next_instantiate_tool_env_id: usize,
 }
 
 impl EventReporter {
@@ -122,6 +120,8 @@ impl EventReporter {
                 next_pixi_solve_id: 0,
                 next_pixi_install_id: 0,
                 next_git_checkout_id: 0,
+                next_source_metadata_id: 0,
+                next_instantiate_tool_env_id: 0,
             },
             events,
         )
@@ -129,7 +129,7 @@ impl EventReporter {
 }
 
 impl CondaSolveReporter for EventReporter {
-    fn on_solve_queued(
+    fn on_queued(
         &mut self,
         context: Option<ReporterContext>,
         env: &SolveCondaEnvironmentSpec,
@@ -147,13 +147,13 @@ impl CondaSolveReporter for EventReporter {
         next_id
     }
 
-    fn on_solve_start(&mut self, solve_id: CondaSolveId) {
+    fn on_start(&mut self, solve_id: CondaSolveId) {
         let event = Event::CondaSolveStarted { id: solve_id };
         println!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.lock().unwrap().push(event);
     }
 
-    fn on_solve_finished(&mut self, solve_id: CondaSolveId) {
+    fn on_finished(&mut self, solve_id: CondaSolveId) {
         let event = Event::CondaSolveFinished { id: solve_id };
         println!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.lock().unwrap().push(event);
@@ -161,7 +161,7 @@ impl CondaSolveReporter for EventReporter {
 }
 
 impl PixiSolveReporter for EventReporter {
-    fn on_solve_queued(
+    fn on_queued(
         &mut self,
         context: Option<ReporterContext>,
         env: &PixiEnvironmentSpec,
@@ -179,13 +179,13 @@ impl PixiSolveReporter for EventReporter {
         next_id
     }
 
-    fn on_solve_start(&mut self, solve_id: PixiSolveId) {
+    fn on_start(&mut self, solve_id: PixiSolveId) {
         let event = Event::PixiSolveStarted { id: solve_id };
         println!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.lock().unwrap().push(event);
     }
 
-    fn on_solve_finished(&mut self, solve_id: PixiSolveId) {
+    fn on_finished(&mut self, solve_id: PixiSolveId) {
         let event = Event::PixiSolveFinished { id: solve_id };
         println!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.lock().unwrap().push(event);
@@ -193,7 +193,7 @@ impl PixiSolveReporter for EventReporter {
 }
 
 impl PixiInstallReporter for EventReporter {
-    fn on_install_queued(
+    fn on_queued(
         &mut self,
         context: Option<ReporterContext>,
         env: &InstallPixiEnvironmentSpec,
@@ -211,13 +211,13 @@ impl PixiInstallReporter for EventReporter {
         next_id
     }
 
-    fn on_install_start(&mut self, solve_id: PixiInstallId) {
+    fn on_start(&mut self, solve_id: PixiInstallId) {
         let event = Event::PixiInstallStarted { id: solve_id };
         println!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.lock().unwrap().push(event);
     }
 
-    fn on_install_finished(&mut self, solve_id: PixiInstallId) {
+    fn on_finished(&mut self, solve_id: PixiInstallId) {
         let event = Event::PixiInstallFinished { id: solve_id };
         println!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.lock().unwrap().push(event);
@@ -225,7 +225,7 @@ impl PixiInstallReporter for EventReporter {
 }
 
 impl GitCheckoutReporter for EventReporter {
-    fn on_checkout_queued(
+    fn on_queued(
         &mut self,
         context: Option<ReporterContext>,
         env: &RepositoryReference,
@@ -243,14 +243,78 @@ impl GitCheckoutReporter for EventReporter {
         next_id
     }
 
-    fn on_checkout_start(&mut self, checkout_id: GitCheckoutId) {
+    fn on_start(&mut self, checkout_id: GitCheckoutId) {
         let event = Event::GitCheckoutStarted { id: checkout_id };
         println!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.lock().unwrap().push(event);
     }
 
-    fn on_checkout_finished(&mut self, checkout_id: GitCheckoutId) {
+    fn on_finished(&mut self, checkout_id: GitCheckoutId) {
         let event = Event::GitCheckoutFinished { id: checkout_id };
+        println!("{}", serde_json::to_string_pretty(&event).unwrap());
+        self.events.lock().unwrap().push(event);
+    }
+}
+
+impl SourceMetadataReporter for EventReporter {
+    fn on_queued(
+        &mut self,
+        context: Option<ReporterContext>,
+        spec: &SourceMetadataSpec,
+    ) -> SourceMetadataId {
+        let next_id = SourceMetadataId(self.next_source_metadata_id);
+        self.next_source_metadata_id += 1;
+
+        let event = Event::SourceMetadataQueued {
+            id: next_id,
+            spec: spec.clone(),
+            context,
+        };
+        println!("{}", serde_json::to_string_pretty(&event).unwrap());
+        self.events.lock().unwrap().push(event);
+        next_id
+    }
+
+    fn on_started(&mut self, id: SourceMetadataId) {
+        let event = Event::SourceMetadataStarted { id };
+        println!("{}", serde_json::to_string_pretty(&event).unwrap());
+        self.events.lock().unwrap().push(event);
+    }
+
+    fn on_finished(&mut self, id: SourceMetadataId) {
+        let event = Event::SourceMetadataFinished { id };
+        println!("{}", serde_json::to_string_pretty(&event).unwrap());
+        self.events.lock().unwrap().push(event);
+    }
+}
+
+impl InstantiateToolEnvironmentReporter for EventReporter {
+    fn on_queued(
+        &mut self,
+        context: Option<ReporterContext>,
+        spec: &InstantiateToolEnvironmentSpec,
+    ) -> InstantiateToolEnvId {
+        let next_id = InstantiateToolEnvId(self.next_instantiate_tool_env_id);
+        self.next_instantiate_tool_env_id += 1;
+
+        let event = Event::InstantiateToolEnvQueued {
+            id: next_id,
+            spec: spec.clone(),
+            context,
+        };
+        println!("{}", serde_json::to_string_pretty(&event).unwrap());
+        self.events.lock().unwrap().push(event);
+        next_id
+    }
+
+    fn on_started(&mut self, id: InstantiateToolEnvId) {
+        let event = Event::InstantiateToolEnvStarted { id };
+        println!("{}", serde_json::to_string_pretty(&event).unwrap());
+        self.events.lock().unwrap().push(event);
+    }
+
+    fn on_finished(&mut self, id: InstantiateToolEnvId) {
+        let event = Event::InstantiateToolEnvFinished { id };
         println!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.lock().unwrap().push(event);
     }
@@ -270,6 +334,16 @@ impl Reporter for EventReporter {
     }
 
     fn as_pixi_install_reporter(&mut self) -> Option<&mut dyn PixiInstallReporter> {
+        Some(self)
+    }
+
+    fn as_instantiate_tool_environment_reporter(
+        &mut self,
+    ) -> Option<&mut dyn InstantiateToolEnvironmentReporter> {
+        Some(self)
+    }
+
+    fn as_source_metadata_reporter(&mut self) -> Option<&mut dyn SourceMetadataReporter> {
         Some(self)
     }
 }

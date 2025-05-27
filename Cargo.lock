@@ -4681,6 +4681,7 @@ dependencies = [
  "serde_json",
  "slotmap",
  "strsim",
+ "text_trees",
  "thiserror 2.0.12",
  "tokio",
  "tracing",
@@ -7229,6 +7230,12 @@ dependencies = [
  "rustix 1.0.5",
  "windows-sys 0.59.0",
 ]
+
+[[package]]
+name = "text_trees"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "419ea7ab2f07ffc59c5e9424bcb73677933940f8bdadbe21649c1584dc06d0cf"
 
 [[package]]
 name = "textwrap"

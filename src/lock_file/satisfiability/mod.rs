@@ -1469,10 +1469,10 @@ pub(crate) async fn verify_package_platform_satisfiability(
         })?;
 
         let input_hash = input_hash_cache
-            .compute_hash(GlobHashKey {
-                root: source_dir,
-                globs: locked_input_hash.globs.clone(),
-            })
+            .compute_hash(GlobHashKey::new(
+                source_dir,
+                locked_input_hash.globs.clone(),
+            ))
             .await
             .map_err(PlatformUnsat::FailedToComputeInputHash)
             .map_err(Box::new)?;

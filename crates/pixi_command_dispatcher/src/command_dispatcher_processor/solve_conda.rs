@@ -19,7 +19,7 @@ impl CommandDispatcherProcessor {
             .reporter
             .as_deref_mut()
             .and_then(Reporter::as_conda_solve_reporter)
-            .map(|reporter| reporter.on_solve_queued(parent_context, &task.spec));
+            .map(|reporter| reporter.on_queued(parent_context, &task.spec));
 
         // Store information about the pending environment.
         let environment_id = self.conda_solves.insert(PendingSolveCondaEnvironment {
@@ -56,7 +56,7 @@ impl CommandDispatcherProcessor {
                 .and_then(Reporter::as_conda_solve_reporter)
                 .zip(reporter_id)
             {
-                reporter.on_solve_start(id)
+                reporter.on_start(id)
             }
 
             // Add the task to the list of pending futures.
@@ -90,7 +90,7 @@ impl CommandDispatcherProcessor {
             .and_then(Reporter::as_conda_solve_reporter)
             .zip(env.reporter_id)
         {
-            reporter.on_solve_finished(id)
+            reporter.on_finished(id)
         }
 
         // Notify the command dispatcher that the result is available.
