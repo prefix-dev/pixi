@@ -44,7 +44,7 @@
       "description": "We want a separate PR for rattler crates",
       "matchPackageNames": ["rattler*", "file_url"],
       "matchManagers": ["cargo"],
-      "enables": false
+      "enabled": false
     }
   ]
 }
