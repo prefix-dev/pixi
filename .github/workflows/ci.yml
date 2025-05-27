@@ -164,10 +164,6 @@ jobs:
             exit 1
           fi
 
-      - name: Lint pixi_docs
-        run: |
-          pixi run lint-pixi_docs
-  #
   # Run tests on important platforms.
   #
 

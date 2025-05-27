@@ -20,7 +20,7 @@ python = "3.13.*"
 build-debug = "cargo build"
 build-release = "cargo build --release"
 bump = "tbump --only-patch $RELEASE_VERSION"
-generate-cli-docs = "cargo run --locked --manifest-path pixi_docs/Cargo.toml"
+generate-cli-docs = "cargo run --locked --manifest-path crates/pixi_docs/Cargo.toml"
 install = { cmd = "cargo install --path . --locked", description = "Install pixi itself locally using cargo" }
 install-as = { cmd = "python scripts/install.py", depends-on = [
   "build-release",
@@ -36,7 +36,6 @@ test-all-slow = { depends-on = ["test-slow", "test-integration-slow"] }
 test-fast = "cargo nextest run --workspace --all-targets"
 test-slow = """cargo nextest run --workspace --all-targets --retries 2 --features slow_integration_tests
               --status-level skip --failure-output immediate-final --no-fail-fast --final-status-level slow"""
-update-lockfiles = "python scripts/update-lockfiles.py"
 # TODO: add cargo-edit to conda-forge
 update-rattler = "cargo upgrade -p rattler -p file_url -p rattler_cache -p rattler_conda_types -p rattler_digest -p rattler_lock -p rattler_networking -p rattler_repodata_gateway -p rattler_shell -p rattler_solve -p rattler_virtual_packages"
 
@@ -106,15 +105,9 @@ typos = ">=1.29.10,<2"
 [feature.lint.tasks]
 actionlint = { cmd = "actionlint", env = { SHELLCHECK_OPTS = "-e SC2086" } }
 cargo-clippy = "cargo clippy --all-targets --workspace -- -D warnings"
-cargo-clippy-pixi_docs = "cargo clippy --all-targets --workspace --manifest-path pixi_docs/Cargo.toml -- -D warnings"
 cargo-fmt = "cargo fmt --all"
-cargo-fmt-pixi_docs = "cargo fmt --all --manifest-path pixi_docs/Cargo.toml"
 check-openssl = "python tests/scripts/check-openssl.py"
 lint = { cmd = "pre-commit run --all-files --hook-stage=manual", description = "Run all linters and formatters on all code" }
-lint-pixi_docs = { depends-on = [
-  "cargo-fmt-pixi_docs",
-  "cargo-clippy-pixi_docs",
-] }
 pre-commit-install = "pre-commit install --install-hooks -t=pre-commit -t=pre-push"
 pre-commit-install-minimal = "pre-commit install -t=pre-commit"
 pre-commit-run = "pre-commit run --all-files"
