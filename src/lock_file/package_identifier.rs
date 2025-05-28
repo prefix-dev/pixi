@@ -1,3 +1,4 @@
+use pixi_record::PixiRecord;
 use pixi_uv_conversions::{
     ConversionError as PixiConversionError, to_normalize, to_uv_normalize, to_uv_version,
 };
@@ -29,7 +30,16 @@ impl PypiPackageIdentifier {
         Ok(result)
     }
 
-    pub fn from_package_record(record: &PackageRecord) -> Result<Vec<Self>, ConversionError> {
+    pub fn from_pixi_record(record: &PixiRecord) -> Result<Vec<Self>, ConversionError> {
+        match record {
+            PixiRecord::Binary(repodata_record) => Self::from_repodata_record(repodata_record),
+            PixiRecord::Source(source_record) => {
+                Self::from_package_record(&source_record.package_record)
+            }
+        }
+    }
+
+    fn from_package_record(record: &PackageRecord) -> Result<Vec<Self>, ConversionError> {
         let mut result = Vec::new();
         if let Some(purls) = &record.purls {
             for purl in purls.iter() {

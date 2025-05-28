@@ -17,15 +17,14 @@ use uv_distribution_types::{
     SourceDist, SourceDistCompatibility, UrlString,
 };
 use uv_resolver::{
-    DefaultResolverProvider, FlatDistributions, MetadataResponse, ResolverProvider, VersionMap,
-    VersionsResponse, WheelMetadataResult,
+    FlatDistributions, MetadataResponse, ResolverProvider, VersionMap, VersionsResponse,
+    WheelMetadataResult,
 };
-use uv_types::BuildContext;
 
 use crate::lock_file::PypiPackageIdentifier;
 
-pub(super) struct CondaResolverProvider<'a, Context: BuildContext> {
-    pub(super) fallback: DefaultResolverProvider<'a, Context>,
+pub(super) struct CondaResolverProvider<'a, Fallback> {
+    pub(super) fallback: Fallback,
     pub(super) conda_python_identifiers:
         &'a HashMap<uv_normalize::PackageName, (PixiRecord, PypiPackageIdentifier)>,
 
@@ -33,7 +32,7 @@ pub(super) struct CondaResolverProvider<'a, Context: BuildContext> {
     pub(super) package_requests: Rc<RefCell<HashMap<uv_normalize::PackageName, u32>>>,
 }
 
-impl<Context: BuildContext> ResolverProvider for CondaResolverProvider<'_, Context> {
+impl<Fallback: ResolverProvider> ResolverProvider for CondaResolverProvider<'_, Fallback> {
     fn get_package_versions<'io>(
         &'io self,
         package_name: &'io uv_normalize::PackageName,
@@ -117,7 +116,7 @@ impl<Context: BuildContext> ResolverProvider for CondaResolverProvider<'_, Conte
             .right_future();
         }
 
-        // Otherwise use the default implementation
+        // Otherwise use the fallback implementation.
         self.fallback
             .get_package_versions(package_name, index)
             .left_future()
@@ -154,7 +153,7 @@ impl<Context: BuildContext> ResolverProvider for CondaResolverProvider<'_, Conte
             }
         }
 
-        // Otherwise just call the default implementation
+        // Otherwise just call the fallback implementation.
         self.fallback
             .get_or_build_wheel_metadata(dist)
             .right_future()
