@@ -95,18 +95,13 @@ pub enum OverriddenBackends {
     Specified(Vec<OverriddenTool>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[error("Failed to parse OverriddenBackends")]
 pub struct ParseError;
-impl std::fmt::Display for ParseError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Failed to parse OverriddenBackends")
-    }
-}
 
 const EQUALS: &str = "=";
 const SEPARATOR: &str = "::";
 
-impl std::error::Error for ParseError {}
 impl FromStr for OverriddenBackends {
     type Err = ParseError;
     // This can be in the form of either:
@@ -149,8 +144,8 @@ impl BackendOverride {
     /// to separate different tools. and the `=` is used to separate the
     /// tool name from the path. If no path is provided the tool is assumed to
     /// be available in the root.
-    pub fn from_env() -> Option<Self> {
-        match std::env::var("PIXI_BUILD_BACKEND_OVERRIDE_ALL") {
+    pub fn from_env() -> miette::Result<Option<Self>> {
+        let backend_override = match std::env::var("PIXI_BUILD_BACKEND_OVERRIDE_ALL") {
             Ok(_) => {
                 tracing::warn!("overriding build backend with system prefixed tools");
                 Some(Self::System(OverriddenBackends::All))
@@ -158,11 +153,13 @@ impl BackendOverride {
             Err(_) => match std::env::var("PIXI_BUILD_BACKEND_OVERRIDE") {
                 Ok(spec) => {
                     tracing::warn!("overriding build backend with: {}", spec);
-                    Some(Self::System(OverriddenBackends::from_str(&spec).unwrap()))
+                    Some(Self::System(OverriddenBackends::from_str(&spec)?))
                 }
                 Err(_) => None,
             },
-        }
+        };
+
+        Ok(backend_override)
     }
 }
 

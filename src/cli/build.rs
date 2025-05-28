@@ -120,7 +120,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .parent()
                 .expect("a manifest must have parent directory")
                 .to_path_buf(),
-            build_tool_override: BackendOverride::from_env(),
+            build_tool_override: BackendOverride::from_env()?,
             build_id: 0,
         })
         .await

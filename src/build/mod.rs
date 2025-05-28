@@ -376,7 +376,8 @@ impl BuildContext {
             .with_tool_context(self.tool_context.clone())
             .setup_protocol(SetupRequest {
                 source_dir: source.path.clone(),
-                build_tool_override: BackendOverride::from_env(),
+                build_tool_override: BackendOverride::from_env()
+                    .map_err(|e| BuildError::BackendError(e.into()))?,
                 build_id,
             })
             .await
