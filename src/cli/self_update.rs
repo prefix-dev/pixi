@@ -129,7 +129,7 @@ async fn latest_version() -> miette::Result<Version> {
 async fn fetch_release_notes(version: &Version) -> miette::Result<String> {
     let url = format!("{}/v{}", consts::RELEASES_API_BY_TAG, version);
 
-    let client = Client::new();
+    let client = build_reqwest_clients(None, None)?.1;
     let response = client
         .get(&url)
         .header("User-Agent", user_agent())
