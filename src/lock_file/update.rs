@@ -1655,6 +1655,8 @@ impl<'p> UpdateContext<'p> {
 /// current platform.
 fn make_unsupported_pypi_platform_error(environment: &Environment<'_>) -> miette::Report {
     let grouped_environment = GroupedEnvironment::from(environment.clone());
+    let current_platform = environment.best_platform();
+    let platforms = environment.platforms();
 
     // Construct a diagnostic that explains that the current platform is not
     // supported.
@@ -1667,7 +1669,42 @@ fn make_unsupported_pypi_platform_error(environment: &Environment<'_>) -> miette
         }
     ));
 
-    diag.help = Some("Try adding python as a dependency with 'pixi add python' or converting your [pypi-dependencies] to conda [dependencies]".to_string());
+    let help_message = if !platforms.contains(&current_platform) {
+        // State 1: Current platform is not in the platforms list
+        format!(
+            "The current platform '{}' is not included in the environment's platforms. Try adding it with 'pixi workspace platform add {}'",
+            current_platform, current_platform
+        )
+    } else {
+        let has_python_any_platform = platforms.iter().any(|platform| {
+            environment
+                .combined_dependencies(Some(*platform))
+                .iter()
+                .any(|(name, _)| name.as_normalized() == "python")
+        });
+
+        if !has_python_any_platform {
+            // State 2: Python is not in dependencies at all
+            "Python is not in your dependencies. Try adding it with 'pixi add python' or converting your [pypi-dependencies] to conda [dependencies]".to_string()
+        } else {
+            // State 3: Python is not in dependencies for current platform
+            let has_python_current = environment
+                .combined_dependencies(Some(current_platform))
+                .iter()
+                .any(|(name, _)| name.as_normalized() == "python");
+
+            if !has_python_current {
+                format!(
+                    "Python is not available for platform '{}'. Try adding it with 'pixi add python --platform {}'",
+                    current_platform, current_platform
+                )
+            } else {
+                "Try adding python as a dependency with 'pixi add python' or converting your [pypi-dependencies] to conda [dependencies]".to_string()
+            }
+        }
+    };
+
+    diag.help = Some(help_message);
 
     miette::Report::new(diag)
 }
