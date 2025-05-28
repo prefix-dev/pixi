@@ -1,7 +1,5 @@
 mod source_metadata_collector;
 
-use std::{path::PathBuf, time::Instant};
-
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
     SolveCondaEnvironmentSpec,
@@ -20,6 +18,8 @@ use rattler_conda_types::{Channel, ChannelConfig, ChannelUrl, NamelessMatchSpec,
 use rattler_repodata_gateway::RepoData;
 use rattler_solve::{ChannelPriority, SolveStrategy};
 use serde::Serialize;
+use std::collections::BTreeMap;
+use std::{path::PathBuf, time::Instant};
 use thiserror::Error;
 
 /// Contains all information that describes the input of a pixi environment.
@@ -70,6 +70,9 @@ pub struct PixiEnvironmentSpec {
     /// The channel configuration to use for this environment.
     pub channel_config: ChannelConfig,
 
+    /// Build variants to use during the solve
+    pub variants: Option<BTreeMap<String, Vec<String>>>,
+
     /// The protocols that are enabled for source packages
     #[serde(skip_serializing_if = "crate::is_default")]
     pub enabled_protocols: EnabledProtocols,
@@ -87,6 +90,7 @@ impl Default for PixiEnvironmentSpec {
             channel_priority: ChannelPriority::Strict,
             exclude_newer: None,
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from(".")),
+            variants: None,
             enabled_protocols: EnabledProtocols::default(),
         }
     }
@@ -113,6 +117,7 @@ impl PixiEnvironmentSpec {
             self.channels.clone(),
             self.channel_config.clone(),
             self.build_environment.clone(),
+            self.variants.clone(),
             self.enabled_protocols.clone(),
         )
         .collect(

@@ -17,6 +17,7 @@ use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Diagnostic, IntoDiagnostic, MietteDiagnostic, Report, WrapErr};
 use pixi_build_frontend::ToolContext;
+use pixi_command_dispatcher::BuildEnvironment;
 use pixi_consts::consts;
 use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
@@ -47,7 +48,7 @@ use crate::{
     Workspace,
     activation::CurrentEnvVarBehavior,
     build::{
-        BuildContext, BuildEnvironment, GlobHashCache,
+        BuildContext, GlobHashCache,
         source_metadata_collector::{CollectedSourceMetadata, SourceMetadataCollector},
     },
     environment::{
@@ -62,7 +63,6 @@ use crate::{
         virtual_packages::validate_system_meets_environment_requirements,
     },
     prefix::Prefix,
-    repodata::Repodata,
     workspace::{
         Environment, EnvironmentVars, HasWorkspaceRef, get_activated_environment_variables,
         grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
@@ -685,7 +685,8 @@ pub struct UpdateContext<'p> {
     /// Whether it is allowed to instantiate any prefix.
     no_install: bool,
 
-    /// The progress bar where all the command dispatcher progress will be placed.
+    /// The progress bar where all the command dispatcher progress will be
+    /// placed.
     dispatcher_progress_bar: ProgressBar,
 }
 
@@ -1092,14 +1093,7 @@ impl<'p> UpdateContextBuilder<'p> {
             })
             .collect();
 
-        let gateway = project.repodata_gateway()?.clone();
         let client = project.authenticated_client()?.clone();
-
-        // tool context
-        let tool_context = ToolContext::builder()
-            .with_gateway(gateway)
-            .with_client(client.clone())
-            .build();
 
         // Construct a command dispatcher that will be used to run the tasks.
         let multi_progress = global_multi_progress();
@@ -1112,6 +1106,14 @@ impl<'p> UpdateContextBuilder<'p> {
                 anchor_pb.clone(),
             ))
             .finish();
+
+        let gateway = command_dispatcher.gateway().clone();
+
+        // tool context
+        let tool_context = ToolContext::builder()
+            .with_gateway(gateway)
+            .with_client(client.clone())
+            .build();
 
         let build_context = BuildContext::from_workspace(project, command_dispatcher)?
             .with_tool_context(Arc::new(tool_context));
@@ -1237,7 +1239,7 @@ impl<'p> UpdateContext<'p> {
                 let group_solve_task = spawn_solve_conda_environment_task(
                     source.clone(),
                     locked_group_records,
-                    project.repodata_gateway()?.clone(),
+                    self.build_context.command_dispatcher().gateway().clone(),
                     self.mapping_client.clone(),
                     platform,
                     self.conda_solve_semaphore.clone(),
@@ -1811,14 +1813,16 @@ async fn spawn_solve_conda_environment_task(
                     &pb.pb,
                     source_specs.len() as u64,
                 ));
+
                 SourceMetadataCollector::new(
                     build_context.clone(),
                     channel_urls.clone(),
+                    // We want to get the dependencies when compiling from `platform` to `platform`.
                     BuildEnvironment {
-                        build_platform: platform,
-                        build_virtual_packages: virtual_packages.clone(),
                         host_platform: platform,
                         host_virtual_packages: virtual_packages.clone(),
+                        build_platform: platform,
+                        build_virtual_packages: virtual_packages.clone(),
                     },
                     metadata_reporter,
                 )

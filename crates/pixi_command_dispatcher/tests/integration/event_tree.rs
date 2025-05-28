@@ -109,7 +109,7 @@ impl EventTree {
                 }
                 Event::GitCheckoutFinished { .. } => {}
                 Event::SourceMetadataQueued { id, context, spec } => {
-                    source_metadata_label.insert(*id, spec.source_spec.to_toml_value().to_string());
+                    source_metadata_label.insert(*id, spec.source.pinned.to_string());
                     builder.set_event_parent((*id).into(), *context);
                 }
                 Event::SourceMetadataStarted { id } => {

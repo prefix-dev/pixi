@@ -1,5 +1,4 @@
 mod build_cache;
-mod source_metadata_cache;
 
 use std::{
     ffi::OsStr,
@@ -8,9 +7,6 @@ use std::{
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 pub use build_cache::{BuildCache, BuildCacheError, BuildInput, CachedBuild, SourceInfo};
-pub use source_metadata_cache::{
-    CachedCondaMetadata, SourceMetadataCache, SourceMetadataError, SourceMetadataInput,
-};
 use xxhash_rust::xxh3::Xxh3;
 
 use crate::build::SourceCheckout;
