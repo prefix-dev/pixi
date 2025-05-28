@@ -273,7 +273,7 @@ To install `pixi`, run:
       <strong>Guillaume Lemaitre</strong> – <a href="https://scikit-learn.org">scikit-learn</a>
     </div>
     <div class="quote-card">
-      <p>"I can’t stress enough how much I love using Pixi global as a package manager for my daily CLI tools."</p>
+      <p>"I can’t stress enough how much I love using Pixi global as a package manager for my daily CLI tools. It makes sharing my setup across machines, through the global manifest, trivial!"</p>
       <strong>Matthew Feickert</strong> – <a href="https://www.wisc.edu/">University of Wisconsin–Madison</a>
     </div>
     <div class="quote-card">
