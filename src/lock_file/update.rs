@@ -1653,60 +1653,35 @@ impl<'p> UpdateContext<'p> {
 /// Constructs an error that indicates that the current platform cannot solve
 /// pypi dependencies because there is no python interpreter available for the
 /// current platform.
-fn make_unsupported_pypi_platform_error(environment: &Environment<'_>) -> miette::Report {
+fn make_unsupported_pypi_platform_error(environment: &Environment<'_>) -> Report {
     let grouped_environment = GroupedEnvironment::from(environment.clone());
     let current_platform = environment.best_platform();
     let platforms = environment.platforms();
 
-    // Construct a diagnostic that explains that the current platform is not
-    // supported.
     let mut diag = MietteDiagnostic::new(format!(
-        "Unable to solve pypi dependencies for the {} {} because no compatible python interpreter can be installed for the current platform",
+        "Unable to solve pypi dependencies for the {} {} — no compatible Python interpreter for '{}'",
         grouped_environment.name().fancy_display(),
         match &grouped_environment {
             GroupedEnvironment::Group(_) => "solve group",
             GroupedEnvironment::Environment(_) => "environment",
-        }
+        },
+        consts::PLATFORM_STYLE.apply_to(current_platform),
     ));
 
     let help_message = if !platforms.contains(&current_platform) {
         // State 1: Current platform is not in the platforms list
         format!(
-            "The current platform '{}' is not included in the environment's platforms. Try adding it with 'pixi workspace platform add {}'",
-            current_platform, current_platform
+            "Try: {}",
+            consts::TASK_STYLE.apply_to(format!("pixi workspace platform add {current_platform}")),
         )
     } else {
-        let has_python_any_platform = platforms.iter().any(|platform| {
-            environment
-                .combined_dependencies(Some(*platform))
-                .iter()
-                .any(|(name, _)| name.as_normalized() == "python")
-        });
-
-        if !has_python_any_platform {
-            // State 2: Python is not in dependencies at all
-            "Python is not in your dependencies. Try adding it with 'pixi add python' or converting your [pypi-dependencies] to conda [dependencies]".to_string()
-        } else {
-            // State 3: Python is not in dependencies for current platform
-            let has_python_current = environment
-                .combined_dependencies(Some(current_platform))
-                .iter()
-                .any(|(name, _)| name.as_normalized() == "python");
-
-            if !has_python_current {
-                format!(
-                    "Python is not available for platform '{}'. Try adding it with 'pixi add python --platform {}'",
-                    current_platform, current_platform
-                )
-            } else {
-                "Try adding python as a dependency with 'pixi add python' or converting your [pypi-dependencies] to conda [dependencies]".to_string()
-            }
-        }
+        // State 2: Python is not in the dependencies.
+        format!("Try: {}", consts::TASK_STYLE.apply_to("pixi add python"))
     };
 
     diag.help = Some(help_message);
 
-    miette::Report::new(diag)
+    Report::new(diag)
 }
 
 /// Represents data that is sent back from a task. This is used to communicate
