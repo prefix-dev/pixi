@@ -104,7 +104,7 @@ impl std::fmt::Display for ParseError {
 }
 
 const EQUALS: &str = "=";
-const SEPARATOR: &str = ",";
+const SEPARATOR: &str = "::";
 
 impl std::error::Error for ParseError {}
 impl FromStr for OverriddenBackends {
