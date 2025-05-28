@@ -1,10 +1,11 @@
-use std::{
-    collections::BTreeMap,
-    hash::{Hash, Hasher},
-    path::PathBuf,
+use crate::install_pixi::{InstallPixiEnvironmentError, InstallPixiEnvironmentSpec};
+use crate::{
+    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
+    PixiEnvironmentSpec, SolvePixiEnvironmentError,
 };
-
-use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD, prelude::BASE64_URL_SAFE_NO_PAD};
+use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use base64::prelude::BASE64_URL_SAFE_NO_PAD;
 use chrono::{DateTime, Utc};
 use futures::TryFutureExt;
 use itertools::Itertools;
@@ -15,14 +16,10 @@ use pixi_spec_containers::DependencyMap;
 use pixi_utils::AsyncPrefixGuard;
 use rattler_conda_types::{ChannelConfig, ChannelUrl, NamelessMatchSpec, prefix::Prefix};
 use rattler_solve::{ChannelPriority, SolveStrategy};
+use std::hash::{Hash, Hasher};
+use std::path::PathBuf;
 use thiserror::Error;
 use xxhash_rust::xxh3::Xxh3;
-
-use crate::{
-    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    PixiEnvironmentSpec, SolvePixiEnvironmentError,
-    install_pixi::{InstallPixiEnvironmentError, InstallPixiEnvironmentSpec},
-};
 
 /// Specification for a tool environment. Tool environments are cached between
 /// runs.
@@ -53,9 +50,6 @@ pub struct InstantiateToolEnvironmentSpec {
     /// The channel configuration to use for this environment.
     pub channel_config: ChannelConfig,
 
-    /// Variants
-    pub variants: Option<BTreeMap<String, Vec<String>>>,
-
     /// The protocols that are enabled for source packages
     #[serde(skip_serializing_if = "crate::is_default")]
     pub enabled_protocols: EnabledProtocols,
@@ -72,7 +66,6 @@ impl Hash for InstantiateToolEnvironmentSpec {
             exclude_newer,
             channel_config,
             enabled_protocols,
-            variants,
         } = self;
         name.hash(state);
         requirement.hash(state);
@@ -95,7 +88,6 @@ impl Hash for InstantiateToolEnvironmentSpec {
         exclude_newer.hash(state);
         channel_config.hash(state);
         enabled_protocols.hash(state);
-        variants.hash(state);
     }
 }
 
@@ -111,7 +103,6 @@ impl InstantiateToolEnvironmentSpec {
             exclude_newer: None,
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from(".")),
             enabled_protocols: EnabledProtocols::default(),
-            variants: None,
         }
     }
 
@@ -146,11 +137,6 @@ impl InstantiateToolEnvironmentSpec {
         self,
         command_queue: CommandDispatcher,
     ) -> Result<Prefix, CommandDispatcherError<InstantiateToolEnvironmentError>> {
-        tracing::debug!(
-            "Installing tool env for: {}",
-            &self.requirement.0.as_source()
-        );
-
         // Determine the cache key for the environment.
         let cache_key = self.cache_key();
 
@@ -196,7 +182,6 @@ impl InstantiateToolEnvironmentSpec {
                 enabled_protocols: self.enabled_protocols,
                 installed: Vec::new(), // Install from scratch
                 channel_priority: ChannelPriority::default(),
-                variants: self.variants,
                 strategy: SolveStrategy::default(),
             })
             .await

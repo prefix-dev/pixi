@@ -15,6 +15,8 @@ mod source_anchor;
 mod toml;
 mod url;
 
+use std::{path::PathBuf, str::FromStr};
+
 pub use detailed::DetailedSpec;
 pub use git::{GitReference, GitReferenceError, GitSpec};
 use itertools::Either;
@@ -23,8 +25,6 @@ use rattler_conda_types::{
     ChannelConfig, NamedChannelOrUrl, NamelessMatchSpec, ParseChannelError, VersionSpec,
 };
 pub use source_anchor::SourceAnchor;
-use std::fmt::Display;
-use std::{path::PathBuf, str::FromStr};
 use thiserror::Error;
 pub use toml::{TomlSpec, TomlVersionSpecStr};
 pub use url::{UrlBinarySpec, UrlSourceSpec, UrlSpec};
@@ -333,16 +333,6 @@ pub enum SourceSpec {
 
     /// The spec is represented as a local directory or local file archive.
     Path(PathSourceSpec),
-}
-
-impl Display for SourceSpec {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            SourceSpec::Url(url) => write!(f, "{}", url),
-            SourceSpec::Git(git) => write!(f, "{}", git),
-            SourceSpec::Path(path) => write!(f, "{}", path),
-        }
-    }
 }
 
 impl SourceSpec {

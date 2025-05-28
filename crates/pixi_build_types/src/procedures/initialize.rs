@@ -1,8 +1,7 @@
 use std::path::PathBuf;
 
-use serde::{Deserialize, Serialize};
-
 use crate::VersionedProjectModel;
+use serde::{Deserialize, Serialize};
 
 pub const METHOD_NAME: &str = "initialize";
 
@@ -23,16 +22,7 @@ pub const METHOD_NAME: &str = "initialize";
 #[serde(rename_all = "camelCase")]
 pub struct InitializeParams {
     /// The manifest that the build backend should use.
-    ///
-    /// This is an absolute path.
     pub manifest_path: PathBuf,
-
-    /// The root directory of the source code that the build backend should use.
-    /// If this is `None`, the backend should use the directory of the
-    /// `manifest_path` as the source directory.
-    ///
-    /// This is an absolute path.
-    pub source_dir: Option<PathBuf>,
 
     /// Optionally the cache directory to use for any caching activity.
     pub cache_directory: Option<PathBuf>,

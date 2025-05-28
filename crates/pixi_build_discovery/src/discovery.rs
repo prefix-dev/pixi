@@ -43,7 +43,7 @@ pub struct BackendInitializationParams {
     /// The directory that contains the source code.
     pub source_dir: PathBuf,
 
-    /// The path of the discovered manifest _relative_ to `source_dir`.
+    /// The path of the discovered manifest relative to the `source_dir`.
     pub manifest_path: PathBuf,
 
     /// Optionally, the manifest of the discovered package.

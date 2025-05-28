@@ -1,11 +1,17 @@
+use crate::command_dispatcher::error::CommandDispatcherError;
+use crate::instantiate_tool_env::{
+    InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec,
+};
+use crate::{BuildEnvironment, CommandDispatcher, CommandDispatcherErrorResultExt};
 use miette::Diagnostic;
 use pixi_build_discovery::{
     BackendInitializationParams, BackendSpec, CommandSpec, EnabledProtocols,
 };
+use pixi_build_frontend::tool::IsolatedTool;
 use pixi_build_frontend::{
     Backend, json_rpc,
     json_rpc::JsonRpcBackend,
-    tool::{IsolatedTool, SystemTool, Tool},
+    tool::{SystemTool, Tool},
 };
 use pixi_spec::PixiSpec;
 use rattler_conda_types::ChannelConfig;
@@ -15,12 +21,6 @@ use rattler_shell::{
 };
 use rattler_virtual_packages::DetectVirtualPackageError;
 use thiserror::Error;
-
-use crate::{
-    BuildEnvironment, CommandDispatcher, CommandDispatcherErrorResultExt,
-    command_dispatcher::error::CommandDispatcherError,
-    instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec},
-};
 
 #[derive(Debug)]
 pub struct InstantiateBackendSpec {
@@ -33,6 +33,9 @@ pub struct InstantiateBackendSpec {
     /// The channel configuration to use for any source packages required by the
     /// backend.
     pub channel_config: ChannelConfig,
+
+    /// The platform to instantiate the backend for.
+    pub build_environment: BuildEnvironment,
 
     /// The protocols that are enabled for discovering source packages
     pub enabled_protocols: EnabledProtocols,
@@ -56,7 +59,7 @@ impl CommandDispatcher {
                 system_spec.command.unwrap_or(backend_spec.name),
             )),
             CommandSpec::EnvironmentSpec(env_spec) => {
-                let (tool_platform, tool_platform_virtual_packages) = self.tool_platform();
+                let target_platform = spec.build_environment.host_platform;
                 let prefix = self
                     .instantiate_tool_environment(InstantiateToolEnvironmentSpec {
                         requirement: (
@@ -80,15 +83,9 @@ impl CommandDispatcher {
                             })
                             .collect(),
                         constraints: env_spec.constraints,
-                        build_environment: BuildEnvironment {
-                            host_platform: tool_platform,
-                            build_platform: tool_platform,
-                            host_virtual_packages: tool_platform_virtual_packages.to_vec(),
-                            build_virtual_packages: tool_platform_virtual_packages.to_vec(),
-                        },
+                        build_environment: spec.build_environment,
                         channels: env_spec.channels,
                         exclude_newer: None,
-                        variants: None,
                         channel_config: spec.channel_config,
                         enabled_protocols: spec.enabled_protocols,
                     })
@@ -97,7 +94,7 @@ impl CommandDispatcher {
 
                 // Get the activation scripts
                 let activator =
-                    Activator::from_path(prefix.path(), ShellEnum::default(), tool_platform)
+                    Activator::from_path(prefix.path(), ShellEnum::default(), target_platform)
                         .map_err(InstantiateBackendError::from)?;
 
                 let activation_scripts = activator
@@ -112,17 +109,8 @@ impl CommandDispatcher {
             }
         };
 
-        // The backend expects both the manifest path and the source directory to be
-        // absolute paths.
-        let manifest_path = spec
-            .init_params
-            .source_dir
-            .join(spec.init_params.manifest_path);
-        let source_dir = spec.init_params.source_dir;
-
         JsonRpcBackend::setup(
-            source_dir,
-            manifest_path,
+            spec.init_params.manifest_path,
             spec.init_params.project_model,
             spec.init_params.configuration,
             Some(self.cache_dirs().root().clone()),

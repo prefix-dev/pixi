@@ -1,4 +1,3 @@
-use miette::Diagnostic;
 use pixi_git::GitError;
 use pixi_record::PinnedSourceSpec;
 use std::path::{Path, PathBuf};
@@ -7,7 +6,7 @@ use thiserror::Error;
 /// Location of the source code for a package. This will be used as the input
 /// for the build process. Archives are unpacked, git clones are checked out,
 /// etc.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct SourceCheckout {
     /// The path to where the source is located locally on disk.
     pub path: PathBuf,
@@ -25,7 +24,7 @@ impl SourceCheckout {
     }
 }
 
-#[derive(Debug, Error, Diagnostic)]
+#[derive(Debug, Error)]
 pub enum SourceCheckoutError {
     #[error(transparent)]
     InvalidPath(#[from] InvalidPathError),

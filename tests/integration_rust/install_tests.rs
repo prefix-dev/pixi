@@ -1,41 +1,44 @@
-use std::{
-    fs::File,
-    io::Write,
-    path::{Path, PathBuf},
-    str::FromStr,
+use crate::common::{LockFileExt, PixiControl};
+use crate::common::{
+    builders::{
+        HasDependencyConfig, HasLockFileUpdateConfig, HasPrefixUpdateConfig, string_from_iter,
+    },
+    package_database::{Package, PackageDatabase},
 };
-
 use fs_err::tokio as tokio_fs;
+use pixi::lock_file::{ReinstallPackages, UpdateMode};
+use pixi::{UpdateLockFileOptions, Workspace};
 use pixi::{
-    UpdateLockFileOptions, Workspace,
     build::BuildContext,
     cli::{
         LockFileUsageConfig,
-        cli_config::{LockFileUpdateConfig, WorkspaceConfig},
         run::{self, Args},
     },
-    environment::LockFileUsage,
-    lock_file::{CondaPrefixUpdater, IoConcurrencyLimit, ReinstallPackages, UpdateMode},
+    lock_file::{CondaPrefixUpdater, IoConcurrencyLimit},
+};
+use pixi::{cli::cli_config::LockFileUpdateConfig, environment::LockFileUsage};
+use pixi::{
+    cli::cli_config::WorkspaceConfig,
     workspace::{HasWorkspaceRef, grouped_environment::GroupedEnvironment},
 };
+use pixi_build_frontend::ToolContext;
 use pixi_config::{Config, DetachedEnvironments, RunPostLinkScripts};
 use pixi_consts::consts;
 use pixi_manifest::{FeatureName, FeaturesExt};
 use pixi_record::PixiRecord;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{ChannelConfig, Platform, RepoDataRecord};
+use std::{
+    fs::File,
+    io::Write,
+    path::{Path, PathBuf},
+    str::FromStr,
+    sync::Arc,
+};
 use tempfile::{TempDir, tempdir};
 use tokio::{fs, task::JoinSet};
 use url::Url;
 use uv_python::PythonEnvironment;
-
-use crate::common::{
-    LockFileExt, PixiControl,
-    builders::{
-        HasDependencyConfig, HasLockFileUpdateConfig, HasPrefixUpdateConfig, string_from_iter,
-    },
-    package_database::{Package, PackageDatabase},
-};
 
 /// Should add a python version to the environment and lock file that matches
 /// the specified version and run it
@@ -959,8 +962,10 @@ async fn test_multiple_prefix_update() {
         PackageCache::new(tmp_dir.path().to_path_buf()),
         IoConcurrencyLimit::default(),
         BuildContext::new(
+            tmp_dir.path().to_path_buf(),
             ChannelConfig::default_with_root_dir(tmp_dir.path().to_path_buf()),
             Default::default(),
+            Arc::new(ToolContext::default()),
             command_dispatcher,
         )
         .unwrap(),

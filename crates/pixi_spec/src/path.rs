@@ -1,4 +1,3 @@
-use std::fmt::Display;
 use std::path::{Path, PathBuf};
 
 use itertools::Either;
@@ -75,12 +74,6 @@ pub struct PathSourceSpec {
     /// The path to the package. Either a directory or an archive.
     #[serde_as(as = "serde_with::DisplayFromStr")]
     pub path: Utf8TypedPathBuf,
-}
-
-impl Display for PathSourceSpec {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.path)
-    }
 }
 
 impl From<PathSourceSpec> for PathSpec {

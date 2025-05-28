@@ -7,10 +7,8 @@ use pixi_spec::{SourceAnchor, SourceSpec};
 use rattler_conda_types::{ChannelUrl, MatchSpec, ParseStrictness};
 use thiserror::Error;
 
-use crate::{
-    build::{BuildContext, BuildEnvironment, BuildError, SourceMetadata},
-    reporters::BuildMetadataReporter,
-};
+use crate::build::{BuildContext, BuildEnvironment, BuildError, SourceMetadata};
+use crate::reporters::BuildMetadataReporter;
 
 /// An object that is responsible for recursively collecting metadata of source
 /// dependencies.
@@ -25,7 +23,7 @@ pub struct SourceMetadataCollector {
 pub struct CollectedSourceMetadata {
     /// Information about all queried source packages. This can be used as
     /// repodata.
-    pub source_repodata: Vec<Arc<SourceMetadata>>,
+    pub source_repodata: Vec<SourceMetadata>,
 
     /// A list of transitive dependencies of all collected source records.
     pub transitive_dependencies: Vec<MatchSpec>,
@@ -122,12 +120,11 @@ impl SourceMetadataCollector {
         name: rattler_conda_types::PackageName,
         spec: SourceSpec,
         build_id: usize,
-    ) -> Result<Arc<SourceMetadata>, ExtractSourceMetadataError> {
+    ) -> Result<SourceMetadata, ExtractSourceMetadataError> {
         // Extract information for the particular source spec.
         let source_metadata = self
             .build_context
             .extract_source_metadata(
-                &name,
                 &spec,
                 &self.channel_urls,
                 self.build_env.clone(),
@@ -147,9 +144,6 @@ impl SourceMetadataCollector {
             .iter()
             .any(|record| record.package_record.name == name)
         {
-            let source_metadata = Arc::try_unwrap(source_metadata)
-                .unwrap_or_else(|source_metadata| (*source_metadata).clone());
-
             return Err(ExtractSourceMetadataError::PackageMetadataNotFound {
                 name: name.as_source().to_string(),
                 pinned_source: Box::new(source_metadata.source.pinned),
