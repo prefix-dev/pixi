@@ -1667,7 +1667,7 @@ fn make_unsupported_pypi_platform_error(environment: &Environment<'_>) -> miette
         }
     ));
 
-    diag.help = Some("Try converting your [pypi-dependencies] to conda [dependencies]".to_string());
+    diag.help = Some("Try adding python as a dependency with 'pixi add python' or converting your [pypi-dependencies] to conda [dependencies]".to_string());
 
     miette::Report::new(diag)
 }
