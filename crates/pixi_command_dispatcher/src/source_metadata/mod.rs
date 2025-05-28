@@ -1,37 +1,25 @@
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    path::PathBuf,
-};
-
-use miette::Diagnostic;
-use pixi_build_discovery::{DiscoveredBackend, EnabledProtocols};
-use pixi_build_frontend::types::{
-    ChannelConfiguration, CondaPackageMetadata, PlatformAndVirtualPackages, SourcePackageSpecV1,
-    procedures::conda_metadata::CondaMetadataParams,
-};
-use pixi_glob::GlobHashKey;
-use pixi_record::{InputHash, SourceRecord};
-use rattler_conda_types::{ChannelConfig, ChannelUrl, PackageRecord};
-use thiserror::Error;
-
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
     InstantiateBackendError, InstantiateBackendSpec, SourceCheckout, SourceCheckoutError,
     build::WorkDirKey,
 };
-
-mod source_metadata_cache;
-
-use source_metadata_cache::SourceMetadataKey;
-pub use source_metadata_cache::{SourceMetadataCache, SourceMetadataCacheError};
-
-use crate::source_metadata::source_metadata_cache::CachedCondaMetadata;
+use miette::Diagnostic;
+use pixi_build_discovery::{DiscoveredBackend, EnabledProtocols};
+use pixi_build_frontend::types::{
+    ChannelConfiguration, CondaPackageMetadata, PlatformAndVirtualPackages, SourcePackageSpecV1,
+    procedures::conda_metadata::{CondaMetadataParams, CondaMetadataResult},
+};
+use pixi_glob::GlobHashKey;
+use pixi_record::{InputHash, SourceRecord};
+use pixi_spec::SourceSpec;
+use rattler_conda_types::{ChannelConfig, ChannelUrl, PackageRecord};
+use thiserror::Error;
 
 /// Represents a request for source metadata.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, serde::Serialize)]
 pub struct SourceMetadataSpec {
     /// The source specification
-    pub source: SourceCheckout,
+    pub source_spec: SourceSpec,
 
     /// The channel configuration to use when resolving metadata
     pub channel_config: ChannelConfig,
@@ -42,9 +30,6 @@ pub struct SourceMetadataSpec {
 
     /// Information about the build environment.
     pub build_environment: BuildEnvironment,
-
-    /// Variant configuration
-    pub variants: Option<BTreeMap<String, Vec<String>>>,
 
     /// The protocols that are enabled for this source
     #[serde(skip_serializing_if = "crate::is_default")]
@@ -66,131 +51,71 @@ impl SourceMetadataSpec {
         self,
         command_queue: CommandDispatcher,
     ) -> Result<SourceMetadata, CommandDispatcherError<SourceMetadataError>> {
-        tracing::debug!(
-            "Requesting source metadata for source spec: {}",
-            self.source.pinned
-        );
-
-        // Check the source metadata cache, short circuit if we have it.
-        let cache_key = self.cache_key();
-        let (metadata, entry) = command_queue
-            .source_metadata_cache()
-            .entry(&self.source, &cache_key)
+        // Get the pinned source for this source spec.
+        let source = command_queue
+            .pin_and_checkout(self.source_spec.clone())
             .await
-            .map_err(SourceMetadataError::Cache)?;
-        if let Some(metadata) = metadata {
-            tracing::debug!(
-                "Found source metadata in cache for source spec: {}",
-                self.source.pinned
-            );
-
-            // Check if the input hash is still valid.
-            if let Some(input_globs) = &metadata.input_hash {
-                let new_hash = command_queue
-                    .glob_hash_cache()
-                    .compute_hash(GlobHashKey::new(
-                        self.source.path.clone(),
-                        input_globs.globs.clone(),
-                    ))
-                    .await
-                    .map_err(SourceMetadataError::GlobHash)?;
-                if new_hash.hash == input_globs.hash {
-                    tracing::debug!("found up-to-date cached metadata.");
-                    return Ok(SourceMetadata {
-                        records: source_metadata_to_records(
-                            &self.source,
-                            metadata.packages,
-                            metadata.input_hash,
-                        ),
-                        source: self.source,
-                    });
-                } else {
-                    tracing::debug!("found stale cached metadata.");
-                }
-            } else {
-                tracing::debug!("found cached metadata.");
-                // No input hash so just assume it is still valid.
-                return Ok(SourceMetadata {
-                    records: source_metadata_to_records(
-                        &self.source,
-                        metadata.packages,
-                        metadata.input_hash,
-                    ),
-                    source: self.source,
-                });
-            }
-        }
+            .map_err_with(SourceMetadataError::SourceCheckout)?;
 
         // Discover information about the build backend from the source code.
         let discovered_backend = DiscoveredBackend::discover(
-            &self.source.path,
+            &source.path,
             &self.channel_config,
             &self.enabled_protocols,
         )
         .map_err(SourceMetadataError::Discovery)?;
 
         // Instantiate the backend with the discovered backend information.
-        let manifest_path = discovered_backend.init_params.manifest_path.clone();
         let backend = command_queue
             .instantiate_backend(InstantiateBackendSpec {
                 backend_spec: discovered_backend.backend_spec,
                 init_params: discovered_backend.init_params,
                 channel_config: self.channel_config.clone(),
+                build_environment: BuildEnvironment {
+                    host_platform: self.build_environment.build_platform,
+                    host_virtual_packages: self.build_environment.build_virtual_packages.clone(),
+                    build_platform: self.build_environment.build_platform,
+                    build_virtual_packages: self.build_environment.build_virtual_packages.clone(),
+                },
                 enabled_protocols: self.enabled_protocols,
             })
             .await
             .map_err_with(SourceMetadataError::Initialize)?;
 
         // Query the backend for metadata.
-        let params = CondaMetadataParams {
-            build_platform: Some(PlatformAndVirtualPackages {
-                platform: self.build_environment.build_platform,
-                virtual_packages: Some(self.build_environment.build_virtual_packages),
-            }),
-            host_platform: Some(PlatformAndVirtualPackages {
-                platform: self.build_environment.host_platform,
-                virtual_packages: Some(self.build_environment.host_virtual_packages),
-            }),
-            channel_base_urls: Some(self.channels.into_iter().map(Into::into).collect()),
-            channel_configuration: ChannelConfiguration {
-                base_url: self.channel_config.channel_alias.clone(),
-            },
-            variant_configuration: self.variants.map(|variants| variants.into_iter().collect()),
-            work_directory: command_queue.cache_dirs().working_dirs().join(
-                WorkDirKey {
-                    source: self.source.clone(),
-                    host_platform: self.build_environment.host_platform,
-                    build_backend: backend.identifier().to_string(),
-                }
-                .key(),
-            ),
-        };
         let metadata = backend
-            .conda_get_metadata(&params)
+            .conda_get_metadata(&CondaMetadataParams {
+                build_platform: Some(PlatformAndVirtualPackages {
+                    platform: self.build_environment.build_platform,
+                    virtual_packages: Some(self.build_environment.build_virtual_packages),
+                }),
+                host_platform: Some(PlatformAndVirtualPackages {
+                    platform: self.build_environment.host_platform,
+                    virtual_packages: Some(self.build_environment.host_virtual_packages),
+                }),
+                channel_base_urls: Some(self.channels.into_iter().map(Into::into).collect()),
+                channel_configuration: ChannelConfiguration {
+                    base_url: self.channel_config.channel_alias.clone(),
+                },
+                variant_configuration: None,
+                work_directory: command_queue.cache_dirs().working_dirs().join(
+                    WorkDirKey {
+                        source: source.clone(),
+                        host_platform: self.build_environment.host_platform,
+                        build_backend: backend.identifier().to_string(),
+                    }
+                    .key(),
+                ),
+            })
             .await
             .map_err(SourceMetadataError::Communication)?;
 
         // Compute the input globs for the mutable source checkouts.
-        let input_hash = Self::compute_input_hash(
-            command_queue,
-            &self.source,
-            manifest_path,
-            metadata.input_globs,
-        )
-        .await?;
-
-        // Store the metadata in the cache for later retrieval
-        entry
-            .insert(CachedCondaMetadata {
-                input_hash: input_hash.clone(),
-                packages: metadata.packages.clone(),
-            })
-            .await
-            .map_err(SourceMetadataError::Cache)?;
+        let input_hash = Self::compute_input_hash(command_queue, &source, &metadata).await?;
 
         Ok(SourceMetadata {
-            records: source_metadata_to_records(&self.source, metadata.packages, input_hash),
-            source: self.source,
+            records: source_metadata_to_records(&source, metadata.packages, input_hash),
+            source,
         })
     }
 
@@ -198,15 +123,12 @@ impl SourceMetadataSpec {
     async fn compute_input_hash(
         command_queue: CommandDispatcher,
         source: &SourceCheckout,
-        manifest_path: PathBuf,
-        input_globs: Option<BTreeSet<String>>,
+        metadata: &CondaMetadataResult,
     ) -> Result<Option<InputHash>, CommandDispatcherError<SourceMetadataError>> {
         let input_hash = if source.pinned.is_immutable() {
             None
         } else {
-            // Compute the input hash based on the manifest path and the input globs.
-            let mut input_globs = input_globs.unwrap_or_default();
-            input_globs.insert(manifest_path.to_string_lossy().into_owned());
+            let input_globs = metadata.input_globs.clone().unwrap_or_default();
             let input_hash = command_queue
                 .glob_hash_cache()
                 .compute_hash(GlobHashKey::new(&source.path, input_globs.clone()))
@@ -220,19 +142,9 @@ impl SourceMetadataSpec {
         };
         Ok(input_hash)
     }
-
-    /// Computes the cache key for this instance
-    pub(crate) fn cache_key(&self) -> SourceMetadataKey {
-        SourceMetadataKey {
-            channel_urls: self.channels.clone(),
-            build_environment: self.build_environment.clone(),
-            build_variants: self.variants.clone().unwrap_or_default(),
-            enabled_protocols: self.enabled_protocols.clone(),
-        }
-    }
 }
 
-pub(crate) fn source_metadata_to_records(
+fn source_metadata_to_records(
     source: &SourceCheckout,
     packages: Vec<CondaPackageMetadata>,
     input_hash: Option<InputHash>,
@@ -346,7 +258,4 @@ pub enum SourceMetadataError {
 
     #[error("could not compute hash of input files")]
     GlobHash(#[from] pixi_glob::GlobHashError),
-
-    #[error(transparent)]
-    Cache(#[from] SourceMetadataCacheError),
 }

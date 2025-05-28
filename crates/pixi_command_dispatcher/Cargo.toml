@@ -9,7 +9,6 @@ repository.workspace = true
 version = "0.1.0"
 
 [dependencies]
-async-fd-lock = { workspace = true }
 base64 = { workspace = true }
 chrono = { workspace = true }
 derive_more = { workspace = true, features = ["from"] }
@@ -38,7 +37,6 @@ rattler_virtual_packages = { workspace = true }
 
 pixi_build_discovery = { workspace = true, features = ["serde"] }
 pixi_build_frontend = { workspace = true }
-pixi_build_types = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_git = { workspace = true }
 pixi_glob = { workspace = true }

@@ -123,7 +123,6 @@ impl JsonRpcBackend {
     /// connection.
     #[allow(clippy::too_many_arguments)]
     pub async fn setup(
-        source_dir: PathBuf,
         manifest_path: PathBuf,
         package_manifest: Option<ProjectModelV1>,
         configuration: Option<serde_json::Value>,
@@ -167,7 +166,6 @@ impl JsonRpcBackend {
         let (tx, rx) = stdio_transport(stdin, stdout);
         Self::setup_with_transport(
             backend_identifier,
-            source_dir,
             manifest_path,
             package_manifest,
             configuration,
@@ -183,7 +181,6 @@ impl JsonRpcBackend {
     #[allow(clippy::too_many_arguments)]
     pub(crate) async fn setup_with_transport(
         backend_identifier: String,
-        source_dir: PathBuf,
         manifest_path: PathBuf,
         project_model: Option<ProjectModelV1>,
         configuration: Option<serde_json::Value>,
@@ -224,7 +221,6 @@ impl JsonRpcBackend {
                     project_model: project_model.map(VersionedProjectModel::V1),
                     configuration,
                     manifest_path: manifest_path.clone(),
-                    source_dir: Some(source_dir),
                     cache_directory: cache_dir,
                 }),
             )

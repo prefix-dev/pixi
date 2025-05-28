@@ -1,21 +1,21 @@
+use async_fd_lock::{LockWrite, RwLockWriteGuard};
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+use pixi_build_types::CondaPackageMetadata;
+use pixi_record::InputHash;
+use rattler_conda_types::{GenericVirtualPackage, Platform};
+use serde::Deserialize;
+use serde_with::serde_derive::Serialize;
+use std::collections::BTreeMap;
 use std::{
-    collections::BTreeMap,
     hash::{DefaultHasher, Hash, Hasher},
     io::SeekFrom,
     path::PathBuf,
 };
-
-use async_fd_lock::{LockWrite, RwLockWriteGuard};
-use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use pixi_build_discovery::EnabledProtocols;
-use pixi_build_types::CondaPackageMetadata;
-use pixi_record::InputHash;
-use rattler_conda_types::ChannelUrl;
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
+use url::Url;
 
-use crate::{BuildEnvironment, SourceCheckout, build::source_checkout_cache_key};
+use crate::build::{SourceCheckout, cache::source_checkout_cache_key};
 
 /// A cache for caching the metadata of a source checkout.
 ///
@@ -31,58 +31,58 @@ pub struct SourceMetadataCache {
 }
 
 #[derive(Debug, Error)]
-pub enum SourceMetadataCacheError {
+pub enum SourceMetadataError {
     /// An I/O error occurred while reading or writing the cache.
     #[error("an IO error occurred while {0} {1}")]
     IoError(String, PathBuf, #[source] std::io::Error),
 }
 
 /// Defines additional input besides the source files that are used to compute
-/// the metadata of a source checkout. This is used to bucket the metadata.
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub struct SourceMetadataKey {
-    /// The URLs of the channels that were used.
-    pub channel_urls: Vec<ChannelUrl>,
+/// the metadata of a source checkout.
+pub struct SourceMetadataInput {
+    // TODO: I think this should also include the build backend used! Maybe?
+    /// The URL of the source.
+    pub channel_urls: Vec<Url>,
 
-    /// The build environment
-    pub build_environment: BuildEnvironment,
+    /// The platform on which the package will be built
+    pub build_platform: Platform,
+    pub build_virtual_packages: Vec<GenericVirtualPackage>,
 
-    /// The variants that were used
+    /// The platform on which the package will run
+    pub host_platform: Platform,
+    pub host_virtual_packages: Vec<GenericVirtualPackage>,
+
+    /// The variants of the build
     pub build_variants: BTreeMap<String, Vec<String>>,
-
-    /// The protocols that are enabled for source packages
-    pub enabled_protocols: EnabledProtocols,
 }
 
-impl SourceMetadataKey {
+impl SourceMetadataInput {
     /// Computes a unique semi-human-readable hash for this key.
     pub fn hash_key(&self) -> String {
         let mut hasher = DefaultHasher::new();
         self.channel_urls.hash(&mut hasher);
-        self.build_environment.build_platform.hash(&mut hasher);
-        self.build_environment
-            .build_virtual_packages
-            .hash(&mut hasher);
-        self.build_environment
-            .host_virtual_packages
-            .hash(&mut hasher);
+        self.build_platform.hash(&mut hasher);
+        self.build_virtual_packages.hash(&mut hasher);
+        self.host_virtual_packages.hash(&mut hasher);
         self.build_variants.hash(&mut hasher);
-        self.enabled_protocols.hash(&mut hasher);
         format!(
             "{}-{}",
-            self.build_environment.host_platform,
+            self.host_platform,
             URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes())
         )
     }
 }
 
 impl SourceMetadataCache {
-    /// The version identifier that should be used for the cache directory.
-    pub const CACHE_SUFFIX: &'static str = "v0";
-
     /// Constructs a new instance.
+    ///
+    /// An additional directory is created by this cache inside the passed root
+    /// which includes a version number. This is to ensure that the cache is
+    /// never corrupted if the format changes in the future.
     pub fn new(root: PathBuf) -> Self {
-        Self { root }
+        Self {
+            root: root.join("source-meta-v0"),
+        }
     }
 
     /// Returns the cache entry for the given source checkout and input.
@@ -93,12 +93,12 @@ impl SourceMetadataCache {
     pub async fn entry(
         &self,
         source: &SourceCheckout,
-        input: &SourceMetadataKey,
-    ) -> Result<(Option<CachedCondaMetadata>, CacheEntry), SourceMetadataCacheError> {
+        input: &SourceMetadataInput,
+    ) -> Result<(Option<CachedCondaMetadata>, CacheEntry), SourceMetadataError> {
         // Locate the cache file and lock it.
         let cache_dir = self.root.join(source_checkout_cache_key(source));
         tokio::fs::create_dir_all(&cache_dir).await.map_err(|e| {
-            SourceMetadataCacheError::IoError(
+            SourceMetadataError::IoError(
                 "creating cache directory".to_string(),
                 cache_dir.clone(),
                 e,
@@ -115,7 +115,7 @@ impl SourceMetadataCache {
             .open(&cache_file_path)
             .await
             .map_err(|e| {
-                SourceMetadataCacheError::IoError(
+                SourceMetadataError::IoError(
                     "opening cache file".to_string(),
                     cache_file_path.clone(),
                     e,
@@ -123,7 +123,7 @@ impl SourceMetadataCache {
             })?;
 
         let mut locked_cache_file = cache_file.lock_write().await.map_err(|e| {
-            SourceMetadataCacheError::IoError(
+            SourceMetadataError::IoError(
                 "locking cache file".to_string(),
                 cache_file_path.clone(),
                 e.error,
@@ -136,7 +136,7 @@ impl SourceMetadataCache {
             .read_to_string(&mut cache_file_contents)
             .await
             .map_err(|e| {
-                SourceMetadataCacheError::IoError(
+                SourceMetadataError::IoError(
                     "reading cache file".to_string(),
                     cache_file_path.clone(),
                     e,
@@ -168,9 +168,9 @@ impl CacheEntry {
     pub async fn insert(
         mut self,
         metadata: CachedCondaMetadata,
-    ) -> Result<(), SourceMetadataCacheError> {
+    ) -> Result<(), SourceMetadataError> {
         self.file.seek(SeekFrom::Start(0)).await.map_err(|e| {
-            SourceMetadataCacheError::IoError(
+            SourceMetadataError::IoError(
                 "seeking to start of cache file".to_string(),
                 self.path.clone(),
                 e,
@@ -178,7 +178,7 @@ impl CacheEntry {
         })?;
         let bytes = serde_json::to_vec(&metadata).expect("serialization to JSON should not fail");
         self.file.write_all(&bytes).await.map_err(|e| {
-            SourceMetadataCacheError::IoError(
+            SourceMetadataError::IoError(
                 "writing metadata to cache file".to_string(),
                 self.path.clone(),
                 e,
@@ -189,7 +189,7 @@ impl CacheEntry {
             .set_len(bytes.len() as u64)
             .await
             .map_err(|e| {
-                SourceMetadataCacheError::IoError(
+                SourceMetadataError::IoError(
                     "setting length of cache file".to_string(),
                     self.path.clone(),
                     e,

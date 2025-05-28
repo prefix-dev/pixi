@@ -227,11 +227,6 @@ pub async fn execute() -> miette::Result<()> {
         .add_directive("apple_codesign=off".parse().into_diagnostic()?)
         .add_directive(format!("pixi={}", pixi_level).parse().into_diagnostic()?)
         .add_directive(
-            format!("pixi_command_dispatcher={}", pixi_level)
-                .parse()
-                .into_diagnostic()?,
-        )
-        .add_directive(
             format!("resolvo={}", low_level_filter)
                 .parse()
                 .into_diagnostic()?,
