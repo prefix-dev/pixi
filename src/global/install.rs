@@ -208,7 +208,8 @@ fn path_diff(path_before: &str, path_after: &str, prefix: &Prefix) -> miette::Re
     // Calculate the PATH diff
     let path_diff = paths_after
         .iter()
-        .filter(|p| !paths_before.contains(p) || prefix_path_entries.contains(p));
+        .filter(|p| !paths_before.contains(p) || prefix_path_entries.contains(p))
+        .unique();
 
     env::join_paths(path_diff)
         .map(|p| p.to_string_lossy().to_string())
