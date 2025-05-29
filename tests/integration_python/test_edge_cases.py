@@ -475,7 +475,7 @@ version = "0.1.0"
 name = "test"
 requires-python = "== 3.12"
 dependencies = [
-    "requests @ https://files.pythonhosted.org/packages/f9/9b/335f9764261e915ed497fcdeb11df5dfd6f7bf257d4a6a2a686d80da4d54/requests-2.32.3-py3-none-any.whl#sha256=incorrect_hash_value_that_will_cause_installation_to_fail"
+    "requests @ https://files.pythonhosted.org/packages/f9/9b/335f9764261e915ed497fcdeb11df5dfd6f7bf257d4a6a2a686d80da4d54/requests-2.32.3-py3-none-any.whl#sha256=8d29f97ed1541709b57caddb77bb20592411d7ca10ec4f03275f49ee8456e230"
 ]
 [tool.pixi.workspace]
 platforms = ["linux-64", "osx-arm64", "win-64"]

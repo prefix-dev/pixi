@@ -92,14 +92,47 @@ pub fn convert_to_dist(
     pkg: &PypiPackageData,
     lock_file_dir: &Path,
 ) -> Result<Dist, ConvertToUvDistError> {
+    // Log the package location and hash for debugging
+    tracing::info!(
+        "Converting package {} with location: {:?}, hash: {:?}",
+        pkg.name,
+        pkg.location,
+        pkg.hash
+    );
+    
     // Figure out if it is a url from the registry or a direct url
     let dist = match &pkg.location {
         UrlOrPath::Url(url) if is_direct_url(url.scheme()) => {
             let url_without_direct = strip_direct_scheme(url);
             let pkg_name = to_uv_normalize(&pkg.name)?;
 
-            if LockedGitUrl::is_locked_git_url(&url_without_direct) {
-                let locked_git_url = LockedGitUrl::new(url_without_direct.clone().into_owned());
+            // Convert to owned URL so we can modify it if needed
+            let mut final_url = url_without_direct.into_owned();
+            
+            // If we have a hash, add it back to the URL fragment for verification
+            if let Some(hash) = &pkg.hash {
+                let hash_fragment = match hash {
+                    rattler_lock::PackageHashes::Sha256(sha256) => {
+                        format!("sha256={:x}", sha256)
+                    }
+                    rattler_lock::PackageHashes::Md5(md5) => {
+                        format!("md5={:x}", md5)
+                    }
+                    rattler_lock::PackageHashes::Md5Sha256(_md5, sha256) => {
+                        // Prefer SHA256 for direct URLs
+                        format!("sha256={:x}", sha256)
+                    }
+                };
+                tracing::info!(
+                    "Adding hash fragment '{}' to URL for package {}",
+                    hash_fragment,
+                    pkg.name
+                );
+                final_url.set_fragment(Some(&hash_fragment));
+            }
+
+            if LockedGitUrl::is_locked_git_url(&final_url) {
+                let locked_git_url = LockedGitUrl::new(final_url.clone());
                 let parsed_git_url = to_parsed_git_url(&locked_git_url).map_err(|err| {
                     ConvertToUvDistError::LockedUrl(
                         err.to_string(),
@@ -111,18 +144,61 @@ pub fn convert_to_dist(
                     pkg_name,
                     VerbatimParsedUrl {
                         parsed_url: ParsedUrl::Git(parsed_git_url),
-                        verbatim: uv_pep508::VerbatimUrl::from(url_without_direct.into_owned()),
+                        verbatim: uv_pep508::VerbatimUrl::from(final_url),
                     },
                 )?
             } else {
-                Dist::from_url(
-                    pkg_name,
-                    VerbatimParsedUrl {
-                        parsed_url: ParsedUrl::try_from(url_without_direct.clone().into_owned())
-                            .map_err(Box::new)?,
-                        verbatim: uv_pep508::VerbatimUrl::from(url_without_direct.into_owned()),
-                    },
-                )?
+                tracing::info!(
+                    "Creating Dist for package {} with final URL: {}",
+                    pkg.name,
+                    final_url
+                );
+                
+                // For direct URLs, we need to create a registry distribution with hash info
+                // Extract the filename from the URL
+                let filename_raw = final_url
+                    .path_segments()
+                    .and_then(|segments| segments.last())
+                    .ok_or_else(|| ConvertToUvDistError::LockedUrl(
+                        "URL has no filename".to_string(),
+                        final_url.to_string()
+                    ))?;
+                
+                // Decode the filename
+                let filename_decoded = percent_encoding::percent_decode_str(filename_raw).decode_utf8_lossy();
+                
+                // Create a file with hash information
+                let file = locked_data_to_file(
+                    &final_url,
+                    pkg.hash.as_ref(),
+                    filename_decoded.as_ref(),
+                    pkg.requires_python.clone(),
+                )?;
+                
+                // Try to parse as a wheel filename
+                if let Ok(wheel_filename) = WheelFilename::from_str(filename_decoded.as_ref()) {
+                    Dist::Built(BuiltDist::Registry(RegistryBuiltDist {
+                        wheels: vec![RegistryBuiltWheel {
+                            filename: wheel_filename,
+                            file: Box::new(file),
+                            index: IndexUrl::Url(Arc::new(uv_pep508::VerbatimUrl::from_url(final_url.clone()))),
+                        }],
+                        best_wheel_index: 0,
+                        sdist: None,
+                    }))
+                } else {
+                    // If not a wheel, treat as source distribution
+                    Dist::Source(SourceDist::Registry(RegistrySourceDist {
+                        name: pkg_name,
+                        version: to_uv_version(&pkg.version)?,
+                        file: Box::new(file),
+                        index: IndexUrl::Url(Arc::new(uv_pep508::VerbatimUrl::from_url(final_url.clone()))),
+                        wheels: vec![],
+                        ext: SourceDistExtension::from_path(Path::new(filename_raw)).map_err(|e| {
+                            ConvertToUvDistError::Extension(e, filename_raw.to_string())
+                        })?,
+                    }))
+                }
             }
         }
         UrlOrPath::Url(url) => {

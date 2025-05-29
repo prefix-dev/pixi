@@ -193,15 +193,12 @@ pub fn as_uv_req(
         PixiPypiSpec::Url {
             url, subdirectory, ..
         } => {
-            // We will clone the original URL and strip it's SHA256 fragment,
-            // So that we can normalize the URL for comparison.
-            let mut location_url = url.clone();
-            location_url.set_fragment(None);
+            // Keep the original URL with hash fragment for verification
             let verbatim_url = VerbatimUrl::from_url(url.clone());
 
             RequirementSource::Url {
                 subdirectory: subdirectory.as_ref().map(|sub| Box::from(Path::new(sub.as_str()))),
-                location: location_url,
+                location: url.clone(),
                 url: verbatim_url,
                 ext: DistExtension::from_path(url.path())?,
             }

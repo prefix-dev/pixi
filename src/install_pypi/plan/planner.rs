@@ -91,7 +91,7 @@ impl InstallPlanner {
         }
         let uv_version = to_uv_version(&required_pkg.version)?;
         // If it is not stale its either in the registry cache or not
-        let cached = dist_cache.get_cached_dist(name, uv_version);
+        let cached = dist_cache.get_cached_dist(name, uv_version, required_pkg.hash.as_ref());
         // If we have it in the cache we can use that
         if let Some(distribution) = cached {
             local.push((CachedDist::Registry(distribution), op_to_reason.cached()));

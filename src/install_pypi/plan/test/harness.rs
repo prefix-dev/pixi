@@ -395,6 +395,7 @@ impl<'a> CachedDistProvider<'a> for NoCache {
         &mut self,
         _name: &'a uv_normalize::PackageName,
         _version: uv_pep440::Version,
+        _expected_hash: Option<&rattler_lock::PackageHashes>,
     ) -> Option<uv_distribution_types::CachedRegistryDist> {
         None
     }
@@ -407,6 +408,7 @@ impl<'a> CachedDistProvider<'a> for AllCached {
         &mut self,
         name: &'a uv_normalize::PackageName,
         version: uv_pep440::Version,
+        _expected_hash: Option<&rattler_lock::PackageHashes>,
     ) -> Option<uv_distribution_types::CachedRegistryDist> {
         let wheel_filename =
             WheelFilename::from_str(format!("{}-{}-py3-none-any.whl", name, version).as_str())

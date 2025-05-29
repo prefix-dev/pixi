@@ -34,7 +34,6 @@ use uv_install_wheel::LinkMode;
 use uv_installer::{Preparer, SitePackages, UninstallError};
 use uv_python::{Interpreter, PythonEnvironment};
 use uv_resolver::FlatIndex;
-use uv_types::HashStrategy;
 use uv_workspace::WorkspaceCache;
 
 use crate::{
@@ -190,7 +189,7 @@ impl<'a> PyPIPrefixUpdaterBuilder<'a> {
             &self.uv_context.cache,
             &self.tags,
             &self.index_locations,
-            &HashStrategy::None,
+            &self.uv_context.hash_strategy,
             &self.config_settings,
         );
 
@@ -343,6 +342,7 @@ impl PyPIPrefixUpdater {
             reinstalls,
             extraneous,
             duplicates,
+            ..
         } = &self.installation_plan;
 
         // Nothing to do.
@@ -497,6 +497,70 @@ impl PyPIPrefixUpdater {
         }
     }
 
+    /// Download and verify hash of a direct URL before letting UV handle it
+    async fn verify_direct_url_hash(
+        &self,
+        dist: &Dist,
+    ) -> miette::Result<()> {
+        use sha2::{Sha256, Digest};
+        
+        // Only verify direct URLs with hash fragments
+        if let Dist::Built(built_dist) = dist {
+            if let uv_distribution_types::BuiltDist::Registry(reg_dist) = built_dist {
+                if let Some(wheel) = reg_dist.wheels.first() {
+                    let url_str = match &wheel.file.url {
+                        uv_distribution_types::FileLocation::AbsoluteUrl(url_string) => url_string.as_ref(),
+                        _ => return Ok(()),
+                    };
+                    
+                    // Check for hash in URL fragment
+                    if let Some(fragment_start) = url_str.find("#sha256=") {
+                        let expected_hash = &url_str[fragment_start + 8..];
+                        let download_url = &url_str[..fragment_start];
+                        
+                        tracing::info!(
+                            "Verifying hash for direct URL package {}: downloading from {}",
+                            dist.name(),
+                            download_url
+                        );
+                        
+                        // Download the file and compute its hash
+                        let download_url_parsed = url::Url::parse(download_url)
+                            .into_diagnostic()
+                            .with_context(|| format!("Failed to parse URL: {}", download_url))?;
+                        
+                        let response = self.registry_client
+                            .uncached_client(&download_url_parsed)
+                            .get(download_url)
+                            .send()
+                            .await
+                            .into_diagnostic()
+                            .with_context(|| format!("Failed to download {}", download_url))?;
+                            
+                        let bytes = response.bytes().await.into_diagnostic()?;
+                        
+                        let mut hasher = Sha256::new();
+                        hasher.update(&bytes);
+                        let computed_hash = format!("{:x}", hasher.finalize());
+                        
+                        if computed_hash != expected_hash {
+                            return Err(miette::miette!(
+                                "Hash verification failed for {}: expected sha256={}, got sha256={}",
+                                dist.name(),
+                                expected_hash,
+                                computed_hash
+                            ));
+                        }
+                        
+                        tracing::info!("Hash verification passed for {}", dist.name());
+                    }
+                }
+            }
+        }
+        
+        Ok(())
+    }
+
     /// This method prepares any remote distributions i.e. download and potentially build them
     async fn prepare_remote_distributions(
         &self,
@@ -524,10 +588,15 @@ impl PyPIPrefixUpdater {
             tracing::debug!("Stored credentials for {}: {}", url, success);
         }
 
+        // Verify hashes for all remote distributions BEFORE preparation
+        for (dist, _) in remote.iter() {
+            self.verify_direct_url_hash(dist).await?;
+        }
+
         let preparer = Preparer::new(
             &self.uv_context.cache,
             &self.tags,
-            &uv_types::HashStrategy::None,
+            &self.uv_context.hash_strategy,
             &self.build_options,
             distribution_database,
         )
