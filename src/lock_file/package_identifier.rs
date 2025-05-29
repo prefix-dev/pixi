@@ -6,6 +6,7 @@ use std::{collections::HashSet, str::FromStr};
 use thiserror::Error;
 
 use pixi_pypi_spec::PypiPackageName;
+use uv_distribution_types::{Requirement, RequirementSource};
 use uv_normalize::{ExtraName, InvalidNameError};
 
 /// Defines information about a Pypi package extracted from either a python
@@ -135,7 +136,7 @@ impl PypiPackageIdentifier {
     /// in this package identifier.
     pub(crate) fn satisfies(
         &self,
-        requirement: &uv_pypi_types::Requirement,
+        requirement: &Requirement,
     ) -> Result<bool, ConversionError> {
         // Verify the name of the package
         let uv_normalized = to_uv_normalize(self.name.as_normalized())?;
@@ -145,21 +146,21 @@ impl PypiPackageIdentifier {
 
         // Check the version of the requirement
         match &requirement.source {
-            uv_pypi_types::RequirementSource::Registry { specifier, .. } => {
+            RequirementSource::Registry { specifier, .. } => {
                 let uv_version = to_uv_version(&self.version)?;
                 Ok(specifier.contains(&uv_version))
             }
             // a pypi -> conda requirement on these versions are not supported
-            uv_pypi_types::RequirementSource::Url { .. } => {
+            RequirementSource::Url { .. } => {
                 unreachable!("direct url requirement on conda package is not supported")
             }
-            uv_pypi_types::RequirementSource::Git { .. } => {
+            RequirementSource::Git { .. } => {
                 unreachable!("git requirement on conda package is not supported")
             }
-            uv_pypi_types::RequirementSource::Path { .. } => {
+            RequirementSource::Path { .. } => {
                 unreachable!("path requirement on conda package is not supported")
             }
-            uv_pypi_types::RequirementSource::Directory { .. } => {
+            RequirementSource::Directory { .. } => {
                 unreachable!("directory requirement on conda package is not supported")
             }
         }

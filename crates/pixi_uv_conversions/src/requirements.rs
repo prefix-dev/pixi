@@ -11,7 +11,8 @@ use uv_distribution_filename::DistExtension;
 use uv_normalize::{InvalidNameError, PackageName};
 use uv_pep440::VersionSpecifiers;
 use uv_pep508::VerbatimUrl;
-use uv_pypi_types::{ParsedPathUrl, ParsedUrl, RequirementSource, VerbatimParsedUrl};
+use uv_pypi_types::{ParsedPathUrl, ParsedUrl, VerbatimParsedUrl};
+use uv_distribution_types::RequirementSource;
 
 use crate::{ConversionError, into_uv_git_reference, to_uv_marker_tree, to_uv_version_specifiers};
 
@@ -83,20 +84,20 @@ pub enum AsPep508Error {
     GitUrlParseError(#[from] uv_git_types::GitUrlParseError),
 }
 
-/// Convert into a [`uv_pypi_types::Requirement`], which is an uv extended
+/// Convert into a [`uv_distribution_types::Requirement`], which is an uv extended
 /// requirement type
 pub fn as_uv_req(
     req: &PixiPypiSpec,
     name: &str,
     project_root: &Path,
-) -> Result<uv_pypi_types::Requirement, AsPep508Error> {
+) -> Result<uv_distribution_types::Requirement, AsPep508Error> {
     let name = PackageName::from_str(name)?;
     let source = match req {
-        PixiPypiSpec::Version { version, index, .. } => {
-            // TODO: implement index later
+        PixiPypiSpec::Version { version, .. } => {
+            // TODO: implement index later - for now we skip custom indexes
             RequirementSource::Registry {
                 specifier: manifest_version_to_version_specifiers(version)?,
-                index: index.clone(),
+                index: None,
                 conflict: None,
             }
         }
@@ -136,7 +137,7 @@ pub fn as_uv_req(
                     .transpose()
                     .expect("could not parse sha"),
             )?,
-            subdirectory: subdirectory.as_ref().and_then(|s| s.parse().ok()),
+            subdirectory: subdirectory.as_ref().map(|s| Box::from(Path::new(s.as_str()))),
             // The full url used to clone, comparable to the git+ url in pip. e.g:
             // - 'git+SCHEMA://HOST/PATH@REF#subdirectory=SUBDIRECTORY'
             // - 'git+ssh://github.com/user/repo@d099af3b1028b00c232d8eda28a997984ae5848b'
@@ -168,7 +169,7 @@ pub fn as_uv_req(
 
             if canonicalized.is_dir() {
                 RequirementSource::Directory {
-                    install_path: canonicalized,
+                    install_path: canonicalized.into(),
                     editable: editable.unwrap_or_default(),
                     url: verbatim,
                     // TODO: we could see if we ever need this
@@ -183,7 +184,7 @@ pub fn as_uv_req(
                 }
             } else {
                 RequirementSource::Path {
-                    install_path: canonicalized,
+                    install_path: canonicalized.into(),
                     url: verbatim,
                     ext: DistExtension::from_path(path)?,
                 }
@@ -199,7 +200,7 @@ pub fn as_uv_req(
             let verbatim_url = VerbatimUrl::from_url(url.clone());
 
             RequirementSource::Url {
-                subdirectory: subdirectory.as_ref().map(|sub| PathBuf::from(sub.as_str())),
+                subdirectory: subdirectory.as_ref().map(|sub| Box::from(Path::new(sub.as_str()))),
                 location: location_url,
                 url: verbatim_url,
                 ext: DistExtension::from_path(url.path())?,
@@ -212,7 +213,7 @@ pub fn as_uv_req(
         },
     };
 
-    Ok(uv_pypi_types::Requirement {
+    Ok(uv_distribution_types::Requirement {
         name: name.clone(),
         extras: req
             .extras()
@@ -226,10 +227,10 @@ pub fn as_uv_req(
     })
 }
 
-/// Convert a [`pep508_rs::Requirement`] into a [`uv_pypi_types::Requirement`]
+/// Convert a [`pep508_rs::Requirement`] into a [`uv_distribution_types::Requirement`]
 pub fn pep508_requirement_to_uv_requirement(
     requirement: pep508_rs::Requirement,
-) -> Result<uv_pypi_types::Requirement, ConversionError> {
+) -> Result<uv_distribution_types::Requirement, ConversionError> {
     let parsed_url = if let Some(version_or_url) = requirement.version_or_url {
         match version_or_url {
             pep508_rs::VersionOrUrl::VersionSpecifier(version) => Some(
@@ -250,7 +251,7 @@ pub fn pep508_requirement_to_uv_requirement(
                                 )
                             })?;
                         let parsed_url = ParsedUrl::Path(ParsedPathUrl::from_source(
-                            path.as_str().into(),
+                            Box::from(Path::new(path.as_str())),
                             ext,
                             verbatim_url.to_url(),
                         ));

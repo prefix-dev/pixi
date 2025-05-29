@@ -37,16 +37,16 @@ use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBui
 use uv_configuration::{ConfigSettings, Constraints, Overrides};
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{
-    BuiltDist, DependencyMetadata, Diagnostic, Dist, FileLocation, HashPolicy, IndexCapabilities,
-    IndexUrl, Name, Resolution, ResolvedDist, SourceDist, ToUrlError,
+    BuiltDist, DependencyMetadata, Diagnostic, Dist, FileLocation, IndexCapabilities,
+    IndexUrl, Name, Requirement, RequirementSource, Resolution, ResolvedDist, SourceDist, ToUrlError,
 };
-use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigests, RequirementSource};
+use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigests};
 use uv_requirements::LookaheadResolver;
 use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
     PreferenceError, Preferences, PythonRequirement, Resolver, ResolverEnvironment,
 };
-use uv_types::EmptyInstalledPackages;
+use uv_types::{EmptyInstalledPackages, HashStrategy};
 
 use crate::{
     environment::CondaPrefixUpdated,
@@ -69,6 +69,31 @@ use crate::{
 #[error("Invalid hash: {0} type: {1}")]
 struct InvalidHash(String, String);
 
+/// Parse hash from URL fragment (e.g., "#sha256=abc123...")
+fn parse_hash_from_url_fragment(url: &Url) -> Result<Option<PackageHashes>, InvalidHash> {
+    if let Some(fragment) = url.fragment() {
+        // Fragment format: "sha256=<hex>" or "md5=<hex>"
+        if let Some((algo, hash)) = fragment.split_once('=') {
+            match algo {
+                "sha256" => {
+                    let sha256 = parse_digest_from_hex::<Sha256>(hash)
+                        .ok_or_else(|| InvalidHash(hash.to_string(), "sha256".to_string()))?;
+                    return Ok(Some(PackageHashes::Sha256(sha256)));
+                }
+                "md5" => {
+                    let md5 = parse_digest_from_hex::<Md5>(hash)
+                        .ok_or_else(|| InvalidHash(hash.to_string(), "md5".to_string()))?;
+                    return Ok(Some(PackageHashes::Md5(md5)));
+                }
+                _ => {
+                    // Unknown hash algorithm, ignore
+                }
+            }
+        }
+    }
+    Ok(None)
+}
+
 fn parse_hashes_from_hash_vec(hashes: &HashDigests) -> Result<Option<PackageHashes>, InvalidHash> {
     let mut sha256 = None;
     let mut md5 = None;
@@ -81,7 +106,7 @@ fn parse_hashes_from_hash_vec(hashes: &HashDigests) -> Result<Option<PackageHash
             HashAlgorithm::Md5 => {
                 md5 = Some(hash.digest.to_string());
             }
-            HashAlgorithm::Sha384 | HashAlgorithm::Sha512 => {
+            HashAlgorithm::Sha384 | HashAlgorithm::Sha512 | HashAlgorithm::Blake2b => {
                 // We do not support these algorithms
             }
         }
@@ -314,7 +339,7 @@ pub async fn resolve_pypi(
     let index_strategy = to_index_strategy(pypi_options.index_strategy.as_ref());
     let mut uv_client_builder = RegistryClientBuilder::new(context.cache.clone())
         .allow_insecure_host(context.allow_insecure_host.clone())
-        .index_urls(index_locations.index_urls())
+        .index_locations(&index_locations)
         .index_strategy(index_strategy)
         .markers(&marker_environment)
         .keyring(context.keyring_provider)
@@ -333,9 +358,9 @@ pub async fn resolve_pypi(
 
     // Resolve the flat indexes from `--find-links`.
     let flat_index = {
-        let client = FlatIndexClient::new(&registry_client, &context.cache);
+        let client = FlatIndexClient::new(registry_client.cached_client(), Connectivity::Online, &context.cache);
         let entries = client
-            .fetch(
+            .fetch_all(
                 index_locations
                     .flat_indexes()
                     .map(uv_distribution_types::Index::url),
@@ -410,9 +435,9 @@ pub async fn resolve_pypi(
                 conflict: None,
             };
 
-            Ok::<_, ConversionError>(uv_pypi_types::Requirement {
+            Ok::<_, ConversionError>(Requirement {
                 name: to_uv_normalize(p.name.as_normalized())?,
-                extras: vec![],
+                extras: vec![].into(),
                 marker: Default::default(),
                 source,
                 groups: Default::default(),
@@ -438,7 +463,7 @@ pub async fn resolve_pypi(
             let (package_data, _) = record;
             let requirement = uv_pep508::Requirement {
                 name: to_uv_normalize(&package_data.name)?,
-                extras: Vec::new(),
+                extras: Vec::new().into(),
                 version_or_url: Some(uv_pep508::VersionOrUrl::VersionSpecifier(
                     uv_pep440::VersionSpecifiers::from(
                         uv_pep440::VersionSpecifier::equals_version(to_uv_version(
@@ -565,6 +590,7 @@ pub async fn resolve_pypi(
         &context.capabilities,
         context.concurrency.downloads,
         project_root,
+        &context.hash_strategy,
     )
     .await?;
 
@@ -693,6 +719,7 @@ async fn lock_pypi_packages(
     index_capabilities: &IndexCapabilities,
     concurrent_downloads: usize,
     abs_project_root: &Path,
+    hash_strategy: &HashStrategy,
 ) -> miette::Result<Vec<(PypiPackageData, PypiPackageEnvironmentData)>> {
     let mut locked_packages = LockedPypiPackages::with_capacity(resolution.len());
     let database =
@@ -728,11 +755,17 @@ async fn lock_pypi_packages(
                         }
                         BuiltDist::DirectUrl(dist) => {
                             let url = dist.url.to_url();
+                            
+                            // Extract hash from URL fragment if present
+                            let hash = parse_hash_from_url_fragment(&url)
+                                .into_diagnostic()
+                                .context("cannot parse hash from direct url")?;
+                            
                             let direct_url = Url::parse(&format!("direct+{url}"))
                                 .into_diagnostic()
                                 .context("cannot create direct url")?;
 
-                            (UrlOrPath::Url(direct_url), None)
+                            (UrlOrPath::Url(direct_url), hash)
                         }
                         BuiltDist::Path(dist) => (
                             UrlOrPath::Path(Utf8TypedPathBuf::from(
@@ -787,10 +820,11 @@ async fn lock_pypi_packages(
                         })
                         .transpose()?;
 
+                    let dist = Dist::Source(source.clone());
                     let metadata_response = database
                         .get_or_build_wheel_metadata(
-                            &Dist::Source(source.clone()),
-                            HashPolicy::None,
+                            &dist,
+                            hash_strategy.get(&dist),
                         )
                         .await
                         .into_diagnostic()?;

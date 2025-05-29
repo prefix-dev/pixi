@@ -74,7 +74,7 @@ pub(crate) fn need_reinstall(
             };
 
             match direct_url_json {
-                uv_pypi_types::DirectUrl::LocalDirectory { url, dir_info } => {
+                uv_pypi_types::DirectUrl::LocalDirectory { url, dir_info, .. } => {
                     // Recreate file url
                     let result = Url::parse(&url);
                     match result {

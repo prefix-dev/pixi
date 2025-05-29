@@ -68,7 +68,7 @@ impl UvResolutionContext {
         Ok(Self {
             cache,
             in_flight: InFlight::default(),
-            hash_strategy: HashStrategy::None,
+            hash_strategy: HashStrategy::Verify(Default::default()),
             keyring_provider,
             concurrency: Concurrency::default(),
             source_strategy: SourceStrategy::Enabled,

@@ -102,7 +102,7 @@ impl<'a> PyPIPrefixUpdaterBuilder<'a> {
 
         let mut uv_client_builder = RegistryClientBuilder::new(uv_context.cache.clone())
             .allow_insecure_host(uv_context.allow_insecure_host.clone())
-            .index_urls(index_locations.index_urls())
+            .index_locations(&index_locations)
             .keyring(uv_context.keyring_provider)
             .connectivity(Connectivity::Online)
             .extra_middleware(uv_context.extra_middleware.clone());
@@ -115,9 +115,9 @@ impl<'a> PyPIPrefixUpdaterBuilder<'a> {
 
         // Resolve the flat indexes from `--find-links`.
         let flat_index = {
-            let client = FlatIndexClient::new(&registry_client, &uv_context.cache);
+            let client = FlatIndexClient::new(registry_client.cached_client(), Connectivity::Online, &uv_context.cache);
             let indexes = index_locations.flat_indexes().map(|index| index.url());
-            let entries = client.fetch(indexes).await.into_diagnostic()?;
+            let entries = client.fetch_all(indexes).await.into_diagnostic()?;
             FlatIndex::from_entries(
                 entries,
                 Some(&tags),

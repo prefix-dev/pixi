@@ -40,10 +40,9 @@ use uv_configuration::{
 use uv_dispatch::{BuildDispatch, BuildDispatchError, SharedState};
 use uv_distribution_filename::DistFilename;
 use uv_distribution_types::{
-    CachedDist, DependencyMetadata, IndexLocations, IsBuildBackendError, Resolution, SourceDist,
+    CachedDist, DependencyMetadata, IndexLocations, IsBuildBackendError, Requirement, Resolution, SourceDist,
 };
 use uv_install_wheel::LinkMode;
-use uv_pypi_types::Requirement;
 use uv_python::{Interpreter, InterpreterError, PythonEnvironment};
 use uv_resolver::{ExcludeNewer, FlatIndex};
 use uv_types::{BuildContext, BuildStack, HashStrategy};
