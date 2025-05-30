@@ -498,7 +498,7 @@ impl Workspace {
             .with_limits(Limits {
                 max_concurrent_solves: self.config().max_concurrent_solves().into(),
             })
-            .with_backend_overrides(BackendOverride::from_env().unwrap_or_default()))
+            .with_backend_overrides(BackendOverride::from_env()?.unwrap_or_default()))
     }
 
     fn client_and_authenticated_client(
