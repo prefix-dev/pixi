@@ -57,6 +57,7 @@ use crate::{
     diff::LockFileDiff,
     lock_file::filter_lock_file,
 };
+use crate::repodata::Repodata;
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
 
@@ -491,6 +492,7 @@ impl Workspace {
         let cache_dirs =
             CacheDirs::new(pixi_config::get_cache_dir()?).with_workspace(self.pixi_dir());
         Ok(CommandDispatcher::builder()
+            .with_gateway(self.repodata_gateway()?.clone())
             .with_cache_dirs(cache_dirs)
             .with_root_dir(self.root().to_path_buf())
             .with_download_client(self.authenticated_client()?.clone())

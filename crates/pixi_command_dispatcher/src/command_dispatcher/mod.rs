@@ -504,6 +504,14 @@ impl CommandDispatcherBuilder {
         }
     }
 
+    /// Sets the gateway to use for querying conda repodata.
+    pub fn with_gateway(self, gateway: Gateway) -> Self {
+        Self {
+            gateway: Some(gateway),
+            ..self
+        }
+    }
+
     /// Sets the reporter used by the [`CommandDispatcher`] to report progress.
     pub fn with_reporter<F: Reporter + 'static>(self, reporter: F) -> Self {
         Self {
