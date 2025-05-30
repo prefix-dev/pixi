@@ -95,24 +95,19 @@ pub enum OverriddenBackends {
     Specified(Vec<OverriddenTool>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[error("Failed to parse OverriddenBackends")]
 pub struct ParseError;
-impl std::fmt::Display for ParseError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Failed to parse OverriddenBackends")
-    }
-}
 
 const EQUALS: &str = "=";
 const SEPARATOR: &str = ",";
 
-impl std::error::Error for ParseError {}
 impl FromStr for OverriddenBackends {
     type Err = ParseError;
     // This can be in the form of either:
     // 1. pixi-build-python=/some/path/to/custom-build
     // 2. pixi-build-python (just the name of the tool)
-    // The separation is done with a '::' between different tools.
+    // The separation is done with a ',' between different tools.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut tools = Vec::new();
         if s.is_empty() {
@@ -145,12 +140,12 @@ impl BackendOverride {
     /// environment variable.
     ///
     /// This variable should be in the form of
-    /// `tool_name=/path/to/executable::tool_name2`. Where the `::` is used
+    /// `tool_name=/path/to/executable,tool_name2`. Where the `,` is used
     /// to separate different tools. and the `=` is used to separate the
     /// tool name from the path. If no path is provided the tool is assumed to
     /// be available in the root.
-    pub fn from_env() -> Option<Self> {
-        match std::env::var("PIXI_BUILD_BACKEND_OVERRIDE_ALL") {
+    pub fn from_env() -> miette::Result<Option<Self>> {
+        let backend_override = match std::env::var("PIXI_BUILD_BACKEND_OVERRIDE_ALL") {
             Ok(_) => {
                 tracing::warn!("overriding build backend with system prefixed tools");
                 Some(Self::System(OverriddenBackends::All))
@@ -158,11 +153,13 @@ impl BackendOverride {
             Err(_) => match std::env::var("PIXI_BUILD_BACKEND_OVERRIDE") {
                 Ok(spec) => {
                     tracing::warn!("overriding build backend with: {}", spec);
-                    Some(Self::System(OverriddenBackends::from_str(&spec).unwrap()))
+                    Some(Self::System(OverriddenBackends::from_str(&spec)?))
                 }
                 Err(_) => None,
             },
-        }
+        };
+
+        Ok(backend_override)
     }
 }
 

@@ -18,6 +18,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-64/c-ares-1.34.4-hb9d3cd8_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/c-compiler-1.9.0-h2b85faf_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/ca-certificates-2025.1.31-hbcca054_0.conda
+      - conda: https://prefix.dev/conda-forge/linux-64/cargo-edit-0.13.4-hb23c6cf_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/cargo-nextest-0.9.93-h6c30b3d_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/certifi-2025.1.31-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cffconvert-2.0.0-pyhd8ed1ab_1.conda
@@ -162,6 +163,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-aarch64/c-ares-1.34.4-h86ecc28_0.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/c-compiler-1.9.0-h6561dab_0.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/ca-certificates-2025.1.31-hcefe29a_0.conda
+      - conda: https://prefix.dev/conda-forge/linux-aarch64/cargo-edit-0.13.4-h7d7b287_0.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/cargo-nextest-0.9.93-ha3529ed_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/certifi-2025.1.31-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cffconvert-2.0.0-pyhd8ed1ab_1.conda
@@ -292,6 +294,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/osx-64/c-ares-1.34.4-hf13058a_0.conda
       - conda: https://prefix.dev/conda-forge/osx-64/c-compiler-1.9.0-h09a7c41_0.conda
       - conda: https://prefix.dev/conda-forge/osx-64/ca-certificates-2025.1.31-h8857fd0_0.conda
+      - conda: https://prefix.dev/conda-forge/osx-64/cargo-edit-0.13.4-hd2571bf_0.conda
       - conda: https://prefix.dev/conda-forge/osx-64/cargo-nextest-0.9.93-hd2571bf_0.conda
       - conda: https://prefix.dev/conda-forge/osx-64/cctools-1010.6-ha66f10e_6.conda
       - conda: https://prefix.dev/conda-forge/osx-64/cctools_osx-64-1010.6-hd19c6af_6.conda
@@ -433,6 +436,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/osx-arm64/c-ares-1.34.4-h5505292_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/c-compiler-1.9.0-hdf49b6b_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/ca-certificates-2025.1.31-hf0a4a13_0.conda
+      - conda: https://prefix.dev/conda-forge/osx-arm64/cargo-edit-0.13.4-h8dba533_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/cargo-nextest-0.9.93-h8dba533_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/cctools-1010.6-hb4fb6a3_6.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/cctools_osx-arm64-1010.6-h3b4f5d3_6.conda
@@ -574,6 +578,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/win-64/bzip2-1.0.8-h2466b09_7.conda
       - conda: https://prefix.dev/conda-forge/win-64/c-compiler-1.9.0-hcfcfb64_0.conda
       - conda: https://prefix.dev/conda-forge/win-64/ca-certificates-2025.1.31-h56e8100_0.conda
+      - conda: https://prefix.dev/conda-forge/win-64/cargo-edit-0.13.4-h63977a8_0.conda
       - conda: https://prefix.dev/conda-forge/win-64/cargo-nextest-0.9.93-ha073cba_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/certifi-2025.1.31-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/cffconvert-2.0.0-pyhd8ed1ab_1.conda
@@ -3117,6 +3122,65 @@ packages:
   license_family: LGPL
   size: 44459
   timestamp: 1747337159019
+- conda: https://prefix.dev/conda-forge/linux-64/cargo-edit-0.13.4-hb23c6cf_0.conda
+  sha256: 05ab06282bda9eb4b1ebeaa30e6c360b7f309ce6db17cc69cbeb11c09df45150
+  md5: f674e736cf9e2f52aa9924481761aa68
+  depends:
+  - libgcc >=13
+  - __glibc >=2.17,<3.0.a0
+  constrains:
+  - __glibc >=2.17
+  license: MIT
+  license_family: MIT
+  size: 2655449
+  timestamp: 1747159532847
+- conda: https://prefix.dev/conda-forge/linux-aarch64/cargo-edit-0.13.4-h7d7b287_0.conda
+  sha256: 2eed0a442ba9712052d8825d7f18aadcc2cc0319b9c438c0c811ea3e1496a02c
+  md5: 236a09617c6dcbd3f684f2b0cdf0fbde
+  depends:
+  - libgcc >=13
+  constrains:
+  - __glibc >=2.17
+  license: MIT
+  license_family: MIT
+  size: 2516567
+  timestamp: 1747159739536
+- conda: https://prefix.dev/conda-forge/osx-64/cargo-edit-0.13.4-hd2571bf_0.conda
+  sha256: 50f43b70aa223346e019e26404980176dc8a47cb5d2ac6a83c5f0d3eedb7c1cd
+  md5: dd7622a323f6c1b8802e5c8ad4f82a73
+  depends:
+  - __osx >=10.13
+  constrains:
+  - __osx >=10.13
+  license: MIT
+  license_family: MIT
+  size: 2473656
+  timestamp: 1747159542189
+- conda: https://prefix.dev/conda-forge/osx-arm64/cargo-edit-0.13.4-h8dba533_0.conda
+  sha256: 9b9c51f2331badc9d5470df224545e60890cacf2b2a0fd8b0133fa0d24450170
+  md5: 367b8f4b86fc180949bb6b79ef288a24
+  depends:
+  - __osx >=11.0
+  constrains:
+  - __osx >=11.0
+  license: MIT
+  license_family: MIT
+  size: 2273754
+  timestamp: 1747159590739
+- conda: https://prefix.dev/conda-forge/win-64/cargo-edit-0.13.4-h63977a8_0.conda
+  sha256: 400d50b49657f7286ffef2f91e371fd40d8dbf268750c480a8c2ea7d13352929
+  md5: 30f3f09f18891eb8d0735c829e1e1707
+  depends:
+  - vc >=14.2,<15
+  - vc14_runtime >=14.29.30139
+  - ucrt >=10.0.20348.0
+  - vc >=14.2,<15
+  - vc14_runtime >=14.29.30139
+  - ucrt >=10.0.20348.0
+  license: MIT
+  license_family: MIT
+  size: 2440758
+  timestamp: 1747159526319
 - conda: https://prefix.dev/conda-forge/linux-64/cargo-nextest-0.9.93-h6c30b3d_0.conda
   sha256: 9612a9fb1284127b7939dcf64c264f0bd641bfb9d8fe47a6b9bb239554582bc8
   md5: 8481dcdc9edb2e52d248b52d5c87293e

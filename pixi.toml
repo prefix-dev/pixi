@@ -36,8 +36,6 @@ test-all-slow = { depends-on = ["test-slow", "test-integration-slow"] }
 test-fast = "cargo nextest run --workspace --all-targets"
 test-slow = """cargo nextest run --workspace --all-targets --retries 2 --features slow_integration_tests
               --status-level skip --failure-output immediate-final --no-fail-fast --final-status-level slow"""
-# TODO: add cargo-edit to conda-forge
-update-rattler = "cargo upgrade -p rattler -p file_url -p rattler_cache -p rattler_conda_types -p rattler_digest -p rattler_lock -p rattler_networking -p rattler_repodata_gateway -p rattler_shell -p rattler_solve -p rattler_virtual_packages"
 
 
 [feature.pytest.dependencies]
@@ -87,9 +85,14 @@ update-test-channel = { cmd = "python update-channels.py {{ channel }}", args = 
 
 [feature.dev.dependencies]
 # Needed for the citation
+cargo-edit = ">=0.13.4,<0.14"
 cargo-nextest = ">=0.9.78,<0.10"
 cffconvert = ">=2.0.0,<2.1"
 tbump = ">=6.9.0,<6.10"
+
+[feature.dev.tasks]
+update-rattler = "cargo upgrade -p rattler -p file_url -p rattler_cache -p rattler_conda_types -p rattler_digest -p rattler_lock -p rattler_networking -p rattler_repodata_gateway -p rattler_shell -p rattler_solve -p rattler_virtual_packages"
+
 
 [feature.lint.dependencies]
 actionlint = ">=1.7.7,<2"

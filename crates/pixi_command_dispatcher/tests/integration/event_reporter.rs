@@ -18,7 +18,7 @@ pub enum Event {
     CondaSolveQueued {
         id: CondaSolveId,
         #[serde(flatten)]
-        spec: SolveCondaEnvironmentSpec,
+        spec: Box<SolveCondaEnvironmentSpec>,
         #[serde(skip_serializing_if = "Option::is_none")]
         context: Option<ReporterContext>,
     },
@@ -139,7 +139,7 @@ impl CondaSolveReporter for EventReporter {
 
         let event = Event::CondaSolveQueued {
             id: next_id,
-            spec: env.clone(),
+            spec: Box::new(env.clone()),
             context,
         };
         println!("{}", serde_json::to_string_pretty(&event).unwrap());

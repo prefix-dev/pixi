@@ -131,6 +131,17 @@ You can also pack PyPi wheel packages into your environment.
 If you happen to use source distributions, you can ignore them by using the `--ignore-pypi-non-wheel` flag.
 This will skip the bundling of PyPi packages that are source distributions.
 
+The `--inject` option also supports wheels.
+
+```bash
+pixi-pack pack --ignore-pypi-non-wheel --inject my_webserver-0.1.0-py3-none-any.whl
+```
+
+!!! warning
+
+    In contrast to injecting from conda packages,
+    we cannot verify that injected wheels are compatible with the target environment. Please make sure the packages are compatible.
+
 ### Mirror and S3 middleware
 
 You can use mirror middleware by creating a configuration file as described in the [pixi documentation](../reference/pixi_configuration.md#mirror-configuration) and referencing it using `--config`.
