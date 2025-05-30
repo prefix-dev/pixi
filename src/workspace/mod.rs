@@ -52,12 +52,12 @@ use url::Url;
 pub use workspace_mut::WorkspaceMut;
 use xxhash_rust::xxh3::xxh3_64;
 
+use crate::repodata::Repodata;
 use crate::{
     activation::{CurrentEnvVarBehavior, initialize_env_variables},
     diff::LockFileDiff,
     lock_file::filter_lock_file,
 };
-use crate::repodata::Repodata;
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
 
