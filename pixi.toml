@@ -31,6 +31,10 @@ run-all-examples = { cmd = "python tests/scripts/run-all-examples.py --pixi-exec
   "build-release",
 ] }
 test = { depends-on = ["test-all-fast"], description = "Run all fast tests" }
+test-all-extra-slow = { depends-on = [
+  "test-slow",
+  "test-integration-extra-slow",
+] }
 test-all-fast = { depends-on = ["test-fast", "test-integration-fast"] }
 test-all-slow = { depends-on = ["test-slow", "test-integration-slow"] }
 test-fast = "cargo nextest run --workspace --all-targets"
