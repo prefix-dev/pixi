@@ -142,13 +142,16 @@ table code {
   max-width: 100%;
   overflow-x: auto;
   padding: 1rem 0;
+  cursor: grab;
 }
 
 .quote-scroll {
   display: flex;
   gap: 1rem;
   padding: 0 1rem;
+  scroll-behavior: smooth;
 }
+
 .quote-card {
   flex: 0 0 320px;
   border: 1px solid #ccc;
