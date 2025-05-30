@@ -143,6 +143,9 @@ table code {
   overflow-x: auto;
   padding: 1rem 0;
   cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  -ms-user-select: none;
 }
 
 .quote-scroll {
