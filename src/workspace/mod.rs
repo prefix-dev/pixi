@@ -31,7 +31,7 @@ use pep508_rs::Requirement;
 use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{CacheDirs, CommandDispatcher, CommandDispatcherBuilder, Limits};
 use pixi_config::Config;
-use pixi_consts::consts::{self, CACHED_BUILD_WORK_DIR};
+use pixi_consts::consts;
 use pixi_manifest::{
     AssociateProvenance, EnvironmentName, Environments, ExplicitManifestError,
     HasWorkspaceManifest, LoadManifestsError, ManifestProvenance, Manifests, PackageManifest,
@@ -52,6 +52,7 @@ use url::Url;
 pub use workspace_mut::WorkspaceMut;
 use xxhash_rust::xxh3::xxh3_64;
 
+use crate::repodata::Repodata;
 use crate::{
     activation::{CurrentEnvVarBehavior, initialize_env_variables},
     diff::LockFileDiff,
@@ -488,12 +489,14 @@ impl Workspace {
     /// Returns a pre-filled command dispatcher builder that can be used to
     /// construct a [`pixi_command_dispatcher::CommandDispatcher`].
     pub fn command_dispatcher_builder(&self) -> miette::Result<CommandDispatcherBuilder> {
-        let cache_dirs = CacheDirs::new(pixi_config::get_cache_dir()?)
-            .with_working_dirs(self.pixi_dir().join(CACHED_BUILD_WORK_DIR));
+        let cache_dirs =
+            CacheDirs::new(pixi_config::get_cache_dir()?).with_workspace(self.pixi_dir());
         Ok(CommandDispatcher::builder()
+            .with_gateway(self.repodata_gateway()?.clone())
             .with_cache_dirs(cache_dirs)
             .with_root_dir(self.root().to_path_buf())
             .with_download_client(self.authenticated_client()?.clone())
+            .with_max_download_concurrency(self.concurrent_downloads_semaphore())
             .with_limits(Limits {
                 max_concurrent_solves: self.config().max_concurrent_solves().into(),
             })

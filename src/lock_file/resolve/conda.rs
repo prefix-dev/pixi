@@ -1,4 +1,3 @@
-use crate::build::SourceMetadata;
 use ahash::HashMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
@@ -7,10 +6,11 @@ use pixi_record::{PixiRecord, SourceRecord};
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, RepoDataRecord};
 use rattler_repodata_gateway::RepoData;
 use rattler_solve::{SolveStrategy, SolverImpl, resolvo};
+use std::sync::Arc;
 use url::Url;
 
 use crate::lock_file::LockedCondaPackages;
-use pixi_command_dispatcher::SourceCheckout;
+use pixi_command_dispatcher::{SourceCheckout, SourceMetadata};
 
 /// Solves the conda package environment for the given input. This function is
 /// async because it spawns a background task for the solver. Since solving is a
@@ -21,7 +21,7 @@ pub async fn resolve_conda(
     virtual_packages: Vec<GenericVirtualPackage>,
     locked_packages: Vec<RepoDataRecord>,
     available_repodata: Vec<RepoData>,
-    available_source_packages: Vec<SourceMetadata>,
+    available_source_packages: Vec<Arc<SourceMetadata>>,
     channel_priority: ChannelPriority,
     exclude_newer: Option<chrono::DateTime<chrono::Utc>>,
     solve_strategy: SolveStrategy,
@@ -29,9 +29,9 @@ pub async fn resolve_conda(
     tokio::task::spawn_blocking(move || {
         // Combine the repodata from the source packages and from registry channels.
         let mut url_to_source_package = HashMap::default();
-        for source_metadata in available_source_packages {
-            for record in source_metadata.records {
-                let url = unique_url(&source_metadata.source, &record);
+        for source_metadata in available_source_packages.iter() {
+            for record in source_metadata.records.iter() {
+                let url = unique_url(&source_metadata.source, record);
                 let repodata_record = RepoDataRecord {
                     package_record: record.package_record.clone(),
                     url: url.clone(),
@@ -78,7 +78,7 @@ pub async fn resolve_conda(
             .map(|record| {
                 url_to_source_package.remove(&record.url).map_or_else(
                     || PixiRecord::Binary(record),
-                    |(source_record, _repodata_record)| PixiRecord::Source(source_record),
+                    |(source_record, _repodata_record)| PixiRecord::Source(source_record.clone()),
                 )
             })
             .collect_vec())
