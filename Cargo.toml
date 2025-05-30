@@ -390,7 +390,7 @@ tokio = { workspace = true, features = ["rt"] }
 
 [patch.crates-io]
 # This is a temporary patch to get `cargo vendor` to work with the `uv` and pep508_rs` crates.
-version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "b70cf707aa43f21b32f3a61b8a0889b15032d5c4" }
+version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "06ec5a5f59ffaeb6cf5079c6cb184467da06c9db" }
 
 # Config for 'dist'
 [workspace.metadata.dist]
