@@ -302,7 +302,7 @@ pub fn to_parsed_git_url(
             Some(into_uv_git_sha(git_source.commit)),
         )
         .into_diagnostic()?,
-        git_source.subdirectory.map(|s| PathBuf::from(s.as_str())),
+        git_source.subdirectory.map(|s| Box::from(Path::new(s.as_str()))),
     );
 
     Ok(parsed_git_url)
@@ -317,7 +317,7 @@ pub fn to_uv_specifiers(
 }
 
 pub fn to_requirements<'req>(
-    requirements: impl Iterator<Item = &'req uv_pypi_types::Requirement>,
+    requirements: impl Iterator<Item = &'req uv_distribution_types::Requirement>,
 ) -> Result<Vec<pep508_rs::Requirement>, crate::ConversionError> {
     let requirements: Result<Vec<pep508_rs::Requirement>, _> = requirements
         .map(|requirement| {

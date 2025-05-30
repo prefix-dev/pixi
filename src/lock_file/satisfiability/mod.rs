@@ -33,7 +33,8 @@ use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_distribution_filename::{DistExtension, ExtensionError, SourceDistExtension};
 use uv_git_types::GitReference;
-use uv_pypi_types::{ParsedUrlError, RequirementSource};
+use uv_distribution_types::{Requirement, RequirementSource};
+use uv_pypi_types::ParsedUrlError;
 use uv_resolver::RequiresPython;
 
 use super::{
@@ -232,10 +233,10 @@ pub enum PlatformUnsat {
     FailedToConvertRequirement(pep508_rs::PackageName, #[source] Box<ParsedUrlError>),
 
     #[error("the requirement '{0}' could not be satisfied (required by '{1}')")]
-    UnsatisfiableRequirement(Box<uv_pypi_types::Requirement>, String),
+    UnsatisfiableRequirement(Box<Requirement>, String),
 
     #[error("the conda package does not satisfy the pypi requirement '{0}' (required by '{1}')")]
-    CondaUnsatisfiableRequirement(Box<uv_pypi_types::Requirement>, String),
+    CondaUnsatisfiableRequirement(Box<Requirement>, String),
 
     #[error("there was a duplicate entry for '{0}'")]
     DuplicateEntry(String),
@@ -279,7 +280,7 @@ pub enum PlatformUnsat {
     #[error("editable pypi dependency on conda resolved package '{0}' is not supported")]
     EditableDependencyOnCondaInstalledPackage(
         uv_normalize::PackageName,
-        Box<uv_pypi_types::RequirementSource>,
+        Box<RequirementSource>,
     ),
 
     #[error("direct pypi url dependency to a conda installed package '{0}' is not supported")]
@@ -736,14 +737,14 @@ enum Dependency {
         SourceSpec,
         Cow<'static, str>,
     ),
-    PyPi(uv_pypi_types::Requirement, Cow<'static, str>),
+    PyPi(Requirement, Cow<'static, str>),
 }
 
 /// Check satatisfiability of a pypi requirement against a locked pypi package
 /// This also does an additional check for git urls when using direct url
 /// references
 pub(crate) fn pypi_satifisfies_editable(
-    spec: &uv_pypi_types::Requirement,
+    spec: &Requirement,
     locked_data: &PypiPackageData,
     project_root: &Path,
 ) -> Result<(), Box<PlatformUnsat>> {
@@ -782,11 +783,11 @@ pub(crate) fn pypi_satifisfies_editable(
                     ))
                 })?;
 
-                if &canocalized_path != install_path {
+                if canocalized_path.as_path() != install_path.as_ref() {
                     return Err(Box::new(PlatformUnsat::EditablePackagePathMismatch(
                         spec.name.clone(),
                         absolute_path.into_owned(),
-                        install_path.clone(),
+                        install_path.to_path_buf(),
                     )));
                 }
                 Ok(())
@@ -799,7 +800,7 @@ pub(crate) fn pypi_satifisfies_editable(
 /// This also does an additional check for git urls when using direct url
 /// references
 pub(crate) fn pypi_satifisfies_requirement(
-    spec: &uv_pypi_types::Requirement,
+    spec: &Requirement,
     locked_data: &PypiPackageData,
     project_root: &Path,
 ) -> Result<(), Box<PlatformUnsat>> {
@@ -1222,7 +1223,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                                 // editable and vice versa.
                                 expected_editable_pypi_packages.insert(requirement.name.clone());
 
-                                FoundPackage::PyPi(PypiPackageIdx(idx), requirement.extras)
+                                FoundPackage::PyPi(PypiPackageIdx(idx), requirement.extras.to_vec())
                             } else {
                                 if let Err(err) = pypi_satifisfies_requirement(
                                     &requirement,
@@ -1232,7 +1233,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                                     delayed_pypi_error.get_or_insert(err);
                                 }
 
-                                FoundPackage::PyPi(PypiPackageIdx(idx), requirement.extras)
+                                FoundPackage::PyPi(PypiPackageIdx(idx), requirement.extras.to_vec())
                             }
                         }
                         Ok(None) => {
