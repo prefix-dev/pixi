@@ -9,11 +9,28 @@ use std::{
     sync::Arc,
 };
 
+use crate::{
+    environment::CondaPrefixUpdated,
+    lock_file::{
+        CondaPrefixUpdater, LockedPypiPackages, PixiRecordsByName, PypiPackageIdentifier,
+        PypiRecord, UvResolutionContext,
+        records_by_name::HasNameVersion,
+        resolve::{
+            build_dispatch::{
+                LazyBuildDispatch, LazyBuildDispatchDependencies, UvBuildDispatchParams,
+            },
+            resolver_provider::CondaResolverProvider,
+        },
+    },
+    uv_reporter::{UvReporter, UvReporterOptions},
+    workspace::{Environment, EnvironmentVars},
+};
 use chrono::{DateTime, Utc};
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
+use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, SystemRequirements, pypi::pypi_options::PypiOptions};
 use pixi_pypi_spec::PixiPypiSpec;
 use pixi_record::PixiRecord;
@@ -47,23 +64,6 @@ use uv_resolver::{
     PreferenceError, Preferences, PythonRequirement, Resolver, ResolverEnvironment,
 };
 use uv_types::EmptyInstalledPackages;
-
-use crate::{
-    environment::CondaPrefixUpdated,
-    lock_file::{
-        CondaPrefixUpdater, LockedPypiPackages, PixiRecordsByName, PypiPackageIdentifier,
-        PypiRecord, UvResolutionContext,
-        records_by_name::HasNameVersion,
-        resolve::{
-            build_dispatch::{
-                LazyBuildDispatch, LazyBuildDispatchDependencies, UvBuildDispatchParams,
-            },
-            resolver_provider::CondaResolverProvider,
-        },
-    },
-    uv_reporter::{UvReporter, UvReporterOptions},
-    workspace::{Environment, EnvironmentVars},
-};
 
 #[derive(Debug, thiserror::Error)]
 #[error("Invalid hash: {0} type: {1}")]
@@ -264,7 +264,6 @@ pub async fn resolve_pypi(
         .collect::<Result<Vec<_>, _>>()
         .into_diagnostic()?;
 
-    use pixi_consts::consts::WORKSPACE_MANIFEST;
     // Determine the python interpreter that is installed as part of the conda
     // packages.
     let python_record = locked_pixi_records
@@ -273,7 +272,12 @@ pub async fn resolve_pypi(
             PixiRecord::Binary(r) => is_python_record(r),
             _ => false,
         })
-        .ok_or_else(|| miette::miette!("could not resolve pypi dependencies because no python interpreter is added to the dependencies of the project.\nMake sure to add a python interpreter to the [dependencies] section of the {WORKSPACE_MANIFEST}, or run:\n\n\tpixi add python"))?;
+        .ok_or_else(|| {
+            miette::miette!(
+                help = format!("Try: {}", consts::TASK_STYLE.apply_to("pixi add python")),
+                "No Python interpreter found in the dependencies"
+            )
+        })?;
 
     // Construct the marker environment for the target platform
     let marker_environment = determine_marker_environment(platform, python_record.as_ref())?;

@@ -1651,23 +1651,35 @@ impl<'p> UpdateContext<'p> {
 /// Constructs an error that indicates that the current platform cannot solve
 /// pypi dependencies because there is no python interpreter available for the
 /// current platform.
-fn make_unsupported_pypi_platform_error(environment: &Environment<'_>) -> miette::Report {
+fn make_unsupported_pypi_platform_error(environment: &Environment<'_>) -> Report {
     let grouped_environment = GroupedEnvironment::from(environment.clone());
+    let current_platform = environment.best_platform();
+    let platforms = environment.platforms();
 
-    // Construct a diagnostic that explains that the current platform is not
-    // supported.
     let mut diag = MietteDiagnostic::new(format!(
-        "Unable to solve pypi dependencies for the {} {} because no compatible python interpreter can be installed for the current platform",
+        "Unable to solve pypi dependencies for the {} {} — no compatible Python interpreter for '{}'",
         grouped_environment.name().fancy_display(),
         match &grouped_environment {
             GroupedEnvironment::Group(_) => "solve group",
             GroupedEnvironment::Environment(_) => "environment",
-        }
+        },
+        consts::PLATFORM_STYLE.apply_to(current_platform),
     ));
 
-    diag.help = Some("Try converting your [pypi-dependencies] to conda [dependencies]".to_string());
+    let help_message = if !platforms.contains(&current_platform) {
+        // State 1: Current platform is not in the platforms list
+        format!(
+            "Try: {}",
+            consts::TASK_STYLE.apply_to(format!("pixi workspace platform add {current_platform}")),
+        )
+    } else {
+        // State 2: Python is not in the dependencies.
+        format!("Try: {}", consts::TASK_STYLE.apply_to("pixi add python"))
+    };
 
-    miette::Report::new(diag)
+    diag.help = Some(help_message);
+
+    Report::new(diag)
 }
 
 /// Represents data that is sent back from a task. This is used to communicate
