@@ -1,13 +1,18 @@
 mod git;
 mod release_notes;
 
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 pub use release_notes::format_release_notes;
 
 use git::GitCheckoutProgress;
 use indicatif::{MultiProgress, ProgressBar};
 use pixi_build_frontend::{CondaBuildReporter, CondaMetadataReporter};
+use pixi_command_dispatcher::{
+    InstallPixiEnvironmentSpec, ReporterContext, reporter::PixiInstallId,
+};
+use uv_configuration::RAYON_INITIALIZE;
+
 pub trait BuildMetadataReporter: CondaMetadataReporter {
     /// Reporters that the metadata has been cached.
     fn on_metadata_cached(&self, build_id: usize);
@@ -97,6 +102,24 @@ impl pixi_command_dispatcher::Reporter for TopLevelProgress {
     fn as_pixi_install_reporter(
         &mut self,
     ) -> Option<&mut dyn pixi_command_dispatcher::PixiInstallReporter> {
-        None
+        Some(self)
     }
+}
+
+impl pixi_command_dispatcher::PixiInstallReporter for TopLevelProgress {
+    fn on_queued(
+        &mut self,
+        _reason: Option<ReporterContext>,
+        _env: &InstallPixiEnvironmentSpec,
+    ) -> PixiInstallId {
+        // Installing a pixi environment uses rayon. We only want to initialize the
+        // rayon thread pool when we absolutely need it.
+        LazyLock::force(&RAYON_INITIALIZE);
+
+        PixiInstallId(0)
+    }
+
+    fn on_start(&mut self, _solve_id: PixiInstallId) {}
+
+    fn on_finished(&mut self, _solve_id: PixiInstallId) {}
 }

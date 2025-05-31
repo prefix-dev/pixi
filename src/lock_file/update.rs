@@ -17,6 +17,7 @@ use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Diagnostic, IntoDiagnostic, MietteDiagnostic, Report, WrapErr};
 use pixi_build_frontend::ToolContext;
+use pixi_command_dispatcher::BuildEnvironment;
 use pixi_consts::consts;
 use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
@@ -47,7 +48,7 @@ use crate::{
     Workspace,
     activation::CurrentEnvVarBehavior,
     build::{
-        BuildContext, BuildEnvironment, GlobHashCache,
+        BuildContext, GlobHashCache,
         source_metadata_collector::{CollectedSourceMetadata, SourceMetadataCollector},
     },
     environment::{
@@ -62,7 +63,6 @@ use crate::{
         virtual_packages::validate_system_meets_environment_requirements,
     },
     prefix::Prefix,
-    repodata::Repodata,
     workspace::{
         Environment, EnvironmentVars, HasWorkspaceRef, get_activated_environment_variables,
         grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
@@ -685,7 +685,8 @@ pub struct UpdateContext<'p> {
     /// Whether it is allowed to instantiate any prefix.
     no_install: bool,
 
-    /// The progress bar where all the command dispatcher progress will be placed.
+    /// The progress bar where all the command dispatcher progress will be
+    /// placed.
     dispatcher_progress_bar: ProgressBar,
 }
 
@@ -1092,14 +1093,7 @@ impl<'p> UpdateContextBuilder<'p> {
             })
             .collect();
 
-        let gateway = project.repodata_gateway()?.clone();
         let client = project.authenticated_client()?.clone();
-
-        // tool context
-        let tool_context = ToolContext::builder()
-            .with_gateway(gateway)
-            .with_client(client.clone())
-            .build();
 
         // Construct a command dispatcher that will be used to run the tasks.
         let multi_progress = global_multi_progress();
@@ -1112,6 +1106,14 @@ impl<'p> UpdateContextBuilder<'p> {
                 anchor_pb.clone(),
             ))
             .finish();
+
+        let gateway = command_dispatcher.gateway().clone();
+
+        // tool context
+        let tool_context = ToolContext::builder()
+            .with_gateway(gateway)
+            .with_client(client.clone())
+            .build();
 
         let build_context = BuildContext::from_workspace(project, command_dispatcher)?
             .with_tool_context(Arc::new(tool_context));
@@ -1237,7 +1239,7 @@ impl<'p> UpdateContext<'p> {
                 let group_solve_task = spawn_solve_conda_environment_task(
                     source.clone(),
                     locked_group_records,
-                    project.repodata_gateway()?.clone(),
+                    self.build_context.command_dispatcher().gateway().clone(),
                     self.mapping_client.clone(),
                     platform,
                     self.conda_solve_semaphore.clone(),
@@ -1651,23 +1653,35 @@ impl<'p> UpdateContext<'p> {
 /// Constructs an error that indicates that the current platform cannot solve
 /// pypi dependencies because there is no python interpreter available for the
 /// current platform.
-fn make_unsupported_pypi_platform_error(environment: &Environment<'_>) -> miette::Report {
+fn make_unsupported_pypi_platform_error(environment: &Environment<'_>) -> Report {
     let grouped_environment = GroupedEnvironment::from(environment.clone());
+    let current_platform = environment.best_platform();
+    let platforms = environment.platforms();
 
-    // Construct a diagnostic that explains that the current platform is not
-    // supported.
     let mut diag = MietteDiagnostic::new(format!(
-        "Unable to solve pypi dependencies for the {} {} because no compatible python interpreter can be installed for the current platform",
+        "Unable to solve pypi dependencies for the {} {} — no compatible Python interpreter for '{}'",
         grouped_environment.name().fancy_display(),
         match &grouped_environment {
             GroupedEnvironment::Group(_) => "solve group",
             GroupedEnvironment::Environment(_) => "environment",
-        }
+        },
+        consts::PLATFORM_STYLE.apply_to(current_platform),
     ));
 
-    diag.help = Some("Try converting your [pypi-dependencies] to conda [dependencies]".to_string());
+    let help_message = if !platforms.contains(&current_platform) {
+        // State 1: Current platform is not in the platforms list
+        format!(
+            "Try: {}",
+            consts::TASK_STYLE.apply_to(format!("pixi workspace platform add {current_platform}")),
+        )
+    } else {
+        // State 2: Python is not in the dependencies.
+        format!("Try: {}", consts::TASK_STYLE.apply_to("pixi add python"))
+    };
 
-    miette::Report::new(diag)
+    diag.help = Some(help_message);
+
+    Report::new(diag)
 }
 
 /// Represents data that is sent back from a task. This is used to communicate
@@ -1811,14 +1825,16 @@ async fn spawn_solve_conda_environment_task(
                     &pb.pb,
                     source_specs.len() as u64,
                 ));
+
                 SourceMetadataCollector::new(
                     build_context.clone(),
                     channel_urls.clone(),
+                    // We want to get the dependencies when compiling from `platform` to `platform`.
                     BuildEnvironment {
-                        build_platform: platform,
-                        build_virtual_packages: virtual_packages.clone(),
                         host_platform: platform,
                         host_virtual_packages: virtual_packages.clone(),
+                        build_platform: platform,
+                        build_virtual_packages: virtual_packages.clone(),
                     },
                     metadata_reporter,
                 )

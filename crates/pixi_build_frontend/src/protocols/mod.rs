@@ -303,6 +303,7 @@ impl JsonRPCBuildProtocol {
                 RpcParams::from(InitializeParams {
                     project_model,
                     configuration,
+                    source_dir: Some(source_dir.clone()),
                     manifest_path: manifest_path.clone(),
                     cache_directory: cache_dir,
                 }),

@@ -6,6 +6,11 @@
 //! checkouts. It ensures efficient execution by avoiding redundant computations
 //! and supporting concurrent operations.
 
+use std::{
+    path::{Component, Path, PathBuf},
+    sync::Arc,
+};
+
 pub use error::{CommandDispatcherError, CommandDispatcherErrorResultExt};
 pub(crate) use git::GitCheckoutTask;
 pub use instantiate_backend::{InstantiateBackendError, InstantiateBackendSpec};
@@ -16,27 +21,23 @@ use pixi_record::{PinnedPathSpec, PinnedSourceSpec, PixiRecord};
 use pixi_spec::SourceSpec;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::prefix::Prefix;
-use rattler_repodata_gateway::Gateway;
+use rattler_conda_types::{GenericVirtualPackage, Platform};
+use rattler_repodata_gateway::{Gateway, MaxConcurrency};
+use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use reqwest_middleware::ClientWithMiddleware;
-use std::{
-    path::{Component, Path, PathBuf},
-    sync::Arc,
-};
 use tokio::sync::{mpsc, oneshot};
 use typed_path::Utf8TypedPath;
 
-use crate::install_pixi::{InstallPixiEnvironmentError, InstallPixiEnvironmentSpec};
-use crate::instantiate_tool_env::{
-    InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec,
-};
 use crate::{
     Executor, InvalidPathError, PixiEnvironmentSpec, SolveCondaEnvironmentSpec,
     SolvePixiEnvironmentError, SourceCheckout, SourceCheckoutError, SourceMetadataSpec,
     cache_dirs::CacheDirs,
     command_dispatcher_processor::CommandDispatcherProcessor,
+    install_pixi::{InstallPixiEnvironmentError, InstallPixiEnvironmentSpec},
+    instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec},
     limits::{Limits, ResolvedLimits},
     reporter::Reporter,
-    source_metadata::{SourceMetadata, SourceMetadataError},
+    source_metadata::{SourceMetadata, SourceMetadataCache, SourceMetadataError},
 };
 
 mod error;
@@ -59,6 +60,9 @@ pub struct CommandDispatcher {
 pub(crate) struct CommandDispatcherData {
     /// The gateway to use to query conda repodata.
     pub gateway: Gateway,
+
+    /// Source metadata cache used to store metadata for source packages.
+    pub source_metadata_cache: SourceMetadataCache,
 
     /// The resolver of git repositories.
     pub git_resolver: GitResolver,
@@ -83,6 +87,10 @@ pub(crate) struct CommandDispatcherData {
 
     /// The package cache used to store packages.
     pub package_cache: PackageCache,
+
+    /// The platform (and virtual packages) to use for tools that should run on the current system.
+    /// Usually this is the current platform, but it can be a different platform.
+    pub tool_platform: (Platform, Vec<GenericVirtualPackage>),
 }
 
 /// A channel through which to send any messages to the command_dispatcher. Some
@@ -205,6 +213,11 @@ impl CommandDispatcher {
         CommandDispatcherBuilder::default()
     }
 
+    /// Returns the cache for source metadata.
+    pub fn source_metadata_cache(&self) -> &SourceMetadataCache {
+        &self.data.source_metadata_cache
+    }
+
     /// Returns the gateway used to query conda repodata.
     pub fn gateway(&self) -> &Gateway {
         &self.data.gateway
@@ -233,6 +246,11 @@ impl CommandDispatcher {
     /// Returns the package cache used by the command dispatcher.
     pub fn package_cache(&self) -> &PackageCache {
         &self.data.package_cache
+    }
+
+    /// Returns the platform and virtual packages used for tool environments.
+    pub fn tool_platform(&self) -> (Platform, &[GenericVirtualPackage]) {
+        (self.data.tool_platform.0, &self.data.tool_platform.1)
     }
 
     /// Sends a task to the command dispatcher and waits for the result.
@@ -471,8 +489,10 @@ pub struct CommandDispatcherBuilder {
     download_client: Option<ClientWithMiddleware>,
     cache_dirs: Option<CacheDirs>,
     build_backend_overrides: BackendOverride,
+    max_download_concurrency: MaxConcurrency,
     limits: Limits,
     executor: Executor,
+    tool_platform: Option<(Platform, Vec<GenericVirtualPackage>)>,
 }
 
 impl CommandDispatcherBuilder {
@@ -480,6 +500,14 @@ impl CommandDispatcherBuilder {
     pub fn with_cache_dirs(self, cache_dirs: CacheDirs) -> Self {
         Self {
             cache_dirs: Some(cache_dirs),
+            ..self
+        }
+    }
+
+    /// Sets the gateway to use for querying conda repodata.
+    pub fn with_gateway(self, gateway: Gateway) -> Self {
+        Self {
+            gateway: Some(gateway),
             ..self
         }
     }
@@ -524,6 +552,27 @@ impl CommandDispatcherBuilder {
         }
     }
 
+    /// Sets the maximum number of concurrent downloads.
+    pub fn with_max_download_concurrency(self, max_concurrency: impl Into<MaxConcurrency>) -> Self {
+        Self {
+            max_download_concurrency: max_concurrency.into(),
+            ..self
+        }
+    }
+
+    /// Sets the tool platform and virtual packages associated with it. This is used when
+    /// instantiating tool environments and defaults to the current platform.
+    pub fn with_tool_platform(
+        self,
+        platform: Platform,
+        virtual_packages: Vec<GenericVirtualPackage>,
+    ) -> Self {
+        Self {
+            tool_platform: Some((platform, virtual_packages)),
+            ..self
+        }
+    }
+
     /// Set the limits to which this instance should adhere.
     pub fn with_limits(self, limits: Limits) -> Self {
         Self { limits, ..self }
@@ -550,13 +599,25 @@ impl CommandDispatcherBuilder {
                 .with_client(download_client.clone())
                 .with_cache_dir(cache_dirs.root().clone())
                 .with_package_cache(package_cache.clone())
+                .with_max_concurrent_requests(self.max_download_concurrency)
                 .finish()
         });
 
         let git_resolver = self.git_resolver.unwrap_or_default();
+        let source_metadata_cache = SourceMetadataCache::new(cache_dirs.source_metadata());
+        let tool_platform = self.tool_platform.unwrap_or_else(|| {
+            let platform = Platform::current();
+            let virtual_packages =
+                VirtualPackages::detect(&VirtualPackageOverrides::default()).unwrap_or_default();
+            (
+                platform,
+                virtual_packages.into_generic_virtual_packages().collect(),
+            )
+        });
 
         let data = Arc::new(CommandDispatcherData {
             gateway,
+            source_metadata_cache,
             root_dir,
             git_resolver,
             cache_dirs,
@@ -565,6 +626,7 @@ impl CommandDispatcherBuilder {
             glob_hash_cache: GlobHashCache::default(),
             limits: ResolvedLimits::from(self.limits),
             package_cache,
+            tool_platform,
         });
 
         let sender = CommandDispatcherProcessor::spawn(data.clone(), self.reporter, self.executor);
