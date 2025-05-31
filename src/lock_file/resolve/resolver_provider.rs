@@ -37,7 +37,7 @@ impl<Context: BuildContext> ResolverProvider for CondaResolverProvider<'_, Conte
     fn get_package_versions<'io>(
         &'io self,
         package_name: &'io uv_normalize::PackageName,
-        index: Option<&'io IndexUrl>,
+        index: Option<&'io uv_distribution_types::IndexMetadata>,
     ) -> impl Future<Output = uv_resolver::PackageVersionsResult> + 'io {
         if let Some((repodata_record, identifier)) = self.conda_python_identifiers.get(package_name)
         {
@@ -142,7 +142,7 @@ impl<Context: BuildContext> ResolverProvider for CondaResolverProvider<'_, Conte
                     metadata: Metadata {
                         name,
                         version,
-                        requires_dist: vec![],
+                        requires_dist: vec![].into(),
                         requires_python: None,
                         provides_extras: iden.extras.iter().cloned().collect(),
                         dependency_groups: Default::default(),

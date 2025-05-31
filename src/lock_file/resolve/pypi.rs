@@ -53,11 +53,12 @@ use url::Url;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
 use uv_configuration::{ConfigSettings, Constraints, Overrides};
 use uv_distribution::DistributionDatabase;
+use uv_distribution_types::RequirementSource;
 use uv_distribution_types::{
     BuiltDist, DependencyMetadata, Diagnostic, Dist, FileLocation, HashPolicy, IndexCapabilities,
     IndexUrl, Name, Resolution, ResolvedDist, SourceDist, ToUrlError,
 };
-use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigests, RequirementSource};
+use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigests};
 use uv_requirements::LookaheadResolver;
 use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
@@ -81,7 +82,7 @@ fn parse_hashes_from_hash_vec(hashes: &HashDigests) -> Result<Option<PackageHash
             HashAlgorithm::Md5 => {
                 md5 = Some(hash.digest.to_string());
             }
-            HashAlgorithm::Sha384 | HashAlgorithm::Sha512 => {
+            HashAlgorithm::Sha384 | HashAlgorithm::Sha512 | HashAlgorithm::Blake2b => {
                 // We do not support these algorithms
             }
         }
@@ -318,7 +319,7 @@ pub async fn resolve_pypi(
     let index_strategy = to_index_strategy(pypi_options.index_strategy.as_ref());
     let mut uv_client_builder = RegistryClientBuilder::new(context.cache.clone())
         .allow_insecure_host(context.allow_insecure_host.clone())
-        .index_urls(index_locations.index_urls())
+        .index_locations(&index_locations)
         .index_strategy(index_strategy)
         .markers(&marker_environment)
         .keyring(context.keyring_provider)
@@ -336,19 +337,26 @@ pub async fn resolve_pypi(
             .into_diagnostic()?;
 
     // Resolve the flat indexes from `--find-links`.
-    let flat_index = {
-        let client = FlatIndexClient::new(&registry_client, &context.cache);
-        let entries = client
-            .fetch(
-                index_locations
-                    .flat_indexes()
-                    .map(uv_distribution_types::Index::url),
-            )
-            .await
-            .into_diagnostic()
-            .wrap_err("failed to query find-links locations")?;
-        FlatIndex::from_entries(entries, Some(&tags), &context.hash_strategy, &build_options)
-    };
+    // In UV 0.7.8, we need to fetch flat index entries from the index locations
+    let flat_index_client = FlatIndexClient::new(
+        registry_client.cached_client(),
+        Connectivity::Online,
+        &context.cache,
+    );
+    let flat_index_urls: Vec<&IndexUrl> = index_locations
+        .flat_indexes()
+        .map(|index| index.url())
+        .collect();
+    let flat_index_entries = flat_index_client
+        .fetch_all(flat_index_urls.into_iter())
+        .await
+        .into_diagnostic()?;
+    let flat_index = FlatIndex::from_entries(
+        flat_index_entries,
+        Some(&tags),
+        &context.hash_strategy,
+        &build_options,
+    );
 
     // Hi maintainers! For anyone coming here, if you expose any additional `uv` options, similar to `index_strategy`, make sure to
     // include them in this struct as well instead of relying on the default.
@@ -414,9 +422,9 @@ pub async fn resolve_pypi(
                 conflict: None,
             };
 
-            Ok::<_, ConversionError>(uv_pypi_types::Requirement {
+            Ok::<_, ConversionError>(uv_distribution_types::Requirement {
                 name: to_uv_normalize(p.name.as_normalized())?,
-                extras: vec![],
+                extras: vec![].into(),
                 marker: Default::default(),
                 source,
                 groups: Default::default(),
@@ -442,7 +450,7 @@ pub async fn resolve_pypi(
             let (package_data, _) = record;
             let requirement = uv_pep508::Requirement {
                 name: to_uv_normalize(&package_data.name)?,
-                extras: Vec::new(),
+                extras: Vec::new().into(),
                 version_or_url: Some(uv_pep508::VersionOrUrl::VersionSpecifier(
                     uv_pep440::VersionSpecifiers::from(
                         uv_pep440::VersionSpecifier::equals_version(to_uv_version(
