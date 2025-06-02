@@ -15,7 +15,7 @@ use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::{Diagnostic, IntoDiagnostic};
 use pixi_config::{ConfigCli, ConfigCliActivation};
-use pixi_manifest::TaskName;
+use pixi_manifest::{FeaturesExt, TaskName};
 use rattler_conda_types::Platform;
 use thiserror::Error;
 use tracing::Level;
@@ -345,7 +345,7 @@ fn command_not_found<'p>(workspace: &'p Workspace, explicit_environment: Option<
     if workspace
         .environments()
         .iter()
-        .any(|env| env.best_platform() == Platform::current())
+        .all(|env| !env.platforms().contains(&env.best_platform()))
     {
         eprintln!(
             "\nHelp: This platform ({}) is not supported. Please run the following command to add this platform to the workspace:\n\n\tpixi workspace platform add {}",

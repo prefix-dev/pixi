@@ -27,6 +27,7 @@ class ExitCode(IntEnum):
     SUCCESS = 0
     FAILURE = 1
     INCORRECT_USAGE = 2
+    COMMAND_NOT_FOUND = 127
 
 
 class Output:
