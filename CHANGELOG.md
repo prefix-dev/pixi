@@ -7,9 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### [0.48.0] - 2025-06-02
 #### ✨ Highlights
+
 Support for recursive source run dependencies when using `pixi build`.
-Also the implementation of the `CommandDispatcher` which allows for better command handling and extensibility in Pixi itself.
-More improvements related to this are coming soon!
+This means, you can now add source dependencies in the `run-dependencies` section of your Pixi package:
+
+```toml
+[package.run-dependencies]
+cpp_math = { path = "packages/cpp_math" }
+```
 
 #### Added
 
@@ -19,7 +24,7 @@ More improvements related to this are coming soon!
 
 #### Changed
 
-- Improve type of outputs, add Eq, PartialEq, etc. by @wolfv in [#3822](https://github.com/prefix-dev/pixi/pull/3822)
+- Improve type of outputs, add `Eq`, `PartialEq`, etc. by @wolfv in [#3822](https://github.com/prefix-dev/pixi/pull/3822)
 - Transform reporter events into tree by @baszalmstra in [#3834](https://github.com/prefix-dev/pixi/pull/3834)
 - Add release notes to the `self-update` including `--dry-run` by @chrisliebaer in [#3397](https://github.com/prefix-dev/pixi/pull/3397)
 - Migrate to `uv_distribution_types` for package requirements and update uv by @zelosleone in [#3872](https://github.com/prefix-dev/pixi/pull/3872)
@@ -57,9 +62,9 @@ More improvements related to this are coming soon!
 #### Refactor
 
 - Command dispatcher by @baszalmstra in [#3791](https://github.com/prefix-dev/pixi/pull/3791)
-- Move pixi_docs to Cargo workspace by @Hofer-Julian in [#3844](https://github.com/prefix-dev/pixi/pull/3844)
+- Move `pixi_docs` to Cargo workspace by @Hofer-Julian in [#3844](https://github.com/prefix-dev/pixi/pull/3844)
 - Move fetching of source metadata to command dispatcher by @baszalmstra in [#3843](https://github.com/prefix-dev/pixi/pull/3843)
-- Alphabetise command list in cli help by @dhirschfeld in [#3817](https://github.com/prefix-dev/pixi/pull/3817)
+- Alphabetize command list in CLI help by @dhirschfeld in [#3817](https://github.com/prefix-dev/pixi/pull/3817)
 
 #### New Contributors
 * @e8035669 made their first contribution in [#3853](https://github.com/prefix-dev/pixi/pull/3853)
