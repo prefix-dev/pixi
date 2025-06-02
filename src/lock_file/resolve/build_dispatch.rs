@@ -41,7 +41,7 @@ use uv_dispatch::{BuildDispatch, BuildDispatchError, SharedState};
 use uv_distribution_filename::DistFilename;
 use uv_distribution_types::Requirement;
 use uv_distribution_types::{
-    CachedDist, DependencyMetadata, IndexLocations, IsBuildBackendError, Requirement, Resolution, SourceDist,
+    CachedDist, DependencyMetadata, IndexLocations, IsBuildBackendError, Resolution, SourceDist,
 };
 use uv_install_wheel::LinkMode;
 use uv_python::{Interpreter, InterpreterError, PythonEnvironment};

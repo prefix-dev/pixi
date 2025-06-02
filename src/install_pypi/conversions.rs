@@ -99,7 +99,7 @@ pub fn convert_to_dist(
         pkg.location,
         pkg.hash
     );
-    
+
     // Figure out if it is a url from the registry or a direct url
     let dist = match &pkg.location {
         UrlOrPath::Url(url) if is_direct_url(url.scheme()) => {
@@ -108,7 +108,7 @@ pub fn convert_to_dist(
 
             // Convert to owned URL so we can modify it if needed
             let mut final_url = url_without_direct.into_owned();
-            
+
             // If we have a hash, add it back to the URL fragment for verification
             if let Some(hash) = &pkg.hash {
                 let hash_fragment = match hash {
@@ -153,20 +153,23 @@ pub fn convert_to_dist(
                     pkg.name,
                     final_url
                 );
-                
+
                 // For direct URLs, we need to create a registry distribution with hash info
                 // Extract the filename from the URL
                 let filename_raw = final_url
                     .path_segments()
                     .and_then(|segments| segments.last())
-                    .ok_or_else(|| ConvertToUvDistError::LockedUrl(
-                        "URL has no filename".to_string(),
-                        final_url.to_string()
-                    ))?;
-                
+                    .ok_or_else(|| {
+                        ConvertToUvDistError::LockedUrl(
+                            "URL has no filename".to_string(),
+                            final_url.to_string(),
+                        )
+                    })?;
+
                 // Decode the filename
-                let filename_decoded = percent_encoding::percent_decode_str(filename_raw).decode_utf8_lossy();
-                
+                let filename_decoded =
+                    percent_encoding::percent_decode_str(filename_raw).decode_utf8_lossy();
+
                 // Create a file with hash information
                 let file = locked_data_to_file(
                     &final_url,
@@ -174,14 +177,16 @@ pub fn convert_to_dist(
                     filename_decoded.as_ref(),
                     pkg.requires_python.clone(),
                 )?;
-                
+
                 // Try to parse as a wheel filename
                 if let Ok(wheel_filename) = WheelFilename::from_str(filename_decoded.as_ref()) {
                     Dist::Built(BuiltDist::Registry(RegistryBuiltDist {
                         wheels: vec![RegistryBuiltWheel {
                             filename: wheel_filename,
                             file: Box::new(file),
-                            index: IndexUrl::Url(Arc::new(uv_pep508::VerbatimUrl::from_url(final_url.clone()))),
+                            index: IndexUrl::Url(Arc::new(uv_pep508::VerbatimUrl::from_url(
+                                final_url.clone(),
+                            ))),
                         }],
                         best_wheel_index: 0,
                         sdist: None,
@@ -192,11 +197,13 @@ pub fn convert_to_dist(
                         name: pkg_name,
                         version: to_uv_version(&pkg.version)?,
                         file: Box::new(file),
-                        index: IndexUrl::Url(Arc::new(uv_pep508::VerbatimUrl::from_url(final_url.clone()))),
+                        index: IndexUrl::Url(Arc::new(uv_pep508::VerbatimUrl::from_url(
+                            final_url.clone(),
+                        ))),
                         wheels: vec![],
-                        ext: SourceDistExtension::from_path(Path::new(filename_raw)).map_err(|e| {
-                            ConvertToUvDistError::Extension(e, filename_raw.to_string())
-                        })?,
+                        ext: SourceDistExtension::from_path(Path::new(filename_raw)).map_err(
+                            |e| ConvertToUvDistError::Extension(e, filename_raw.to_string()),
+                        )?,
                     }))
                 }
             }

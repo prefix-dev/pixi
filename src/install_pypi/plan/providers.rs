@@ -47,43 +47,54 @@ impl<'a> CachedDistProvider<'a> for RegistryWheelIndex<'a> {
         version: uv_pep440::Version,
         expected_hash: Option<&rattler_lock::PackageHashes>,
     ) -> Option<CachedRegistryDist> {
-        let index = self
-            .get(name)
-            .find(|entry| {
-                // Check version matches
-                if entry.dist.filename.version != version {
+        let index = self.get(name).find(|entry| {
+            // Check version matches
+            if entry.dist.filename.version != version {
+                return false;
+            }
+
+            // If we have an expected hash, verify it matches
+            if let Some(expected) = expected_hash {
+                // Check if any of the cached hashes match the expected hash
+                let has_matching_hash =
+                    entry
+                        .dist
+                        .hashes
+                        .iter()
+                        .any(|hash| match (expected, hash.algorithm()) {
+                            (
+                                rattler_lock::PackageHashes::Sha256(expected_sha256),
+                                uv_pypi_types::HashAlgorithm::Sha256,
+                            ) => format!("{:x}", expected_sha256) == hash.digest.to_string(),
+                            (
+                                rattler_lock::PackageHashes::Md5(expected_md5),
+                                uv_pypi_types::HashAlgorithm::Md5,
+                            ) => format!("{:x}", expected_md5) == hash.digest.to_string(),
+                            (
+                                rattler_lock::PackageHashes::Md5Sha256(
+                                    expected_md5,
+                                    expected_sha256,
+                                ),
+                                algo,
+                            ) => match algo {
+                                uv_pypi_types::HashAlgorithm::Sha256 => {
+                                    format!("{:x}", expected_sha256) == hash.digest.to_string()
+                                }
+                                uv_pypi_types::HashAlgorithm::Md5 => {
+                                    format!("{:x}", expected_md5) == hash.digest.to_string()
+                                }
+                                _ => false,
+                            },
+                            _ => false,
+                        });
+
+                if !has_matching_hash {
                     return false;
                 }
-                
-                // If we have an expected hash, verify it matches
-                if let Some(expected) = expected_hash {
-                    // Check if any of the cached hashes match the expected hash
-                    let has_matching_hash = entry.dist.hashes.iter().any(|hash| {
-                        match (expected, hash.algorithm()) {
-                            (rattler_lock::PackageHashes::Sha256(expected_sha256), uv_pypi_types::HashAlgorithm::Sha256) => {
-                                format!("{:x}", expected_sha256) == hash.digest.to_string()
-                            }
-                            (rattler_lock::PackageHashes::Md5(expected_md5), uv_pypi_types::HashAlgorithm::Md5) => {
-                                format!("{:x}", expected_md5) == hash.digest.to_string()
-                            }
-                            (rattler_lock::PackageHashes::Md5Sha256(expected_md5, expected_sha256), algo) => {
-                                match algo {
-                                    uv_pypi_types::HashAlgorithm::Sha256 => format!("{:x}", expected_sha256) == hash.digest.to_string(),
-                                    uv_pypi_types::HashAlgorithm::Md5 => format!("{:x}", expected_md5) == hash.digest.to_string(),
-                                    _ => false,
-                                }
-                            }
-                            _ => false,
-                        }
-                    });
-                    
-                    if !has_matching_hash {
-                        return false;
-                    }
-                }
-                
-                true
-            });
+            }
+
+            true
+        });
         index.map(|index| index.dist.clone())
     }
 }
