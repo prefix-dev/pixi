@@ -10,11 +10,15 @@ name = "pixi"
 # Using faster repodata fetching from our experimental fast channel, which implements https://github.com/conda/ceps/pull/75
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["linux-64", "win-64", "osx-64", "osx-arm64", "linux-aarch64"]
+preview = ["pixi-build"]
 requires-pixi = ">=0.45"
 
 [dependencies]
 git = "==2.49.0"
 python = "3.13.*"
+
+[feature.self.dependencies]
+pixi = { path = "." }
 
 [tasks]
 build-debug = "cargo build"
@@ -230,6 +234,7 @@ lint = { features = [
   "pytest",
   "build",
 ], no-default-feature = true, solve-group = "default" }
+pixi = ["self"]
 pypi-gen = { features = ["pypi-gen"] }
 recipes = { features = ["recipes"], no-default-feature = true }
 schema = { features = [
@@ -238,3 +243,30 @@ schema = { features = [
 ], no-default-feature = true, solve-group = "default" }
 test-export = { features = ["micromamba"], no-default-feature = true }
 trampoline = { features = ["trampoline", "rust"], no-default-feature = true }
+[package]
+license = "BSD-3-Clause"
+version = "0.48.0"
+# TODO: This also needs to include the bundled licenses of the dependencies
+homepage = "https://github.com/prefix-dev/pixi"
+license-file = "LICENSE"
+
+[package.build]
+backend = { name = "pixi-build-rust", version = "0.1.*" }
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+
+[package.build-dependencies]
+cargo-bundle-licenses = "*"
+cmake = ">=3.27.0,<4"
+pkg-config = "*"
+rust = ">=1.86.0,<1.87"
+
+[package.target.unix.build-dependencies]
+make = "*"
+
+[package.target.linux.host-dependencies]
+openssl = "*"
+[package.target.win.host-dependencies]
+libgit2 = "*"
