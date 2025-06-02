@@ -13,7 +13,10 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_manifest::{
     EnvironmentName, FeatureName,
-    task::{Alias, CmdArgs, Dependency, Execute, Task, TaskArg, TaskName, quote},
+    task::{
+        Alias, CmdArgs, Dependency, Execute, GlobPatterns, Task, TaskArg, TaskName, TemplateString,
+        quote,
+    },
 };
 use rattler_conda_types::Platform;
 use serde::Serialize;
@@ -61,6 +64,39 @@ pub struct RemoveArgs {
     pub feature: Option<String>,
 }
 
+/// Parse a dependency specification that can include task name, environment, and arguments
+/// Format: "task_name" or "task_name:env_name" or "task_name::arg1,arg2" or "task_name:env_name:arg1,arg2"
+fn parse_dependency(s: &str) -> Result<Dependency, Box<dyn Error + Send + Sync + 'static>> {
+    Dependency::from_str(s).map_err(|e| e.into())
+}
+
+/// Parse a task argument with optional default value
+/// Format: "arg_name" or "arg_name=default_value"
+fn parse_task_arg(s: &str) -> Result<TaskArg, Box<dyn Error + Send + Sync + 'static>> {
+    if let Some((name, default)) = s.split_once('=') {
+        // "arg_name=default_value"
+        let arg_name = pixi_manifest::task::ArgName::from_str(name)?;
+        Ok(TaskArg {
+            name: arg_name,
+            default: Some(default.to_string()),
+        })
+    } else {
+        // "arg_name"
+        let arg_name = pixi_manifest::task::ArgName::from_str(s)?;
+        Ok(TaskArg {
+            name: arg_name,
+            default: None,
+        })
+    }
+}
+
+/// Parse a glob pattern list
+/// Format: "pattern1,pattern2,pattern3"
+fn parse_glob_patterns(s: &str) -> Result<GlobPatterns, Box<dyn Error + Send + Sync + 'static>> {
+    let patterns: Vec<TemplateString> = s.split(',').map(|pattern| pattern.trim().into()).collect();
+    Ok(GlobPatterns::new(patterns))
+}
+
 #[derive(Parser, Debug, Clone)]
 #[clap(arg_required_else_help = true)]
 pub struct AddArgs {
@@ -68,11 +104,13 @@ pub struct AddArgs {
     pub name: TaskName,
 
     /// One or more commands to actually execute.
-    #[clap(required = true, num_args = 1.., id = "COMMAND")]
+    /// If no commands are provided but dependencies are specified, an alias will be created.
+    #[clap(num_args = 0.., id = "COMMAND")]
     pub commands: Vec<String>,
 
     /// Depends on these other commands.
-    #[clap(long)]
+    /// Format: 'task_name', 'task_name:env_name', or 'task_name:env_name:arg1,arg2'
+    #[clap(long, value_parser = parse_dependency)]
     #[clap(num_args = 1..)]
     pub depends_on: Option<Vec<Dependency>>,
 
@@ -102,9 +140,39 @@ pub struct AddArgs {
     #[arg(long)]
     pub clean_env: bool,
 
-    /// The arguments to pass to the task
-    #[arg(long = "arg", action = clap::ArgAction::Append)]
+    /// The arguments to pass to the task.
+    /// Format: 'arg_name' or 'arg_name=default_value'
+    #[arg(long = "arg", action = clap::ArgAction::Append, value_parser = parse_task_arg)]
     pub args: Option<Vec<TaskArg>>,
+
+    /// Input glob patterns for the task.
+    /// Format: 'pattern1,pattern2,pattern3'
+    #[arg(long, value_parser = parse_glob_patterns)]
+    pub inputs: Option<GlobPatterns>,
+
+    /// Output glob patterns for the task.
+    /// Format: 'pattern1,pattern2,pattern3'
+    #[arg(long, value_parser = parse_glob_patterns)]
+    pub outputs: Option<GlobPatterns>,
+}
+
+impl AddArgs {
+    /// Validates that either commands or dependencies are provided
+    pub fn validate(&self) -> miette::Result<()> {
+        let has_commands = !self.commands.is_empty();
+        let has_dependencies = self
+            .depends_on
+            .as_ref()
+            .is_some_and(|deps| !deps.is_empty());
+
+        if !has_commands && !has_dependencies {
+            return Err(miette::miette!(
+                "Either commands or dependencies (--depends-on) must be provided"
+            ));
+        }
+
+        Ok(())
+    }
 }
 
 /// Parse a single key-value pair
@@ -162,40 +230,57 @@ pub struct ListArgs {
 impl From<AddArgs> for Task {
     fn from(value: AddArgs) -> Self {
         let depends_on = value.depends_on.unwrap_or_default();
-        // description or none
         let description = value.description;
 
-        // Convert the arguments into a single string representation
-        let cmd_args = value
-            .commands
-            .iter()
-            .exactly_one()
-            .map(|c| c.to_string())
-            .unwrap_or_else(|_| {
-                // Simply concatenate all arguments
-                value
-                    .commands
-                    .iter()
-                    .map(|arg| quote(arg).into_owned())
-                    .join(" ")
-            });
+        // Check if we have any commands
+        let has_commands = !value.commands.is_empty();
+        let has_dependencies = !depends_on.is_empty();
 
-        // Depending on whether the task has a command, and depends_on or not we create
-        // a plain or complex, or alias command.
-        if cmd_args.trim().is_empty() && !depends_on.is_empty() {
+        // Convert the arguments into a single string representation
+        let cmd_args = if has_commands {
+            value
+                .commands
+                .iter()
+                .exactly_one()
+                .map(|c| c.to_string())
+                .unwrap_or_else(|_| {
+                    // Simply concatenate all arguments
+                    value
+                        .commands
+                        .iter()
+                        .map(|arg| quote(arg).into_owned())
+                        .join(" ")
+                })
+        } else {
+            String::new()
+        };
+
+        // Determine the type of task to create:
+        // 1. If no commands but has dependencies -> Alias
+        // 2. If has commands but no other complex features -> Plain
+        // 3. Otherwise -> Execute
+
+        if !has_commands && has_dependencies {
+            // Create an alias task
             Self::Alias(Alias {
                 depends_on,
                 description,
                 args: value.args,
             })
-        } else if depends_on.is_empty()
+        } else if has_commands
+            && depends_on.is_empty()
             && value.cwd.is_none()
             && value.env.is_empty()
             && description.is_none()
             && value.args.is_none()
+            && value.inputs.is_none()
+            && value.outputs.is_none()
+            && !value.clean_env
         {
+            // Create a plain task (simple command with no extra features)
             Self::Plain(cmd_args.into())
         } else {
+            // Create an execute task (command with extra features)
             let clean_env = value.clean_env;
             let cwd = value.cwd;
             let env = if value.env.is_empty() {
@@ -212,8 +297,8 @@ impl From<AddArgs> for Task {
             Self::Execute(Box::new(Execute {
                 cmd: CmdArgs::Single(cmd_args.into()),
                 depends_on,
-                inputs: None,
-                outputs: None,
+                inputs: value.inputs,
+                outputs: value.outputs,
                 cwd,
                 env,
                 description,
@@ -474,6 +559,9 @@ async fn remove_tasks(mut workspace: WorkspaceMut, args: RemoveArgs) -> miette::
 }
 
 async fn add_task(mut workspace: WorkspaceMut, args: AddArgs) -> miette::Result<()> {
+    // Validate the arguments
+    args.validate()?;
+
     let name = &args.name;
     let task: Task = args.clone().into();
     let feature = args
