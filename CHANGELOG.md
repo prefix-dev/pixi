@@ -5,6 +5,69 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.48.0] - 2025-06-02
+#### ✨ Highlights
+Support for recursive source run dependencies when using `pixi build`.
+Also the implementation of the `CommandDispatcher` which allows for better command handling and extensibility in Pixi itself.
+More improvements related to this are coming soon!
+
+#### Added
+
+- Add `XDG_CONFIG_HOME` as configuration location on macOS by @ruben-arts in [#3759](https://github.com/prefix-dev/pixi/pull/3759)
+- Support relative path input globs for `pixi build` by @nichmor in [#3812](https://github.com/prefix-dev/pixi/pull/3812)
+- Add `condapackageignore` file to exclude `.pixi` directory from builds by @zelosleone in [#3840](https://github.com/prefix-dev/pixi/pull/3840)
+
+#### Changed
+
+- Improve type of outputs, add Eq, PartialEq, etc. by @wolfv in [#3822](https://github.com/prefix-dev/pixi/pull/3822)
+- Transform reporter events into tree by @baszalmstra in [#3834](https://github.com/prefix-dev/pixi/pull/3834)
+- Add release notes to the `self-update` including `--dry-run` by @chrisliebaer in [#3397](https://github.com/prefix-dev/pixi/pull/3397)
+- Migrate to `uv_distribution_types` for package requirements and update uv by @zelosleone in [#3872](https://github.com/prefix-dev/pixi/pull/3872)
+
+#### Documentation
+
+- Start using recursive source run dependencies by @Hofer-Julian in [#3768](https://github.com/prefix-dev/pixi/pull/3768)
+- Simplify documentation frontpage by @ruben-arts in [#3802](https://github.com/prefix-dev/pixi/pull/3802)
+- Add security policy by @pavelzw in [#3823](https://github.com/prefix-dev/pixi/pull/3823)
+- Fix typo in multi_environment.md by @AH-Merii in [#3797](https://github.com/prefix-dev/pixi/pull/3797)
+- Update pixi-pack docs for allow `--inject`ing wheels by @e8035669 in [#3853](https://github.com/prefix-dev/pixi/pull/3853)
+- Separator backend override by @Hofer-Julian in [#3857](https://github.com/prefix-dev/pixi/pull/3857)
+
+#### Fixed
+
+- Adapt for backend update by @Hofer-Julian in [#3767](https://github.com/prefix-dev/pixi/pull/3767)
+- Hashing for same package-name by @tdejager in [#3775](https://github.com/prefix-dev/pixi/pull/3775)
+- Recursive source run deps by @Hofer-Julian in [#3712](https://github.com/prefix-dev/pixi/pull/3712)
+- Workspace version and name inheritance by @baszalmstra in [#3786](https://github.com/prefix-dev/pixi/pull/3786)
+- Examples in self-update_extender by @sjpfenninger in [#3793](https://github.com/prefix-dev/pixi/pull/3793)
+- Take into account tasks arguments when caching by @nichmor in [#3782](https://github.com/prefix-dev/pixi/pull/3782)
+- Hanging on ssh passphrase by @nichmor in [#3761](https://github.com/prefix-dev/pixi/pull/3761)
+- Keep index on pypi dependency upgrade by @remimimimimi in [#3746](https://github.com/prefix-dev/pixi/pull/3746)
+- Help user when command not found by @ruben-arts in [#3803](https://github.com/prefix-dev/pixi/pull/3803)
+- Failing ci and improve test by @tdejager in [#3798](https://github.com/prefix-dev/pixi/pull/3798)
+- Space is a valid separator between date and time in `exclude-newer` by @trim21 in [#3764](https://github.com/prefix-dev/pixi/pull/3764)
+- Source globs and make them unique by @wolfv in [#3831](https://github.com/prefix-dev/pixi/pull/3831)
+- Validate `depends-on` must be a list by @YoganshSharma in [#3832](https://github.com/prefix-dev/pixi/pull/3832)
+- Path diff not calculated on Windows by @Hofer-Julian in [#3824](https://github.com/prefix-dev/pixi/pull/3824)
+- Unify reqwest Client for self_update when downloading archives by @gzm55 in [#3346](https://github.com/prefix-dev/pixi/pull/3346)
+- Fix main CI with some clippy and conflict fixes by @ruben-arts in [#3858](https://github.com/prefix-dev/pixi/pull/3858)
+- Filter duplicated path_diff entries for pixi global by @Hofer-Julian in [#3859](https://github.com/prefix-dev/pixi/pull/3859)
+- Update help message for unsupported PyPI platform error to include adding Python dependency by @zelosleone in [#3861](https://github.com/prefix-dev/pixi/pull/3861)
+
+#### Refactor
+
+- Command dispatcher by @baszalmstra in [#3791](https://github.com/prefix-dev/pixi/pull/3791)
+- Move pixi_docs to Cargo workspace by @Hofer-Julian in [#3844](https://github.com/prefix-dev/pixi/pull/3844)
+- Move fetching of source metadata to command dispatcher by @baszalmstra in [#3843](https://github.com/prefix-dev/pixi/pull/3843)
+- Alphabetise command list in cli help by @dhirschfeld in [#3817](https://github.com/prefix-dev/pixi/pull/3817)
+
+#### New Contributors
+* @e8035669 made their first contribution in [#3853](https://github.com/prefix-dev/pixi/pull/3853)
+* @chrisliebaer made their first contribution in [#3397](https://github.com/prefix-dev/pixi/pull/3397)
+* @YoganshSharma made their first contribution in [#3832](https://github.com/prefix-dev/pixi/pull/3832)
+* @remimimimimi made their first contribution in [#3746](https://github.com/prefix-dev/pixi/pull/3746)
+* @sjpfenninger made their first contribution in [#3793](https://github.com/prefix-dev/pixi/pull/3793)
+
 ### [0.47.0] - 2025-05-12
 #### ✨ Highlights
 
