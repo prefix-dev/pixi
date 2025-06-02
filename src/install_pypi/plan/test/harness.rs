@@ -28,7 +28,7 @@ impl InstalledDistBuilder {
         let registry = InstalledRegistryDist {
             name,
             version,
-            path,
+            path: path.into(),
             cache_info: None,
         };
         InstalledDist::Registry(registry)
@@ -52,6 +52,7 @@ impl InstalledDistBuilder {
             dir_info: uv_pypi_types::DirInfo {
                 editable: Some(editable),
             },
+            subdirectory: None,
         };
 
         let installed_direct_url = InstalledDirectUrlDist {
@@ -60,7 +61,7 @@ impl InstalledDistBuilder {
             direct_url: Box::new(direct_url.clone()),
             url: directory_url,
             editable,
-            path: install_path,
+            path: install_path.into(),
             cache_info: None,
         };
         (InstalledDist::Url(installed_direct_url), direct_url)
@@ -92,7 +93,7 @@ impl InstalledDistBuilder {
             direct_url: Box::new(direct_url.clone()),
             url,
             editable: false,
-            path: install_path,
+            path: install_path.into(),
             cache_info: None,
         };
         (InstalledDist::Url(installed_direct_url), direct_url)
@@ -131,7 +132,7 @@ impl InstalledDistBuilder {
             version,
             direct_url: Box::new(direct_url.clone()),
             url,
-            path: install_path,
+            path: install_path.into(),
             editable: false,
             cache_info: None,
         };
@@ -415,7 +416,7 @@ impl<'a> CachedDistProvider<'a> for AllCached {
                 .unwrap();
         let dist = uv_distribution_types::CachedRegistryDist {
             filename: wheel_filename,
-            path: Default::default(),
+            path: PathBuf::new().into(),
             hashes: vec![].into(),
             cache_info: Default::default(),
         };

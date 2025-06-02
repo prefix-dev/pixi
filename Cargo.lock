@@ -4243,7 +4243,7 @@ dependencies = [
  "serde",
  "unicode-width 0.2.0",
  "unscanny",
- "version-ranges 0.1.1 (git+https://github.com/astral-sh/pubgrub?rev=b70cf707aa43f21b32f3a61b8a0889b15032d5c4)",
+ "version-ranges",
 ]
 
 [[package]]
@@ -4265,7 +4265,7 @@ dependencies = [
  "unicode-width 0.2.0",
  "url",
  "urlencoding",
- "version-ranges 0.1.1 (git+https://github.com/astral-sh/pubgrub?rev=b70cf707aa43f21b32f3a61b8a0889b15032d5c4)",
+ "version-ranges",
 ]
 
 [[package]]
@@ -5191,7 +5191,7 @@ dependencies = [
  "priority-queue",
  "rustc-hash",
  "thiserror 2.0.12",
- "version-ranges 0.1.1 (git+https://github.com/astral-sh/pubgrub?rev=06ec5a5f59ffaeb6cf5079c6cb184467da06c9db)",
+ "version-ranges",
 ]
 
 [[package]]
@@ -7861,7 +7861,7 @@ dependencies = [
  "uv-pypi-types",
  "uv-version",
  "uv-warnings",
- "version-ranges 0.1.1 (git+https://github.com/astral-sh/pubgrub?rev=06ec5a5f59ffaeb6cf5079c6cb184467da06c9db)",
+ "version-ranges",
  "walkdir",
  "zip",
 ]
@@ -8181,7 +8181,7 @@ dependencies = [
  "uv-platform-tags",
  "uv-pypi-types",
  "uv-small-str",
- "version-ranges 0.1.1 (git+https://github.com/astral-sh/pubgrub?rev=06ec5a5f59ffaeb6cf5079c6cb184467da06c9db)",
+ "version-ranges",
 ]
 
 [[package]]
@@ -8426,7 +8426,7 @@ dependencies = [
  "tracing",
  "unicode-width 0.2.0",
  "unscanny",
- "version-ranges 0.1.1 (git+https://github.com/astral-sh/pubgrub?rev=06ec5a5f59ffaeb6cf5079c6cb184467da06c9db)",
+ "version-ranges",
 ]
 
 [[package]]
@@ -8449,7 +8449,7 @@ dependencies = [
  "uv-fs",
  "uv-normalize",
  "uv-pep440",
- "version-ranges 0.1.1 (git+https://github.com/astral-sh/pubgrub?rev=06ec5a5f59ffaeb6cf5079c6cb184467da06c9db)",
+ "version-ranges",
 ]
 
 [[package]]
@@ -8860,14 +8860,6 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 name = "version-ranges"
 version = "0.1.1"
 source = "git+https://github.com/astral-sh/pubgrub?rev=06ec5a5f59ffaeb6cf5079c6cb184467da06c9db#06ec5a5f59ffaeb6cf5079c6cb184467da06c9db"
-dependencies = [
- "smallvec",
-]
-
-[[package]]
-name = "version-ranges"
-version = "0.1.1"
-source = "git+https://github.com/astral-sh/pubgrub?rev=b70cf707aa43f21b32f3a61b8a0889b15032d5c4#b70cf707aa43f21b32f3a61b8a0889b15032d5c4"
 dependencies = [
  "smallvec",
 ]

@@ -8,11 +8,11 @@ use std::{
 use thiserror::Error;
 use url::Url;
 use uv_distribution_filename::DistExtension;
+use uv_distribution_types::RequirementSource;
 use uv_normalize::{InvalidNameError, PackageName};
 use uv_pep440::VersionSpecifiers;
 use uv_pep508::VerbatimUrl;
 use uv_pypi_types::{ParsedPathUrl, ParsedUrl, VerbatimParsedUrl};
-use uv_distribution_types::RequirementSource;
 
 use crate::{ConversionError, into_uv_git_reference, to_uv_marker_tree, to_uv_version_specifiers};
 
@@ -93,11 +93,15 @@ pub fn as_uv_req(
 ) -> Result<uv_distribution_types::Requirement, AsPep508Error> {
     let name = PackageName::from_str(name)?;
     let source = match req {
-        PixiPypiSpec::Version { version, .. } => {
-            // TODO: implement index later - for now we skip custom indexes
+        PixiPypiSpec::Version { version, index, .. } => {
+            // TODO: implement index later
             RequirementSource::Registry {
                 specifier: manifest_version_to_version_specifiers(version)?,
-                index: None,
+                index: index.clone().map(|url| {
+                    uv_distribution_types::IndexMetadata::from(
+                        uv_distribution_types::IndexUrl::from(VerbatimUrl::from_url(url)),
+                    )
+                }),
                 conflict: None,
             }
         }
@@ -137,7 +141,9 @@ pub fn as_uv_req(
                     .transpose()
                     .expect("could not parse sha"),
             )?,
-            subdirectory: subdirectory.as_ref().map(|s| Box::from(Path::new(s.as_str()))),
+            subdirectory: subdirectory
+                .as_ref()
+                .map(|s| PathBuf::from(s).into_boxed_path()),
             // The full url used to clone, comparable to the git+ url in pip. e.g:
             // - 'git+SCHEMA://HOST/PATH@REF#subdirectory=SUBDIRECTORY'
             // - 'git+ssh://github.com/user/repo@d099af3b1028b00c232d8eda28a997984ae5848b'
@@ -169,7 +175,7 @@ pub fn as_uv_req(
 
             if canonicalized.is_dir() {
                 RequirementSource::Directory {
-                    install_path: canonicalized.into(),
+                    install_path: canonicalized.into_boxed_path(),
                     editable: editable.unwrap_or_default(),
                     url: verbatim,
                     // TODO: we could see if we ever need this
@@ -184,7 +190,7 @@ pub fn as_uv_req(
                 }
             } else {
                 RequirementSource::Path {
-                    install_path: canonicalized.into(),
+                    install_path: canonicalized.into_boxed_path(),
                     url: verbatim,
                     ext: DistExtension::from_path(path)?,
                 }
@@ -193,12 +199,17 @@ pub fn as_uv_req(
         PixiPypiSpec::Url {
             url, subdirectory, ..
         } => {
-            // Keep the original URL with hash fragment for verification
+            // We will clone the original URL and strip it's SHA256 fragment,
+            // So that we can normalize the URL for comparison.
+            let mut location_url = url.clone();
+            location_url.set_fragment(None);
             let verbatim_url = VerbatimUrl::from_url(url.clone());
 
             RequirementSource::Url {
-                subdirectory: subdirectory.as_ref().map(|sub| Box::from(Path::new(sub.as_str()))),
-                location: url.clone(),
+                subdirectory: subdirectory
+                    .as_ref()
+                    .map(|sub| PathBuf::from(sub.as_str()).into_boxed_path()),
+                location: location_url,
                 url: verbatim_url,
                 ext: DistExtension::from_path(url.path())?,
             }
@@ -248,7 +259,7 @@ pub fn pep508_requirement_to_uv_requirement(
                                 )
                             })?;
                         let parsed_url = ParsedUrl::Path(ParsedPathUrl::from_source(
-                            Box::from(Path::new(path.as_str())),
+                            PathBuf::from(path.as_str()).into_boxed_path(),
                             ext,
                             verbatim_url.to_url(),
                         ));

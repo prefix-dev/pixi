@@ -32,8 +32,8 @@ use thiserror::Error;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_distribution_filename::{DistExtension, ExtensionError, SourceDistExtension};
+use uv_distribution_types::RequirementSource;
 use uv_git_types::GitReference;
-use uv_distribution_types::{Requirement, RequirementSource};
 use uv_pypi_types::ParsedUrlError;
 use uv_resolver::RequiresPython;
 
@@ -233,10 +233,10 @@ pub enum PlatformUnsat {
     FailedToConvertRequirement(pep508_rs::PackageName, #[source] Box<ParsedUrlError>),
 
     #[error("the requirement '{0}' could not be satisfied (required by '{1}')")]
-    UnsatisfiableRequirement(Box<Requirement>, String),
+    UnsatisfiableRequirement(Box<uv_distribution_types::Requirement>, String),
 
     #[error("the conda package does not satisfy the pypi requirement '{0}' (required by '{1}')")]
-    CondaUnsatisfiableRequirement(Box<Requirement>, String),
+    CondaUnsatisfiableRequirement(Box<uv_distribution_types::Requirement>, String),
 
     #[error("there was a duplicate entry for '{0}'")]
     DuplicateEntry(String),
@@ -280,7 +280,7 @@ pub enum PlatformUnsat {
     #[error("editable pypi dependency on conda resolved package '{0}' is not supported")]
     EditableDependencyOnCondaInstalledPackage(
         uv_normalize::PackageName,
-        Box<RequirementSource>,
+        Box<uv_distribution_types::RequirementSource>,
     ),
 
     #[error("direct pypi url dependency to a conda installed package '{0}' is not supported")]
@@ -737,14 +737,14 @@ enum Dependency {
         SourceSpec,
         Cow<'static, str>,
     ),
-    PyPi(Requirement, Cow<'static, str>),
+    PyPi(uv_distribution_types::Requirement, Cow<'static, str>),
 }
 
 /// Check satatisfiability of a pypi requirement against a locked pypi package
 /// This also does an additional check for git urls when using direct url
 /// references
 pub(crate) fn pypi_satifisfies_editable(
-    spec: &Requirement,
+    spec: &uv_distribution_types::Requirement,
     locked_data: &PypiPackageData,
     project_root: &Path,
 ) -> Result<(), Box<PlatformUnsat>> {
@@ -783,7 +783,7 @@ pub(crate) fn pypi_satifisfies_editable(
                     ))
                 })?;
 
-                if canocalized_path.as_path() != install_path.as_ref() {
+                if &canocalized_path != install_path.as_ref() {
                     return Err(Box::new(PlatformUnsat::EditablePackagePathMismatch(
                         spec.name.clone(),
                         absolute_path.into_owned(),
@@ -800,7 +800,7 @@ pub(crate) fn pypi_satifisfies_editable(
 /// This also does an additional check for git urls when using direct url
 /// references
 pub(crate) fn pypi_satifisfies_requirement(
-    spec: &Requirement,
+    spec: &uv_distribution_types::Requirement,
     locked_data: &PypiPackageData,
     project_root: &Path,
 ) -> Result<(), Box<PlatformUnsat>> {

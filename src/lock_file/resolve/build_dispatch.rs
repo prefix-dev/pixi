@@ -39,6 +39,7 @@ use uv_configuration::{
 };
 use uv_dispatch::{BuildDispatch, BuildDispatchError, SharedState};
 use uv_distribution_filename::DistFilename;
+use uv_distribution_types::Requirement;
 use uv_distribution_types::{
     CachedDist, DependencyMetadata, IndexLocations, IsBuildBackendError, Requirement, Resolution, SourceDist,
 };

@@ -52,6 +52,7 @@ use url::Url;
 pub use workspace_mut::WorkspaceMut;
 use xxhash_rust::xxh3::xxh3_64;
 
+use crate::repodata::Repodata;
 use crate::{
     activation::{CurrentEnvVarBehavior, initialize_env_variables},
     diff::LockFileDiff,
@@ -491,6 +492,7 @@ impl Workspace {
         let cache_dirs =
             CacheDirs::new(pixi_config::get_cache_dir()?).with_workspace(self.pixi_dir());
         Ok(CommandDispatcher::builder()
+            .with_gateway(self.repodata_gateway()?.clone())
             .with_cache_dirs(cache_dirs)
             .with_root_dir(self.root().to_path_buf())
             .with_download_client(self.authenticated_client()?.clone())

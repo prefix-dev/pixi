@@ -55,6 +55,8 @@ theme:
 
 extra_css:
   - stylesheets/extra.css
+extra_javascript:
+  - javascripts/extra.js
 
 repo_url: https://github.com/prefix-dev/pixi/
 edit_uri: edit/main/docs/
