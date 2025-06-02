@@ -103,15 +103,15 @@ toml_edit = "0.22.24"
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
 typed-path = "0.10.0"
-uv-build-frontend = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
-uv-distribution-filename = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
-uv-distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
-uv-install-wheel = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
-uv-pep440 = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
-uv-pep508 = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
-uv-platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
-uv-pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
-uv-requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
+uv-build-frontend = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-distribution-filename = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-install-wheel = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-pep440 = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-pep508 = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
 
 wax = "0.6.0"
 which = "7.0.2"
@@ -137,22 +137,22 @@ rattler_virtual_packages = { version = "2.0.9", default-features = false }
 
 # Bumping this to a higher version breaks the Windows path handling.
 url = "2.5.4"
-uv-auth = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
-uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
-uv-cache-info = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
-uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
-uv-configuration = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
-uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
-uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
-uv-git = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
-uv-git-types = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
-uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
-uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
-uv-python = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
-uv-requirements = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
-uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
-uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
-uv-workspace = { git = "https://github.com/astral-sh/uv", tag = "0.6.9" }
+uv-auth = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-cache-info = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-configuration = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-git = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-git-types = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-python = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-requirements = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-workspace = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
 winapi = { version = "0.3.9", default-features = false }
 xxhash-rust = "0.8.15"
 zip = { version = "2.4.2", default-features = false }
@@ -390,7 +390,7 @@ tokio = { workspace = true, features = ["rt"] }
 
 [patch.crates-io]
 # This is a temporary patch to get `cargo vendor` to work with the `uv` and pep508_rs` crates.
-version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "b70cf707aa43f21b32f3a61b8a0889b15032d5c4" }
+version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "06ec5a5f59ffaeb6cf5079c6cb184467da06c9db" }
 
 # Config for 'dist'
 [workspace.metadata.dist]
