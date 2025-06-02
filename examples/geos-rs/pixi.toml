@@ -1,7 +1,7 @@
 [project]
 channels = ["conda-forge"]
 name = "geos-rs"
-platforms = ["linux-64", "osx-64", "osx-arm64"]
+platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
 
 [tasks]
 start = "cargo run"
