@@ -2,7 +2,7 @@
 # Otherwise the example thinks it belongs to the workspace of the Pixi repository
 
 [package]
-edition = "2021"
+edition = "2024"
 name = "geos-rs"
 version = "0.1.0"
 
