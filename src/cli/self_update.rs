@@ -247,7 +247,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Stop here if the target version is the same as the current version
     if target_version
         .as_ref()
-        .map_or(false, |t| *t == current_version)
+        .is_some_and(|t| *t == current_version)
     {
         eprintln!(
             "{}pixi is already up-to-date (version {})",
@@ -260,14 +260,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let action = if !args.force
         && target_version
             .as_ref()
-            .map_or(false, |t| *t < current_version)
+            .is_some_and(|t| *t < current_version)
     {
         if args.version.is_none() {
             // Ask if --version was not passed
             let confirmation = dialoguer::Confirm::new()
                 .with_prompt(format!(
                         "\nCurrent version ({}) is more recent than remote ({}). Do you want to downgrade?",
-                        current_version, target_version.as_ref().unwrap()
+                        current_version, target_version.as_ref().expect("target_version is not resolved")
                 ))
                 .default(false)
                 .show_default(true)
@@ -288,7 +288,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             console::style(console::Emoji("✔ ", "")).green(),
             action,
             current_version,
-            target_version.as_ref().unwrap()
+            target_version
+                .as_ref()
+                .expect("target_version is not resolved")
         );
     }
 
