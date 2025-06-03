@@ -28,7 +28,7 @@ use uv_configuration::{BuildOptions, ConfigSettings, Constraints, IndexStrategy,
 use uv_dispatch::{BuildDispatch, SharedState};
 use uv_distribution::{DistributionDatabase, RegistryWheelIndex};
 use uv_distribution_types::{
-    CachedDist, DependencyMetadata, Dist, IndexLocations, InstalledDist, Name, Resolution,
+    CachedDist, DependencyMetadata, Dist, IndexLocations, IndexUrl, InstalledDist, Name, Resolution,
 };
 use uv_install_wheel::LinkMode;
 use uv_installer::{Preparer, SitePackages, UninstallError};
@@ -102,7 +102,6 @@ impl<'a> PyPIPrefixUpdaterBuilder<'a> {
 
         let mut uv_client_builder = RegistryClientBuilder::new(uv_context.cache.clone())
             .allow_insecure_host(uv_context.allow_insecure_host.clone())
-            .index_urls(index_locations.index_urls())
             .keyring(uv_context.keyring_provider)
             .connectivity(Connectivity::Online)
             .extra_middleware(uv_context.extra_middleware.clone());
@@ -114,17 +113,26 @@ impl<'a> PyPIPrefixUpdaterBuilder<'a> {
         let registry_client = Arc::new(uv_client_builder.build());
 
         // Resolve the flat indexes from `--find-links`.
-        let flat_index = {
-            let client = FlatIndexClient::new(&registry_client, &uv_context.cache);
-            let indexes = index_locations.flat_indexes().map(|index| index.url());
-            let entries = client.fetch(indexes).await.into_diagnostic()?;
-            FlatIndex::from_entries(
-                entries,
-                Some(&tags),
-                &uv_context.hash_strategy, // Use hash strategy from context
-                &build_options,
-            )
-        };
+        // In UV 0.7.8, we need to fetch flat index entries from the index locations
+        let flat_index_client = FlatIndexClient::new(
+            registry_client.cached_client(),
+            Connectivity::Online,
+            &uv_context.cache,
+        );
+        let flat_index_urls: Vec<&IndexUrl> = index_locations
+            .flat_indexes()
+            .map(|index| index.url())
+            .collect();
+        let flat_index_entries = flat_index_client
+            .fetch_all(flat_index_urls.into_iter())
+            .await
+            .into_diagnostic()?;
+        let flat_index = FlatIndex::from_entries(
+            flat_index_entries,
+            Some(&tags),
+            &uv_context.hash_strategy,
+            &build_options,
+        );
 
         let config_settings = ConfigSettings::default();
 

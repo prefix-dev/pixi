@@ -31,6 +31,10 @@ run-all-examples = { cmd = "python tests/scripts/run-all-examples.py --pixi-exec
   "build-release",
 ] }
 test = { depends-on = ["test-all-fast"], description = "Run all fast tests" }
+test-all-extra-slow = { depends-on = [
+  "test-slow",
+  "test-integration-extra-slow",
+] }
 test-all-fast = { depends-on = ["test-fast", "test-integration-fast"] }
 test-all-slow = { depends-on = ["test-slow", "test-integration-slow"] }
 test-fast = "cargo nextest run --workspace --all-targets"
@@ -40,8 +44,8 @@ test-slow = """cargo nextest run --workspace --all-targets --retries 2 --feature
 
 [feature.pytest.dependencies]
 filelock = ">=3.16.0,<4"
-mypy = ">=1.15,<1.16"
-py-rattler = ">=0.13,<0.14"
+mypy = ">=1.16,<1.17"
+py-rattler = ">=0.14,<0.15"
 pytest = "*"
 pytest-rerunfailures = ">=15,<16"
 pytest-timeout = ">=2.3.1,<3"

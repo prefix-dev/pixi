@@ -4,6 +4,9 @@ import subprocess
 import pytest
 import platform
 import sys
+import tomli
+import tomli_w
+
 from .common import CURRENT_PLATFORM, verify_cli_command, ExitCode
 
 
@@ -465,3 +468,22 @@ allow-direct-references = true
         result.check_returncode()
     except subprocess.CalledProcessError:
         pytest.fail("Failed to solve the pypi requirements. pytrace=False")
+
+
+def test_help_warning_when_platform_not_supported(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test that the help command warns about unsupported platforms"""
+    verify_cli_command([pixi, "init", tmp_pixi_workspace], ExitCode.SUCCESS)
+
+    # Remove all platforms
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+    content = manifest_path.read_text()
+    manifest_toml = tomli.loads(content)
+    manifest_toml["workspace"]["platforms"] = []
+    manifest_path.write_text(tomli_w.dumps(manifest_toml))
+
+    # Check if the command throws a warning
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", tmp_pixi_workspace, "bla"],
+        ExitCode.COMMAND_NOT_FOUND,
+        stderr_contains=["pixi workspace platform add"],
+    )

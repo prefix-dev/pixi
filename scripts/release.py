@@ -86,7 +86,7 @@ def main() -> None:
         "Set release version",
         "Create and switch to release branch",
         "Bump all versions",
-        "Update lockfiles",
+        "Update cargo lockfile",
         "Update changelog",
         "Lint changes",
         "Commit changes",
@@ -143,9 +143,9 @@ def main() -> None:
             status.append("Bumped all versions")
 
         if start_step <= 6:
-            colored_print("\nUpdate lockfiles...", Colors.YELLOW)
-            run_command([pixi, "run", "update-lockfiles"])
-            status.append("Updated all lockfiles")
+            colored_print("\nUpdate Cargo pixi lockfile...", Colors.YELLOW)
+            run_command([pixi, "run", "cargo update pixi"])
+            status.append("Updated all lockfile")
 
         if start_step <= 7:
             while True:

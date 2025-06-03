@@ -1,12 +1,12 @@
 [project]
 channels = ["conda-forge"]
 name = "geos-rs"
-platforms = ["linux-64", "osx-64", "osx-arm64"]
+platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
 
 [tasks]
 start = "cargo run"
 
 [dependencies]
-geos = "~=3.12"
-pkg-config = "*"
-rust = "~=1.77"
+geos = ">=3.13.1,<4"
+pkg-config = ">=0.29.2,<0.30"
+rust = ">=1.87.0,<1.88"
