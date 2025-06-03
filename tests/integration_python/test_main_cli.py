@@ -232,6 +232,34 @@ def test_search(pixi: Path) -> None:
     )
 
 
+def test_search_wildcard(pixi: Path, dummy_channel_1: str) -> None:
+    verify_cli_command(
+        [pixi, "search", "this-will-not-be-found", "-c", dummy_channel_1],
+        ExitCode.FAILURE,
+        stderr_contains="not found",
+    )
+
+    verify_cli_command(
+        [pixi, "search", "d*", "-c", dummy_channel_1],
+        ExitCode.SUCCESS,
+        stdout_contains=["dummy-a"],
+    )
+
+
+def test_search_matchspec(pixi: Path, dummy_channel_1: str) -> None:
+    verify_cli_command(
+        [pixi, "search", "dummy-a=0.1.0", "-c", dummy_channel_1],
+        ExitCode.SUCCESS,
+        stdout_contains=["dummy-a"],
+    )
+
+    verify_cli_command(
+        [pixi, "search", "dummy-a[build_number=0]", "-c", dummy_channel_1],
+        ExitCode.SUCCESS,
+        stdout_contains=["dummy-a"],
+    )
+
+
 @pytest.mark.slow
 def test_simple_project_setup(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest_path = tmp_pixi_workspace / "pixi.toml"
