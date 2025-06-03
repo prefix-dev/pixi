@@ -783,7 +783,7 @@ pub(crate) fn pypi_satifisfies_editable(
                     ))
                 })?;
 
-                if &canocalized_path != install_path.as_ref() {
+                if canocalized_path != install_path.as_ref() {
                     return Err(Box::new(PlatformUnsat::EditablePackagePathMismatch(
                         spec.name.clone(),
                         absolute_path.into_owned(),

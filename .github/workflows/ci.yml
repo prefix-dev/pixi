@@ -268,7 +268,7 @@ jobs:
     name: "build binary | linux x86_64"
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: rui314/setup-mold@67424c1b3680e35255d95971cbd5de0047bf31c3 # v1
+      - uses: rui314/setup-mold@b3958095189f34b95d402a680b6e96b7f194f7b9 # v1
       - name: "Setup musl"
         run: |
           sudo apt-get install musl-tools
@@ -295,7 +295,7 @@ jobs:
     name: "build binary | macos aarch64"
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: rui314/setup-mold@67424c1b3680e35255d95971cbd5de0047bf31c3 # v1
+      - uses: rui314/setup-mold@b3958095189f34b95d402a680b6e96b7f194f7b9 # v1
       - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
       - name: "Build"
         run: >
@@ -317,7 +317,7 @@ jobs:
     name: "build binary | macos x86_64"
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: rui314/setup-mold@67424c1b3680e35255d95971cbd5de0047bf31c3 # v1
+      - uses: rui314/setup-mold@b3958095189f34b95d402a680b6e96b7f194f7b9 # v1
       - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
       - name: "Build"
         run: >
