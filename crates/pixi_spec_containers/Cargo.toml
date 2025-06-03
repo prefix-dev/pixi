@@ -1,0 +1,16 @@
+[package]
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi_spec_containers"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]
+indexmap = { workspace = true }
+itertools = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+
+rattler_conda_types = { workspace = true }

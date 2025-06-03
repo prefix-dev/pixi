@@ -1,7 +1,12 @@
 from pathlib import Path
 import shutil
+import subprocess
 import pytest
 import platform
+import sys
+import tomli
+import tomli_w
+
 from .common import CURRENT_PLATFORM, verify_cli_command, ExitCode
 
 
@@ -214,6 +219,10 @@ def test_unused_strict_system_requirements(
     )
 
 
+@pytest.mark.skipif(
+    platform.system() == "Windows",
+    reason="Post-link script uses linux commands for file tasks, fails on windows. Package needs manual fixing.",
+)
 def test_post_link_scripts(
     pixi: Path,
     tmp_pixi_workspace: Path,
@@ -341,4 +350,140 @@ def test_build_git_source_deps(
         [pixi, "run", "rich-example-main", "--manifest-path", minimal_workspace / "pixi.toml"],
         stdout_contains="John Doe Jr.",
         cwd=minimal_workspace,
+    )
+
+
+def test_installation_pypi_conda_mismatch(
+    pixi: Path, tmp_pixi_workspace: Path, test_data: Path, pixi_tomls: Path
+) -> None:
+    """
+    This tests the following situation, if you have conda and pypi package with the same name, different version, but the same import path.
+    e.g foobar is the name and the conda package contains files `a.py` and `b.py`, while the pypi package contains just `a.py`.
+    If you install a lock file with the conda package, then install a lock file with the pypi version, and then subsequently install the conda version again.
+    The files should be `a.py` and `b.py`.
+    """
+    installation_order = test_data / "installation-order"
+    pixi_wheel_only = pixi_tomls / "installation-pypi.toml"
+    pixi_mix = pixi_tomls / "installation-conda-pypi.toml"
+    dest_toml = tmp_pixi_workspace / "pixi.toml"
+
+    # Copy wheel and conda files
+    shutil.copyfile(
+        installation_order / "foobar" / "foobar-0.1.0-pyhbf21a9e_0.conda",
+        tmp_pixi_workspace / "foobar-0.1.0-pyhbf21a9e_0.conda",
+    )
+    shutil.copyfile(
+        installation_order / "minimal-0.1.0-py2.py3-none-any.whl",
+        tmp_pixi_workspace / "minimal-0.1.0-py2.py3-none-any.whl",
+    )
+    shutil.copyfile(
+        installation_order / "foobar_whl" / "dist" / "foobar-0.1.1-py3-none-any.whl",
+        tmp_pixi_workspace / "foobar-0.1.1-py3-none-any.whl",
+    )
+
+    if not sys.platform.startswith("win"):
+        site_packages = (
+            tmp_pixi_workspace
+            / ".pixi"
+            / "envs"
+            / "default"
+            / "lib"
+            / "python3.13"
+            / "site-packages"
+        )
+    else:
+        site_packages = tmp_pixi_workspace / ".pixi" / "envs" / "default" / "Lib" / "site-packages"
+
+    # First conda
+    shutil.copyfile(pixi_mix, dest_toml)
+    verify_cli_command([pixi, "install", "-v"], cwd=tmp_pixi_workspace)
+    assert (site_packages / "foobar-0.1.0.dist-info").exists(), (
+        "[conda] foobar-0.1.0.dist-info does not exist"
+    )
+    assert (site_packages / "foobar").exists(), "foobar package does not exist"
+
+    # Then pypi
+    shutil.copyfile(pixi_wheel_only, dest_toml)
+    verify_cli_command([pixi, "install", "-v"], cwd=tmp_pixi_workspace)
+    assert not (site_packages / "foobar-0.1.0.dist-info").exists(), (
+        "[conda] foobar-0.1.0.dist-info should not exist"
+    )
+    assert (site_packages / "foobar-0.1.1.dist-info").exists(), (
+        "[pypi] foobar-0.1.1.dist-info does not exist"
+    )
+    assert (site_packages / "foobar").exists(), "foobar package does not exist"
+
+    # Then conda again
+    shutil.copyfile(pixi_mix, dest_toml)
+    verify_cli_command([pixi, "install", "-vv"], cwd=tmp_pixi_workspace)
+    assert (site_packages / "foobar").exists(), "foobar package does not exist"
+    assert not (site_packages / "foobar-0.1.1.dist-info").exists(), (
+        "duplicate foobar-0.1.1-dist-info not removed, while it should have been"
+    )
+    # Recall that the conda package contains files `a.py` and `b.py`
+    assert (site_packages / "foobar" / "a.py").exists(), "a.py does not exist"
+    # Previously, this file was erroneously removed
+    assert (site_packages / "foobar" / "b.py").exists(), "b.py does not exist"
+
+
+def test_pypi_url_fragment_in_project_deps(tmp_pixi_workspace: Path, pixi: Path) -> None:
+    pyproject_content = """
+[project]
+version = "0.1.0"
+name = "test"
+requires-python = "== 3.12"
+dependencies = [
+    "jinja2 @ https://files.pythonhosted.org/packages/62/a1/3d680cbfd5f4b8f15abc1d571870c5fc3e594bb582bc3b64ea099db13e56/jinja2-3.1.6-py3-none-any.whl#sha256=85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67"
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.pixi.workspace]
+platforms = ["linux-64", "osx-arm64", "win-64"]
+channels = ["https://prefix.dev/conda-forge"]
+
+[tool.pixi.pypi-dependencies]
+test = { path = ".", editable = true }
+
+[tool.hatch.metadata]
+allow-direct-references = true
+"""
+    pyproject_path = tmp_pixi_workspace / "pyproject.toml"
+    pyproject_path.write_text(pyproject_content)
+
+    src_dir = tmp_pixi_workspace / "src" / "test"
+    src_dir.mkdir(parents=True, exist_ok=True)
+    (src_dir / "__init__.py").touch()
+
+    try:
+        result = subprocess.run(
+            [pixi, "install", "-v"],
+            cwd=tmp_pixi_workspace,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        result.check_returncode()
+    except subprocess.CalledProcessError:
+        pytest.fail("Failed to solve the pypi requirements. pytrace=False")
+
+
+def test_help_warning_when_platform_not_supported(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test that the help command warns about unsupported platforms"""
+    verify_cli_command([pixi, "init", tmp_pixi_workspace], ExitCode.SUCCESS)
+
+    # Remove all platforms
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+    content = manifest_path.read_text()
+    manifest_toml = tomli.loads(content)
+    manifest_toml["workspace"]["platforms"] = []
+    manifest_path.write_text(tomli_w.dumps(manifest_toml))
+
+    # Check if the command throws a warning
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", tmp_pixi_workspace, "bla"],
+        ExitCode.COMMAND_NOT_FOUND,
+        stderr_contains=["pixi workspace platform add"],
     )

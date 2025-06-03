@@ -11,10 +11,9 @@
 mod detailed;
 mod git;
 mod path;
+mod source_anchor;
 mod toml;
 mod url;
-
-use std::{path::PathBuf, str::FromStr};
 
 pub use detailed::DetailedSpec;
 pub use git::{GitReference, GitReferenceError, GitSpec};
@@ -23,6 +22,9 @@ pub use path::{PathBinarySpec, PathSourceSpec, PathSpec};
 use rattler_conda_types::{
     ChannelConfig, NamedChannelOrUrl, NamelessMatchSpec, ParseChannelError, VersionSpec,
 };
+pub use source_anchor::SourceAnchor;
+use std::fmt::Display;
+use std::{path::PathBuf, str::FromStr};
 use thiserror::Error;
 pub use toml::{TomlSpec, TomlVersionSpecStr};
 pub use url::{UrlBinarySpec, UrlSourceSpec, UrlSpec};
@@ -319,7 +321,8 @@ impl PixiSpec {
 ///
 /// This type only represents source packages. Use [`PixiSpec`] to represent
 /// both binary and source packages.
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, serde::Serialize)]
+#[serde(untagged)]
 pub enum SourceSpec {
     /// The spec is represented as an archive that can be downloaded from the
     /// specified URL.
@@ -332,10 +335,26 @@ pub enum SourceSpec {
     Path(PathSourceSpec),
 }
 
+impl Display for SourceSpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SourceSpec::Url(url) => write!(f, "{}", url),
+            SourceSpec::Git(git) => write!(f, "{}", git),
+            SourceSpec::Path(path) => write!(f, "{}", path),
+        }
+    }
+}
+
 impl SourceSpec {
     /// Returns true if this spec represents a git repository.
     pub fn is_git(&self) -> bool {
         matches!(self, Self::Git(_))
+    }
+
+    /// Converts this instance into a [`toml_edit::Value`].
+    pub fn to_toml_value(&self) -> toml_edit::Value {
+        ::serde::Serialize::serialize(self, toml_edit::ser::ValueSerializer::new())
+            .expect("conversion to toml cannot fail")
     }
 }
 
@@ -561,7 +580,7 @@ impl From<PathSourceSpec> for rattler_lock::source::PathSourceLocation {
 mod test {
     use rattler_conda_types::ChannelConfig;
     use serde::Serialize;
-    use serde_json::{json, Value};
+    use serde_json::{Value, json};
     use url::Url;
 
     use crate::PixiSpec;

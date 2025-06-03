@@ -6,14 +6,14 @@ use pixi_spec::PixiSpec;
 use rattler_conda_types::{PackageName, PrefixRecord, Version};
 use serde::Serialize;
 
-use miette::{miette, IntoDiagnostic};
+use miette::{IntoDiagnostic, miette};
 
 use crate::{
-    environment::list::{print_package_table, PackageToOutput},
+    environment::list::{PackageToOutput, print_package_table},
     global::common::find_package_records,
 };
 
-use super::{project::ParsedEnvironment, EnvChanges, EnvState, EnvironmentName, Mapping, Project};
+use super::{EnvChanges, EnvState, EnvironmentName, Mapping, Project, project::ParsedEnvironment};
 
 /// Sorting strategy for the package table
 #[derive(clap::ValueEnum, Clone, Debug, Serialize, Default)]
@@ -167,6 +167,7 @@ pub async fn list_all_global_environments(
     envs: Option<Vec<EnvironmentName>>,
     envs_changes: Option<&EnvChanges>,
     regex: Option<String>,
+    show_header: bool,
 ) -> miette::Result<()> {
     let mut project_envs = project.environments().clone();
     project_envs.sort_by(|a, _, b, _| a.to_string().cmp(&b.to_string()));
@@ -216,11 +217,11 @@ pub async fn list_all_global_environments(
                 EnvState::Installed => {
                     format!("({})", console::style("installed".to_string()).green())
                 }
-                EnvState::NotChanged(ref reason) => {
+                EnvState::NotChanged(reason) => {
                     format!("({})", reason.fancy_display())
                 }
             })
-            .unwrap_or("".to_string());
+            .unwrap_or_default();
 
         if !env
             .dependencies
@@ -282,11 +283,14 @@ pub async fn list_all_global_environments(
     if message.is_empty() {
         println!("No global environments found.");
     } else {
-        println!(
-            "Global environments as specified in '{}'\n{}",
-            console::style(project.manifest.path.display()).bold(),
-            message
+        let header = format!(
+            "Global environments as specified in '{}'",
+            project.manifest.path.display()
         );
+        if show_header {
+            println!("{}", header);
+        }
+        println!("{}", message);
     }
 
     Ok(())

@@ -16,7 +16,7 @@ use rattler_shell::{
 };
 use tokio::sync::broadcast;
 
-use super::{installer::ToolInstaller, IsolatedTool};
+use super::{IsolatedTool, installer::ToolInstaller};
 use crate::IsolatedToolSpec;
 
 /// A entity that is either pending or has been fetched.
@@ -302,12 +302,12 @@ mod tests {
     use tokio::sync::{Barrier, Mutex, Semaphore};
 
     use crate::{
-        tool::{
-            cache::{find_spec_records, ToolCache},
-            installer::{ToolContext, ToolInstaller},
-            IsolatedTool, ToolSpec,
-        },
         IsolatedToolSpec,
+        tool::{
+            IsolatedTool, ToolSpec,
+            cache::{ToolCache, find_spec_records},
+            installer::{ToolContext, ToolInstaller},
+        },
     };
 
     const BAT_META_JSON: &str = "bat-0.24.0-h3bba108_1.json";

@@ -5,20 +5,23 @@ use indicatif::ProgressBar;
 use miette::{Context, IntoDiagnostic};
 use pixi_build_frontend::{BackendOverride, CondaBuildReporter, SetupRequest};
 use pixi_build_types::{
-    procedures::conda_build::CondaBuildParams, ChannelConfiguration, PlatformAndVirtualPackages,
+    ChannelConfiguration, PlatformAndVirtualPackages, procedures::conda_build::CondaBuildParams,
 };
+use pixi_command_dispatcher::SourceCheckout;
 use pixi_config::ConfigCli;
 use pixi_manifest::FeaturesExt;
+use pixi_progress::global_multi_progress;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use typed_path::Utf8TypedPath;
 
 use crate::{
-    build::{BuildContext, SourceCheckout, WorkDirKey},
+    WorkspaceLocator,
+    build::{BuildContext, WorkDirKey},
     cli::cli_config::WorkspaceConfig,
     repodata::Repodata,
-    utils::{move_file, MoveError},
-    WorkspaceLocator,
+    reporters::TopLevelProgress,
+    utils::{MoveError, move_file},
 };
 
 #[derive(Parser, Debug)]
@@ -117,7 +120,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .parent()
                 .expect("a manifest must have parent directory")
                 .to_path_buf(),
-            build_tool_override: BackendOverride::from_env(),
+            build_tool_override: BackendOverride::from_env()?,
             build_id: 0,
         })
         .await
@@ -155,7 +158,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // Specify the build directory
         let key = WorkDirKey::new(
             SourceCheckout::new(
-                workspace.root().to_path_buf(),
+                workspace.root(),
                 PinnedSourceSpec::Path(PinnedPathSpec {
                     path: Utf8TypedPath::derive(&workspace.root().to_string_lossy()).to_path_buf(),
                 }),
@@ -196,7 +199,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .map(GenericVirtualPackage::from)
         .collect();
 
-    let build_context = BuildContext::from_workspace(&workspace)?;
+    let multi_progress = global_multi_progress();
+    let anchor_pb = multi_progress.add(ProgressBar::hidden());
+    let command_dispatcher = workspace
+        .command_dispatcher_builder()?
+        .with_reporter(TopLevelProgress::new(global_multi_progress(), anchor_pb))
+        .finish();
+
+    let build_context = BuildContext::from_workspace(&workspace, command_dispatcher)?;
 
     // Build the individual packages.
     let result = protocol
@@ -273,7 +283,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                             package.output_file.display(),
                             dest.display()
                         )
-                    })
+                    });
                 }
             }
         }

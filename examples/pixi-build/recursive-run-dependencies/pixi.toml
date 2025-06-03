@@ -1,0 +1,14 @@
+[workspace]
+channels = [
+  "https://prefix.dev/conda-forge",
+  "https://prefix.dev/pixi-build-backends",
+]
+name = "recursive-run-deps"
+platforms = ["win-64", "osx-arm64", "linux-64"]
+preview = ["pixi-build"]
+
+[dependencies]
+root = { path = "src/root" }
+
+[tasks]
+start = "python -c 'import root'"

@@ -1,30 +1,33 @@
-use std::borrow::Cow;
-use std::io;
-use std::io::{stdout, Write};
+use std::{
+    borrow::Cow,
+    io,
+    io::{Write, stdout},
+};
 
 use clap::Parser;
 use console::Color;
+use fancy_display::FancyDisplay;
 use human_bytes::human_bytes;
 use itertools::Itertools;
-use miette::{miette, IntoDiagnostic};
-use uv_configuration::ConfigSettings;
-
-use crate::cli::cli_config::WorkspaceConfig;
-use crate::lock_file::{UpdateLockFileOptions, UvResolutionContext};
-use crate::WorkspaceLocator;
-use fancy_display::FancyDisplay;
+use miette::IntoDiagnostic;
 use pixi_consts::consts;
 use pixi_manifest::FeaturesExt;
 use pixi_uv_conversions::{
-    pypi_options_to_index_locations, to_uv_normalize, to_uv_version, ConversionError,
+    ConversionError, pypi_options_to_index_locations, to_uv_normalize, to_uv_version,
 };
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record};
 use rattler_conda_types::Platform;
 use rattler_lock::{CondaPackageData, LockedPackageRef, PypiPackageData, UrlOrPath};
 use serde::Serialize;
+use uv_configuration::ConfigSettings;
 use uv_distribution::RegistryWheelIndex;
 
 use super::cli_config::LockFileUpdateConfig;
+use crate::{
+    WorkspaceLocator,
+    cli::cli_config::WorkspaceConfig,
+    lock_file::{UpdateLockFileOptions, UvResolutionContext},
+};
 
 // an enum to sort by size or name
 #[derive(clap::ValueEnum, Clone, Debug, Serialize)]
@@ -63,7 +66,8 @@ pub struct Args {
     #[clap(flatten)]
     pub workspace_config: WorkspaceConfig,
 
-    /// The environment to list packages for. Defaults to the default environment.
+    /// The environment to list packages for. Defaults to the default
+    /// environment.
     #[arg(short, long)]
     pub environment: Option<String>,
 
@@ -292,12 +296,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     if packages_to_output.is_empty() {
-        return Err(miette!(
-            "{}No packages found in '{}' environment for '{}' platform.",
-            console::style(console::Emoji("✘ ", "")).red(),
+        miette::bail!(
+            "No packages found in '{}' environment for '{}' platform.",
             environment.name().fancy_display(),
             consts::ENVIRONMENT_STYLE.apply_to(platform),
-        ));
+        );
     }
 
     // Print as table string or JSON
@@ -416,7 +419,8 @@ fn create_package_to_output<'a, 'b>(
             },
         ),
         PackageExt::PyPI(p, name) => {
-            // Check the hash to avoid non index packages to be handled by the registry index as wheels
+            // Check the hash to avoid non index packages to be handled by the registry
+            // index as wheels
             if p.hash.is_some() {
                 if let Some(registry_index) = registry_index {
                     // Handle case where the registry index is present

@@ -8,10 +8,10 @@ use rattler_conda_types::{MatchSpec, PackageName};
 
 use super::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs};
 use crate::{
+    WorkspaceLocator,
     cli::cli_config::{DependencyConfig, PrefixUpdateConfig, WorkspaceConfig},
     environment::sanity_check_project,
     workspace::DependencyType,
-    WorkspaceLocator,
 };
 
 /// Adds dependencies to the workspace
@@ -58,6 +58,8 @@ use crate::{
 ///   array
 /// - `pixi add --pypi boto3 --feature aws` will add `boto3` to the
 ///   `dependency-groups.aws` array
+/// - `pixi add --pypi --editable 'boto3 @ file://absolute/path/to/boto3'` will add
+///   the local editable `boto3` to the `pypi-dependencies` array
 ///
 /// Note that if `--platform` or `--editable` are specified, the pypi dependency
 /// will be added to the `tool.pixi.pypi-dependencies` table instead as native
@@ -155,12 +157,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             {
                 Some(vcs_reqs) => vcs_reqs
                     .into_iter()
-                    .map(|(name, req)| (name, (req, None)))
+                    .map(|(name, req)| (name, (req, None, None)))
                     .collect(),
                 None => dependency_config
                     .pypi_deps(workspace.workspace())?
                     .into_iter()
-                    .map(|(name, req)| (name, (req, None)))
+                    .map(|(name, req)| (name, (req, None, None)))
                     .collect(),
             };
 

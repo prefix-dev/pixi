@@ -5,8 +5,8 @@ use tempfile::TempDir;
 use url::Url;
 
 use crate::common::{
-    package_database::{Package, PackageDatabase},
     PixiControl,
+    package_database::{Package, PackageDatabase},
 };
 
 #[tokio::test]

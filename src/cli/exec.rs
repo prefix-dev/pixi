@@ -5,20 +5,20 @@ use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pixi_config::{self, Config, ConfigCli};
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
-use pixi_utils::{reqwest::build_reqwest_clients, AsyncPrefixGuard, EnvironmentHash};
+use pixi_utils::{AsyncPrefixGuard, EnvironmentHash, reqwest::build_reqwest_clients};
 use rattler::{
     install::{IndicatifReporter, Installer},
     package_cache::PackageCache,
 };
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, PackageName, Platform};
-use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
+use rattler_solve::{SolverImpl, SolverTask, resolvo::Solver};
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use reqwest_middleware::ClientWithMiddleware;
 use uv_configuration::RAYON_INITIALIZE;
 
 use super::cli_config::ChannelsConfig;
 use crate::{
-    environment::list::{print_package_table, PackageToOutput},
+    environment::list::{PackageToOutput, print_package_table},
     prefix::Prefix,
 };
 
@@ -236,13 +236,7 @@ fn list_exec_environment(
     solved_records: rattler_conda_types::SolverResult,
     regex: String,
 ) -> Result<(), miette::Error> {
-    let regex = {
-        if regex.is_empty() {
-            None
-        } else {
-            Some(regex)
-        }
-    };
+    let regex = { if regex.is_empty() { None } else { Some(regex) } };
     let mut packages_to_output = solved_records
         .records
         .iter()

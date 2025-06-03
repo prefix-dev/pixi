@@ -15,15 +15,17 @@
 //!
 //! Only the whole ProjectModel is versioned explicitly in an enum.
 //! When making a change to one of the types, be sure to add another enum declaration if it is breaking.
-use std::collections::HashMap;
-use std::path::PathBuf;
-
 use indexmap::IndexMap;
 use rattler_conda_types::{BuildNumberSpec, StringMatcher, Version, VersionSpec};
-use rattler_digest::{serde::SerializableHash, Md5, Md5Hash, Sha256, Sha256Hash};
+use rattler_digest::{Md5, Md5Hash, Sha256, Sha256Hash, serde::SerializableHash};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use serde_with::DisplayFromStr;
+use serde_with::{DeserializeFromStr, DisplayFromStr, SerializeDisplay};
+use std::collections::HashMap;
+use std::convert::Infallible;
+use std::fmt::Display;
+use std::path::PathBuf;
+use std::str::FromStr;
 use url::Url;
 
 /// Enum containing all versions of the project model.
@@ -110,18 +112,42 @@ impl From<ProjectModelV1> for VersionedProjectModel {
     }
 }
 
-/// Represents a target selector. Currently we only support explicit platform
+/// Represents a target selector. Currently, we only support explicit platform
 /// selection.
-#[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, DeserializeFromStr, SerializeDisplay, Hash, Eq, PartialEq)]
 pub enum TargetSelectorV1 {
     // Platform specific configuration
-    Platform(String),
     Unix,
     Linux,
     Win,
     MacOs,
+    Platform(String),
     // TODO: Add minijinja coolness here.
+}
+
+impl Display for TargetSelectorV1 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TargetSelectorV1::Unix => write!(f, "unix"),
+            TargetSelectorV1::Linux => write!(f, "linux"),
+            TargetSelectorV1::Win => write!(f, "win"),
+            TargetSelectorV1::MacOs => write!(f, "macos"),
+            TargetSelectorV1::Platform(p) => write!(f, "{}", p),
+        }
+    }
+}
+impl FromStr for TargetSelectorV1 {
+    type Err = Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "unix" => Ok(TargetSelectorV1::Unix),
+            "linux" => Ok(TargetSelectorV1::Linux),
+            "win" => Ok(TargetSelectorV1::Win),
+            "macos" => Ok(TargetSelectorV1::MacOs),
+            _ => Ok(TargetSelectorV1::Platform(s.to_string())),
+        }
+    }
 }
 
 /// A collect of targets including a default target.
@@ -318,5 +344,123 @@ impl std::fmt::Debug for BinaryPackageSpecV1 {
         }
 
         debug_struct.finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_sample_target_v1() -> TargetV1 {
+        TargetV1 {
+            host_dependencies: Some(IndexMap::from([(
+                "host_dep1".to_string(),
+                PackageSpecV1::Binary(Box::default()),
+            )])),
+            build_dependencies: Some(IndexMap::from([(
+                "build_dep1".to_string(),
+                PackageSpecV1::Binary(Box::default()),
+            )])),
+            run_dependencies: Some(IndexMap::from([(
+                "run_dep1".to_string(),
+                PackageSpecV1::Binary(Box::default()),
+            )])),
+        }
+    }
+
+    #[test]
+    fn serialize_targets_v1_with_default_target() {
+        let targets = TargetsV1 {
+            default_target: Some(create_sample_target_v1()),
+            targets: None,
+        };
+
+        let serialized = serde_json::to_string(&targets).unwrap();
+        assert!(serialized.contains("defaultTarget"));
+        assert!(serialized.contains("hostDependencies"));
+    }
+
+    #[test]
+    fn serialize_targets_v1_with_multiple_targets() {
+        let platform_strs = [
+            "unix",
+            "win",
+            "macos",
+            "linux-64",
+            "linux-arm64",
+            "linux-ppc64le",
+            "osx-64",
+            "osx-arm64",
+            "win-64",
+            "win-arm64",
+        ];
+
+        let targets = TargetsV1 {
+            default_target: None,
+            targets: Some(
+                platform_strs
+                    .iter()
+                    .map(|s| {
+                        let selector = match *s {
+                            "unix" => TargetSelectorV1::Unix,
+                            "win" => TargetSelectorV1::Win,
+                            "macos" => TargetSelectorV1::MacOs,
+                            other => TargetSelectorV1::Platform(other.to_string()),
+                        };
+                        (selector, create_sample_target_v1())
+                    })
+                    .collect(),
+            ),
+        };
+
+        let serialized = serde_json::to_string(&targets).unwrap();
+
+        for platform in platform_strs {
+            assert!(serialized.contains(platform), "Missing: {}", platform);
+        }
+    }
+
+    #[test]
+    fn deserialize_targets_v1_with_empty_fields() {
+        let json = r#"{
+            "defaultTarget": null,
+            "targets": null
+        }"#;
+
+        let deserialized: TargetsV1 = serde_json::from_str(json).unwrap();
+        assert!(deserialized.default_target.is_none());
+        assert!(deserialized.targets.is_none());
+    }
+
+    #[test]
+    fn deserialize_targets_v1_with_valid_data() {
+        let json = r#"{
+            "defaultTarget": {
+                "hostDependencies": {
+                    "host_dep1": {
+                        "binary": {}
+                    }
+                },
+                "buildDependencies": null,
+                "runDependencies": null
+            },
+            "targets": {
+                "unix": {
+                    "hostDependencies": null,
+                    "buildDependencies": null,
+                    "runDependencies": null
+                }
+            }
+        }"#;
+
+        let deserialized: TargetsV1 = serde_json::from_str(json).unwrap();
+        assert!(deserialized.default_target.is_some());
+        assert!(deserialized.targets.is_some());
+        assert!(
+            deserialized
+                .targets
+                .unwrap()
+                .contains_key(&TargetSelectorV1::Unix)
+        );
     }
 }

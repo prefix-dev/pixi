@@ -10,11 +10,10 @@ use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 use crate::{
     cli::{global::revert_environment_after_error, has_specs::HasSpecs},
     global::{
-        self,
-        common::{contains_menuinst_document, NotChangedReason},
+        self, EnvChanges, EnvState, EnvironmentName, Mapping, Project, StateChange, StateChanges,
+        common::{NotChangedReason, contains_menuinst_document},
         list::list_all_global_environments,
         project::ExposedType,
-        EnvChanges, EnvState, EnvironmentName, Mapping, Project, StateChange, StateChanges,
     },
 };
 use pixi_config::{self, Config, ConfigCli};
@@ -158,6 +157,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         Some(env_names),
         Some(&env_changes),
         None,
+        false,
     )
     .await?;
 

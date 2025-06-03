@@ -8,7 +8,7 @@ from typing import Generator
 
 from rattler import Platform
 
-PIXI_VERSION = "0.45.0"
+PIXI_VERSION = "0.47.0"
 
 
 ALL_PLATFORMS = '["linux-64", "osx-64", "osx-arm64", "win-64", "linux-ppc64le", "linux-aarch64"]'
@@ -27,6 +27,7 @@ class ExitCode(IntEnum):
     SUCCESS = 0
     FAILURE = 1
     INCORRECT_USAGE = 2
+    COMMAND_NOT_FOUND = 127
 
 
 class Output:
@@ -61,8 +62,16 @@ def verify_cli_command(
     # Set `NO_GRAPHICS` to avoid to have miette splitting up lines
     complete_env |= {"NO_GRAPHICS": "1"}
 
-    process = subprocess.run(command, capture_output=True, text=True, env=complete_env, cwd=cwd)
-    stdout, stderr, returncode = process.stdout, process.stderr, process.returncode
+    process = subprocess.run(
+        command,
+        capture_output=True,
+        env=complete_env,
+        cwd=cwd,
+    )
+    # Decode stdout and stderr explicitly using UTF-8
+    stdout = process.stdout.decode("utf-8", errors="replace")
+    stderr = process.stderr.decode("utf-8", errors="replace")
+    returncode = process.returncode
     output = Output(command, stdout, stderr, returncode)
     print(f"command: {command}, stdout: {stdout}, stderr: {stderr}, code: {returncode}")
     assert returncode == expected_exit_code, (

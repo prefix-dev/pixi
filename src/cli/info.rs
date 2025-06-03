@@ -14,15 +14,14 @@ use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_networking::authentication_storage;
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use serde::Serialize;
-use serde_with::{serde_as, DisplayFromStr};
+use serde_with::{DisplayFromStr, serde_as};
 use tokio::task::spawn_blocking;
 use toml_edit::ser::to_string;
 
 use crate::{
-    global,
+    WorkspaceLocator, global,
     global::{BinDir, EnvRoot},
     task::TaskName,
-    WorkspaceLocator,
 };
 use fancy_display::FancyDisplay;
 
@@ -93,7 +92,6 @@ impl Display for EnvironmentInfo {
                 consts::SOLVE_GROUP_STYLE.apply_to(solve_group)
             )?;
         }
-        // TODO: add environment size when PR 674 is merged
         if let Some(size) = &self.environment_size {
             writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Environment size"), size)?;
         }
@@ -145,6 +143,13 @@ impl Display for EnvironmentInfo {
                 platform_list
             )?;
         }
+
+        writeln!(
+            f,
+            "{:>WIDTH$}: {}",
+            bold.apply_to("Prefix location"),
+            self.prefix.display()
+        )?;
 
         if !self.system_requirements.is_empty() {
             let serialized = to_string(&self.system_requirements)
@@ -416,13 +421,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         .map(|t| t.into_keys().cloned().collect())
                         .unwrap_or_default();
 
+                    let environment_size =
+                        args.extended.then(|| dir_size(env.dir()).ok()).flatten();
+
                     EnvironmentInfo {
                         name: env.name().clone(),
                         features: env.features().map(|feature| feature.name.clone()).collect(),
                         solve_group: env
                             .solve_group()
                             .map(|solve_group| solve_group.name().to_string()),
-                        environment_size: None,
+                        environment_size,
                         dependencies: env
                             .combined_dependencies(Some(env.best_platform()))
                             .names()

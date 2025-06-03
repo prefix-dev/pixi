@@ -1,0 +1,7 @@
+---
+source: crates/pixi_manifest/src/discovery.rs
+expression: snapshot
+---
+Discovered workspace at: split_package/good/pixi.toml
+- Name: test_build_conda_package
+Package: test_build_conda_package @ 1.0.0

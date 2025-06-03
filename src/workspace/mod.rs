@@ -28,13 +28,16 @@ use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use once_cell::sync::OnceCell;
 use pep508_rs::Requirement;
+use pixi_build_frontend::BackendOverride;
+use pixi_command_dispatcher::{CacheDirs, CommandDispatcher, CommandDispatcherBuilder, Limits};
 use pixi_config::Config;
 use pixi_consts::consts;
 use pixi_manifest::{
-    pypi::PyPiPackageName, AssociateProvenance, EnvironmentName, Environments,
-    ExplicitManifestError, HasWorkspaceManifest, LoadManifestsError, ManifestProvenance, Manifests,
-    PackageManifest, SpecType, WithProvenance, WithWarnings, WorkspaceManifest,
+    AssociateProvenance, EnvironmentName, Environments, ExplicitManifestError,
+    HasWorkspaceManifest, LoadManifestsError, ManifestProvenance, Manifests, PackageManifest,
+    SpecType, WithProvenance, WithWarnings, WorkspaceManifest,
 };
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::SourceSpec;
 use pixi_utils::reqwest::build_reqwest_clients;
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
@@ -49,8 +52,9 @@ use url::Url;
 pub use workspace_mut::WorkspaceMut;
 use xxhash_rust::xxh3::xxh3_64;
 
+use crate::repodata::Repodata;
 use crate::{
-    activation::{initialize_env_variables, CurrentEnvVarBehavior},
+    activation::{CurrentEnvVarBehavior, initialize_env_variables},
     diff::LockFileDiff,
     lock_file::filter_lock_file,
 };
@@ -179,8 +183,12 @@ impl Debug for Workspace {
 }
 
 pub type PypiDeps = indexmap::IndexMap<
-    PyPiPackageName,
-    (Requirement, Option<pixi_manifest::PypiDependencyLocation>),
+    PypiPackageName,
+    (
+        Requirement,
+        Option<PixiPypiSpec>,
+        Option<pixi_manifest::PypiDependencyLocation>,
+    ),
 >;
 
 pub type MatchSpecs = indexmap::IndexMap<PackageName, (MatchSpec, SpecType)>;
@@ -478,6 +486,23 @@ impl Workspace {
             .clone()
     }
 
+    /// Returns a pre-filled command dispatcher builder that can be used to
+    /// construct a [`pixi_command_dispatcher::CommandDispatcher`].
+    pub fn command_dispatcher_builder(&self) -> miette::Result<CommandDispatcherBuilder> {
+        let cache_dirs =
+            CacheDirs::new(pixi_config::get_cache_dir()?).with_workspace(self.pixi_dir());
+        Ok(CommandDispatcher::builder()
+            .with_gateway(self.repodata_gateway()?.clone())
+            .with_cache_dirs(cache_dirs)
+            .with_root_dir(self.root().to_path_buf())
+            .with_download_client(self.authenticated_client()?.clone())
+            .with_max_download_concurrency(self.concurrent_downloads_semaphore())
+            .with_limits(Limits {
+                max_concurrent_solves: self.config().max_concurrent_solves().into(),
+            })
+            .with_backend_overrides(BackendOverride::from_env()?.unwrap_or_default()))
+    }
+
     fn client_and_authenticated_client(
         &self,
     ) -> miette::Result<&(reqwest::Client, ClientWithMiddleware)> {
@@ -584,7 +609,7 @@ impl Workspace {
                                     Err(err) => {
                                         return Err(err).into_diagnostic().context(format!(
                                             "Could not convert {mapping_location} to URL"
-                                        ))
+                                        ));
                                     }
                                 }
                             } else {
@@ -1077,21 +1102,27 @@ mod tests {
         )
         .unwrap();
 
-        assert_debug_snapshot!(workspace
-            .workspace
-            .value
-            .tasks(Some(Platform::Osx64), &FeatureName::DEFAULT)
-            .unwrap());
-        assert_debug_snapshot!(workspace
-            .workspace
-            .value
-            .tasks(Some(Platform::Win64), &FeatureName::DEFAULT)
-            .unwrap());
-        assert_debug_snapshot!(workspace
-            .workspace
-            .value
-            .tasks(Some(Platform::Linux64), &FeatureName::DEFAULT)
-            .unwrap());
+        assert_debug_snapshot!(
+            workspace
+                .workspace
+                .value
+                .tasks(Some(Platform::Osx64), &FeatureName::DEFAULT)
+                .unwrap()
+        );
+        assert_debug_snapshot!(
+            workspace
+                .workspace
+                .value
+                .tasks(Some(Platform::Win64), &FeatureName::DEFAULT)
+                .unwrap()
+        );
+        assert_debug_snapshot!(
+            workspace
+                .workspace
+                .value
+                .tasks(Some(Platform::Linux64), &FeatureName::DEFAULT)
+                .unwrap()
+        );
     }
 
     #[test]

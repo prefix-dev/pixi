@@ -5,7 +5,7 @@ expression: project_model
 {
   "version": "1",
   "data": {
-    "name": "rich_example",
+    "name": "python_rich",
     "version": "0.1.0",
     "description": null,
     "authors": null,
@@ -33,6 +33,13 @@ expression: project_model
         },
         "buildDependencies": {},
         "runDependencies": {
+          "cpp_math": {
+            "source": {
+              "Path": {
+                "path": "packages/cpp_math"
+              }
+            }
+          },
           "rich": {
             "binary": {
               "version": "13.9.*",

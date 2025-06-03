@@ -16,8 +16,9 @@ futures = { workspace = true }
 itertools = { workspace = true }
 jsonrpsee = { workspace = true, features = ["client"] }
 miette = { workspace = true, features = ["fancy-no-backtrace", "serde"] }
+pixi_build_discovery = { workspace = true }
 pixi_build_type_conversions = { workspace = true }
-pixi_build_types = { path = "../pixi_build_types" }
+pixi_build_types = { workspace = true }
 pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_manifest = { workspace = true }
@@ -44,8 +45,13 @@ which = { workspace = true }
 [dev-dependencies]
 bytes = { workspace = true }
 dunce = { workspace = true }
-insta = { workspace = true, features = ["yaml", "filters", "json"] }
-rstest = { workspace = true }
+insta = { workspace = true, features = [
+  "yaml",
+  "filters",
+  "json",
+  "glob",
+  "redactions",
+] }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = [
   "process",

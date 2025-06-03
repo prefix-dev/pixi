@@ -1,15 +1,15 @@
 use std::sync::Arc;
 
-use futures::{stream::FuturesUnordered, StreamExt};
+use futures::{StreamExt, stream::FuturesUnordered};
 use miette::Diagnostic;
 use pixi_record::PinnedSourceSpec;
-use pixi_spec::SourceSpec;
+use pixi_spec::{SourceAnchor, SourceSpec};
 use rattler_conda_types::{ChannelUrl, MatchSpec, ParseStrictness};
 use thiserror::Error;
 
-use crate::build::{
-    reporters::SourceReporter, source_anchor::SourceAnchor, BuildContext, BuildEnvironment,
-    BuildError, BuildMetadataReporter, SourceMetadata,
+use crate::{
+    build::{BuildContext, BuildEnvironment, BuildError, SourceMetadata},
+    reporters::BuildMetadataReporter,
 };
 
 /// An object that is responsible for recursively collecting metadata of source
@@ -19,14 +19,13 @@ pub struct SourceMetadataCollector {
     channel_urls: Vec<ChannelUrl>,
     build_env: BuildEnvironment,
     metadata_reporter: Arc<dyn BuildMetadataReporter>,
-    source_checkout_reporter: Option<Arc<dyn SourceReporter>>,
 }
 
 #[derive(Default)]
 pub struct CollectedSourceMetadata {
     /// Information about all queried source packages. This can be used as
     /// repodata.
-    pub source_repodata: Vec<SourceMetadata>,
+    pub source_repodata: Vec<Arc<SourceMetadata>>,
 
     /// A list of transitive dependencies of all collected source records.
     pub transitive_dependencies: Vec<MatchSpec>,
@@ -57,14 +56,12 @@ impl SourceMetadataCollector {
         channel_urls: Vec<ChannelUrl>,
         build_env: BuildEnvironment,
         metadata_reporter: Arc<dyn BuildMetadataReporter>,
-        source_checkout_reporter: Option<Arc<dyn SourceReporter>>,
     ) -> Self {
         Self {
             build_context,
             channel_urls,
             build_env,
             metadata_reporter,
-            source_checkout_reporter,
         }
     }
 
@@ -95,7 +92,7 @@ impl SourceMetadataCollector {
 
             // Process transitive dependencies
             for record in &source_metadata.records {
-                let anchor = SourceAnchor::from(record.source.clone());
+                let anchor = SourceAnchor::from(SourceSpec::from(record.source.clone()));
                 for depend in &record.package_record.depends {
                     if let Ok(spec) = MatchSpec::from_str(depend, ParseStrictness::Lenient) {
                         if let Some((name, source_spec)) = spec.name.as_ref().and_then(|name| {
@@ -125,16 +122,16 @@ impl SourceMetadataCollector {
         name: rattler_conda_types::PackageName,
         spec: SourceSpec,
         build_id: usize,
-    ) -> Result<SourceMetadata, ExtractSourceMetadataError> {
+    ) -> Result<Arc<SourceMetadata>, ExtractSourceMetadataError> {
         // Extract information for the particular source spec.
         let source_metadata = self
             .build_context
             .extract_source_metadata(
+                &name,
                 &spec,
                 &self.channel_urls,
                 self.build_env.clone(),
                 self.metadata_reporter.clone(),
-                self.source_checkout_reporter.clone(),
                 build_id,
             )
             .await
@@ -150,6 +147,9 @@ impl SourceMetadataCollector {
             .iter()
             .any(|record| record.package_record.name == name)
         {
+            let source_metadata = Arc::try_unwrap(source_metadata)
+                .unwrap_or_else(|source_metadata| (*source_metadata).clone());
+
             return Err(ExtractSourceMetadataError::PackageMetadataNotFound {
                 name: name.as_source().to_string(),
                 pinned_source: Box::new(source_metadata.source.pinned),

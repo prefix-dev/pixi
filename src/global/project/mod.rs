@@ -1,19 +1,19 @@
 use self::trampoline::{Configuration, ConfigurationParseError, Trampoline};
 use super::{
-    common::{get_install_changes, shortcuts_sync_status, EnvironmentUpdate},
+    BinDir, EnvRoot, StateChange, StateChanges,
+    common::{EnvironmentUpdate, get_install_changes, shortcuts_sync_status},
     install::find_binary_by_name,
     trampoline::{self, GlobalExecutable},
-    BinDir, EnvRoot, StateChange, StateChanges,
 };
 use crate::{
     global::{
+        EnvDir,
         common::{
             channel_url_to_prioritized_channel, expose_scripts_sync_status, find_package_records,
         },
         find_executables, find_executables_for_many_records,
         install::{create_executable_trampolines, script_exec_mapping},
         project::environment::environment_specs_in_sync,
-        EnvDir,
     },
     prefix::{Executable, Prefix},
     repodata::Repodata,
@@ -38,12 +38,12 @@ use indexmap::{IndexMap, IndexSet};
 use is_executable::IsExecutable;
 use itertools::Itertools;
 pub(crate) use manifest::{ExposedType, Manifest, Mapping};
-use miette::{miette, Context, IntoDiagnostic};
+use miette::{Context, IntoDiagnostic, miette};
 use once_cell::sync::OnceCell;
 use parsed_manifest::ParsedManifest;
 pub(crate) use parsed_manifest::{ExposedName, ParsedEnvironment};
-use pixi_config::{default_channel_config, pixi_home, Config};
-use pixi_consts::consts;
+use pixi_config::{Config, default_channel_config, pixi_home};
+use pixi_consts::consts::{self, CACHED_PACKAGES};
 use pixi_manifest::PrioritizedChannel;
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
 use pixi_utils::{executable_from_path, reqwest::build_reqwest_clients};
@@ -52,12 +52,12 @@ use rattler::{
     package_cache::PackageCache,
 };
 use rattler_conda_types::{
-    menuinst::MenuMode, ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform,
-    PrefixRecord,
+    ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, PrefixRecord,
+    menuinst::MenuMode,
 };
 use rattler_lock::Matches;
 use rattler_repodata_gateway::Gateway;
-use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
+use rattler_solve::{SolverImpl, SolverTask, resolvo::Solver};
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use reqwest_middleware::ClientWithMiddleware;
 use tokio::sync::Semaphore;
@@ -315,9 +315,9 @@ impl Project {
                 );
                 return Self::try_from_existing_installation(&manifest_path, env_root, bin_dir)
                     .await
-                    .wrap_err_with(|| {
-                        "Failed to create global manifest from existing installation"
-                    });
+                    .wrap_err_with(
+                        || "Failed to create global manifest from existing installation",
+                    );
             } else {
                 tracing::debug!("Create an empty global manifest.");
                 tokio_fs::File::create(&manifest_path)
@@ -580,7 +580,7 @@ impl Project {
         LazyLock::force(&RAYON_INITIALIZE);
 
         // Install the environment
-        let package_cache = PackageCache::new(pixi_config::get_cache_dir()?.join("pkgs"));
+        let package_cache = PackageCache::new(pixi_config::get_cache_dir()?.join(CACHED_PACKAGES));
         let prefix = self.environment_prefix(env_name).await?;
         let authenticated_client = self.authenticated_client()?.clone();
         let result = await_in_progress(
@@ -1293,7 +1293,7 @@ impl Repodata for Project {
 mod tests {
     use std::{collections::HashMap, io::Write};
 
-    use fake::{faker::filesystem::en::FilePath, Fake};
+    use fake::{Fake, faker::filesystem::en::FilePath};
     use itertools::Itertools;
     use rattler_conda_types::{
         NamedChannelOrUrl, PackageRecord, Platform, RepoDataRecord, VersionWithSource,

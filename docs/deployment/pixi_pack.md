@@ -87,6 +87,29 @@ This can be useful if you want to distribute the environment to users that don't
     environment.ps1
     ```
 
+#### Custom pixi-pack executable path
+
+When creating a self-extracting binary, you can specify a custom path or URL to a `pixi-pack` executable to avoid downloading it from the [default location](https://github.com/Quantco/pixi-pack/releases/download).
+
+You can provide one of the following as the `--pixi-pack-source`:
+
+- a URL to a `pixi-pack` executable like `https://my.mirror/pixi-pack/pixi-pack-x86_64-unknown-linux-musl`
+- a path to a `pixi-pack` binary like `./pixi-pack-x86_64-unknown-linux-musl`
+
+##### Example Usage
+
+Using a URL:
+
+```bash
+pixi-pack pack --create-executable --pixi-pack-source https://my.mirror/pixi-pack/pixi-pack-x86_64-unknown-linux-musl
+```
+
+Using a path:
+
+```bash
+pixi-pack pack --create-executable --pixi-pack-source ./pixi-pack-x86_64-unknown-linux-musl
+```
+
 !!! note
 
     The produced executable is a simple shell script that contains both the `pixi-pack` binary as well as the packed environment.
@@ -107,6 +130,35 @@ You can also pack PyPi wheel packages into your environment.
 `pixi-pack` only supports wheel packages and not source distributions.
 If you happen to use source distributions, you can ignore them by using the `--ignore-pypi-non-wheel` flag.
 This will skip the bundling of PyPi packages that are source distributions.
+
+The `--inject` option also supports wheels.
+
+```bash
+pixi-pack pack --ignore-pypi-non-wheel --inject my_webserver-0.1.0-py3-none-any.whl
+```
+
+!!! warning
+
+    In contrast to injecting from conda packages,
+    we cannot verify that injected wheels are compatible with the target environment. Please make sure the packages are compatible.
+
+### Mirror and S3 middleware
+
+You can use mirror middleware by creating a configuration file as described in the [pixi documentation](../reference/pixi_configuration.md#mirror-configuration) and referencing it using `--config`.
+
+```toml title="config.toml"
+[mirrors]
+"https://conda.anaconda.org/conda-forge" = ["https://my.artifactory/conda-forge"]
+```
+
+If you are using [S3 in pixi](./s3.md), you can also add the appropriate S3 config in your config file and reference it.
+
+```toml title="config.toml"
+[s3-options.my-s3-bucket]
+endpoint-url = "https://s3.eu-central-1.amazonaws.com"
+region = "eu-central-1"
+force-path-style = false
+```
 
 ### Cache Downloaded Packages
 

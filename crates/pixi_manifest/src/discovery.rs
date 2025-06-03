@@ -12,14 +12,13 @@ use rattler_conda_types::VersionSpec;
 use thiserror::Error;
 use toml_span::Deserialize;
 
-use crate::toml::ExternalWorkspaceProperties;
 use crate::{
-    pyproject::PyProjectManifest,
-    toml::{ExternalPackageProperties, TomlManifest},
-    utils::WithSourceCode,
-    warning::WarningWithSource,
     AssociateProvenance, ManifestKind, ManifestProvenance, ManifestSource, PackageManifest,
     ProvenanceError, TomlError, WithProvenance, WithWarnings, WorkspaceManifest,
+    pyproject::PyProjectManifest,
+    toml::{ExternalWorkspaceProperties, TomlManifest},
+    utils::WithSourceCode,
+    warning::WarningWithSource,
 };
 
 /// A helper struct to discover the workspace manifest in a directory tree from
@@ -101,7 +100,7 @@ impl Manifests {
                     error: TomlError::from(e),
                     source: build_source_code(),
                 })
-                .into())
+                .into());
             }
         };
 
@@ -129,7 +128,7 @@ impl Manifests {
                     error: toml_error,
                     source: build_source_code(),
                 })
-                .into())
+                .into());
             }
         };
 
@@ -329,22 +328,35 @@ impl WorkspaceDiscoverer {
             // Read the contents of the manifest file.
             let contents = provenance.read()?.map(Arc::<str>::from);
 
-            // Cheap check to see if the manifest contains a pixi section.
+            // Cheap check to see if the manifest contains a pixi section and if so has the
+            // required sections.
             if let ManifestSource::PyProjectToml(source) = &contents {
-                if !source.contains("[tool.pixi")
-                    && matches!(search_path.clone(), SearchPath::Explicit(_))
+                if (source.contains("[tool.pixi")
+                    || matches!(search_path.clone(), SearchPath::Explicit(_)))
+                    && !Self::REQUIRED_SECTIONS
+                        .iter()
+                        .any(|section| source.contains(&format!("[tool.pixi.{}", section)))
                 {
                     return Err(WorkspaceDiscoveryError::Toml(Box::new(WithSourceCode {
-                        error: TomlError::NoPixiTable(ManifestKind::Pyproject, None),
+                        error: TomlError::NoPixiTable(
+                            ManifestKind::Pyproject,
+                            Some(format!(
+                                "Any of the following sections is required:\n{}",
+                                Self::REQUIRED_SECTIONS
+                                    .map(|s| format!("* tool.pixi.{}", s))
+                                    .join("\n")
+                            )),
+                        ),
                         source: contents.into_named(provenance.absolute_path().to_string_lossy()),
                     })));
                 }
             } else if let ManifestSource::PixiToml(source) = &contents {
                 // check if at least one of the required sections is present
-                if !Self::REQUIRED_SECTIONS
-                    .iter()
-                    .any(|section| source.contains(&format!("[{}]", section)))
-                {
+                if !Self::REQUIRED_SECTIONS.iter().any(|section| {
+                    source
+                        .lines()
+                        .any(|line| line.trim_start().starts_with(&format!("[{}", section)))
+                }) {
                     return Err(WorkspaceDiscoveryError::Toml(Box::new(WithSourceCode {
                         error: TomlError::NoPixiTable(
                             ManifestKind::Pixi,
@@ -370,7 +382,7 @@ impl WorkspaceDiscoverer {
                         error: TomlError::from(e),
                         source,
                     })
-                    .into())
+                    .into());
                 }
             };
 
@@ -392,7 +404,7 @@ impl WorkspaceDiscoverer {
                                 error: TomlError::from(err),
                                 source,
                             })
-                            .into())
+                            .into());
                         }
                     };
 
@@ -416,15 +428,13 @@ impl WorkspaceDiscoverer {
                     }
                 }
                 ManifestKind::Pyproject => {
-                    if closest_package_manifest.is_some()
-                        && toml.pointer("/tool/pixi/workspace").is_none()
-                    {
-                        // The manifest does not contain a workspace section, and we don't care
+                    if closest_package_manifest.is_some() && toml.pointer("/tool/pixi").is_none() {
+                        // The manifest does not contain a pixi section, and we don't care
                         // about the package section.
                         continue;
                     }
 
-                    // Parse as a pixi.toml manifest
+                    // Parse as a pyproject.toml manifest
                     let manifest = match PyProjectManifest::deserialize(&mut toml) {
                         Ok(manifest) => manifest,
                         Err(err) => {
@@ -432,7 +442,7 @@ impl WorkspaceDiscoverer {
                                 error: TomlError::from(err),
                                 source,
                             })
-                            .into())
+                            .into());
                         }
                     };
 
@@ -485,7 +495,7 @@ impl WorkspaceDiscoverer {
                     let manifest_dir = provenance.path.parent().expect("a file must have a parent");
                     let package_manifest = match package_manifest {
                         EitherManifest::Pixi(manifest) => manifest.into_package_manifest(
-                            ExternalPackageProperties::default(),
+                            workspace_manifest.derived_external_package_properties(),
                             &workspace_manifest,
                             Some(manifest_dir),
                         ),
@@ -544,10 +554,10 @@ impl WorkspaceDiscoverer {
 mod test {
     use std::{fmt::Write, path::Path};
 
+    use pixi_test_utils::format_diagnostic;
     use rstest::*;
 
     use super::*;
-    use crate::utils::test_utils::format_diagnostic;
 
     #[rstest]
     #[case::root("")]
@@ -627,7 +637,9 @@ mod test {
     #[case::empty("empty")]
     #[case::package_specific("package_a/pixi.toml")]
     #[case::missing_table_pixi_manifest("missing-tables/pixi.toml")]
-    #[case::missing_table_pyproject_manifest("missing-tables/pyproject.toml")]
+    #[case::missing_table_pyproject_manifest("missing-tables-pyproject/pyproject.toml")]
+    #[case::split_package("split_package/good/package")]
+    #[case::split_package("split_package/bad/package")]
     fn test_explicit_workspace_discoverer(#[case] subdir: &str) {
         let test_data_root = dunce::canonicalize(
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/workspace-discovery"),
@@ -686,7 +698,8 @@ mod test {
 
     #[test]
     fn test_non_existing_discovery() {
-        // Split from the previous rstests, to avoid insta snapshot path conflicts in the error.
+        // Split from the previous rstests, to avoid insta snapshot path conflicts in
+        // the error.
         let test_data_root = dunce::canonicalize(
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/workspace-discovery"),
         )
@@ -700,5 +713,25 @@ mod test {
         .expect_err("Expected an error");
 
         assert!(matches!(err, WorkspaceDiscoveryError::Canonicalize(_, _)));
+    }
+
+    #[test]
+    fn test_missing_tables_pyproject_discovery() {
+        let test_data_root = dunce::canonicalize(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/workspace-discovery"),
+        )
+        .unwrap();
+
+        let err = WorkspaceDiscoverer::new(DiscoveryStart::SearchRoot(
+            test_data_root.join("missing-tables-pyproject"),
+        ))
+        .discover()
+        .expect_err("Expected an error");
+
+        assert!(matches!(err, WorkspaceDiscoveryError::Toml(_)));
+        assert!(
+            err.to_string()
+                .contains("Missing table in manifest pyproject.toml")
+        )
     }
 }

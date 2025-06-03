@@ -1,8 +1,8 @@
 use super::{EnvDir, EnvironmentName, ExposedName, StateChanges};
 use crate::{
     global::{
-        trampoline::{Configuration, Trampoline},
         BinDir, StateChange,
+        trampoline::{Configuration, Trampoline},
     },
     prefix::Executable,
     prefix::Prefix,
@@ -106,6 +106,7 @@ pub(crate) async fn create_executable_trampolines(
     let mut activation_variables = prefix.run_activation().await?;
     let path_after_activation = activation_variables
         .remove("PATH")
+        .or_else(|| activation_variables.remove("Path"))
         .unwrap_or_else(|| path_current.clone());
 
     let path_diff = path_diff(&path_current, &path_after_activation, prefix)?;
@@ -207,7 +208,8 @@ fn path_diff(path_before: &str, path_after: &str, prefix: &Prefix) -> miette::Re
     // Calculate the PATH diff
     let path_diff = paths_after
         .iter()
-        .filter(|p| !paths_before.contains(p) || prefix_path_entries.contains(p));
+        .filter(|p| !paths_before.contains(p) || prefix_path_entries.contains(p))
+        .unique();
 
     env::join_paths(path_diff)
         .map(|p| p.to_string_lossy().to_string())
@@ -407,11 +409,10 @@ mod tests {
         ripgrep_specs: IndexSet<MatchSpec>,
         ripgrep_bat_specs: IndexSet<MatchSpec>,
     ) {
-        assert!(!local_environment_matches_spec(
-            ripgrep_bat_records.clone(),
-            &ripgrep_specs,
-            None
-        ), "The function needs to detect that records coming from ripgrep and bat don't match ripgrep alone.");
+        assert!(
+            !local_environment_matches_spec(ripgrep_bat_records.clone(), &ripgrep_specs, None),
+            "The function needs to detect that records coming from ripgrep and bat don't match ripgrep alone."
+        );
 
         assert!(
             local_environment_matches_spec(ripgrep_bat_records, &ripgrep_bat_specs, None),

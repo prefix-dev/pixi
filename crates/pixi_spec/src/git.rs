@@ -21,8 +21,21 @@ pub struct GitSpec {
     pub subdirectory: Option<String>,
 }
 
+impl Display for GitSpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.git)?;
+        if let Some(rev) = &self.rev {
+            write!(f, " @ {}", rev)?;
+        }
+        if let Some(subdir) = &self.subdirectory {
+            write!(f, " in {}", subdir)?;
+        }
+        Ok(())
+    }
+}
+
 /// A reference to a specific commit in a git repository.
-#[derive(Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord, ::serde::Deserialize)]
+#[derive(Default, Debug, Clone, Hash, Eq, PartialEq, PartialOrd, Ord, ::serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum GitReference {
     /// The HEAD commit of a branch.
@@ -35,6 +48,7 @@ pub enum GitReference {
     Rev(String),
 
     /// A default branch.
+    #[default]
     DefaultBranch,
 }
 

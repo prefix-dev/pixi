@@ -1,9 +1,9 @@
 [workspace]
 authors = ["nichmor <nmorkotilo@gmail.com>"]
-channels = ["conda-forge"]
+channels = ["https://prefix.dev/conda-forge"]
 description = "Add a short description here"
 name = "boltons"
-platforms = ["osx-arm64"]
+platforms = ["win-64", "linux-64", "osx-arm64", "osx-64"]
 preview = ['pixi-build']
 version = "0.1.0"
 
@@ -25,6 +25,6 @@ hatchling = "*"
 [package.build]
 backend = { name = "pixi-build-rattler-build", version = "0.1.*" }
 channels = [
-  "https://repo.prefix.dev/pixi-build-backends",
-  "https://fast.prefix.dev/conda-forge",
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
 ]

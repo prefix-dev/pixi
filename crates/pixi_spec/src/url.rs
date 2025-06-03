@@ -1,8 +1,9 @@
 use crate::BinarySpec;
 use itertools::Either;
-use rattler_conda_types::{package::ArchiveIdentifier, NamelessMatchSpec};
+use rattler_conda_types::{NamelessMatchSpec, package::ArchiveIdentifier};
 use rattler_digest::{Md5Hash, Sha256Hash};
 use serde_with::serde_as;
+use std::fmt::Display;
 use url::Url;
 
 /// A specification of a package from a URL. This is used to represent both
@@ -81,16 +82,34 @@ impl UrlSpec {
 }
 
 /// A specification of a source archive from a URL.
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[serde_as]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, serde::Serialize)]
 pub struct UrlSourceSpec {
     /// The URL of the package
     pub url: Url,
 
     /// The md5 hash of the archive
+    #[serde_as(as = "Option<rattler_digest::serde::SerializableHash<rattler_digest::Md5>>")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub md5: Option<Md5Hash>,
 
     /// The sha256 hash of the archive
+    #[serde_as(as = "Option<rattler_digest::serde::SerializableHash<rattler_digest::Sha256>>")]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub sha256: Option<Sha256Hash>,
+}
+
+impl Display for UrlSourceSpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.url)?;
+        if let Some(md5) = &self.md5 {
+            write!(f, " md5={:x}", md5)?;
+        }
+        if let Some(sha256) = &self.sha256 {
+            write!(f, " sha256={:x}", sha256)?;
+        }
+        Ok(())
+    }
 }
 
 impl From<UrlSourceSpec> for UrlSpec {

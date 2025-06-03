@@ -23,7 +23,10 @@
 //! }
 //! ```
 
-use pixi::cli::cli_config::{GitRev, LockFileUpdateConfig, PrefixUpdateConfig, WorkspaceConfig};
+use pixi::cli::{
+    cli_config::{GitRev, LockFileUpdateConfig, PrefixUpdateConfig, WorkspaceConfig},
+    lock,
+};
 use std::{
     future::{Future, IntoFuture},
     io,
@@ -34,12 +37,12 @@ use std::{
 
 use futures::FutureExt;
 use pixi::{
+    DependencyType,
     cli::{
         add, cli_config::DependencyConfig, init, install, remove, search, task, update, workspace,
     },
-    DependencyType,
 };
-use pixi_manifest::{task::Dependency, EnvironmentName, FeatureName, SpecType};
+use pixi_manifest::{EnvironmentName, FeatureName, SpecType, task::Dependency};
 use rattler_conda_types::{NamedChannelOrUrl, Platform, RepoDataRecord};
 use url::Url;
 
@@ -96,10 +99,9 @@ impl IntoFuture for InitBuilder {
         init::execute(init::Args {
             channels: if !self.no_fast_prefix {
                 self.args.channels.or_else(|| {
-                    Some(vec![NamedChannelOrUrl::from_str(
-                        "https://prefix.dev/conda-forge",
-                    )
-                    .unwrap()])
+                    Some(vec![
+                        NamedChannelOrUrl::from_str("https://prefix.dev/conda-forge").unwrap(),
+                    ])
                 })
             } else {
                 self.args.channels
@@ -563,5 +565,20 @@ impl IntoFuture for UpdateBuilder {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
     fn into_future(self) -> Self::IntoFuture {
         update::execute(self.args).boxed_local()
+    }
+}
+
+/// Contains the arguments to pass to [`lock::execute()`]. Call `.await` to call
+/// the CLI execute method and await the result at the same time.
+pub struct LockBuilder {
+    pub args: lock::Args,
+}
+
+impl IntoFuture for LockBuilder {
+    type Output = miette::Result<()>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        lock::execute(self.args).boxed_local()
     }
 }

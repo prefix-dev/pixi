@@ -1,5 +1,5 @@
-use clap::builder::styling::{AnsiColor, Color, Style};
 use clap::Parser;
+use clap::builder::styling::{AnsiColor, Color, Style};
 use indicatif::ProgressDrawTarget;
 use miette::IntoDiagnostic;
 use pixi_consts::consts;
@@ -7,8 +7,8 @@ use pixi_progress::global_multi_progress;
 use pixi_utils::indicatif::IndicatifWriter;
 use std::{env, io::IsTerminal};
 use tracing_subscriber::{
-    filter::LevelFilter, prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt,
-    EnvFilter,
+    EnvFilter, filter::LevelFilter, prelude::__tracing_subscriber_SubscriberExt,
+    util::SubscriberInitExt,
 };
 
 pub mod add;
@@ -76,26 +76,25 @@ pub struct Args {
 }
 
 #[derive(Debug, Parser)]
-#[clap(next_help_heading = consts::CLAP_GLOBAL_OPTIONS)]
 pub struct GlobalOptions {
     /// Display help information
-    #[clap(long, short, global = true, action = clap::ArgAction::Help)]
+    #[clap(long, short, global = true, action = clap::ArgAction::Help, help_heading = consts::CLAP_GLOBAL_OPTIONS)]
     help: Option<bool>,
 
     /// Increase logging verbosity (-v for warnings, -vv for info, -vvv for debug, -vvvv for trace)
-    #[clap(short, long, action = clap::ArgAction::Count, global = true)]
+    #[clap(short, long, action = clap::ArgAction::Count, global = true, help_heading = consts::CLAP_GLOBAL_OPTIONS)]
     verbose: u8,
 
     /// Decrease logging verbosity (quiet mode)
-    #[clap(short, long, action = clap::ArgAction::Count, global = true)]
+    #[clap(short, long, action = clap::ArgAction::Count, global = true, help_heading = consts::CLAP_GLOBAL_OPTIONS)]
     quiet: u8,
 
     /// Whether the log needs to be colored.
-    #[clap(long, default_value = "auto", global = true, env = "PIXI_COLOR")]
+    #[clap(long, default_value = "auto", global = true, env = "PIXI_COLOR", help_heading = consts::CLAP_GLOBAL_OPTIONS)]
     color: ColorOutput,
 
     /// Hide all progress bars, always turned on if stderr is not a terminal.
-    #[clap(long, default_value = "false", global = true, env = "PIXI_NO_PROGRESS")]
+    #[clap(long, default_value = "false", global = true, env = "PIXI_NO_PROGRESS", help_heading = consts::CLAP_GLOBAL_OPTIONS)]
     no_progress: bool,
 }
 
@@ -126,69 +125,58 @@ impl Args {
 
 #[derive(Parser, Debug)]
 pub enum Command {
-    Init(init::Args),
-
-    // Installation commands
+    // Commands in alphabetical order
     #[clap(visible_alias = "a")]
     Add(add::Args),
-    #[clap(visible_alias = "rm")]
-    Remove(remove::Args),
-    #[clap(visible_alias = "i")]
-    Install(install::Args),
-    Reinstall(reinstall::Args),
-    Update(update::Args),
-    Upgrade(upgrade::Args),
-    Lock(lock::Args),
-
-    #[clap(visible_alias = "r")]
-    Run(run::Args),
+    Auth(rattler::cli::auth::Args),
+    Build(build::Args),
+    Clean(clean::Args),
+    Completion(completion::Args),
+    Config(config::Args),
     #[clap(visible_alias = "x")]
     Exec(exec::Args),
-    #[clap(visible_alias = "s")]
-    Shell(shell::Args),
-    ShellHook(shell_hook::Args),
-
-    // Workspace Manifest modification commands
-    #[clap(alias = "project")]
-    Workspace(workspace::Args),
-    Task(task::Args),
-
-    // Environment inspection
-    #[clap(visible_alias = "ls")]
-    List(list::Args),
-    #[clap(visible_alias = "t")]
-    Tree(tree::Args),
-
-    // Global level commands
     #[clap(visible_alias = "g")]
     Global(global::Args),
-    Auth(rattler::cli::auth::Args),
-    Config(config::Args),
     Info(info::Args),
-    Upload(upload::Args),
+    Init(init::Args),
+    #[clap(visible_alias = "i")]
+    Install(install::Args),
+    #[clap(visible_alias = "ls")]
+    List(list::Args),
+    Lock(lock::Args),
+    Reinstall(reinstall::Args),
+    #[clap(visible_alias = "rm")]
+    Remove(remove::Args),
+    #[clap(visible_alias = "r")]
+    Run(run::Args),
     Search(search::Args),
     #[cfg_attr(not(feature = "self_update"), clap(hide = true))]
     #[cfg_attr(feature = "self_update", clap(hide = false))]
     SelfUpdate(self_update::Args),
-    Clean(clean::Args),
-    Completion(completion::Args),
-
-    // Build
-    Build(build::Args),
+    #[clap(visible_alias = "s")]
+    Shell(shell::Args),
+    ShellHook(shell_hook::Args),
+    Task(task::Args),
+    #[clap(visible_alias = "t")]
+    Tree(tree::Args),
+    Update(update::Args),
+    Upgrade(upgrade::Args),
+    Upload(upload::Args),
+    #[clap(alias = "project")]
+    Workspace(workspace::Args),
 }
 
 #[derive(Parser, Debug, Default, Copy, Clone)]
 #[group(multiple = false)]
-#[clap(next_help_heading = consts::CLAP_UPDATE_OPTIONS)]
 /// Lock file usage from the CLI
 pub struct LockFileUsageConfig {
     /// Install the environment as defined in the lockfile, doesn't update
     /// lockfile if it isn't up-to-date with the manifest file.
-    #[clap(long, conflicts_with = "locked", env = "PIXI_FROZEN")]
+    #[clap(long, conflicts_with = "locked", env = "PIXI_FROZEN", help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub frozen: bool,
     /// Check if lockfile is up-to-date before installing the environment,
     /// aborts when lockfile isn't up-to-date with the manifest file.
-    #[clap(long, conflicts_with = "frozen", env = "PIXI_LOCKED")]
+    #[clap(long, conflicts_with = "frozen", env = "PIXI_LOCKED", help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub locked: bool,
 }
 
@@ -238,6 +226,11 @@ pub async fn execute() -> miette::Result<()> {
         // filter logs from apple codesign because they are very noisy
         .add_directive("apple_codesign=off".parse().into_diagnostic()?)
         .add_directive(format!("pixi={}", pixi_level).parse().into_diagnostic()?)
+        .add_directive(
+            format!("pixi_command_dispatcher={}", pixi_level)
+                .parse()
+                .into_diagnostic()?,
+        )
         .add_directive(
             format!("resolvo={}", low_level_filter)
                 .parse()

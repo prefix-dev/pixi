@@ -14,11 +14,11 @@ use thiserror::Error;
 use which::Error;
 
 use crate::{
+    InProcessBackend, ToolContext,
     backend_override::BackendOverride,
     jsonrpc::{Receiver, Sender},
     protocols::{InitializeError, JsonRPCBuildProtocol},
     tool::{IsolatedToolSpec, ToolCacheError, ToolSpec},
-    InProcessBackend, ToolContext,
 };
 
 /// A protocol that uses a pixi manifest to invoke a build backend .
@@ -60,14 +60,37 @@ impl Display for FinishError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             FinishError::Init(init) => write!(f, "{init}"),
-            FinishError::NoBuildSection(_) => write!(f, "failed to setup a build backend, the project manifest does not contain a [build-system] section"),
+            FinishError::NoBuildSection(_) => write!(
+                f,
+                "failed to setup a build backend, the project manifest does not contain a [build-system] section"
+            ),
             FinishError::Tool(ToolCacheError::Instantiate(tool, err)) => match err {
-                Error::CannotGetCurrentDirAndPathListEmpty | Error::CannotFindBinaryPath => write!(f, "failed to setup a build backend, the backend tool '{}' could not be found", tool.display()),
-                Error::CannotCanonicalize => write!(f, "failed to setup a build backend, although the backend tool  '{}' can be resolved it could not be canonicalized", tool.display()),
+                Error::CannotGetCurrentDirAndPathListEmpty | Error::CannotFindBinaryPath => write!(
+                    f,
+                    "failed to setup a build backend, the backend tool '{}' could not be found",
+                    tool.display()
+                ),
+                Error::CannotCanonicalize => write!(
+                    f,
+                    "failed to setup a build backend, although the backend tool  '{}' can be resolved it could not be canonicalized",
+                    tool.display()
+                ),
             },
-            FinishError::Tool(ToolCacheError::Install(report)) => write!(f, "failed to setup a build backend, the backend tool could not be installed: {}", report),
-            FinishError::Tool(ToolCacheError::CacheDir(report)) => write!(f, "failed to setup a build backend, the cache dir could not be discovered: {}", report),
-            FinishError::SpecConversionError(err) => write!(f, "failed to setup a build backend, the backend tool spec could not be converted: {}", err),
+            FinishError::Tool(ToolCacheError::Install(report)) => write!(
+                f,
+                "failed to setup a build backend, the backend tool could not be installed: {}",
+                report
+            ),
+            FinishError::Tool(ToolCacheError::CacheDir(report)) => write!(
+                f,
+                "failed to setup a build backend, the cache dir could not be discovered: {}",
+                report
+            ),
+            FinishError::SpecConversionError(err) => write!(
+                f,
+                "failed to setup a build backend, the backend tool spec could not be converted: {}",
+                err
+            ),
         }
     }
 }

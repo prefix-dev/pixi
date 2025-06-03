@@ -8,7 +8,18 @@ use toml_span::{DeserError, Value};
 use url::Url;
 
 use super::pypi::pypi_options::PypiOptions;
-use crate::{preview::Preview, PrioritizedChannel, S3Options, Targets};
+use crate::{
+    PrioritizedChannel, S3Options, Targets, exclude_newer::ExcludeNewer, preview::Preview,
+};
+use minijinja::{AutoEscape, Environment, UndefinedBehavior};
+use once_cell::sync::Lazy;
+
+pub static JINJA_ENV: Lazy<Environment<'static>> = Lazy::new(|| {
+    let mut env = Environment::new();
+    env.set_undefined_behavior(UndefinedBehavior::Strict);
+    env.set_auto_escape_callback(|_| AutoEscape::None);
+    env
+});
 
 /// Describes the contents of the `[workspace]` section of the project manifest.
 #[derive(Debug, Default, Clone)]
@@ -69,6 +80,9 @@ pub struct Workspace {
 
     /// Version requirement for pixi itself
     pub requires_pixi: Option<VersionSpec>,
+
+    /// Exclude package candidates that are newer than this date.
+    pub exclude_newer: Option<ExcludeNewer>,
 }
 
 #[derive(
@@ -97,7 +111,6 @@ impl<'de> toml_span::Deserialize<'de> for ChannelPriority {
     }
 }
 
-#[cfg(feature = "rattler_solve")]
 impl From<ChannelPriority> for rattler_solve::ChannelPriority {
     fn from(value: ChannelPriority) -> Self {
         match value {
@@ -107,7 +120,6 @@ impl From<ChannelPriority> for rattler_solve::ChannelPriority {
     }
 }
 
-#[cfg(feature = "rattler_solve")]
 impl From<rattler_solve::ChannelPriority> for ChannelPriority {
     fn from(value: rattler_solve::ChannelPriority) -> Self {
         match value {

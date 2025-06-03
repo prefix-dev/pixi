@@ -1,6 +1,7 @@
 use crate::task::{ExecutableTask, FileHashes, FileHashesError, InvalidWorkingDirectory};
 use crate::workspace;
 use miette::Diagnostic;
+use pixi_manifest::task::TemplateStringError;
 use rattler_lock::LockFile;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -27,8 +28,33 @@ impl Display for ComputationHash {
     }
 }
 
+/// The name hash is a combined hash of all the inputs and outputs of a task.
+/// and it's used as a name for the task cache file.
+///
+/// Use a [`TaskHash`] to construct a name hash.
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Deserialize, Serialize)]
+pub struct NameHash(String);
+
+impl From<String> for NameHash {
+    fn from(value: String) -> Self {
+        NameHash(value)
+    }
+}
+
+impl From<&dyn Hasher> for NameHash {
+    fn from(hasher: &dyn Hasher) -> Self {
+        NameHash(format!("{:x}", hasher.finish()))
+    }
+}
+
+impl Display for NameHash {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 /// The cache of a task. It contains the hash of the task.
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct TaskCache {
     /// The hash of the task.
     pub hash: ComputationHash,
@@ -118,7 +144,7 @@ impl TaskHash {
         }
 
         Ok(Some(Self {
-            command: task.full_command(),
+            command: task.full_command().ok().flatten(),
             outputs: output_hashes,
             inputs: input_hashes,
             // Skipping environment variables used for caching the task
@@ -147,6 +173,32 @@ impl TaskHash {
         self.environment.hash(&mut hasher);
         ComputationHash(format!("{:x}", hasher.finish()))
     }
+
+    /// Return the hash that should be used as the name of the task cache file.
+    /// It takes the rendered inputs and rendered outputs of the task into account.
+    pub fn task_args_hash(task: &ExecutableTask<'_>) -> Result<Option<NameHash>, InputHashesError> {
+        let mut hasher = Xxh3::new();
+
+        let Ok(execute) = task.task().as_execute() else {
+            return Ok(None);
+        };
+
+        // We need to compute hash from input args
+        // If no input args are provided, we treat them as empty list.
+        if let Some(ref inputs) = execute.inputs {
+            let rendered_inputs = inputs.render(Some(task.args()))?;
+            rendered_inputs.hash(&mut hasher);
+        }
+
+        // and the same for output args
+        if let Some(ref outputs) = execute.outputs {
+            let rendered_outputs = outputs.render(Some(task.args()))?;
+            rendered_outputs.hash(&mut hasher);
+        }
+
+        // Create a namehash from the hasher
+        Ok(Some(NameHash::from(&hasher as &dyn Hasher)))
+    }
 }
 
 /// The combination of all the hashes of the inputs of a task.
@@ -158,11 +210,24 @@ pub struct InputHashes {
 impl InputHashes {
     /// Compute the input hashes from a task.
     pub async fn from_task(task: &ExecutableTask<'_>) -> Result<Option<Self>, InputHashesError> {
-        let Some(ref inputs) = task.task().as_execute().and_then(|e| e.inputs.clone()) else {
+        let Ok(execute) = task.task().as_execute() else {
             return Ok(None);
         };
 
-        let files = FileHashes::from_files(task.project().root(), inputs.iter()).await?;
+        let Some(inputs) = &execute.inputs else {
+            return Ok(None);
+        };
+
+        if inputs.is_empty() {
+            return Ok(None);
+        }
+
+        let rendered_inputs: Vec<String> = inputs
+            .iter()
+            .map(|i| i.render(Some(task.args())))
+            .collect::<Result<_, _>>()?;
+
+        let files = FileHashes::from_files(task.project().root(), &rendered_inputs).await?;
 
         // check if any files were matched
         if files.files.is_empty() {
@@ -172,7 +237,10 @@ impl InputHashes {
             );
             tracing::warn!(
                 "Input globs: {:?}",
-                inputs.iter().map(|g| g.as_str()).collect::<Vec<_>>()
+                rendered_inputs
+                    .iter()
+                    .map(|g| g.as_str())
+                    .collect::<Vec<_>>()
             );
         }
 
@@ -192,8 +260,25 @@ impl OutputHashes {
         task: &ExecutableTask<'_>,
         warn: bool,
     ) -> Result<Option<Self>, InputHashesError> {
-        let Some(ref outputs) = task.task().as_execute().and_then(|e| e.outputs.clone()) else {
-            return Ok(None);
+        let outputs: Vec<String> = match task.task().as_execute() {
+            Ok(execute) => {
+                if let Some(outputs) = execute.outputs.clone() {
+                    let mut rendered_outputs = Vec::new();
+                    for output in outputs.iter() {
+                        match output.render(Some(task.args())) {
+                            Ok(rendered) => rendered_outputs.push(rendered),
+                            Err(err) => return Err(InputHashesError::TemplateStringError(err)),
+                        }
+                    }
+                    if rendered_outputs.is_empty() {
+                        return Ok(None);
+                    }
+                    rendered_outputs
+                } else {
+                    return Ok(None);
+                }
+            }
+            Err(_) => return Ok(None),
         };
 
         let files = FileHashes::from_files(task.project().root(), outputs.iter()).await?;
@@ -223,4 +308,8 @@ pub enum InputHashesError {
 
     #[error(transparent)]
     InvalidWorkingDirectory(#[from] InvalidWorkingDirectory),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    TemplateStringError(#[from] TemplateStringError),
 }

@@ -1,19 +1,17 @@
 use std::str::FromStr;
 
-use pixi::{cli::cli_config::GitRev, DependencyType, Workspace};
+use pixi::{DependencyType, Workspace, cli::cli_config::GitRev};
 use pixi_consts::consts;
-use pixi_manifest::{
-    pypi::{PyPiPackageName, VersionOrStar},
-    FeaturesExt, PyPiRequirement, SpecType,
-};
+use pixi_manifest::{FeaturesExt, SpecType};
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName, VersionOrStar};
 use rattler_conda_types::{PackageName, Platform};
 use tempfile::TempDir;
 use url::Url;
 
 use crate::common::{
+    LockFileExt, PixiControl,
     builders::{HasDependencyConfig, HasLockFileUpdateConfig, HasPrefixUpdateConfig},
     package_database::{Package, PackageDatabase},
-    LockFileExt, PixiControl,
 };
 
 /// Test add functionality for different types of packages.
@@ -283,7 +281,7 @@ async fn add_pypi_functionality() {
         .pypi_dependencies(None)
         .into_specs()
         .for_each(|(name, spec)| {
-            if name == PyPiPackageName::from_str("pytest").unwrap() {
+            if name == PypiPackageName::from_str("pytest").unwrap() {
                 assert_eq!(
                     spec.extras(),
                     &[pep508_rs::ExtraName::from_str("dev").unwrap()]
@@ -391,7 +389,7 @@ async fn add_pypi_extra_functionality() {
         .pypi_dependencies(None)
         .into_specs()
         .for_each(|(name, spec)| {
-            if name == PyPiPackageName::from_str("black").unwrap() {
+            if name == PypiPackageName::from_str("black").unwrap() {
                 assert_eq!(
                     spec.extras(),
                     &[pep508_rs::ExtraName::from_str("cli").unwrap()]
@@ -413,7 +411,7 @@ async fn add_pypi_extra_functionality() {
         .pypi_dependencies(None)
         .into_specs()
         .for_each(|(name, spec)| {
-            if name == PyPiPackageName::from_str("black").unwrap() {
+            if name == PypiPackageName::from_str("black").unwrap() {
                 assert_eq!(spec.extras(), &[]);
             }
         });
@@ -432,10 +430,10 @@ async fn add_pypi_extra_functionality() {
         .pypi_dependencies(None)
         .into_specs()
         .for_each(|(name, spec)| {
-            if name == PyPiPackageName::from_str("black").unwrap() {
+            if name == PypiPackageName::from_str("black").unwrap() {
                 assert_eq!(
                     spec,
-                    PyPiRequirement::Version {
+                    PixiPypiSpec::Version {
                         version: VersionOrStar::from_str("==24.8.0").unwrap(),
                         extras: vec![pep508_rs::ExtraName::from_str("cli").unwrap()],
                         index: None
@@ -693,14 +691,15 @@ preview = ['pixi-build']
     });
 
     // Check the manifest itself
-    insta::assert_snapshot!(pixi
-        .workspace()
-        .unwrap()
-        .workspace
-        .provenance
-        .read()
-        .unwrap()
-        .into_inner());
+    insta::assert_snapshot!(
+        pixi.workspace()
+            .unwrap()
+            .workspace
+            .provenance
+            .read()
+            .unwrap()
+            .into_inner()
+    );
 }
 
 /// Test adding git dependencies with credentials
@@ -749,14 +748,15 @@ preview = ['pixi-build']
     });
 
     // Check the manifest itself
-    insta::assert_snapshot!(pixi
-        .workspace()
-        .unwrap()
-        .modify()
-        .unwrap()
-        .manifest()
-        .document
-        .to_string());
+    insta::assert_snapshot!(
+        pixi.workspace()
+            .unwrap()
+            .modify()
+            .unwrap()
+            .manifest()
+            .document
+            .to_string()
+    );
 }
 
 /// Test adding a git dependency with a specific commit
@@ -799,14 +799,15 @@ preview = ['pixi-build']"#,
     });
 
     // Check the manifest itself
-    insta::assert_snapshot!(pixi
-        .workspace()
-        .unwrap()
-        .workspace
-        .provenance
-        .read()
-        .unwrap()
-        .into_inner());
+    insta::assert_snapshot!(
+        pixi.workspace()
+            .unwrap()
+            .workspace
+            .provenance
+            .read()
+            .unwrap()
+            .into_inner()
+    );
 }
 
 /// Test adding a git dependency with a specific tag
@@ -852,14 +853,15 @@ preview = ['pixi-build']"#,
     });
 
     // Check the manifest itself
-    insta::assert_snapshot!(pixi
-        .workspace()
-        .unwrap()
-        .workspace
-        .provenance
-        .read()
-        .unwrap()
-        .into_inner());
+    insta::assert_snapshot!(
+        pixi.workspace()
+            .unwrap()
+            .workspace
+            .provenance
+            .read()
+            .unwrap()
+            .into_inner()
+    );
 }
 
 /// Test adding a git dependency using ssh url
@@ -883,18 +885,20 @@ preview = ['pixi-build']"#,
         .unwrap();
 
     // Check the manifest itself
-    insta::assert_snapshot!(pixi
-        .workspace()
-        .unwrap()
-        .workspace
-        .provenance
-        .read()
-        .unwrap()
-        .into_inner());
+    insta::assert_snapshot!(
+        pixi.workspace()
+            .unwrap()
+            .workspace
+            .provenance
+            .read()
+            .unwrap()
+            .into_inner()
+    );
 }
 
 /// Test adding a git dependency using ssh url
 #[tokio::test]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn add_pypi_git() {
     let pixi = PixiControl::from_manifest(
         format!(

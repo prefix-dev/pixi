@@ -18,11 +18,17 @@
 //! needed.
 use std::{collections::HashMap, path::Path};
 
+use crate::environment::{CondaPrefixUpdated, CondaPrefixUpdater};
+use crate::{
+    activation::CurrentEnvVarBehavior,
+    workspace::{Environment, EnvironmentVars, get_activated_environment_variables},
+};
 use async_once_cell::OnceCell as AsyncCell;
 use once_cell::sync::OnceCell;
 use pixi_manifest::EnvironmentName;
+use pixi_manifest::pypi::pypi_options::NoBuildIsolation;
 use pixi_record::PixiRecord;
-use pixi_uv_conversions::{isolated_names_to_packages, names_to_build_isolation};
+use pixi_uv_conversions::BuildIsolation;
 use tokio::runtime::Handle;
 use uv_build_frontend::SourceBuild;
 use uv_cache::Cache;
@@ -33,22 +39,15 @@ use uv_configuration::{
 };
 use uv_dispatch::{BuildDispatch, BuildDispatchError, SharedState};
 use uv_distribution_filename::DistFilename;
+use uv_distribution_types::Requirement;
 use uv_distribution_types::{
     CachedDist, DependencyMetadata, IndexLocations, IsBuildBackendError, Resolution, SourceDist,
 };
 use uv_install_wheel::LinkMode;
-use uv_pep508::PackageName;
-use uv_pypi_types::Requirement;
 use uv_python::{Interpreter, InterpreterError, PythonEnvironment};
 use uv_resolver::{ExcludeNewer, FlatIndex};
 use uv_types::{BuildContext, BuildStack, HashStrategy};
 use uv_workspace::WorkspaceCache;
-
-use crate::environment::{CondaPrefixUpdated, CondaPrefixUpdater};
-use crate::{
-    activation::CurrentEnvVarBehavior,
-    workspace::{get_activated_environment_variables, Environment, EnvironmentVars},
-};
 
 /// This structure holds all the parameters needed to create a `BuildContext` uv implementation.
 pub struct UvBuildDispatchParams<'a> {
@@ -180,7 +179,7 @@ pub struct LazyBuildDispatch<'a> {
     pub environment: Environment<'a>,
 
     // what pkgs we dont need to activate
-    pub no_build_isolation: Option<Vec<String>>,
+    pub no_build_isolation: NoBuildIsolation,
 
     // we need to tie the interpreter to the build dispatch
     pub lazy_deps: &'a LazyBuildDispatchDependencies,
@@ -202,14 +201,16 @@ pub struct LazyBuildDispatchDependencies {
     /// The initialized python interpreter
     interpreter: OnceCell<Interpreter>,
     /// The non isolated packages
-    non_isolated_packages: OnceCell<Option<Vec<PackageName>>>,
+    non_isolated_packages: OnceCell<BuildIsolation>,
     /// The python environment
     python_env: OnceCell<PythonEnvironment>,
 }
 
 #[derive(Debug, thiserror::Error)]
 enum LazyBuildDispatchError {
-    #[error("installation of conda environment is required to solve PyPI source dependencies but `--no-install` flag has been set")]
+    #[error(
+        "installation of conda environment is required to solve PyPI source dependencies but `--no-install` flag has been set"
+    )]
     InstallationRequiredButDisallowed,
     #[error("failed to initialize build dispatch: '{0}'")]
     InitializationError(String),
@@ -236,7 +237,7 @@ impl<'a> LazyBuildDispatch<'a> {
         project_env_vars: HashMap<EnvironmentName, EnvironmentVars>,
         environment: Environment<'a>,
         repodata_records: Vec<PixiRecord>,
-        no_build_isolation: Option<Vec<String>>,
+        no_build_isolation: NoBuildIsolation,
         lazy_deps: &'a LazyBuildDispatchDependencies,
         disallow_install_conda_prefix: bool,
     ) -> Self {
@@ -308,18 +309,17 @@ impl<'a> LazyBuildDispatch<'a> {
                 .get_or_try_init(|| Interpreter::query(python_path, self.cache()))
                 .map_err(LazyBuildDispatchError::from)?;
 
-            let env = self
-                .lazy_deps
-                .python_env
-                .get_or_init(|| PythonEnvironment::from_interpreter(interpreter.clone()));
-
             let non_isolated_packages = self
                 .lazy_deps
                 .non_isolated_packages
-                .get_or_try_init(|| isolated_names_to_packages(self.no_build_isolation.as_deref()))
+                .get_or_try_init(|| BuildIsolation::try_from(self.no_build_isolation.clone()))
                 .map_err(|err| LazyBuildDispatchError::InitializationError(format!("{}", err)))?;
 
-            let build_isolation = names_to_build_isolation(non_isolated_packages.as_deref(), env);
+            let build_isolation = non_isolated_packages.to_uv_with(|| {
+                self.lazy_deps
+                    .python_env
+                    .get_or_init(|| PythonEnvironment::from_interpreter(interpreter.clone()))
+            });
 
             let build_dispatch = BuildDispatch::new(
                 self.params.client,

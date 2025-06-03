@@ -11,8 +11,8 @@ use rattler_shell::{
 use crate::lock_file::UpdateMode;
 use crate::workspace::get_activated_environment_variables;
 use crate::{
-    activation::CurrentEnvVarBehavior, environment::get_update_lock_file_and_prefix, prompt,
-    UpdateLockFileOptions, WorkspaceLocator,
+    UpdateLockFileOptions, WorkspaceLocator, activation::CurrentEnvVarBehavior,
+    environment::get_update_lock_file_and_prefix, prompt,
 };
 use crate::{
     cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},

@@ -1,9 +1,9 @@
+use crate::DependencyType;
+use crate::Workspace;
 use crate::cli::has_specs::HasSpecs;
 use crate::environment::LockFileUsage;
 use crate::lock_file::UpdateMode;
 use crate::workspace::DiscoveryStart;
-use crate::DependencyType;
-use crate::Workspace;
 use clap::Parser;
 use indexmap::IndexMap;
 use indexmap::IndexSet;
@@ -12,7 +12,6 @@ use miette::IntoDiagnostic;
 use pep508_rs::Requirement;
 use pixi_config::Config;
 use pixi_consts::consts;
-use pixi_manifest::pypi::PyPiPackageName;
 use pixi_manifest::FeaturesExt;
 use pixi_manifest::{FeatureName, SpecType};
 use pixi_spec::GitReference;
@@ -23,6 +22,7 @@ use std::path::PathBuf;
 use url::Url;
 
 use pixi_git::GIT_URL_QUERY_REV_TYPE;
+use pixi_pypi_spec::PypiPackageName;
 
 /// Workspace configuration
 #[derive(Parser, Debug, Default, Clone)]
@@ -101,10 +101,9 @@ impl ChannelsConfig {
 }
 
 #[derive(Parser, Debug, Default, Clone)]
-#[clap(next_help_heading = consts::CLAP_UPDATE_OPTIONS)]
 pub struct LockFileUpdateConfig {
     /// Don't update lockfile, implies the no-install as well.
-    #[clap(long)]
+    #[clap(long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub no_lockfile_update: bool,
 
     /// Lock file usage from the CLI
@@ -126,14 +125,13 @@ impl LockFileUpdateConfig {
 
 /// Configuration for how to update the prefix
 #[derive(Parser, Debug, Default, Clone)]
-#[clap(next_help_heading = consts::CLAP_UPDATE_OPTIONS)]
 pub struct PrefixUpdateConfig {
     /// Don't modify the environment, only modify the lock-file.
-    #[arg(long)]
+    #[arg(long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub no_install: bool,
 
     /// Run the complete environment validation. This will reinstall a broken environment.
-    #[arg(long)]
+    #[arg(long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub revalidate: bool,
 }
 
@@ -334,14 +332,14 @@ impl DependencyConfig {
     pub fn vcs_pep508_requirements(
         &self,
         project: &Workspace,
-    ) -> Option<miette::Result<IndexMap<PyPiPackageName, Requirement>>> {
+    ) -> Option<miette::Result<IndexMap<PypiPackageName, Requirement>>> {
         match &self.git {
             Some(git) => {
                 // pep 508 requirements with direct reference
                 // should be in this format
                 // name @ url@rev#subdirectory=subdir
                 // we need to construct it
-                let pep_reqs: miette::Result<IndexMap<PyPiPackageName, Requirement>> = self
+                let pep_reqs: miette::Result<IndexMap<PypiPackageName, Requirement>> = self
                     .specs
                     .iter()
                     .map(|package_name| {
@@ -353,7 +351,7 @@ impl DependencyConfig {
                         );
 
                         let dep = Requirement::parse(&vcs_req, project.root()).into_diagnostic()?;
-                        let name = PyPiPackageName::from_normalized(dep.clone().name);
+                        let name = PypiPackageName::from_normalized(dep.clone().name);
 
                         Ok((name, dep))
                     })
@@ -410,7 +408,7 @@ fn build_vcs_requirement(
 mod tests {
     use url::Url;
 
-    use crate::cli::cli_config::{build_vcs_requirement, GitRev};
+    use crate::cli::cli_config::{GitRev, build_vcs_requirement};
 
     #[test]
     fn test_build_vcs_requirement_with_all_fields() {
@@ -463,5 +461,16 @@ mod tests {
             None,
         );
         assert_eq!(result, "mypackage @ git+https://github.com/user/repo");
+    }
+
+    #[test]
+    fn test_build_vcs_requirement_with_local_dir() {
+        let result = build_vcs_requirement(
+            "mypackage",
+            &Url::parse("file:///home/user/GitHub/mypackage").unwrap(),
+            None,
+            None,
+        );
+        assert_eq!(result, "mypackage @ git+file:///home/user/GitHub/mypackage");
     }
 }

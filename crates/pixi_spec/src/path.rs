@@ -1,7 +1,9 @@
+use std::fmt::Display;
 use std::path::{Path, PathBuf};
 
 use itertools::Either;
-use rattler_conda_types::{package::ArchiveIdentifier, NamelessMatchSpec};
+use rattler_conda_types::{NamelessMatchSpec, package::ArchiveIdentifier};
+use serde_with::serde_as;
 use typed_path::{Utf8NativePathBuf, Utf8TypedPathBuf};
 
 use crate::{BinarySpec, SpecConversionError};
@@ -67,10 +69,18 @@ impl PathSpec {
 
 /// Path to a source package. Different from [`PathSpec`] in that this type only
 /// refers to source packages.
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[serde_as]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, serde::Serialize)]
 pub struct PathSourceSpec {
     /// The path to the package. Either a directory or an archive.
+    #[serde_as(as = "serde_with::DisplayFromStr")]
     pub path: Utf8TypedPathBuf,
+}
+
+impl Display for PathSourceSpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.path)
+    }
 }
 
 impl From<PathSourceSpec> for PathSpec {

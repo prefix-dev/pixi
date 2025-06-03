@@ -16,7 +16,7 @@ use dialoguer::theme::ColorfulTheme;
 use miette::{Context, IntoDiagnostic};
 use pixi_consts::consts;
 use pixi_git::credentials::store_credentials_from_url;
-use pixi_manifest::{FeaturesExt, PyPiRequirement};
+use pixi_manifest::FeaturesExt;
 use pixi_progress::await_in_progress;
 use pixi_spec::{GitSpec, PixiSpec};
 use rattler_conda_types::Platform;
@@ -25,14 +25,15 @@ use serde::{Deserialize, Serialize};
 use xxhash_rust::xxh3::Xxh3;
 
 use crate::{
+    Workspace,
     lock_file::{LockFileDerivedData, ReinstallPackages, UpdateLockFileOptions, UpdateMode},
     prefix::Prefix,
     rlimit::try_increase_rlimit_to_sensible,
-    workspace::{grouped_environment::GroupedEnvironment, Environment, HasWorkspaceRef},
-    Workspace,
+    workspace::{Environment, HasWorkspaceRef, grouped_environment::GroupedEnvironment},
 };
 
 pub use conda_prefix::{CondaPrefixUpdated, CondaPrefixUpdater, CondaPrefixUpdaterBuilder};
+use pixi_pypi_spec::PixiPypiSpec;
 pub use pypi_prefix::update_prefix_pypi;
 pub use python_status::PythonStatus;
 
@@ -280,7 +281,7 @@ pub fn extract_git_requirements_from_project(project: &Workspace) -> Vec<GitSpec
 
             for (_, pypi_spec) in pypi_dependencies {
                 for spec in pypi_spec {
-                    if let PyPiRequirement::Git { url, .. } = spec {
+                    if let PixiPypiSpec::Git { url, .. } = spec {
                         requirements.push(url);
                     }
                 }
@@ -323,8 +324,10 @@ pub async fn store_credentials_from_project(project: &Workspace) -> miette::Resu
 /// Ensure that the `.pixi/` directory exists and contains a `.gitignore` file.
 /// If the directory doesn't exist, create it.
 /// If the `.gitignore` file doesn't exist, create it with a '*' pattern.
+/// Also creates a `.condapackageignore` file to exclude the `.pixi` directory from builds.
 async fn ensure_pixi_directory_and_gitignore(pixi_dir: &Path) -> miette::Result<()> {
     let gitignore_path = pixi_dir.join(".gitignore");
+    let condapackageignore_path = pixi_dir.join(".condapackageignore");
 
     // Create the `.pixi/` directory if it doesn't exist
     if !pixi_dir.exists() {
@@ -345,6 +348,17 @@ async fn ensure_pixi_directory_and_gitignore(pixi_dir: &Path) -> miette::Result<
             .wrap_err(format!(
                 "Failed to create .gitignore file at {}",
                 gitignore_path.display()
+            ))?;
+    }
+
+    // Create or check the .condapackageignore file
+    if !condapackageignore_path.exists() {
+        tokio::fs::write(&condapackageignore_path, ".pixi\n")
+            .await
+            .into_diagnostic()
+            .wrap_err(format!(
+                "Failed to create .condapackageignore file at {}",
+                condapackageignore_path.display()
             ))?;
     }
 
@@ -400,7 +414,9 @@ pub async fn get_update_lock_file_and_prefix<'env>(
     // Do not install if the platform is not supported
     let mut no_install = update_lock_file_options.no_install;
     if !no_install && !environment.platforms().contains(&current_platform) {
-        tracing::warn!("Not installing dependency on current platform: ({current_platform}) as it is not part of this project's supported platforms.");
+        tracing::warn!(
+            "Not installing dependency on current platform: ({current_platform}) as it is not part of this project's supported platforms."
+        );
         no_install = true;
     }
 

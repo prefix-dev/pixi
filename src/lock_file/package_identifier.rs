@@ -1,18 +1,18 @@
 use pixi_uv_conversions::{
-    to_normalize, to_uv_normalize, to_uv_version, ConversionError as PixiConversionError,
+    ConversionError as PixiConversionError, to_normalize, to_uv_normalize, to_uv_version,
 };
 use rattler_conda_types::{PackageRecord, PackageUrl, RepoDataRecord};
 use std::{collections::HashSet, str::FromStr};
 use thiserror::Error;
 
-use pixi_manifest::pypi::PyPiPackageName;
+use pixi_pypi_spec::PypiPackageName;
 use uv_normalize::{ExtraName, InvalidNameError};
 
 /// Defines information about a Pypi package extracted from either a python
 /// package or from a conda package. That can be used for comparison in both
 #[derive(Debug)]
 pub struct PypiPackageIdentifier {
-    pub name: PyPiPackageName,
+    pub name: PypiPackageName,
     pub version: pep440_rs::Version,
     pub extras: HashSet<ExtraName>,
 }
@@ -78,7 +78,7 @@ impl PypiPackageIdentifier {
                 let pep_name = to_normalize(&name)?;
 
                 result.push(PypiPackageIdentifier {
-                    name: PyPiPackageName::from_normalized(pep_name),
+                    name: PypiPackageName::from_normalized(pep_name),
                     version,
                     // TODO: We can't really tell which python extras are enabled in a conda
                     // package.
@@ -125,7 +125,7 @@ impl PypiPackageIdentifier {
         let pep_name = to_normalize(&name)?;
 
         Ok(Self {
-            name: PyPiPackageName::from_normalized(pep_name),
+            name: PypiPackageName::from_normalized(pep_name),
             version,
             extras,
         })
@@ -135,7 +135,7 @@ impl PypiPackageIdentifier {
     /// in this package identifier.
     pub(crate) fn satisfies(
         &self,
-        requirement: &uv_pypi_types::Requirement,
+        requirement: &uv_distribution_types::Requirement,
     ) -> Result<bool, ConversionError> {
         // Verify the name of the package
         let uv_normalized = to_uv_normalize(self.name.as_normalized())?;
@@ -145,21 +145,21 @@ impl PypiPackageIdentifier {
 
         // Check the version of the requirement
         match &requirement.source {
-            uv_pypi_types::RequirementSource::Registry { specifier, .. } => {
+            uv_distribution_types::RequirementSource::Registry { specifier, .. } => {
                 let uv_version = to_uv_version(&self.version)?;
                 Ok(specifier.contains(&uv_version))
             }
             // a pypi -> conda requirement on these versions are not supported
-            uv_pypi_types::RequirementSource::Url { .. } => {
+            uv_distribution_types::RequirementSource::Url { .. } => {
                 unreachable!("direct url requirement on conda package is not supported")
             }
-            uv_pypi_types::RequirementSource::Git { .. } => {
+            uv_distribution_types::RequirementSource::Git { .. } => {
                 unreachable!("git requirement on conda package is not supported")
             }
-            uv_pypi_types::RequirementSource::Path { .. } => {
+            uv_distribution_types::RequirementSource::Path { .. } => {
                 unreachable!("path requirement on conda package is not supported")
             }
-            uv_pypi_types::RequirementSource::Directory { .. } => {
+            uv_distribution_types::RequirementSource::Directory { .. } => {
                 unreachable!("directory requirement on conda package is not supported")
             }
         }
@@ -175,6 +175,6 @@ pub enum ConversionError {
     Version(String),
     // #[error("'{0}' is not a valid python extra")]
     // Extra(String),
-    #[error("Failed to convert to pypi package name")]
+    #[error(transparent)]
     NameConversion(#[from] PixiConversionError),
 }

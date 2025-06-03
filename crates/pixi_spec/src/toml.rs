@@ -3,19 +3,19 @@ use std::{borrow::Cow, fmt::Display, path::PathBuf};
 use itertools::Either;
 use pixi_toml::{TomlDigest, TomlFromStr};
 use rattler_conda_types::{
-    version_spec::{ParseConstraintError, ParseVersionSpecError},
     BuildNumberSpec, ChannelConfig, NamedChannelOrUrl, NamelessMatchSpec,
     ParseStrictness::{Lenient, Strict},
     StringMatcher, VersionSpec,
+    version_spec::{ParseConstraintError, ParseVersionSpecError},
 };
 use rattler_digest::{Md5Hash, Sha256Hash};
-use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error};
 use serde_with::serde_as;
 use thiserror::Error;
 use toml_span::{
-    de_helpers::{expected, TableHelper},
-    value::ValueInner,
     DeserError, ErrorKind, Value,
+    de_helpers::{TableHelper, expected},
+    value::ValueInner,
 };
 use url::Url;
 
@@ -89,15 +89,21 @@ fn version_spec_error<T: Into<String>>(input: T) -> Option<impl Display> {
         || input.starts_with('\\')
         || input.starts_with("~/")
     {
-        return Some(format!("it seems you're trying to add a path dependency, please specify as a table with a `path` key: '{{ path = \"{input}\" }}'"));
+        return Some(format!(
+            "it seems you're trying to add a path dependency, please specify as a table with a `path` key: '{{ path = \"{input}\" }}'"
+        ));
     }
 
     if input.contains("git") {
-        return Some(format!("it seems you're trying to add a git dependency, please specify as a table with a `git` key: '{{ git = \"{input}\" }}'"));
+        return Some(format!(
+            "it seems you're trying to add a git dependency, please specify as a table with a `git` key: '{{ git = \"{input}\" }}'"
+        ));
     }
 
     if input.contains("://") {
-        return Some(format!("it seems you're trying to add a url dependency, please specify as a table with a `url` key: '{{ url = \"{input}\" }}'"));
+        return Some(format!(
+            "it seems you're trying to add a url dependency, please specify as a table with a `url` key: '{{ url = \"{input}\" }}'"
+        ));
     }
 
     if let Ok(match_spec) = NamelessMatchSpec::from_str(&input, Lenient) {
@@ -138,7 +144,9 @@ pub enum SpecError {
     #[error("only one of `branch`, `rev`, or `tag` can be specified")]
     MultipleGitRefs,
 
-    #[error("one of `version`, `build`, `build-number`, `file-name`, `channel`, `subdir`, `md5`, `sha256`, `git`, `url`, or `path` must be specified")]
+    #[error(
+        "one of `version`, `build`, `build-number`, `file-name`, `channel`, `subdir`, `md5`, `sha256`, `git`, `url`, or `path` must be specified"
+    )]
     MissingDetailedIdentifier,
 
     #[error("only one of `url`, `path`, or `git` can be specified")]
@@ -496,7 +504,9 @@ fn parse_version_string(input: &str) -> Result<VersionSpec, String> {
             // mode. If that fails, we return the original error.
             match VersionSpec::from_str(input, Lenient) {
                 Ok(lenient_version_spec) => {
-                    tracing::warn!("Encountered ambiguous version specifier `{ver}`, could be `{ver}.*` but assuming you meant `=={ver}`. In the future this will result in an error.");
+                    tracing::warn!(
+                        "Encountered ambiguous version specifier `{ver}`, could be `{ver}.*` but assuming you meant `=={ver}`. In the future this will result in an error."
+                    );
                     return Ok(lenient_version_spec);
                 }
                 Err(_) => {
@@ -575,7 +585,7 @@ impl Serialize for PathSpec {
 #[cfg(test)]
 mod test {
     use serde::Serialize;
-    use serde_json::{json, Value};
+    use serde_json::{Value, json};
 
     use super::*;
 

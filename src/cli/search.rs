@@ -10,7 +10,7 @@ use clap::Parser;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, Report};
-use pixi_config::{default_channel_config, Config};
+use pixi_config::{Config, default_channel_config};
 use pixi_progress::await_in_progress;
 use pixi_utils::reqwest::build_reqwest_clients;
 use rattler_conda_types::{MatchSpec, PackageName, ParseStrictness, Platform, RepoDataRecord};
@@ -22,7 +22,7 @@ use tracing::{debug, error};
 use url::Url;
 
 use super::cli_config::ChannelsConfig;
-use crate::{cli::cli_config::WorkspaceConfig, workspace::WorkspaceLocatorError, WorkspaceLocator};
+use crate::{WorkspaceLocator, cli::cli_config::WorkspaceConfig, workspace::WorkspaceLocatorError};
 
 /// Search a conda package
 ///
@@ -228,7 +228,9 @@ where
 
     if packages.is_empty() {
         let normalized_package_name = package_name_search.as_normalized();
-        return Err(miette::miette!("Package {normalized_package_name} not found, please use a wildcard '*' in the search name for a broader result."));
+        return Err(miette::miette!(
+            "Package {normalized_package_name} not found, please use a wildcard '*' in the search name for a broader result."
+        ));
     }
 
     // Sort packages by version, build number and build string

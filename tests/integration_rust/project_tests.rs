@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-use crate::common::{package_database::PackageDatabase, PixiControl};
+use crate::common::{PixiControl, package_database::PackageDatabase};
 use insta::assert_debug_snapshot;
 use pixi::Workspace;
 use pixi_config::Config;

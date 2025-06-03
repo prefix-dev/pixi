@@ -17,14 +17,14 @@ def test_build_conda_package(
             pixi,
             "build",
             "--manifest-path",
-            simple_workspace.path,
+            simple_workspace.package_dir,
             "--output-dir",
-            simple_workspace.path,
+            simple_workspace.workspace_dir,
         ],
     )
 
     # Ensure that exactly one conda package has been built
-    built_packages = list(simple_workspace.path.glob("*.conda"))
+    built_packages = list(simple_workspace.workspace_dir.glob("*.conda"))
     assert len(built_packages) == 1
     assert built_packages[0].exists()
 
@@ -39,10 +39,12 @@ def test_build_conda_package_variants(
 
     # Add package3 to build-variants
     variants = ["0.1.0", "0.2.0"]
-    simple_workspace.manifest["workspace"].setdefault("channels", []).insert(
+    simple_workspace.workspace_manifest["workspace"].setdefault("channels", []).insert(
         0, multiple_versions_channel_1
     )
-    simple_workspace.manifest["workspace"].setdefault("build-variants", {})["package3"] = variants
+    simple_workspace.workspace_manifest["workspace"].setdefault("build-variants", {})[
+        "package3"
+    ] = variants
 
     # Write files
     simple_workspace.write_files()
@@ -53,19 +55,19 @@ def test_build_conda_package_variants(
             pixi,
             "build",
             "--manifest-path",
-            simple_workspace.path,
+            simple_workspace.package_dir,
             "--output-dir",
-            simple_workspace.path,
+            simple_workspace.workspace_dir,
         ],
     )
 
     # Ensure that the correct variants are requested
-    conda_build_params_file = simple_workspace.path.joinpath("conda_build_params.json")
+    conda_build_params_file = simple_workspace.debug_dir.joinpath("conda_build_params.json")
     conda_build_params = json.loads(conda_build_params_file.read_text())
     assert conda_build_params["variantConfiguration"]["package3"] == variants
 
     # Ensure that exactly two conda packages have been built
-    built_packages = list(simple_workspace.path.glob("*.conda"))
+    built_packages = list(simple_workspace.workspace_dir.glob("*.conda"))
     assert len(built_packages) == 2
     for package in built_packages:
         assert package.exists()
@@ -75,20 +77,20 @@ def test_no_change_should_be_fully_cached(pixi: Path, simple_workspace: Workspac
     simple_workspace.write_files()
     # Setting PIXI_CACHE_DIR shouldn't be necessary
     env = {
-        "PIXI_CACHE_DIR": str(simple_workspace.path.joinpath("pixi_cache")),
+        "PIXI_CACHE_DIR": str(simple_workspace.workspace_dir.joinpath("pixi_cache")),
     }
     verify_cli_command(
         [
             pixi,
             "install",
             "--manifest-path",
-            simple_workspace.path,
+            simple_workspace.workspace_dir,
         ],
         env=env,
     )
 
-    conda_metadata_params = simple_workspace.path.joinpath("conda_metadata_params.json")
-    conda_build_params = simple_workspace.path.joinpath("conda_build_params.json")
+    conda_metadata_params = simple_workspace.debug_dir.joinpath("conda_metadata_params.json")
+    conda_build_params = simple_workspace.debug_dir.joinpath("conda_build_params.json")
 
     assert conda_metadata_params.is_file()
     assert conda_build_params.is_file()
@@ -102,7 +104,7 @@ def test_no_change_should_be_fully_cached(pixi: Path, simple_workspace: Workspac
             pixi,
             "install",
             "--manifest-path",
-            simple_workspace.path,
+            simple_workspace.workspace_dir,
         ],
         env=env,
     )
@@ -119,11 +121,11 @@ def test_source_change_trigger_rebuild(pixi: Path, simple_workspace: Workspace) 
             pixi,
             "install",
             "--manifest-path",
-            simple_workspace.path,
+            simple_workspace.workspace_dir,
         ],
     )
 
-    conda_build_params = simple_workspace.path.joinpath("conda_build_params.json")
+    conda_build_params = simple_workspace.debug_dir.joinpath("conda_build_params.json")
 
     assert conda_build_params.is_file()
 
@@ -131,14 +133,14 @@ def test_source_change_trigger_rebuild(pixi: Path, simple_workspace: Workspace) 
     conda_build_params.unlink()
 
     # Touch the recipe
-    simple_workspace.path.joinpath("recipe.yaml").touch()
+    simple_workspace.recipe_path.touch()
 
     verify_cli_command(
         [
             pixi,
             "install",
             "--manifest-path",
-            simple_workspace.path,
+            simple_workspace.workspace_dir,
         ],
     )
 
@@ -155,11 +157,11 @@ def test_host_dependency_change_trigger_rebuild(
             pixi,
             "install",
             "--manifest-path",
-            simple_workspace.path,
+            simple_workspace.workspace_dir,
         ],
     )
 
-    conda_build_params = simple_workspace.path.joinpath("conda_build_params.json")
+    conda_build_params = simple_workspace.debug_dir.joinpath("conda_build_params.json")
 
     assert conda_build_params.is_file()
 
@@ -167,7 +169,7 @@ def test_host_dependency_change_trigger_rebuild(
     conda_build_params.unlink()
 
     # Add dummy-b to host-dependencies
-    simple_workspace.manifest["package"].setdefault("host-dependencies", {})["dummy-b"] = {
+    simple_workspace.package_manifest["package"].setdefault("host-dependencies", {})["dummy-b"] = {
         "version": "*",
         "channel": dummy_channel_1,
     }
@@ -177,7 +179,7 @@ def test_host_dependency_change_trigger_rebuild(
             pixi,
             "install",
             "--manifest-path",
-            simple_workspace.path,
+            simple_workspace.workspace_dir,
         ],
     )
 
@@ -312,3 +314,47 @@ def test_smokey(pixi: Path, build_data: Path, tmp_pixi_workspace: Path) -> None:
     metadata = json.loads(conda_meta.read_text())
 
     assert metadata["name"] == "smokey"
+
+
+@pytest.mark.slow
+def test_recursive_source_run_dependencies(
+    pixi: Path, build_data: Path, tmp_pixi_workspace: Path
+) -> None:
+    """
+    Test whether recursive source dependencies work properly if
+    they are specified in the `run-dependencies` section
+    """
+    project = "recursive_source_run_dep"
+    test_data = build_data.joinpath(project)
+
+    shutil.copytree(test_data, tmp_pixi_workspace, dirs_exist_ok=True)
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    # TODO: Setting the cache dir shouldn't be necessary!
+    env = {
+        "PIXI_CACHE_DIR": str(tmp_pixi_workspace.joinpath("pixi_cache")),
+    }
+
+    verify_cli_command(
+        [
+            pixi,
+            "install",
+            "--manifest-path",
+            manifest_path,
+        ],
+        env=env,
+    )
+
+    # Package B is a dependency of Package A
+    # Check that it is properly installed
+    verify_cli_command(
+        [
+            pixi,
+            "run",
+            "--manifest-path",
+            manifest_path,
+            "package-b",
+        ],
+        env=env,
+        stdout_contains="hello from package-b",
+    )

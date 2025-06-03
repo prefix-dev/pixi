@@ -1,17 +1,17 @@
 use std::{fmt, str::FromStr, sync::Arc};
 
+use crate::{
+    FeatureName, LibCSystemRequirement, ManifestKind, ManifestProvenance, PypiDependencyLocation,
+    SpecType, SystemRequirements, Task, TomlError, manifests::table_name::TableName,
+    toml::TomlDocument, utils::WithSourceCode,
+};
 use miette::{Diagnostic, NamedSource};
 use pixi_consts::consts;
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{PackageName, Platform};
 use thiserror::Error;
-use toml_edit::{value, Array, DocumentMut, Item, Table, Value};
-
-use crate::{
-    manifests::table_name::TableName, pypi::PyPiPackageName, toml::TomlDocument,
-    utils::WithSourceCode, FeatureName, LibCSystemRequirement, ManifestKind, ManifestProvenance,
-    PyPiRequirement, PypiDependencyLocation, SpecType, SystemRequirements, Task, TomlError,
-};
+use toml_edit::{Array, DocumentMut, Item, Table, Value, value};
 
 /// Discriminates between a 'pixi.toml' and a 'pyproject.toml' manifest.
 #[derive(Debug, Clone)]
@@ -124,7 +124,7 @@ impl ManifestDocument {
                     ),
                     error: TomlError::from(err),
                 })
-                .into())
+                .into());
             }
         };
 
@@ -230,7 +230,7 @@ impl ManifestDocument {
     /// If will be a no-op if the dependency is not found.
     pub fn remove_pypi_dependency(
         &mut self,
-        dep: &PyPiPackageName,
+        dep: &PypiPackageName,
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> Result<(), TomlError> {
@@ -248,7 +248,7 @@ impl ManifestDocument {
                             .unwrap_or("")
                             .parse()
                             .expect("should be a valid pep508 dependency");
-                        let name = PyPiPackageName::from_normalized(req.name);
+                        let name = PypiPackageName::from_normalized(req.name);
                         name != *dep
                     });
                     if array.is_empty() {
@@ -341,17 +341,18 @@ impl ManifestDocument {
     pub fn add_pypi_dependency(
         &mut self,
         requirement: &pep508_rs::Requirement,
+        pixi_requirement: Option<&PixiPypiSpec>,
         platform: Option<Platform>,
         feature_name: &FeatureName,
         editable: Option<bool>,
-        location: &Option<PypiDependencyLocation>,
+        location: Option<&PypiDependencyLocation>,
     ) -> Result<(), TomlError> {
         // Pypi dependencies can be stored in different places in pyproject.toml
         // manifests so we remove any potential dependency of the same name
         // before adding it back
         if matches!(self, ManifestDocument::PyProjectToml(_)) {
             self.remove_pypi_dependency(
-                &PyPiPackageName::from_normalized(requirement.name.clone()),
+                &PypiPackageName::from_normalized(requirement.name.clone()),
                 platform,
                 feature_name,
             )?;
@@ -369,7 +370,8 @@ impl ManifestDocument {
             || editable.is_some_and(|e| e)
         {
             let mut pypi_requirement =
-                PyPiRequirement::try_from(requirement.clone()).map_err(Box::new)?;
+                PixiPypiSpec::try_from((requirement.clone(), pixi_requirement.cloned()))
+                    .map_err(Box::new)?;
             if let Some(editable) = editable {
                 pypi_requirement.set_editable(editable);
             }
@@ -439,7 +441,7 @@ impl ManifestDocument {
     /// found, or `None` if it is not found in any of the checked sections.
     pub fn pypi_dependency_location(
         &self,
-        package_name: &PyPiPackageName,
+        package_name: &PypiPackageName,
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> Option<PypiDependencyLocation> {

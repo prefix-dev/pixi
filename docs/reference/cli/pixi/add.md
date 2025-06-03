@@ -26,6 +26,8 @@ pixi add [OPTIONS] <SPEC>...
 - <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
 :  The feature for which the dependency should be modified
 <br>**default**: `default`
+- <a id="arg---editable" href="#arg---editable">`--editable`</a>
+:  Whether the pypi requirement should be editable
 
 ## Config Options
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
@@ -65,8 +67,6 @@ pixi add [OPTIONS] <SPEC>...
 - <a id="arg---locked" href="#arg---locked">`--locked`</a>
 :  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 <br>**env**: `PIXI_LOCKED`
-- <a id="arg---editable" href="#arg---editable">`--editable`</a>
-:  Whether the pypi requirement should be editable
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
@@ -117,6 +117,8 @@ add it to the native pyproject `project.dependencies` array or to the native
   array
 - `pixi add --pypi boto3 --feature aws` will add `boto3` to the
   `dependency-groups.aws` array
+- `pixi add --pypi --editable 'boto3 @ file://absolute/path/to/boto3'` will add
+  the local editable `boto3` to the `pypi-dependencies` array
 
 Note that if `--platform` or `--editable` are specified, the pypi dependency
 will be added to the `tool.pixi.pypi-dependencies` table instead as native
