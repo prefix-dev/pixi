@@ -28,6 +28,7 @@ use reqwest_middleware::ClientWithMiddleware;
 use tokio::sync::{mpsc, oneshot};
 use typed_path::Utf8TypedPath;
 
+use crate::source_build::{BuiltSource, SourceBuildError, SourceBuildSpec};
 use crate::{
     Executor, InvalidPathError, PixiEnvironmentSpec, SolveCondaEnvironmentSpec,
     SolvePixiEnvironmentError, SourceCheckout, SourceCheckoutError, SourceMetadataSpec,
@@ -123,6 +124,7 @@ pub(crate) enum CommandDispatcherContext {
     SolveCondaEnvironment(SolveCondaEnvironmentId),
     SolvePixiEnvironment(SolvePixiEnvironmentId),
     SourceMetadata(SourceMetadataId),
+    SourceBuild(SourceBuildId),
     InstallPixiEnvironment(InstallPixiEnvironmentId),
     InstantiateToolEnv(InstantiatedToolEnvId),
 }
@@ -130,6 +132,9 @@ pub(crate) enum CommandDispatcherContext {
 slotmap::new_key_type! {
     /// An id that uniquely identifies a conda environment that is being solved.
     pub(crate) struct SolveCondaEnvironmentId;
+
+    /// An id that uniquely identifies a conda environment that is being solved.
+    pub(crate) struct SourceBuildId;
 
     /// An id that uniquely identifies a conda environment that is being solved.
     pub(crate) struct SolvePixiEnvironmentId;
@@ -152,6 +157,7 @@ pub(crate) enum ForegroundMessage {
     SolveCondaEnvironment(SolveCondaEnvironmentTask),
     SolvePixiEnvironment(SolvePixiEnvironmentTask),
     SourceMetadata(SourceMetadataTask),
+    SourceBuild(SourceBuildTask),
     GitCheckout(GitCheckoutTask),
     InstallPixiEnvironment(InstallPixiEnvironmentTask),
     InstantiateToolEnvironment(Task<InstantiateToolEnvironmentSpec>),
@@ -188,6 +194,13 @@ pub(crate) type SourceMetadataTask = Task<SourceMetadataSpec>;
 impl TaskSpec for SourceMetadataSpec {
     type Output = Arc<SourceMetadata>;
     type Error = SourceMetadataError;
+}
+
+pub(crate) type SourceBuildTask = Task<SourceBuildSpec>;
+
+impl TaskSpec for SourceBuildSpec {
+    type Output = BuiltSource;
+    type Error = SourceBuildError;
 }
 
 /// Instantiates a tool environment.
@@ -288,6 +301,14 @@ impl CommandDispatcher {
         &self,
         spec: SourceMetadataSpec,
     ) -> Result<Arc<SourceMetadata>, CommandDispatcherError<SourceMetadataError>> {
+        self.execute_task(spec).await
+    }
+
+    /// Builds the source package and returns the built conda package.
+    pub async fn source_build(
+        &self,
+        spec: SourceBuildSpec,
+    ) -> Result<BuiltSource, CommandDispatcherError<SourceBuildError>> {
         self.execute_task(spec).await
     }
 

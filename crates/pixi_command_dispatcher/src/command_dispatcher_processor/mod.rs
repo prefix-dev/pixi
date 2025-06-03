@@ -16,15 +16,16 @@ use rattler_conda_types::prefix::Prefix;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::command_dispatcher::{
-    CommandDispatcherError, InstallPixiEnvironmentId, InstantiatedToolEnvId, TaskSpec,
+    CommandDispatcherError, InstallPixiEnvironmentId, InstantiatedToolEnvId, SourceBuildId,
+    TaskSpec,
 };
 use crate::install_pixi::InstallPixiEnvironmentError;
 use crate::instantiate_tool_env::{
     InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec,
 };
 use crate::{
-    CommandDispatcherErrorResultExt, Reporter, SolveCondaEnvironmentSpec,
-    SolvePixiEnvironmentError, SourceMetadataSpec,
+    BuiltSource, CommandDispatcherErrorResultExt, Reporter, SolveCondaEnvironmentSpec,
+    SolvePixiEnvironmentError, SourceBuildError, SourceBuildSpec, SourceMetadataSpec,
     command_dispatcher::{
         CommandDispatcher, CommandDispatcherChannel, CommandDispatcherContext,
         CommandDispatcherData, ForegroundMessage, SolveCondaEnvironmentId, SolvePixiEnvironmentId,
@@ -40,6 +41,7 @@ mod install_pixi;
 mod instantiate_tool_env;
 mod solve_conda;
 mod solve_pixi;
+mod source_build;
 mod source_metadata;
 
 /// Runs the command_dispatcher background task
@@ -87,6 +89,12 @@ pub(crate) struct CommandDispatcherProcessor {
     /// out.
     git_checkouts: HashMap<GitUrl, PendingGitCheckout>,
 
+    /// Conda environments that are currently being solved.
+    source_builds: slotmap::SlotMap<SourceBuildId, PendingSourceBuild>,
+
+    /// A list of source builds that are pending. These have not yet been queued for processing.
+    pending_source_builds: VecDeque<(SourceBuildId, SourceBuildSpec)>,
+
     /// Keeps track of all pending futures. We poll them manually instead of
     /// spawning them so they can be `!Send` and because they are dropped when
     /// this instance is dropped.
@@ -120,6 +128,10 @@ enum TaskResult {
         InstantiatedToolEnvId,
         Result<Prefix, CommandDispatcherError<InstantiateToolEnvironmentError>>,
     ),
+    SourceBuild(
+        SourceBuildId,
+        Result<BuiltSource, CommandDispatcherError<SourceBuildError>>,
+    ),
 }
 
 /// An either pending or already checked out git repository.
@@ -143,6 +155,14 @@ enum PendingGitCheckout {
 struct PendingSolveCondaEnvironment {
     tx: oneshot::Sender<Result<Vec<PixiRecord>, rattler_solve::SolveError>>,
     reporter_id: Option<reporter::CondaSolveId>,
+}
+
+/// Information about a pending conda environment solve. This is used by the
+/// background task to keep track of which command_dispatcher is awaiting the
+/// result.
+struct PendingSourceBuild {
+    tx: oneshot::Sender<Result<BuiltSource, SourceBuildError>>,
+    reporter_id: Option<reporter::SourceBuildId>,
 }
 
 /// Information about a pending pixi environment solve. This is used by the
@@ -262,6 +282,8 @@ impl CommandDispatcherProcessor {
                 instantiated_tool_envs_reporters: HashMap::default(),
                 instantiated_tool_cache_keys: HashMap::default(),
                 git_checkouts: HashMap::default(),
+                source_builds: Default::default(),
+                pending_source_builds: Default::default(),
                 pending_futures: ExecutorFutures::new(executor),
                 inner,
                 reporter,
@@ -308,6 +330,7 @@ impl CommandDispatcherProcessor {
             }
             ForegroundMessage::SourceMetadata(task) => self.on_source_metadata(task),
             ForegroundMessage::GitCheckout(task) => self.on_checkout_git(task),
+            ForegroundMessage::SourceBuild(task) => self.on_source_build(task),
         }
     }
 
@@ -328,6 +351,7 @@ impl CommandDispatcherProcessor {
             TaskResult::InstantiateToolEnv(id, result) => {
                 self.on_instantiate_tool_environment_result(id, result)
             }
+            TaskResult::SourceBuild(id, result) => self.on_source_build_result(id, result),
         }
     }
 
@@ -401,6 +425,11 @@ impl CommandDispatcherProcessor {
                             PendingDeduplicatingTask::Result(_, context) => Some(*context),
                             PendingDeduplicatingTask::Errored => None,
                         })?
+                }
+                CommandDispatcherContext::SourceBuild(id) => {
+                    return self.source_builds[id]
+                        .reporter_id
+                        .map(reporter::ReporterContext::SourceBuild);
                 }
             };
         }

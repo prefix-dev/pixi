@@ -3,7 +3,7 @@ use serde::Serialize;
 
 use crate::instantiate_tool_env::InstantiateToolEnvironmentSpec;
 use crate::{
-    PixiEnvironmentSpec, SolveCondaEnvironmentSpec, SourceMetadataSpec,
+    PixiEnvironmentSpec, SolveCondaEnvironmentSpec, SourceBuildSpec, SourceMetadataSpec,
     install_pixi::InstallPixiEnvironmentSpec,
 };
 
@@ -144,6 +144,25 @@ pub trait SourceMetadataReporter {
     fn on_finished(&mut self, id: SourceMetadataId);
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(transparent)]
+pub struct SourceBuildId(pub usize);
+
+pub trait SourceBuildReporter {
+    /// Called when an operation was queued on the [`crate::CommandDispatcher`].
+    fn on_queued(
+        &mut self,
+        reason: Option<ReporterContext>,
+        env: &SourceBuildSpec,
+    ) -> SourceBuildId;
+
+    /// Called when the operation has started.
+    fn on_started(&mut self, id: SourceBuildId);
+
+    /// Called when the operation has finished.
+    fn on_finished(&mut self, id: SourceBuildId);
+}
+
 /// A trait that is used to report the progress of the [`crate::CommandDispatcher`].
 ///
 /// The reporter has to be `Send` but does not require `Sync`.
@@ -181,6 +200,11 @@ pub trait Reporter: Send {
     fn as_source_metadata_reporter(&mut self) -> Option<&mut dyn SourceMetadataReporter> {
         None
     }
+    /// Returns a mutable reference to a reporter that reports on the progress
+    /// of building source packages.
+    fn as_source_build_reporter(&mut self) -> Option<&mut dyn SourceBuildReporter> {
+        None
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, derive_more::From)]
@@ -191,4 +215,5 @@ pub enum ReporterContext {
     InstallPixi(PixiInstallId),
     SourceMetadata(SourceMetadataId),
     InstantiateToolEnv(InstantiateToolEnvId),
+    SourceBuild(SourceBuildId),
 }

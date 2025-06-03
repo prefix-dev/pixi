@@ -499,6 +499,7 @@ impl Workspace {
             .with_max_download_concurrency(self.concurrent_downloads_semaphore())
             .with_limits(Limits {
                 max_concurrent_solves: self.config().max_concurrent_solves().into(),
+                ..Limits::default()
             })
             .with_backend_overrides(BackendOverride::from_env()?.unwrap_or_default()))
     }

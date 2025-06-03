@@ -17,7 +17,9 @@
 
 use std::{collections::HashMap, fmt::Display};
 
+use crate::event_reporter::Event;
 use itertools::Itertools;
+use pixi_command_dispatcher::reporter::SourceBuildId;
 use pixi_command_dispatcher::{
     ReporterContext,
     reporter::{
@@ -28,8 +30,6 @@ use pixi_command_dispatcher::{
 use rattler_conda_types::PackageName;
 use slotmap::SlotMap;
 use text_trees::{FormatCharacters, StringTreeNode, TreeFormatting};
-
-use crate::event_reporter::Event;
 
 /// An [`EventTree`] is a hierarchical representation of the events that
 /// occurred in a [`pixi_command_dispatcher::CommandDispatcher`].
@@ -54,6 +54,7 @@ impl EventTree {
         let mut checkout_label = HashMap::new();
         let mut pixi_solve_label = HashMap::new();
         let mut source_metadata_label = HashMap::new();
+        let mut source_build_label = HashMap::new();
         let mut instantiate_tool_env_label = HashMap::new();
 
         for event in events {
@@ -122,6 +123,17 @@ impl EventTree {
                     );
                 }
                 Event::SourceMetadataFinished { .. } => {}
+                Event::SourceBuildQueued { id, context, spec } => {
+                    source_build_label.insert(*id, spec.source.source.to_string());
+                    builder.set_event_parent((*id).into(), *context);
+                }
+                Event::SourceBuildStarted { id } => {
+                    builder.alloc_node(
+                        (*id).into(),
+                        format!("Source build ({})", source_build_label.get(id).unwrap()),
+                    );
+                }
+                Event::SourceBuildFinished { .. } => {}
                 Event::InstantiateToolEnvQueued { id, context, spec } => {
                     instantiate_tool_env_label
                         .insert(*id, spec.requirement.0.as_source().to_string());
@@ -187,6 +199,7 @@ pub enum EventId {
     GitCheckout(GitCheckoutId),
     SourceMetadata(SourceMetadataId),
     InstantiateToolEnv(InstantiateToolEnvId),
+    SourceBuild(SourceBuildId),
 }
 
 impl From<ReporterContext> for EventId {
@@ -197,6 +210,7 @@ impl From<ReporterContext> for EventId {
             ReporterContext::InstallPixi(id) => Self::PixiInstall(id),
             ReporterContext::SourceMetadata(id) => Self::SourceMetadata(id),
             ReporterContext::InstantiateToolEnv(id) => Self::InstantiateToolEnv(id),
+            ReporterContext::SourceBuild(id) => Self::SourceBuild(id),
         }
     }
 }

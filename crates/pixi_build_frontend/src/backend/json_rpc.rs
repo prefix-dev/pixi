@@ -3,6 +3,12 @@ use std::{
     sync::Arc,
 };
 
+use crate::{
+    error::BackendError,
+    jsonrpc::{RpcParams, stdio_transport},
+    protocols::{BuildBackendSetupError, stderr::stderr_buffer},
+    tool::Tool,
+};
 use jsonrpsee::{
     async_client::{Client, ClientBuilder},
     core::{
@@ -12,6 +18,7 @@ use jsonrpsee::{
     types::ErrorCode,
 };
 use miette::Diagnostic;
+use pixi_build_types::procedures::conda_build::{CondaBuildParams, CondaBuildResult};
 use pixi_build_types::{
     FrontendCapabilities, ProjectModelV1, VersionedProjectModel, procedures,
     procedures::{
@@ -25,13 +32,6 @@ use tokio::{
     io::{AsyncBufReadExt, BufReader, Lines},
     process::ChildStderr,
     sync::{Mutex, oneshot},
-};
-
-use crate::{
-    error::BackendError,
-    jsonrpc::{RpcParams, stdio_transport},
-    protocols::{BuildBackendSetupError, stderr::stderr_buffer},
-    tool::Tool,
 };
 
 /// An error that can occur when communicating with a build backend.
@@ -250,7 +250,7 @@ impl JsonRpcBackend {
     /// Call the `conda/getMetadata` method on the backend.
     pub async fn conda_get_metadata(
         &self,
-        request: &CondaMetadataParams,
+        request: CondaMetadataParams,
     ) -> Result<CondaMetadataResult, CommunicationError> {
         // Capture all of stderr and discard it
         let stderr = self.stderr.as_ref().map(|stderr| {
@@ -292,6 +292,56 @@ impl JsonRpcBackend {
                 self.backend_identifier.clone(),
                 err,
                 procedures::conda_metadata::METHOD_NAME,
+                self.manifest_path.parent().unwrap_or(&self.manifest_path),
+                backend_output,
+            )
+        })
+    }
+
+    pub async fn conda_build(
+        &self,
+        request: CondaBuildParams,
+    ) -> Result<CondaBuildResult, CommunicationError> {
+        // Capture all of stderr and discard it
+        let stderr = self.stderr.as_ref().map(|stderr| {
+            // Cancellation signal
+            let (cancel_tx, cancel_rx) = oneshot::channel();
+            // Spawn the stderr forwarding task
+            let handle = tokio::spawn(stderr_buffer(stderr.clone(), cancel_rx));
+            (cancel_tx, handle)
+        });
+
+        let result = self
+            .client
+            .request(
+                procedures::conda_build::METHOD_NAME,
+                RpcParams::from(request),
+            )
+            .await;
+
+        // Wait for the stderr sink to finish, by signaling it to stop
+        let backend_output = if let Some((cancel_tx, handle)) = stderr {
+            // Cancel the stderr forwarding. Ignore any error because that means the
+            // tasks also finished.
+            let _err = cancel_tx.send(());
+            let lines = handle.await.map_or_else(
+                |e| match e.try_into_panic() {
+                    Ok(panic) => std::panic::resume_unwind(panic),
+                    Err(_) => Err(CommunicationError::StdErrPipeStopped),
+                },
+                |e| e.map_err(|_| CommunicationError::StdErrPipeStopped),
+            )?;
+
+            Some(lines)
+        } else {
+            None
+        };
+
+        result.map_err(|err| {
+            CommunicationError::from_client_error(
+                self.backend_identifier.clone(),
+                err,
+                procedures::conda_build::METHOD_NAME,
                 self.manifest_path.parent().unwrap_or(&self.manifest_path),
                 backend_output,
             )

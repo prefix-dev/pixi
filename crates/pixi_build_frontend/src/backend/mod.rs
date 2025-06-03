@@ -1,3 +1,4 @@
+use pixi_build_types::procedures::conda_build::{CondaBuildParams, CondaBuildResult};
 use pixi_build_types::procedures::conda_metadata::{CondaMetadataParams, CondaMetadataResult};
 
 use crate::json_rpc::CommunicationError;
@@ -18,10 +19,19 @@ impl Backend {
 
     pub async fn conda_get_metadata(
         &self,
-        params: &CondaMetadataParams,
+        params: CondaMetadataParams,
     ) -> Result<CondaMetadataResult, CommunicationError> {
         match self {
             Backend::JsonRpc(json_rpc) => json_rpc.conda_get_metadata(params).await,
+        }
+    }
+
+    pub async fn conda_build(
+        &self,
+        params: CondaBuildParams,
+    ) -> Result<CondaBuildResult, CommunicationError> {
+        match self {
+            Backend::JsonRpc(json_rpc) => json_rpc.conda_build(params).await,
         }
     }
 }
