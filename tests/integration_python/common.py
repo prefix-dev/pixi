@@ -1,9 +1,9 @@
+import os
+import platform
+import subprocess
 from contextlib import contextmanager
 from enum import IntEnum
 from pathlib import Path
-import platform
-import subprocess
-import os
 from typing import Generator
 
 from rattler import Platform
@@ -126,7 +126,7 @@ def exec_extension(exe_name: str) -> str:
 def is_binary(path: Path) -> bool:
     textchars = bytearray({7, 8, 9, 10, 12, 13, 27} | set(range(0x20, 0x100)) - {0x7F})
     with open(path, "rb") as f:
-        return bool(f.read(2048).translate(None, textchars))
+        return bool(f.read(2048).translate(None, bytes(textchars)))
 
 
 def pixi_dir(project_root: Path) -> Path:
