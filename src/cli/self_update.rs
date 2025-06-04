@@ -26,6 +26,15 @@ pub struct Args {
     /// Only show release notes, do not modify the binary.
     #[clap(long)]
     dry_run: bool,
+
+    /// Force download the desired version when not exactly same with the current. If no desired
+    /// version, always replace with the latest version.
+    #[clap(long, default_value_t = false)]
+    force: bool,
+
+    /// Skip printing the release notes.
+    #[clap(long, default_value_t = false)]
+    no_release_note: bool,
 }
 
 /// Response from the Github API when fetching a release by tag.
@@ -37,6 +46,9 @@ struct ReleaseResponse {
 
     /// The time and date when the release was published. (seems to be ISO 8601)
     published_at: String,
+
+    /// The tag name of the release
+    tag_name: String,
 }
 
 fn user_agent() -> String {
@@ -126,8 +138,12 @@ async fn latest_version() -> miette::Result<Version> {
     }
 }
 
-async fn fetch_release_notes(version: &Version) -> miette::Result<String> {
-    let url = format!("{}/v{}", consts::RELEASES_API_BY_TAG, version);
+async fn fetch_release_notes(version: &Option<Version>) -> miette::Result<String> {
+    let url = if let Some(version) = version {
+        format!("{}/v{}", consts::RELEASES_API_BY_TAG, version)
+    } else {
+        consts::RELEASES_API_LATEST.to_string()
+    };
 
     let client = build_reqwest_clients(None, None)?.1;
     let response = client
@@ -149,7 +165,10 @@ async fn fetch_release_notes(version: &Version) -> miette::Result<String> {
 
         Ok(format!(
             "Release notes for version {} ({}):\n{}\n",
-            version,
+            version
+                .as_ref()
+                .map(|v| v.to_string())
+                .unwrap_or(release_response.tag_name),
             date,
             release_response.body.trim()
         ))
@@ -159,7 +178,7 @@ async fn fetch_release_notes(version: &Version) -> miette::Result<String> {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    // Get the target version, without 'v' prefix
+    // Get the target version, without 'v' prefix, None for force latest version
     let target_version = match &args.version {
         Some(version) => {
             // Remove leading 'v' if present and inform the user
@@ -169,36 +188,50 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     console::style(console::Emoji("⚠️ ", "")).yellow(),
                     version
                 );
-                Version::from_str(&version.to_string()[1..]).into_diagnostic()?
+                Some(Version::from_str(&version.to_string()[1..]).into_diagnostic()?)
             } else {
-                version.clone()
+                Some(version.clone())
             }
         }
-        None => latest_version().await?,
+        None => {
+            if args.force {
+                None
+            } else {
+                Some(latest_version().await?)
+            }
+        }
     };
 
     // Get the current version of the pixi binary
     let current_version = Version::from_str(consts::PIXI_VERSION).into_diagnostic()?;
 
-    let fetch_release_warning = match fetch_release_notes(&target_version).await {
-        Ok(release_notes) => {
-            // Print release notes
-            eprintln!(
-                "{}{}",
-                console::style(console::Emoji("📝 ", "")).yellow(),
-                format_release_notes(&release_notes)
-            );
-            None
-        }
-        Err(err) => {
-            // Failure to fetch release notes must not prevent self-update, especially if format changes
-            let release_url = format!("{}/v{}", consts::RELEASES_URL, target_version);
-            Some(format!(
-                "{}Failed to fetch release notes ({}). Check the release page for more information: {}",
-                console::style(console::Emoji("⚠️ ", "")).yellow(),
-                err,
-                release_url
-            ))
+    let fetch_release_warning = if args.no_release_note {
+        None
+    } else {
+        match fetch_release_notes(&target_version).await {
+            Ok(release_notes) => {
+                // Print release notes
+                eprintln!(
+                    "{}{}",
+                    console::style(console::Emoji("📝 ", "")).yellow(),
+                    format_release_notes(&release_notes)
+                );
+                None
+            }
+            Err(err) => {
+                // Failure to fetch release notes must not prevent self-update, especially if format changes
+                let release_url = if let Some(ref target_version) = target_version {
+                    format!("{}/v{}", consts::RELEASES_URL, target_version)
+                } else {
+                    format!("{}/latest", consts::RELEASES_URL)
+                };
+                Some(format!(
+                    "{}Failed to fetch release notes ({}). Check the release page for more information: {}",
+                    console::style(console::Emoji("⚠️ ", "")).yellow(),
+                    err,
+                    release_url
+                ))
+            }
         }
     };
 
@@ -212,7 +245,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     // Stop here if the target version is the same as the current version
-    if target_version == current_version {
+    if target_version
+        .as_ref()
+        .is_some_and(|t| *t == current_version)
+    {
         eprintln!(
             "{}pixi is already up-to-date (version {})",
             console::style(console::Emoji("✔ ", "")).green(),
@@ -221,13 +257,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         return Ok(());
     }
 
-    let action = if target_version < current_version {
+    let action = if !args.force
+        && target_version
+            .as_ref()
+            .is_some_and(|t| *t < current_version)
+    {
         if args.version.is_none() {
             // Ask if --version was not passed
             let confirmation = dialoguer::Confirm::new()
                 .with_prompt(format!(
-                    "\nCurrent version ({}) is more recent than remote ({}). Do you want to downgrade?",
-                    current_version, target_version
+                        "\nCurrent version ({}) is more recent than remote ({}). Do you want to downgrade?",
+                        current_version, target_version.as_ref().expect("target_version is not resolved")
                 ))
                 .default(false)
                 .show_default(true)
@@ -242,24 +282,33 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         "updated"
     };
 
-    eprintln!(
-        "{}Pixi will be {} from {} to {}",
-        console::style(console::Emoji("✔ ", "")).green(),
-        action,
-        current_version,
-        target_version
-    );
+    if !args.force {
+        eprintln!(
+            "{}Pixi will be {} from {} to {}",
+            console::style(console::Emoji("✔ ", "")).green(),
+            action,
+            current_version,
+            target_version
+                .as_ref()
+                .expect("target_version is not resolved")
+        );
+    }
 
     // Get the name of the binary to download and install based on the current platform
     let archive_name = default_archive_name()
         .expect("Could not find the default archive name for the current platform");
 
-    let download_url = format!(
-        "{}/download/v{}/{}",
-        consts::RELEASES_URL,
-        target_version,
-        archive_name
-    );
+    let download_url = if let Some(ref target_version) = target_version {
+        format!(
+            "{}/download/v{}/{}",
+            consts::RELEASES_URL,
+            target_version,
+            archive_name
+        )
+    } else {
+        format!("{}/latest/download/{}", consts::RELEASES_URL, archive_name)
+    };
+
     // Create a temp file to download the archive
     let mut archived_tempfile = NamedTempFile::new().into_diagnostic()?;
 
@@ -318,11 +367,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Replace the current binary with the new binary
     self_replace::self_replace(new_binary_path).into_diagnostic()?;
 
-    eprintln!(
-        "{}Pixi has been updated to version {}.",
-        console::style(console::Emoji("✔ ", "")).green(),
-        target_version
-    );
+    if let Some(ref target_version) = target_version {
+        eprintln!(
+            "{}Pixi has been updated to version {}.",
+            console::style(console::Emoji("✔ ", "")).green(),
+            target_version
+        );
+    } else {
+        eprintln!(
+            "{}Pixi has been updated to latest release.",
+            console::style(console::Emoji("✔ ", "")).green(),
+        );
+    }
 
     if let Some(fetch_release_warning) = fetch_release_warning {
         tracing::warn!(fetch_release_warning);
