@@ -923,7 +923,6 @@ mod tests {
     use std::path::PathBuf;
 
     // In this case we want to make the path relative to the project_root or lock file path
-    #[cfg(not(target_os = "windows"))]
     #[test]
     fn process_uv_path_relative_path() {
         let url = uv_pep508::VerbatimUrl::parse_url("file:///a/b/c")
@@ -935,7 +934,6 @@ mod tests {
     }
 
     // In this case we want to make the path relative to the project_root or lock file path
-    #[cfg(not(target_os = "windows"))]
     #[test]
     fn process_uv_path_project_root_subdir() {
         let url = uv_pep508::VerbatimUrl::parse_url("file:///a/b/c")
