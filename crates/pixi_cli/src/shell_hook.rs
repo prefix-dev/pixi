@@ -138,8 +138,23 @@ async fn generate_deactivation_script(
 
     let activator = get_activator(environment, shell.clone()).into_diagnostic()?;
 
-    // Use the deactivation method
-    let result = activator.deactivation().into_diagnostic()?;
+    let current_env = std::env::vars().collect::<HashMap<String, String>>();
+
+    let path = std::env::var("PATH")
+        .ok()
+        .map(|p| std::env::split_paths(&p).collect::<Vec<_>>());
+
+    let conda_prefix = std::env::var("CONDA_PREFIX").ok().map(|p| p.into());
+
+    // Use the deactivation method with environment variables
+    let result = activator
+        .deactivation(ActivationVariables {
+            conda_prefix,
+            path,
+            path_modification_behavior: PathModificationBehavior::default(),
+            current_env,
+        })
+        .into_diagnostic()?;
 
     let script = result.script.contents().into_diagnostic()?;
 
