@@ -923,6 +923,7 @@ mod tests {
     use std::path::PathBuf;
 
     // In this case we want to make the path relative to the project_root or lock file path
+    #[cfg(not(target_os = "windows"))]
     #[test]
     fn process_uv_path_relative_path() {
         let url = uv_pep508::VerbatimUrl::parse_url("file:///a/b/c")
@@ -934,6 +935,7 @@ mod tests {
     }
 
     // In this case we want to make the path relative to the project_root or lock file path
+    #[cfg(not(target_os = "windows"))]
     #[test]
     fn process_uv_path_project_root_subdir() {
         let url = uv_pep508::VerbatimUrl::parse_url("file:///a/b/c")
@@ -941,6 +943,35 @@ mod tests {
             .with_given("./b/c");
         let path =
             process_uv_path_url(&url, &PathBuf::from("/a/c/z"), &PathBuf::from("/a/b/f")).unwrap();
+        assert_eq!(path, PathBuf::from("../../c/z"));
+    }
+
+    // In this case we want to make the path relative to the project_root or lock file path
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn process_uv_path_relative_path() {
+        let url = uv_pep508::VerbatimUrl::parse_url("file://C/a/b/c")
+            .unwrap()
+            .with_given("./b/c");
+        let path =
+            process_uv_path_url(&url, &PathBuf::from("C:\\a\\b\\c"), &PathBuf::from("C:\\a"))
+                .unwrap();
+        assert_eq!(path, PathBuf::from("./b/c"));
+    }
+
+    // In this case we want to make the path relative to the project_root or lock file path
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn process_uv_path_project_root_subdir() {
+        let url = uv_pep508::VerbatimUrl::parse_url("file://C/a/b/c")
+            .unwrap()
+            .with_given("./b/c");
+        let path = process_uv_path_url(
+            &url,
+            &PathBuf::from("C:\\a\\c\\z"),
+            &PathBuf::from("C:\\a\\b\\f"),
+        )
+        .unwrap();
         assert_eq!(path, PathBuf::from("../../c/z"));
     }
 
