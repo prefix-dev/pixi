@@ -295,7 +295,7 @@ impl WorkspaceDiscoverer {
                                 ProvenanceError::UnrecognizedManifestFormat,
                             ),
                         )?;
-                        tracing::info!(
+                        tracing::trace!(
                             "Found manifest in directory: {:?}, continuing further.",
                             provenance.path
                         );
@@ -306,7 +306,7 @@ impl WorkspaceDiscoverer {
                     // Check if a pixi.toml file exists in the current directory.
                     let provenance = Self::provenance_from_dir(manifest_dir_path);
                     if provenance.is_some() {
-                        tracing::info!(
+                        tracing::trace!(
                             "Found manifest in directory: {:?}, continuing further.",
                             manifest_dir_path
                         );

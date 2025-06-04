@@ -1,6 +1,6 @@
 [project]
 authors = ["Bas Zalmstra <zalmstra.bas@gmail.com>"]
-channels = ["conda-forge"]
+channels = ["https://prefix.dev/conda-forge"]
 name = "solve-groups"
 platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
