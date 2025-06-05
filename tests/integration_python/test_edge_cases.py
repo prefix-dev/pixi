@@ -823,6 +823,8 @@ channels = ["https://prefix.dev/conda-forge"]
         [pixi, "install", "-v"],
         cwd=tmp_pixi_workspace,
         expected_exit_code=ExitCode.SUCCESS,
+    )
+
 
 def test_help_warning_when_platform_not_supported(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """Test that the help command warns about unsupported platforms"""
