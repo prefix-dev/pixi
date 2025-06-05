@@ -289,6 +289,12 @@ pub enum PlatformUnsat {
     #[error("git dependency on a conda installed package '{0}' is not supported")]
     GitDependencyOnCondaInstalledPackage(uv_normalize::PackageName),
 
+    #[error("path dependency on a conda installed package '{0}' is not supported")]
+    PathDependencyOnCondaInstalledPackage(uv_normalize::PackageName),
+
+    #[error("directory dependency on a conda installed package '{0}' is not supported")]
+    DirectoryDependencyOnCondaInstalledPackage(uv_normalize::PackageName),
+
     #[error(transparent)]
     EditablePackageMismatch(EditablePackagesMismatch),
 
