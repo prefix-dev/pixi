@@ -174,7 +174,7 @@ impl PypiPackageIdentifier {
             }
             uv_distribution_types::RequirementSource::Directory { .. } => {
                 tracing::warn!(
-                    "PyPI requirement: {} as directory dependency is currently not supported as it is already selected as a conda package",
+                    "PyPI requirement: {} as directory dependency is currently not supported because it is already selected as a conda package",
                     consts::PYPI_PACKAGE_STYLE.apply_to(requirement.name.as_str())
                 );
                 Ok(false)
