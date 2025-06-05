@@ -229,7 +229,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         // check task cache
         let task_cache = match executable_task
-            .can_skip(&lock_file.lock_file)
+            .can_skip(lock_file.as_lock_file())
             .await
             .into_diagnostic()?
         {
@@ -271,7 +271,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 let command_env = get_task_env(
                     &executable_task.run_environment,
                     args.clean_env || executable_task.task().clean_env(),
-                    Some(&lock_file.lock_file),
+                    Some(lock_file.as_lock_file()),
                     workspace.config().force_activate(),
                     workspace.config().experimental_activation_cache_usage(),
                 )
@@ -308,7 +308,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         // Update the task cache with the new hash
         executable_task
-            .save_cache(&lock_file, task_cache)
+            .save_cache(lock_file.as_lock_file(), task_cache)
             .await
             .into_diagnostic()?;
     }

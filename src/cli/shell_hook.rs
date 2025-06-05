@@ -172,7 +172,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         true => {
             generate_environment_json(
                 &environment,
-                &lock_file_data.lock_file,
+                &lock_file_data.into_lock_file(),
                 workspace.config().force_activate(),
                 workspace.config().experimental_activation_cache_usage(),
             )

@@ -103,6 +103,14 @@ impl TopLevelProgress {
 }
 
 impl pixi_command_dispatcher::Reporter for TopLevelProgress {
+    /// Called when the command dispatcher is closing down.
+    ///
+    /// We want to make sure that we clean up all the progress bars.
+    fn on_finished(&mut self) {
+        self.conda_solve_reporter.close();
+        self.repodata_reporter.close();
+    }
+
     fn as_git_reporter(&mut self) -> Option<&mut dyn pixi_command_dispatcher::GitCheckoutReporter> {
         Some(&mut self.source_checkout_reporter)
     }

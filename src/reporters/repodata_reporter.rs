@@ -34,6 +34,12 @@ impl rattler_repodata_gateway::Reporter for RepodataReporter {
     }
 }
 
+impl RepodataReporter {
+    pub fn close(&self) {
+        self.inner.write().close();
+    }
+}
+
 struct RepodataReporterInner {
     pb: ProgressBar,
     title: Option<String>,
@@ -65,6 +71,10 @@ impl RepodataReporter {
 }
 
 impl RepodataReporterInner {
+    pub fn close(&mut self) {
+        self.pb.finish_and_clear();
+    }
+
     pub fn update(&mut self) {
         let downloads = self.downloads.read();
         if !downloads.iter().any(|d| d.bytes_downloaded > 0) {

@@ -231,7 +231,10 @@ pub struct LockFileDerivedData<'p> {
     pub workspace: &'p Workspace,
 
     /// The lock-file
-    pub lock_file: LockFile,
+    ///
+    /// Prefer to use `as_lock_file` or `into_lock_file` to also make a decision what to do with
+    /// the resources used to create this instance.
+    pub(crate) lock_file: LockFile,
 
     /// The package cache
     pub package_cache: PackageCache,
@@ -278,6 +281,19 @@ impl<'p> LockFileDerivedData<'p> {
             .to_path(&lock_file_path)
             .into_diagnostic()
             .context("failed to write lock-file to disk")
+    }
+
+    /// Consumes this instance, dropping any resources that are not needed
+    /// anymore to work with the lock-file.
+    pub(crate) fn into_lock_file(self) -> LockFile {
+        self.lock_file
+    }
+
+    /// Returns a reference to the internal lock-file but does not consume any
+    /// build resources, this is useful if you want to keep using the original
+    /// instance.
+    pub(crate) fn as_lock_file(&self) -> &LockFile {
+        &self.lock_file
     }
 
     fn locked_environment_hash(
