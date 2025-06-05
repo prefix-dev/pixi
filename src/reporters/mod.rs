@@ -107,8 +107,13 @@ impl pixi_command_dispatcher::Reporter for TopLevelProgress {
     ///
     /// We want to make sure that we clean up all the progress bars.
     fn on_finished(&mut self) {
-        self.conda_solve_reporter.close();
-        self.repodata_reporter.close();
+        self.on_clear()
+    }
+
+    /// Clears the current progress bars.
+    fn on_clear(&mut self) {
+        self.conda_solve_reporter.clear();
+        self.repodata_reporter.clear();
     }
 
     fn as_git_reporter(&mut self) -> Option<&mut dyn pixi_command_dispatcher::GitCheckoutReporter> {

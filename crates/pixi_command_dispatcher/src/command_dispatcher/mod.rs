@@ -185,6 +185,7 @@ pub(crate) enum ForegroundMessage {
     GitCheckout(GitCheckoutTask),
     InstallPixiEnvironment(InstallPixiEnvironmentTask),
     InstantiateToolEnvironment(Task<InstantiateToolEnvironmentSpec>),
+    ClearReporter(oneshot::Sender<()>),
 }
 
 /// A message that is send to the background task to start solving a particular
@@ -318,6 +319,18 @@ impl CommandDispatcher {
             Ok(Err(err)) => Err(CommandDispatcherError::Failed(err)),
             Err(_) => Err(CommandDispatcherError::Cancelled),
         }
+    }
+
+    /// Notifies the progress reporter that is should clear its output.
+    pub async fn clear_reporter(&self) {
+        let Some(sender) = self.channel().sender() else {
+            // If this fails, it means the command dispatcher was dropped and the task is
+            // immediately canceled.
+            return;
+        };
+        let (tx, rx) = oneshot::channel();
+        let _ = sender.send(ForegroundMessage::ClearReporter(tx));
+        let _ = rx.await;
     }
 
     /// Returns the metadata of the source spec.

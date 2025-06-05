@@ -35,8 +35,8 @@ impl rattler_repodata_gateway::Reporter for RepodataReporter {
 }
 
 impl RepodataReporter {
-    pub fn close(&self) {
-        self.inner.write().close();
+    pub fn clear(&self) {
+        self.inner.write().clear();
     }
 }
 
@@ -71,8 +71,9 @@ impl RepodataReporter {
 }
 
 impl RepodataReporterInner {
-    pub fn close(&mut self) {
+    pub fn clear(&mut self) {
         self.pb.finish_and_clear();
+        self.downloads.write().clear();
     }
 
     pub fn update(&mut self) {

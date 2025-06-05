@@ -313,6 +313,7 @@ impl CommandDispatcherProcessor {
             }
             ForegroundMessage::SourceMetadata(task) => self.on_source_metadata(task),
             ForegroundMessage::GitCheckout(task) => self.on_checkout_git(task),
+            ForegroundMessage::ClearReporter(sender) => self.clear_reporter(sender),
         }
     }
 
@@ -412,5 +413,13 @@ impl CommandDispatcherProcessor {
         }
 
         None
+    }
+
+    /// Called to clear the reporter.
+    fn clear_reporter(&mut self, sender: oneshot::Sender<()>) {
+        if let Some(reporter) = self.reporter.as_mut() {
+            reporter.on_clear()
+        }
+        let _ = sender.send(());
     }
 }

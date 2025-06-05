@@ -74,7 +74,7 @@ impl<T: Tracker> MainProgressBar<T> {
         state.finish(id);
     }
 
-    pub fn close(&self) {
+    pub fn clear(&self) {
         let mut state = self.inner.write();
         state.close();
     }
@@ -83,6 +83,7 @@ impl<T: Tracker> MainProgressBar<T> {
 impl<T: Tracker> State<T> {
     pub fn close(&mut self) {
         self.pb.finish_and_clear();
+        self.tracker.clear();
     }
 
     pub fn start(&mut self, id: usize) {

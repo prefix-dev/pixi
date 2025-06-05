@@ -134,8 +134,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         })
         .await?;
 
-    // dialoguer doesn't reset the cursor if it's aborted via e.g. SIGINT
-    // So we do it ourselves.
+    // Clear the current progress reports.
+    lock_file
+        .build_context
+        .command_dispatcher()
+        .clear_reporter()
+        .await;
 
     let ctrlc_should_exit_process = Arc::new(AtomicBool::new(true));
     let ctrlc_should_exit_process_clone = Arc::clone(&ctrlc_should_exit_process);

@@ -152,6 +152,9 @@ pub trait Reporter: Send {
     /// Called when the command dispatcher thread starts.
     fn on_start(&mut self) {}
 
+    /// Called to clear the current progress.
+    fn on_clear(&mut self) {}
+
     /// Called when the command dispatcher thread is about to close.
     fn on_finished(&mut self) {}
 
