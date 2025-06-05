@@ -27,6 +27,7 @@ env:
   CICD_INTERMEDIATES_DIR: "_cicd-intermediates"
   XDG_CACHE_HOME: ${{ github.workspace }}/.cache
   PYTEST_ADDOPTS: "--color=yes"
+  PYTHONIOENCODING: utf-8
 
   #
   # Select a profile that is used for building the binary. The profile optimizes for certain use-cases.
