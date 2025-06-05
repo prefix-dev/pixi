@@ -160,7 +160,7 @@ impl PypiPackageIdentifier {
             }
             uv_distribution_types::RequirementSource::Git { .. } => {
                 tracing::warn!(
-                    "PyPI requirement: {} as a Git dependency is currently not supported as it is already selected as a conda package",
+                    "PyPI requirement: {} as a Git dependency is currently not supported because it is already selected as a conda package",
                     consts::PYPI_PACKAGE_STYLE.apply_to(requirement.name.as_str())
                 );
                 Ok(false)
