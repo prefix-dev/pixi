@@ -142,10 +142,11 @@ impl PypiPackageIdentifier {
     pub(crate) fn satisfies(
         &self,
         requirement: &uv_distribution_types::Requirement,
-    ) -> Result<bool, PlatformUnsat> {
+    ) -> Result<bool, Box<PlatformUnsat>> {
         // Verify the name of the package
-        let uv_normalized =
-            to_uv_normalize(self.name.as_normalized()).map_err::<ConversionError, _>(From::from)?;
+        let uv_normalized = to_uv_normalize(self.name.as_normalized())
+            .map_err::<ConversionError, _>(From::from)
+            .map_err::<PlatformUnsat, _>(From::from)?;
         if uv_normalized != requirement.name {
             return Ok(false);
         }
@@ -153,8 +154,9 @@ impl PypiPackageIdentifier {
         // Check the version of the requirement
         match &requirement.source {
             uv_distribution_types::RequirementSource::Registry { specifier, .. } => {
-                let uv_version =
-                    to_uv_version(&self.version).map_err::<ConversionError, _>(From::from)?;
+                let uv_version = to_uv_version(&self.version)
+                    .map_err::<ConversionError, _>(From::from)
+                    .map_err::<PlatformUnsat, _>(From::from)?;
                 Ok(specifier.contains(&uv_version))
             }
             // a pypi -> conda requirement on these versions are not supported
@@ -163,36 +165,36 @@ impl PypiPackageIdentifier {
                     "PyPI requirement: {} as an url dependency is currently not supported because it is already selected as a conda package",
                     consts::PYPI_PACKAGE_STYLE.apply_to(requirement.name.as_str())
                 );
-                Err(DirectUrlDependencyOnCondaInstalledPackage(
+                Err(Box::new(DirectUrlDependencyOnCondaInstalledPackage(
                     requirement.name.clone(),
-                ))
+                )))
             }
             uv_distribution_types::RequirementSource::Git { .. } => {
                 tracing::warn!(
                     "PyPI requirement: {} as a Git dependency is currently not supported because it is already selected as a conda package",
                     consts::PYPI_PACKAGE_STYLE.apply_to(requirement.name.as_str())
                 );
-                Err(GitDependencyOnCondaInstalledPackage(
+                Err(Box::new(GitDependencyOnCondaInstalledPackage(
                     requirement.name.clone(),
-                ))
+                )))
             }
             uv_distribution_types::RequirementSource::Path { .. } => {
                 tracing::warn!(
                     "PyPI requirement: {} as a path dependency is currently not supported because it is already selected as a conda package",
                     consts::PYPI_PACKAGE_STYLE.apply_to(requirement.name.as_str())
                 );
-                Err(PathDependencyOnCondaInstalledPackage(
+                Err(Box::new(PathDependencyOnCondaInstalledPackage(
                     requirement.name.clone(),
-                ))
+                )))
             }
             uv_distribution_types::RequirementSource::Directory { .. } => {
                 tracing::warn!(
                     "PyPI requirement: {} as directory dependency is currently not supported because it is already selected as a conda package",
                     consts::PYPI_PACKAGE_STYLE.apply_to(requirement.name.as_str())
                 );
-                Err(DirectoryDependencyOnCondaInstalledPackage(
+                Err(Box::new(DirectoryDependencyOnCondaInstalledPackage(
                     requirement.name.clone(),
-                ))
+                )))
             }
         }
     }

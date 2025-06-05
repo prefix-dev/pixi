@@ -1194,11 +1194,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                         });
                     }
 
-                    if !identifier
-                        .satisfies(&requirement)
-                        .map_err(From::from)
-                        .map_err(Box::new)?
-                    {
+                    if !identifier.satisfies(&requirement)? {
                         // The record does not match the spec, the lock-file is inconsistent.
                         delayed_pypi_error.get_or_insert_with(|| {
                             Box::new(PlatformUnsat::CondaUnsatisfiableRequirement(
