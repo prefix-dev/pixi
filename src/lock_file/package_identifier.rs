@@ -5,6 +5,7 @@ use rattler_conda_types::{PackageRecord, PackageUrl, RepoDataRecord};
 use std::{collections::HashSet, str::FromStr};
 use thiserror::Error;
 
+use pixi_consts::consts;
 use pixi_pypi_spec::PypiPackageName;
 use uv_normalize::{ExtraName, InvalidNameError};
 
@@ -151,16 +152,32 @@ impl PypiPackageIdentifier {
             }
             // a pypi -> conda requirement on these versions are not supported
             uv_distribution_types::RequirementSource::Url { .. } => {
-                unreachable!("direct url requirement on conda package is not supported")
+                tracing::warn!(
+                    "PyPI requirement: {} as an url dependency is currently not supported as it is already selected as a conda package",
+                    consts::PYPI_PACKAGE_STYLE.apply_to(requirement.name.as_str())
+                );
+                Ok(false)
             }
             uv_distribution_types::RequirementSource::Git { .. } => {
-                unreachable!("git requirement on conda package is not supported")
+                tracing::warn!(
+                    "PyPI requirement: {} as a Git dependency is currently not supported as it is already selected as a conda package",
+                    consts::PYPI_PACKAGE_STYLE.apply_to(requirement.name.as_str())
+                );
+                Ok(false)
             }
             uv_distribution_types::RequirementSource::Path { .. } => {
-                unreachable!("path requirement on conda package is not supported")
+                tracing::warn!(
+                    "PyPI requirement: {} as a path dependency is currently not supported as it is already selected as a conda package",
+                    consts::PYPI_PACKAGE_STYLE.apply_to(requirement.name.as_str())
+                );
+                Ok(false)
             }
             uv_distribution_types::RequirementSource::Directory { .. } => {
-                unreachable!("directory requirement on conda package is not supported")
+                tracing::warn!(
+                    "PyPI requirement: {} as directory dependency is currently not supported as it is already selected as a conda package",
+                    consts::PYPI_PACKAGE_STYLE.apply_to(requirement.name.as_str())
+                );
+                Ok(false)
             }
         }
     }
