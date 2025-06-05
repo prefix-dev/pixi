@@ -153,7 +153,7 @@ impl PypiPackageIdentifier {
             // a pypi -> conda requirement on these versions are not supported
             uv_distribution_types::RequirementSource::Url { .. } => {
                 tracing::warn!(
-                    "PyPI requirement: {} as an url dependency is currently not supported as it is already selected as a conda package",
+                    "PyPI requirement: {} as an url dependency is currently not supported because it is already selected as a conda package",
                     consts::PYPI_PACKAGE_STYLE.apply_to(requirement.name.as_str())
                 );
                 Ok(false)
