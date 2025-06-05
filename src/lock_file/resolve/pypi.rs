@@ -9,22 +9,6 @@ use std::{
     sync::Arc,
 };
 
-use crate::{
-    environment::CondaPrefixUpdated,
-    lock_file::{
-        CondaPrefixUpdater, LockedPypiPackages, PixiRecordsByName, PypiPackageIdentifier,
-        PypiRecord, UvResolutionContext,
-        records_by_name::HasNameVersion,
-        resolve::{
-            build_dispatch::{
-                LazyBuildDispatch, LazyBuildDispatchDependencies, UvBuildDispatchParams,
-            },
-            resolver_provider::CondaResolverProvider,
-        },
-    },
-    uv_reporter::{UvReporter, UvReporterOptions},
-    workspace::{Environment, EnvironmentVars},
-};
 use chrono::{DateTime, Utc};
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
@@ -143,10 +127,9 @@ use url::Url;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
 use uv_configuration::{ConfigSettings, Constraints, Overrides};
 use uv_distribution::DistributionDatabase;
-use uv_distribution_types::RequirementSource;
 use uv_distribution_types::{
     BuiltDist, DependencyMetadata, Diagnostic, Dist, FileLocation, HashPolicy, IndexCapabilities,
-    IndexUrl, Name, Resolution, ResolvedDist, SourceDist, ToUrlError,
+    IndexUrl, Name, RequirementSource, Resolution, ResolvedDist, SourceDist, ToUrlError,
 };
 use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigests};
 use uv_requirements::LookaheadResolver;
@@ -155,6 +138,23 @@ use uv_resolver::{
     PreferenceError, Preferences, PythonRequirement, Resolver, ResolverEnvironment,
 };
 use uv_types::EmptyInstalledPackages;
+
+use crate::{
+    environment::CondaPrefixUpdated,
+    lock_file::{
+        CondaPrefixUpdater, LockedPypiPackages, PixiRecordsByName, PypiPackageIdentifier,
+        PypiRecord, UvResolutionContext,
+        records_by_name::HasNameVersion,
+        resolve::{
+            build_dispatch::{
+                LazyBuildDispatch, LazyBuildDispatchDependencies, UvBuildDispatchParams,
+            },
+            resolver_provider::CondaResolverProvider,
+        },
+    },
+    uv_reporter::{UvReporter, UvReporterOptions},
+    workspace::{Environment, EnvironmentVars},
+};
 
 #[derive(Debug, thiserror::Error)]
 #[error("Invalid hash: {0} type: {1}")]
@@ -203,6 +203,8 @@ enum ProcessPathUrlError {
     NoGivenPath(String),
     #[error("cannot make {} relative to {}", .0, .1)]
     CannotMakeRelative(String, String),
+    #[error("path is not UTF-8: {}", .0.display())]
+    NotUtf8(PathBuf),
 }
 
 /// Given a pyproject.toml and either case:
@@ -216,14 +218,14 @@ enum ProcessPathUrlError {
 ///   2) We get our processed path as a given, which can be relative, as our
 ///      lock may store relative url's.
 ///
-/// We try to create a relative path from the install path to the lock file path.
-/// And we try to keep the path absolute if so specified, by the users.
+/// We try to create a relative path from the install path to the lock file
+/// path. And we try to keep the path absolute if so specified, by the users.
 /// So that's assuming it was `given` in that sense.
 fn process_uv_path_url(
     path_url: &uv_pep508::VerbatimUrl,
     install_path: &Path,
     project_root: &Path,
-) -> Result<PathBuf, ProcessPathUrlError> {
+) -> Result<Utf8TypedPathBuf, ProcessPathUrlError> {
     let given = path_url
         .given()
         .ok_or_else(|| ProcessPathUrlError::NoGivenPath(path_url.to_string()))?;
@@ -238,7 +240,7 @@ fn process_uv_path_url(
         path.is_absolute()
     };
 
-    if !keep_abs {
+    let std_path = if !keep_abs {
         // Find the path relative to the project root
         let path = pathdiff::diff_paths(install_path, project_root).ok_or_else(|| {
             ProcessPathUrlError::CannotMakeRelative(
@@ -246,19 +248,30 @@ fn process_uv_path_url(
                 project_root.to_string_lossy().to_string(),
             )
         })?;
+
         // We used to lock with ./ before changes where made so let's add it back
         // if we are not moving down in the directory structure
-        let path = if !path.starts_with("..") {
+        if !path.starts_with("..") {
             PathBuf::from(".").join(&path)
         } else {
             path
-        };
-
-        Ok(path)
+        }
     } else {
         // Keep the path absolute if it is provided so by the user
-        Ok(PathBuf::from(install_path))
-    }
+        PathBuf::from(install_path)
+    };
+
+    let Some(path_str) = std_path.to_str() else {
+        return Err(ProcessPathUrlError::NotUtf8(std_path));
+    };
+
+    Ok(if cfg!(windows) {
+        // Replace backslashes with forward slashes on Windows because pathdiff can
+        // return paths with backslashes.
+        Utf8TypedPathBuf::from(path_str.replace("\\", "/"))
+    } else {
+        Utf8TypedPathBuf::from(path_str)
+    })
 }
 
 type CondaPythonPackages = HashMap<uv_normalize::PackageName, (PixiRecord, PypiPackageIdentifier)>;
@@ -377,9 +390,10 @@ pub async fn resolve_pypi(
     let tags = get_pypi_tags(platform, &system_requirements, python_record.as_ref())?;
 
     // We need to setup both an interpreter and a requires_python specifier.
-    // The interpreter is used to (potentially) build the wheel, and the requires_python specifier is used
-    // to determine the python version of the wheel.
-    // So make sure the interpreter does not touch the solve parts of this function
+    // The interpreter is used to (potentially) build the wheel, and the
+    // requires_python specifier is used to determine the python version of the
+    // wheel. So make sure the interpreter does not touch the solve parts of
+    // this function
     let interpreter_version = python_record
         .version()
         .as_major_minor()
@@ -448,9 +462,10 @@ pub async fn resolve_pypi(
         &build_options,
     );
 
-    // Hi maintainers! For anyone coming here, if you expose any additional `uv` options, similar to `index_strategy`, make sure to
-    // include them in this struct as well instead of relying on the default.
-    // Otherwise there be panics.
+    // Hi maintainers! For anyone coming here, if you expose any additional `uv`
+    // options, similar to `index_strategy`, make sure to include them in this
+    // struct as well instead of relying on the default. Otherwise there be
+    // panics.
     let options = Options {
         index_strategy,
         build_options: build_options.clone(),
@@ -724,7 +739,8 @@ fn get_url_or_path(
             Ok(url)
         }
         // From observation this is the case where the index is a `--find-links` path
-        // i.e a path to a directory. This is not a PyPI index, but a directory or a file with links to wheels
+        // i.e a path to a directory. This is not a PyPI index, but a directory or a file with links
+        // to wheels
         IndexUrl::Path(_) => {
             let url = match file_location {
                 // Okay we would have something like:
@@ -736,9 +752,10 @@ fn get_url_or_path(
                         .to_file_path()
                         .map_err(|_| GetUrlOrPathError::ExpectedPath(url.to_string()))?;
                     // !IMPORTANT! We need to strip the base path from the absolute path
-                    // not the path returned by the uv solver. Why? Because we need the path relative
-                    // to the project root, **not** the path relative to the --find-links path.
-                    // This is because during installation we do something like: `project_root.join(relative_path)`
+                    // not the path returned by the uv solver. Why? Because we need the path
+                    // relative to the project root, **not** the path relative
+                    // to the --find-links path. This is because during
+                    // installation we do something like: `project_root.join(relative_path)`
                     let relative = absolute.strip_prefix(abs_project_root);
                     let path = match relative {
                         // Apparently, we can make it relative to the project root
@@ -846,16 +863,14 @@ async fn lock_pypi_packages(
                             (UrlOrPath::Url(direct_url), hash)
                         }
                         BuiltDist::Path(dist) => (
-                            UrlOrPath::Path(Utf8TypedPathBuf::from(
+                            UrlOrPath::Path(
                                 process_uv_path_url(
                                     &dist.url,
                                     &dist.install_path,
                                     abs_project_root,
                                 )
-                                .into_diagnostic()?
-                                .to_string_lossy()
-                                .to_string(),
-                            )),
+                                .into_diagnostic()?,
+                            ),
                             None,
                         ),
                     };
@@ -955,11 +970,9 @@ async fn lock_pypi_packages(
                             .into_diagnostic()?;
 
                             // Create the url for the lock file. This is based on the passed in URL
-                            // instead of from the source path to copy the path that was passed in from
-                            // the requirement.
-                            let url_or_path = UrlOrPath::Path(Utf8TypedPathBuf::from(
-                                install_path.to_string_lossy().to_string(),
-                            ));
+                            // instead of from the source path to copy the path that was passed in
+                            // from the requirement.
+                            let url_or_path = UrlOrPath::Path(install_path);
                             (url_or_path, hash, false)
                         }
                         SourceDist::Directory(dir) => {
@@ -981,11 +994,9 @@ async fn lock_pypi_packages(
                                     .into_diagnostic()?;
 
                             // Create the url for the lock file. This is based on the passed in URL
-                            // instead of from the source path to copy the path that was passed in from
-                            // the requirement.
-                            let url_or_path = UrlOrPath::Path(Utf8TypedPathBuf::from(
-                                install_path.to_string_lossy().to_string(),
-                            ));
+                            // instead of from the source path to copy the path that was passed in
+                            // from the requirement.
+                            let url_or_path = UrlOrPath::Path(install_path);
                             (url_or_path, hash, dir.editable)
                         }
                     };
@@ -1018,10 +1029,12 @@ async fn lock_pypi_packages(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::path::PathBuf;
 
-    // In this case we want to make the path relative to the project_root or lock file path
+    use super::*;
+
+    // In this case we want to make the path relative to the project_root or lock
+    // file path
     #[cfg(not(target_os = "windows"))]
     #[test]
     fn process_uv_path_relative_path() {
@@ -1030,10 +1043,11 @@ mod tests {
             .with_given("./b/c");
         let path =
             process_uv_path_url(&url, &PathBuf::from("/a/b/c"), &PathBuf::from("/a")).unwrap();
-        assert_eq!(path, PathBuf::from("./b/c"));
+        assert_eq!(path.as_str(), "./b/c");
     }
 
-    // In this case we want to make the path relative to the project_root or lock file path
+    // In this case we want to make the path relative to the project_root or lock
+    // file path
     #[cfg(not(target_os = "windows"))]
     #[test]
     fn process_uv_path_project_root_subdir() {
@@ -1042,7 +1056,38 @@ mod tests {
             .with_given("./b/c");
         let path =
             process_uv_path_url(&url, &PathBuf::from("/a/c/z"), &PathBuf::from("/a/b/f")).unwrap();
-        assert_eq!(path, PathBuf::from("../../c/z"));
+        assert_eq!(path.as_str(), "../../c/z");
+    }
+
+    // In this case we want to make the path relative to the project_root or lock
+    // file path
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn process_uv_path_relative_path() {
+        let url = uv_pep508::VerbatimUrl::parse_url("file://C/a/b/c")
+            .unwrap()
+            .with_given("./b/c");
+        let path =
+            process_uv_path_url(&url, &PathBuf::from("C:\\a\\b\\c"), &PathBuf::from("C:\\a"))
+                .unwrap();
+        assert_eq!(path.as_str(), "./b/c");
+    }
+
+    // In this case we want to make the path relative to the project_root or lock
+    // file path
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn process_uv_path_project_root_subdir() {
+        let url = uv_pep508::VerbatimUrl::parse_url("file://C/a/b/c")
+            .unwrap()
+            .with_given("./b/c");
+        let path = process_uv_path_url(
+            &url,
+            &PathBuf::from("C:\\a\\c\\z"),
+            &PathBuf::from("C:\\a\\b\\f"),
+        )
+        .unwrap();
+        assert_eq!(path.as_str(), "../../c/z");
     }
 
     // In this case we want to keep the absolute path
@@ -1054,7 +1099,7 @@ mod tests {
             .with_given("/a/b/c");
         let path =
             process_uv_path_url(&url, &PathBuf::from("/a/b/c"), &PathBuf::from("/a")).unwrap();
-        assert_eq!(path, PathBuf::from("/a/b/c"));
+        assert_eq!(path.as_str(), "/a/b/c");
     }
 
     // In this case we want to keep the absolute path
@@ -1067,6 +1112,6 @@ mod tests {
         let path =
             process_uv_path_url(&url, &PathBuf::from("C:\\a\\b\\c"), &PathBuf::from("C:\\a"))
                 .unwrap();
-        assert_eq!(path, PathBuf::from("C:\\a\\b\\c"));
+        assert_eq!(path.as_str(), "C:/a/b/c");
     }
 }

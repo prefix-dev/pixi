@@ -16,7 +16,7 @@ pub const PYPROJECT_MANIFEST: &str = "pyproject.toml";
 pub const CONFIG_FILE: &str = "config.toml";
 pub const PIXI_VERSION: &str = match option_env!("PIXI_VERSION") {
     Some(v) => v,
-    None => "0.47.0",
+    None => "0.48.0",
 };
 pub const PREFIX_FILE_NAME: &str = "pixi_env_prefix";
 pub const ENVIRONMENTS_DIR: &str = "envs";
@@ -95,6 +95,8 @@ pub const ENVIRONMENT_FILE_NAME: &str = "pixi";
 // Note: no trailing slash!
 pub const RELEASES_URL: &str = "https://github.com/prefix-dev/pixi/releases";
 pub const RELEASES_API_BY_TAG: &str = "https://api.github.com/repos/prefix-dev/pixi/releases/tags";
+pub const RELEASES_API_LATEST: &str =
+    "https://api.github.com/repos/prefix-dev/pixi/releases/latest";
 
 pub const CLAP_CONFIG_OPTIONS: &str = "Config Options";
 pub const CLAP_GIT_OPTIONS: &str = "Git Options";

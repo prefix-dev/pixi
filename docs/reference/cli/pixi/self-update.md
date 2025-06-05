@@ -16,5 +16,11 @@ pixi self-update [OPTIONS]
 :  The desired version (to downgrade or upgrade to)
 - <a id="arg---dry-run" href="#arg---dry-run">`--dry-run`</a>
 :  Only show release notes, do not modify the binary
+- <a id="arg---force" href="#arg---force">`--force`</a>
+:  Force download the desired version when not exactly same with the current. If no desired version, always replace with the latest version
+<br>**default**: `false`
+- <a id="arg---no-release-note" href="#arg---no-release-note">`--no-release-note`</a>
+:  Skip printing the release notes
+<br>**default**: `false`
 
 --8<-- "docs/reference/cli/pixi/self-update_extender:example"

@@ -50,15 +50,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let json_diff = LockFileJsonDiff::new(Some(&workspace), diff);
         let json = serde_json::to_string_pretty(&json_diff).expect("failed to convert to json");
         println!("{}", json);
-    } else if diff.is_empty() {
+    } else if new_lock_file.was_outdated {
+        eprintln!(
+            "{}Updated lock-file",
+            console::style(console::Emoji("✔ ", "")).green()
+        );
+        diff.print()
+            .into_diagnostic()
+            .context("failed to print lock-file diff")?;
+    } else {
         eprintln!(
             "{}Lock-file was already up-to-date",
             console::style(console::Emoji("✔ ", "")).green()
         );
-    } else {
-        diff.print()
-            .into_diagnostic()
-            .context("failed to print lock-file diff")?;
     }
 
     // Return with a non-zero exit code if `--check` has been passed and the lock file has been updated

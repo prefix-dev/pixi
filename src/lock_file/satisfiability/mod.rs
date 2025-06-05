@@ -289,6 +289,12 @@ pub enum PlatformUnsat {
     #[error("git dependency on a conda installed package '{0}' is not supported")]
     GitDependencyOnCondaInstalledPackage(uv_normalize::PackageName),
 
+    #[error("path dependency on a conda installed package '{0}' is not supported")]
+    PathDependencyOnCondaInstalledPackage(uv_normalize::PackageName),
+
+    #[error("directory dependency on a conda installed package '{0}' is not supported")]
+    DirectoryDependencyOnCondaInstalledPackage(uv_normalize::PackageName),
+
     #[error(transparent)]
     EditablePackageMismatch(EditablePackagesMismatch),
 
@@ -1188,11 +1194,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                         });
                     }
 
-                    if !identifier
-                        .satisfies(&requirement)
-                        .map_err(From::from)
-                        .map_err(Box::new)?
-                    {
+                    if !identifier.satisfies(&requirement)? {
                         // The record does not match the spec, the lock-file is inconsistent.
                         delayed_pypi_error.get_or_insert_with(|| {
                             Box::new(PlatformUnsat::CondaUnsatisfiableRequirement(
