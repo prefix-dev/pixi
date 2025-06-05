@@ -48,6 +48,96 @@ use rattler_digest::{Md5, Sha256, parse_digest_from_hex};
 use rattler_lock::{
     PackageHashes, PypiPackageData, PypiPackageEnvironmentData, PypiSourceTreeHashable, UrlOrPath,
 };
+
+/// Extract and validate hash from URL fragment like "#sha256=abc123" or "#md5=def456&egg=foo"
+fn extract_hash_from_url_fragment(
+    fragment: &str,
+    package_name: &uv_normalize::PackageName,
+) -> Option<miette::Result<PackageHashes>> {
+    fragment.split('&').find_map(|param| {
+        let (key, value) = param.split_once('=')?;
+        let algorithm = key.to_lowercase();
+
+        // Check if this looks like a hash (common hash algorithm names)
+        if algorithm.contains("sha") || algorithm.contains("md5") || algorithm.contains("blake") {
+            Some(match algorithm.as_str() {
+                "sha256" | "md5" => validate_and_parse_hash(&algorithm, value, package_name),
+                _ => Err(miette::miette!(
+                    "Hash verification failed: Unsupported hash algorithm '{}' for {}. Only SHA256 and MD5 are supported.",
+                    algorithm, package_name
+                )),
+            })
+        } else {
+            None
+        }
+    })
+}
+
+/// Validate and parse a hash value
+fn validate_and_parse_hash(
+    algorithm: &str,
+    hash_str: &str,
+    package_name: &uv_normalize::PackageName,
+) -> miette::Result<PackageHashes> {
+    // Check empty hash
+    if hash_str.is_empty() {
+        return Err(miette::miette!(
+            "Hash verification failed: Empty {} hash provided for {}",
+            algorithm.to_uppercase(),
+            package_name
+        ));
+    }
+
+    // Check hex validity
+    if !hash_str.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(miette::miette!(
+            "Hash verification failed: Invalid {} hash for {}: not a valid hex string",
+            algorithm.to_uppercase(),
+            package_name
+        ));
+    }
+
+    // Parse based on algorithm
+    match algorithm {
+        "sha256" => {
+            if hash_str.len() != 64 {
+                return Err(miette::miette!(
+                    "Hash verification failed: Invalid SHA256 hash for {}: expected 64 characters, got {}",
+                    package_name,
+                    hash_str.len()
+                ));
+            }
+            parse_digest_from_hex::<Sha256>(hash_str)
+                .map(PackageHashes::Sha256)
+                .ok_or_else(|| {
+                    miette::miette!(
+                        "Hash verification failed: Invalid SHA256 hash for {}: {}",
+                        package_name,
+                        hash_str
+                    )
+                })
+        }
+        "md5" => {
+            if hash_str.len() != 32 {
+                return Err(miette::miette!(
+                    "Hash verification failed: Invalid MD5 hash for {}: expected 32 characters, got {}",
+                    package_name,
+                    hash_str.len()
+                ));
+            }
+            parse_digest_from_hex::<Md5>(hash_str)
+                .map(PackageHashes::Md5)
+                .ok_or_else(|| {
+                    miette::miette!(
+                        "Hash verification failed: Invalid MD5 hash for {}: {}",
+                        package_name,
+                        hash_str
+                    )
+                })
+        }
+        _ => unreachable!("validate_and_parse_hash called with unsupported algorithm"),
+    }
+}
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
@@ -740,11 +830,20 @@ async fn lock_pypi_packages(
                         }
                         BuiltDist::DirectUrl(dist) => {
                             let url = dist.url.to_url();
+
+                            // Extract hash from URL fragment
+                            let hash = url
+                                .fragment()
+                                .and_then(|fragment| {
+                                    extract_hash_from_url_fragment(fragment, dist.name())
+                                })
+                                .transpose()?;
+
                             let direct_url = Url::parse(&format!("direct+{url}"))
                                 .into_diagnostic()
                                 .context("cannot create direct url")?;
 
-                            (UrlOrPath::Url(direct_url), None)
+                            (UrlOrPath::Url(direct_url), hash)
                         }
                         BuiltDist::Path(dist) => (
                             UrlOrPath::Path(Utf8TypedPathBuf::from(
