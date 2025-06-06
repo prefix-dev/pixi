@@ -12,6 +12,7 @@ use pixi_command_dispatcher::{
     InstallPixiEnvironmentSpec, PixiEnvironmentSpec, ReporterContext, SolveCondaEnvironmentSpec,
     reporter::{CondaSolveId, PixiInstallId, PixiSolveId},
 };
+use pixi_spec::PixiSpec;
 use rattler_repodata_gateway::Reporter;
 pub use release_notes::format_release_notes;
 use uv_configuration::RAYON_INITIALIZE;
@@ -170,6 +171,19 @@ impl pixi_command_dispatcher::PixiSolveReporter for TopLevelProgress {
         _reason: Option<ReporterContext>,
         env: &PixiEnvironmentSpec,
     ) -> PixiSolveId {
+        let has_direct_conda_dependency =
+            env.dependencies.iter_specs().any(|(_, spec)| match spec {
+                PixiSpec::Url(url) => url.is_binary(),
+                PixiSpec::Path(path) => path.is_binary(),
+                _ => false,
+            });
+        if has_direct_conda_dependency {
+            // Dependencies on conda packages will trigger validating the package cache
+            // which will be done using rayon. If that's the case, we need to ensure rayon
+            // is initialized using the uv initialization.
+            LazyLock::force(&RAYON_INITIALIZE);
+        }
+
         let id = self.conda_solve_reporter.queued(format!(
             "{} ({})",
             env.name.as_deref().unwrap_or_default(),
