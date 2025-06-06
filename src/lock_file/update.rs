@@ -110,6 +110,7 @@ impl Workspace {
                 io_concurrency_limit: IoConcurrencyLimit::default(),
                 build_context: BuildContext::from_workspace(self, command_dispatcher)?,
                 glob_hash_cache,
+                was_outdated: false,
             });
         }
 
@@ -134,6 +135,7 @@ impl Workspace {
                 io_concurrency_limit: IoConcurrencyLimit::default(),
                 build_context: BuildContext::from_workspace(self, command_dispatcher)?,
                 glob_hash_cache,
+                was_outdated: false,
             });
         }
 
@@ -257,6 +259,9 @@ pub struct LockFileDerivedData<'p> {
 
     /// An object that caches input hashes
     pub glob_hash_cache: GlobHashCache,
+
+    /// Whether the lock file was outdated
+    pub was_outdated: bool,
 }
 
 /// The mode to use when updating a prefix.
@@ -1643,6 +1648,7 @@ impl<'p> UpdateContext<'p> {
             io_concurrency_limit: self.io_concurrency_limit,
             build_context: self.build_context,
             glob_hash_cache: self.glob_hash_cache,
+            was_outdated: true,
         })
     }
 }

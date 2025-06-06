@@ -1,6 +1,7 @@
 use clap::Parser;
 use miette::{Context, IntoDiagnostic};
 
+use crate::lock_file::LockFileDerivedData;
 use crate::{
     WorkspaceLocator,
     cli::cli_config::WorkspaceConfig,
@@ -32,16 +33,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
 
-    // Save the original lockfile to compare with the new one.
+    // Update the lock-file, and extract it from the derived data to drop additional resources 
+    // created for the solve.
     let original_lock_file = workspace.load_lock_file().await?;
-    let lock_file = workspace
+    let LockFileDerivedData {
+        lock_file,
+        was_outdated,
+        ..
+    } = workspace
         .update_lock_file(UpdateLockFileOptions {
             lock_file_usage: LockFileUsage::Update,
             no_install: false,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         })
-        .await?
-        .into_lock_file();
+        .await?;
 
     // Determine the diff between the old and new lock-file.
     let diff = LockFileDiff::from_lock_files(&original_lock_file, &lock_file);
@@ -52,15 +57,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let json_diff = LockFileJsonDiff::new(Some(&workspace), diff);
         let json = serde_json::to_string_pretty(&json_diff).expect("failed to convert to json");
         println!("{}", json);
-    } else if diff.is_empty() {
+    } else if was_outdated {
+        eprintln!(
+            "{}Updated lock-file",
+            console::style(console::Emoji("✔ ", "")).green()
+        );
+        diff.print()
+            .into_diagnostic()
+            .context("failed to print lock-file diff")?;
+    } else {
         eprintln!(
             "{}Lock-file was already up-to-date",
             console::style(console::Emoji("✔ ", "")).green()
         );
-    } else {
-        diff.print()
-            .into_diagnostic()
-            .context("failed to print lock-file diff")?;
     }
 
     // Return with a non-zero exit code if `--check` has been passed and the lock

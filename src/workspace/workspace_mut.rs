@@ -358,6 +358,7 @@ impl WorkspaceMut {
             build_context,
             glob_hash_cache,
             io_concurrency_limit,
+            was_outdated: _,
         } = UpdateContext::builder(self.workspace())
             .with_lock_file(unlocked_lock_file)
             .with_no_install(
@@ -410,6 +411,7 @@ impl WorkspaceMut {
             io_concurrency_limit,
             build_context,
             glob_hash_cache,
+            was_outdated: true,
         };
         if !lock_file_update_config.no_lockfile_update && !dry_run {
             updated_lock_file.write_to_disk()?;
