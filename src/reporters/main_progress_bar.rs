@@ -176,10 +176,9 @@ impl<T: Tracker> State<T> {
         let active = !running_items.is_empty();
         self.pb.set_style(
             ProgressStyle::with_template(
-                &format!("{{spinner:.{spinner}}} {{prefix:20!}} [{{bar:20!.{bar}.yellow/dim.white}}] {{pos:>2.dim}}{slash}{{len:2.dim}} {{wide_msg:.dim}}",
+                &format!("{{spinner:.{spinner}}} {{prefix:20!}} [{{bar:20!.bright.yellow/dim.white}}] {{pos:>2.dim}}{slash}{{len:2.dim}} {{wide_msg:.dim}}",
                     spinner = if running_items.is_empty() { "dim" } else { "green" },
                     slash = console::style("/").dim(),
-                    bar = if running_items.is_empty() { "dim" } else { "bright" },
                 ))
                 .expect("failed to create progress bar style")
                 .tick_chars(pixi_progress::style::tick_chars(active))

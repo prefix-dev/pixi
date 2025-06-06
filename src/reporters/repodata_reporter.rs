@@ -93,13 +93,13 @@ impl RepodataReporterInner {
             .any(|d| d.finished.is_none() && d.bytes_downloaded > 0);
 
         // Set the style of the progress bar.
+        let verbose = tracing::event_enabled!(tracing::Level::INFO);
         self.pb.set_style(
             ProgressStyle::with_template(&format!(
-                "{{spinner:.{spinner}}} {{prefix:20!}} [{{bar:20!.{bar}.yellow/dim.white}}] {{bytes:>2.dim}}{slash}{{total_bytes:>2.dim}}{speed}",
+                "{{spinner:.{spinner}}} {{prefix:20!}} [{{bar:20!.bright.yellow/dim.white}}] {verbose}{speed}",
                 spinner = if pending_downloads { "green" } else { "dim" },
-                bar = if pending_downloads { "bright" } else { "dim" },
-                slash = console::style("/").dim(),
-                speed = if pending_downloads { format!(" {at} {{speed:.dim}}", at = console::style("@").dim()) } else { String::new() }
+                verbose = if verbose { format!("{{bytes:>2.dim}}{slash}{{total_bytes:>2.dim}} ", slash = console::style("/").dim()) } else { String::new() },
+                speed = if pending_downloads { format!("{at} {{speed:.dim}}", at = console::style("@").dim()) } else { String::new() }
             ))
             .expect("failed to create progress bar style")
             .tick_chars(pixi_progress::style::tick_chars(pending_downloads))
