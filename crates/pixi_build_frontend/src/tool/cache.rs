@@ -9,6 +9,7 @@ use dashmap::{DashMap, Entry};
 use fs_err::tokio as tokio_fs;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
+use pixi_utils::AsyncPrefixGuard;
 use rattler_conda_types::{ChannelConfig, Matches, Platform, PrefixRecord};
 use rattler_shell::{
     activation::{ActivationVariables, Activator},
@@ -252,6 +253,10 @@ impl ToolCache {
         let mut records_of_records = Vec::new();
 
         for dir in directories.iter() {
+            // Acquire a lock on the directory so we can safely read it.
+            let prefix_guard = AsyncPrefixGuard::new(&dir).await.into_diagnostic()?;
+            let _prefix_guard = prefix_guard.write().await.into_diagnostic()?;
+
             let records = find_spec_records(&dir.join("conda-meta"), specs.clone()).await?;
 
             if let Some(records) = records {
