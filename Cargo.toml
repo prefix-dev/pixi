@@ -134,6 +134,7 @@ rattler_repodata_gateway = { version = "0.22.4", default-features = false }
 rattler_shell = { version = "0.22.25", default-features = false }
 rattler_solve = { version = "1.4.3", default-features = false }
 rattler_virtual_packages = { version = "2.0.9", default-features = false }
+simple_spawn_blocking = { version = "1.1.0", default-features = false }
 
 # Bumping this to a higher version breaks the Windows path handling.
 url = "2.5.4"

@@ -76,7 +76,8 @@ impl SourceMetadataSpec {
             .source_metadata_cache()
             .entry(&self.source, &cache_key)
             .await
-            .map_err(SourceMetadataError::Cache)?;
+            .map_err(SourceMetadataError::Cache)
+            .map_err(CommandDispatcherError::Failed)?;
         if let Some(metadata) = metadata {
             tracing::debug!(
                 "Found source metadata in cache for source spec: {}",
@@ -92,7 +93,8 @@ impl SourceMetadataSpec {
                         input_globs.globs.clone(),
                     ))
                     .await
-                    .map_err(SourceMetadataError::GlobHash)?;
+                    .map_err(SourceMetadataError::GlobHash)
+                    .map_err(CommandDispatcherError::Failed)?;
                 if new_hash.hash == input_globs.hash {
                     tracing::debug!("found up-to-date cached metadata.");
                     return Ok(SourceMetadata {
@@ -126,7 +128,8 @@ impl SourceMetadataSpec {
             &self.channel_config,
             &self.enabled_protocols,
         )
-        .map_err(SourceMetadataError::Discovery)?;
+        .map_err(SourceMetadataError::Discovery)
+        .map_err(CommandDispatcherError::Failed)?;
 
         // Instantiate the backend with the discovered information.
         let manifest_path = discovered_backend.init_params.manifest_path.clone();
@@ -167,7 +170,8 @@ impl SourceMetadataSpec {
         let metadata = backend
             .conda_get_metadata(params)
             .await
-            .map_err(SourceMetadataError::Communication)?;
+            .map_err(SourceMetadataError::Communication)
+            .map_err(CommandDispatcherError::Failed)?;
 
         // Compute the input globs for the mutable source checkouts.
         let input_hash = Self::compute_input_hash(
@@ -185,7 +189,8 @@ impl SourceMetadataSpec {
                 packages: metadata.packages.clone(),
             })
             .await
-            .map_err(SourceMetadataError::Cache)?;
+            .map_err(SourceMetadataError::Cache)
+            .map_err(CommandDispatcherError::Failed)?;
 
         Ok(SourceMetadata {
             records: source_metadata_to_records(&self.source, metadata.packages, input_hash),
@@ -210,7 +215,8 @@ impl SourceMetadataSpec {
                 .glob_hash_cache()
                 .compute_hash(GlobHashKey::new(&source.path, input_globs.clone()))
                 .await
-                .map_err(SourceMetadataError::GlobHash)?;
+                .map_err(SourceMetadataError::GlobHash)
+                .map_err(CommandDispatcherError::Failed)?;
 
             Some(InputHash {
                 hash: input_hash.hash,

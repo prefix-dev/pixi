@@ -1,18 +1,21 @@
 mod event_reporter;
 mod event_tree;
 
-use crate::event_tree::EventTree;
+use std::str::FromStr;
+
 use event_reporter::EventReporter;
 use pixi_command_dispatcher::{
-    BuildEnvironment, CacheDirs, CommandDispatcher, Executor, PixiEnvironmentSpec, SourceBuildSpec,
+    BuildEnvironment, CacheDirs, CommandDispatcher, Executor, InstallPixiEnvironmentSpec,
+    PixiEnvironmentSpec, SourceBuildSpec,
 };
 use pixi_config::default_channel_config;
 use pixi_spec::{GitReference, GitSpec};
 use pixi_spec_containers::DependencyMap;
-use rattler_conda_types::{GenericVirtualPackage, Platform};
+use rattler_conda_types::{GenericVirtualPackage, Platform, prefix::Prefix};
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
-use std::str::FromStr;
 use url::Url;
+
+use crate::event_tree::EventTree;
 
 /// Returns a default set of cache directories for the test.
 fn default_cache_dirs() -> CacheDirs {
@@ -22,7 +25,8 @@ fn default_cache_dirs() -> CacheDirs {
 /// Returns the tool platform that is appropriate for the current platform.
 ///
 /// Specifically, it normalizes `WinArm64` to `Win64` to increase compatibility.
-/// TODO: Once conda-forge supports `WinArm64`, we can remove this normalization.
+/// TODO: Once conda-forge supports `WinArm64`, we can remove this
+/// normalization.
 fn tool_platform() -> (Platform, Vec<GenericVirtualPackage>) {
     let platform = match Platform::current() {
         Platform::WinArm64 => Platform::Win64,
@@ -39,8 +43,10 @@ fn tool_platform() -> (Platform, Vec<GenericVirtualPackage>) {
 pub async fn simple_test() {
     let (reporter, events) = EventReporter::new();
     let (tool_platform, tool_virtual_packages) = tool_platform();
+    let tempdir = tempfile::tempdir().unwrap();
+    let prefix_dir = tempdir.path().join("prefix");
     let dispatcher = CommandDispatcher::builder()
-        .with_cache_dirs(default_cache_dirs())
+        .with_cache_dirs(default_cache_dirs().with_workspace(tempdir.path().to_path_buf()))
         .with_reporter(reporter)
         .with_executor(Executor::Serial)
         .with_tool_platform(tool_platform, tool_virtual_packages.clone())
@@ -79,33 +85,28 @@ pub async fn simple_test() {
         .await
         .unwrap();
 
-    // Find the record for the package we just requested.
-    let boost_check_record = records
-        .into_iter()
-        .filter_map(|r| r.into_source())
-        .find(|r| r.package_record.name.as_normalized() == "boost-check")
-        .expect("the boost-check package is not part of the solution");
-
-    // Built that package
-    let built_source = dispatcher
-        .source_build(SourceBuildSpec {
-            source: boost_check_record,
-            channel_config: default_channel_config(),
+    dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            records: records.clone(),
+            prefix: Prefix::create(&prefix_dir).unwrap(),
+            installed: None,
+            target_platform: tool_platform,
+            force_reinstall: Default::default(),
             channels: vec![
                 Url::from_str("https://prefix.dev/conda-forge")
                     .unwrap()
                     .into(),
             ],
-            build_environment: build_env,
+            channel_config: default_channel_config(),
             variants: None,
             enabled_protocols: Default::default(),
         })
         .await
-        .expect("failed to build the boost-check package");
+        .unwrap();
 
     println!(
-        "Built the package successfully: {}",
-        built_source.output_file.display()
+        "Built the environment successfully: {}",
+        prefix_dir.display()
     );
 
     let event_tree = EventTree::new(events.lock().unwrap().iter());

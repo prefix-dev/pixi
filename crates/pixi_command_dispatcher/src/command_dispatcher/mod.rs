@@ -399,7 +399,8 @@ impl CommandDispatcher {
                 let source_path = self
                     .data
                     .resolve_typed_path(path.path.to_path())
-                    .map_err(SourceCheckoutError::from)?;
+                    .map_err(SourceCheckoutError::from)
+                    .map_err(CommandDispatcherError::Failed)?;
                 Ok(SourceCheckout {
                     path: source_path,
                     pinned: PinnedSourceSpec::Path(PinnedPathSpec { path: path.path }),
@@ -430,7 +431,8 @@ impl CommandDispatcher {
                 let source_path = self
                     .data
                     .resolve_typed_path(path.path.to_path())
-                    .map_err(SourceCheckoutError::from)?;
+                    .map_err(SourceCheckoutError::from)
+                    .map_err(CommandDispatcherError::Failed)?;
                 Ok(SourceCheckout {
                     path: source_path,
                     pinned: pinned_spec,

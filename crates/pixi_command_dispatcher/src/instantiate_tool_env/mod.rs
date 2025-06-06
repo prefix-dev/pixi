@@ -156,20 +156,23 @@ impl InstantiateToolEnvironmentSpec {
 
         // Construct the prefix for the tool environment.
         let prefix = Prefix::create(command_queue.cache_dirs().build_backends().join(cache_key))
-            .map_err(InstantiateToolEnvironmentError::CreatePrefix)?;
+            .map_err(InstantiateToolEnvironmentError::CreatePrefix)
+            .map_err(CommandDispatcherError::Failed)?;
 
         // Acquire a lock on the tool prefix.
         let mut prefix_guard = AsyncPrefixGuard::new(prefix.path())
             .and_then(|guard| guard.write())
             .await
-            .map_err(InstantiateToolEnvironmentError::AcquireLock)?;
+            .map_err(InstantiateToolEnvironmentError::AcquireLock)
+            .map_err(CommandDispatcherError::Failed)?;
 
         // If the environment already exists, we can return early.
         if prefix_guard.is_ready() {
             prefix_guard
                 .finish()
                 .await
-                .map_err(InstantiateToolEnvironmentError::ReleaseLock)?;
+                .map_err(InstantiateToolEnvironmentError::ReleaseLock)
+                .map_err(CommandDispatcherError::Failed)?;
             return Ok(prefix);
         }
 
@@ -177,7 +180,8 @@ impl InstantiateToolEnvironmentSpec {
         prefix_guard
             .begin()
             .await
-            .map_err(InstantiateToolEnvironmentError::UpdateLock)?;
+            .map_err(InstantiateToolEnvironmentError::UpdateLock)
+            .map_err(CommandDispatcherError::Failed)?;
 
         // Start by solving the environment.
         let target_platform = self.build_environment.host_platform;
@@ -191,12 +195,12 @@ impl InstantiateToolEnvironmentSpec {
                 constraints: self.constraints,
                 build_environment: self.build_environment,
                 exclude_newer: self.exclude_newer,
-                channel_config: self.channel_config,
-                channels: self.channels,
-                enabled_protocols: self.enabled_protocols,
+                channel_config: self.channel_config.clone(),
+                channels: self.channels.clone(),
+                enabled_protocols: self.enabled_protocols.clone(),
                 installed: Vec::new(), // Install from scratch
                 channel_priority: ChannelPriority::default(),
-                variants: self.variants,
+                variants: self.variants.clone(),
                 strategy: SolveStrategy::default(),
             })
             .await
@@ -209,17 +213,23 @@ impl InstantiateToolEnvironmentSpec {
                 records: solved_environment,
                 prefix: prefix.clone(),
                 installed: None,
-                platform: target_platform,
+                target_platform,
                 force_reinstall: Default::default(),
+                channels: self.channels,
+                channel_config: self.channel_config,
+                variants: self.variants,
+                enabled_protocols: self.enabled_protocols,
             })
             .await
+            .map_err_with(Box::new)
             .map_err_with(InstantiateToolEnvironmentError::InstallEnvironment)?;
 
         // Mark the environment as finished.
         prefix_guard
             .finish()
             .await
-            .map_err(InstantiateToolEnvironmentError::UpdateLock)?;
+            .map_err(InstantiateToolEnvironmentError::UpdateLock)
+            .map_err(CommandDispatcherError::Failed)?;
 
         Ok(prefix)
     }
@@ -246,5 +256,5 @@ pub enum InstantiateToolEnvironmentError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    InstallEnvironment(InstallPixiEnvironmentError),
+    InstallEnvironment(Box<InstallPixiEnvironmentError>),
 }

@@ -1,23 +1,30 @@
-use crate::build::WorkDirKey;
-use crate::{
-    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    InstantiateBackendError, InstantiateBackendSpec, SourceCheckout, SourceCheckoutError,
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::PathBuf,
+    str::FromStr,
 };
+
 use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_build_discovery::{DiscoveredBackend, EnabledProtocols};
 use pixi_build_frontend::json_rpc::CommunicationError;
-use pixi_build_types::procedures::conda_build::{CondaBuildParams, CondaOutputIdentifier};
-use pixi_build_types::{ChannelConfiguration, PlatformAndVirtualPackages};
+use pixi_build_types::{
+    ChannelConfiguration, PlatformAndVirtualPackages,
+    procedures::conda_build::{CondaBuildParams, CondaOutputIdentifier},
+};
 use pixi_record::SourceRecord;
-use rattler_conda_types::{ChannelConfig, ChannelUrl, Version};
-use std::collections::{BTreeMap, BTreeSet};
-use std::path::PathBuf;
-use std::str::FromStr;
+use rattler_conda_types::{ChannelConfig, ChannelUrl, Platform, Version};
 use thiserror::Error;
 use tracing::instrument;
 
-/// Describes all parameters required to build a conda package from a pixi source package.
+use crate::{
+    CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
+    InstantiateBackendError, InstantiateBackendSpec, SourceCheckout, SourceCheckoutError,
+    build::WorkDirKey,
+};
+
+/// Describes all parameters required to build a conda package from a pixi
+/// source package.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct SourceBuildSpec {
     /// The source specification
@@ -30,8 +37,13 @@ pub struct SourceBuildSpec {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub channels: Vec<ChannelUrl>,
 
-    /// Information about the build environment.
-    pub build_environment: BuildEnvironment,
+    /// Information about host platform on which the package is build. Note that
+    /// a package might be targeting noarch in which case the host platform
+    /// should be used.
+    ///
+    /// If this field is omitted the build backend will use the current
+    /// platform.
+    pub host_platform: Option<PlatformAndVirtualPackages>,
 
     /// Variant configuration
     pub variants: Option<BTreeMap<String, Vec<String>>>,
@@ -56,7 +68,7 @@ pub struct BuiltSource {
 impl SourceBuildSpec {
     #[instrument(skip_all, fields(
         source = %self.source.source,
-        subdir = %self.build_environment.host_platform,
+        subdir = %self.source.package_record.subdir,
         name = %self.source.package_record.name.as_normalized(),
         version = %self.source.package_record.version,
         build = %self.source.package_record.build))]
@@ -78,7 +90,8 @@ impl SourceBuildSpec {
             &self.channel_config,
             &self.enabled_protocols,
         )
-        .map_err(SourceBuildError::Discovery)?;
+        .map_err(SourceBuildError::Discovery)
+        .map_err(CommandDispatcherError::Failed)?;
 
         // Instantiate the backend with the discovered information.
         let backend = command_dispatcher
@@ -95,12 +108,8 @@ impl SourceBuildSpec {
         let build_result = backend
             .conda_build(CondaBuildParams {
                 build_platform_virtual_packages: Some(
-                    self.build_environment.build_virtual_packages,
+                    command_dispatcher.tool_platform().1.to_vec(),
                 ),
-                host_platform: Some(PlatformAndVirtualPackages {
-                    platform: self.build_environment.host_platform,
-                    virtual_packages: Some(self.build_environment.host_virtual_packages.clone()),
-                }),
                 channel_base_urls: Some(self.channels.into_iter().map(Into::into).collect()),
                 channel_configuration: ChannelConfiguration {
                     base_url: self.channel_config.channel_alias.clone(),
@@ -115,15 +124,21 @@ impl SourceBuildSpec {
                 work_directory: command_dispatcher.cache_dirs().working_dirs().join(
                     WorkDirKey {
                         source: source_checkout.clone(),
-                        host_platform: self.build_environment.host_platform,
+                        host_platform: self
+                            .host_platform
+                            .as_ref()
+                            .map(|platform| platform.platform)
+                            .unwrap_or(Platform::current()),
                         build_backend: backend.identifier().to_string(),
                     }
                     .key(),
                 ),
+                host_platform: self.host_platform,
                 editable: false,
             })
             .await
-            .map_err(SourceBuildError::BuildError)?;
+            .map_err(SourceBuildError::BuildError)
+            .map_err(CommandDispatcherError::Failed)?;
 
         // If the backend returned more packages than expected output a warning.
         if build_result.packages.len() > 1 {
@@ -136,7 +151,7 @@ impl SourceBuildSpec {
             tracing::warn!(
                 "While building {} for {}, the build backend returned more packages than expected: {pkgs}. Only the package matching the source record will be used.",
                 self.source.source,
-                self.build_environment.host_platform
+                self.source.package_record.subdir,
             );
         }
 
@@ -148,13 +163,14 @@ impl SourceBuildSpec {
                 && pkg.build == self.source.package_record.build
                 && pkg.subdir == self.source.package_record.subdir
         }) else {
-            return Err(SourceBuildError::UnexpectedPackage {
-                subdir: self.source.package_record.subdir.clone(),
-                name: self.source.package_record.name.as_normalized().to_string(),
-                version: self.source.package_record.version.to_string(),
-                build: self.source.package_record.build.clone(),
-            }
-            .into());
+            return Err(CommandDispatcherError::Failed(
+                SourceBuildError::UnexpectedPackage {
+                    subdir: self.source.package_record.subdir.clone(),
+                    name: self.source.package_record.name.as_normalized().to_string(),
+                    version: self.source.package_record.version.to_string(),
+                    build: self.source.package_record.build.clone(),
+                },
+            ));
         };
 
         Ok(BuiltSource {

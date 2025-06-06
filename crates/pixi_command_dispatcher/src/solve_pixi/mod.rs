@@ -145,7 +145,8 @@ impl PixiEnvironmentSpec {
             )
             .recursive(true)
             .await
-            .map_err(SolvePixiEnvironmentError::QueryError)?;
+            .map_err(SolvePixiEnvironmentError::QueryError)
+            .map_err(CommandDispatcherError::Failed)?;
         let total_records = binary_repodata.iter().map(RepoData::len).sum::<usize>();
         tracing::info!(
             "fetched {total_records} records in {:?}",
