@@ -279,18 +279,20 @@ impl CommandDispatcherProcessor {
         }
         loop {
             tokio::select! {
-                Some(message) = self.receiver.recv() => {
-                    self.on_message(message);
+                message = self.receiver.recv() => {
+                    match message {
+                        Some(message) => self.on_message(message),
+                        None => {
+                            // If all the senders are dropped, the receiver will be closed. When this
+                            // happens, we can stop the command_dispatcher. All remaining tasks will be dropped
+                            // as `self.pending_futures` is dropped.
+                            break;
+                        }
+                    }
                 }
                 Some(result) = self.pending_futures.next() => {
                     self.on_result(result);
                 }
-                else => {
-                    // If all the senders are dropped, the receiver will be closed. When this
-                    // happens, we can stop the command_dispatcher. All remaining tasks will be dropped
-                    // as `self.pending_futures` is dropped.
-                    break
-                },
             }
         }
         if let Some(reporter) = self.reporter.as_mut() {
