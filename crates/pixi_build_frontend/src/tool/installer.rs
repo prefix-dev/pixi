@@ -1,3 +1,6 @@
+use std::{fmt::Debug, future::Future, path::PathBuf};
+
+use miette::{IntoDiagnostic, miette};
 use pixi_consts::consts::CACHED_BUILD_TOOL_ENVS_DIR;
 use pixi_progress::await_in_progress;
 use pixi_utils::{AsyncPrefixGuard, EnvironmentHash};
@@ -11,15 +14,10 @@ use rattler_shell::{
 use rattler_solve::{SolverImpl, SolverTask, resolvo::Solver};
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use reqwest_middleware::ClientWithMiddleware;
-use std::fmt::Debug;
-use std::future::Future;
-use std::path::PathBuf;
 
 use super::{
     IsolatedTool, IsolatedToolSpec, SystemTool, Tool, ToolCacheError, ToolSpec, cache::ToolCache,
 };
-
-use miette::{IntoDiagnostic, miette};
 
 /// A trait that is responsible for installing tools.
 pub trait ToolInstaller {
@@ -160,7 +158,8 @@ impl ToolContext {
 
     /// Instantiate a tool from a specification.
     ///
-    /// If the tool is not already cached, it will be created, installed and cached.
+    /// If the tool is not already cached, it will be created, installed and
+    /// cached.
     pub async fn instantiate(
         &self,
         spec: ToolSpec,
@@ -249,11 +248,9 @@ impl ToolInstaller for ToolContext {
         );
 
         // ensure that the cache directory exists
-        if !self.cache_dir.exists() {
-            tokio::fs::create_dir(&self.cache_dir)
-                .await
-                .into_diagnostic()?;
-        }
+        fs_err::tokio::create_dir_all(&self.cache_dir)
+            .await
+            .into_diagnostic()?;
 
         let cached_dir = self
             .cache_dir

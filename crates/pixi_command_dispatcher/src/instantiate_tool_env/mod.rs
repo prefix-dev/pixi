@@ -183,6 +183,7 @@ impl InstantiateToolEnvironmentSpec {
         let target_platform = self.build_environment.host_platform;
         let solved_environment = command_queue
             .solve_pixi_environment(PixiEnvironmentSpec {
+                name: Some(self.requirement.0.as_normalized().to_string()),
                 dependencies: self
                     .additional_requirements
                     .into_specs()

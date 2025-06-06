@@ -1,6 +1,4 @@
 mod cache;
-pub mod source_metadata_collector;
-
 use std::{
     collections::{BTreeSet, HashMap},
     ffi::OsStr,
@@ -169,7 +167,7 @@ impl BuildContext {
             }
         }
 
-        tracing::info!("resolved variant configuration: {:?}", result);
+        tracing::trace!("resolved variant configuration: {:?}", result);
 
         result
     }

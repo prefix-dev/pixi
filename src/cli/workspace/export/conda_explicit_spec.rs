@@ -175,7 +175,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         })
         .await?
-        .lock_file;
+        .into_lock_file();
 
     let mut environments = Vec::new();
     if let Some(env_names) = args.environment {

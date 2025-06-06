@@ -39,13 +39,18 @@ impl CommandDispatcherProcessor {
             reporter.on_start(id)
         }
 
+        let dispatcher_context = CommandDispatcherContext::SolvePixiEnvironment(pending_env_id);
+        let reporter_context = self.reporter_context(dispatcher_context);
+        let gateway_reporter = self
+            .reporter
+            .as_deref_mut()
+            .and_then(|reporter| reporter.create_gateway_reporter(reporter_context));
+
         // Add the task to the list of pending futures.
-        let dispatcher = self.create_task_command_dispatcher(
-            CommandDispatcherContext::SolvePixiEnvironment(pending_env_id),
-        );
+        let dispatcher = self.create_task_command_dispatcher(dispatcher_context);
         self.pending_futures.push(
             task.spec
-                .solve(dispatcher)
+                .solve(dispatcher, gateway_reporter)
                 .map(move |result| TaskResult::SolvePixiEnvironment(pending_env_id, result))
                 .boxed_local(),
         );

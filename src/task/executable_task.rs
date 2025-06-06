@@ -23,7 +23,6 @@ use super::task_hash::{InputHashesError, NameHash, TaskCache, TaskHash};
 use crate::{
     Workspace,
     activation::CurrentEnvVarBehavior,
-    lock_file::LockFileDerivedData,
     task::task_graph::{TaskGraph, TaskId},
     workspace::get_activated_environment_variables,
     workspace::{Environment, HasWorkspaceRef},
@@ -315,7 +314,7 @@ impl<'p> ExecutableTask<'p> {
     /// no hash, it will not save the cache.
     pub(crate) async fn save_cache(
         &self,
-        lock_file: &LockFileDerivedData<'_>,
+        lock_file: &LockFile,
         previous_hash: Option<TaskHash>,
     ) -> Result<(), CacheUpdateError> {
         let task_cache_folder = self.project().task_cache_folder();
@@ -324,7 +323,7 @@ impl<'p> ExecutableTask<'p> {
         let new_hash = if let Some(mut previous_hash) = previous_hash {
             previous_hash.update_output(self).await?;
             previous_hash
-        } else if let Some(hash) = TaskHash::from_task(self, &lock_file.lock_file).await? {
+        } else if let Some(hash) = TaskHash::from_task(self, lock_file).await? {
             hash
         } else {
             return Ok(());

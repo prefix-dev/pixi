@@ -1,3 +1,4 @@
+use std::fmt::Display;
 use std::path::PathBuf;
 
 use fancy_display::FancyDisplay;
@@ -170,6 +171,15 @@ impl GroupedEnvironmentName {
         match self {
             GroupedEnvironmentName::Group(group) => group.as_str(),
             GroupedEnvironmentName::Environment(env) => env.as_str(),
+        }
+    }
+}
+
+impl Display for GroupedEnvironmentName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GroupedEnvironmentName::Group(name) => write!(f, "{}", name),
+            GroupedEnvironmentName::Environment(name) => write!(f, "{}", name),
         }
     }
 }
