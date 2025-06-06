@@ -8,7 +8,7 @@ Add a command to the workspace
 
 ## Usage
 ```
-pixi task add [OPTIONS] <NAME> <COMMAND>...
+pixi task add [OPTIONS] <NAME> [COMMAND]...
 ```
 
 ## Arguments
@@ -16,13 +16,12 @@ pixi task add [OPTIONS] <NAME> <COMMAND>...
 :  Task name
 <br>**required**: `true`
 - <a id="arg-<COMMAND>" href="#arg-<COMMAND>">`<COMMAND>`</a>
-:  One or more commands to actually execute
+:  One or more commands to actually execute. If no commands are provided but dependencies are specified, an alias will be created
 <br>May be provided more than once.
-<br>**required**: `true`
 
 ## Options
 - <a id="arg---depends-on" href="#arg---depends-on">`--depends-on <DEPENDS_ON>`</a>
-:  Depends on these other commands
+:  Depends on these other commands. Format: 'task_name', 'task_name:env_name', or 'task_name:env_name:arg1,arg2'
 <br>May be provided more than once.
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
 :  The platform for which the task should be added
@@ -38,7 +37,11 @@ pixi task add [OPTIONS] <NAME> <COMMAND>...
 - <a id="arg---clean-env" href="#arg---clean-env">`--clean-env`</a>
 :  Isolate the task from the shell environment, and only use the pixi environment to run the task
 - <a id="arg---arg" href="#arg---arg">`--arg <ARGS>`</a>
-:  The arguments to pass to the task
+:  The arguments to pass to the task. Format: 'arg_name' or 'arg_name=default_value'
 <br>May be provided more than once.
+- <a id="arg---inputs" href="#arg---inputs">`--inputs <INPUTS>`</a>
+:  Input glob patterns for the task. Format: 'pattern1,pattern2,pattern3'
+- <a id="arg---outputs" href="#arg---outputs">`--outputs <OUTPUTS>`</a>
+:  Output glob patterns for the task. Format: 'pattern1,pattern2,pattern3'
 
 --8<-- "docs/reference/cli/pixi/task/add_extender:example"
