@@ -280,7 +280,7 @@ pub enum UpdateMode {
 
 impl<'p> LockFileDerivedData<'p> {
     /// Write the lock-file to disk.
-    pub(crate) fn write_to_disk(&self) -> miette::Result<()> {
+    pub fn write_to_disk(&self) -> miette::Result<()> {
         let lock_file_path = self.workspace.lock_file_path();
         self.lock_file
             .to_path(&lock_file_path)
@@ -290,7 +290,7 @@ impl<'p> LockFileDerivedData<'p> {
 
     /// Consumes this instance, dropping any resources that are not needed
     /// anymore to work with the lock-file.
-    pub(crate) fn into_lock_file(self) -> LockFile {
+    pub fn into_lock_file(self) -> LockFile {
         self.lock_file
     }
 
