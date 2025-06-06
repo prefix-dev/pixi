@@ -12,6 +12,7 @@ pub struct MainProgressBar<T> {
     inner: Arc<RwLock<State<T>>>,
 }
 
+/// Holds the internal state of a [`MainProgressBar`].
 struct State<T> {
     /// The progress bar that is being used to display the progress.
     pb: ProgressBar,
@@ -25,6 +26,7 @@ struct State<T> {
     next_tracker_id: usize,
 }
 
+/// A trait for something that can be tracked by the [`MainProgressBar`].
 pub trait Tracker: Ord {
     /// Returns the name of the item being tracked.
     fn name(&self) -> &str;
@@ -36,6 +38,8 @@ impl Tracker for String {
     }
 }
 
+/// Internal state that tracks information about an item being tracked by the
+/// [`MainProgressBar`].
 struct TrackedItem<T> {
     tracker: T,
     started: Option<Instant>,
@@ -43,6 +47,8 @@ struct TrackedItem<T> {
 }
 
 impl<T: Tracker> MainProgressBar<T> {
+    /// Constructs a new instance of [`MainProgressBar`] with the given title
+    /// and placement.
     pub fn new(
         multi_progress: MultiProgress,
         progress_bar_placement: ProgressBarPlacement,
@@ -59,31 +65,42 @@ impl<T: Tracker> MainProgressBar<T> {
         }
     }
 
+    /// Called when an item is queued for processing.
     pub fn queued(&self, tracker: T) -> usize {
         let mut state = self.inner.write();
         state.queued(tracker)
     }
 
+    /// Called when processing of an item is started.
     pub fn start(&self, id: usize) {
         let mut state = self.inner.write();
         state.start(id)
     }
 
+    /// Called when processing of an item has finished.
     pub fn finish(&self, id: usize) {
         let mut state = self.inner.write();
         state.finish(id);
     }
 
+    /// Called to clear the progress bar.
     pub fn clear(&self) {
         let mut state = self.inner.write();
-        state.close();
+        state.clear();
     }
 }
 
 impl<T: Tracker> State<T> {
-    pub fn close(&mut self) {
-        self.pb.finish_and_clear();
-        self.tracker.clear();
+    pub fn clear(&mut self) {
+        // Clear all items that have finished processing.
+        self.tracker.retain(|_, item| item.finished.is_none());
+
+        // Clear or update the progress bar.
+        if self.tracker.is_empty() {
+            self.pb.finish_and_clear();
+        } else {
+            self.update()
+        }
     }
 
     pub fn start(&mut self, id: usize) {
@@ -156,6 +173,7 @@ impl<T: Tracker> State<T> {
         };
 
         // Set the style of the progress bar.
+        let active = !running_items.is_empty();
         self.pb.set_style(
             ProgressStyle::with_template(
                 &format!("{{spinner:.{spinner}}} {{prefix:20!}} [{{bar:20!.{bar}.yellow/dim.white}}] {{pos:>2.dim}}{slash}{{len:2.dim}} {{wide_msg:.dim}}",
@@ -164,8 +182,8 @@ impl<T: Tracker> State<T> {
                     bar = if running_items.is_empty() { "dim" } else { "bright" },
                 ))
                 .expect("failed to create progress bar style")
-                .tick_chars(if running_items.is_empty() { "▪▪" } else { "⠁⠁⠉⠙⠚⠒⠂⠂⠒⠲⠴⠤⠄⠄⠤⠠⠠⠤⠦⠖⠒⠐⠐⠒⠓⠋⠉⠈⠈ " })
-                .progress_chars("━━╾─"),
+                .tick_chars(pixi_progress::style::tick_chars(active))
+                .progress_chars(pixi_progress::style::progress_chars(active)),
             );
         self.pb.set_length(total as u64);
         self.pb.set_position(finished as u64);

@@ -102,12 +102,8 @@ impl RepodataReporterInner {
                 speed = if pending_downloads { format!(" {at} {{speed:.dim}}", at = console::style("@").dim()) } else { String::new() }
             ))
             .expect("failed to create progress bar style")
-            .progress_chars("━━╾─")
-            .tick_chars(if pending_downloads {
-                "⠁⠁⠉⠙⠚⠒⠂⠂⠒⠲⠴⠤⠄⠄⠤⠠⠠⠤⠦⠖⠒⠐⠐⠒⠓⠋⠉⠈⠈ "
-            } else {
-                "▪▪"
-            })
+            .tick_chars(pixi_progress::style::tick_chars(pending_downloads))
+            .progress_chars(pixi_progress::style::progress_chars(pending_downloads))
             .with_key(
                 "speed",
                 DurationTracker {

@@ -33,7 +33,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
 
-    // Update the lock-file, and extract it from the derived data to drop additional resources 
+    // Update the lock-file, and extract it from the derived data to drop additional resources
     // created for the solve.
     let original_lock_file = workspace.load_lock_file().await?;
     let LockFileDerivedData {
