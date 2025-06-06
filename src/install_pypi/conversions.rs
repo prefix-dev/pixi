@@ -19,6 +19,102 @@ use uv_pypi_types::{HashAlgorithm, HashDigest, ParsedUrl, ParsedUrlError, Verbat
 
 use super::utils::{is_direct_url, strip_direct_scheme};
 
+/// Parse hash from URL fragment like "#sha256=abc123" or "#sha256=abc123&egg=foo"
+fn parse_hash_from_fragment(
+    fragment: &str,
+    package_name: &pep508_rs::PackageName,
+) -> Result<Option<PackageHashes>, ConvertToUvDistError> {
+    // Find hash parameter in fragment
+    for param in fragment.split('&') {
+        if let Some((algorithm, hash_str)) = param.split_once('=') {
+            let algorithm_lower = algorithm.to_lowercase();
+            if algorithm_lower.contains("sha")
+                || algorithm_lower.contains("md5")
+                || algorithm_lower.contains("blake")
+            {
+                if !matches!(algorithm_lower.as_str(), "sha256" | "md5") {
+                    return Err(ConvertToUvDistError::InvalidHash(format!(
+                        "Hash verification failed: Unsupported hash algorithm '{}' for {}. Only SHA256 and MD5 are supported.",
+                        algorithm_lower, package_name
+                    )));
+                }
+            } else {
+                continue;
+            }
+
+            // Validate hash value
+            if hash_str.is_empty() {
+                return Err(ConvertToUvDistError::InvalidHash(format!(
+                    "Hash verification failed: Empty {} hash provided for {}",
+                    algorithm_lower.to_uppercase(),
+                    package_name
+                )));
+            }
+
+            if !hash_str.chars().all(|c| c.is_ascii_hexdigit()) {
+                return Err(ConvertToUvDistError::InvalidHash(format!(
+                    "Hash verification failed: Invalid {} hash for {}: not a valid hex string",
+                    algorithm_lower.to_uppercase(),
+                    package_name
+                )));
+            }
+
+            // Parse the hash
+            return match algorithm_lower.as_str() {
+                "sha256" => {
+                    if hash_str.len() != 64 {
+                        return Err(ConvertToUvDistError::InvalidHash(format!(
+                            "Hash verification failed: Invalid SHA256 hash for {}: expected 64 characters, got {}",
+                            package_name,
+                            hash_str.len()
+                        )));
+                    }
+                    rattler_digest::parse_digest_from_hex::<rattler_digest::Sha256>(hash_str)
+                        .map(|h| Some(PackageHashes::Sha256(h)))
+                        .ok_or_else(|| {
+                            ConvertToUvDistError::InvalidHash(format!(
+                                "Hash verification failed: Invalid SHA256 hash for {}: {}",
+                                package_name, hash_str
+                            ))
+                        })
+                        .inspect(|_| {
+                            tracing::info!(
+                                "Extracted SHA256 hash from URL fragment for package {}",
+                                package_name
+                            )
+                        })
+                }
+                "md5" => {
+                    if hash_str.len() != 32 {
+                        return Err(ConvertToUvDistError::InvalidHash(format!(
+                            "Hash verification failed: Invalid MD5 hash for {}: expected 32 characters, got {}",
+                            package_name,
+                            hash_str.len()
+                        )));
+                    }
+                    rattler_digest::parse_digest_from_hex::<rattler_digest::Md5>(hash_str)
+                        .map(|h| Some(PackageHashes::Md5(h)))
+                        .ok_or_else(|| {
+                            ConvertToUvDistError::InvalidHash(format!(
+                                "Hash verification failed: Invalid MD5 hash for {}: {}",
+                                package_name, hash_str
+                            ))
+                        })
+                        .inspect(|_| {
+                            tracing::info!(
+                                "Extracted MD5 hash from URL fragment for package {}",
+                                package_name
+                            )
+                        })
+                }
+                _ => unreachable!(),
+            };
+        }
+    }
+
+    Ok(None)
+}
+
 /// Converts our locked data to a file
 pub fn locked_data_to_file(
     url: &Url,
@@ -82,6 +178,8 @@ pub enum ConvertToUvDistError {
     Extension(#[source] ExtensionError, String),
     #[error("error parsing locked git url {0} {1}")]
     LockedUrl(String, String),
+    #[error("Hash verification failed: {0}")]
+    InvalidHash(String),
 
     #[error(transparent)]
     UvPepTypes(#[from] ConversionError),
@@ -92,14 +190,56 @@ pub fn convert_to_dist(
     pkg: &PypiPackageData,
     lock_file_dir: &Path,
 ) -> Result<Dist, ConvertToUvDistError> {
+    // Log the package location and hash for debugging
+    tracing::info!(
+        "Converting package {} with location: {:?}, hash: {:?}",
+        pkg.name,
+        pkg.location,
+        pkg.hash
+    );
+
     // Figure out if it is a url from the registry or a direct url
     let dist = match &pkg.location {
         UrlOrPath::Url(url) if is_direct_url(url.scheme()) => {
             let url_without_direct = strip_direct_scheme(url);
             let pkg_name = to_uv_normalize(&pkg.name)?;
 
-            if LockedGitUrl::is_locked_git_url(&url_without_direct) {
-                let locked_git_url = LockedGitUrl::new(url_without_direct.clone().into_owned());
+            // Convert to owned URL so we can modify it if needed
+            let mut final_url = url_without_direct.into_owned();
+
+            // Extract and validate hash from URL fragment if present
+            let url_hash = match final_url.fragment() {
+                Some(fragment) => parse_hash_from_fragment(fragment, &pkg.name)?,
+                None => None,
+            };
+
+            // Use the hash from the lock file, or the one from the URL if not in lock
+            let final_hash = pkg.hash.as_ref().or(url_hash.as_ref());
+
+            // If we have a hash, add it back to the URL fragment for verification
+            if let Some(hash) = final_hash {
+                let hash_fragment = match hash {
+                    rattler_lock::PackageHashes::Sha256(sha256) => {
+                        format!("sha256={:x}", sha256)
+                    }
+                    rattler_lock::PackageHashes::Md5(md5) => {
+                        format!("md5={:x}", md5)
+                    }
+                    rattler_lock::PackageHashes::Md5Sha256(_md5, sha256) => {
+                        // Prefer SHA256 for direct URLs
+                        format!("sha256={:x}", sha256)
+                    }
+                };
+                tracing::info!(
+                    "Setting hash fragment '{}' on URL for package {}",
+                    hash_fragment,
+                    pkg.name
+                );
+                final_url.set_fragment(Some(&hash_fragment));
+            }
+
+            if LockedGitUrl::is_locked_git_url(&final_url) {
+                let locked_git_url = LockedGitUrl::new(final_url.clone());
                 let parsed_git_url = to_parsed_git_url(&locked_git_url).map_err(|err| {
                     ConvertToUvDistError::LockedUrl(
                         err.to_string(),
@@ -111,16 +251,25 @@ pub fn convert_to_dist(
                     pkg_name,
                     VerbatimParsedUrl {
                         parsed_url: ParsedUrl::Git(parsed_git_url),
-                        verbatim: uv_pep508::VerbatimUrl::from(url_without_direct.into_owned()),
+                        verbatim: uv_pep508::VerbatimUrl::from(final_url),
                     },
                 )?
             } else {
+                tracing::info!(
+                    "Creating Dist for package {} with final URL: {}",
+                    pkg.name,
+                    final_url
+                );
+
+                // For non-git direct URLs, create DirectUrl distribution
+                let parsed_url = ParsedUrl::try_from(final_url.clone())
+                    .map_err(|e| ConvertToUvDistError::ParseUrl(Box::new(e)))?;
+
                 Dist::from_url(
                     pkg_name,
                     VerbatimParsedUrl {
-                        parsed_url: ParsedUrl::try_from(url_without_direct.clone().into_owned())
-                            .map_err(Box::new)?,
-                        verbatim: uv_pep508::VerbatimUrl::from(url_without_direct.into_owned()),
+                        parsed_url,
+                        verbatim: uv_pep508::VerbatimUrl::from(final_url),
                     },
                 )?
             }

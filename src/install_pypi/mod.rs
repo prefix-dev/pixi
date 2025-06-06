@@ -6,6 +6,7 @@ use std::{
 };
 
 use conda_pypi_clobber::PypiCondaClobberRegistry;
+use futures::future;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
 use pixi_consts::consts;
@@ -34,7 +35,6 @@ use uv_install_wheel::LinkMode;
 use uv_installer::{Preparer, SitePackages, UninstallError};
 use uv_python::{Interpreter, PythonEnvironment};
 use uv_resolver::FlatIndex;
-use uv_types::HashStrategy;
 use uv_workspace::WorkspaceCache;
 
 use crate::{
@@ -198,7 +198,7 @@ impl<'a> PyPIPrefixUpdaterBuilder<'a> {
             &self.uv_context.cache,
             &self.tags,
             &self.index_locations,
-            &HashStrategy::None,
+            &self.uv_context.hash_strategy,
             &self.config_settings,
         );
 
@@ -370,6 +370,9 @@ impl PyPIPrefixUpdater {
         // Log installation details for debugging
         self.log_installation_details(local, remote, reinstalls, extraneous, duplicates);
 
+        // Verify hashes for direct URL distributions (both local and remote)
+        self.verify_all_direct_url_hashes(local, remote).await?;
+
         // Download, build, and unzip any missing distributions.
         let remote_dists = if remote.is_empty() {
             Vec::new()
@@ -535,7 +538,7 @@ impl PyPIPrefixUpdater {
         let preparer = Preparer::new(
             &self.uv_context.cache,
             &self.tags,
-            &uv_types::HashStrategy::None,
+            &self.uv_context.hash_strategy,
             &self.build_options,
             distribution_database,
         )
@@ -563,6 +566,99 @@ impl PyPIPrefixUpdater {
         );
 
         Ok(remote_dists)
+    }
+
+    /// Verify hashes for all direct URL distributions
+    async fn verify_all_direct_url_hashes(
+        &self,
+        _local: &[(CachedDist, InstallReason)],
+        remote: &[(Dist, InstallReason)],
+    ) -> miette::Result<()> {
+        future::try_join_all(remote.iter().map(|(dist, _)| self.verify_dist_hash(dist))).await?;
+        Ok(())
+    }
+
+    /// Extract hash info from URL fragment like "#sha256=abc123" or "#md5=def456&egg=foo"
+    fn extract_hash_from_fragment(fragment: &str) -> Option<(&str, &str)> {
+        fragment.split('&').find_map(|param| {
+            let (key, value) = param.split_once('=')?;
+            match key.to_lowercase().as_str() {
+                "sha256" => Some((value, "sha256")),
+                "md5" => Some((value, "md5")),
+                _ => None,
+            }
+        })
+    }
+
+    /// Verify hash for a single distribution
+    async fn verify_dist_hash(&self, dist: &Dist) -> miette::Result<()> {
+        use rattler_digest::{Md5, Sha256, compute_bytes_digest};
+
+        let (url, name) = match dist {
+            Dist::Built(uv_distribution_types::BuiltDist::DirectUrl(direct)) => {
+                (direct.url.to_url(), dist.name())
+            }
+            _ => return Ok(()),
+        };
+
+        let Some((expected_hash, algorithm)) =
+            url.fragment().and_then(Self::extract_hash_from_fragment)
+        else {
+            return Ok(());
+        };
+
+        tracing::info!(
+            "Verifying {} hash for {}: expected {}",
+            algorithm,
+            name,
+            expected_hash
+        );
+
+        // Download file for verification
+        let clean_url = url
+            .as_str()
+            .split('#')
+            .next()
+            .ok_or_else(|| miette::miette!("Invalid URL format"))?;
+        let clean_url = url::Url::parse(clean_url).into_diagnostic()?;
+
+        let bytes = self
+            .registry_client
+            .uncached_client(&clean_url)
+            .get(clean_url.as_str())
+            .send()
+            .await
+            .into_diagnostic()
+            .context("Failed to download distribution for hash verification")?
+            .bytes()
+            .await
+            .into_diagnostic()
+            .context("Failed to read distribution bytes")?;
+
+        // Compute and compare hash
+        let actual_hash = match algorithm {
+            "sha256" => format!("{:x}", compute_bytes_digest::<Sha256>(&bytes)),
+            "md5" => format!("{:x}", compute_bytes_digest::<Md5>(&bytes)),
+            _ => unreachable!("Unsupported hash algorithm"),
+        };
+
+        if actual_hash != expected_hash {
+            return Err(miette::miette!(
+                "Hash verification failed for {}.\nExpected {}: {}\nActual {}: {}",
+                name,
+                algorithm,
+                expected_hash,
+                algorithm,
+                actual_hash
+            ));
+        }
+
+        tracing::info!(
+            "Hash verification succeeded for {}: {} matches",
+            name,
+            algorithm
+        );
+        Ok(())
     }
 
     fn create_build_dispatch<'a>(
