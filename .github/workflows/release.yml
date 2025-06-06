@@ -343,6 +343,18 @@ jobs:
           name: artifacts-pixi-aarch64-pc-windows-msvc.exe
           path: unpacked-artifacts/pixi-aarch64-pc-windows-msvc.exe
 
+      # Upload installer scripts
+      - name: Upload install.sh
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: artifacts-install.sh
+          path: install/install.sh
+      - name: Upload install.ps1
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: artifacts-install.ps1
+          path: install/install.ps1
+
   # Create a GitHub Release while uploading all files to it
   announce:
     needs:
