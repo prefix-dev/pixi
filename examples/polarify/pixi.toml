@@ -1,5 +1,5 @@
 [project]
-channels = ["https://prefix.dev/conda-forge"]
+channels = ["conda-forge"]
 name = "polarify-use-case"
 platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
 
