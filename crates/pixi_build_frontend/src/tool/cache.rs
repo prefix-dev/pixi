@@ -254,7 +254,7 @@ impl ToolCache {
 
         for dir in directories.iter() {
             // Acquire a lock on the directory so we can safely read it.
-            let prefix_guard = AsyncPrefixGuard::new(&dir).await.into_diagnostic()?;
+            let prefix_guard = AsyncPrefixGuard::new(dir).await.into_diagnostic()?;
             let _prefix_guard = prefix_guard.write().await.into_diagnostic()?;
 
             let records = find_spec_records(&dir.join("conda-meta"), specs.clone()).await?;
