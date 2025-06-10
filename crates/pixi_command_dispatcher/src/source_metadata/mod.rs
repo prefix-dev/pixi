@@ -74,7 +74,7 @@ impl SourceMetadataSpec {
         let cache_key = self.cache_key();
         let (metadata, entry) = command_dispatcher
             .source_metadata_cache()
-            .entry(&self.source, &cache_key)
+            .entry(&self.source.pinned, &cache_key)
             .await
             .map_err(SourceMetadataError::Cache)
             .map_err(CommandDispatcherError::Failed)?;

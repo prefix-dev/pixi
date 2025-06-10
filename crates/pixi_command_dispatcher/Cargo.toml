@@ -14,6 +14,7 @@ base64 = { workspace = true }
 chrono = { workspace = true }
 derive_more = { workspace = true, features = ["from"] }
 dirs = { workspace = true }
+fs-err = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
@@ -50,8 +51,9 @@ pixi_spec_containers = { workspace = true }
 pixi_utils = { workspace = true }
 
 [dev-dependencies]
-tempfile = { workspace = true }
+indexmap = { workspace = true }
 insta = { workspace = true, features = ["json"] }
 pixi_config = { workspace = true }
+tempfile = { workspace = true }
 text_trees = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }

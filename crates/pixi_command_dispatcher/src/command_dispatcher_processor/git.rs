@@ -1,17 +1,17 @@
 use std::collections::hash_map::Entry;
 
 use futures::FutureExt;
-use pixi_git::{GitError, GitUrl, resolver::RepositoryReference, source::Fetch};
+use pixi_git::{GitError, resolver::RepositoryReference, source::Fetch};
 
 use super::{CommandDispatcherProcessor, PendingGitCheckout, TaskResult};
-use crate::Reporter;
-use crate::command_dispatcher::GitCheckoutTask;
+use crate::{Reporter, command_dispatcher::GitCheckoutTask};
 
 impl CommandDispatcherProcessor {
     /// Called when a [`ForegroundMessage::GitCheckout`] task was received.
     pub(crate) fn on_checkout_git(&mut self, task: GitCheckoutTask) {
         let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
-        match self.git_checkouts.entry(task.spec.clone()) {
+        let repository_reference = RepositoryReference::from(&task.spec);
+        match self.git_checkouts.entry(repository_reference.clone()) {
             Entry::Occupied(mut existing_checkout) => match existing_checkout.get_mut() {
                 PendingGitCheckout::Pending(_, pending) => pending.push(task.tx),
                 PendingGitCheckout::CheckedOut(fetch) => {
@@ -23,6 +23,8 @@ impl CommandDispatcherProcessor {
                 }
             },
             Entry::Vacant(entry) => {
+                dbg!(&task.spec);
+
                 // Notify the reporter that a new checkout has been queued.
                 let reporter_id = self
                     .reporter
@@ -52,7 +54,7 @@ impl CommandDispatcherProcessor {
                         let fetch = resolver
                             .fetch(task.spec.clone(), client, cache_dir, None)
                             .await;
-                        TaskResult::GitCheckedOut(task.spec, fetch)
+                        TaskResult::GitCheckedOut(repository_reference, fetch)
                     }
                     .boxed_local(),
                 );
@@ -61,9 +63,13 @@ impl CommandDispatcherProcessor {
     }
 
     /// Called when a git checkout task has completed.
-    pub(crate) fn on_git_checked_out(&mut self, url: GitUrl, result: Result<Fetch, GitError>) {
+    pub(crate) fn on_git_checked_out(
+        &mut self,
+        repository_reference: RepositoryReference,
+        result: Result<Fetch, GitError>,
+    ) {
         let Some(PendingGitCheckout::Pending(reporter_id, pending)) =
-            self.git_checkouts.get_mut(&url)
+            self.git_checkouts.get_mut(&repository_reference)
         else {
             unreachable!("cannot get a result for a git checkout that is not pending");
         };
@@ -84,8 +90,9 @@ impl CommandDispatcherProcessor {
                     let _ = tx.send(Ok(fetch.clone()));
                 }
 
+                // Store the fetch in the git checkouts map.
                 self.git_checkouts
-                    .insert(url, PendingGitCheckout::CheckedOut(fetch));
+                    .insert(repository_reference, PendingGitCheckout::CheckedOut(fetch));
             }
             Err(mut err) => {
                 // Only send the error to the first channel, drop the rest, which cancels them.
@@ -97,7 +104,8 @@ impl CommandDispatcherProcessor {
                     }
                 }
 
-                self.git_checkouts.insert(url, PendingGitCheckout::Errored);
+                self.git_checkouts
+                    .insert(repository_reference, PendingGitCheckout::Errored);
             }
         }
     }

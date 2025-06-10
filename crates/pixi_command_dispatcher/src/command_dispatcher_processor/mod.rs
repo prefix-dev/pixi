@@ -10,28 +10,23 @@ use std::{
 };
 
 use futures::{StreamExt, future::LocalBoxFuture};
-use pixi_git::{GitError, GitUrl, source::Fetch};
+use pixi_git::{GitError, resolver::RepositoryReference, source::Fetch};
 use pixi_record::PixiRecord;
 use rattler_conda_types::prefix::Prefix;
 use tokio::sync::{mpsc, oneshot};
 
-use crate::command_dispatcher::{
-    CommandDispatcherError, InstallPixiEnvironmentId, InstantiatedToolEnvId, SourceBuildId,
-    TaskSpec,
-};
-use crate::install_pixi::InstallPixiEnvironmentError;
-use crate::instantiate_tool_env::{
-    InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec,
-};
 use crate::{
     BuiltSource, CommandDispatcherErrorResultExt, Reporter, SolveCondaEnvironmentSpec,
     SolvePixiEnvironmentError, SourceBuildError, SourceBuildSpec, SourceMetadataSpec,
     command_dispatcher::{
         CommandDispatcher, CommandDispatcherChannel, CommandDispatcherContext,
-        CommandDispatcherData, ForegroundMessage, SolveCondaEnvironmentId, SolvePixiEnvironmentId,
-        SourceMetadataId,
+        CommandDispatcherData, CommandDispatcherError, ForegroundMessage, InstallPixiEnvironmentId,
+        InstantiatedToolEnvId, SolveCondaEnvironmentId, SolvePixiEnvironmentId, SourceBuildId,
+        SourceMetadataId, TaskSpec,
     },
     executor::{Executor, ExecutorFutures},
+    install_pixi::InstallPixiEnvironmentError,
+    instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec},
     reporter,
     source_metadata::{SourceMetadata, SourceMetadataError},
 };
@@ -87,12 +82,13 @@ pub(crate) struct CommandDispatcherProcessor {
 
     /// Git checkouts in the process of being checked out, or already checked
     /// out.
-    git_checkouts: HashMap<GitUrl, PendingGitCheckout>,
+    git_checkouts: HashMap<RepositoryReference, PendingGitCheckout>,
 
     /// Conda environments that are currently being solved.
     source_builds: slotmap::SlotMap<SourceBuildId, PendingSourceBuild>,
 
-    /// A list of source builds that are pending. These have not yet been queued for processing.
+    /// A list of source builds that are pending. These have not yet been queued
+    /// for processing.
     pending_source_builds: VecDeque<(SourceBuildId, SourceBuildSpec)>,
 
     /// Keeps track of all pending futures. We poll them manually instead of
@@ -119,7 +115,7 @@ enum TaskResult {
         SourceMetadataId,
         Result<Arc<SourceMetadata>, CommandDispatcherError<SourceMetadataError>>,
     ),
-    GitCheckedOut(GitUrl, Result<Fetch, GitError>),
+    GitCheckedOut(RepositoryReference, Result<Fetch, GitError>),
     InstallPixiEnvironment(
         InstallPixiEnvironmentId,
         Result<(), CommandDispatcherError<InstallPixiEnvironmentError>>,

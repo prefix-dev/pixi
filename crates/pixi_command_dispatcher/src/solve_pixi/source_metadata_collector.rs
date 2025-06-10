@@ -142,7 +142,8 @@ impl SourceMetadataCollector {
             .map_err(|err| CollectSourceMetadataError::SourceCheckoutError {
                 name: name.as_source().to_string(),
                 error: err,
-            }).map_err(CommandDispatcherError::Failed)?;
+            })
+            .map_err(CommandDispatcherError::Failed)?;
 
         // Extract information for the particular source spec.
         let source_metadata = self

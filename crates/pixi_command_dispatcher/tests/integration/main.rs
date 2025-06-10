@@ -6,7 +6,7 @@ use std::str::FromStr;
 use event_reporter::EventReporter;
 use pixi_command_dispatcher::{
     BuildEnvironment, CacheDirs, CommandDispatcher, Executor, InstallPixiEnvironmentSpec,
-    PixiEnvironmentSpec, SourceBuildSpec,
+    PixiEnvironmentSpec,
 };
 use pixi_config::default_channel_config;
 use pixi_spec::{GitReference, GitSpec};
