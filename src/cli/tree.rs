@@ -89,11 +89,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         })
         .await
-        .wrap_err("Failed to update lock file")?;
+        .wrap_err("Failed to update lock file")?
+        .into_lock_file();
 
     let platform = args.platform.unwrap_or_else(|| environment.best_platform());
     let locked_deps = lock_file
-        .lock_file
         .environment(environment.name().as_str())
         .and_then(|env| env.packages(platform).map(Vec::from_iter))
         .unwrap_or_default();
