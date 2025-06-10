@@ -1,12 +1,7 @@
 mod source_metadata_collector;
 
-use crate::{
-    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    SolveCondaEnvironmentSpec,
-    solve_pixi::source_metadata_collector::{
-        CollectSourceMetadataError, CollectedSourceMetadata, SourceMetadataCollector,
-    },
-};
+use std::{collections::BTreeMap, path::PathBuf, time::Instant};
+
 use chrono::{DateTime, Utc};
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
@@ -18,9 +13,17 @@ use rattler_conda_types::{Channel, ChannelConfig, ChannelUrl, NamelessMatchSpec,
 use rattler_repodata_gateway::RepoData;
 use rattler_solve::{ChannelPriority, SolveStrategy};
 use serde::Serialize;
-use std::collections::BTreeMap;
-use std::{path::PathBuf, time::Instant};
 use thiserror::Error;
+use tracing::instrument;
+use url::Url;
+
+use crate::{
+    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
+    SolveCondaEnvironmentSpec,
+    solve_pixi::source_metadata_collector::{
+        CollectSourceMetadataError, CollectedSourceMetadata, SourceMetadataCollector,
+    },
+};
 
 /// Contains all information that describes the input of a pixi environment.
 ///
@@ -36,6 +39,8 @@ use thiserror::Error;
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct PixiEnvironmentSpec {
+    pub name: Option<String>,
+
     /// The requirements of the environment
     #[serde(skip_serializing_if = "DependencyMap::is_empty")]
     pub dependencies: DependencyMap<rattler_conda_types::PackageName, PixiSpec>,
@@ -81,6 +86,7 @@ pub struct PixiEnvironmentSpec {
 impl Default for PixiEnvironmentSpec {
     fn default() -> Self {
         Self {
+            name: None,
             dependencies: DependencyMap::default(),
             constraints: DependencyMap::default(),
             installed: Vec::new(),
@@ -98,9 +104,17 @@ impl Default for PixiEnvironmentSpec {
 
 impl PixiEnvironmentSpec {
     /// Solves this environment using the given command_dispatcher.
+    #[instrument(
+        skip_all,
+        fields(
+            name = self.name.as_deref().unwrap_or("unspecified"),
+            platform = %self.build_environment.host_platform,
+        )
+    )]
     pub async fn solve(
         self,
         command_queue: CommandDispatcher,
+        gateway_reporter: Option<Box<dyn rattler_repodata_gateway::Reporter>>,
     ) -> Result<Vec<PixiRecord>, CommandDispatcherError<SolvePixiEnvironmentError>> {
         // Split the requirements into source and binary requirements.
         let (source_specs, binary_specs) = Self::split_into_source_and_binary_requirements(
@@ -134,7 +148,7 @@ impl PixiEnvironmentSpec {
         // all (recursively) discovered source dependencies. This ensures that all
         // repodata required to solve the environment is loaded.
         let fetch_repodata_start = Instant::now();
-        let binary_repodata = command_queue
+        let query = command_queue
             .gateway()
             .query(
                 self.channels.iter().cloned().map(Channel::from_url),
@@ -143,7 +157,15 @@ impl PixiEnvironmentSpec {
                     .iter_match_specs()
                     .chain(transitive_dependencies),
             )
-            .recursive(true)
+            .recursive(true);
+
+        let query = if let Some(gateway_reporter) = gateway_reporter {
+            query.with_reporter(WrappingGatewayReporter(gateway_reporter))
+        } else {
+            query
+        };
+
+        let binary_repodata = query
             .await
             .map_err(SolvePixiEnvironmentError::QueryError)
             .map_err(CommandDispatcherError::Failed)?;
@@ -157,6 +179,7 @@ impl PixiEnvironmentSpec {
         // environment.
         command_queue
             .solve_conda_environment(SolveCondaEnvironmentSpec {
+                name: self.name,
                 source_specs,
                 binary_specs,
                 constraints: self.constraints,
@@ -213,4 +236,49 @@ pub enum SolvePixiEnvironmentError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     CollectSourceMetadataError(#[from] CollectSourceMetadataError),
+}
+
+struct WrappingGatewayReporter(Box<dyn rattler_repodata_gateway::Reporter>);
+
+impl rattler_repodata_gateway::Reporter for WrappingGatewayReporter {
+    fn on_download_start(&self, url: &Url) -> usize {
+        self.0.on_download_start(url)
+    }
+    fn on_download_progress(
+        &self,
+        url: &Url,
+        index: usize,
+        bytes_downloaded: usize,
+        total_bytes: Option<usize>,
+    ) {
+        self.0
+            .on_download_progress(url, index, bytes_downloaded, total_bytes)
+    }
+    fn on_download_complete(&self, url: &Url, index: usize) {
+        self.0.on_download_complete(url, index)
+    }
+    fn on_jlap_start(&self) -> usize {
+        self.0.on_jlap_start()
+    }
+    fn on_jlap_decode_start(&self, index: usize) {
+        self.0.on_jlap_decode_start(index)
+    }
+    fn on_jlap_decode_completed(&self, index: usize) {
+        self.0.on_jlap_decode_completed(index)
+    }
+    fn on_jlap_apply_patch(&self, index: usize, patch_index: usize, total: usize) {
+        self.0.on_jlap_apply_patch(index, patch_index, total)
+    }
+    fn on_jlap_apply_patches_completed(&self, index: usize) {
+        self.0.on_jlap_apply_patches_completed(index)
+    }
+    fn on_jlap_encode_start(&self, index: usize) {
+        self.0.on_jlap_encode_start(index)
+    }
+    fn on_jlap_encode_completed(&self, index: usize) {
+        self.0.on_jlap_encode_completed(index)
+    }
+    fn on_jlap_completed(&self, index: usize) {
+        self.0.on_jlap_completed(index)
+    }
 }

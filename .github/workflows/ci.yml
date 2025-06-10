@@ -27,6 +27,7 @@ env:
   CICD_INTERMEDIATES_DIR: "_cicd-intermediates"
   XDG_CACHE_HOME: ${{ github.workspace }}/.cache
   PYTEST_ADDOPTS: "--color=yes"
+  PYTHONIOENCODING: utf-8 # necessary to make unicode symbols print correctly on Windows
 
   #
   # Select a profile that is used for building the binary. The profile optimizes for certain use-cases.
@@ -902,3 +903,115 @@ jobs:
       - name: "After Install"
         run: $USERPROFILE/.pixi/bin/pixi.exe --version
         shell: msys2 {0}
+
+  test-build-linux-x86_64:
+    timeout-minutes: 10
+    name: Test pixi-build Linux x86_64
+    runs-on: ubuntu-latest
+    needs: build-binary-linux-x86_64
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          repository: prefix-dev/pixi-build-testsuite
+
+      - name: Set up pixi
+        uses: prefix-dev/setup-pixi@main
+        with:
+          cache: true
+          cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
+
+      - name: Download pixi artifacts
+        run: pixi run download-artifacts pixi --run-id ${{ github.run_id }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download pixi-build-backends artifacts
+        run: pixi run download-artifacts pixi-build-backends
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup binary permissions
+        run: chmod a+x artifacts/pixi*
+
+      - name: Run integration tests
+        run: pixi run --locked test-slow
+        env:
+          PIXI_BIN_DIR: ${{ github.workspace }}/artifacts
+          BUILD_BACKENDS_BIN_DIR: ${{ github.workspace }}/artifacts
+
+  test-build-windows-x86_64:
+    timeout-minutes: 10
+    name: Test pixi-build Windows x86_64
+    runs-on: windows-latest
+    needs: build-binary-windows-x86_64
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          repository: prefix-dev/pixi-build-testsuite
+
+      - name: Create Dev Drive
+        run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
+
+      - name: Copy Git Repo to Dev Drive
+        run: Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.PIXI_WORKSPACE }}" -Recurse
+
+      - name: Set up pixi
+        uses: prefix-dev/setup-pixi@main
+        with:
+          manifest-path: ${{ env.PIXI_WORKSPACE }}/pixi.toml
+          cache: true
+          cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
+
+      - name: Download pixi artifacts
+        working-directory: ${{ env.PIXI_WORKSPACE }}
+        run: pixi run download-artifacts pixi --run-id ${{ github.run_id }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download pixi-build-backends artifacts
+        working-directory: ${{ env.PIXI_WORKSPACE }}
+        run: pixi run download-artifacts pixi-build-backends
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run integration tests
+        run: pixi run --locked test-slow
+        working-directory: ${{ env.PIXI_WORKSPACE }}
+        env:
+          PIXI_BIN_DIR: ${{ env.PIXI_WORKSPACE }}/artifacts
+          BUILD_BACKENDS_BIN_DIR: ${{ env.PIXI_WORKSPACE }}/artifacts
+
+  test-build-macos-aarch64:
+    timeout-minutes: 10
+    name: Test pixi-build macOS aarch64
+    runs-on: macos-14
+    needs: build-binary-macos-aarch64
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          repository: prefix-dev/pixi-build-testsuite
+
+      - name: Set up pixi
+        uses: prefix-dev/setup-pixi@main
+        with:
+          cache: true
+          cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
+
+      - name: Download pixi artifacts
+        run: pixi run download-artifacts pixi --run-id ${{ github.run_id }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download pixi-build-backends artifacts
+        run: pixi run download-artifacts pixi-build-backends
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup binary permissions
+        run: chmod a+x artifacts/pixi*
+
+      - name: Run integration tests
+        run: pixi run --locked test-slow
+        env:
+          PIXI_BIN_DIR: ${{ github.workspace }}/artifacts
+          BUILD_BACKENDS_BIN_DIR: ${{ github.workspace }}/artifacts

@@ -48,9 +48,39 @@ mod instantiate_backend;
 /// different conda environments.
 #[derive(Clone)]
 pub struct CommandDispatcher {
-    pub(crate) channel: CommandDispatcherChannel,
+    /// The channel through which messages are sent to the command dispatcher.
+    ///
+    /// This is an option so we can drop this field in the `Drop`
+    /// implementation. It should only ever be `None` when the command
+    /// dispatcher is dropped.
+    pub(crate) channel: Option<CommandDispatcherChannel>,
+
+    /// The context in which the command dispatcher is operating. If a command
+    /// dispatcher is created for a background task, this context will indicate
+    /// from which task it was created.
     pub(crate) context: Option<CommandDispatcherContext>,
+
+    /// Holds the shared data required by the command dispatcher.
     pub(crate) data: Arc<CommandDispatcherData>,
+
+    /// Holds a strong reference to the process thread handle, this allows us to
+    /// wait for the background thread to finish once the last (user facing)
+    /// command dispatcher is dropped.
+    pub(crate) processor_handle: Option<Arc<std::thread::JoinHandle<()>>>,
+}
+
+impl Drop for CommandDispatcher {
+    fn drop(&mut self) {
+        // Release our strong reference to the main thread channel. If this is the last
+        // strong reference to the channel, the thread will shut down.
+        drop(self.channel.take());
+
+        // If this instance holds the last strong reference to the background thread
+        // join handle this will await its shutdown.
+        if let Some(handle) = self.processor_handle.take().and_then(Arc::into_inner) {
+            let _err = handle.join();
+        }
+    }
 }
 
 /// Contains shared data required by the [`CommandDispatcher`].
@@ -167,6 +197,7 @@ pub(crate) enum ForegroundMessage {
     GitCheckout(GitCheckoutTask),
     InstallPixiEnvironment(InstallPixiEnvironmentTask),
     InstantiateToolEnvironment(Task<InstantiateToolEnvironmentSpec>),
+    ClearReporter(oneshot::Sender<()>),
 }
 
 /// A message that is send to the background task to start solving a particular
@@ -277,6 +308,13 @@ impl CommandDispatcher {
         (self.data.tool_platform.0, &self.data.tool_platform.1)
     }
 
+    /// Returns the channel used to send messages to the command dispatcher.
+    fn channel(&self) -> &CommandDispatcherChannel {
+        self.channel
+            .as_ref()
+            .expect("command dispatcher has been dropped")
+    }
+
     /// Sends a task to the command dispatcher and waits for the result.
     async fn execute_task<T: TaskSpec>(
         &self,
@@ -285,7 +323,7 @@ impl CommandDispatcher {
     where
         ForegroundMessage: From<Task<T>>,
     {
-        let Some(sender) = self.channel.sender() else {
+        let Some(sender) = self.channel().sender() else {
             // If this fails, it means the command dispatcher was dropped and the task is
             // immediately canceled.
             return Err(CommandDispatcherError::Cancelled);
@@ -305,6 +343,18 @@ impl CommandDispatcher {
             Ok(Err(err)) => Err(CommandDispatcherError::Failed(err)),
             Err(_) => Err(CommandDispatcherError::Cancelled),
         }
+    }
+
+    /// Notifies the progress reporter that it should clear its output.
+    pub async fn clear_reporter(&self) {
+        let Some(sender) = self.channel().sender() else {
+            // If this fails, it means the command dispatcher was dropped and the task is
+            // immediately canceled.
+            return;
+        };
+        let (tx, rx) = oneshot::channel();
+        let _ = sender.send(ForegroundMessage::ClearReporter(tx));
+        let _ = rx.await;
     }
 
     /// Returns the metadata of the source spec.

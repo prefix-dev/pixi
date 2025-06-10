@@ -170,11 +170,13 @@ impl CommandDispatcherBuilder {
             tool_platform,
         });
 
-        let sender = CommandDispatcherProcessor::spawn(data.clone(), self.reporter, self.executor);
+        let (sender, join_handle) =
+            CommandDispatcherProcessor::spawn(data.clone(), self.reporter, self.executor);
         CommandDispatcher {
-            channel: CommandDispatcherChannel::Strong(sender),
+            channel: Some(CommandDispatcherChannel::Strong(sender)),
             context: None,
             data,
+            processor_handle: Some(Arc::new(join_handle)),
         }
     }
 }

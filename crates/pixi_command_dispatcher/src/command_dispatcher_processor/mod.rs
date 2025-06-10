@@ -259,11 +259,14 @@ impl CommandDispatcherProcessor {
         inner: Arc<CommandDispatcherData>,
         reporter: Option<Box<dyn Reporter>>,
         executor: Executor,
-    ) -> mpsc::UnboundedSender<ForegroundMessage> {
+    ) -> (
+        mpsc::UnboundedSender<ForegroundMessage>,
+        std::thread::JoinHandle<()>,
+    ) {
         let (tx, rx) = mpsc::unbounded_channel();
         let weak_tx = tx.downgrade();
         let rt = tokio::runtime::Handle::current();
-        std::thread::spawn(move || {
+        let join_handle = std::thread::spawn(move || {
             let task = Self {
                 receiver: rx,
                 sender: weak_tx,
@@ -286,30 +289,38 @@ impl CommandDispatcherProcessor {
             };
             rt.block_on(task.run());
         });
-        tx
+        (tx, join_handle)
     }
 
     /// The main loop of the command_dispatcher background task. This function
     /// will run until all dispatchers have been dropped.
     async fn run(mut self) {
-        tracing::debug!("Dispatch background task has started");
+        tracing::trace!("Dispatch background task has started");
+        if let Some(reporter) = self.reporter.as_mut() {
+            reporter.on_start();
+        }
         loop {
             tokio::select! {
-                Some(message) = self.receiver.recv() => {
-                    self.on_message(message);
+                message = self.receiver.recv() => {
+                    match message {
+                        Some(message) => self.on_message(message),
+                        None => {
+                            // If all the senders are dropped, the receiver will be closed. When this
+                            // happens, we can stop the command_dispatcher. All remaining tasks will be dropped
+                            // as `self.pending_futures` is dropped.
+                            break;
+                        }
+                    }
                 }
                 Some(result) = self.pending_futures.next() => {
                     self.on_result(result);
                 }
-                else => {
-                    // If all the senders are dropped, the receiver will be closed. When this
-                    // happens, we can stop the command_dispatcher. All remaining tasks will be dropped
-                    // as `self.pending_futures` is dropped.
-                    break
-                },
             }
         }
-        tracing::debug!("Dispatch background task has finished");
+        if let Some(reporter) = self.reporter.as_mut() {
+            reporter.on_finished();
+        }
+        tracing::trace!("Dispatch background task has finished");
     }
 
     /// Called when a message was received from either the command_dispatcher or
@@ -327,6 +338,7 @@ impl CommandDispatcherProcessor {
             ForegroundMessage::SourceMetadata(task) => self.on_source_metadata(task),
             ForegroundMessage::GitCheckout(task) => self.on_checkout_git(task),
             ForegroundMessage::SourceBuild(task) => self.on_source_build(task),
+            ForegroundMessage::ClearReporter(sender) => self.clear_reporter(sender),
         }
     }
 
@@ -352,15 +364,16 @@ impl CommandDispatcherProcessor {
     }
 
     /// Constructs a new [`CommandDispatcher`] that can be used for tasks
-    /// constructed by the command_dispatcher_processor itself.
+    /// constructed by the command dispatcher process itself.
     fn create_task_command_dispatcher(
         &self,
         context: CommandDispatcherContext,
     ) -> CommandDispatcher {
         CommandDispatcher {
-            channel: CommandDispatcherChannel::Weak(self.sender.clone()),
+            channel: Some(CommandDispatcherChannel::Weak(self.sender.clone())),
             context: Some(context),
             data: self.inner.clone(),
+            processor_handle: None,
         }
     }
 
@@ -431,5 +444,13 @@ impl CommandDispatcherProcessor {
         }
 
         None
+    }
+
+    /// Called to clear the reporter.
+    fn clear_reporter(&mut self, sender: oneshot::Sender<()>) {
+        if let Some(reporter) = self.reporter.as_mut() {
+            reporter.on_clear()
+        }
+        let _ = sender.send(());
     }
 }
