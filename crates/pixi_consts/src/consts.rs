@@ -1,5 +1,5 @@
 use console::Style;
-use rattler_conda_types::NamedChannelOrUrl;
+use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, NamelessMatchSpec, ParseStrictness};
 use std::{
     fmt::{Display, Formatter},
     str::FromStr,
@@ -102,6 +102,14 @@ pub const CLAP_CONFIG_OPTIONS: &str = "Config Options";
 pub const CLAP_GIT_OPTIONS: &str = "Git Options";
 pub const CLAP_GLOBAL_OPTIONS: &str = "Global Options";
 pub const CLAP_UPDATE_OPTIONS: &str = "Update Options";
+
+/// The MatchSpec for the pixi-build-mutex dependency
+/// Adding this spec to each pixi build backend environment specs ensures that
+/// a backend is selected that uses the same interface version as Pixi does
+pub static PIXI_BUILD_API_VERSION: LazyLock<MatchSpec> = LazyLock::new(|| {
+    MatchSpec::from_str("pixi-build-api-version==0", ParseStrictness::Strict)
+        .expect("should always succeed")
+});
 
 pub static TASK_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().blue());
 pub static TASK_ERROR_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().red());

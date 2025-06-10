@@ -1,7 +1,7 @@
 use std::{fmt::Debug, future::Future, path::PathBuf};
 
 use miette::{IntoDiagnostic, miette};
-use pixi_consts::consts::CACHED_BUILD_TOOL_ENVS_DIR;
+use pixi_consts::consts::{CACHED_BUILD_TOOL_ENVS_DIR, PIXI_BUILD_API_VERSION};
 use pixi_progress::await_in_progress;
 use pixi_utils::{AsyncPrefixGuard, EnvironmentHash};
 use rattler::{install::Installer, package_cache::PackageCache};
@@ -236,6 +236,7 @@ impl ToolInstaller for ToolContext {
             .solve(SolverTask {
                 specs: spec.specs.clone(),
                 virtual_packages,
+                constraints: Vec::from([PIXI_BUILD_API_VERSION.clone()]),
                 ..SolverTask::from_iter(&repodata)
             })
             .into_diagnostic()?;
