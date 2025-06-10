@@ -321,7 +321,7 @@ impl CommandDispatcher {
         }
     }
 
-    /// Notifies the progress reporter that is should clear its output.
+    /// Notifies the progress reporter that it should clear its output.
     pub async fn clear_reporter(&self) {
         let Some(sender) = self.channel().sender() else {
             // If this fails, it means the command dispatcher was dropped and the task is
