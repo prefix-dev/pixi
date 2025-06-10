@@ -2,7 +2,6 @@ use std::fmt::{self, Display, Formatter};
 
 use rattler_conda_types::Platform;
 
-use crate::utils::toml_utils::escape_toml_key;
 use crate::FeatureName;
 
 /// Struct that is used to access a table in `pixi.toml` or `pyproject.toml`.
@@ -65,8 +64,6 @@ impl TableName<'_> {
     fn to_toml_table_name(&self) -> String {
         let mut parts = Vec::new();
 
-        let escaped_feature;
-
         if self.prefix.is_some() {
             parts.push(self.prefix.unwrap());
         }
@@ -75,9 +72,7 @@ impl TableName<'_> {
             if !feature_name.is_default() {
                 parts.push("feature");
                 let feature_str = feature_name.as_str();
-
-                escaped_feature = escape_toml_key(feature_str);
-                parts.push(&escaped_feature);
+                parts.push(feature_str);
             }
         }
 
@@ -91,6 +86,36 @@ impl TableName<'_> {
         }
 
         parts.join(".")
+    }
+
+    /// Returns the individual parts of the table name for proper TOML key escaping.
+    /// This allows the TOML library to handle escaping of individual keys correctly.
+    pub fn to_parts(&self) -> Vec<String> {
+        let mut parts = Vec::new();
+
+        if let Some(prefix) = self.prefix {
+            parts.push(prefix.to_string());
+        }
+
+        if let Some(feature_name) = self.feature_name.as_ref() {
+            if !feature_name.is_default() {
+                parts.push("feature".to_string());
+                let feature_str = feature_name.as_str();
+                // Don't pre-escape - let the TOML library handle escaping
+                parts.push(feature_str.to_string());
+            }
+        }
+
+        if let Some(platform) = self.platform {
+            parts.push("target".to_string());
+            parts.push(platform.as_str().to_string());
+        }
+
+        if let Some(table) = self.table {
+            parts.push(table.to_string());
+        }
+
+        parts
     }
 }
 
@@ -171,14 +196,23 @@ mod tests {
                 .to_string()
         );
 
-        // Test feature name with dot
+        // Test feature name with dot - no longer escaped in to_string()
         let feature_name = FeatureName::from("test.test");
         assert_eq!(
-            "feature.\"test.test\".dependencies".to_string(),
+            "feature.test.test.dependencies".to_string(),
             TableName::new()
                 .with_feature_name(Some(&feature_name))
                 .with_table(Some("dependencies"))
                 .to_string()
+        );
+
+        // But to_parts() should have the unescaped feature name (TOML library handles escaping)
+        assert_eq!(
+            vec!["feature", "test.test", "dependencies"],
+            TableName::new()
+                .with_feature_name(Some(&feature_name))
+                .with_table(Some("dependencies"))
+                .to_parts()
         );
     }
 }
