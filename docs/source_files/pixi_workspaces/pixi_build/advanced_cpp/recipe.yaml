@@ -9,29 +9,29 @@ source:
 build:
   number: 0
   script: # (2)!
-    if: win
-    then: |
-      cmake %CMAKE_ARGS \
-        -GNinja \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_INSTALL_PREFIX=%PREFIX% \
-        -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-        -DBUILD_SHARED_LIBS=ON \
-        -B %SRC_DIR%/../build \
-        -S .
+    - if: win
+      then: |
+        cmake %CMAKE_ARGS \
+          -GNinja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_INSTALL_PREFIX=%PREFIX% \
+          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+          -DBUILD_SHARED_LIBS=ON \
+          -B %SRC_DIR%/../build \
+          -S .
 
-      cmake --build %SRC_DIR%/../build --target install
-    else: |
-      cmake $CMAKE_ARGS \
-        -GNinja \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_INSTALL_PREFIX=$PREFIX \
-        -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-        -DBUILD_SHARED_LIBS=ON \
-        -B $SRC_DIR/../build \
-        -S .
+        cmake --build %SRC_DIR%/../build --target install
+      else: |
+        cmake $CMAKE_ARGS \
+          -GNinja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_INSTALL_PREFIX=$PREFIX \
+          -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+          -DBUILD_SHARED_LIBS=ON \
+          -B $SRC_DIR/../build \
+          -S .
 
-      cmake --build $SRC_DIR/../build --target install
+        cmake --build $SRC_DIR/../build --target install
 
 requirements:
   build: # (3)!
