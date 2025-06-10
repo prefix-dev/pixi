@@ -61,6 +61,25 @@ impl TomlDocument {
         Ok(current_table)
     }
 
+    /// Retrieve a reference to a target table using pre-split parts.
+    /// This allows for proper handling of escaped TOML keys.
+    pub fn get_nested_table_from_parts<'a>(
+        &'a self,
+        parts: &[String],
+    ) -> Result<&'a dyn TableLike, TomlError> {
+        let table_name = parts.join(".");
+        let mut current_table = self.0.as_table() as &dyn TableLike;
+
+        for part in parts {
+            current_table = current_table
+                .get(part)
+                .ok_or_else(|| TomlError::table_error(part, &table_name))?
+                .as_table_like()
+                .ok_or_else(|| TomlError::table_error(part, &table_name))?;
+        }
+        Ok(current_table)
+    }
+
     /// Retrieve a mutable reference to a target table `table_name`
     /// in dotted form (e.g. `table1.table2`) from the root of the document.
     /// If the table is not found, it is inserted into the document.
@@ -69,10 +88,19 @@ impl TomlDocument {
         table_name: &str,
     ) -> Result<&'a mut dyn TableLike, TomlError> {
         let parts: Vec<&str> = table_name.split('.').collect();
+        self.get_or_insert_nested_table_from_parts(parts.iter().map(|s| s.to_string()).collect())
+    }
 
+    /// Retrieve a mutable reference to a target table using pre-split parts.
+    /// This allows for proper handling of escaped TOML keys.
+    pub fn get_or_insert_nested_table_from_parts(
+        &mut self,
+        parts: Vec<String>,
+    ) -> Result<&mut dyn TableLike, TomlError> {
+        let table_name = parts.join(".");
         let mut current_table = self.0.as_table_mut() as &mut dyn TableLike;
 
-        for part in parts {
+        for part in &parts {
             let entry = current_table.entry(part);
             let item = entry.or_insert(Item::Table(Table::new()));
             if let Some(table) = item.as_table_mut() {
@@ -81,7 +109,7 @@ impl TomlDocument {
             }
             current_table = item
                 .as_table_like_mut()
-                .ok_or_else(|| TomlError::table_error(part, table_name))?;
+                .ok_or_else(|| TomlError::table_error(part, &table_name))?;
         }
         Ok(current_table)
     }
@@ -142,7 +170,24 @@ impl TomlDocument {
             .entry(array_name)
             .or_insert(Item::Value(Value::Array(Array::new())))
             .as_array_mut()
-            .ok_or_else(|| TomlError::array_error(array_name, table_name.to_string().as_str()))
+            .ok_or_else(|| TomlError::array_error(array_name, table_name))
+    }
+
+    /// Retrieves a mutable reference to a target array `array_name`
+    /// in table specified by pre-split parts.
+    ///
+    /// If the array is not found, it is inserted into the document.
+    pub fn get_or_insert_toml_array_mut_from_parts<'a>(
+        &'a mut self,
+        table_parts: Vec<String>,
+        array_name: &str,
+    ) -> Result<&'a mut Array, TomlError> {
+        let table_name = table_parts.join(".");
+        self.get_or_insert_nested_table_from_parts(table_parts)?
+            .entry(array_name)
+            .or_insert(Item::Value(Value::Array(Array::new())))
+            .as_array_mut()
+            .ok_or_else(|| TomlError::array_error(array_name, &table_name))
     }
 
     /// Retrieves a mutable reference to a target array `array_name`

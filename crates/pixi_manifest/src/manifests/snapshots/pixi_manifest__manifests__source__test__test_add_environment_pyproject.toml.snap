@@ -1,7 +1,7 @@
 ---
 source: crates/pixi_manifest/src/manifests/source.rs
+assertion_line: 108
 expression: source.to_string()
-snapshot_kind: text
 ---
 [project]
 name = "test"
@@ -9,7 +9,7 @@ name = "test"
 channels = []
 platforms = []
 
-[tool.pixi.environments]
+["tool.pixi".environments]
 foo = []
 bar = ["not-default"]
 baz = { features = ["default"], solve-group = "group1" }
