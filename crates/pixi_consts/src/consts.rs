@@ -1,5 +1,5 @@
 use console::Style;
-use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, NamelessMatchSpec, ParseStrictness};
+use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, ParseStrictness};
 use std::{
     fmt::{Display, Formatter},
     str::FromStr,

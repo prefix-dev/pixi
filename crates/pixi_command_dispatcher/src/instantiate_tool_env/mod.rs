@@ -10,10 +10,13 @@ use futures::TryFutureExt;
 use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
+use pixi_consts::consts::PIXI_BUILD_API_VERSION;
 use pixi_spec::PixiSpec;
 use pixi_spec_containers::DependencyMap;
 use pixi_utils::AsyncPrefixGuard;
-use rattler_conda_types::{ChannelConfig, ChannelUrl, NamelessMatchSpec, prefix::Prefix};
+use rattler_conda_types::{
+    ChannelConfig, ChannelUrl, MatchSpec, Matches, NamelessMatchSpec, prefix::Prefix,
+};
 use rattler_solve::{ChannelPriority, SolveStrategy};
 use thiserror::Error;
 use xxhash_rust::xxh3::Xxh3;
@@ -179,6 +182,14 @@ impl InstantiateToolEnvironmentSpec {
             .await
             .map_err(InstantiateToolEnvironmentError::UpdateLock)?;
 
+        // Make sure a compatible backend is selected
+        let constraints = {
+            let mut constraints = self.constraints;
+            let (name, spec) = PIXI_BUILD_API_VERSION.clone().into_nameless();
+            constraints.insert(name.expect("should always be there"), spec);
+            constraints
+        };
+
         // Start by solving the environment.
         let target_platform = self.build_environment.host_platform;
         let solved_environment = command_queue
@@ -189,7 +200,7 @@ impl InstantiateToolEnvironmentSpec {
                     .into_specs()
                     .chain([self.requirement])
                     .collect(),
-                constraints: self.constraints,
+                constraints,
                 build_environment: self.build_environment,
                 exclude_newer: self.exclude_newer,
                 channel_config: self.channel_config,
@@ -203,6 +214,18 @@ impl InstantiateToolEnvironmentSpec {
             .await
             .map_err_with(Box::new)
             .map_err_with(InstantiateToolEnvironmentError::SolveEnvironment)?;
+
+        // Ensure that solution contains matching api version package
+        if !solved_environment
+            .iter()
+            .any(|r| PIXI_BUILD_API_VERSION.matches(r.package_record()))
+        {
+            return Err(CommandDispatcherError::Failed(
+                InstantiateToolEnvironmentError::NoMatchingBackends {
+                    constraint: Box::from(PIXI_BUILD_API_VERSION.clone()),
+                },
+            ));
+        }
 
         // Install the environment
         command_queue
@@ -248,4 +271,7 @@ pub enum InstantiateToolEnvironmentError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     InstallEnvironment(InstallPixiEnvironmentError),
+
+    #[error("no backends found that match the build API version constraint: {}", constraint.to_string())]
+    NoMatchingBackends { constraint: Box<MatchSpec> },
 }

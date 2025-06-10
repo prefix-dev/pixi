@@ -5,7 +5,7 @@ use pixi_consts::consts::{CACHED_BUILD_TOOL_ENVS_DIR, PIXI_BUILD_API_VERSION};
 use pixi_progress::await_in_progress;
 use pixi_utils::{AsyncPrefixGuard, EnvironmentHash};
 use rattler::{install::Installer, package_cache::PackageCache};
-use rattler_conda_types::{Channel, ChannelConfig, GenericVirtualPackage, Platform};
+use rattler_conda_types::{Channel, ChannelConfig, GenericVirtualPackage, Matches, Platform};
 use rattler_repodata_gateway::Gateway;
 use rattler_shell::{
     activation::{ActivationVariables, Activator},
@@ -240,6 +240,17 @@ impl ToolInstaller for ToolContext {
                 ..SolverTask::from_iter(&repodata)
             })
             .into_diagnostic()?;
+
+        if !solved_records
+            .records
+            .iter()
+            .any(|r| PIXI_BUILD_API_VERSION.matches(r))
+        {
+            miette::bail!(
+                "Couldn't find any backends that match the constraint {}",
+                PIXI_BUILD_API_VERSION.to_string()
+            )
+        }
 
         let cache = EnvironmentHash::new(
             spec.command.clone(),
