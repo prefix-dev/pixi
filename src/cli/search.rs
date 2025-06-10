@@ -170,29 +170,33 @@ pub async fn execute_impl<W: Write>(
             .into_future()
     };
 
-    // When package name filter contains * (wildcard), it will search and display a
-    // list of packages matching this filter
-    let packages = if package_name_filter.contains('*') {
-        let package_name_without_filter = package_name_filter.replace('*', "");
-        let package_name = PackageName::try_from(package_name_without_filter).into_diagnostic()?;
+    let matchSpec =
+        MatchSpec::from_str(&package_name_filter, ParseStrictness::Lenient).into_diagnostic();
 
-        search_package_by_wildcard(
-            package_name,
-            &package_name_filter,
-            all_names,
-            repodata_query_func,
-            args.limit,
-            out,
-        )
-        .await?
+   let packages= match matchSpec {
+    Ok(matchSpec) => {
+        // If it's a valid MatchSpec, use exact search
+        search_exact_package(matchSpec, all_names, repodata_query_func, out).await?
     }
-    // If package name filter doesn't contain * (wildcard), it will search and display specific
-    // package info (if any package is found)
-    else {
-        let package_spec = MatchSpec::from_str(&package_name_filter, ParseStrictness::Lenient)
-            .into_diagnostic()?;
-        search_exact_package(package_spec, all_names, repodata_query_func, out).await?
-    };
+    Err(_) => {
+        // If it's not a valid MatchSpec, check for wildcard
+        if package_name_filter.contains('*') {
+            let package_name_without_filter = package_name_filter.replace('*', "");
+            let package_name = PackageName::try_from(package_name_without_filter).into_diagnostic()?;
+
+            search_package_by_wildcard(
+                package_name,
+                &package_name_filter,
+                all_names,
+                repodata_query_func,
+                args.limit,
+                out,
+            )
+            .await?
+        } else {
+            return Err(miette::miette!("Invalid package specification: {}", package_name_filter));
+        }
+    }
 
     Ok(packages)
 }
