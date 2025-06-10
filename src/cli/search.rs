@@ -173,33 +173,27 @@ pub async fn execute_impl<W: Write>(
     let match_spec =
         MatchSpec::from_str(&package_name_filter, ParseStrictness::Lenient).into_diagnostic();
 
-    let packages = match match_spec {
-        Ok(match_spec) => {
-            search_exact_package(match_spec, all_names, repodata_query_func, out).await?
-        }
-        Err(_) => {
-            // If it's not a valid MatchSpec, check for wildcard
-            if package_name_filter.contains('*') {
-                let package_name_without_filter = package_name_filter.replace('*', "");
-                let package_name =
-                    PackageName::try_from(package_name_without_filter).into_diagnostic()?;
+    let packages = if let Ok(match_spec) = match_spec {
+        search_exact_package(match_spec, all_names, repodata_query_func, out).await?
+    } else if package_name_filter.contains('*') {
+        // If it's not a valid MatchSpec, check for wildcard
+        let package_name_without_filter = package_name_filter.replace('*', "");
+        let package_name = PackageName::try_from(package_name_without_filter).into_diagnostic()?;
 
-                search_package_by_wildcard(
-                    package_name,
-                    &package_name_filter,
-                    all_names,
-                    repodata_query_func,
-                    args.limit,
-                    out,
-                )
-                .await?
-            } else {
-                return Err(miette::miette!(
-                    "Invalid package specification: {}",
-                    package_name_filter
-                ));
-            }
-        }
+        search_package_by_wildcard(
+            package_name,
+            &package_name_filter,
+            all_names,
+            repodata_query_func,
+            args.limit,
+            out,
+        )
+        .await?
+    } else {
+        return Err(miette::miette!(
+            "Invalid package specification: {}",
+            package_name_filter
+        ));
     };
 
     Ok(packages)
