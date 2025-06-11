@@ -9,7 +9,7 @@ name = "test"
 channels = []
 platforms = []
 
-["tool.pixi".environments]
+[tool.pixi.environments]
 foo = []
 bar = ["not-default"]
 baz = { features = ["default"], solve-group = "group1" }
