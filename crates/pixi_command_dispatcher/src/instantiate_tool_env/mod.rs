@@ -104,13 +104,17 @@ impl Hash for InstantiateToolEnvironmentSpec {
 
 impl InstantiateToolEnvironmentSpec {
     /// Constructs a new default instance.
-    pub fn new(package_name: rattler_conda_types::PackageName, requirement: PixiSpec) -> Self {
+    pub fn new(
+        package_name: rattler_conda_types::PackageName,
+        requirement: PixiSpec,
+        channels: Vec<ChannelUrl>,
+    ) -> Self {
         Self {
             requirement: (package_name, requirement),
             additional_requirements: DependencyMap::default(),
             constraints: DependencyMap::default(),
             build_environment: BuildEnvironment::default(),
-            channels: vec![],
+            channels,
             exclude_newer: None,
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from(".")),
             enabled_protocols: EnabledProtocols::default(),

@@ -1,15 +1,24 @@
 mod event_reporter;
 mod event_tree;
 
-use std::str::FromStr;
+use std::{path::PathBuf, str::FromStr};
 
 use event_reporter::EventReporter;
-use pixi_command_dispatcher::{CacheDirs, CommandDispatcher, Executor, PixiEnvironmentSpec};
-use pixi_spec::{GitReference, GitSpec};
+use pixi_build_discovery::EnabledProtocols;
+use pixi_command_dispatcher::{
+    BuildEnvironment, CacheDirs, CommandDispatcher, Executor, InstantiateToolEnvironmentSpec,
+    PixiEnvironmentSpec,
+};
+use pixi_spec::{GitReference, GitSpec, PixiSpec};
 use pixi_spec_containers::DependencyMap;
+use rattler_conda_types::{ChannelConfig, ChannelUrl, PackageName, VersionSpec};
+use tempfile::TempDir;
 use url::Url;
 
-use crate::event_tree::EventTree;
+use crate::{
+    command_dispatcher::event_tree::EventTree,
+    common::package_database::{Package, PackageDatabase},
+};
 
 /// Returns a default set of cache directories for the test.
 fn default_cache_dirs() -> CacheDirs {
