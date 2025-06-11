@@ -9,6 +9,7 @@ use pixi_command_dispatcher::{
     BuildEnvironment, CacheDirs, CommandDispatcher, Executor, InstantiateToolEnvironmentSpec,
     PixiEnvironmentSpec,
 };
+use pixi_consts::consts::PIXI_BUILD_API_VERSION;
 use pixi_spec::{GitReference, GitSpec, PixiSpec};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{ChannelConfig, ChannelUrl, PackageName, VersionSpec};
@@ -61,4 +62,26 @@ pub async fn simple_test() {
 
     let event_tree = EventTree::new(events.lock().unwrap().iter());
     insta::assert_snapshot!(event_tree.to_string());
+}
+
+#[tokio::test]
+pub async fn instantiate_backend_with_compatible_api_version() {
+    // Add a package
+    let backend_name = PackageName::new_unchecked("backend-with-compatible-api-version");
+
+    let channel_dir = todo!();
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_cache_dirs(default_cache_dirs())
+        .with_executor(Executor::Serial)
+        .finish();
+
+    dispatcher
+        .instantiate_tool_environment(InstantiateToolEnvironmentSpec::new(
+            backend_name,
+            PixiSpec::Version(VersionSpec::Any),
+            Vec::from([Url::from_directory_path(channel_dir).unwrap().into()]),
+        ))
+        .await
+        .unwrap();
 }
