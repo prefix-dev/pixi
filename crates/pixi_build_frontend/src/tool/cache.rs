@@ -297,7 +297,7 @@ impl ToolCache {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, path::PathBuf, sync::Arc};
+    use std::{collections::HashMap, path::PathBuf, str::FromStr, sync::Arc};
 
     use pixi_config::Config;
     use rattler_conda_types::{
@@ -305,6 +305,7 @@ mod tests {
     };
     use reqwest_middleware::ClientWithMiddleware;
     use tokio::sync::{Barrier, Mutex, Semaphore};
+    use url::Url;
 
     use crate::{
         IsolatedToolSpec,
@@ -400,10 +401,15 @@ mod tests {
             .with_gateway(config.gateway().with_client(auth_client).finish())
             .build();
 
+        let backends_channel = NamedChannelOrUrl::Url(
+            Url::from_str("https://prefix.dev/pixi-build-backends").unwrap(),
+        );
+        let conda_forge_channel = NamedChannelOrUrl::Name("conda-forge".to_string());
+
         let tool_spec = IsolatedToolSpec {
-            specs: vec![MatchSpec::from_str("bat", ParseStrictness::Strict).unwrap()],
-            command: "bat".into(),
-            channels: config.default_channels.clone(),
+            specs: vec![MatchSpec::from_str("pixi-build-rust", ParseStrictness::Strict).unwrap()],
+            command: "pixi-build-rust".into(),
+            channels: vec![backends_channel, conda_forge_channel],
         };
 
         let tool = tool_context
@@ -411,12 +417,7 @@ mod tests {
             .await
             .unwrap();
 
-        tool.command()
-            .arg("--version")
-            .spawn()
-            .unwrap()
-            .wait()
-            .unwrap();
+        tool.command().arg("help").spawn().unwrap().wait().unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
