@@ -1,15 +1,19 @@
 mod event_reporter;
 mod event_tree;
 
-use std::{path::PathBuf, str::FromStr};
+use std::{
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 use event_reporter::EventReporter;
+use futures::channel;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_command_dispatcher::{
     BuildEnvironment, CacheDirs, CommandDispatcher, Executor, InstantiateToolEnvironmentSpec,
     PixiEnvironmentSpec,
 };
-use pixi_consts::consts::PIXI_BUILD_API_VERSION;
+use pixi_consts::consts::{PIXI_BUILD_API_NAME, PIXI_BUILD_API_VERSION};
 use pixi_spec::{GitReference, GitSpec, PixiSpec};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{ChannelConfig, ChannelUrl, PackageName, VersionSpec};
@@ -66,10 +70,9 @@ pub async fn simple_test() {
 
 #[tokio::test]
 pub async fn instantiate_backend_with_compatible_api_version() {
-    // Add a package
     let backend_name = PackageName::new_unchecked("backend-with-compatible-api-version");
-
-    let channel_dir = todo!();
+    let channel_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/data/channels/channels/backend_channel_1");
 
     let dispatcher = CommandDispatcher::builder()
         .with_cache_dirs(default_cache_dirs())
@@ -84,4 +87,27 @@ pub async fn instantiate_backend_with_compatible_api_version() {
         ))
         .await
         .unwrap();
+}
+
+#[tokio::test]
+pub async fn instantiate_backend_without_compatible_api_version() {
+    let backend_name = PackageName::new_unchecked("backend-without-compatible-api-version");
+    let channel_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/data/channels/channels/backend_channel_1");
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_cache_dirs(default_cache_dirs())
+        .with_executor(Executor::Serial)
+        .finish();
+
+    let err = dispatcher
+        .instantiate_tool_environment(InstantiateToolEnvironmentSpec::new(
+            backend_name,
+            PixiSpec::Version(VersionSpec::Any),
+            Vec::from([Url::from_directory_path(channel_dir).unwrap().into()]),
+        ))
+        .await
+        .unwrap_err();
+
+    insta::assert_snapshot!(err);
 }

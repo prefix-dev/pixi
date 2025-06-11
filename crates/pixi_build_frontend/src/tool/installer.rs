@@ -1,11 +1,15 @@
 use std::{fmt::Debug, future::Future, path::PathBuf};
 
 use miette::{IntoDiagnostic, miette};
-use pixi_consts::consts::{CACHED_BUILD_TOOL_ENVS_DIR, PIXI_BUILD_API_VERSION};
+use pixi_consts::consts::{
+    CACHED_BUILD_TOOL_ENVS_DIR, PIXI_BUILD_API_NAME, PIXI_BUILD_API_VERSION,
+};
 use pixi_progress::await_in_progress;
 use pixi_utils::{AsyncPrefixGuard, EnvironmentHash};
 use rattler::{install::Installer, package_cache::PackageCache};
-use rattler_conda_types::{Channel, ChannelConfig, GenericVirtualPackage, Matches, Platform};
+use rattler_conda_types::{
+    Channel, ChannelConfig, GenericVirtualPackage, MatchSpec, Matches, ParseStrictness, Platform,
+};
 use rattler_repodata_gateway::Gateway;
 use rattler_shell::{
     activation::{ActivationVariables, Activator},
@@ -232,11 +236,17 @@ impl ToolInstaller for ToolContext {
             .map(GenericVirtualPackage::from)
             .collect();
 
+        let build_api_version_spec = MatchSpec::from_str(
+            &format!("{PIXI_BUILD_API_NAME}=={PIXI_BUILD_API_VERSION}"),
+            ParseStrictness::Strict,
+        )
+        .expect("should always succeed");
+
         let solved_records = Solver
             .solve(SolverTask {
                 specs: spec.specs.clone(),
                 virtual_packages,
-                constraints: Vec::from([PIXI_BUILD_API_VERSION.clone()]),
+                constraints: Vec::from([build_api_version_spec.clone()]),
                 ..SolverTask::from_iter(&repodata)
             })
             .into_diagnostic()?;
@@ -244,7 +254,7 @@ impl ToolInstaller for ToolContext {
         if !solved_records
             .records
             .iter()
-            .any(|r| PIXI_BUILD_API_VERSION.matches(r))
+            .any(|r| build_api_version_spec.matches(r))
         {
             miette::bail!(
                 "Couldn't find any backends that match the constraint {}",

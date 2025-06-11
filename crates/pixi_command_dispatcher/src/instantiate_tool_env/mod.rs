@@ -10,12 +10,13 @@ use futures::TryFutureExt;
 use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
-use pixi_consts::consts::PIXI_BUILD_API_VERSION;
+use pixi_consts::consts::{PIXI_BUILD_API_NAME, PIXI_BUILD_API_VERSION};
 use pixi_spec::PixiSpec;
 use pixi_spec_containers::DependencyMap;
 use pixi_utils::AsyncPrefixGuard;
 use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, MatchSpec, Matches, NamelessMatchSpec, prefix::Prefix,
+    ChannelConfig, ChannelUrl, MatchSpec, Matches, NamelessMatchSpec, PackageName, ParseStrictness,
+    prefix::Prefix,
 };
 use rattler_solve::{ChannelPriority, SolveStrategy};
 use thiserror::Error;
@@ -186,11 +187,19 @@ impl InstantiateToolEnvironmentSpec {
             .await
             .map_err(InstantiateToolEnvironmentError::UpdateLock)?;
 
+        let build_api_version_spec = MatchSpec::from_str(
+            &format!("{PIXI_BUILD_API_NAME}=={PIXI_BUILD_API_VERSION}"),
+            ParseStrictness::Strict,
+        )
+        .expect("should always succeed");
+
         // Make sure a compatible backend is selected
         let constraints = {
             let mut constraints = self.constraints;
-            let (name, spec) = PIXI_BUILD_API_VERSION.clone().into_nameless();
-            constraints.insert(name.expect("should always be there"), spec);
+            constraints.insert(
+                PackageName::new_unchecked(PIXI_BUILD_API_NAME),
+                build_api_version_spec.clone().into_nameless().1,
+            );
             constraints
         };
 
@@ -222,11 +231,11 @@ impl InstantiateToolEnvironmentSpec {
         // Ensure that solution contains matching api version package
         if !solved_environment
             .iter()
-            .any(|r| PIXI_BUILD_API_VERSION.matches(r.package_record()))
+            .any(|r| build_api_version_spec.matches(r.package_record()))
         {
             return Err(CommandDispatcherError::Failed(
                 InstantiateToolEnvironmentError::NoMatchingBackends {
-                    constraint: Box::from(PIXI_BUILD_API_VERSION.clone()),
+                    constraint: Box::from(build_api_version_spec.clone()),
                 },
             ));
         }

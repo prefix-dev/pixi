@@ -106,10 +106,8 @@ pub const CLAP_UPDATE_OPTIONS: &str = "Update Options";
 /// The MatchSpec for the pixi-build-mutex dependency
 /// Adding this spec to each pixi build backend environment specs ensures that
 /// a backend is selected that uses the same interface version as Pixi does
-pub static PIXI_BUILD_API_VERSION: LazyLock<MatchSpec> = LazyLock::new(|| {
-    MatchSpec::from_str("pixi-build-api-version==0", ParseStrictness::Strict)
-        .expect("should always succeed")
-});
+pub const PIXI_BUILD_API_NAME: &str = "pixi-build-api-version";
+pub const PIXI_BUILD_API_VERSION: &str = "0";
 
 pub static TASK_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().blue());
 pub static TASK_ERROR_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().red());
