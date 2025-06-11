@@ -94,7 +94,8 @@ impl TableName<'_> {
         let mut parts = Vec::new();
 
         if let Some(prefix) = self.prefix {
-            parts.push(prefix.to_string());
+            // Split the prefix by dots to handle cases like "tool.pixi"
+            parts.extend(prefix.split('.').map(|s| s.to_string()));
         }
 
         if let Some(feature_name) = self.feature_name.as_ref() {
@@ -210,6 +211,26 @@ mod tests {
         assert_eq!(
             vec!["feature", "test.test", "dependencies"],
             TableName::new()
+                .with_feature_name(Some(&feature_name))
+                .with_table(Some("dependencies"))
+                .to_parts()
+        );
+
+        // Test with prefix - should split "tool.pixi" into separate parts
+        assert_eq!(
+            vec!["tool", "pixi", "dependencies"],
+            TableName::new()
+                .with_prefix(Some("tool.pixi"))
+                .with_feature_name(Some(&FeatureName::DEFAULT))
+                .with_table(Some("dependencies"))
+                .to_parts()
+        );
+
+        // Test with prefix and feature - should split "tool.pixi" and keep feature name unescaped
+        assert_eq!(
+            vec!["tool", "pixi", "feature", "test.test", "dependencies"],
+            TableName::new()
+                .with_prefix(Some("tool.pixi"))
                 .with_feature_name(Some(&feature_name))
                 .with_table(Some("dependencies"))
                 .to_parts()
