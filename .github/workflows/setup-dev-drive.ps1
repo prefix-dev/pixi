@@ -1,6 +1,10 @@
 # Configures a drive for testing in CI.
 # Credits to astral-sh/uv: https://github.com/astral-sh/uv/blob/d2b9ffdc9e3f336e46b0af18a8554de560bfbefc/.github/workflows/setup-dev-drive.ps1
 
+param(
+    [switch]$OnlyCargo
+)
+
 # When not using a GitHub Actions "larger runner", the `D:` drive is present and
 # has similar or better performance characteristics than a ReFS dev drive.
 # Sometimes using a larger runner is still more performant (e.g., when running
@@ -50,13 +54,20 @@ if (Test-Path "C:/Users/runneradmin/.cargo") {
     Copy-Item -Path "C:/Users/runneradmin/.cargo/*" -Destination "$($Drive)/.cargo/" -Recurse -Force
 }
 
+# Set environment variables for GitHub Actions
 Write-Output `
-	"DEV_DRIVE=$($Drive)" `
-	"TMP=$($Tmp)" `
-	"TEMP=$($Tmp)" `
-	"RATTLER_CACHE_DIR=$($Drive)/rattler-cache" `
-	"RUSTUP_HOME=$($Drive)/.rustup" `
-	"CARGO_HOME=$($Drive)/.cargo" `
-	"PIXI_HOME=$($Drive)/.pixi" `
-	"PIXI_WORKSPACE=$($Drive)/pixi" `
-	>> $env:GITHUB_ENV
+    "DEV_DRIVE=$($Drive)" `
+    "TMP=$($Tmp)" `
+    "TEMP=$($Tmp)" `
+    "RUSTUP_HOME=$($Drive)/.rustup" `
+    "CARGO_HOME=$($Drive)/.cargo" `
+    >> $env:GITHUB_ENV
+
+# If not cargo-only mode, set additional Pixi-related environment variables
+if (-not $OnlyCargo) {
+    Write-Output `
+        "RATTLER_CACHE_DIR=$($Drive)/rattler-cache" `
+        "PIXI_HOME=$($Drive)/.pixi" `
+        "PIXI_WORKSPACE=$($Drive)/pixi" `
+        >> $env:GITHUB_ENV
+}

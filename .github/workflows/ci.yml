@@ -242,25 +242,21 @@ jobs:
     runs-on: windows_x64_2025_large
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        # We don't put Pixi on the dev drive since it runs out of space otherwise
       - name: Create Dev Drive
-        run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
-
-      - name: Copy Git Repo to Dev Drive
-        run: Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.PIXI_WORKSPACE }}" -Recurse
-
+        run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1 -OnlyCargo
       - uses: prefix-dev/setup-pixi@main
         with:
-          manifest-path: ${{ env.PIXI_WORKSPACE }}/pixi.toml
           cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
       - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
         with:
-          workspaces: "${{ env.PIXI_WORKSPACE }} -> target/pixi"
+          cache-directories: ${{ env.DEV_DRIVE }}/target
           key: ${{ hashFiles('pixi.lock') }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Test pixi
         run: pixi run test-slow --retries 2
-        working-directory: ${{ env.PIXI_WORKSPACE }}
         env:
+          CARGO_TARGET_DIR: ${{ env.DEV_DRIVE }}/target
           PIXI_TEST_R2_ACCESS_KEY_ID: ${{ secrets.PIXI_TEST_R2_ACCESS_KEY_ID }}
           PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
 
