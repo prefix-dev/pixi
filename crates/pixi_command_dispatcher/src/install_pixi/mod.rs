@@ -12,7 +12,10 @@ use pixi_build_discovery::EnabledProtocols;
 use pixi_build_types::PlatformAndVirtualPackages;
 use pixi_glob::GlobModificationTime;
 use pixi_record::{PixiRecord, SourceRecord};
-use rattler::install::{Installer, InstallerError};
+use rattler::install::{
+    Installer, InstallerError, Transaction,
+    link_script::{LinkScriptError, PrePostLinkResult},
+};
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, Platform, PrefixRecord, RepoDataRecord, prefix::Prefix,
 };
@@ -68,11 +71,28 @@ pub struct InstallPixiEnvironmentSpec {
     pub enabled_protocols: EnabledProtocols,
 }
 
+/// The result of installing a Pixi environment.
+pub struct InstallPixiEnvironmentResult {
+    /// The transaction that was applied
+    pub transaction: Transaction<PrefixRecord, RepoDataRecord>,
+
+    /// The result of running pre link scripts. `None` if no
+    /// pre-processing was performed, possibly because link scripts were
+    /// disabled.
+    pub pre_link_script_result: Option<PrePostLinkResult>,
+
+    /// The result of running post link scripts. `None` if no
+    /// post-processing was performed, possibly because link scripts were
+    /// disabled.
+    pub post_link_script_result: Option<Result<PrePostLinkResult, LinkScriptError>>,
+}
+
 impl InstallPixiEnvironmentSpec {
     pub async fn install(
         mut self,
-        command_queue: CommandDispatcher,
-    ) -> Result<(), CommandDispatcherError<InstallPixiEnvironmentError>> {
+        command_dispatcher: CommandDispatcher,
+    ) -> Result<InstallPixiEnvironmentResult, CommandDispatcherError<InstallPixiEnvironmentError>>
+    {
         // Split into source and binary records
         let (source_records, mut binary_records): (Vec<_>, Vec<_>) =
             std::mem::take(&mut self.records)
@@ -93,7 +113,7 @@ impl InstallPixiEnvironmentSpec {
         let mut build_futures = FuturesUnordered::new();
         for source_record in source_records {
             build_futures.push(async {
-                self.build_from_source_with_cache(&command_queue, &source_record)
+                self.build_from_source_with_cache(&command_dispatcher, &source_record)
                     .await
                     .map_err_with(move |build_err| {
                         InstallPixiEnvironmentError::BuildSourceError(source_record, build_err)
@@ -111,22 +131,27 @@ impl InstallPixiEnvironmentSpec {
         // Install the environment using the prefix installer
         let mut installer = Installer::new()
             .with_target_platform(self.target_platform)
-            .with_download_client(command_queue.download_client().clone())
-            .with_package_cache(command_queue.package_cache().clone())
+            .with_download_client(command_dispatcher.download_client().clone())
+            .with_package_cache(command_dispatcher.package_cache().clone())
             .with_reinstall_packages(self.force_reinstall)
+            .with_execute_link_scripts(command_dispatcher.allow_execute_link_scripts())
             .with_installed_packages(installed_packages);
 
         if let Some(installed) = self.installed {
             installer = installer.with_installed_packages(installed);
         };
 
-        let _result = installer
+        let result = installer
             .install(self.prefix.path(), binary_records)
             .await
             .map_err(InstallPixiEnvironmentError::Installer)
             .map_err(CommandDispatcherError::Failed)?;
 
-        Ok(())
+        Ok(InstallPixiEnvironmentResult {
+            transaction: result.transaction,
+            post_link_script_result: result.post_link_script_result,
+            pre_link_script_result: result.pre_link_script_result,
+        })
     }
 
     /// Builds a package from source or returns a cached build if it exists.

@@ -31,6 +31,7 @@ pub struct CommandDispatcherBuilder {
     limits: Limits,
     executor: Executor,
     tool_platform: Option<(Platform, Vec<GenericVirtualPackage>)>,
+    execute_link_scripts: bool,
 }
 
 impl CommandDispatcherBuilder {
@@ -122,6 +123,14 @@ impl CommandDispatcherBuilder {
         Self { executor, ..self }
     }
 
+    /// Whether to allow executing link scripts when installing packages.
+    pub fn execute_link_scripts(self, execute: bool) -> Self {
+        Self {
+            execute_link_scripts: execute,
+            ..self
+        }
+    }
+
     /// Completes the builder and returns a new [`CommandDispatcher`].
     pub fn finish(self) -> CommandDispatcher {
         let root_dir = self
@@ -168,6 +177,7 @@ impl CommandDispatcherBuilder {
             limits: ResolvedLimits::from(self.limits),
             package_cache,
             tool_platform,
+            execute_link_scripts: self.execute_link_scripts,
         });
 
         let (sender, join_handle) =

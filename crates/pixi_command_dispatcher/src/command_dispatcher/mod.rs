@@ -27,6 +27,7 @@ use reqwest_middleware::ClientWithMiddleware;
 use tokio::sync::{mpsc, oneshot};
 use typed_path::Utf8TypedPath;
 
+use crate::install_pixi::InstallPixiEnvironmentResult;
 use crate::{
     InvalidPathError, PixiEnvironmentSpec, SolveCondaEnvironmentSpec, SolvePixiEnvironmentError,
     SourceCheckout, SourceCheckoutError, SourceMetadataSpec,
@@ -125,6 +126,9 @@ pub(crate) struct CommandDispatcherData {
     /// the current system. Usually this is the current platform, but it can
     /// be a different platform.
     pub tool_platform: (Platform, Vec<GenericVirtualPackage>),
+
+    /// True if execution of link scripts is enabled.
+    pub execute_link_scripts: bool,
 }
 
 /// A channel through which to send any messages to the command_dispatcher. Some
@@ -212,7 +216,7 @@ impl TaskSpec for PixiEnvironmentSpec {
 /// pixi environment.
 pub(crate) type InstallPixiEnvironmentTask = Task<InstallPixiEnvironmentSpec>;
 impl TaskSpec for InstallPixiEnvironmentSpec {
-    type Output = ();
+    type Output = InstallPixiEnvironmentResult;
     type Error = InstallPixiEnvironmentError;
 }
 
@@ -306,6 +310,11 @@ impl CommandDispatcher {
     /// Returns the platform and virtual packages used for tool environments.
     pub fn tool_platform(&self) -> (Platform, &[GenericVirtualPackage]) {
         (self.data.tool_platform.0, &self.data.tool_platform.1)
+    }
+
+    /// Returns true if execution of link scripts is enabled.
+    pub fn allow_execute_link_scripts(&self) -> bool {
+        self.data.execute_link_scripts
     }
 
     /// Returns the channel used to send messages to the command dispatcher.
@@ -402,7 +411,8 @@ impl CommandDispatcher {
     pub async fn install_pixi_environment(
         &self,
         spec: InstallPixiEnvironmentSpec,
-    ) -> Result<(), CommandDispatcherError<InstallPixiEnvironmentError>> {
+    ) -> Result<InstallPixiEnvironmentResult, CommandDispatcherError<InstallPixiEnvironmentError>>
+    {
         self.execute_task(spec).await
     }
 

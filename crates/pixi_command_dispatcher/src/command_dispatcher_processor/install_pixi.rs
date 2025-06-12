@@ -4,8 +4,8 @@ use super::{CommandDispatcherProcessor, PendingInstallPixiEnvironment, TaskResul
 use crate::command_dispatcher::{InstallPixiEnvironmentId, InstallPixiEnvironmentTask};
 use crate::install_pixi::InstallPixiEnvironmentError;
 use crate::{
-    CommandDispatcherError, CommandDispatcherErrorResultExt, Reporter,
-    command_dispatcher::CommandDispatcherContext,
+    CommandDispatcherError, CommandDispatcherErrorResultExt, InstallPixiEnvironmentResult,
+    Reporter, command_dispatcher::CommandDispatcherContext,
 };
 
 impl CommandDispatcherProcessor {
@@ -58,7 +58,10 @@ impl CommandDispatcherProcessor {
     pub(crate) fn on_install_pixi_environment_result(
         &mut self,
         id: InstallPixiEnvironmentId,
-        result: Result<(), CommandDispatcherError<InstallPixiEnvironmentError>>,
+        result: Result<
+            InstallPixiEnvironmentResult,
+            CommandDispatcherError<InstallPixiEnvironmentError>,
+        >,
     ) {
         let env = self
             .install_pixi_environment

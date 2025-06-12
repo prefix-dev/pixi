@@ -149,6 +149,10 @@ impl BuildContext {
         &self.command_dispatcher
     }
 
+    pub fn channel_config(&self) -> &ChannelConfig {
+        &self.channel_config
+    }
+
     pub fn with_tool_context(self, tool_context: Arc<ToolContext>) -> Self {
         Self {
             tool_context,

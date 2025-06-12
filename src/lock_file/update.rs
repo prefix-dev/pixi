@@ -594,14 +594,8 @@ impl<'p> LockFileDerivedData<'p> {
         let group = GroupedEnvironment::Environment(environment.clone());
         let platform = environment.best_platform();
 
-        let conda_prefix_updater = CondaPrefixUpdaterBuilder::new(
-            group,
-            platform,
-            self.package_cache.clone(),
-            self.io_concurrency_limit.clone(),
-            self.build_context.clone(),
-        )
-        .build()?;
+        let conda_prefix_updater =
+            CondaPrefixUpdaterBuilder::new(group, platform, self.build_context.clone()).build()?;
 
         // Get the locked environment from the lock-file.
         let records = self
@@ -1313,8 +1307,6 @@ impl<'p> UpdateContext<'p> {
             let conda_prefix_updater = CondaPrefixUpdaterBuilder::new(
                 group.clone(),
                 environment.best_platform(),
-                self.package_cache.clone(),
-                self.io_concurrency_limit.clone(),
                 self.build_context.clone(),
             )
             .build()?;

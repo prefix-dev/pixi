@@ -16,8 +16,9 @@ use rattler_conda_types::prefix::Prefix;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::{
-    BuiltSource, CommandDispatcherErrorResultExt, Reporter, SolveCondaEnvironmentSpec,
-    SolvePixiEnvironmentError, SourceBuildError, SourceBuildSpec, SourceMetadataSpec,
+    BuiltSource, CommandDispatcherErrorResultExt, InstallPixiEnvironmentResult, Reporter,
+    SolveCondaEnvironmentSpec, SolvePixiEnvironmentError, SourceBuildError, SourceBuildSpec,
+    SourceMetadataSpec,
     command_dispatcher::{
         CommandDispatcher, CommandDispatcherChannel, CommandDispatcherContext,
         CommandDispatcherData, CommandDispatcherError, ForegroundMessage, InstallPixiEnvironmentId,
@@ -118,7 +119,7 @@ enum TaskResult {
     GitCheckedOut(RepositoryReference, Result<Fetch, GitError>),
     InstallPixiEnvironment(
         InstallPixiEnvironmentId,
-        Result<(), CommandDispatcherError<InstallPixiEnvironmentError>>,
+        Result<InstallPixiEnvironmentResult, CommandDispatcherError<InstallPixiEnvironmentError>>,
     ),
     InstantiateToolEnv(
         InstantiatedToolEnvId,
@@ -173,7 +174,7 @@ struct PendingPixiEnvironment {
 /// the background task to keep track of which command_dispatcher is awaiting
 /// the result.
 struct PendingInstallPixiEnvironment {
-    tx: oneshot::Sender<Result<(), InstallPixiEnvironmentError>>,
+    tx: oneshot::Sender<Result<InstallPixiEnvironmentResult, InstallPixiEnvironmentError>>,
     reporter_id: Option<reporter::PixiInstallId>,
 }
 
