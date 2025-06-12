@@ -209,6 +209,19 @@ impl DownloadVerifyReporter {
     pub fn on_entry_finished(&mut self, index: usize) {
         let mut entries = self.entries.write();
         match &entries[index].state {
+            EntryState::Downloading {
+                bytes_downloaded,
+                total_bytes,
+                started,
+            } => {
+                entries[index].state = EntryState::Finished {
+                    download: Some((
+                        *started,
+                        Instant::now(),
+                        total_bytes.unwrap_or(*bytes_downloaded),
+                    )),
+                };
+            }
             EntryState::Pending | EntryState::Validating => {
                 entries[index].state = EntryState::Finished { download: None };
             }
@@ -246,7 +259,7 @@ impl DownloadVerifyReporter {
         let verbose = tracing::event_enabled!(tracing::Level::INFO);
         self.pb.set_style(
             ProgressStyle::with_template(&format!(
-                "{{spinner:.{spinner}}} {{prefix:20!}} [{{bar:20!.bright.yellow/dim.white}}] {{pos_count:>2.dim}}{slash}{{len_count:2.dim}} {verbose}{speed} {{wide_msg:.dim}}",
+                "{{spinner:.{spinner}}} {{prefix:20!}} [{{bar:20!.bright.yellow/dim.white}}] {{pos_count:>2.dim}}{slash}{{len_count:2.dim}} {{msg:.dim}} {verbose}{speed}",
                 spinner = if has_pending_entries { "green" } else { "dim" },
                 slash = console::style("/").dim(),
                 verbose = if verbose { format!("{{bytes:>2.dim}}{slash}{{total_bytes:>2.dim}} ", slash = console::style("/").dim()) } else { String::new() },
@@ -284,25 +297,30 @@ impl DownloadVerifyReporter {
 /// The function calculates the total active download time from a slice of
 /// `Entry` items, considering their start and finish times, and
 /// returns the result as a `Duration`.
-fn total_duration(items: &[Entry], now: Instant) -> Duration {
-    let mut intervals: Vec<(Instant, Instant)> = items
+fn total_duration_and_size(items: &[Entry], now: Instant) -> (Duration, u64) {
+    let mut intervals: Vec<(Instant, Instant, u64)> = items
         .iter()
         .filter_map(|d| match d.state {
-            EntryState::Downloading { started, .. } => Some((started, now)),
+            EntryState::Downloading {
+                started,
+                bytes_downloaded,
+                ..
+            } => Some((started, now, bytes_downloaded)),
             EntryState::Finished {
-                download: Some((started, finished, _)),
-            } => Some((started, finished)),
+                download: Some((started, finished, size)),
+            } => Some((started, finished, size)),
             _ => None,
         })
         .collect();
 
     // Sort intervals by start time
-    intervals.sort_by_key(|(start, _)| *start);
+    intervals.sort_by_key(|(start, _, _)| *start);
 
     let mut total = Duration::ZERO;
     let mut current: Option<(Instant, Instant)> = None;
+    let mut total_size = 0;
 
-    for (start, end) in intervals {
+    for (start, end, size) in intervals {
         if let Some((cur_start, cur_end)) = current {
             if start <= cur_end {
                 current = Some((cur_start, cur_end.max(end)));
@@ -313,13 +331,14 @@ fn total_duration(items: &[Entry], now: Instant) -> Duration {
         } else {
             current = Some((start, end));
         }
+        total_size += size;
     }
 
     if let Some((cur_start, cur_end)) = current {
         total += cur_end.duration_since(cur_start);
     }
 
-    total
+    (total, total_size)
 }
 
 fn find_max_and_multiple(entries: &[Entry]) -> (Option<&Entry>, usize) {
@@ -363,10 +382,11 @@ impl ProgressTracker for DurationTracker {
         Box::new(self.clone())
     }
 
-    fn tick(&mut self, state: &ProgressState, now: std::time::Instant) {
+    fn tick(&mut self, _state: &ProgressState, now: std::time::Instant) {
         let inner = self.inner.read();
-        self.duration = total_duration(&inner, now);
-        self.len = state.len().unwrap_or(0);
+        let (duration, len) = total_duration_and_size(&inner, now);
+        self.duration = duration;
+        self.len = len;
     }
 
     fn reset(&mut self, _state: &ProgressState, _now: std::time::Instant) {}
