@@ -305,7 +305,6 @@ mod tests {
     };
     use reqwest_middleware::ClientWithMiddleware;
     use tokio::sync::{Barrier, Mutex, Semaphore};
-    use url::Url;
 
     use crate::{
         IsolatedToolSpec,
@@ -401,9 +400,8 @@ mod tests {
             .with_gateway(config.gateway().with_client(auth_client).finish())
             .build();
 
-        let backends_channel = NamedChannelOrUrl::from_str(
-            "https://prefix.dev/pixi-build-backends",
-        ).unwrap();
+        let backends_channel =
+            NamedChannelOrUrl::from_str("https://prefix.dev/pixi-build-backends").unwrap();
         let conda_forge_channel = NamedChannelOrUrl::from_str("conda-forge").unwrap();
 
         let tool_spec = IsolatedToolSpec {
