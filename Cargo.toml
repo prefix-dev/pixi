@@ -242,7 +242,6 @@ console = { workspace = true, features = ["windows-console-colors"] }
 crossbeam-channel = { workspace = true }
 csv = { workspace = true }
 deno_task_shell = { workspace = true }
-derive_more = { workspace = true, features = ["from"] }
 dialoguer = { workspace = true }
 dirs = { workspace = true }
 dunce = { workspace = true }
@@ -291,7 +290,6 @@ anyhow = "1.0.97"
 ctrlc = { workspace = true }
 fs-err = { workspace = true, features = ["tokio"] }
 pixi_allocator = { workspace = true, optional = true }
-pixi_build_discovery = { workspace = true }
 pixi_build_frontend = { workspace = true }
 pixi_build_types = { workspace = true }
 pixi_command_dispatcher = { workspace = true }
@@ -305,7 +303,6 @@ pixi_progress = { workspace = true }
 pixi_pypi_spec = { workspace = true }
 pixi_record = { workspace = true }
 pixi_spec = { workspace = true }
-pixi_spec_containers = { workspace = true }
 pixi_toml = { workspace = true }
 pixi_utils = { workspace = true, default-features = false }
 pixi_uv_conversions = { workspace = true }
@@ -325,13 +322,11 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 serde_with = { workspace = true, features = ["indexmap"] }
 shlex = { workspace = true }
-slotmap = { workspace = true }
 strsim = { workspace = true }
 tabwriter = { workspace = true, features = ["ansi_formatting"] }
 tar = { workspace = true }
 temp-env = { workspace = true }
 tempfile = { workspace = true }
-text_trees = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
 tokio-util = { workspace = true }
