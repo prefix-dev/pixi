@@ -1,5 +1,6 @@
 ---
 source: crates/pixi_build_frontend/tests/integration/diagnostics.rs
-expression: error_to_snapshot(&err)
+expression: format_diagnostic(&err)
 ---
-  × failed to setup a build backend, the backend tool could not be installed: Couldn't find any backends that match the constraint pixi-build-api-version ==0
+  × failed to setup a build backend, the backend tool could not be installed: The environment for the build backend package does not depend on `pixi-build-api-version`. Without this package pixi has
+  │ no way of knowing the API to use to communicate with the backend.

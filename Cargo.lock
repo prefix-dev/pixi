@@ -4613,6 +4613,7 @@ dependencies = [
  "pixi_manifest",
  "pixi_progress",
  "pixi_spec",
+ "pixi_test_utils",
  "pixi_utils",
  "rattler",
  "rattler_conda_types",
