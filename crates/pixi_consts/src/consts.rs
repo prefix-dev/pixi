@@ -103,12 +103,6 @@ pub const CLAP_GIT_OPTIONS: &str = "Git Options";
 pub const CLAP_GLOBAL_OPTIONS: &str = "Global Options";
 pub const CLAP_UPDATE_OPTIONS: &str = "Update Options";
 
-/// The MatchSpec for the pixi-build-mutex dependency
-/// Adding this spec to each pixi build backend environment specs ensures that
-/// a backend is selected that uses the same interface version as Pixi does
-pub const PIXI_BUILD_API_NAME: &str = "pixi-build-api-version";
-pub const PIXI_BUILD_API_VERSION: &str = "0";
-
 pub static TASK_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().blue());
 pub static TASK_ERROR_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().red());
 pub static PLATFORM_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().yellow());

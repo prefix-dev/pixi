@@ -10,13 +10,12 @@ use futures::TryFutureExt;
 use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
-use pixi_consts::consts::{PIXI_BUILD_API_NAME, PIXI_BUILD_API_VERSION};
+use pixi_build_types::{PIXI_BUILD_API_VERSION_NAME, PIXI_BUILD_API_VERSION_SPEC};
 use pixi_spec::PixiSpec;
 use pixi_spec_containers::DependencyMap;
 use pixi_utils::AsyncPrefixGuard;
 use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, MatchSpec, Matches, NamelessMatchSpec, PackageName, ParseStrictness,
-    prefix::Prefix,
+    ChannelConfig, ChannelUrl, NamelessMatchSpec, PackageName, prefix::Prefix,
 };
 use rattler_solve::{ChannelPriority, SolveStrategy};
 use thiserror::Error;
@@ -187,18 +186,17 @@ impl InstantiateToolEnvironmentSpec {
             .await
             .map_err(InstantiateToolEnvironmentError::UpdateLock)?;
 
-        let build_api_version_spec = MatchSpec::from_str(
-            &format!("{PIXI_BUILD_API_NAME}=={PIXI_BUILD_API_VERSION}"),
-            ParseStrictness::Strict,
-        )
-        .expect("should always succeed");
+        let build_api_version_nameless_spec = NamelessMatchSpec {
+            version: Some(PIXI_BUILD_API_VERSION_SPEC.clone()),
+            ..NamelessMatchSpec::default()
+        };
 
         // Make sure a compatible backend is selected
         let constraints = {
             let mut constraints = self.constraints;
             constraints.insert(
-                PackageName::new_unchecked(PIXI_BUILD_API_NAME),
-                build_api_version_spec.clone().into_nameless().1,
+                PIXI_BUILD_API_VERSION_NAME.clone(),
+                build_api_version_nameless_spec,
             );
             constraints
         };
@@ -230,7 +228,7 @@ impl InstantiateToolEnvironmentSpec {
         // Ensure that solution contains matching api version package
         if !solved_environment
             .iter()
-            .any(|r| build_api_version_spec.matches(r.package_record()))
+            .any(|r| r.package_record().name == *PIXI_BUILD_API_VERSION_NAME)
         {
             return Err(CommandDispatcherError::Failed(
                 InstantiateToolEnvironmentError::NoMatchingBackends {
@@ -284,9 +282,9 @@ pub enum InstantiateToolEnvironmentError {
     #[diagnostic(transparent)]
     InstallEnvironment(InstallPixiEnvironmentError),
 
-    #[error("The environment for the build backend package (`{} {}`) does not depend on `{}`. Without this package pixi has no way of knowing the API to use to communicate with the backend.", .build_backend.0.as_normalized(), .build_backend.1.to_string(), PIXI_BUILD_API_NAME)]
+    #[error("The environment for the build backend package (`{} {}`) does not depend on `{}`. Without this package pixi has no way of knowing the API to use to communicate with the backend.", .build_backend.0.as_normalized(), .build_backend.1.to_string(), PIXI_BUILD_API_VERSION_NAME.as_normalized())]
     #[diagnostic(help(
-        "Modify the requirements on `{}` or contact the maintainers to ensure a dependency on `{}` is added.", .build_backend.0.as_normalized(), PIXI_BUILD_API_NAME
+        "Modify the requirements on `{}` or contact the maintainers to ensure a dependency on `{}` is added.", .build_backend.0.as_normalized(), PIXI_BUILD_API_VERSION_NAME.as_normalized()
     ))]
     NoMatchingBackends {
         build_backend: (PackageName, PixiSpec),
