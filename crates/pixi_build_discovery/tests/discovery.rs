@@ -3,8 +3,6 @@ use pixi_build_discovery::{DiscoveredBackend, EnabledProtocols};
 use rattler_conda_types::ChannelConfig;
 use std::path::{Path, PathBuf};
 
-use miette::{Diagnostic, GraphicalReportHandler, GraphicalTheme};
-
 fn discovery_directory() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/discovery")
 }
