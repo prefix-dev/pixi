@@ -213,11 +213,19 @@ pub trait Reporter: Send {
         None
     }
 
-    /// Returns a mutable reference to a reporter that reports gateway progress.
+    /// Returns a reporter that reports gateway progress.
     fn create_gateway_reporter(
         &mut self,
         _reason: Option<ReporterContext>,
     ) -> Option<Box<dyn rattler_repodata_gateway::Reporter>> {
+        None
+    }
+
+    /// Returns a reporter that reports installation progress.
+    fn create_install_reporter(
+        &mut self,
+        _reason: Option<ReporterContext>,
+    ) -> Option<Box<dyn rattler::install::Reporter>> {
         None
     }
 

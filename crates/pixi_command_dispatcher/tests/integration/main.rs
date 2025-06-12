@@ -87,6 +87,7 @@ pub async fn simple_test() {
 
     dispatcher
         .install_pixi_environment(InstallPixiEnvironmentSpec {
+            name: "test-env".to_owned(),
             records: records.clone(),
             prefix: Prefix::create(&prefix_dir).unwrap(),
             installed: None,

@@ -147,6 +147,7 @@ impl CondaPrefixUpdater {
                 let group_name = self.inner.name.clone();
 
                 let python_status = update_prefix_conda(
+                    self.name().to_string(),
                     &self.inner.prefix,
                     pixi_records,
                     channels,
@@ -174,6 +175,7 @@ impl CondaPrefixUpdater {
 /// Updates the environment to contain the packages from the specified lock-file
 #[allow(clippy::too_many_arguments)]
 pub async fn update_prefix_conda(
+    name: String,
     prefix: &Prefix,
     pixi_records: Vec<PixiRecord>,
     channels: Vec<ChannelUrl>,
@@ -189,6 +191,7 @@ pub async fn update_prefix_conda(
     let result = build_context
         .command_dispatcher()
         .install_pixi_environment(InstallPixiEnvironmentSpec {
+            name,
             records: pixi_records,
             prefix: rattler_conda_types::prefix::Prefix::create(prefix.root()).into_diagnostic()?,
             installed: None,

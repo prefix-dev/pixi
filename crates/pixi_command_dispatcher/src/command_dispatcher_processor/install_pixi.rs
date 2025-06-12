@@ -38,13 +38,19 @@ impl CommandDispatcherProcessor {
             reporter.on_start(id)
         }
 
+        // Create a reporter for the installation task.
+        let dispatcher_context = CommandDispatcherContext::InstallPixiEnvironment(pending_env_id);
+        let reporter_context = self.reporter_context(dispatcher_context);
+        let install_reporter = self
+            .reporter
+            .as_mut()
+            .and_then(|reporter| reporter.create_install_reporter(reporter_context));
+
         // Add the task to the list of pending futures.
-        let dispatcher = self.create_task_command_dispatcher(
-            CommandDispatcherContext::InstallPixiEnvironment(pending_env_id),
-        );
+        let dispatcher = self.create_task_command_dispatcher(dispatcher_context);
         self.pending_futures.push(
             task.spec
-                .install(dispatcher)
+                .install(dispatcher, install_reporter)
                 .map(move |result| TaskResult::InstallPixiEnvironment(pending_env_id, result))
                 .boxed_local(),
         );

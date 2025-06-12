@@ -153,6 +153,7 @@ impl InstantiateToolEnvironmentSpec {
 
         // Determine the cache key for the environment.
         let cache_key = self.cache_key();
+        let name = self.requirement.0.as_source().to_string();
 
         // Construct the prefix for the tool environment.
         let prefix = Prefix::create(command_queue.cache_dirs().build_backends().join(cache_key))
@@ -187,7 +188,7 @@ impl InstantiateToolEnvironmentSpec {
         let target_platform = self.build_environment.host_platform;
         let solved_environment = command_queue
             .solve_pixi_environment(PixiEnvironmentSpec {
-                name: Some(self.requirement.0.as_normalized().to_string()),
+                name: Some(name.clone()),
                 dependencies: self
                     .additional_requirements
                     .into_specs()
@@ -211,6 +212,7 @@ impl InstantiateToolEnvironmentSpec {
         // Install the environment
         command_queue
             .install_pixi_environment(InstallPixiEnvironmentSpec {
+                name,
                 records: solved_environment,
                 prefix: prefix.clone(),
                 installed: None,

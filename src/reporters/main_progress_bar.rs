@@ -8,12 +8,16 @@ use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use parking_lot::RwLock;
 use pixi_progress::ProgressBarPlacement;
 
+#[derive(Clone)]
 pub struct MainProgressBar<T> {
     inner: Arc<RwLock<State<T>>>,
 }
 
 /// Holds the internal state of a [`MainProgressBar`].
 struct State<T> {
+    /// The multi progress instance that is used to manage the progress bar.
+    multi_progress: MultiProgress,
+
     /// The progress bar that is being used to display the progress.
     pb: ProgressBar,
 
@@ -54,9 +58,10 @@ impl<T: Tracker> MainProgressBar<T> {
         progress_bar_placement: ProgressBarPlacement,
         title: String,
     ) -> Self {
-        let pb = progress_bar_placement.insert(multi_progress, ProgressBar::hidden());
+        let pb = progress_bar_placement.insert(multi_progress.clone(), ProgressBar::hidden());
         Self {
             inner: Arc::new(RwLock::new(State {
+                multi_progress,
                 pb,
                 title: Some(title),
                 tracker: HashMap::new(),
@@ -92,12 +97,24 @@ impl<T: Tracker> MainProgressBar<T> {
 
 impl<T: Tracker> State<T> {
     pub fn clear(&mut self) {
+        // If the tracker is already empty, we don't need to do anything.
+        if self.tracker.is_empty() {
+            return;
+        }
+
         // Clear all items that have finished processing.
         self.tracker.retain(|_, item| item.finished.is_none());
 
         // Clear or update the progress bar.
         if self.tracker.is_empty() {
+            // We cannot clear the progress bar and restart it later, so replacing it with a
+            // new hidden one is currently the only option.
+            self.title = Some(self.pb.prefix());
+            let new_pb = self
+                .multi_progress
+                .insert_after(&self.pb, ProgressBar::hidden());
             self.pb.finish_and_clear();
+            self.pb = new_pb;
         } else {
             self.update()
         }
@@ -112,10 +129,13 @@ impl<T: Tracker> State<T> {
     }
 
     pub fn finish(&mut self, id: usize) {
-        self.tracker
+        let tracker = self.tracker
             .get_mut(&id)
-            .expect("missing tracker id")
-            .finished = Some(Instant::now());
+            .expect("missing tracker id");
+
+        let now = Instant::now();
+        tracker.started.get_or_insert(now);
+        tracker.finished = Some(now);
         self.update();
     }
 

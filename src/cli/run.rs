@@ -20,6 +20,7 @@ use rattler_conda_types::Platform;
 use thiserror::Error;
 use tracing::Level;
 
+use super::cli_config::LockFileUpdateConfig;
 use crate::{
     Workspace, WorkspaceLocator,
     cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
@@ -32,15 +33,14 @@ use crate::{
     workspace::{Environment, errors::UnsupportedPlatformError},
 };
 
-use super::cli_config::LockFileUpdateConfig;
-
 /// Runs task in the pixi environment.
 ///
 /// This command is used to run tasks in the pixi environment.
 /// It will activate the environment and run the task in the environment.
 /// It is using the deno_task_shell to run the task.
 ///
-/// `pixi run` will also update the lockfile and install the environment if it is required.
+/// `pixi run` will also update the lockfile and install the environment if it
+/// is required.
 #[derive(Parser, Debug, Default)]
 #[clap(trailing_var_arg = true, disable_help_flag = true)]
 pub struct Args {
@@ -133,13 +133,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             ..UpdateLockFileOptions::default()
         })
         .await?;
-
-    // Clear the current progress reports.
-    lock_file
-        .build_context
-        .command_dispatcher()
-        .clear_reporter()
-        .await;
 
     let ctrlc_should_exit_process = Arc::new(AtomicBool::new(true));
     let ctrlc_should_exit_process_clone = Arc::clone(&ctrlc_should_exit_process);
@@ -272,6 +265,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     )
                     .await?;
 
+                // Clear the current progress reports.
+                lock_file
+                    .build_context
+                    .command_dispatcher()
+                    .clear_reporter()
+                    .await;
+
                 let command_env = get_task_env(
                     &executable_task.run_environment,
                     args.clean_env || executable_task.task().clean_env(),
@@ -345,7 +345,8 @@ fn command_not_found<'p>(workspace: &'p Workspace, explicit_environment: Option<
         );
     }
 
-    // Help user when there is no task available because the platform is not supported
+    // Help user when there is no task available because the platform is not
+    // supported
     if workspace
         .environments()
         .iter()

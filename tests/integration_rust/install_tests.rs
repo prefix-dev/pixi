@@ -943,28 +943,21 @@ async fn test_multiple_prefix_update() {
         .channel_urls(&group.workspace().channel_config())
         .unwrap();
     let name = group.name();
-    let client = group.workspace().authenticated_client().unwrap().clone();
     let prefix = group.prefix();
-    let virtual_packages = group.virtual_packages(current_platform);
 
     let command_dispatcher = project.command_dispatcher_builder().unwrap().finish();
 
     let conda_prefix_updater = CondaPrefixUpdater::new(
         channels,
         name,
-        client,
         prefix,
-        virtual_packages,
         current_platform,
-        PackageCache::new(tmp_dir.path().to_path_buf()),
-        IoConcurrencyLimit::default(),
         BuildContext::new(
             ChannelConfig::default_with_root_dir(tmp_dir.path().to_path_buf()),
             Default::default(),
             command_dispatcher,
         )
         .unwrap(),
-        RunPostLinkScripts::False,
     );
 
     let pixi_records = Vec::from([

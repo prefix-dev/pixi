@@ -1,3 +1,5 @@
+mod reporter;
+
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     ffi::OsStr,
@@ -28,6 +30,7 @@ use crate::{
     CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt, SourceBuildError,
     SourceBuildSpec, SourceCheckout, SourceCheckoutError,
     build::{BuildCacheError, BuildInput, CachedBuild, CachedBuildSourceInfo},
+    install_pixi::reporter::WrappingInstallReporter,
 };
 
 /// A list of globs that should be ignored when calculating any input hash.
@@ -38,6 +41,9 @@ const DEFAULT_BUILD_IGNORE_GLOBS: &[&str] = &["!.pixi/**"];
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct InstallPixiEnvironmentSpec {
+    /// A descriptive name of the environment.
+    pub name: String,
+
     /// The specification of the environment to install.
     #[serde(skip)]
     pub records: Vec<PixiRecord>,
@@ -91,6 +97,7 @@ impl InstallPixiEnvironmentSpec {
     pub async fn install(
         mut self,
         command_dispatcher: CommandDispatcher,
+        install_reporter: Option<Box<dyn rattler::install::Reporter>>,
     ) -> Result<InstallPixiEnvironmentResult, CommandDispatcherError<InstallPixiEnvironmentError>>
     {
         // Split into source and binary records
@@ -140,6 +147,10 @@ impl InstallPixiEnvironmentSpec {
         if let Some(installed) = self.installed {
             installer = installer.with_installed_packages(installed);
         };
+
+        if let Some(reporter) = install_reporter {
+            installer = installer.with_reporter(WrappingInstallReporter(reporter));
+        }
 
         let result = installer
             .install(self.prefix.path(), binary_records)
