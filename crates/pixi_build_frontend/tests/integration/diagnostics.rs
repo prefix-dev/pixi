@@ -95,8 +95,8 @@ async fn test_invalid_manifest() {
 
 fn replace_source_dir(snapshot: &str, source_dir: &Path) -> String {
     snapshot.replace(
-        &(source_dir.display().to_string().replace("\\", "/") + std::path::MAIN_SEPARATOR_STR),
-        "[SOURCE_DIR]/",
+        &source_dir.display().to_string().replace("\\", "/"),
+        "[SOURCE_DIR]",
     )
 }
 
