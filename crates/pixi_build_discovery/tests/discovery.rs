@@ -5,16 +5,6 @@ use std::path::{Path, PathBuf};
 
 use miette::{Diagnostic, GraphicalReportHandler, GraphicalTheme};
 
-fn error_to_snapshot(diag: &impl Diagnostic) -> String {
-    let mut report_str = String::new();
-    GraphicalReportHandler::new_themed(GraphicalTheme::unicode_nocolor())
-        .without_syntax_highlighting()
-        .with_width(160)
-        .render_report(&mut report_str, diag)
-        .unwrap();
-    report_str
-}
-
 fn discovery_directory() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/discovery")
 }
@@ -40,7 +30,7 @@ macro_rules! assert_discover_snapshot {
                 });
             }
             Err(err) => {
-                assert_snapshot!(error_to_snapshot(&err));
+                assert_snapshot!(pixi_test_utils::format_diagnostic(&err));
             }
         }
     };

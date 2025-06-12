@@ -1,6 +1,5 @@
 use std::path::{Path, PathBuf};
 
-use super::error_to_snapshot;
 use bytes::Bytes;
 use futures::{SinkExt, StreamExt};
 use pixi_build_frontend::{BuildFrontend, InProcessBackend, SetupRequest, ToolContext};
@@ -49,7 +48,7 @@ async fn test_non_existing_discovery() {
         .await
         .unwrap_err();
 
-    insta::assert_snapshot!(error_to_snapshot(&err));
+    insta::assert_snapshot!(format_diagnostic(&err));
 }
 
 #[tokio::test]
@@ -64,7 +63,7 @@ async fn test_source_dir_is_empty() {
         .await
         .unwrap_err();
 
-    let snapshot = error_to_snapshot(&err);
+    let snapshot = format_diagnostic(&err);
     let snapshot = replace_source_dir(&snapshot, source_dir.path());
     insta::assert_snapshot!(snapshot);
 }
@@ -85,7 +84,7 @@ async fn test_invalid_manifest() {
         .await
         .unwrap_err();
 
-    let snapshot = error_to_snapshot(&err);
+    let snapshot = format_diagnostic(&err);
     let snapshot = replace_source_dir(
         &snapshot,
         dunce::canonicalize(source_dir.path()).unwrap().as_path(),
@@ -130,7 +129,7 @@ async fn test_not_a_package() {
         .await
         .unwrap_err();
 
-    let snapshot = error_to_snapshot(&err);
+    let snapshot = format_diagnostic(&err);
     let snapshot = replace_source_dir(&snapshot, source_dir.path());
     insta::assert_snapshot!(snapshot);
 }
@@ -224,7 +223,7 @@ async fn test_invalid_backend() {
     .await
     .unwrap_err();
 
-    let snapshot = error_to_snapshot(&err);
+    let snapshot = format_diagnostic(&err);
     let snapshot = replace_source_dir(&snapshot, source_dir.path());
     insta::assert_snapshot!(snapshot);
 }
