@@ -1,10 +1,11 @@
 use std::{
     collections::{HashMap, HashSet},
+    fmt,
     sync::Arc,
     time::{Duration, Instant},
 };
 
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use indicatif::{MultiProgress, ProgressBar, ProgressState, ProgressStyle, style::ProgressTracker};
 use parking_lot::RwLock;
 use pixi_progress::ProgressBarPlacement;
 
@@ -26,14 +27,19 @@ struct State<T> {
     title: Option<String>,
 
     /// The items that are being tracked by this progress bar.
-    tracker: HashMap<usize, TrackedItem<T>>,
+    tracker: Arc<RwLock<HashMap<usize, TrackedItem<T>>>>,
     next_tracker_id: usize,
 }
 
 /// A trait for something that can be tracked by the [`MainProgressBar`].
-pub trait Tracker: Ord {
+pub trait Tracker: Ord + Send + Sync + 'static {
     /// Returns the name of the item being tracked.
     fn name(&self) -> &str;
+
+    /// Returns the size of the item being tracked.
+    fn size(&self) -> u64 {
+        1
+    }
 }
 
 impl Tracker for String {
@@ -64,10 +70,15 @@ impl<T: Tracker> MainProgressBar<T> {
                 multi_progress,
                 pb,
                 title: Some(title),
-                tracker: HashMap::new(),
+                tracker: Arc::new(RwLock::new(HashMap::new())),
                 next_tracker_id: 0,
             })),
         }
+    }
+
+    /// Returns the progress bar that is being used to display the progress.
+    pub fn progress_bar(&self) -> ProgressBar {
+        self.inner.read().pb.clone()
     }
 
     /// Called when an item is queued for processing.
@@ -97,16 +108,18 @@ impl<T: Tracker> MainProgressBar<T> {
 
 impl<T: Tracker> State<T> {
     pub fn clear(&mut self) {
+        let mut trackers = self.tracker.write();
+
         // If the tracker is already empty, we don't need to do anything.
-        if self.tracker.is_empty() {
+        if trackers.is_empty() {
             return;
         }
 
         // Clear all items that have finished processing.
-        self.tracker.retain(|_, item| item.finished.is_none());
+        trackers.retain(|_, item| item.finished.is_none());
 
         // Clear or update the progress bar.
-        if self.tracker.is_empty() {
+        if trackers.is_empty() {
             // We cannot clear the progress bar and restart it later, so replacing it with a
             // new hidden one is currently the only option.
             self.title = Some(self.pb.prefix());
@@ -116,33 +129,35 @@ impl<T: Tracker> State<T> {
             self.pb.finish_and_clear();
             self.pb = new_pb;
         } else {
+            drop(trackers);
             self.update()
         }
     }
 
     pub fn start(&mut self, id: usize) {
-        self.tracker
-            .get_mut(&id)
-            .expect("missing tracker id")
-            .started = Some(Instant::now());
+        let mut trackers = self.tracker.write();
+        trackers.get_mut(&id).expect("missing tracker id").started = Some(Instant::now());
+        drop(trackers);
         self.update();
     }
 
     pub fn finish(&mut self, id: usize) {
-        let tracker = self.tracker
-            .get_mut(&id)
-            .expect("missing tracker id");
-
-        let now = Instant::now();
-        tracker.started.get_or_insert(now);
-        tracker.finished = Some(now);
-        self.update();
+        let mut trackers = self.tracker.write();
+        let tracker = trackers.get_mut(&id).expect("missing tracker id");
+        if tracker.finished.is_none() {
+            let now = Instant::now();
+            tracker.started.get_or_insert(now);
+            tracker.finished = Some(now);
+            drop(trackers);
+            self.update();
+        }
     }
 
     pub fn queued(&mut self, tracker: T) -> usize {
+        let mut trackers = self.tracker.write();
         let id = self.next_tracker_id;
         self.next_tracker_id += 1;
-        self.tracker.insert(
+        trackers.insert(
             id,
             TrackedItem {
                 tracker,
@@ -150,6 +165,7 @@ impl<T: Tracker> State<T> {
                 finished: None,
             },
         );
+        drop(trackers);
         self.update();
         id
     }
@@ -160,23 +176,18 @@ impl<T: Tracker> State<T> {
             return;
         }
 
-        // Make the progress bar visible if it is not already.
-        if let Some(title) = self.title.take() {
-            self.pb.set_prefix(title);
-            self.pb.enable_steady_tick(Duration::from_millis(100));
-        }
+        let tracker = self.tracker.read();
 
-        let total = self.tracker.len();
-        let finished = self
-            .tracker
+        let length: u64 = tracker.values().map(|item| item.tracker.size()).sum();
+        let position: u64 = tracker
             .values()
             .filter(|item| item.finished.is_some())
-            .count();
+            .map(|item| item.tracker.size())
+            .sum();
 
         // Create a list of currently running items.
         let mut seen_items = HashSet::new();
-        let running_items = self
-            .tracker
+        let running_items = tracker
             .values()
             .filter(|item| item.started.is_some() && item.finished.is_none())
             .filter(|item| seen_items.insert(item.tracker.name()))
@@ -196,16 +207,83 @@ impl<T: Tracker> State<T> {
         let active = !running_items.is_empty();
         self.pb.set_style(
             ProgressStyle::with_template(
-                &format!("{{spinner:.{spinner}}} {{prefix:20!}} [{{bar:20!.bright.yellow/dim.white}}] {{pos:>2.dim}}{slash}{{len:2.dim}} {{wide_msg:.dim}}",
-                    spinner = if running_items.is_empty() { "dim" } else { "green" },
-                    slash = console::style("/").dim(),
+                &format!("{{spinner:.{spinner}}} {{prefix:20!}} [{{bar:20!.bright.yellow/dim.white}}] {{pos_count:>2.dim}}{slash}{{len_count:2.dim}} {{wide_msg:.dim}}",
+                         spinner = if running_items.is_empty() { "dim" } else { "green" },
+                         slash = console::style("/").dim(),
                 ))
                 .expect("failed to create progress bar style")
                 .tick_chars(pixi_progress::style::tick_chars(active))
-                .progress_chars(pixi_progress::style::progress_chars(active)),
-            );
-        self.pb.set_length(total as u64);
-        self.pb.set_position(finished as u64);
+                .progress_chars(pixi_progress::style::progress_chars(active))
+                .with_key("pos_count", PosCount::new(self.tracker.clone()))
+                .with_key("len_count", TotalCount::new(self.tracker.clone()))
+        );
+        if let Some(title) = self.title.take() {
+            self.pb.set_prefix(title);
+            self.pb.enable_steady_tick(Duration::from_millis(100));
+        }
+        self.pb.update(|state| {
+            state.set_len(length);
+            state.set_pos(position);
+        });
         self.pb.set_message(wide_msg);
+    }
+}
+
+struct PosCount<T> {
+    trackers: Arc<RwLock<HashMap<usize, TrackedItem<T>>>>,
+    count: usize,
+}
+
+impl<T> PosCount<T> {
+    pub fn new(trackers: Arc<RwLock<HashMap<usize, TrackedItem<T>>>>) -> Self {
+        Self { trackers, count: 0 }
+    }
+}
+
+impl<T: Send + Sync + 'static> ProgressTracker for PosCount<T> {
+    fn clone_box(&self) -> Box<dyn ProgressTracker> {
+        Box::new(PosCount {
+            trackers: Arc::clone(&self.trackers),
+            count: self.count,
+        })
+    }
+    fn tick(&mut self, _state: &ProgressState, _now: Instant) {
+        self.count = self
+            .trackers
+            .read()
+            .values()
+            .filter(|item| item.finished.is_some())
+            .count();
+    }
+    fn reset(&mut self, _state: &ProgressState, _now: Instant) {}
+    fn write(&self, _state: &ProgressState, w: &mut dyn fmt::Write) {
+        write!(w, "{}", self.count).expect("failed to write progress count");
+    }
+}
+
+struct TotalCount<T> {
+    trackers: Arc<RwLock<HashMap<usize, TrackedItem<T>>>>,
+    count: usize,
+}
+
+impl<T> TotalCount<T> {
+    pub fn new(trackers: Arc<RwLock<HashMap<usize, TrackedItem<T>>>>) -> Self {
+        Self { trackers, count: 0 }
+    }
+}
+
+impl<T: Send + Sync + 'static> ProgressTracker for TotalCount<T> {
+    fn clone_box(&self) -> Box<dyn ProgressTracker> {
+        Box::new(TotalCount {
+            trackers: Arc::clone(&self.trackers),
+            count: self.count,
+        })
+    }
+    fn tick(&mut self, _state: &ProgressState, _now: Instant) {
+        self.count = self.trackers.read().len();
+    }
+    fn reset(&mut self, _state: &ProgressState, _now: Instant) {}
+    fn write(&self, _state: &ProgressState, w: &mut dyn fmt::Write) {
+        write!(w, "{}", self.count).expect("failed to write progress count");
     }
 }

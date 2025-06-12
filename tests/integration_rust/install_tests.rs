@@ -15,14 +15,13 @@ use pixi::{
         run::{self, Args},
     },
     environment::LockFileUsage,
-    lock_file::{CondaPrefixUpdater, IoConcurrencyLimit, ReinstallPackages, UpdateMode},
+    lock_file::{CondaPrefixUpdater, ReinstallPackages, UpdateMode},
     workspace::{HasWorkspaceRef, grouped_environment::GroupedEnvironment},
 };
-use pixi_config::{Config, DetachedEnvironments, RunPostLinkScripts};
+use pixi_config::{Config, DetachedEnvironments};
 use pixi_consts::consts;
 use pixi_manifest::{FeatureName, FeaturesExt};
 use pixi_record::PixiRecord;
-use rattler::package_cache::PackageCache;
 use rattler_conda_types::{ChannelConfig, Platform, RepoDataRecord};
 use tempfile::{TempDir, tempdir};
 use tokio::{fs, task::JoinSet};

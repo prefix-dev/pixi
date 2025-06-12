@@ -3,6 +3,7 @@ mod install_reporter;
 mod main_progress_bar;
 mod release_notes;
 mod repodata_reporter;
+mod download_verify_reporter;
 
 use std::sync::{Arc, LazyLock};
 
@@ -19,7 +20,8 @@ pub use release_notes::format_release_notes;
 use uv_configuration::RAYON_INITIALIZE;
 
 use crate::reporters::{
-    install_reporter::InstallReporter, main_progress_bar::MainProgressBar,
+    install_reporter::{SyncReporter},
+    main_progress_bar::MainProgressBar,
     repodata_reporter::RepodataReporter,
 };
 
@@ -82,7 +84,7 @@ pub(crate) struct TopLevelProgress {
     source_checkout_reporter: GitCheckoutProgress,
     conda_solve_reporter: MainProgressBar<String>,
     repodata_reporter: RepodataReporter,
-    install_reporter: InstallReporter,
+    sync_reporter: SyncReporter,
 }
 
 impl TopLevelProgress {
@@ -99,7 +101,7 @@ impl TopLevelProgress {
             pixi_progress::ProgressBarPlacement::Before(anchor_pb.clone()),
             "solving".to_owned(),
         );
-        let install_reporter = InstallReporter::new(
+        let install_reporter = SyncReporter::new(
             multi_progress.clone(),
             pixi_progress::ProgressBarPlacement::Before(anchor_pb.clone()),
         );
@@ -108,7 +110,7 @@ impl TopLevelProgress {
             source_checkout_reporter,
             conda_solve_reporter,
             repodata_reporter,
-            install_reporter,
+            sync_reporter: install_reporter,
         }
     }
 }
@@ -125,7 +127,7 @@ impl pixi_command_dispatcher::Reporter for TopLevelProgress {
     fn on_clear(&mut self) {
         self.conda_solve_reporter.clear();
         self.repodata_reporter.clear();
-        self.install_reporter.clear();
+        self.sync_reporter.clear();
     }
 
     fn as_git_reporter(&mut self) -> Option<&mut dyn pixi_command_dispatcher::GitCheckoutReporter> {
@@ -156,6 +158,13 @@ impl pixi_command_dispatcher::Reporter for TopLevelProgress {
     ) -> Option<Box<dyn Reporter>> {
         Some(Box::new(self.repodata_reporter.clone()))
     }
+
+    fn create_install_reporter(
+        &mut self,
+        _reason: Option<ReporterContext>,
+    ) -> Option<Box<dyn rattler::install::Reporter>> {
+        Some(Box::new(self.sync_reporter.create_reporter()))
+    }
 }
 
 impl pixi_command_dispatcher::PixiInstallReporter for TopLevelProgress {
@@ -167,15 +176,15 @@ impl pixi_command_dispatcher::PixiInstallReporter for TopLevelProgress {
         // Installing a pixi environment uses rayon. We only want to initialize the
         // rayon thread pool when we absolutely need it.
         LazyLock::force(&RAYON_INITIALIZE);
-        self.install_reporter.on_queued(reason, env)
+        self.sync_reporter.on_queued(reason, env)
     }
 
     fn on_start(&mut self, install_id: PixiInstallId) {
-        self.install_reporter.on_start(install_id)
+        self.sync_reporter.on_start(install_id)
     }
 
     fn on_finished(&mut self, install_id: PixiInstallId) {
-        self.install_reporter.on_finished(install_id);
+        self.sync_reporter.on_finished(install_id);
     }
 }
 
