@@ -4688,6 +4688,7 @@ dependencies = [
  "pixi_record",
  "pixi_spec",
  "pixi_spec_containers",
+ "pixi_test_utils",
  "pixi_utils",
  "rattler",
  "rattler_conda_types",

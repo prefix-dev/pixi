@@ -211,7 +211,7 @@ impl InstantiateToolEnvironmentSpec {
                 dependencies: self
                     .additional_requirements
                     .into_specs()
-                    .chain([self.requirement])
+                    .chain([self.requirement.clone()])
                     .collect(),
                 constraints,
                 build_environment: self.build_environment,
@@ -227,7 +227,6 @@ impl InstantiateToolEnvironmentSpec {
             .await
             .map_err_with(Box::new)
             .map_err_with(InstantiateToolEnvironmentError::SolveEnvironment)?;
-
         // Ensure that solution contains matching api version package
         if !solved_environment
             .iter()
@@ -235,7 +234,7 @@ impl InstantiateToolEnvironmentSpec {
         {
             return Err(CommandDispatcherError::Failed(
                 InstantiateToolEnvironmentError::NoMatchingBackends {
-                    constraint: Box::from(build_api_version_spec.clone()),
+                    build_backend: self.requirement,
                 },
             ));
         }
@@ -285,6 +284,11 @@ pub enum InstantiateToolEnvironmentError {
     #[diagnostic(transparent)]
     InstallEnvironment(InstallPixiEnvironmentError),
 
-    #[error("no backends found that match the build API version constraint: {}", constraint.to_string())]
-    NoMatchingBackends { constraint: Box<MatchSpec> },
+    #[error("The environment for the build backend package (`{} {}`) does not depend on `{}`. Without this package pixi has no way of knowing the API to use to communicate with the backend.", .build_backend.0.as_normalized(), .build_backend.1.to_string(), PIXI_BUILD_API_NAME)]
+    #[diagnostic(help(
+        "Modify the requirements on `{}` or contact the maintainers to ensure a dependency on `{}` is added.", .build_backend.0.as_normalized(), PIXI_BUILD_API_NAME
+    ))]
+    NoMatchingBackends {
+        build_backend: (PackageName, PixiSpec),
+    },
 }

@@ -31,7 +31,7 @@ use text_trees::{FormatCharacters, StringTreeNode, TreeFormatting};
 
 use event_reporter::Event;
 
-use crate::command_dispatcher::event_reporter;
+use crate::event_reporter;
 
 /// An [`EventTree`] is a hierarchical representation of the events that
 /// occurred in a [`pixi_command_dispatcher::CommandDispatcher`].

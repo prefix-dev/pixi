@@ -9,10 +9,11 @@ use pixi_command_dispatcher::{
 };
 use pixi_spec::{GitReference, GitSpec, PixiSpec};
 use pixi_spec_containers::DependencyMap;
+use pixi_test_utils::format_diagnostic;
 use rattler_conda_types::{PackageName, VersionSpec};
 use url::Url;
 
-use crate::command_dispatcher::event_tree::EventTree;
+use crate::event_tree::EventTree;
 
 /// Returns a default set of cache directories for the test.
 fn default_cache_dirs() -> CacheDirs {
@@ -60,8 +61,11 @@ pub async fn simple_test() {
 #[tokio::test]
 pub async fn instantiate_backend_with_compatible_api_version() {
     let backend_name = PackageName::new_unchecked("backend-with-compatible-api-version");
-    let channel_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/data/channels/channels/backend_channel_1");
+    let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .unwrap();
+    let channel_dir = root_dir.join("tests/data/channels/channels/backend_channel_1");
 
     let dispatcher = CommandDispatcher::builder()
         .with_cache_dirs(default_cache_dirs())
@@ -81,8 +85,11 @@ pub async fn instantiate_backend_with_compatible_api_version() {
 #[tokio::test]
 pub async fn instantiate_backend_without_compatible_api_version() {
     let backend_name = PackageName::new_unchecked("backend-without-compatible-api-version");
-    let channel_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/data/channels/channels/backend_channel_1");
+    let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .unwrap();
+    let channel_dir = root_dir.join("tests/data/channels/channels/backend_channel_1");
 
     let dispatcher = CommandDispatcher::builder()
         .with_cache_dirs(default_cache_dirs())
@@ -98,5 +105,5 @@ pub async fn instantiate_backend_without_compatible_api_version() {
         .await
         .unwrap_err();
 
-    insta::assert_snapshot!(err);
+    insta::assert_snapshot!(format_diagnostic(&err));
 }

@@ -1,5 +1,4 @@
 mod add_tests;
-mod command_dispatcher;
 mod common;
 mod init_tests;
 mod install_tests;

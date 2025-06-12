@@ -1,5 +1,0 @@
----
-source: tests/integration_rust/command_dispatcher/mod.rs
-expression: err
----
-no backends found that match the build API version constraint: pixi-build-api-version ==0

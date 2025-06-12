@@ -404,7 +404,7 @@ mod tests {
         let backends_channel = NamedChannelOrUrl::Url(
             Url::from_str("https://prefix.dev/pixi-build-backends").unwrap(),
         );
-        let conda_forge_channel = NamedChannelOrUrl::Name("conda-forge".to_string());
+        let conda_forge_channel = NamedChannelOrUrl::from_str("conda-forge").unwrap();
 
         let tool_spec = IsolatedToolSpec {
             specs: vec![MatchSpec::from_str("pixi-build-rust", ParseStrictness::Strict).unwrap()],

@@ -67,6 +67,12 @@ impl PathSpec {
     }
 }
 
+impl Display for PathSpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.path)
+    }
+}
+
 /// Path to a source package. Different from [`PathSpec`] in that this type only
 /// refers to source packages.
 #[serde_as]
