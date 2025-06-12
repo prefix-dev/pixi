@@ -10,6 +10,7 @@ use pixi_manifest::{
     toml::{ExternalWorkspaceProperties, FromTomlStr, TomlManifest},
 };
 use pixi_spec::BinarySpec;
+use pixi_test_utils::format_diagnostic;
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_stream::wrappers::ReceiverStream;
@@ -172,7 +173,7 @@ async fn missing_backend_executable() {
     .unwrap_err();
 
     // Check that the error message contains the expected text.
-    insta::assert_snapshot!(error_to_snapshot(&err));
+    insta::assert_snapshot!(format_diagnostic(&err));
 }
 
 #[tokio::test]
