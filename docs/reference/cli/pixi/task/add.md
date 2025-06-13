@@ -40,5 +40,7 @@ pixi task add [OPTIONS] <NAME> <COMMAND>...
 - <a id="arg---arg" href="#arg---arg">`--arg <ARGS>`</a>
 :  The arguments to pass to the task
 <br>May be provided more than once.
+- <a id="arg---interpreter" href="#arg---interpreter">`--interpreter <INTERPRETER>`</a>
+:  The interpreter to use for executing the command (e.g., "bash", "sh", "nu")
 
 --8<-- "docs/reference/cli/pixi/task/add_extender:example"

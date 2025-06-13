@@ -389,6 +389,11 @@ class TaskInlineTable(StrictBaseModel):
         description="The arguments to pass to the task",
         examples=["arg1", "arg2"],
     )
+    interpreter: NonEmptyStr | None = Field(
+        None,
+        description="The interpreter to use for executing the command (e.g., 'bash', 'sh', 'nu').",
+        examples=["bash", "sh", "nu"],
+    )
 
 
 #######################
