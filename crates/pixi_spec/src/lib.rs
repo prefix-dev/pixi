@@ -91,6 +91,18 @@ impl Default for PixiSpec {
     }
 }
 
+impl Display for PixiSpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PixiSpec::Version(version) => write!(f, "{}", version),
+            PixiSpec::DetailedVersion(detailed) => write!(f, "{}", detailed),
+            PixiSpec::Url(url) => write!(f, "{}", url),
+            PixiSpec::Git(git) => write!(f, "{}", git),
+            PixiSpec::Path(path) => write!(f, "{}", path),
+        }
+    }
+}
+
 impl From<VersionSpec> for PixiSpec {
     fn from(value: VersionSpec) -> Self {
         Self::Version(value)
