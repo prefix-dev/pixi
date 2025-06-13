@@ -348,7 +348,7 @@ async fn test_indexes_are_passed_when_solving_build_pypi_dependencies() {
     // verify that the pypi-build-index can be installed when solved the build dependencies
     pixi.install().await.unwrap();
 
-    // verify that
+    // verify that index is recorder
     assert_eq!(
         lock_file
             .default_environment()
