@@ -610,7 +610,7 @@ impl PixiControl {
         Ok(project
             .update_lock_file(UpdateLockFileOptions::default())
             .await?
-            .lock_file)
+            .into_lock_file())
     }
 
     /// Returns an [`LockBuilder`].

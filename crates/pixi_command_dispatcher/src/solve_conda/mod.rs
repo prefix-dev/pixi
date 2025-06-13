@@ -27,6 +27,9 @@ use crate::{CommandDispatcherError, SourceCheckout, source_metadata::SourceMetad
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct SolveCondaEnvironmentSpec {
+    /// A name, useful for debugging purposes.
+    pub name: Option<String>,
+
     /// Requirements on source packages.
     #[serde(skip_serializing_if = "DependencyMap::is_empty")]
     pub source_specs: DependencyMap<rattler_conda_types::PackageName, SourceSpec>,
@@ -81,6 +84,7 @@ pub struct SolveCondaEnvironmentSpec {
 impl Default for SolveCondaEnvironmentSpec {
     fn default() -> Self {
         Self {
+            name: None,
             source_specs: DependencyMap::default(),
             binary_specs: DependencyMap::default(),
             constraints: DependencyMap::default(),

@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.48.1] - 2025-06-10
+#### ✨ Highlights
+
+This is a minor release with a couple of bugs fixed.
+Additionally, `pixi self-update` accepts now the flags `--force` and `--no-release-note`.
+
+
+#### Added
+
+- Add cli options for self-update: --force and --no-release-note by @gzm55 in [#3888](https://github.com/prefix-dev/pixi/pull/3888)
+- Add pixi build testsuite by @Hofer-Julian in [#3891](https://github.com/prefix-dev/pixi/pull/3891)
+
+
+#### Fixed
+
+- Discovery error message by @Hofer-Julian in [#3903](https://github.com/prefix-dev/pixi/pull/3903)
+- `pixi lock` reporting by @Hofer-Julian in [#3896](https://github.com/prefix-dev/pixi/pull/3896)
+- Backslashes in editable path by @tdejager in [#3895](https://github.com/prefix-dev/pixi/pull/3895)
+- No longer panics, when a conda dependency is a PyPI get dependency by @ruben-arts in [#3905](https://github.com/prefix-dev/pixi/pull/3905)
+
+
+#### Removed
+
+- Remove pixi build tests by @Hofer-Julian in [#3892](https://github.com/prefix-dev/pixi/pull/3892)
+
+
+#### New Contributors
+* @simonjung1603 made their first contribution in [#3565](https://github.com/prefix-dev/pixi/pull/3565)
+
 ### [0.48.0] - 2025-06-02
 #### ✨ Highlights
 
