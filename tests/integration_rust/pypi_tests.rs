@@ -348,21 +348,33 @@ async fn test_indexes_are_passed_when_solving_build_pypi_dependencies() {
     // verify that the pypi-build-index can be installed when solved the build dependencies
     pixi.install().await.unwrap();
 
+    let mut local_pypi_index = pypi_indexes
+        .join("multiple-indexes-a")
+        .join("index")
+        .display()
+        .to_string();
+
+    let mut lock_file_index = lock_file
+        .default_environment()
+        .unwrap()
+        .pypi_indexes()
+        .unwrap()
+        .indexes
+        .first()
+        .unwrap()
+        .path()
+        .to_string();
+
+    if cfg!(windows) {
+        // Replace backslashes with forward slashes for consistency in snapshots as well
+        // as ; with :
+        local_pypi_index = local_pypi_index.replace("\\\\", "\\");
+        local_pypi_index = local_pypi_index.replace("\\", "/");
+
+        // pop the first / that is present in the path
+        lock_file_index.remove(0);
+    }
+
     // verify that
-    assert_eq!(
-        lock_file
-            .default_environment()
-            .unwrap()
-            .pypi_indexes()
-            .unwrap()
-            .indexes
-            .first()
-            .unwrap()
-            .path(),
-        pypi_indexes
-            .join("multiple-indexes-a")
-            .join("index")
-            .display()
-            .to_string()
-    );
+    assert_eq!(local_pypi_index, lock_file_index,);
 }
