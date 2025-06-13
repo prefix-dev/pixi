@@ -645,6 +645,7 @@ impl TasksControl<'_> {
                 description: None,
                 clean_env: false,
                 args: None,
+                interpreter: None,
             },
         }
     }

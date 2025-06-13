@@ -233,27 +233,70 @@ impl<'p> ExecutableTask<'p> {
         ExecutableTaskConsoleDisplay { task: self }
     }
 
+    /// Prepares the script and stdin pipe for execution.
+    ///
+    /// This method handles the common logic for both `execute_with_pipes` and the CLI's `execute_task`.
+    /// Returns None if there is no script to execute (e.g., for alias tasks).
+    pub(crate) fn prepare_execution(
+        &self,
+        input: Option<&[u8]>,
+    ) -> Result<
+        Option<(
+            deno_task_shell::parser::SequentialList,
+            deno_task_shell::ShellPipeReader,
+        )>,
+        FailedToParseShellScript,
+    > {
+        let Some(interpreter) = self.task().interpreter() else {
+            let Some(deno_script) = self.as_deno_script()? else {
+                // No script to execute
+                return Ok(None);
+            };
+
+            let (stdin, mut stdin_writer) = pipe();
+            if let Some(stdin_data) = input {
+                stdin_writer
+                    .write_all(stdin_data)
+                    .expect("should be able to write to stdin");
+            }
+            drop(stdin_writer); // prevent a deadlock by dropping the writer
+            return Ok(Some((deno_script, stdin)));
+        };
+
+        let Some(full_script) = self.as_script()? else {
+            // No script to execute
+            return Ok(None);
+        };
+        let interpreter_script = deno_task_shell::parser::parse(interpreter).map_err(|e| {
+            FailedToParseShellScript::ParseError {
+                source: e,
+                task: interpreter.to_string(),
+            }
+        })?;
+        let (stdin, mut stdin_writer) = pipe();
+        stdin_writer
+            .write_all(full_script.as_bytes())
+            .expect("Failed to write script to pipe");
+        drop(stdin_writer);
+        Ok(Some((interpreter_script, stdin)))
+    }
+
     /// Executes the task and capture its output.
     pub async fn execute_with_pipes(
         &self,
         command_env: &HashMap<OsString, OsString>,
         input: Option<&[u8]>,
     ) -> Result<RunOutput, TaskExecutionError> {
-        let Some(script) = self.as_deno_script()? else {
+        let Some((script, stdin)) = self.prepare_execution(input)? else {
+            // No script to execute, return empty output
             return Ok(RunOutput {
                 exit_code: 0,
                 stdout: String::new(),
                 stderr: String::new(),
             });
         };
+
         let cwd = self.working_directory()?;
-        let (stdin, mut stdin_writer) = pipe();
-        if let Some(stdin) = input {
-            stdin_writer
-                .write_all(stdin)
-                .expect("should be able to write to stdin");
-        }
-        drop(stdin_writer); // prevent a deadlock by dropping the writer
         let (stdout, stdout_handle) = get_output_writer_and_handle();
         let (stderr, stderr_handle) = get_output_writer_and_handle();
         let state = ShellState::new(
