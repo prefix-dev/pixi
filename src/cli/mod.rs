@@ -254,7 +254,10 @@ pub async fn execute() -> miette::Result<()> {
 }
 
 /// Execute the actual command
-pub async fn execute_command(command: Command, global_options: &GlobalOptions) -> miette::Result<()> {
+pub async fn execute_command(
+    command: Command,
+    global_options: &GlobalOptions,
+) -> miette::Result<()> {
     match command {
         Command::Completion(cmd) => completion::execute(cmd),
         Command::Config(cmd) => config::execute(cmd).await,
