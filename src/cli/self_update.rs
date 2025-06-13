@@ -14,8 +14,8 @@ use url::Url;
 use rattler_conda_types::Version;
 use std::str::FromStr;
 
-use crate::reporters::format_release_notes;
 use crate::cli::GlobalOptions;
+use crate::reporters::format_release_notes;
 
 /// Update pixi to the latest version or a specific version.
 #[derive(Debug, clap::Parser)]
