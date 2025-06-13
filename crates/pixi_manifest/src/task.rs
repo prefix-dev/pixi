@@ -292,6 +292,14 @@ impl Task {
             _ => None,
         }
     }
+
+    /// Returns the interpreter for the task.
+    pub fn interpreter(&self) -> Option<&str> {
+        match self {
+            Task::Execute(exe) => exe.interpreter.as_deref(),
+            _ => None,
+        }
+    }
 }
 
 /// A list of glob patterns that can be used as input or output for a task
@@ -357,6 +365,9 @@ pub struct Execute {
 
     /// The arguments to pass to the task
     pub args: Option<Vec<TaskArg>>,
+
+    /// The interpreter to use for executing the command (e.g., "bash", "sh", "nu")
+    pub interpreter: Option<String>,
 }
 
 impl From<Execute> for Task {
@@ -772,6 +783,9 @@ impl From<Task> for Item {
                 }
                 if let Some(description) = &process.description {
                     table.insert("description", description.into());
+                }
+                if let Some(interpreter) = &process.interpreter {
+                    table.insert("interpreter", interpreter.into());
                 }
                 Item::Value(Value::InlineTable(table))
             }

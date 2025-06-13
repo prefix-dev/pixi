@@ -1444,6 +1444,7 @@ def test_pixi_task_list_json(pixi: Path, tmp_pixi_workspace: Path) -> None:
                                 "clean_env": False,
                                 "inputs": None,
                                 "outputs": None,
+                                "interpreter": None,
                             }
                         ],
                     }
