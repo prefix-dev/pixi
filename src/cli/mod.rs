@@ -250,11 +250,11 @@ pub async fn execute() -> miette::Result<()> {
         .init();
 
     // Execute the command
-    execute_command(args.command).await
+    execute_command(args.command, &args.global_options).await
 }
 
 /// Execute the actual command
-pub async fn execute_command(command: Command) -> miette::Result<()> {
+pub async fn execute_command(command: Command, global_options: &GlobalOptions) -> miette::Result<()> {
     match command {
         Command::Completion(cmd) => completion::execute(cmd),
         Command::Config(cmd) => config::execute(cmd).await,
@@ -275,7 +275,7 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::Workspace(cmd) => workspace::execute(cmd).await,
         Command::Remove(cmd) => remove::execute(cmd).await,
         #[cfg(feature = "self_update")]
-        Command::SelfUpdate(cmd) => self_update::execute(cmd).await,
+        Command::SelfUpdate(cmd) => self_update::execute(cmd, global_options).await,
         #[cfg(not(feature = "self_update"))]
         Command::SelfUpdate(cmd) => self_update::execute_stub(cmd).await,
         Command::List(cmd) => list::execute(cmd).await,
