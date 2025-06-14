@@ -235,6 +235,9 @@ def test_search(pixi: Path) -> None:
     )
 
 
+    verify_cli_command([pixi, "search", "python-*"])
+
+
 def test_search_wildcard(pixi: Path, dummy_channel_1: str) -> None:
     verify_cli_command(
         [pixi, "search", "this-will-not-be-found", "-c", dummy_channel_1],
@@ -261,6 +264,8 @@ def test_search_matchspec(pixi: Path, dummy_channel_1: str) -> None:
         ExitCode.SUCCESS,
         stdout_contains=["dummy-a"],
     )
+
+    verify_cli_command([pixi, "search", "python 3.12.*"])
 
 
 @pytest.mark.slow
