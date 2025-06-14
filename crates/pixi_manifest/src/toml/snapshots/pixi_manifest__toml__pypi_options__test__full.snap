@@ -87,4 +87,5 @@ PypiOptions {
     no_build: Some(
         All,
     ),
+    dependency_overrides: None,
 }
