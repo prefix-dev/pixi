@@ -264,7 +264,7 @@ def test_search_matchspec(
         stdout_contains=["dummy-a"],
     )
 
-    verify_cli_command([pixi, "search", "package 0.*", "-c", "multiple_versions_channel_1"])
+    verify_cli_command([pixi, "search", "package 0.*", "-c", multiple_versions_channel_1])
 
 
 @pytest.mark.slow
