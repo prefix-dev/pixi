@@ -1,11 +1,14 @@
 use std::{fmt::Debug, future::Future, path::PathBuf};
 
 use miette::{IntoDiagnostic, miette};
+use pixi_build_types::{PIXI_BUILD_API_VERSION_NAME, PIXI_BUILD_API_VERSION_SPEC};
 use pixi_consts::consts::CACHED_BUILD_TOOL_ENVS_DIR;
 use pixi_progress::await_in_progress;
 use pixi_utils::{AsyncPrefixGuard, EnvironmentHash};
 use rattler::{install::Installer, package_cache::PackageCache};
-use rattler_conda_types::{Channel, ChannelConfig, GenericVirtualPackage, Platform};
+use rattler_conda_types::{
+    Channel, ChannelConfig, GenericVirtualPackage, MatchSpec, NamelessMatchSpec, Platform,
+};
 use rattler_repodata_gateway::Gateway;
 use rattler_shell::{
     activation::{ActivationVariables, Activator},
@@ -232,13 +235,38 @@ impl ToolInstaller for ToolContext {
             .map(GenericVirtualPackage::from)
             .collect();
 
+        let build_api_version_nameless_spec = NamelessMatchSpec {
+            version: Some(PIXI_BUILD_API_VERSION_SPEC.clone()),
+            ..NamelessMatchSpec::default()
+        };
+        let build_api_version_spec = MatchSpec::from_nameless(
+            build_api_version_nameless_spec,
+            Some(PIXI_BUILD_API_VERSION_NAME.clone()),
+        );
+
         let solved_records = Solver
             .solve(SolverTask {
                 specs: spec.specs.clone(),
                 virtual_packages,
+                constraints: Vec::from([build_api_version_spec.clone()]),
                 ..SolverTask::from_iter(&repodata)
             })
             .into_diagnostic()?;
+
+        if !solved_records
+            .records
+            .iter()
+            .any(|r| r.package_record.name == *PIXI_BUILD_API_VERSION_NAME)
+        {
+            return Err(miette::miette!(
+                help = format!(
+                    "Modify the requirements or contact the maintainers to ensure a dependency on `{}` is added.",
+                    PIXI_BUILD_API_VERSION_NAME.as_normalized()
+                ),
+                "The environment for the build backend package does not depend on `{}`. Without this package pixi has no way of knowing the API to use to communicate with the backend.",
+                PIXI_BUILD_API_VERSION_NAME.as_normalized()
+            ));
+        }
 
         let cache = EnvironmentHash::new(
             spec.command.clone(),
