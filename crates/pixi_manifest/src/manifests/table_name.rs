@@ -68,27 +68,55 @@ impl TableName<'_> {
             parts.push(self.prefix.unwrap());
         }
 
-        if self
-            .feature_name
-            .as_ref()
-            .is_some_and(|feature_name| !feature_name.is_default())
-        {
-            parts.push("feature");
-            parts.push(
-                self.feature_name
-                    .as_ref()
-                    .expect("we already verified")
-                    .as_str(),
-            );
+        if let Some(feature_name) = self.feature_name.as_ref() {
+            if !feature_name.is_default() {
+                parts.push("feature");
+                let feature_str = feature_name.as_str();
+                parts.push(feature_str);
+            }
         }
+
         if let Some(platform) = self.platform {
             parts.push("target");
             parts.push(platform.as_str());
         }
+
         if let Some(table) = self.table {
             parts.push(table);
         }
+
         parts.join(".")
+    }
+
+    /// Returns the individual parts of the table name for proper TOML key escaping.
+    /// This allows the TOML library to handle escaping of individual keys correctly.
+    pub fn to_parts(&self) -> Vec<String> {
+        let mut parts = Vec::new();
+
+        if let Some(prefix) = self.prefix {
+            // Split the prefix by dots to handle cases like "tool.pixi"
+            parts.extend(prefix.split('.').map(|s| s.to_string()));
+        }
+
+        if let Some(feature_name) = self.feature_name.as_ref() {
+            if !feature_name.is_default() {
+                parts.push("feature".to_string());
+                let feature_str = feature_name.as_str();
+                // Don't pre-escape - let the TOML library handle escaping
+                parts.push(feature_str.to_string());
+            }
+        }
+
+        if let Some(platform) = self.platform {
+            parts.push("target".to_string());
+            parts.push(platform.as_str().to_string());
+        }
+
+        if let Some(table) = self.table {
+            parts.push(table.to_string());
+        }
+
+        parts
     }
 }
 
@@ -167,6 +195,45 @@ mod tests {
                 .with_platform(Some(&Platform::Linux64))
                 .with_table(Some("dependencies"))
                 .to_string()
+        );
+
+        // Test feature name with dot - no longer escaped in to_string()
+        let feature_name = FeatureName::from("test.test");
+        assert_eq!(
+            "feature.test.test.dependencies".to_string(),
+            TableName::new()
+                .with_feature_name(Some(&feature_name))
+                .with_table(Some("dependencies"))
+                .to_string()
+        );
+
+        // But to_parts() should have the unescaped feature name (TOML library handles escaping)
+        assert_eq!(
+            vec!["feature", "test.test", "dependencies"],
+            TableName::new()
+                .with_feature_name(Some(&feature_name))
+                .with_table(Some("dependencies"))
+                .to_parts()
+        );
+
+        // Test with prefix - should split "tool.pixi" into separate parts
+        assert_eq!(
+            vec!["tool", "pixi", "dependencies"],
+            TableName::new()
+                .with_prefix(Some("tool.pixi"))
+                .with_feature_name(Some(&FeatureName::DEFAULT))
+                .with_table(Some("dependencies"))
+                .to_parts()
+        );
+
+        // Test with prefix and feature - should split "tool.pixi" and keep feature name unescaped
+        assert_eq!(
+            vec!["tool", "pixi", "feature", "test.test", "dependencies"],
+            TableName::new()
+                .with_prefix(Some("tool.pixi"))
+                .with_feature_name(Some(&feature_name))
+                .with_table(Some("dependencies"))
+                .to_parts()
         );
     }
 }
