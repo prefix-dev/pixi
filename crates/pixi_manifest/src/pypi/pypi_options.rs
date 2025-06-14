@@ -1,11 +1,15 @@
 use std::{collections::HashSet, hash::Hash, path::PathBuf};
 
+use indexmap::IndexMap;
 use indexmap::IndexSet;
 use pep508_rs::PackageName;
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use serde::ser::SerializeSeq;
 use serde::{Serialize, Serializer};
 use thiserror::Error;
 use url::Url;
+
+// use crate::dependencies;
 
 // taken from: https://docs.astral.sh/uv/reference/settings/#index-strategy
 /// The strategy to use when resolving against multiple index URLs.
@@ -101,6 +105,8 @@ pub struct PypiOptions {
     pub index_strategy: Option<IndexStrategy>,
     /// Don't build sdist for all or certain packages
     pub no_build: Option<NoBuild>,
+    /// Dependency overrides
+    pub dependency_overrides: Option<IndexMap<PypiPackageName, PixiPypiSpec>>,
 }
 
 /// Clones and deduplicates two iterators of values
@@ -124,6 +130,7 @@ impl PypiOptions {
         no_build_isolation: NoBuildIsolation,
         index_strategy: Option<IndexStrategy>,
         no_build: Option<NoBuild>,
+        dependency_overrides: Option<IndexMap<PypiPackageName, PixiPypiSpec>>,
     ) -> Self {
         Self {
             index_url: index,
@@ -132,6 +139,7 @@ impl PypiOptions {
             no_build_isolation,
             index_strategy,
             no_build,
+            dependency_overrides,
         }
     }
 
@@ -235,6 +243,20 @@ impl PypiOptions {
             (None, Some(b)) => Some(b.clone()),
             (None, None) => None,
         };
+        // Set the dependency overrides
+        // notice that self is overridden by other
+        // default feature comes last in the feature_ext
+        // so we
+        let dependency_overrides = match (&self.dependency_overrides, &other.dependency_overrides) {
+            (Some(a), Some(b)) => {
+                let mut overrides = b.clone();
+                overrides.extend(a.into_iter().map(|(k, v)| (k.clone(), v.clone())));
+                Some(overrides)
+            }
+            (Some(a), None) => Some(a.clone()),
+            (None, Some(b)) => Some(b.clone()),
+            (None, None) => None,
+        };
 
         Ok(PypiOptions {
             index_url: index,
@@ -243,6 +265,7 @@ impl PypiOptions {
             no_build_isolation,
             index_strategy,
             no_build,
+            dependency_overrides,
         })
     }
 }
@@ -396,6 +419,7 @@ mod tests {
             ]),
             index_strategy: None,
             no_build: None,
+            dependency_overrides: None,
         };
 
         // Create the second set of options
@@ -409,6 +433,8 @@ mod tests {
             no_build_isolation: NoBuildIsolation::from_iter(["foo".parse().unwrap()]),
             index_strategy: None,
             no_build: Some(NoBuild::All),
+            // todo: add dependency overrides
+            dependency_overrides: None,
         };
 
         // Merge the two options
@@ -465,6 +491,7 @@ mod tests {
             no_build_isolation: NoBuildIsolation::default(),
             index_strategy: None,
             no_build: Default::default(),
+            dependency_overrides: None,
         };
 
         // Create the second set of options
@@ -475,6 +502,7 @@ mod tests {
             no_build_isolation: NoBuildIsolation::default(),
             index_strategy: None,
             no_build: Default::default(),
+            dependency_overrides: None,
         };
 
         // Merge the two options
@@ -493,6 +521,7 @@ mod tests {
             no_build_isolation: NoBuildIsolation::default(),
             index_strategy: Some(IndexStrategy::FirstIndex),
             no_build: Default::default(),
+            dependency_overrides: None,
         };
 
         // Create the second set of options
@@ -503,6 +532,7 @@ mod tests {
             no_build_isolation: NoBuildIsolation::default(),
             index_strategy: Some(IndexStrategy::UnsafeBestMatch),
             no_build: Default::default(),
+            dependency_overrides: None,
         };
 
         // Merge the two options
