@@ -9,3 +9,4 @@ find-links: ~
 no-build-isolation: []
 index-strategy: ~
 no-build: ~
+dependency-overrides: ~

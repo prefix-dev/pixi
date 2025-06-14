@@ -16,7 +16,7 @@ use std::{borrow::Cow, hash::Hash, iter::FromIterator};
 /// and CondaDependencies struct to represent Pypi and Conda dependencies
 /// respectively.
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DependencyMap<N: Hash + Eq + Clone, D: Hash + Eq + Clone> {
     map: IndexMap<N, IndexSet<D>>,
 }

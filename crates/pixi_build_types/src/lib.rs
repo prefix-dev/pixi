@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 /// The constraint for the pixi build api version package
 /// Adding this constraint when solving a pixi build backend environment ensures that
 /// a backend is selected that uses the same interface version as Pixi does
-pub const PIXI_BUILD_API_VERSION_NAME: LazyLock<PackageName> =
+pub static PIXI_BUILD_API_VERSION_NAME: LazyLock<PackageName> =
     LazyLock::new(|| PackageName::new_unchecked("pixi-build-api-version"));
 pub const PIXI_BUILD_API_VERSION_LOWER: u64 = 0;
 pub const PIXI_BUILD_API_VERSION_UPPER: u64 = 1;
