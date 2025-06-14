@@ -131,6 +131,7 @@
               'description': None,
               'env': None,
               'inputs': None,
+              'interpreter': None,
               'name': 'test-task',
               'outputs': None,
             }),
