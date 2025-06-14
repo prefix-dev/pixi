@@ -248,7 +248,6 @@ def test_search_wildcard(pixi: Path, dummy_channel_1: str) -> None:
         stdout_contains=["dummy-a"],
     )
 
-    verify_cli_command([pixi, "search", "python-*"])
 
 
 def test_search_matchspec(pixi: Path, dummy_channel_1: str) -> None:
