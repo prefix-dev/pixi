@@ -135,8 +135,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Install or update
     fs_err::create_dir_all(&args.target).ok();
     let target_dir = args.target.canonicalize().into_diagnostic()?;
-    let prefix = Prefix::new(target_dir.clone()); // must use absolute path
-    tracing::info!("Updating prefix: '{}'", target_dir.display());
+    let prefix = Prefix::new(target_dir); // must use absolute path
+    tracing::info!("Updating prefix: '{}'", prefix.root().display());
 
     let pixi_records = env
         .conda_packages(plat)
