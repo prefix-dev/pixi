@@ -1,6 +1,6 @@
 ---
 source: crates/pixi_config/src/lib.rs
-assertion_line: 2213
+assertion_line: 2225
 expression: debug
 ---
 Config {
@@ -93,6 +93,7 @@ Config {
         extra_index_urls: [],
         keyring_provider: None,
         allow_insecure_host: [],
+        verify_direct_url_hashes: false,
     },
     s3_options: {
         "bucket1": S3Options {

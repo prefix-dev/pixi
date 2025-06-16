@@ -1,7 +1,7 @@
 mod name;
 mod pep508;
 mod toml;
-mod utils;
+pub mod utils;
 mod version_or_star;
 
 use std::{
@@ -382,7 +382,7 @@ mod tests {
             snapshot.push(Snapshot { input, result });
         }
 
-        insta::assert_snapshot!(
+        assert_snapshot!(
             snapshot
                 .into_iter()
                 .map(|Snapshot { input, result }| format!(

@@ -174,15 +174,14 @@ impl<'a> PyPIPrefixUpdaterBuilder<'a> {
         python_packages: &[CombinedPypiPackageData],
     ) -> miette::Result<PyPIPrefixUpdater> {
         // Create a map of the required packages
-        let required_map: std::collections::HashMap<uv_normalize::PackageName, &PypiPackageData> =
-            python_packages
-                .iter()
-                .map(|(pkg, _)| {
-                    let uv_name = uv_normalize::PackageName::from_str(pkg.name.as_ref())
-                        .expect("should be correct");
-                    (uv_name, pkg)
-                })
-                .collect();
+        let required_map: HashMap<uv_normalize::PackageName, &PypiPackageData> = python_packages
+            .iter()
+            .map(|(pkg, _)| {
+                let uv_name = uv_normalize::PackageName::from_str(pkg.name.as_ref())
+                    .expect("should be correct");
+                (uv_name, pkg)
+            })
+            .collect();
 
         // Find out what packages are already installed
         let site_packages =
@@ -233,6 +232,7 @@ impl<'a> PyPIPrefixUpdaterBuilder<'a> {
             index_locations: self.index_locations,
             build_isolation: self.build_isolation,
             installation_plan,
+            verify_direct_url_hashes: self.uv_context.verify_direct_url_hashes,
         };
 
         Ok(updater)
@@ -253,6 +253,7 @@ pub struct PyPIPrefixUpdater {
     index_locations: IndexLocations,
     build_isolation: BuildIsolation,
     installation_plan: PyPIInstallationPlan,
+    verify_direct_url_hashes: bool,
 }
 
 impl PyPIPrefixUpdater {
@@ -569,30 +570,30 @@ impl PyPIPrefixUpdater {
     }
 
     /// Verify hashes for all direct URL distributions
+    ///
+    /// This is a critical security feature because UV does not verify hashes from URL fragments
+    /// for direct URLs. Without this verification, packages could be tampered with.
     async fn verify_all_direct_url_hashes(
         &self,
         _local: &[(CachedDist, InstallReason)],
         remote: &[(Dist, InstallReason)],
     ) -> miette::Result<()> {
-        future::try_join_all(remote.iter().map(|(dist, _)| self.verify_dist_hash(dist))).await?;
+        if self.verify_direct_url_hashes {
+            tracing::debug!("Verifying hashes for direct URL distributions");
+            future::try_join_all(remote.iter().map(|(dist, _)| self.verify_dist_hash(dist)))
+                .await?;
+        } else {
+            tracing::debug!(
+                "Skipping direct URL hash verification per configuration (pypi.verify-direct-url-hashes = false)"
+            );
+        }
         Ok(())
-    }
-
-    /// Extract hash info from URL fragment like "#sha256=abc123" or "#md5=def456&egg=foo"
-    fn extract_hash_from_fragment(fragment: &str) -> Option<(&str, &str)> {
-        fragment.split('&').find_map(|param| {
-            let (key, value) = param.split_once('=')?;
-            match key.to_lowercase().as_str() {
-                "sha256" => Some((value, "sha256")),
-                "md5" => Some((value, "md5")),
-                _ => None,
-            }
-        })
     }
 
     /// Verify hash for a single distribution
     async fn verify_dist_hash(&self, dist: &Dist) -> miette::Result<()> {
-        use rattler_digest::{Md5, Sha256, compute_bytes_digest};
+        use futures::StreamExt;
+        use rattler_digest::{Md5, Sha256, digest::Digest};
 
         let (url, name) = match dist {
             Dist::Built(uv_distribution_types::BuiltDist::DirectUrl(direct)) => {
@@ -601,63 +602,110 @@ impl PyPIPrefixUpdater {
             _ => return Ok(()),
         };
 
-        let Some((expected_hash, algorithm)) =
-            url.fragment().and_then(Self::extract_hash_from_fragment)
-        else {
+        // Extract and parse hash from URL fragment
+        let Some(fragment) = url.fragment() else {
             return Ok(());
         };
 
-        tracing::info!(
-            "Verifying {} hash for {}: expected {}",
-            algorithm,
-            name,
-            expected_hash
-        );
+        let hash = match pixi_utils::hash::parse_hash_from_url_fragment(fragment, &name) {
+            Ok(Some(hash)) => hash,
+            Ok(None) => return Ok(()), // No hash in fragment
+            Err(e) => return Err(miette::miette!("Invalid hash in URL fragment: {}", e)),
+        };
 
-        // Download file for verification
-        let clean_url = url
-            .as_str()
-            .split('#')
-            .next()
-            .ok_or_else(|| miette::miette!("Invalid URL format"))?;
-        let clean_url = url::Url::parse(clean_url).into_diagnostic()?;
+        // 1. Double download: Files are downloaded here for verification and again during installation
+        // 2. Cache bypass: Using uncached_client ignores already cached packages
+        //
+        // This is a temporary workaround because UV's hash verification doesn't currently
+        // work correctly with direct URLs that have hash fragments. This is a SECURITY ISSUE in UV:
+        // URLs like https://example.com/package.zip#sha256=abc123 are downloaded without verifying
+        // the hash, allowing potential tampering.
+        //
+        // Ideal solution: UV should verify hashes from URL fragments during its normal
+        // download/installation process. Until then, we're stuck with this inefficient approach.
+        //
 
-        let bytes = self
+        // Download file for verification using streaming
+        let mut clean_url = url.clone();
+        clean_url.set_fragment(None);
+
+        let response = self
             .registry_client
             .uncached_client(&clean_url)
             .get(clean_url.as_str())
             .send()
             .await
             .into_diagnostic()
-            .context("Failed to download distribution for hash verification")?
-            .bytes()
-            .await
-            .into_diagnostic()
-            .context("Failed to read distribution bytes")?;
+            .context("Failed to download distribution for hash verification")?;
 
-        // Compute and compare hash
-        let actual_hash = match algorithm {
-            "sha256" => format!("{:x}", compute_bytes_digest::<Sha256>(&bytes)),
-            "md5" => format!("{:x}", compute_bytes_digest::<Md5>(&bytes)),
-            _ => unreachable!("Unsupported hash algorithm"),
-        };
+        // Stream the response and compute hash based on the type in PackageHashes
+        let mut stream = response.bytes_stream();
 
-        if actual_hash != expected_hash {
-            return Err(miette::miette!(
-                "Hash verification failed for {}.\nExpected {}: {}\nActual {}: {}",
-                name,
-                algorithm,
-                expected_hash,
-                algorithm,
-                actual_hash
-            ));
+        // Compute and verify hash based on the expected hash type
+        match hash {
+            rattler_lock::PackageHashes::Sha256(expected_sha256) => {
+                let mut hasher = Sha256::default();
+                while let Some(chunk) = stream.next().await {
+                    let chunk = chunk
+                        .into_diagnostic()
+                        .context("Failed to read chunk during hash verification")?;
+                    hasher.update(&chunk);
+                }
+                let actual_hash = format!("{:x}", hasher.finalize());
+                let expected_hash = format!("{:x}", expected_sha256);
+
+                if actual_hash != expected_hash {
+                    return Err(miette::miette!(
+                        "Hash verification failed for {}.\nExpected SHA256: {}\nActual SHA256: {}",
+                        name,
+                        expected_hash,
+                        actual_hash
+                    ));
+                }
+            }
+            rattler_lock::PackageHashes::Md5(expected_md5) => {
+                let mut hasher = Md5::default();
+                while let Some(chunk) = stream.next().await {
+                    let chunk = chunk
+                        .into_diagnostic()
+                        .context("Failed to read chunk during hash verification")?;
+                    hasher.update(&chunk);
+                }
+                let actual_hash = format!("{:x}", hasher.finalize());
+                let expected_hash = format!("{:x}", expected_md5);
+
+                if actual_hash != expected_hash {
+                    return Err(miette::miette!(
+                        "Hash verification failed for {}.\nExpected MD5: {}\nActual MD5: {}",
+                        name,
+                        expected_hash,
+                        actual_hash
+                    ));
+                }
+            }
+            rattler_lock::PackageHashes::Md5Sha256(_expected_md5, expected_sha256) => {
+                // For Md5Sha256, we verify SHA256 (preferred for security)
+                let mut hasher = Sha256::default();
+                while let Some(chunk) = stream.next().await {
+                    let chunk = chunk
+                        .into_diagnostic()
+                        .context("Failed to read chunk during hash verification")?;
+                    hasher.update(&chunk);
+                }
+                let actual_hash = format!("{:x}", hasher.finalize());
+                let expected_hash = format!("{:x}", expected_sha256);
+
+                if actual_hash != expected_hash {
+                    return Err(miette::miette!(
+                        "Hash verification failed for {}.\nExpected SHA256: {}\nActual SHA256: {}",
+                        name,
+                        expected_hash,
+                        actual_hash
+                    ));
+                }
+            }
         }
 
-        tracing::info!(
-            "Hash verification succeeded for {}: {} matches",
-            name,
-            algorithm
-        );
         Ok(())
     }
 

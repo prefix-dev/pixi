@@ -11,6 +11,7 @@
 use uv_distribution::RegistryWheelIndex;
 use uv_distribution_types::{CachedRegistryDist, InstalledDist};
 use uv_installer::SitePackages;
+use uv_pypi_types::{HashAlgorithm, HashDigest};
 
 // Below we define a couple of traits so that we can make the creaton of the install plan
 // somewhat more abstract
@@ -40,6 +41,29 @@ pub trait CachedDistProvider<'a> {
     ) -> Option<CachedRegistryDist>;
 }
 
+/// Check if a hash digest matches the expected package hash
+fn hash_matches_expected(
+    hash: &HashDigest,
+    algorithm: HashAlgorithm,
+    expected: &rattler_lock::PackageHashes,
+) -> bool {
+    match (expected, algorithm) {
+        (rattler_lock::PackageHashes::Sha256(expected_sha256), HashAlgorithm::Sha256) => {
+            format!("{:x}", expected_sha256) == hash.to_string()
+        }
+        (rattler_lock::PackageHashes::Md5(expected_md5), HashAlgorithm::Md5) => {
+            format!("{:x}", expected_md5) == hash.to_string()
+        }
+        (rattler_lock::PackageHashes::Md5Sha256(expected_md5, expected_sha256), algo) => match algo
+        {
+            HashAlgorithm::Sha256 => format!("{:x}", expected_sha256) == hash.to_string(),
+            HashAlgorithm::Md5 => format!("{:x}", expected_md5) == hash.to_string(),
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
 impl<'a> CachedDistProvider<'a> for RegistryWheelIndex<'a> {
     fn get_cached_dist(
         &mut self,
@@ -56,37 +80,11 @@ impl<'a> CachedDistProvider<'a> for RegistryWheelIndex<'a> {
             // If we have an expected hash, verify it matches
             if let Some(expected) = expected_hash {
                 // Check if any of the cached hashes match the expected hash
-                let has_matching_hash =
-                    entry
-                        .dist
-                        .hashes
-                        .iter()
-                        .any(|hash| match (expected, hash.algorithm()) {
-                            (
-                                rattler_lock::PackageHashes::Sha256(expected_sha256),
-                                uv_pypi_types::HashAlgorithm::Sha256,
-                            ) => format!("{:x}", expected_sha256) == hash.digest.to_string(),
-                            (
-                                rattler_lock::PackageHashes::Md5(expected_md5),
-                                uv_pypi_types::HashAlgorithm::Md5,
-                            ) => format!("{:x}", expected_md5) == hash.digest.to_string(),
-                            (
-                                rattler_lock::PackageHashes::Md5Sha256(
-                                    expected_md5,
-                                    expected_sha256,
-                                ),
-                                algo,
-                            ) => match algo {
-                                uv_pypi_types::HashAlgorithm::Sha256 => {
-                                    format!("{:x}", expected_sha256) == hash.digest.to_string()
-                                }
-                                uv_pypi_types::HashAlgorithm::Md5 => {
-                                    format!("{:x}", expected_md5) == hash.digest.to_string()
-                                }
-                                _ => false,
-                            },
-                            _ => false,
-                        });
+                let has_matching_hash = entry
+                    .dist
+                    .hashes
+                    .iter()
+                    .any(|hash| hash_matches_expected(hash, hash.algorithm(), expected));
 
                 if !has_matching_hash {
                     return false;

@@ -7,6 +7,7 @@ use pixi_record::LockedGitUrl;
 use pixi_uv_conversions::{
     ConversionError, to_parsed_git_url, to_uv_normalize, to_uv_version, to_uv_version_specifiers,
 };
+use rattler_digest::{Md5, Sha256, parse_digest_from_hex};
 use rattler_lock::{PackageHashes, PypiPackageData, UrlOrPath};
 use url::Url;
 use uv_distribution_filename::DistExtension;
@@ -24,95 +25,133 @@ fn parse_hash_from_fragment(
     fragment: &str,
     package_name: &pep508_rs::PackageName,
 ) -> Result<Option<PackageHashes>, ConvertToUvDistError> {
-    // Find hash parameter in fragment
-    for param in fragment.split('&') {
-        if let Some((algorithm, hash_str)) = param.split_once('=') {
-            let algorithm_lower = algorithm.to_lowercase();
-            if algorithm_lower.contains("sha")
-                || algorithm_lower.contains("md5")
-                || algorithm_lower.contains("blake")
-            {
-                if !matches!(algorithm_lower.as_str(), "sha256" | "md5") {
-                    return Err(ConvertToUvDistError::InvalidHash(format!(
-                        "Hash verification failed: Unsupported hash algorithm '{}' for {}. Only SHA256 and MD5 are supported.",
-                        algorithm_lower, package_name
-                    )));
-                }
-            } else {
-                continue;
-            }
+    use pixi_pypi_spec::utils::parse_url_fragment_parameters;
 
-            // Validate hash value
-            if hash_str.is_empty() {
+    for (key, value) in parse_url_fragment_parameters(fragment) {
+        let algorithm = key.to_lowercase();
+
+        match algorithm.as_str() {
+            "sha256" => {
+                return validate_and_parse_hash("sha256", value, package_name)
+                    .map(Some)
+                    .map_err(ConvertToUvDistError::InvalidHash);
+            }
+            "md5" => {
+                return validate_and_parse_hash("md5", value, package_name)
+                    .map(Some)
+                    .map_err(ConvertToUvDistError::InvalidHash);
+            }
+            alg if alg.contains("sha") || alg.contains("md5") || alg.contains("blake") => {
                 return Err(ConvertToUvDistError::InvalidHash(format!(
-                    "Hash verification failed: Empty {} hash provided for {}",
-                    algorithm_lower.to_uppercase(),
-                    package_name
+                    "Unsupported hash algorithm '{}' for {}. Only SHA256 and MD5 are supported.",
+                    algorithm, package_name
                 )));
             }
-
-            if !hash_str.chars().all(|c| c.is_ascii_hexdigit()) {
-                return Err(ConvertToUvDistError::InvalidHash(format!(
-                    "Hash verification failed: Invalid {} hash for {}: not a valid hex string",
-                    algorithm_lower.to_uppercase(),
-                    package_name
-                )));
-            }
-
-            // Parse the hash
-            return match algorithm_lower.as_str() {
-                "sha256" => {
-                    if hash_str.len() != 64 {
-                        return Err(ConvertToUvDistError::InvalidHash(format!(
-                            "Hash verification failed: Invalid SHA256 hash for {}: expected 64 characters, got {}",
-                            package_name,
-                            hash_str.len()
-                        )));
-                    }
-                    rattler_digest::parse_digest_from_hex::<rattler_digest::Sha256>(hash_str)
-                        .map(|h| Some(PackageHashes::Sha256(h)))
-                        .ok_or_else(|| {
-                            ConvertToUvDistError::InvalidHash(format!(
-                                "Hash verification failed: Invalid SHA256 hash for {}: {}",
-                                package_name, hash_str
-                            ))
-                        })
-                        .inspect(|_| {
-                            tracing::info!(
-                                "Extracted SHA256 hash from URL fragment for package {}",
-                                package_name
-                            )
-                        })
-                }
-                "md5" => {
-                    if hash_str.len() != 32 {
-                        return Err(ConvertToUvDistError::InvalidHash(format!(
-                            "Hash verification failed: Invalid MD5 hash for {}: expected 32 characters, got {}",
-                            package_name,
-                            hash_str.len()
-                        )));
-                    }
-                    rattler_digest::parse_digest_from_hex::<rattler_digest::Md5>(hash_str)
-                        .map(|h| Some(PackageHashes::Md5(h)))
-                        .ok_or_else(|| {
-                            ConvertToUvDistError::InvalidHash(format!(
-                                "Hash verification failed: Invalid MD5 hash for {}: {}",
-                                package_name, hash_str
-                            ))
-                        })
-                        .inspect(|_| {
-                            tracing::info!(
-                                "Extracted MD5 hash from URL fragment for package {}",
-                                package_name
-                            )
-                        })
-                }
-                _ => unreachable!(),
-            };
+            _ => continue,
         }
     }
 
     Ok(None)
+}
+
+/// Validates and parses a hash string into PackageHashes
+fn validate_and_parse_hash(
+    algorithm: &str,
+    hash_str: &str,
+    package_name: &pep508_rs::PackageName,
+) -> Result<PackageHashes, String> {
+    // Check empty hash
+    if hash_str.is_empty() {
+        return Err(format!(
+            "Empty {} hash provided for {}",
+            algorithm.to_uppercase(),
+            package_name
+        ));
+    }
+
+    // Check hex validity
+    if !hash_str.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(format!(
+            "Invalid {} hash for {}: not a valid hex string",
+            algorithm.to_uppercase(),
+            package_name
+        ));
+    }
+
+    // Parse based on algorithm
+    match algorithm {
+        "sha256" => {
+            if hash_str.len() != 64 {
+                return Err(format!(
+                    "Invalid SHA256 hash for {}: expected 64 characters, got {}",
+                    package_name,
+                    hash_str.len()
+                ));
+            }
+            parse_digest_from_hex::<Sha256>(hash_str)
+                .map(PackageHashes::Sha256)
+                .ok_or_else(|| format!("Invalid SHA256 hash for {}: {}", package_name, hash_str))
+        }
+        "md5" => {
+            if hash_str.len() != 32 {
+                return Err(format!(
+                    "Invalid MD5 hash for {}: expected 32 characters, got {}",
+                    package_name,
+                    hash_str.len()
+                ));
+            }
+            parse_digest_from_hex::<Md5>(hash_str)
+                .map(PackageHashes::Md5)
+                .ok_or_else(|| format!("Invalid MD5 hash for {}: {}", package_name, hash_str))
+        }
+        _ => unreachable!(
+            "validate_and_parse_hash called with unsupported algorithm: {}",
+            algorithm
+        ),
+    }
+}
+
+/// Updates or adds a hash parameter to a URL fragment while preserving other parameters
+///
+/// For example:
+/// - "egg=foo" + sha256 hash -> "egg=foo&sha256=abc123"
+/// - "sha256=old&egg=foo" + new sha256 -> "sha256=new&egg=foo"
+/// - "" + sha256 hash -> "sha256=abc123"
+fn update_fragment_with_hash(fragment: Option<&str>, hash: &PackageHashes) -> String {
+    // Convert hash to fragment format
+    let hash_param = match hash {
+        PackageHashes::Sha256(sha256) => format!("sha256={:x}", sha256),
+        PackageHashes::Md5(md5) => format!("md5={:x}", md5),
+        PackageHashes::Md5Sha256(_md5, sha256) => {
+            // Prefer SHA256 for direct URLs
+            format!("sha256={:x}", sha256)
+        }
+    };
+
+    match fragment {
+        None | Some("") => hash_param,
+        Some(existing) => {
+            // Parse existing parameters
+            let mut params: Vec<String> = existing.split('&').map(|s| s.to_string()).collect();
+            let mut hash_updated = false;
+
+            // Update existing hash parameter if present
+            for param in &mut params {
+                if param.starts_with("sha256=") || param.starts_with("md5=") {
+                    *param = hash_param.clone();
+                    hash_updated = true;
+                    break;
+                }
+            }
+
+            // If no hash parameter was found, add it
+            if !hash_updated {
+                params.push(hash_param);
+            }
+
+            params.join("&")
+        }
+    }
 }
 
 /// Converts our locked data to a file
@@ -190,14 +229,6 @@ pub fn convert_to_dist(
     pkg: &PypiPackageData,
     lock_file_dir: &Path,
 ) -> Result<Dist, ConvertToUvDistError> {
-    // Log the package location and hash for debugging
-    tracing::info!(
-        "Converting package {} with location: {:?}, hash: {:?}",
-        pkg.name,
-        pkg.location,
-        pkg.hash
-    );
-
     // Figure out if it is a url from the registry or a direct url
     let dist = match &pkg.location {
         UrlOrPath::Url(url) if is_direct_url(url.scheme()) => {
@@ -216,26 +247,10 @@ pub fn convert_to_dist(
             // Use the hash from the lock file, or the one from the URL if not in lock
             let final_hash = pkg.hash.as_ref().or(url_hash.as_ref());
 
-            // If we have a hash, add it back to the URL fragment for verification
+            // If we have a hash, update the URL fragment while preserving other parameters
             if let Some(hash) = final_hash {
-                let hash_fragment = match hash {
-                    rattler_lock::PackageHashes::Sha256(sha256) => {
-                        format!("sha256={:x}", sha256)
-                    }
-                    rattler_lock::PackageHashes::Md5(md5) => {
-                        format!("md5={:x}", md5)
-                    }
-                    rattler_lock::PackageHashes::Md5Sha256(_md5, sha256) => {
-                        // Prefer SHA256 for direct URLs
-                        format!("sha256={:x}", sha256)
-                    }
-                };
-                tracing::info!(
-                    "Setting hash fragment '{}' on URL for package {}",
-                    hash_fragment,
-                    pkg.name
-                );
-                final_url.set_fragment(Some(&hash_fragment));
+                let updated_fragment = update_fragment_with_hash(final_url.fragment(), hash);
+                final_url.set_fragment(Some(&updated_fragment));
             }
 
             if LockedGitUrl::is_locked_git_url(&final_url) {
@@ -255,12 +270,6 @@ pub fn convert_to_dist(
                     },
                 )?
             } else {
-                tracing::info!(
-                    "Creating Dist for package {} with final URL: {}",
-                    pkg.name,
-                    final_url
-                );
-
                 // For non-git direct URLs, create DirectUrl distribution
                 let parsed_url = ParsedUrl::try_from(final_url.clone())
                     .map_err(|e| ConvertToUvDistError::ParseUrl(Box::new(e)))?;
@@ -369,10 +378,11 @@ mod tests {
     use std::{path::PathBuf, str::FromStr};
 
     use pep440_rs::Version;
-    use rattler_lock::{PypiPackageData, UrlOrPath};
-    use uv_distribution_types::RemoteSource;
+    use rattler_digest::{Md5, Sha256, parse_digest_from_hex};
+    use rattler_lock::{PackageHashes, PypiPackageData, UrlOrPath};
+    use uv_distribution_types::{Dist, RemoteSource, SourceDist};
 
-    use super::convert_to_dist;
+    use super::{convert_to_dist, update_fragment_with_hash};
 
     #[test]
     /// Create locked pypi data, pass this into the convert_to_dist function
@@ -398,5 +408,134 @@ mod tests {
 
         // Check if the dist is a built dist
         assert!(!dist.filename().unwrap().contains("%2B"));
+    }
+
+    #[test]
+    fn test_update_fragment_with_hash() {
+        let sha256_hash = parse_digest_from_hex::<Sha256>(
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        )
+        .unwrap();
+        let md5_hash = parse_digest_from_hex::<Md5>("d41d8cd98f00b204e9800998ecf8427e").unwrap();
+
+        // Test 1: No existing fragment
+        let result = update_fragment_with_hash(None, &PackageHashes::Sha256(sha256_hash));
+        assert_eq!(
+            result,
+            "sha256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+
+        // Test 2: Empty fragment
+        let result = update_fragment_with_hash(Some(""), &PackageHashes::Sha256(sha256_hash));
+        assert_eq!(
+            result,
+            "sha256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+
+        // Test 3: Fragment with egg parameter
+        let result =
+            update_fragment_with_hash(Some("egg=mypackage"), &PackageHashes::Sha256(sha256_hash));
+        assert_eq!(
+            result,
+            "egg=mypackage&sha256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+
+        // Test 4: Fragment with multiple parameters
+        let result = update_fragment_with_hash(
+            Some("egg=mypackage&subdirectory=src"),
+            &PackageHashes::Sha256(sha256_hash),
+        );
+        assert_eq!(
+            result,
+            "egg=mypackage&subdirectory=src&sha256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+
+        // Test 5: Fragment with existing sha256 hash
+        let result = update_fragment_with_hash(
+            Some("sha256=oldhash&egg=mypackage"),
+            &PackageHashes::Sha256(sha256_hash),
+        );
+        assert_eq!(
+            result,
+            "sha256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855&egg=mypackage"
+        );
+
+        // Test 6: Fragment with existing md5 hash, updating with sha256
+        let result = update_fragment_with_hash(
+            Some("md5=oldhash&egg=mypackage"),
+            &PackageHashes::Sha256(sha256_hash),
+        );
+        assert_eq!(
+            result,
+            "sha256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855&egg=mypackage"
+        );
+
+        // Test 7: MD5 hash
+        let result =
+            update_fragment_with_hash(Some("egg=mypackage"), &PackageHashes::Md5(md5_hash));
+        assert_eq!(result, "egg=mypackage&md5=d41d8cd98f00b204e9800998ecf8427e");
+
+        // Test 8: Md5Sha256 hash (should prefer SHA256)
+        let result = update_fragment_with_hash(
+            Some("egg=mypackage"),
+            &PackageHashes::Md5Sha256(md5_hash, sha256_hash),
+        );
+        assert_eq!(
+            result,
+            "egg=mypackage&sha256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+    }
+
+    #[test]
+    fn test_convert_to_dist_preserves_fragment_params() {
+        // Test that convert_to_dist preserves egg and subdirectory parameters when adding hash
+        let url_with_fragment =
+            "direct+https://github.com/org/repo/archive.zip#egg=mypackage&subdirectory=src"
+                .parse()
+                .unwrap();
+
+        let sha256_hash = parse_digest_from_hex::<Sha256>(
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        )
+        .unwrap();
+
+        let locked = PypiPackageData {
+            name: "mypackage".parse().unwrap(),
+            version: Version::from_str("1.0.0").unwrap(),
+            location: UrlOrPath::Url(url_with_fragment),
+            hash: Some(PackageHashes::Sha256(sha256_hash)),
+            requires_dist: vec![],
+            requires_python: None,
+            editable: false,
+        };
+
+        let dist = convert_to_dist(&locked, &PathBuf::new()).expect("could not convert to dist");
+
+        // Get the URL from the dist
+        match &dist {
+            Dist::Source(SourceDist::DirectUrl(direct)) => {
+                let url = direct.url.to_url();
+                let fragment = url.fragment().expect("URL should have fragment");
+                // Verify all parameters are preserved
+                assert!(
+                    fragment.contains("egg=mypackage"),
+                    "Fragment should contain egg parameter"
+                );
+                assert!(
+                    fragment.contains("subdirectory=src"),
+                    "Fragment should contain subdirectory parameter"
+                );
+                assert!(
+                    fragment.contains(
+                        "sha256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                    ),
+                    "Fragment should contain SHA256 hash"
+                );
+            }
+            _ => panic!(
+                "Expected dist to be a DirectUrl source distribution, got {:?}",
+                dist
+            ),
+        }
     }
 }

@@ -129,6 +129,10 @@ pub struct ConfigCli {
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
     pypi_keyring_provider: Option<KeyringProvider>,
 
+    /// Verify hashes from URL fragments for PyPI direct URLs (may cause double downloads)
+    #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    pypi_verify_direct_url_hashes: bool,
+
     /// Max concurrent solves, default is the number of CPUs
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
     pub concurrent_solves: Option<usize>,
@@ -302,6 +306,18 @@ pub struct PyPIConfig {
     #[serde(default)]
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub allow_insecure_host: Vec<String>,
+
+    /// Whether to verify hashes from URL fragments for direct URLs
+    /// Default: false (skips verification to avoid double downloads)
+    /// Set to true for enhanced security at the cost of performance
+    ///
+    /// Example in pixi.toml:
+    /// ```toml
+    /// [pypi]
+    /// verify-direct-url-hashes = true
+    /// ```
+    #[serde(default)]
+    pub verify_direct_url_hashes: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -456,6 +472,8 @@ impl PyPIConfig {
                 .into_iter()
                 .chain(other.allow_insecure_host)
                 .collect(),
+            verify_direct_url_hashes: other.verify_direct_url_hashes
+                || self.verify_direct_url_hashes,
         }
     }
 
@@ -736,13 +754,16 @@ impl Default for Config {
 
 impl From<ConfigCli> for Config {
     fn from(cli: ConfigCli) -> Self {
+        let mut pypi_config = PyPIConfig::default();
+        if let Some(keyring) = cli.pypi_keyring_provider {
+            pypi_config = pypi_config.with_keyring(keyring);
+        }
+        pypi_config.verify_direct_url_hashes = cli.pypi_verify_direct_url_hashes;
+
         Self {
             tls_no_verify: if cli.tls_no_verify { Some(true) } else { None },
             authentication_override_file: cli.auth_file,
-            pypi_config: cli
-                .pypi_keyring_provider
-                .map(|val| PyPIConfig::default().with_keyring(val))
-                .unwrap_or_default(),
+            pypi_config,
             detached_environments: None,
             concurrency: ConcurrencyConfig {
                 solves: cli
@@ -1892,6 +1913,7 @@ UNUSED = "unused"
             tls_no_verify: true,
             auth_file: None,
             pypi_keyring_provider: Some(KeyringProvider::Subprocess),
+            pypi_verify_direct_url_hashes: false,
             concurrent_solves: None,
             concurrent_downloads: None,
         };
@@ -1906,6 +1928,7 @@ UNUSED = "unused"
             tls_no_verify: false,
             auth_file: Some(PathBuf::from("path.json")),
             pypi_keyring_provider: None,
+            pypi_verify_direct_url_hashes: false,
             concurrent_solves: None,
             concurrent_downloads: None,
         };
@@ -1937,6 +1960,36 @@ UNUSED = "unused"
             config.pypi_config().keyring_provider,
             Some(KeyringProvider::Subprocess)
         );
+    }
+
+    #[test]
+    fn test_pypi_config_verify_direct_url_hashes() {
+        let toml = r#"
+            [pypi-config]
+            verify-direct-url-hashes = true
+        "#;
+        let (config, _) = Config::from_toml(toml, None).unwrap();
+        assert_eq!(config.pypi_config().verify_direct_url_hashes, true);
+
+        // Test default value
+        let toml = r#"
+            [pypi-config]
+            index-url = "https://pypi.org/simple"
+        "#;
+        let (config, _) = Config::from_toml(toml, None).unwrap();
+        assert_eq!(config.pypi_config().verify_direct_url_hashes, false);
+
+        // Test CLI override
+        let cli = ConfigCli {
+            tls_no_verify: false,
+            auth_file: None,
+            pypi_keyring_provider: None,
+            pypi_verify_direct_url_hashes: true,
+            concurrent_solves: None,
+            concurrent_downloads: None,
+        };
+        let config = Config::from(cli);
+        assert_eq!(config.pypi_config().verify_direct_url_hashes, true);
     }
 
     #[test]
@@ -2035,6 +2088,7 @@ UNUSED = "unused"
                 ]),
                 index_url: Some(Url::parse("https://conda.anaconda.org/conda-forge").unwrap()),
                 keyring_provider: Some(KeyringProvider::Subprocess),
+                verify_direct_url_hashes: false,
             },
             s3_options: HashMap::from([(
                 "bucket1".into(),

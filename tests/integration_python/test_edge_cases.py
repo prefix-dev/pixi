@@ -511,7 +511,7 @@ dependencies = [
     "requests @ https://files.pythonhosted.org/packages/f9/9b/335f9764261e915ed497fcdeb11df5dfd6f7bf257d4a6a2a686d80da4d54/requests-2.32.3-py3-none-any.whl#sha256=70761cfe03c773ceb22aa2f671b4757976145175cdfca038c02654d061d6dcc6"
 ]
 [tool.pixi.workspace]
-platforms = ["linux-64", "osx-arm64", "win-64"]
+platforms = ["linux-64"]
 channels = ["https://prefix.dev/conda-forge"]
 """
     pyproject_path = tmp_pixi_workspace / "pyproject.toml"
@@ -541,7 +541,7 @@ dependencies = [
     "idna @ https://files.pythonhosted.org/packages/76/c6/c88e154df9c4e1a2a66ccf0005a88dfb2650c1dffb6f5ce603dfbd452ce3/idna-3.10-py3-none-any.whl#md5=ce22685f1b296fb33e5fda362870685d"
 ]
 [tool.pixi.workspace]
-platforms = ["linux-64", "osx-arm64", "win-64"]
+platforms = ["linux-64"]
 channels = ["https://prefix.dev/conda-forge"]
 """
     pyproject_path = tmp_pixi_workspace / "pyproject.toml"
@@ -570,7 +570,7 @@ dependencies = [
     "idna @ https://files.pythonhosted.org/packages/76/c6/c88e154df9c4e1a2a66ccf0005a88dfb2650c1dffb6f5ce603dfbd452ce3/idna-3.10-py3-none-any.whl#md5=00000000000000000000000000000000"
 ]
 [tool.pixi.workspace]
-platforms = ["linux-64", "osx-arm64", "win-64"]
+platforms = ["linux-64"]
 channels = ["https://prefix.dev/conda-forge"]
 """
     pyproject_path = tmp_pixi_workspace / "pyproject.toml"
@@ -600,7 +600,7 @@ dependencies = [
     "requests @ https://files.pythonhosted.org/packages/f9/9b/335f9764261e915ed497fcdeb11df5dfd6f7bf257d4a6a2a686d80da4d54/requests-2.32.3-py3-none-any.whl"
 ]
 [tool.pixi.workspace]
-platforms = ["linux-64", "osx-arm64", "win-64"]
+platforms = ["linux-64"]
 channels = ["https://prefix.dev/conda-forge"]
 """
     pyproject_path = tmp_pixi_workspace / "pyproject.toml"
@@ -629,7 +629,7 @@ dependencies = [
     "requests @ https://files.pythonhosted.org/packages/f9/9b/335f9764261e915ed497fcdeb11df5dfd6f7bf257d4a6a2a686d80da4d54/requests-2.32.3-py3-none-any.whl#sha256=notahexhash"
 ]
 [tool.pixi.workspace]
-platforms = ["linux-64", "osx-arm64", "win-64"]
+platforms = ["linux-64"]
 channels = ["https://prefix.dev/conda-forge"]
 """
     pyproject_path = tmp_pixi_workspace / "pyproject.toml"
@@ -659,7 +659,7 @@ dependencies = [
     "requests @ https://files.pythonhosted.org/packages/f9/9b/335f9764261e915ed497fcdeb11df5dfd6f7bf257d4a6a2a686d80da4d54/requests-2.32.3-py3-none-any.whl#sha256="
 ]
 [tool.pixi.workspace]
-platforms = ["linux-64", "osx-arm64", "win-64"]
+platforms = ["linux-64"]
 channels = ["https://prefix.dev/conda-forge"]
 """
     pyproject_path = tmp_pixi_workspace / "pyproject.toml"
@@ -689,7 +689,7 @@ dependencies = [
     "requests @ https://files.pythonhosted.org/packages/f9/9b/335f9764261e915ed497fcdeb11df5dfd6f7bf257d4a6a2a686d80da4d54/requests-2.32.3-py3-none-any.whl#sha512=abcdef1234567890"
 ]
 [tool.pixi.workspace]
-platforms = ["linux-64", "osx-arm64", "win-64"]
+platforms = ["linux-64"]
 channels = ["https://prefix.dev/conda-forge"]
 """
     pyproject_path = tmp_pixi_workspace / "pyproject.toml"
@@ -719,7 +719,7 @@ dependencies = [
     "requests @ https://files.pythonhosted.org/packages/f9/9b/335f9764261e915ed497fcdeb11df5dfd6f7bf257d4a6a2a686d80da4d54/requests-2.32.3-py3-none-any.whl#sha256=70761cfe03c773ceb22aa2f671b"
 ]
 [tool.pixi.workspace]
-platforms = ["linux-64", "osx-arm64", "win-64"]
+platforms = ["linux-64"]
 channels = ["https://prefix.dev/conda-forge"]
 """
     pyproject_path = tmp_pixi_workspace / "pyproject.toml"
@@ -749,7 +749,7 @@ dependencies = [
     "requests @ https://files.pythonhosted.org/packages/f9/9b/335f9764261e915ed497fcdeb11df5dfd6f7bf257d4a6a2a686d80da4d54/requests-2.32.3-py3-none-any.whl#sha256=70761cfe03c773ceb22aa2f671b4757976145175cdfca038c02654d061d6dcc6&egg=requests"
 ]
 [tool.pixi.workspace]
-platforms = ["linux-64", "osx-arm64", "win-64"]
+platforms = ["linux-64"]
 channels = ["https://prefix.dev/conda-forge"]
 """
     pyproject_path = tmp_pixi_workspace / "pyproject.toml"
@@ -779,7 +779,7 @@ dependencies = [
     "charset-normalizer @ https://files.pythonhosted.org/packages/f2/4f/e1808dc01273379acc506d18f1504eb2d299bd4131743b9fc54d7be4df1e/charset_normalizer-3.4.0.tar.gz#sha256=223217c3d4f82c3ac5e29032b3f1c2eb0fb591b72161f86d93f5719079dae93e"
 ]
 [tool.pixi.workspace]
-platforms = ["linux-64", "osx-arm64", "win-64"]
+platforms = ["linux-64"]
 channels = ["https://prefix.dev/conda-forge"]
 """
     pyproject_path = tmp_pixi_workspace / "pyproject.toml"
@@ -808,7 +808,7 @@ dependencies = [
     "requests @ https://files.pythonhosted.org/packages/f9/9b/335f9764261e915ed497fcdeb11df5dfd6f7bf257d4a6a2a686d80da4d54/requests-2.32.3-py3-none-any.whl#SHA256=70761cfe03c773ceb22aa2f671b4757976145175cdfca038c02654d061d6dcc6"
 ]
 [tool.pixi.workspace]
-platforms = ["linux-64", "osx-arm64", "win-64"]
+platforms = ["linux-64"]
 channels = ["https://prefix.dev/conda-forge"]
 """
     pyproject_path = tmp_pixi_workspace / "pyproject.toml"

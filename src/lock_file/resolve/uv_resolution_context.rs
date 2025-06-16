@@ -26,6 +26,7 @@ pub struct UvResolutionContext {
     pub shared_state: SharedState,
     pub extra_middleware: ExtraMiddleware,
     pub proxies: Vec<reqwest::Proxy>,
+    pub verify_direct_url_hashes: bool,
 }
 
 impl UvResolutionContext {
@@ -77,6 +78,7 @@ impl UvResolutionContext {
             shared_state: SharedState::default(),
             extra_middleware: ExtraMiddleware(uv_middlewares(project.config())),
             proxies: project.config().get_proxies().into_diagnostic()?,
+            verify_direct_url_hashes: project.config().pypi_config.verify_direct_url_hashes,
         })
     }
 
