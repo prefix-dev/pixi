@@ -493,7 +493,7 @@ channels = ["https://prefix.dev/conda-forge"]
 
     # use verify_cli_command to check that the installation fails with the expected error
     verify_cli_command(
-        [pixi, "install", "-v"],
+        [pixi, "install", "-v", "--pypi-verify-direct-url-hashes"],
         cwd=tmp_pixi_workspace,
         expected_exit_code=ExitCode.FAILURE,
         stderr_contains=["Hash verification failed"],
@@ -582,7 +582,7 @@ channels = ["https://prefix.dev/conda-forge"]
 
     # Should fail with incorrect MD5 hash
     verify_cli_command(
-        [pixi, "install", "-v"],
+        [pixi, "install", "-v", "--pypi-verify-direct-url-hashes"],
         cwd=tmp_pixi_workspace,
         expected_exit_code=ExitCode.FAILURE,
         stderr_contains=["Hash verification failed"],
@@ -641,7 +641,7 @@ channels = ["https://prefix.dev/conda-forge"]
 
     # Should fail - invalid hash format
     verify_cli_command(
-        [pixi, "install", "-v"],
+        [pixi, "install", "-v", "--pypi-verify-direct-url-hashes"],
         cwd=tmp_pixi_workspace,
         expected_exit_code=ExitCode.FAILURE,
         stderr_contains=["Hash verification failed", "not a valid hex string"],
@@ -671,7 +671,7 @@ channels = ["https://prefix.dev/conda-forge"]
 
     # Should fail - empty hash value
     verify_cli_command(
-        [pixi, "install", "-v"],
+        [pixi, "install", "-v", "--pypi-verify-direct-url-hashes"],
         cwd=tmp_pixi_workspace,
         expected_exit_code=ExitCode.FAILURE,
         stderr_contains=["Hash verification failed", "Empty"],
@@ -701,7 +701,7 @@ channels = ["https://prefix.dev/conda-forge"]
 
     # Should fail - unknown hash algorithm
     verify_cli_command(
-        [pixi, "install", "-v"],
+        [pixi, "install", "-v", "--pypi-verify-direct-url-hashes"],
         cwd=tmp_pixi_workspace,
         expected_exit_code=ExitCode.FAILURE,
         stderr_contains=["Hash verification failed", "Unsupported hash algorithm"],
@@ -731,7 +731,7 @@ channels = ["https://prefix.dev/conda-forge"]
 
     # Should fail - truncated hash won't match
     verify_cli_command(
-        [pixi, "install", "-v"],
+        [pixi, "install", "-v", "--pypi-verify-direct-url-hashes"],
         cwd=tmp_pixi_workspace,
         expected_exit_code=ExitCode.FAILURE,
         stderr_contains=["Hash verification failed"],
