@@ -4430,7 +4430,7 @@ dependencies = [
 
 [[package]]
 name = "pixi"
-version = "0.48.1"
+version = "0.48.2"
 dependencies = [
  "ahash",
  "anyhow",
