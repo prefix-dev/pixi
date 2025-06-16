@@ -23,6 +23,8 @@ use pixi_record::PixiRecord;
 use pixi_utils::reqwest::build_reqwest_clients;
 use rattler_conda_types::{Arch, ChannelConfig, ChannelUrl, Platform};
 use rattler_lock::LockFile;
+use rattler_shell::activation::{ActivationVariables, Activator, PathModificationBehavior};
+use rattler_shell::shell::{Shell, ShellEnum};
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use std::path::PathBuf;
 use url::Url;
@@ -135,7 +137,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Install or update
     fs_err::create_dir_all(&args.target).ok();
     let target_dir = args.target.canonicalize().into_diagnostic()?;
-    let prefix = Prefix::new(target_dir); // must use absolute path
+    let prefix = Prefix::new(target_dir.clone()); // must use absolute path
     tracing::info!("Updating prefix: '{}'", prefix.root().display());
 
     let pixi_records = env
@@ -216,44 +218,84 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     .await?;
 
     // No `uv` support for WASM right now
-    if plat.arch() == Some(Arch::Wasm32) {
-        return Ok(());
+    if plat.arch() != Some(Arch::Wasm32) {
+        let pypi_records = env
+            .pypi_packages(plat)
+            .map(|iter| {
+                iter.map(|(data, env_data)| (data.clone(), env_data.clone()))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
+        let uv_context = UvResolutionContext::new(&config)?.set_cache_refresh(Some(false), None);
+
+        // Update the prefix with Pypi records
+        update_prefix_pypi(
+            &name,
+            &prefix,
+            plat,
+            &pixi_records,
+            &pypi_records,
+            &python_status,
+            &Default::default(), // use default system requirements
+            &uv_context,
+            env.pypi_indexes(),
+            &Default::default(), // skip get_activated_environment_variables
+            lockfile_dir,
+            plat,
+            &NoBuildIsolation::All, // enable no-build-isolation for all packages
+            &NoBuild::All,          // enable no-build for all packages
+        )
+        .await
+        .with_context(|| {
+            format!(
+                "Failed to update PyPI packages for environment '{}'",
+                name.fancy_display()
+            )
+        })?;
     }
 
-    let pypi_records = env
-        .pypi_packages(plat)
-        .map(|iter| {
-            iter.map(|(data, env_data)| (data.clone(), env_data.clone()))
-                .collect::<Vec<_>>()
-        })
+    // Generate the activate script
+    let shell = ShellEnum::from_parent_process()
+        .or_else(ShellEnum::from_env)
         .unwrap_or_default();
+    let activate_script = if shell.extension() == "sh" {
+        target_dir.join("bin").join("activate")
+    } else {
+        target_dir
+            .join("bin")
+            .join(format!("activate.{}", shell.extension()))
+    };
+    let name_in_env = target_dir
+        .file_name()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or(name.to_string());
+    let mut activator =
+        Activator::from_path(target_dir.as_path(), shell.clone(), plat).map_err(|e| {
+            miette::miette!(format!("failed to create activator for {:?}\n{}", name, e))
+        })?;
+    activator
+        .env_vars
+        .insert("CONDA_DEFAULT_ENV".to_string(), name_in_env.clone());
+    activator
+        .env_vars
+        .insert("PIXI_ENVIRONMENT_NAME".to_string(), name_in_env);
+    activator
+        .env_vars
+        .insert("PIXI_ENVIRONMENT_PLATFORMS".to_string(), plat.to_string());
 
-    let uv_context = UvResolutionContext::new(&config)?.set_cache_refresh(Some(false), None);
+    let activate_content = activator
+        .activation(ActivationVariables {
+            conda_prefix: None,
+            path: None,
+            path_modification_behavior: PathModificationBehavior::Prepend,
+        })
+        .into_diagnostic()?
+        .script
+        .contents()
+        .into_diagnostic()?;
 
-    // Update the prefix with Pypi records
-    update_prefix_pypi(
-        &name,
-        &prefix,
-        plat,
-        &pixi_records,
-        &pypi_records,
-        &python_status,
-        &Default::default(), // use default system requirements
-        &uv_context,
-        env.pypi_indexes(),
-        &Default::default(), // skip get_activated_environment_variables
-        lockfile_dir,
-        plat,
-        &NoBuildIsolation::All, // enable no-build-isolation for all packages
-        &NoBuild::All,          // enable no-build for all packages
-    )
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to update PyPI packages for environment '{}'",
-            name.fancy_display()
-        )
-    })?;
+    fs_err::write(activate_script, activate_content).into_diagnostic()?;
 
     // Save an environment file to the environment directory after the update.
     // Avoiding writing the cache away before the update is done.
