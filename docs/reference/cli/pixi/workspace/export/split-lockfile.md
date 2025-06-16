@@ -13,7 +13,7 @@ pixi workspace export split-lockfile [OPTIONS] <OUTPUT_DIR>
 
 ## Arguments
 - <a id="arg-<OUTPUT_DIR>" href="#arg-<OUTPUT_DIR>">`<OUTPUT_DIR>`</a>
-:  Output directory for each split lock file. The paths of the output lock files are: <output_dir>/<platform>/<environment>.lock
+:  Output directory for each split lock file. The paths of the output lock files are: {output_dir}/{platform}/{environment}.lock
 <br>**required**: `true`
 
 ## Options
