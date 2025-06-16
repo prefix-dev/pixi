@@ -25,6 +25,8 @@ pixi global uninstall [OPTIONS] <ENVIRONMENT>...
 - <a id="arg---pypi-keyring-provider" href="#arg---pypi-keyring-provider">`--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>`</a>
 :  Specifies whether to use the keyring to look up credentials for PyPI
 <br>**options**: `disabled`, `subprocess`
+- <a id="arg---pypi-verify-direct-url-hashes" href="#arg---pypi-verify-direct-url-hashes">`--pypi-verify-direct-url-hashes`</a>
+:  Verify hashes from URL fragments for PyPI direct URLs (may cause double downloads)
 - <a id="arg---concurrent-solves" href="#arg---concurrent-solves">`--concurrent-solves <CONCURRENT_SOLVES>`</a>
 :  Max concurrent solves, default is the number of CPUs
 - <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
