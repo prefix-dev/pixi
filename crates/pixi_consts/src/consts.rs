@@ -86,6 +86,8 @@ pub static DEFAULT_CHANNELS: LazyLock<Vec<NamedChannelOrUrl>> =
         }
     });
 
+pub const MOJOPROJECT_MANIFEST: &str = "mojoproject.toml";
+
 pub const CONDA_INSTALLER: &str = "conda";
 
 pub const ONE_TIME_MESSAGES_DIR: &str = "one-time-messages";

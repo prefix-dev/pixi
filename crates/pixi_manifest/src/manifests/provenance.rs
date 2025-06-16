@@ -56,6 +56,7 @@ impl ManifestProvenance {
         match self.kind {
             ManifestKind::Pixi => Ok(ManifestSource::PixiToml(contents)),
             ManifestKind::Pyproject => Ok(ManifestSource::PyProjectToml(contents)),
+            ManifestKind::MojoProject => Ok(ManifestSource::MojoProjectToml(contents)),
         }
     }
 
@@ -75,6 +76,7 @@ impl From<ManifestKind> for ManifestProvenance {
 pub enum ManifestKind {
     Pixi,
     Pyproject,
+    MojoProject,
 }
 
 impl ManifestKind {
@@ -83,6 +85,7 @@ impl ManifestKind {
         match path.file_name().and_then(OsStr::to_str)? {
             consts::WORKSPACE_MANIFEST => Some(Self::Pixi),
             consts::PYPROJECT_MANIFEST => Some(Self::Pyproject),
+            consts::MOJOPROJECT_MANIFEST => Some(Self::MojoProject),
             _ => None,
         }
     }
@@ -92,6 +95,7 @@ impl ManifestKind {
         match self {
             ManifestKind::Pixi => consts::WORKSPACE_MANIFEST,
             ManifestKind::Pyproject => consts::PYPROJECT_MANIFEST,
+            ManifestKind::MojoProject => consts::MOJOPROJECT_MANIFEST,
         }
     }
 

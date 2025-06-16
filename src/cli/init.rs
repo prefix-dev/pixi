@@ -28,6 +28,7 @@ use crate::workspace::WorkspaceMut;
 pub enum ManifestFormat {
     Pixi,
     Pyproject,
+    Mojoproject,
 }
 
 /// Creates a new workspace
@@ -261,6 +262,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let dir = args.path.canonicalize().into_diagnostic()?;
     let pixi_manifest_path = dir.join(consts::WORKSPACE_MANIFEST);
     let pyproject_manifest_path = dir.join(consts::PYPROJECT_MANIFEST);
+    let mojoproject_manifest_path = dir.join(consts::MOJOPROJECT_MANIFEST);
     let gitignore_path = dir.join(".gitignore");
     let gitattributes_path = dir.join(".gitattributes");
     let config = Config::load_global();
@@ -501,11 +503,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         // Create a 'pixi.toml' manifest
         } else {
-            // Check if the 'pixi.toml' file doesn't already exist. We don't want to
+            let path = if args.format == Some(ManifestFormat::Mojoproject) {
+                mojoproject_manifest_path
+            } else {
+                pixi_manifest_path
+            };
+
+            // Check if the manifest file doesn't already exist. We don't want to
             // overwrite it.
-            if pixi_manifest_path.is_file() {
+            if path.is_file() {
                 miette::bail!("{} already exists", consts::WORKSPACE_MANIFEST);
             }
+
             let rv = render_workspace(
                 &env,
                 default_name,
@@ -518,7 +527,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 config.s3_options,
                 None,
             );
-            save_manifest_file(&pixi_manifest_path, rv)?;
+            save_manifest_file(&path, rv)?;
         };
     }
 
