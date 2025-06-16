@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### [0.48.2] - 2025-06-16
 #### ✨ Highlights
 
-This is a minor release with a couple of bugs fixed.
+This is a minor release with a couple of bugfixes.
 A new feature is the support for legacy `mojoproject.toml` files.
 
 
