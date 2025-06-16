@@ -14,6 +14,7 @@ use url::Url;
 use rattler_conda_types::Version;
 use std::str::FromStr;
 
+use crate::cli::GlobalOptions;
 use crate::reporters::format_release_notes;
 
 /// Update pixi to the latest version or a specific version.
@@ -177,17 +178,25 @@ async fn fetch_release_notes(version: &Option<Version>) -> miette::Result<String
     }
 }
 
-pub async fn execute(args: Args) -> miette::Result<()> {
+/// Executes the self-update command.
+///
+/// # Arguments
+/// * `args` - The self-update specific arguments.
+/// * `global_options` - Reference to the global CLI options.
+pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Result<()> {
+    let is_quiet = global_options.quiet > 0;
     // Get the target version, without 'v' prefix, None for force latest version
     let target_version = match &args.version {
         Some(version) => {
             // Remove leading 'v' if present and inform the user
             if version.to_string().starts_with('v') {
-                eprintln!(
-                    "{}Warning: Leading 'v' removed from version {}",
-                    console::style(console::Emoji("⚠️ ", "")).yellow(),
-                    version
-                );
+                if !is_quiet {
+                    eprintln!(
+                        "{}Warning: Leading 'v' removed from version {}",
+                        console::style(console::Emoji("⚠️ ", "")).yellow(),
+                        version
+                    );
+                }
                 Some(Version::from_str(&version.to_string()[1..]).into_diagnostic()?)
             } else {
                 Some(version.clone())
@@ -205,7 +214,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Get the current version of the pixi binary
     let current_version = Version::from_str(consts::PIXI_VERSION).into_diagnostic()?;
 
-    let fetch_release_warning = if args.no_release_note {
+    let fetch_release_warning = if args.no_release_note || is_quiet {
         None
     } else {
         match fetch_release_notes(&target_version).await {
@@ -237,10 +246,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Don't actually update the binary if `--dry-run` is passed
     if args.dry_run {
-        eprintln!(
-            "{} Pixi version has not been updated. If you want to update, run the command again without `--dry-run`.",
-            console::style(console::Emoji("ℹ️ ", "")).yellow()
-        );
+        if !is_quiet {
+            eprintln!(
+                "{} Pixi version has not been updated. If you want to update, run the command again without `--dry-run`.",
+                console::style(console::Emoji("ℹ️ ", "")).yellow()
+            );
+        }
         return Ok(());
     }
 
@@ -249,11 +260,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .as_ref()
         .is_some_and(|t| *t == current_version)
     {
-        eprintln!(
-            "{}pixi is already up-to-date (version {})",
-            console::style(console::Emoji("✔ ", "")).green(),
-            current_version
-        );
+        if !is_quiet {
+            eprintln!(
+                "{}pixi is already up-to-date (version {})",
+                console::style(console::Emoji("✔ ", "")).green(),
+                current_version
+            );
+        }
         return Ok(());
     }
 
@@ -282,7 +295,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         "updated"
     };
 
-    if !args.force {
+    if !args.force && !is_quiet {
         eprintln!(
             "{}Pixi will be {} from {} to {}",
             console::style(console::Emoji("✔ ", "")).green(),
@@ -332,10 +345,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     }
 
-    eprintln!(
-        "{}Pixi archive downloaded.",
-        console::style(console::Emoji("✔ ", "")).green(),
-    );
+    if !is_quiet {
+        eprintln!(
+            "{}Pixi archive downloaded.",
+            console::style(console::Emoji("✔ ", "")).green(),
+        );
+    }
 
     // Seek to the beginning of the file before uncompressing it
     archived_tempfile
@@ -356,10 +371,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         Err(miette::miette!(error_message))?
     }
 
-    eprintln!(
-        "{}Pixi archive uncompressed.",
-        console::style(console::Emoji("✔ ", "")).green(),
-    );
+    if !is_quiet {
+        eprintln!(
+            "{}Pixi archive uncompressed.",
+            console::style(console::Emoji("✔ ", "")).green(),
+        );
+    }
 
     // Get the new binary path used for self-replacement
     let new_binary_path = binary_tempdir.path().join(pixi_binary_name());
@@ -367,17 +384,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Replace the current binary with the new binary
     self_replace::self_replace(new_binary_path).into_diagnostic()?;
 
-    if let Some(ref target_version) = target_version {
-        eprintln!(
-            "{}Pixi has been updated to version {}.",
-            console::style(console::Emoji("✔ ", "")).green(),
-            target_version
-        );
-    } else {
-        eprintln!(
-            "{}Pixi has been updated to latest release.",
-            console::style(console::Emoji("✔ ", "")).green(),
-        );
+    if !is_quiet {
+        if let Some(ref target_version) = target_version {
+            eprintln!(
+                "{}Pixi has been updated to version {}.",
+                console::style(console::Emoji("✔ ", "")).green(),
+                target_version
+            );
+        } else {
+            eprintln!(
+                "{}Pixi has been updated to latest release.",
+                console::style(console::Emoji("✔ ", "")).green(),
+            );
+        }
     }
 
     if let Some(fetch_release_warning) = fetch_release_warning {
