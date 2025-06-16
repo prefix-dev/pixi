@@ -7,11 +7,16 @@
     ]
   },
   {
-    "version": "v0.48.1",
-    "title": "v0.48.1",
+    "version": "v0.48.2",
+    "title": "v0.48.2",
     "aliases": [
       "latest"
     ]
+  },
+  {
+    "version": "v0.48.1",
+    "title": "v0.48.1",
+    "aliases": []
   },
   {
     "version": "v0.48.0",
