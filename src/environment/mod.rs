@@ -32,7 +32,9 @@ use crate::{
     workspace::{Environment, HasWorkspaceRef, grouped_environment::GroupedEnvironment},
 };
 
-pub use conda_prefix::{CondaPrefixUpdated, CondaPrefixUpdater, CondaPrefixUpdaterBuilder};
+pub use conda_prefix::{
+    CondaPrefixUpdated, CondaPrefixUpdater, CondaPrefixUpdaterBuilder, update_prefix_conda,
+};
 use pixi_pypi_spec::PixiPypiSpec;
 pub use pypi_prefix::update_prefix_pypi;
 pub use python_status::PythonStatus;

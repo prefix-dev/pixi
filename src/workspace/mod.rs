@@ -21,7 +21,7 @@ use std::{
 
 use async_once_cell::OnceCell as AsyncCell;
 pub use discovery::{DiscoveryStart, WorkspaceLocator, WorkspaceLocatorError};
-pub use environment::Environment;
+pub use environment::{Environment, best_platform};
 pub use has_project_ref::HasWorkspaceRef;
 use indexmap::Equivalent;
 use itertools::Itertools;
