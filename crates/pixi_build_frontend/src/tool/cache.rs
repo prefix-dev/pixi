@@ -9,6 +9,7 @@ use dashmap::{DashMap, Entry};
 use fs_err::tokio as tokio_fs;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
+use pixi_utils::AsyncPrefixGuard;
 use rattler_conda_types::{ChannelConfig, Matches, Platform, PrefixRecord};
 use rattler_shell::{
     activation::{ActivationVariables, Activator},
@@ -252,6 +253,10 @@ impl ToolCache {
         let mut records_of_records = Vec::new();
 
         for dir in directories.iter() {
+            // Acquire a lock on the directory so we can safely read it.
+            let prefix_guard = AsyncPrefixGuard::new(dir).await.into_diagnostic()?;
+            let _prefix_guard = prefix_guard.write().await.into_diagnostic()?;
+
             let records = find_spec_records(&dir.join("conda-meta"), specs.clone()).await?;
 
             if let Some(records) = records {
@@ -292,7 +297,7 @@ impl ToolCache {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashMap, path::PathBuf, sync::Arc};
+    use std::{collections::HashMap, path::PathBuf, str::FromStr, sync::Arc};
 
     use pixi_config::Config;
     use rattler_conda_types::{
@@ -395,10 +400,14 @@ mod tests {
             .with_gateway(config.gateway().with_client(auth_client).finish())
             .build();
 
+        let backends_channel =
+            NamedChannelOrUrl::from_str("https://prefix.dev/pixi-build-backends").unwrap();
+        let conda_forge_channel = NamedChannelOrUrl::from_str("conda-forge").unwrap();
+
         let tool_spec = IsolatedToolSpec {
-            specs: vec![MatchSpec::from_str("bat", ParseStrictness::Strict).unwrap()],
-            command: "bat".into(),
-            channels: config.default_channels.clone(),
+            specs: vec![MatchSpec::from_str("pixi-build-rust", ParseStrictness::Strict).unwrap()],
+            command: "pixi-build-rust".into(),
+            channels: vec![backends_channel, conda_forge_channel],
         };
 
         let tool = tool_context
@@ -406,12 +415,7 @@ mod tests {
             .await
             .unwrap();
 
-        tool.command()
-            .arg("--version")
-            .spawn()
-            .unwrap()
-            .wait()
-            .unwrap();
+        tool.command().arg("help").spawn().unwrap().wait().unwrap();
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

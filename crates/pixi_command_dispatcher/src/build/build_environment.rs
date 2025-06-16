@@ -44,4 +44,14 @@ impl BuildEnvironment {
                 .collect(),
         })
     }
+
+    /// Constructs a build environment that targets a specific `target_platform`
+    pub fn simple(platform: Platform, virtual_packages: Vec<GenericVirtualPackage>) -> Self {
+        Self {
+            host_platform: platform,
+            host_virtual_packages: virtual_packages.clone(),
+            build_platform: platform,
+            build_virtual_packages: virtual_packages,
+        }
+    }
 }

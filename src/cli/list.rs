@@ -188,14 +188,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             no_install: false,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         })
-        .await?;
+        .await?
+        .into_lock_file();
 
     // Load the platform
     let platform = args.platform.unwrap_or_else(|| environment.best_platform());
 
     // Get all the packages in the environment.
     let locked_deps = lock_file
-        .lock_file
         .environment(environment.name().as_str())
         .and_then(|env| env.packages(platform).map(Vec::from_iter))
         .unwrap_or_default();

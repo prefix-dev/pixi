@@ -50,13 +50,14 @@ if (Test-Path "C:/Users/runneradmin/.cargo") {
     Copy-Item -Path "C:/Users/runneradmin/.cargo/*" -Destination "$($Drive)/.cargo/" -Recurse -Force
 }
 
+# Set environment variables for GitHub Actions
 Write-Output `
-	"DEV_DRIVE=$($Drive)" `
-	"TMP=$($Tmp)" `
-	"TEMP=$($Tmp)" `
+    "DEV_DRIVE=$($Drive)" `
+    "TMP=$($Tmp)" `
+    "TEMP=$($Tmp)" `
+    "RUSTUP_HOME=$($Drive)/.rustup" `
+    "CARGO_HOME=$($Drive)/.cargo" `
 	"RATTLER_CACHE_DIR=$($Drive)/rattler-cache" `
-	"RUSTUP_HOME=$($Drive)/.rustup" `
-	"CARGO_HOME=$($Drive)/.cargo" `
-	"PIXI_HOME=$($Drive)/.pixi" `
-	"PIXI_WORKSPACE=$($Drive)/pixi" `
-	>> $env:GITHUB_ENV
+    "PIXI_HOME=$($Drive)/.pixi" `
+    "PIXI_WORKSPACE=$($Drive)/pixi" `
+    >> $env:GITHUB_ENV

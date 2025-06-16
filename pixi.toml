@@ -38,7 +38,7 @@ test-all-extra-slow = { depends-on = [
 test-all-fast = { depends-on = ["test-fast", "test-integration-fast"] }
 test-all-slow = { depends-on = ["test-slow", "test-integration-slow"] }
 test-fast = "cargo nextest run --workspace --all-targets"
-test-slow = """cargo nextest run --workspace --all-targets --retries 2 --features slow_integration_tests
+test-slow = """cargo nextest run --workspace --all-targets --features slow_integration_tests
               --status-level skip --failure-output immediate-final --no-fail-fast --final-status-level slow"""
 
 
@@ -75,7 +75,7 @@ test-integration-slow = { cmd = "pytest --numprocesses=auto --durations=0 --time
 # pass the file to run as an argument to the task
 # you can also pass a specific test function, like this:
 # /path/to/test.py::test_function
-test-specific-test = { cmd = "pytest -k {{ test_substring }}", args = [
+test-specific-test = { cmd = "pytest -k '{{ test_substring }}'", args = [
   "test_substring",
 ], depends-on = [
   "build-release",

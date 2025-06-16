@@ -170,9 +170,13 @@ pub async fn execute_impl<W: Write>(
             .into_future()
     };
 
-    // When package name filter contains * (wildcard), it will search and display a
-    // list of packages matching this filter
-    let packages = if package_name_filter.contains('*') {
+    let match_spec =
+        MatchSpec::from_str(&package_name_filter, ParseStrictness::Lenient).into_diagnostic();
+
+    let packages = if let Ok(match_spec) = match_spec {
+        search_exact_package(match_spec, all_names, repodata_query_func, out).await?
+    } else if package_name_filter.contains('*') {
+        // If it's not a valid MatchSpec, check for wildcard
         let package_name_without_filter = package_name_filter.replace('*', "");
         let package_name = PackageName::try_from(package_name_without_filter).into_diagnostic()?;
 
@@ -185,13 +189,11 @@ pub async fn execute_impl<W: Write>(
             out,
         )
         .await?
-    }
-    // If package name filter doesn't contain * (wildcard), it will search and display specific
-    // package info (if any package is found)
-    else {
-        let package_spec = MatchSpec::from_str(&package_name_filter, ParseStrictness::Lenient)
-            .into_diagnostic()?;
-        search_exact_package(package_spec, all_names, repodata_query_func, out).await?
+    } else {
+        return Err(miette::miette!(
+            "Invalid package specification: {}",
+            package_name_filter
+        ));
     };
 
     Ok(packages)

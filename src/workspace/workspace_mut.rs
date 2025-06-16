@@ -5,17 +5,6 @@ use std::{
     sync::Arc,
 };
 
-use crate::{
-    Workspace,
-    cli::cli_config::{LockFileUpdateConfig, PrefixUpdateConfig},
-    diff::LockFileDiff,
-    environment::LockFileUsage,
-    lock_file::{LockFileDerivedData, ReinstallPackages, UpdateContext, UpdateMode},
-    workspace::{
-        MatchSpecs, NON_SEMVER_PACKAGES, PypiDeps, SourceSpecs, UpdateDeps,
-        grouped_environment::GroupedEnvironment,
-    },
-};
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, NamedSource};
@@ -32,6 +21,18 @@ use pixi_spec::PixiSpec;
 use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform, Version};
 use rattler_lock::LockFile;
 use toml_edit::DocumentMut;
+
+use crate::{
+    Workspace,
+    cli::cli_config::{LockFileUpdateConfig, PrefixUpdateConfig},
+    diff::LockFileDiff,
+    environment::LockFileUsage,
+    lock_file::{LockFileDerivedData, ReinstallPackages, UpdateContext, UpdateMode},
+    workspace::{
+        MatchSpecs, NON_SEMVER_PACKAGES, PypiDeps, SourceSpecs, UpdateDeps,
+        grouped_environment::GroupedEnvironment,
+    },
+};
 
 struct OriginalContent {
     manifest: WorkspaceManifest,
@@ -105,6 +106,7 @@ impl WorkspaceMut {
         let workspace_manifest_document = match workspace.workspace.provenance.kind {
             ManifestKind::Pyproject => ManifestDocument::PyProjectToml(toml),
             ManifestKind::Pixi => ManifestDocument::PixiToml(toml),
+            ManifestKind::MojoProject => ManifestDocument::MojoProjectToml(toml),
         };
 
         Ok(Self {
@@ -143,6 +145,7 @@ impl WorkspaceMut {
         let workspace_manifest_document = match workspace.workspace.provenance.kind {
             ManifestKind::Pyproject => ManifestDocument::PyProjectToml(toml),
             ManifestKind::Pixi => ManifestDocument::PixiToml(toml),
+            ManifestKind::MojoProject => ManifestDocument::MojoProjectToml(toml),
         };
 
         Ok(Self {
@@ -431,7 +434,7 @@ impl WorkspaceMut {
         }
 
         let lock_file_diff =
-            LockFileDiff::from_lock_files(&original_lock_file, &updated_lock_file.lock_file);
+            LockFileDiff::from_lock_files(&original_lock_file, &updated_lock_file.into_lock_file());
 
         Ok(Some(UpdateDeps {
             implicit_constraints,
