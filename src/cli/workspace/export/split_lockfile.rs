@@ -61,8 +61,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         };
         for plat in env.platforms() {
             let mut builder = LockFile::builder()
-                .with_channels(output_env_name, env.channels().iter().map(Channel::clone));
-            //.with_options(output_env_name, env.with_options())
+                .with_channels(output_env_name, env.channels().iter().map(Channel::clone))
+                .with_options(output_env_name, env.solve_options().clone());
             if let Some(pypi_indexes) = env.pypi_indexes() {
                 builder.set_pypi_indexes(output_env_name, pypi_indexes.clone());
             }
