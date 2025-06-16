@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### ✨ Highlights
 
 This is a minor release with a couple of bugfixes.
-A new feature is the support for legacy `mojoproject.toml` files.
+A new feature is the support for `mojoproject.toml` files which is used to develop on projects written in the Mojo programming language.
+This enables users to migrate from the [deprecated](https://docs.modular.com/magic/) Magic package manager to Pixi.
 
 
 #### Added
