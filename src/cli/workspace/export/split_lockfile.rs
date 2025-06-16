@@ -17,7 +17,7 @@ pub struct Args {
     pub workspace_config: WorkspaceConfig,
 
     /// Output directory for each split lock file.
-    /// The paths of the output lock files are: <output_dir>/<platform>/<environment>.lock
+    /// The paths of the output lock files are: {output_dir}/{platform}/{environment}.lock
     pub output_dir: PathBuf,
 
     /// Keep the original environment name in the output lock file instead of replacing by "default"
