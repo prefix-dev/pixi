@@ -129,7 +129,6 @@ impl SourceMetadataSpec {
         }
 
         // Instantiate the backend with the discovered backend information.
-        let manifest_path = discovered_backend.init_params.manifest_path.clone();
         let project_model = discovered_backend.init_params.project_model.clone();
         let backend = command_queue
             .instantiate_backend(InstantiateBackendSpec {

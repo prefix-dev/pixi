@@ -10,6 +10,7 @@ use std::{
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
+use pixi_build_discovery::{DiscoveredBackend, EnabledProtocols};
 use pixi_git::url::RepositoryUrl;
 use pixi_glob::{GlobHashCache, GlobHashError, GlobHashKey};
 use pixi_manifest::{FeaturesExt, pypi::pypi_options::NoBuild};
@@ -1471,10 +1472,17 @@ pub(crate) async fn verify_package_platform_satisfiability(
             ))
         })?;
 
+        let discovered_backend = DiscoveredBackend::discover(
+            &source_dir,
+            &environment.channel_config(),
+            &EnabledProtocols::default(),
+        )?;
+
         let input_hash = input_hash_cache
             .compute_hash(GlobHashKey::new(
                 source_dir,
                 locked_input_hash.globs.clone(),
+                discovered_backend.init_params.project_model,
             ))
             .await
             .map_err(PlatformUnsat::FailedToComputeInputHash)
