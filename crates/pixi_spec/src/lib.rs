@@ -46,8 +46,8 @@ pub enum SpecConversionError {
     InvalidPath(String),
 
     /// Encountered an invalid channel url or path
-    #[error("invalid channel '{0}'")]
-    InvalidChannel(#[from] ParseChannelError),
+    #[error("the channel '{0}' could not be resolved")]
+    InvalidChannel(String, #[source] ParseChannelError),
 }
 
 /// A package specification for pixi.

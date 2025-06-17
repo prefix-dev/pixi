@@ -4477,6 +4477,7 @@ dependencies = [
  "pep508_rs",
  "percent-encoding",
  "pixi_allocator",
+ "pixi_build_discovery",
  "pixi_build_frontend",
  "pixi_build_types",
  "pixi_command_dispatcher",

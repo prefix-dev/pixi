@@ -1,23 +1,25 @@
-use crate::{
-    BackendSpec,
-    backend_spec::{CommandSpec, EnvironmentSpec, JsonRpcBackendSpec},
+use std::{
+    ffi::OsStr,
+    path::{Path, PathBuf},
 };
+
 use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_build_type_conversions::to_project_model_v1;
 use pixi_build_types::ProjectModelV1;
 use pixi_manifest::{
-    DiscoveryStart, ExplicitManifestError, PrioritizedChannel, WithProvenance, WorkspaceDiscoverer,
-    WorkspaceDiscoveryError,
+    DiscoveryStart, ExplicitManifestError, PackageManifest, PrioritizedChannel, WithProvenance,
+    WorkspaceDiscoverer, WorkspaceDiscoveryError, WorkspaceManifest,
 };
 use pixi_spec::SpecConversionError;
 use pixi_spec_containers::DependencyMap;
-use rattler_conda_types::{ChannelConfig, ParseChannelError};
-use std::{
-    ffi::OsStr,
-    path::{Path, PathBuf},
-};
+use rattler_conda_types::ChannelConfig;
 use thiserror::Error;
+
+use crate::{
+    BackendSpec,
+    backend_spec::{CommandSpec, EnvironmentSpec, JsonRpcBackendSpec},
+};
 
 const VALID_RECIPE_NAMES: [&str; 2] = ["recipe.yaml", "recipe.yml"];
 const VALID_RECIPE_DIRS: [&str; 2] = ["", "recipe"];
@@ -96,9 +98,6 @@ pub enum DiscoveryError {
     #[diagnostic(help("This is often caused by an internal error. Please report this issue."))]
     SpecConversionError(pixi_spec::SpecConversionError),
 
-    #[error("the channel '{0}' could not be resolved, {1}")]
-    InvalidChannel(String, ParseChannelError),
-
     #[error("the source directory does not contain a supported manifest")]
     #[diagnostic(help(
         "Ensure that the source directory contains a valid pixi.toml or recipe.yaml file."
@@ -174,6 +173,95 @@ impl DiscoveredBackend {
         })
     }
 
+    /// Convert a package manifest and corresponding workspace manifest into a
+    /// discovered backend.
+    pub fn from_package_and_workspace(
+        source_path: PathBuf,
+        package_manifest: &WithProvenance<PackageManifest>,
+        workspace: &WorkspaceManifest,
+        channel_config: &ChannelConfig,
+    ) -> Result<Self, SpecConversionError> {
+        let WithProvenance {
+            value: package_manifest,
+            provenance,
+        } = package_manifest;
+
+        // Construct the project model from the manifest
+        let project_model = to_project_model_v1(package_manifest, channel_config)?;
+
+        // Determine the build system requirements.
+        let build_system = package_manifest.build.clone();
+        let requirement = (
+            build_system.backend.name.clone(),
+            build_system
+                .backend
+                .spec
+                .clone()
+                .try_into_nameless_match_spec(channel_config)?,
+        );
+        let additional_requirements = build_system
+            .additional_dependencies
+            .iter()
+            .map(|(name, spec)| {
+                Ok((
+                    name.clone(),
+                    spec.clone().try_into_nameless_match_spec(channel_config)?,
+                ))
+            })
+            .collect::<Result<_, SpecConversionError>>()?;
+
+        // Figure out the channels to use
+        let named_channels = match build_system.channels.as_ref() {
+            Some(channels) => itertools::Either::Left(channels.iter()),
+            None => itertools::Either::Right(PrioritizedChannel::sort_channels_by_priority(
+                workspace.workspace.channels.iter(),
+            )),
+        };
+        let channels = named_channels
+            .map(|channel| {
+                channel
+                    .clone()
+                    .into_base_url(channel_config)
+                    .map_err(|err| SpecConversionError::InvalidChannel(channel.to_string(), err))
+            })
+            .collect::<Result<_, _>>()?;
+
+        // Make sure that the source directory is a directory.
+        let source_dir = if source_path.is_file() {
+            source_path
+                .parent()
+                .expect("a file has a parent")
+                .to_path_buf()
+        } else {
+            source_path
+        };
+
+        Ok(Self {
+            backend_spec: BackendSpec::JsonRpc(JsonRpcBackendSpec {
+                name: build_system.backend.name.as_normalized().to_string(),
+                command: CommandSpec::EnvironmentSpec(Box::new(EnvironmentSpec {
+                    requirement,
+                    additional_requirements,
+                    channels,
+                    constraints: DependencyMap::default(),
+                    command: None,
+                })),
+            }),
+            init_params: BackendInitializationParams {
+                manifest_path: pathdiff::diff_paths(&provenance.path, &source_dir).expect(
+                    "must be able to construct a path to go from source dir to manifest path",
+                ),
+                source_dir,
+                project_model: Some(project_model),
+                configuration: build_system.configuration.map(|config| {
+                    config
+                        .deserialize_into()
+                        .expect("Configuration dictionary should be serializable to JSON")
+                }),
+            },
+        })
+    }
+
     /// Try to discover a pixi.yoml file in the source directory.
     fn discover_pixi(
         source_path: PathBuf,
@@ -193,87 +281,20 @@ impl DiscoveredBackend {
             };
 
         // Make sure the manifest describes a package.
-        let Some(WithProvenance {
-            value: package_manifest,
-            provenance,
-        }) = manifests.package
-        else {
+        let Some(package_manifest) = manifests.package else {
             return Err(DiscoveryError::NotAPackage(
                 manifests.workspace.provenance.path,
             ));
         };
 
-        // Construct the project model from the manifest
-        let project_model = to_project_model_v1(&package_manifest, channel_config)
-            .map_err(DiscoveryError::SpecConversionError)?;
-
-        // If we get here the tool is not overridden, so we use the isolated variant
-        let build_system = package_manifest.build;
-        let requirement = (
-            build_system.backend.name.clone(),
-            build_system
-                .backend
-                .spec
-                .try_into_nameless_match_spec(channel_config)
-                .map_err(DiscoveryError::SpecConversionError)?,
-        );
-        let additional_requirements = build_system
-            .additional_dependencies
-            .into_iter()
-            .map(|(name, spec)| Ok((name, spec.try_into_nameless_match_spec(channel_config)?)))
-            .collect::<Result<_, SpecConversionError>>()
-            .map_err(DiscoveryError::SpecConversionError)?;
-
-        // Figure out the channels to use
-        let named_channels = match build_system.channels.as_ref() {
-            Some(channels) => itertools::Either::Left(channels.iter()),
-            None => itertools::Either::Right(PrioritizedChannel::sort_channels_by_priority(
-                manifests.workspace.value.workspace.channels.iter(),
-            )),
-        };
-        let channels = named_channels
-            .map(|channel| {
-                channel
-                    .clone()
-                    .into_base_url(channel_config)
-                    .map_err(|err| DiscoveryError::InvalidChannel(channel.to_string(), err))
-            })
-            .collect::<Result<_, _>>()?;
-
-        // Make sure that the source directory is a directory.
-        let source_dir = if source_path.is_file() {
-            source_path
-                .parent()
-                .expect("a file has a parent")
-                .to_path_buf()
-        } else {
-            source_path
-        };
-
-        Ok(Some(Self {
-            backend_spec: BackendSpec::JsonRpc(JsonRpcBackendSpec {
-                name: build_system.backend.name.as_normalized().to_string(),
-                command: CommandSpec::EnvironmentSpec(Box::new(EnvironmentSpec {
-                    requirement,
-                    additional_requirements,
-                    channels,
-                    constraints: DependencyMap::default(),
-                    command: None,
-                })),
-            }),
-            init_params: BackendInitializationParams {
-                manifest_path: pathdiff::diff_paths(provenance.path, &source_dir).expect(
-                    "must be able to construct a path to go from source dir to manifest path",
-                ),
-                source_dir,
-                project_model: Some(project_model),
-                configuration: build_system.configuration.map(|config| {
-                    config
-                        .deserialize_into()
-                        .expect("Configuration dictionary should be serializable to JSON")
-                }),
-            },
-        }))
+        Self::from_package_and_workspace(
+            source_path,
+            &package_manifest,
+            &manifests.workspace.value,
+            channel_config,
+        )
+        .map_err(DiscoveryError::SpecConversionError)
+        .map(Some)
     }
 
     /// Try to discover a rattler build recipe in the repository.
