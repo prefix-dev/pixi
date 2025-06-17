@@ -14,6 +14,7 @@ dashmap = { workspace = true }
 fs-err = { workspace = true }
 itertools = { workspace = true }
 memchr = { workspace = true }
+pixi_build_types = { workspace = true }
 rattler_digest = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["sync", "rt"] }

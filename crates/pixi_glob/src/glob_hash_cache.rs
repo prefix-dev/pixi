@@ -9,6 +9,7 @@ use std::{
 };
 
 use dashmap::{DashMap, Entry};
+use pixi_build_types::ProjectModelV1;
 use tokio::sync::broadcast;
 
 use super::{GlobHash, GlobHashError};
@@ -20,18 +21,28 @@ pub struct GlobHashKey {
     root: PathBuf,
     /// The glob patterns.
     globs: BTreeSet<String>,
+    /// The project model.
+    project_model: Option<ProjectModelV1>,
 }
 
 impl GlobHashKey {
     /// Creates a new `GlobHashKey` from the given root directory and glob patterns.
-    pub fn new(root: impl Into<PathBuf>, globs: BTreeSet<String>) -> Self {
+    pub fn new(
+        root: impl Into<PathBuf>,
+        globs: BTreeSet<String>,
+        project_model: Option<ProjectModelV1>,
+    ) -> Self {
         let mut root = root.into();
         // Ensure that `root` points to a directory, not a file.
         if root.is_file() {
             root = root.parent().expect("Root must be a directory").to_owned();
         }
 
-        Self { root, globs }
+        Self {
+            root,
+            globs,
+            project_model,
+        }
     }
 }
 

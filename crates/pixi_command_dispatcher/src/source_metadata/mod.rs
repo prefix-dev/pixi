@@ -1,7 +1,4 @@
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    path::PathBuf,
-};
+use std::collections::{BTreeMap, BTreeSet};
 
 use miette::Diagnostic;
 use pixi_build_discovery::{DiscoveredBackend, EnabledProtocols};
@@ -9,6 +6,7 @@ use pixi_build_frontend::types::{
     ChannelConfiguration, CondaPackageMetadata, PlatformAndVirtualPackages, SourcePackageSpecV1,
     procedures::conda_metadata::CondaMetadataParams,
 };
+use pixi_build_types::ProjectModelV1;
 use pixi_glob::GlobHashKey;
 use pixi_record::{InputHash, SourceRecord};
 use rattler_conda_types::{ChannelConfig, ChannelUrl, PackageRecord};
@@ -174,7 +172,7 @@ impl SourceMetadataSpec {
         let input_hash = Self::compute_input_hash(
             command_queue,
             &self.source,
-            manifest_path,
+            discovered_backend.init_params.project_model,
             metadata.input_globs,
         )
         .await?;
@@ -198,18 +196,22 @@ impl SourceMetadataSpec {
     async fn compute_input_hash(
         command_queue: CommandDispatcher,
         source: &SourceCheckout,
-        manifest_path: PathBuf,
+        project_model: Option<ProjectModelV1>,
         input_globs: Option<BTreeSet<String>>,
     ) -> Result<Option<InputHash>, CommandDispatcherError<SourceMetadataError>> {
         let input_hash = if source.pinned.is_immutable() {
             None
         } else {
             // Compute the input hash based on the manifest path and the input globs.
-            let mut input_globs = input_globs.unwrap_or_default();
-            input_globs.insert(manifest_path.to_string_lossy().into_owned());
+            let input_globs = input_globs.unwrap_or_default();
+
             let input_hash = command_queue
                 .glob_hash_cache()
-                .compute_hash(GlobHashKey::new(&source.path, input_globs.clone()))
+                .compute_hash(GlobHashKey::new(
+                    &source.path,
+                    input_globs.clone(),
+                    project_model,
+                ))
                 .await
                 .map_err(SourceMetadataError::GlobHash)?;
 

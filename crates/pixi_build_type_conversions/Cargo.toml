@@ -12,6 +12,7 @@ version = "0.1.0"
 [dependencies]
 indexmap = { workspace = true }
 itertools = { workspace = true }
+ordermap = { workspace = true }
 pixi_build_types = { workspace = true }
 pixi_manifest = { workspace = true }
 pixi_spec = { workspace = true }

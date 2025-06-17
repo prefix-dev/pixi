@@ -4095,6 +4095,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ordermap"
+version = "0.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d31b8b7a99f71bdff4235faf9ce9eada0ad3562c8fbeb7d607d9f41a6ec569d"
+dependencies = [
+ "indexmap 2.9.0",
+ "serde",
+]
+
+[[package]]
 name = "os_pipe"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4643,6 +4653,7 @@ dependencies = [
  "indexmap 2.9.0",
  "insta",
  "itertools 0.14.0",
+ "ordermap",
  "pixi_build_types",
  "pixi_manifest",
  "pixi_spec",
@@ -4655,6 +4666,7 @@ name = "pixi_build_types"
 version = "0.1.0"
 dependencies = [
  "indexmap 2.9.0",
+ "ordermap",
  "rattler_conda_types",
  "rattler_digest",
  "serde",
@@ -4792,6 +4804,7 @@ dependencies = [
  "insta",
  "itertools 0.14.0",
  "memchr",
+ "pixi_build_types",
  "rattler_digest",
  "rstest",
  "tempfile",

@@ -6,12 +6,11 @@
 //! This will mostly be boilerplate conversions but some of these are a bit more
 //! interesting
 
-use std::collections::HashMap;
-
 // Namespace to pbt, *please use* exclusively so we do not get confused between the two
 // different types
-use indexmap::IndexMap;
 use pixi_build_types as pbt;
+
+use ordermap::OrderMap;
 use pixi_manifest::{PackageManifest, PackageTarget, TargetSelector, Targets};
 use pixi_spec::{GitReference, PixiSpec, SpecConversionError};
 use rattler_conda_types::{ChannelConfig, PackageName};
@@ -78,12 +77,12 @@ fn to_pixi_spec_v1(
 fn to_pbt_dependencies<'a>(
     iter: impl Iterator<Item = (&'a PackageName, &'a PixiSpec)>,
     channel_config: &ChannelConfig,
-) -> Result<IndexMap<pbt::SourcePackageName, pbt::PackageSpecV1>, SpecConversionError> {
+) -> Result<OrderMap<pbt::SourcePackageName, pbt::PackageSpecV1>, SpecConversionError> {
     iter.map(|(name, spec)| {
         let converted = to_pixi_spec_v1(spec, channel_config)?;
         Ok((name.as_normalized().to_string(), converted))
     })
-    .collect::<Result<IndexMap<_, _>, _>>()
+    .collect()
 }
 
 /// Converts a [`PackageTarget`] to a [`pbt::TargetV1`].
@@ -140,7 +139,7 @@ fn to_targets_v1(
                     .map(|target| (to_target_selector_v1(selector), target))
             })
         })
-        .collect::<Result<HashMap<pbt::TargetSelectorV1, pbt::TargetV1>, _>>()?;
+        .collect::<Result<OrderMap<pbt::TargetSelectorV1, pbt::TargetV1>, _>>()?;
 
     Ok(pbt::TargetsV1 {
         default_target: Some(to_target_v1(targets.default(), channel_config)?),
