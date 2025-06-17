@@ -16,7 +16,6 @@ use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Diagnostic, IntoDiagnostic, MietteDiagnostic, Report, WrapErr};
-use pixi_build_frontend::ToolContext;
 use pixi_command_dispatcher::{BuildEnvironment, PixiEnvironmentSpec};
 use pixi_consts::consts;
 use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
@@ -1107,16 +1106,8 @@ impl<'p> UpdateContextBuilder<'p> {
             ))
             .finish();
 
-        let gateway = command_dispatcher.gateway().clone();
-
         // tool context
-        let tool_context = ToolContext::builder()
-            .with_gateway(gateway)
-            .with_client(client.clone())
-            .build();
-
-        let build_context = BuildContext::from_workspace(project, command_dispatcher)?
-            .with_tool_context(Arc::new(tool_context));
+        let build_context = BuildContext::from_workspace(project, command_dispatcher)?;
 
         let mapping_client = self.mapping_client.unwrap_or_else(|| {
             MappingClient::builder(client)

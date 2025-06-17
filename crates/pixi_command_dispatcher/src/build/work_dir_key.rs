@@ -13,7 +13,7 @@ use crate::SourceCheckout;
 
 /// A key to uniquely identify a work directory. If there is a source build with
 /// the same key, they will share the same working directory.
-pub(crate) struct WorkDirKey {
+pub struct WorkDirKey {
     /// The location of the source
     pub source: SourceCheckout,
 

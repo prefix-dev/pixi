@@ -7,7 +7,7 @@ use pixi_build_discovery::EnabledProtocols;
 use pixi_build_types::{
     ChannelConfiguration, PlatformAndVirtualPackages, procedures::conda_build::CondaBuildParams,
 };
-use pixi_command_dispatcher::{InstantiateBackendSpec, SourceCheckout};
+use pixi_command_dispatcher::{InstantiateBackendSpec, SourceCheckout, build::WorkDirKey};
 use pixi_config::ConfigCli;
 use pixi_manifest::FeaturesExt;
 use pixi_progress::global_multi_progress;
@@ -17,7 +17,7 @@ use typed_path::Utf8TypedPath;
 
 use crate::{
     WorkspaceLocator,
-    build::{BuildContext, WorkDirKey},
+    build::BuildContext,
     cli::cli_config::WorkspaceConfig,
     reporters::TopLevelProgress,
     utils::{MoveError, move_file},
@@ -102,16 +102,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Determine if we want to re-use existing build data
     let (_tmp, work_dir) = if incremental {
         // Specify the build directory
-        let key = WorkDirKey::new(
-            SourceCheckout::new(
+        let key = WorkDirKey {
+            source: SourceCheckout::new(
                 workspace.root(),
                 PinnedSourceSpec::Path(PinnedPathSpec {
                     path: Utf8TypedPath::derive(&workspace.root().to_string_lossy()).to_path_buf(),
                 }),
             ),
-            args.target_platform,
-            backend.identifier().to_string(),
-        )
+            host_platform: args.target_platform,
+            build_backend: backend.identifier().to_string(),
+        }
         .key();
 
         (None, build_dir.join(key))

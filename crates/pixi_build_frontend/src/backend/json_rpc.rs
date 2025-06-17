@@ -28,13 +28,22 @@ use tokio::{
     sync::{Mutex, oneshot},
 };
 
-use crate::backend::BackendOutputStream;
+use super::stderr::{stderr_buffer, stream_stderr};
 use crate::{
+    backend::BackendOutputStream,
     error::BackendError,
     jsonrpc::{RpcParams, stdio_transport},
-    protocols::{BuildBackendSetupError, stderr::stderr_buffer},
     tool::Tool,
 };
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum BuildBackendSetupError {
+    #[error("an unexpected io error occurred while communicating with the pixi build backend")]
+    Io(#[from] std::io::Error),
+
+    #[error("the build backend executable '{0}' appears to be missing")]
+    MissingExecutable(String),
+}
 
 /// An error that can occur when communicating with a build backend.
 #[derive(Debug, Error, Diagnostic)]
@@ -354,36 +363,5 @@ impl JsonRpcBackend {
     /// Returns the backend identifier.
     pub fn identifier(&self) -> &str {
         &self.backend_identifier
-    }
-}
-
-/// Stderr stream that captures the stderr output of the backend and stores it
-/// in a buffer for later use.
-pub(crate) async fn stream_stderr<W: BackendOutputStream>(
-    buffer: Arc<Mutex<Lines<BufReader<ChildStderr>>>>,
-    cancel: oneshot::Receiver<()>,
-    mut on_log: W,
-) -> Result<String, std::io::Error> {
-    // Create a future that continuously read from the buffer and stores the lines
-    // until all data is received.
-    let mut lines = Vec::new();
-    let read_and_buffer = async {
-        let mut buffer = buffer.lock().await;
-        while let Some(line) = buffer.next_line().await? {
-            on_log.on_line(line.clone());
-            lines.push(line);
-        }
-        Ok(lines.join("\n"))
-    };
-
-    // Either wait until the cancel signal is received or the `read_and_buffer`
-    // finishes which means there is no more data to read.
-    tokio::select! {
-        _ = cancel => {
-            Ok(lines.join("\n"))
-        }
-        result = read_and_buffer => {
-            result
-        }
     }
 }

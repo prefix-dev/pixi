@@ -32,7 +32,7 @@
 //! created and awaited concurrently. This enables parallel execution while
 //! maintaining a simple API surface.
 
-mod build;
+pub mod build;
 mod cache_dirs;
 mod command_dispatcher;
 mod command_dispatcher_processor;

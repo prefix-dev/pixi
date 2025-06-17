@@ -15,7 +15,7 @@ pub use build_environment::BuildEnvironment;
 pub(crate) use move_file::{MoveError, move_file};
 use pixi_record::PinnedSourceSpec;
 use url::Url;
-pub(crate) use work_dir_key::WorkDirKey;
+pub use work_dir_key::WorkDirKey;
 use xxhash_rust::xxh3::Xxh3;
 
 const KNOWN_SUFFIXES: [&str; 3] = [".git", ".tar.gz", ".zip"];
@@ -82,8 +82,9 @@ pub(crate) fn source_checkout_cache_key(source: &PinnedSourceSpec) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use indexmap::IndexMap;
+
+    use super::*;
 
     #[test]
     fn test_source_checkout_cache_key() {

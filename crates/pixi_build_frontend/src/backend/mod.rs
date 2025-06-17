@@ -2,6 +2,7 @@ use pixi_build_types::procedures::{
     conda_build::{CondaBuildParams, CondaBuildResult},
     conda_metadata::{CondaMetadataParams, CondaMetadataResult},
 };
+mod stderr;
 
 use crate::json_rpc::CommunicationError;
 
