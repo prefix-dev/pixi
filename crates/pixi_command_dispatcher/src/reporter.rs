@@ -1,3 +1,4 @@
+use futures::Stream;
 use pixi_git::resolver::RepositoryReference;
 use serde::Serialize;
 
@@ -158,8 +159,13 @@ pub trait SourceBuildReporter {
         env: &SourceBuildSpec,
     ) -> SourceBuildId;
 
-    /// Called when the operation has started.
-    fn on_started(&mut self, id: SourceBuildId);
+    /// Called when the operation has started. The `backend_output_stream`
+    /// stream can be used to capture the output of the build process.
+    fn on_started(
+        &mut self,
+        id: SourceBuildId,
+        backend_output_stream: Box<dyn Stream<Item = String> + Unpin + Send>,
+    );
 
     /// Called when the operation has finished.
     fn on_finished(&mut self, id: SourceBuildId);

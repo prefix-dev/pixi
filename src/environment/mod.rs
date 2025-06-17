@@ -3,8 +3,6 @@ mod conda_prefix;
 pub mod list;
 mod pypi_prefix;
 mod python_status;
-mod reporters;
-
 use std::{
     collections::HashMap,
     hash::{Hash, Hasher},
@@ -46,7 +44,7 @@ pub async fn verify_prefix_location_unchanged(environment_dir: &Path) -> miette:
         .join(consts::CONDA_META_DIR)
         .join(consts::PREFIX_FILE_NAME);
 
-    tracing::info!(
+    tracing::debug!(
         "verifying prefix location is unchanged, with prefix file: {}",
         prefix_file.display()
     );

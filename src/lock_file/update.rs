@@ -420,7 +420,7 @@ impl<'p> LockFileDerivedData<'p> {
             environment.name().fancy_display()
         ))?;
 
-        tracing::info!("Updating prefix: '{}'", environment.dir().display());
+        tracing::trace!("Updating prefix: '{}'", environment.dir().display());
 
         let platform = environment.best_platform();
         let pixi_records = self

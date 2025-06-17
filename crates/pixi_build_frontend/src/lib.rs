@@ -21,7 +21,7 @@ pub use pixi_build_types as types;
 
 use std::path::PathBuf;
 
-pub use backend::{Backend, json_rpc};
+pub use backend::{Backend, BackendOutputStream, json_rpc};
 pub use backend_override::BackendOverride;
 pub use build_frontend::{BuildFrontend, BuildFrontendError};
 pub use reporters::{

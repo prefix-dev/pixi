@@ -4703,6 +4703,7 @@ dependencies = [
  "text_trees",
  "thiserror 2.0.12",
  "tokio",
+ "tokio-stream",
  "tracing",
  "typed-path",
  "url",

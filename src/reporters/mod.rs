@@ -1,9 +1,9 @@
+mod download_verify_reporter;
 mod git;
 mod install_reporter;
 mod main_progress_bar;
 mod release_notes;
 mod repodata_reporter;
-mod download_verify_reporter;
 
 use std::sync::{Arc, LazyLock};
 
@@ -12,7 +12,7 @@ use indicatif::{MultiProgress, ProgressBar};
 use pixi_build_frontend::{CondaBuildReporter, CondaMetadataReporter};
 use pixi_command_dispatcher::{
     InstallPixiEnvironmentSpec, PixiEnvironmentSpec, ReporterContext, SolveCondaEnvironmentSpec,
-    reporter::{CondaSolveId, PixiInstallId, PixiSolveId},
+    reporter::{CondaSolveId, PixiInstallId, PixiSolveId, SourceBuildReporter},
 };
 use pixi_spec::PixiSpec;
 use rattler_repodata_gateway::Reporter;
@@ -20,8 +20,7 @@ pub use release_notes::format_release_notes;
 use uv_configuration::RAYON_INITIALIZE;
 
 use crate::reporters::{
-    install_reporter::{SyncReporter},
-    main_progress_bar::MainProgressBar,
+    install_reporter::SyncReporter, main_progress_bar::MainProgressBar,
     repodata_reporter::RepodataReporter,
 };
 
@@ -105,7 +104,7 @@ impl TopLevelProgress {
             multi_progress.clone(),
             pixi_progress::ProgressBarPlacement::Before(anchor_pb.clone()),
         );
-        let source_checkout_reporter = GitCheckoutProgress::new(anchor_pb, multi_progress);
+        let source_checkout_reporter = GitCheckoutProgress::new(anchor_pb, multi_progress.clone());
         Self {
             source_checkout_reporter,
             conda_solve_reporter,
@@ -132,6 +131,10 @@ impl pixi_command_dispatcher::Reporter for TopLevelProgress {
 
     fn as_git_reporter(&mut self) -> Option<&mut dyn pixi_command_dispatcher::GitCheckoutReporter> {
         Some(&mut self.source_checkout_reporter)
+    }
+
+    fn as_source_build_reporter(&mut self) -> Option<&mut dyn SourceBuildReporter> {
+        Some(&mut self.sync_reporter)
     }
 
     fn as_conda_solve_reporter(
@@ -170,22 +173,18 @@ impl pixi_command_dispatcher::Reporter for TopLevelProgress {
 impl pixi_command_dispatcher::PixiInstallReporter for TopLevelProgress {
     fn on_queued(
         &mut self,
-        reason: Option<ReporterContext>,
-        env: &InstallPixiEnvironmentSpec,
+        _reason: Option<ReporterContext>,
+        _env: &InstallPixiEnvironmentSpec,
     ) -> PixiInstallId {
         // Installing a pixi environment uses rayon. We only want to initialize the
         // rayon thread pool when we absolutely need it.
         LazyLock::force(&RAYON_INITIALIZE);
-        self.sync_reporter.on_queued(reason, env)
+        PixiInstallId(0)
     }
 
-    fn on_start(&mut self, install_id: PixiInstallId) {
-        self.sync_reporter.on_start(install_id)
-    }
+    fn on_start(&mut self, _install_id: PixiInstallId) {}
 
-    fn on_finished(&mut self, install_id: PixiInstallId) {
-        self.sync_reporter.on_finished(install_id);
-    }
+    fn on_finished(&mut self, _install_id: PixiInstallId) {}
 }
 
 impl pixi_command_dispatcher::PixiSolveReporter for TopLevelProgress {

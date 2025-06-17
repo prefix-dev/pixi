@@ -76,11 +76,6 @@ impl<T: Tracker> MainProgressBar<T> {
         }
     }
 
-    /// Returns the progress bar that is being used to display the progress.
-    pub fn progress_bar(&self) -> ProgressBar {
-        self.inner.read().pb.clone()
-    }
-
     /// Called when an item is queued for processing.
     pub fn queued(&self, tracker: T) -> usize {
         let mut state = self.inner.write();

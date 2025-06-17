@@ -25,6 +25,7 @@ slotmap = { workspace = true }
 strsim = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt", "sync"] }
+tokio-stream = { workspace = true }
 tracing = { workspace = true }
 typed-path = { workspace = true }
 url = { workspace = true }

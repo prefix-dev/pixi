@@ -1,10 +1,10 @@
 use futures::FutureExt;
 
 use super::{CommandDispatcherProcessor, PendingSourceBuild, TaskResult};
-use crate::command_dispatcher::{SourceBuildId, SourceBuildTask};
 use crate::{
     BuiltSource, CommandDispatcherError, CommandDispatcherErrorResultExt, Reporter,
-    SourceBuildError, command_dispatcher::CommandDispatcherContext,
+    SourceBuildError,
+    command_dispatcher::{CommandDispatcherContext, SourceBuildId, SourceBuildTask},
 };
 
 impl CommandDispatcherProcessor {
@@ -46,6 +46,9 @@ impl CommandDispatcherProcessor {
 
             let reporter_id = self.source_builds[source_build_id].reporter_id;
 
+            // Open a channel to receive build output.
+            let (tx, rx) = futures::channel::mpsc::unbounded();
+
             // Notify the reporter that the solve has started.
             if let Some((reporter, id)) = self
                 .reporter
@@ -53,7 +56,7 @@ impl CommandDispatcherProcessor {
                 .and_then(Reporter::as_source_build_reporter)
                 .zip(reporter_id)
             {
-                reporter.on_started(id)
+                reporter.on_started(id, Box::new(rx));
             }
 
             // Add the task to the list of pending futures.
@@ -61,7 +64,7 @@ impl CommandDispatcherProcessor {
                 CommandDispatcherContext::SourceBuild(source_build_id),
             );
             self.pending_futures.push(
-                spec.build(dispatcher)
+                spec.build(dispatcher, tx)
                     .map(move |result| TaskResult::SourceBuild(source_build_id, result))
                     .boxed_local(),
             );

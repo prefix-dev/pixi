@@ -213,8 +213,8 @@ impl<'a> PyPIPrefixUpdaterBuilder<'a> {
         // Show totals
         let total_to_install = installation_plan.local.len() + installation_plan.remote.len();
         let total_required = required_map.len();
-        tracing::info!(
-            "{} of {} required packages are considered are installed and up-to-date",
+        tracing::debug!(
+            "{} of {} required packages are considered installed and up-to-date",
             total_required - total_to_install,
             total_required
         );
@@ -444,26 +444,26 @@ impl PyPIPrefixUpdater {
         }
 
         if !install_missing.is_empty() {
-            tracing::info!(
+            tracing::debug!(
                 "*installing* from remote because no version is cached: {}",
                 install_missing.iter().join(", ")
             );
         }
         if !install_stale.is_empty() {
-            tracing::info!(
+            tracing::debug!(
                 "*installing* from remote because local version is stale: {}",
                 install_stale.iter().join(", ")
             );
         }
         if !install_cached.is_empty() {
-            tracing::info!(
+            tracing::debug!(
                 "*installing* cached version because cache is up-to-date: {}",
                 install_cached.iter().join(", ")
             );
         }
 
         if !reinstalls.is_empty() {
-            tracing::info!(
+            tracing::debug!(
                 "*re-installing* following packages: {}",
                 reinstalls
                     .iter()
@@ -474,7 +474,7 @@ impl PyPIPrefixUpdater {
             for (dist, reason) in reinstalls {
                 // Only log the re-install reason if it is not an installer mismatch
                 if !matches!(reason, NeedReinstall::InstallerMismatch { .. }) {
-                    tracing::info!(
+                    tracing::debug!(
                         "re-installing '{}' because: '{}'",
                         console::style(dist.name()).blue(),
                         reason
@@ -484,7 +484,7 @@ impl PyPIPrefixUpdater {
         }
         if !extraneous.is_empty() {
             // List all packages that will be removed
-            tracing::info!(
+            tracing::debug!(
                 "*removing* following packages: {}",
                 extraneous
                     .iter()
@@ -495,7 +495,7 @@ impl PyPIPrefixUpdater {
 
         if !duplicates.is_empty() {
             // List all packages that will be removed
-            tracing::info!(
+            tracing::debug!(
                 "*removing .dist-info* following duplicate packages: {}",
                 duplicates
                     .iter()

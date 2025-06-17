@@ -7,11 +7,12 @@ use std::{
 
 use indicatif::{MultiProgress, ProgressBar, ProgressState, ProgressStyle, style::ProgressTracker};
 use parking_lot::RwLock;
+use pixi_command_dispatcher::SourceBuildSpec;
 use pixi_progress::ProgressBarPlacement;
 use rattler_conda_types::RepoDataRecord;
 
 #[derive(Clone)]
-pub struct DownloadVerifyReporter {
+pub struct BuildDownloadVerifyReporter {
     multi_progress: MultiProgress,
     pb: ProgressBar,
     title: Option<String>,
@@ -25,6 +26,7 @@ struct Entry {
 }
 
 pub enum EntryState {
+    Building,
     Pending,
     Validating,
     Downloading {
@@ -48,6 +50,14 @@ impl Entry {
 
     pub fn is_validating(&self) -> bool {
         matches!(&self.state, EntryState::Validating)
+    }
+
+    pub fn is_building(&self) -> bool {
+        matches!(&self.state, EntryState::Building)
+    }
+
+    pub fn is_active(&self) -> bool {
+        self.is_downloading() || self.is_validating() || self.is_building()
     }
 
     pub fn progress(&self) -> u64 {
@@ -74,7 +84,7 @@ impl Entry {
     }
 }
 
-impl DownloadVerifyReporter {
+impl BuildDownloadVerifyReporter {
     pub fn new(
         multi_progress: MultiProgress,
         progress_bar_placement: ProgressBarPlacement,
@@ -118,6 +128,41 @@ impl DownloadVerifyReporter {
             drop(entries);
             self.update()
         }
+    }
+
+    pub fn on_build_queued(&mut self, spec: &SourceBuildSpec) -> usize {
+        let mut entries = self.entries.write();
+        let id = entries.len();
+        entries.push(Entry {
+            name: format!("building {}", spec.source.package_record.name.as_source()),
+            size: None,
+            state: EntryState::Pending,
+        });
+        drop(entries);
+        self.update();
+        id
+    }
+
+    pub fn on_build_start(&mut self, index: usize) {
+        let mut entries = self.entries.write();
+        entries[index].state = EntryState::Building;
+        drop(entries);
+        self.update();
+    }
+
+    pub fn on_build_finished(&mut self, index: usize) {
+        let mut entries = self.entries.write();
+        match &mut entries[index].state {
+            EntryState::Building => {
+                entries[index].state = EntryState::Finished { download: None };
+            }
+            EntryState::Pending | EntryState::Validating => {
+                entries[index].state = EntryState::Finished { download: None };
+            }
+            _ => {}
+        };
+        drop(entries);
+        self.update();
     }
 
     pub fn on_entry_start(&mut self, record: &RepoDataRecord) -> usize {
@@ -233,10 +278,7 @@ impl DownloadVerifyReporter {
 
     fn update(&mut self) {
         let entries = self.entries.read();
-        if !entries
-            .iter()
-            .any(|d| d.is_finished() || d.is_downloading() || d.is_validating())
-        {
+        if !entries.iter().any(|d| d.is_active()) {
             // Don't do anything if nothing has started.
             return;
         }
@@ -245,7 +287,7 @@ impl DownloadVerifyReporter {
         let bytes_downloaded = entries.iter().map(|d| d.progress()).sum::<u64>();
 
         // Find the biggest pending entry
-        let (first, running_count) = find_max_and_multiple(&entries);
+        let (first, running_count, is_downloading) = find_max_and_multiple(&entries);
         let wide_msg = match (first, running_count) {
             (None, _) => Cow::Borrowed(""),
             (Some(first), 1) => Cow::Borrowed(first.name.as_str()),
@@ -263,7 +305,7 @@ impl DownloadVerifyReporter {
                 spinner = if has_pending_entries { "green" } else { "dim" },
                 slash = console::style("/").dim(),
                 verbose = if verbose { format!("{{bytes:>2.dim}}{slash}{{total_bytes:>2.dim}} ", slash = console::style("/").dim()) } else { String::new() },
-                speed = if has_pending_entries { format!("{at} {{speed:.dim}}", at = console::style("@").dim()) } else { String::new() }
+                speed = if is_downloading { format!("{at} {{speed:.dim}}", at = console::style("@").dim()) } else { String::new() }
             ))
                 .expect("failed to create progress bar style")
                 .tick_chars(pixi_progress::style::tick_chars(has_pending_entries))
@@ -341,21 +383,21 @@ fn total_duration_and_size(items: &[Entry], now: Instant) -> (Duration, u64) {
     (total, total_size)
 }
 
-fn find_max_and_multiple(entries: &[Entry]) -> (Option<&Entry>, usize) {
-    let mut iter = entries
-        .iter()
-        .filter(|entry| entry.is_downloading() || entry.is_validating());
+fn find_max_and_multiple(entries: &[Entry]) -> (Option<&Entry>, usize, bool) {
+    let mut iter = entries.iter().filter(|entry| entry.is_active());
     let Some(mut max) = iter.next() else {
-        return (None, 0);
+        return (None, 0, false);
     };
+    let mut is_downloading = max.is_downloading();
     let mut count = 1;
     for next in iter {
         count += 1;
         if next.size() > max.size() {
             max = next;
         }
+        is_downloading |= next.is_downloading();
     }
-    (Some(max), count)
+    (Some(max), count, is_downloading)
 }
 
 /// This is a custom progress tracker that calculates the average download speed

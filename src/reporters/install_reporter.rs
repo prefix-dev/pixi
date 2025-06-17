@@ -1,21 +1,23 @@
 use std::{cmp::Ordering, collections::HashMap, sync::Arc};
 
+use futures::{Stream, StreamExt};
 use indicatif::MultiProgress;
 use parking_lot::Mutex;
 use pixi_command_dispatcher::{
-    InstallPixiEnvironmentSpec, ReporterContext, reporter::PixiInstallId,
+    ReporterContext, SourceBuildSpec,
+    reporter::{SourceBuildId, SourceBuildReporter},
 };
 use pixi_progress::ProgressBarPlacement;
 use rattler::install::Transaction;
 use rattler_conda_types::{PrefixRecord, RepoDataRecord};
 
 use crate::reporters::{
-    download_verify_reporter::DownloadVerifyReporter,
+    download_verify_reporter::BuildDownloadVerifyReporter,
     main_progress_bar::{MainProgressBar, Tracker},
 };
 
 pub struct SyncReporter {
-    sync_pb: MainProgressBar<String>,
+    multi_progress: MultiProgress,
     combined_inner: Arc<Mutex<CombinedInstallReporterInner>>,
 }
 
@@ -24,26 +26,20 @@ impl SyncReporter {
         multi_progress: MultiProgress,
         progress_bar_placement: ProgressBarPlacement,
     ) -> Self {
-        let sync_pb = MainProgressBar::new(
-            multi_progress.clone(),
-            progress_bar_placement,
-            "syncing".to_owned(),
-        );
         let combined_inner = Arc::new(Mutex::new(CombinedInstallReporterInner::new(
             multi_progress.clone(),
-            ProgressBarPlacement::Before(sync_pb.progress_bar()),
+            progress_bar_placement,
         )));
         Self {
-            sync_pb,
+            multi_progress,
             combined_inner,
         }
     }
 
     pub fn clear(&mut self) {
-        self.sync_pb.clear();
         let mut inner = self.combined_inner.lock();
         inner.preparing_progress_bar.clear();
-        inner.link_progress_bar.clear();
+        inner.install_progress_bar.clear();
     }
 
     /// Creates a new InstallReporter that shares this SyncReporter instance
@@ -60,22 +56,40 @@ impl SyncReporter {
     }
 }
 
-impl pixi_command_dispatcher::PixiInstallReporter for SyncReporter {
+impl SourceBuildReporter for SyncReporter {
     fn on_queued(
         &mut self,
         _reason: Option<ReporterContext>,
-        env: &InstallPixiEnvironmentSpec,
-    ) -> PixiInstallId {
-        let id = self.sync_pb.queued(env.name.clone());
-        PixiInstallId(id)
+        env: &SourceBuildSpec,
+    ) -> SourceBuildId {
+        let mut inner = self.combined_inner.lock();
+        let id = inner.preparing_progress_bar.on_build_queued(env);
+        SourceBuildId(id)
     }
 
-    fn on_start(&mut self, solve_id: PixiInstallId) {
-        self.sync_pb.start(solve_id.0);
+    fn on_started(
+        &mut self,
+        id: SourceBuildId,
+        mut backend_output_stream: Box<dyn Stream<Item = String> + Unpin + Send>,
+    ) {
+        if tracing::event_enabled!(tracing::Level::INFO) {
+            // Stream the progress of the output to the screen.
+            let progress_bar = self.multi_progress.clone();
+            tokio::spawn(async move {
+                while let Some(line) = backend_output_stream.next().await {
+                    // Suspend the main progress bar while we print the line.
+                    progress_bar.suspend(|| eprintln!("{}", line));
+                }
+            });
+        }
+
+        let mut inner = self.combined_inner.lock();
+        inner.preparing_progress_bar.on_build_start(id.0);
     }
 
-    fn on_finished(&mut self, solve_id: PixiInstallId) {
-        self.sync_pb.finish(solve_id.0);
+    fn on_finished(&mut self, id: SourceBuildId) {
+        let mut inner = self.combined_inner.lock();
+        inner.preparing_progress_bar.on_build_finished(id.0);
     }
 }
 
@@ -84,8 +98,8 @@ pub struct CombinedInstallReporterInner {
 
     operation_link_id: HashMap<(TransactionId, usize), usize>,
 
-    preparing_progress_bar: DownloadVerifyReporter,
-    link_progress_bar: MainProgressBar<PackageWithSize>,
+    preparing_progress_bar: BuildDownloadVerifyReporter,
+    install_progress_bar: MainProgressBar<PackageWithSize>,
 }
 
 #[derive(PartialEq, Eq)]
@@ -121,7 +135,7 @@ impl CombinedInstallReporterInner {
         multi_progress: MultiProgress,
         progress_bar_placement: ProgressBarPlacement,
     ) -> Self {
-        let preparing_progress_bar = DownloadVerifyReporter::new(
+        let preparing_progress_bar = BuildDownloadVerifyReporter::new(
             multi_progress.clone(),
             progress_bar_placement.clone(),
             "preparing packages".to_owned(),
@@ -129,13 +143,13 @@ impl CombinedInstallReporterInner {
         let link_progress_bar = MainProgressBar::new(
             multi_progress.clone(),
             ProgressBarPlacement::After(preparing_progress_bar.progress_bar()),
-            "linking packages".to_owned(),
+            "installing".to_owned(),
         );
 
         Self {
             next_id: std::sync::atomic::AtomicUsize::new(0),
             preparing_progress_bar,
-            link_progress_bar,
+            install_progress_bar: link_progress_bar,
             operation_link_id: HashMap::new(),
         }
     }
@@ -152,7 +166,7 @@ impl CombinedInstallReporterInner {
             {
                 self.operation_link_id.insert(
                     (id, operation_id),
-                    self.link_progress_bar.queued(PackageWithSize {
+                    self.install_progress_bar.queued(PackageWithSize {
                         name: record.package_record.name.as_normalized().to_string(),
                         size: record.package_record.size.unwrap_or(1),
                     }),
@@ -220,7 +234,7 @@ impl CombinedInstallReporterInner {
         _record: &PrefixRecord,
     ) -> usize {
         if let Some(&link_id) = self.operation_link_id.get(&(id, operation)) {
-            self.link_progress_bar.start(link_id)
+            self.install_progress_bar.start(link_id)
         };
         operation
     }
@@ -234,7 +248,7 @@ impl CombinedInstallReporterInner {
         _record: &RepoDataRecord,
     ) -> usize {
         if let Some(&link_id) = self.operation_link_id.get(&(id, operation)) {
-            self.link_progress_bar.start(link_id)
+            self.install_progress_bar.start(link_id)
         };
         operation
     }
@@ -243,7 +257,7 @@ impl CombinedInstallReporterInner {
 
     fn on_transaction_operation_complete(&mut self, id: TransactionId, operation: usize) {
         if let Some(link_id) = self.operation_link_id.remove(&(id, operation)) {
-            self.link_progress_bar.finish(link_id);
+            self.install_progress_bar.finish(link_id);
         }
     }
 

@@ -4,6 +4,7 @@ use std::{
     str::FromStr,
 };
 
+use futures::{SinkExt, channel::mpsc::UnboundedSender};
 use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_build_discovery::{DiscoveredBackend, EnabledProtocols};
@@ -75,6 +76,7 @@ impl SourceBuildSpec {
     pub(crate) async fn build(
         self,
         command_dispatcher: CommandDispatcher,
+        mut log_sink: UnboundedSender<String>,
     ) -> Result<BuiltSource, CommandDispatcherError<SourceBuildError>> {
         tracing::debug!("Building package for source spec: {}", self.source.source);
 
@@ -106,36 +108,43 @@ impl SourceBuildSpec {
 
         // Use the backend to build the source package.
         let build_result = backend
-            .conda_build(CondaBuildParams {
-                build_platform_virtual_packages: Some(
-                    command_dispatcher.tool_platform().1.to_vec(),
-                ),
-                channel_base_urls: Some(self.channels.into_iter().map(Into::into).collect()),
-                channel_configuration: ChannelConfiguration {
-                    base_url: self.channel_config.channel_alias.clone(),
+            .conda_build(
+                CondaBuildParams {
+                    build_platform_virtual_packages: Some(
+                        command_dispatcher.tool_platform().1.to_vec(),
+                    ),
+                    channel_base_urls: Some(self.channels.into_iter().map(Into::into).collect()),
+                    channel_configuration: ChannelConfiguration {
+                        base_url: self.channel_config.channel_alias.clone(),
+                    },
+                    outputs: Some(BTreeSet::from_iter([CondaOutputIdentifier {
+                        name: Some(self.source.package_record.name.as_normalized().to_string()),
+                        version: Some(self.source.package_record.version.to_string()),
+                        build: Some(self.source.package_record.build.clone()),
+                        subdir: Some(self.source.package_record.subdir.clone()),
+                    }])),
+                    variant_configuration: self
+                        .variants
+                        .map(|variants| variants.into_iter().collect()),
+                    work_directory: command_dispatcher.cache_dirs().working_dirs().join(
+                        WorkDirKey {
+                            source: source_checkout.clone(),
+                            host_platform: self
+                                .host_platform
+                                .as_ref()
+                                .map(|platform| platform.platform)
+                                .unwrap_or(Platform::current()),
+                            build_backend: backend.identifier().to_string(),
+                        }
+                        .key(),
+                    ),
+                    host_platform: self.host_platform,
+                    editable: false,
                 },
-                outputs: Some(BTreeSet::from_iter([CondaOutputIdentifier {
-                    name: Some(self.source.package_record.name.as_normalized().to_string()),
-                    version: Some(self.source.package_record.version.to_string()),
-                    build: Some(self.source.package_record.build.clone()),
-                    subdir: Some(self.source.package_record.subdir.clone()),
-                }])),
-                variant_configuration: self.variants.map(|variants| variants.into_iter().collect()),
-                work_directory: command_dispatcher.cache_dirs().working_dirs().join(
-                    WorkDirKey {
-                        source: source_checkout.clone(),
-                        host_platform: self
-                            .host_platform
-                            .as_ref()
-                            .map(|platform| platform.platform)
-                            .unwrap_or(Platform::current()),
-                        build_backend: backend.identifier().to_string(),
-                    }
-                    .key(),
-                ),
-                host_platform: self.host_platform,
-                editable: false,
-            })
+                move |line| {
+                    let _err = futures::executor::block_on(log_sink.send(line));
+                },
+            )
             .await
             .map_err(SourceBuildError::BuildError)
             .map_err(CommandDispatcherError::Failed)?;

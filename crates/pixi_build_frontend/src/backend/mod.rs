@@ -1,5 +1,7 @@
-use pixi_build_types::procedures::conda_build::{CondaBuildParams, CondaBuildResult};
-use pixi_build_types::procedures::conda_metadata::{CondaMetadataParams, CondaMetadataResult};
+use pixi_build_types::procedures::{
+    conda_build::{CondaBuildParams, CondaBuildResult},
+    conda_metadata::{CondaMetadataParams, CondaMetadataResult},
+};
 
 use crate::json_rpc::CommunicationError;
 
@@ -26,12 +28,29 @@ impl Backend {
         }
     }
 
-    pub async fn conda_build(
+    pub async fn conda_build<W: BackendOutputStream + Send + 'static>(
         &self,
         params: CondaBuildParams,
+        output_stream: W,
     ) -> Result<CondaBuildResult, CommunicationError> {
         match self {
-            Backend::JsonRpc(json_rpc) => json_rpc.conda_build(params).await,
+            Backend::JsonRpc(json_rpc) => json_rpc.conda_build(params, output_stream).await,
         }
+    }
+}
+
+pub trait BackendOutputStream {
+    fn on_line(&mut self, line: String);
+}
+
+impl BackendOutputStream for () {
+    fn on_line(&mut self, _line: String) {
+        // No-op implementation
+    }
+}
+
+impl<F: FnMut(String)> BackendOutputStream for F {
+    fn on_line(&mut self, line: String) {
+        self(line);
     }
 }

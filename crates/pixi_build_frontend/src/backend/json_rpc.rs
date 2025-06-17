@@ -3,12 +3,6 @@ use std::{
     sync::Arc,
 };
 
-use crate::{
-    error::BackendError,
-    jsonrpc::{RpcParams, stdio_transport},
-    protocols::{BuildBackendSetupError, stderr::stderr_buffer},
-    tool::Tool,
-};
 use jsonrpsee::{
     async_client::{Client, ClientBuilder},
     core::{
@@ -18,10 +12,10 @@ use jsonrpsee::{
     types::ErrorCode,
 };
 use miette::Diagnostic;
-use pixi_build_types::procedures::conda_build::{CondaBuildParams, CondaBuildResult};
 use pixi_build_types::{
     FrontendCapabilities, ProjectModelV1, VersionedProjectModel, procedures,
     procedures::{
+        conda_build::{CondaBuildParams, CondaBuildResult},
         conda_metadata::{CondaMetadataParams, CondaMetadataResult},
         initialize::{InitializeParams, InitializeResult},
         negotiate_capabilities::{NegotiateCapabilitiesParams, NegotiateCapabilitiesResult},
@@ -32,6 +26,14 @@ use tokio::{
     io::{AsyncBufReadExt, BufReader, Lines},
     process::ChildStderr,
     sync::{Mutex, oneshot},
+};
+
+use crate::backend::BackendOutputStream;
+use crate::{
+    error::BackendError,
+    jsonrpc::{RpcParams, stdio_transport},
+    protocols::{BuildBackendSetupError, stderr::stderr_buffer},
+    tool::Tool,
 };
 
 /// An error that can occur when communicating with a build backend.
@@ -298,16 +300,17 @@ impl JsonRpcBackend {
         })
     }
 
-    pub async fn conda_build(
+    pub async fn conda_build<W: BackendOutputStream + Send + 'static>(
         &self,
         request: CondaBuildParams,
+        output_stream: W,
     ) -> Result<CondaBuildResult, CommunicationError> {
         // Capture all of stderr and discard it
         let stderr = self.stderr.as_ref().map(|stderr| {
             // Cancellation signal
             let (cancel_tx, cancel_rx) = oneshot::channel();
             // Spawn the stderr forwarding task
-            let handle = tokio::spawn(stderr_buffer(stderr.clone(), cancel_rx));
+            let handle = tokio::spawn(stream_stderr(stderr.clone(), cancel_rx, output_stream));
             (cancel_tx, handle)
         });
 
@@ -351,5 +354,36 @@ impl JsonRpcBackend {
     /// Returns the backend identifier.
     pub fn identifier(&self) -> &str {
         &self.backend_identifier
+    }
+}
+
+/// Stderr stream that captures the stderr output of the backend and stores it
+/// in a buffer for later use.
+pub(crate) async fn stream_stderr<W: BackendOutputStream>(
+    buffer: Arc<Mutex<Lines<BufReader<ChildStderr>>>>,
+    cancel: oneshot::Receiver<()>,
+    mut on_log: W,
+) -> Result<String, std::io::Error> {
+    // Create a future that continuously read from the buffer and stores the lines
+    // until all data is received.
+    let mut lines = Vec::new();
+    let read_and_buffer = async {
+        let mut buffer = buffer.lock().await;
+        while let Some(line) = buffer.next_line().await? {
+            on_log.on_line(line.clone());
+            lines.push(line);
+        }
+        Ok(lines.join("\n"))
+    };
+
+    // Either wait until the cancel signal is received or the `read_and_buffer`
+    // finishes which means there is no more data to read.
+    tokio::select! {
+        _ = cancel => {
+            Ok(lines.join("\n"))
+        }
+        result = read_and_buffer => {
+            result
+        }
     }
 }

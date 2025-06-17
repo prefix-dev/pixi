@@ -321,8 +321,8 @@ pub async fn resolve_pypi(
     let requires_python = uv_resolver::RequiresPython::from_specifiers(
         &uv_pep440::VersionSpecifiers::from(python_specifier),
     );
-    tracing::info!(
-        "using requires python specifier (this may differ from the above): {}",
+    tracing::debug!(
+        "using requires-python specifier (this may differ from the above): {}",
         requires_python
     );
 
