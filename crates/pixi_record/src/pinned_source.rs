@@ -556,7 +556,7 @@ impl PinnedPathSpec {
     #[allow(clippy::result_large_err)]
     /// Verifies if the locked path satisfies the requested path.
     pub fn satisfies(&self, spec: &PathSourceSpec) -> Result<(), SourceMismatchError> {
-        if spec.path != self.path {
+        if spec.path.normalize() != self.path.normalize() {
             return Err(SourceMismatchError::PathMismatch {
                 locked: self.path.clone(),
                 requested: spec.path.clone(),
