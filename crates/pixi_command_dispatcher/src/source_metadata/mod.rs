@@ -69,6 +69,14 @@ impl SourceMetadataSpec {
             self.source.pinned
         );
 
+        // Discover information about the build backend from the source code.
+        let discovered_backend = DiscoveredBackend::discover(
+            &self.source.path,
+            &self.channel_config,
+            &self.enabled_protocols,
+        )
+        .map_err(SourceMetadataError::Discovery)?;
+
         // Check the source metadata cache, short circuit if we have it.
         let cache_key = self.cache_key();
         let (metadata, entry) = command_queue
@@ -89,6 +97,7 @@ impl SourceMetadataSpec {
                     .compute_hash(GlobHashKey::new(
                         self.source.path.clone(),
                         input_globs.globs.clone(),
+                        discovered_backend.init_params.project_model.clone(),
                     ))
                     .await
                     .map_err(SourceMetadataError::GlobHash)?;
@@ -119,16 +128,9 @@ impl SourceMetadataSpec {
             }
         }
 
-        // Discover information about the build backend from the source code.
-        let discovered_backend = DiscoveredBackend::discover(
-            &self.source.path,
-            &self.channel_config,
-            &self.enabled_protocols,
-        )
-        .map_err(SourceMetadataError::Discovery)?;
-
         // Instantiate the backend with the discovered backend information.
         let manifest_path = discovered_backend.init_params.manifest_path.clone();
+        let project_model = discovered_backend.init_params.project_model.clone();
         let backend = command_queue
             .instantiate_backend(InstantiateBackendSpec {
                 backend_spec: discovered_backend.backend_spec,
@@ -172,7 +174,7 @@ impl SourceMetadataSpec {
         let input_hash = Self::compute_input_hash(
             command_queue,
             &self.source,
-            discovered_backend.init_params.project_model,
+            project_model,
             metadata.input_globs,
         )
         .await?;
