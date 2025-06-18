@@ -67,7 +67,7 @@ Ask a question on the Prefix Discord server: https://discord.gg/kKV8ZxyzY4
 For more information, see the documentation at: https://pixi.sh
 ", consts::PIXI_VERSION),
 )]
-#[clap(arg_required_else_help = true, styles=get_styles(), disable_help_flag = true)]
+#[clap(arg_required_else_help = true, styles=get_styles(), disable_help_flag = true, allow_external_subcommands = true)]
 pub struct Args {
     #[command(subcommand)]
     command: Command,
@@ -165,6 +165,8 @@ pub enum Command {
     Upload(upload::Args),
     #[clap(alias = "project")]
     Workspace(workspace::Args),
+    #[command(external_subcommand)]
+    External(Vec<String>),
 }
 
 #[derive(Parser, Debug, Default, Copy, Clone)]
@@ -286,6 +288,14 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::Lock(cmd) => lock::execute(cmd).await,
         Command::Exec(args) => exec::execute(args).await,
         Command::Build(args) => build::execute(args).await,
+        Command::External(args) => {
+            // TODO: here should be a function like
+            // `execute_external_command` that handles the external command execution
+
+            // `execute_external_command` will itself, call some `find_extension` that should return the path to it
+            // and you could invoke it with `std::process::Command`
+            Ok(())
+        }
     }
 }
 
