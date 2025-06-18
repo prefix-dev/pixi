@@ -205,7 +205,6 @@ impl SourceMetadataSpec {
         } else {
             // Compute the input hash based on the project model and the input globs.
             let input_globs = input_globs.unwrap_or_default();
-            dbg!(&input_globs);
             let input_hash = command_queue
                 .glob_hash_cache()
                 .compute_hash(GlobHashKey::new(
