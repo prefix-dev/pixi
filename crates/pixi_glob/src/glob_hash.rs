@@ -10,7 +10,6 @@ use std::{
 use itertools::Itertools;
 use pixi_build_types::ProjectModelV1;
 use rattler_digest::{Sha256, Sha256Hash, digest::Digest};
-use serde_json;
 use thiserror::Error;
 
 use crate::glob_set::{self, GlobSet};
