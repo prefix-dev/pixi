@@ -4651,7 +4651,6 @@ dependencies = [
 name = "pixi_build_type_conversions"
 version = "0.1.0"
 dependencies = [
- "indexmap 2.9.0",
  "insta",
  "itertools 0.14.0",
  "ordermap",
