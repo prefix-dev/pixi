@@ -33,6 +33,9 @@ pub enum GlobHashError {
     #[error("during line normalization, failed to access {}", .0.display())]
     NormalizeLineEnds(PathBuf, #[source] io::Error),
 
+    #[error("failed to serialize project model")]
+    ProjectModelSerialization(#[source] serde_json::Error),
+
     #[error("the operation was cancelled")]
     Cancelled,
 }
@@ -80,12 +83,8 @@ impl GlobHash {
 
         if let Some(project_model) = project_model {
             // Serialize the project model and add it to the hash
-            let serialized = serde_json::to_vec(&project_model).map_err(|e| {
-                GlobHashError::NormalizeLineEnds(
-                    PathBuf::from("project_model"),
-                    io::Error::new(io::ErrorKind::InvalidData, e),
-                )
-            })?;
+            let serialized = serde_json::to_vec(&project_model)
+                .map_err(GlobHashError::ProjectModelSerialization)?;
             rattler_digest::digest::Update::update(&mut hasher, &serialized);
         }
 
