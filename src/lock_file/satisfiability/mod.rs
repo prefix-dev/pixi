@@ -388,6 +388,10 @@ pub enum PlatformUnsat {
     #[error("failed to convert between pep508 and uv types: {0}")]
     UvTypesConversionError(#[from] ConversionError),
 
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    BackendDiscovery(#[from] pixi_build_discovery::DiscoveryError),
+
     #[error("'{name}' is locked as a conda package but only requested by pypi dependencies")]
     CondaPackageShouldBePypi { name: String },
 }
@@ -1476,7 +1480,9 @@ pub(crate) async fn verify_package_platform_satisfiability(
             &source_dir,
             &environment.channel_config(),
             &EnabledProtocols::default(),
-        )?;
+        )
+        .map_err(PlatformUnsat::BackendDiscovery)
+        .map_err(Box::new)?;
 
         let input_hash = input_hash_cache
             .compute_hash(GlobHashKey::new(
