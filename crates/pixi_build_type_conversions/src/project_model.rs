@@ -64,8 +64,8 @@ fn to_pixi_spec_v1(
                 file_name: nameless.file_name,
                 channel: nameless.channel.map(|c| c.base_url.url().clone().into()),
                 subdir: nameless.subdir,
-                md5: nameless.md5.map(Into::into),
-                sha256: nameless.sha256.map(Into::into),
+                md5: nameless.md5,
+                sha256: nameless.sha256,
             }))
         }
     };
