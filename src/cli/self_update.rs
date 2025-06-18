@@ -438,7 +438,7 @@ fn pixi_binary_name() -> String {
     format!("pixi{}", std::env::consts::EXE_SUFFIX)
 }
 
-pub async fn execute_stub(_: Args) -> miette::Result<()> {
+pub async fn execute_stub(_: Args, _: &GlobalOptions) -> miette::Result<()> {
     let message = option_env!("PIXI_SELF_UPDATE_DISABLED_MESSAGE");
     miette::bail!(
         message.unwrap_or("This version of pixi was built without self-update support. Please use your package manager to update pixi.")
