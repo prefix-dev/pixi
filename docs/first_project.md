@@ -27,7 +27,7 @@ The one created by `pixi init` is a minimal manifest that looks like this:
 ```toml title="pixi.toml"
 [workspace]
 authors = ["Jane Doe <jane.doe@example.com>"]
-channels = ["https://prefix.dev/conda-forge"]
+channels = ["conda-forge"]
 name = "my_project"
 platforms = ["osx-arm64"]
 version = "0.1.0"
