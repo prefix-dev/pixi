@@ -219,7 +219,7 @@ impl InstallPixiEnvironmentSpec {
         // package, the returned updated repodata record will reflect that.
         let repodata_record = build_cache_entry
             .insert(CachedBuild {
-                source: if source_checkout.pinned.is_immutable() {
+                source: if !source_checkout.pinned.is_immutable() {
                     Some(CachedBuildSourceInfo { globs: input_globs })
                 } else {
                     None
