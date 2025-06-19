@@ -179,8 +179,7 @@ impl BuildCache {
     }
 }
 
-/// Cached result of calling `conda/getMetadata` on a build backend. This is
-/// returned by [`SourceMetadataCache::entry`].
+/// Cached result of calling `conda/getMetadata` on a build backend.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CachedBuild {
     #[serde(default, skip_serializing_if = "Option::is_none")]

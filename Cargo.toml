@@ -223,10 +223,8 @@ performance = ["pixi_allocator"]
 [dependencies]
 ahash = { workspace = true }
 assert_matches = { workspace = true }
-async-fd-lock = { workspace = true }
 async-once-cell = { workspace = true }
 barrier_cell = { path = "crates/barrier_cell" }
-base64 = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true, features = [
   "derive",

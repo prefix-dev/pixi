@@ -9,7 +9,7 @@ use std::hash::{Hash, Hasher};
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 pub use build_cache::{
-    BuildCache, BuildCacheError, BuildInput, CachedBuild, CachedBuildSourceInfo,
+    BuildCache, BuildCacheEntry, BuildCacheError, BuildInput, CachedBuild, CachedBuildSourceInfo,
 };
 pub use build_environment::BuildEnvironment;
 pub(crate) use move_file::{MoveError, move_file};

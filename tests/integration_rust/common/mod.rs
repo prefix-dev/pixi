@@ -498,7 +498,7 @@ impl PixiControl {
             .transpose()?;
 
         // Ensure the lock-file is up-to-date
-        let mut lock_file = project
+        let lock_file = project
             .update_lock_file(UpdateLockFileOptions {
                 lock_file_usage: args.lock_file_update_config.lock_file_usage(),
                 ..UpdateLockFileOptions::default()
@@ -530,7 +530,7 @@ impl PixiControl {
                         .prefix(
                             &task.run_environment,
                             UpdateMode::Revalidate,
-                            ReinstallPackages::default(),
+                            &ReinstallPackages::default(),
                         )
                         .await?;
                     let env =

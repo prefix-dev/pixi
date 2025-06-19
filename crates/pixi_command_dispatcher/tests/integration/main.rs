@@ -6,10 +6,10 @@ use std::{path::Path, str::FromStr};
 use event_reporter::EventReporter;
 use pixi_command_dispatcher::{
     BuildEnvironment, CacheDirs, CommandDispatcher, Executor, InstallPixiEnvironmentSpec,
-    PixiEnvironmentSpec,
+    InstantiateToolEnvironmentSpec, PixiEnvironmentSpec,
 };
 use pixi_config::default_channel_config;
-use pixi_spec::{GitReference, GitSpec};
+use pixi_spec::{GitReference, GitSpec, PixiSpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_test_utils::format_diagnostic;
 use rattler_conda_types::{
