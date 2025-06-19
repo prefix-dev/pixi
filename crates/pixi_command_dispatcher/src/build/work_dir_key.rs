@@ -62,7 +62,7 @@ impl WorkDirKey {
         };
 
         match name {
-            Some(name) => format!("{}-{}", name, unique_key),
+            Some(name) => format!("{name}-{unique_key}"),
             None => unique_key,
         }
     }
