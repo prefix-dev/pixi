@@ -139,7 +139,7 @@ impl SourceBuildSpec {
                         .key(),
                     ),
                     host_platform: self.host_platform,
-                    editable: false,
+                    editable: !self.source.source.is_immutable(),
                 },
                 move |line| {
                     let _err = futures::executor::block_on(log_sink.send(line));
