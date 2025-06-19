@@ -214,11 +214,15 @@ This means that you can have multiple environments with the same packages but on
     This way, Pixi automatically manages/bootstraps the Python interpreter for you, so no more `brew`, `apt` or other system install steps.
 
 ??? question "How to use the Free-threaded interpreter?"
-    If you want to use a free-threaded Python interpreter, you can add the `python-freethreading` dependency to the `[tool.pixi.dependencies]`.
+    If you want to use a free-threaded Python interpreter, you can add the `python-freethreading` dependency with:
+    ```
+    pixi add python-freethreading
+    ```
     This ensures that a free-threaded version of Python is installed in the environment.
     This might not work with other packages that are not thread-safe yet.
     You can read more about free-threaded Python [here](https://docs.python.org/3/howto/free-threading-python.html).
 
+### Multiple environments
 Pixi can also create multiple environments, this works well together with the `dependency-groups` feature in the `pyproject.toml` file.
 
 Let's add a dependency-group, which Pixi calls a `feature`, named `test`.
