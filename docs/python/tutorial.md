@@ -102,20 +102,20 @@ Which will result in the following addition to the `pyproject.toml`:
 
 ```toml
 [tool.pixi.dependencies]
-black = ">=24.10.0,<25"  # (1)!
+black = ">=25.1.0,<26"  # (1)!
 ```
 
 1. Or the latest version that is available on the [conda-forge](https://prefix.dev/channels/conda-forge/packages/black) channel.
 
 But we can also be strict about the version that should be used.
 ```shell
-pixi add black=24
+pixi add black=25
 ```
 resulting in:
 
 ```toml
 [tool.pixi.dependencies]
-black = "24.*"
+black = "25.*"
 ```
 
 Sometimes there are packages that aren't available on conda channels but are published on PyPI.
