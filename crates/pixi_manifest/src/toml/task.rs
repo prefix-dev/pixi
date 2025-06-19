@@ -90,6 +90,9 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
 
                             deps.push(Dependency::new(&name, args, environment));
                         }
+                        ValueInner::String(str) => {
+                            deps.push(Dependency::from(str.as_ref()));
+                        }
                         value => return Err(expected("table", value, item.span).into()),
                     }
                 }

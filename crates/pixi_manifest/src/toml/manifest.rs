@@ -932,4 +932,32 @@ mod test {
         "#,
         ));
     }
+
+    #[test]
+    fn test_task_variants() {
+        let _ = WorkspaceManifest::from_toml_str(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = []
+
+        [tasks]
+        build = "simple"
+        # Single simple depends-on task
+        b = ["build"]
+        # Multiple simple depends-on tasks
+        c = ["b", "configure"]
+        # Map task with a command
+        configure = { cmd = "execute" }
+        # Map task with a commandand arguments
+        args = { cmd = "{{ arg }}" }
+        # Map task with a command, arguments and dependencies
+        depends = { depends-on = ["b", "c"] }
+        # Simple depends-on complex tasks
+        depends2 = [ {task = "depends-on"}, "b", { task = "args" , args = ["test"]}]
+        "#,
+        )
+        .unwrap();
+    }
 }
