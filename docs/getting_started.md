@@ -63,8 +63,8 @@ python = "3.13.*"
 # Pixi automatically creates a default environment that consists only of the default feature
 default = ["default"]
 # Unless you opt-out with `no-default-feature`, every environment contains the default feature
-py312 = ["default", "py312"]
-py313 = ["default", "py313"]
+py312 = ["py312", "default"]
+py313 = ["py313", "default"]
 ```
 
 Let's adapt the Python script so that it displays the current Python version:
