@@ -3,6 +3,7 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
     str::FromStr,
+    sync::LazyLock,
 };
 
 use fs_err::tokio as tokio_fs;
@@ -26,6 +27,7 @@ use rattler_conda_types::{ChannelConfig, Platform, RepoDataRecord};
 use tempfile::{TempDir, tempdir};
 use tokio::{fs, task::JoinSet};
 use url::Url;
+use uv_configuration::RAYON_INITIALIZE;
 use uv_python::PythonEnvironment;
 
 use crate::common::{
@@ -937,6 +939,10 @@ async fn test_multiple_prefix_update() {
     let tmp_dir = tempfile::tempdir().unwrap();
 
     let group = GroupedEnvironment::from(project.default_environment().clone());
+
+    // Normally in pixi, the RAYON_INITIALIZE is lazily initialized by the reporter
+    // associated with the command dispatcher.
+    LazyLock::force(&RAYON_INITIALIZE);
 
     let channels = group
         .channel_urls(&group.workspace().channel_config())

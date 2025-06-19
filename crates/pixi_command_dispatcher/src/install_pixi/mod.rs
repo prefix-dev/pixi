@@ -389,10 +389,12 @@ impl InstallPixiEnvironmentSpec {
 async fn detect_installed_packages(
     prefix: &Prefix,
 ) -> Result<Vec<PrefixRecord>, CommandDispatcherError<InstallPixiEnvironmentError>> {
-    let path = prefix.path().to_path_buf();
+    let prefix = prefix.clone();
     simple_spawn_blocking::tokio::run_blocking_task(move || {
-        PrefixRecord::collect_from_prefix(&path).map_err(|e| {
-            CommandDispatcherError::Failed(InstallPixiEnvironmentError::ReadInstalledPackages(e))
+        PrefixRecord::collect_from_prefix(prefix.path()).map_err(|e| {
+            CommandDispatcherError::Failed(InstallPixiEnvironmentError::ReadInstalledPackages(
+                prefix, e,
+            ))
         })
     })
     .await
@@ -413,9 +415,9 @@ async fn compute_package_sha256(
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum InstallPixiEnvironmentError {
-    #[error(transparent)]
+    #[error("failed to collect prefix records from '{}'", .0.path().display())]
     #[diagnostic(help("try `pixi clean` to reset the environment and run the command again"))]
-    ReadInstalledPackages(#[from] std::io::Error),
+    ReadInstalledPackages(Prefix, #[source] std::io::Error),
 
     #[error(transparent)]
     Installer(InstallerError),
