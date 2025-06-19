@@ -29,11 +29,12 @@ impl WorkDirKey {
     pub fn key(&self) -> String {
         let mut hasher = Xxh3::new();
         self.source.pinned.to_string().hash(&mut hasher);
+        self.host_platform.to_string().hash(&mut hasher);
         self.build_backend.hash(&mut hasher);
         let unique_key = URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes());
         match self.source.path.file_name().and_then(OsStr::to_str) {
-            Some(name) => format!("{}-{}/{}", name, unique_key, self.host_platform),
-            None => format!("{}/{}", unique_key, self.host_platform),
+            Some(name) => format!("{}-{}", name, unique_key),
+            None => unique_key,
         }
     }
 }
