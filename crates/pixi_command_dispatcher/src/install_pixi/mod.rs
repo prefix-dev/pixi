@@ -392,9 +392,7 @@ async fn detect_installed_packages(
     let path = prefix.path().to_path_buf();
     simple_spawn_blocking::tokio::run_blocking_task(move || {
         PrefixRecord::collect_from_prefix(&path).map_err(|e| {
-            CommandDispatcherError::Failed(InstallPixiEnvironmentError::Installer(
-                InstallerError::FailedToDetectInstalledPackages(e),
-            ))
+            CommandDispatcherError::Failed(InstallPixiEnvironmentError::ReadInstalledPackages(e))
         })
     })
     .await
@@ -415,6 +413,10 @@ async fn compute_package_sha256(
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum InstallPixiEnvironmentError {
+    #[error(transparent)]
+    #[diagnostic(help("try `pixi clean` to reset the environment and run the command again"))]
+    ReadInstalledPackages(#[from] std::io::Error),
+
     #[error(transparent)]
     Installer(InstallerError),
 
