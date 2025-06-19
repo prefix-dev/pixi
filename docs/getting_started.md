@@ -86,7 +86,7 @@ You can specify which platforms your workspace supports and Pixi will ensure tha
 - [`pixi add --platform`](./reference/cli/pixi/add.md#arg---platform) - add a package only to a specific platform
 - [`pixi workspace platform add`](./reference/cli/pixi/workspace/platform/add.md) - add a platform to the workspace that you want to support with your project
 
-More information: [Multi platform support](./workspace/multi_platform.md)
+More information: [Multi platform support](./workspace/multi_platform_configuration.md)
 
 ## Utilities
 Pixi comes with a set of utilities to help you debug or manage your setup.
