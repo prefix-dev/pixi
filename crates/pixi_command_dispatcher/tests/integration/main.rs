@@ -1,7 +1,7 @@
 mod event_reporter;
 mod event_tree;
 
-use std::str::FromStr;
+use std::{path::Path, str::FromStr};
 
 use event_reporter::EventReporter;
 use pixi_command_dispatcher::{
@@ -11,7 +11,10 @@ use pixi_command_dispatcher::{
 use pixi_config::default_channel_config;
 use pixi_spec::{GitReference, GitSpec};
 use pixi_spec_containers::DependencyMap;
-use rattler_conda_types::{GenericVirtualPackage, Platform, prefix::Prefix};
+use pixi_test_utils::format_diagnostic;
+use rattler_conda_types::{
+    GenericVirtualPackage, PackageName, Platform, VersionSpec, prefix::Prefix,
+};
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use url::Url;
 
@@ -112,4 +115,54 @@ pub async fn simple_test() {
 
     let event_tree = EventTree::new(events.lock().unwrap().iter());
     insta::assert_snapshot!(event_tree.to_string());
+}
+
+#[tokio::test]
+pub async fn instantiate_backend_with_compatible_api_version() {
+    let backend_name = PackageName::new_unchecked("backend-with-compatible-api-version");
+    let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .unwrap();
+    let channel_dir = root_dir.join("tests/data/channels/channels/backend_channel_1");
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_cache_dirs(default_cache_dirs())
+        .with_executor(Executor::Serial)
+        .finish();
+
+    dispatcher
+        .instantiate_tool_environment(InstantiateToolEnvironmentSpec::new(
+            backend_name,
+            PixiSpec::Version(VersionSpec::Any),
+            Vec::from([Url::from_directory_path(channel_dir).unwrap().into()]),
+        ))
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+pub async fn instantiate_backend_without_compatible_api_version() {
+    let backend_name = PackageName::new_unchecked("backend-without-compatible-api-version");
+    let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .unwrap();
+    let channel_dir = root_dir.join("tests/data/channels/channels/backend_channel_1");
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_cache_dirs(default_cache_dirs())
+        .with_executor(Executor::Serial)
+        .finish();
+
+    let err = dispatcher
+        .instantiate_tool_environment(InstantiateToolEnvironmentSpec::new(
+            backend_name,
+            PixiSpec::Version(VersionSpec::Any),
+            Vec::from([Url::from_directory_path(channel_dir).unwrap().into()]),
+        ))
+        .await
+        .unwrap_err();
+
+    insta::assert_snapshot!(format_diagnostic(&err));
 }

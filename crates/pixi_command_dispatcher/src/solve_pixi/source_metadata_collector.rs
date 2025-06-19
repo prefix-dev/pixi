@@ -1,4 +1,7 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashSet},
+    sync::Arc,
+};
 
 use futures::{StreamExt, stream::FuturesUnordered};
 use miette::Diagnostic;
@@ -87,10 +90,14 @@ impl SourceMetadataCollector {
         let mut source_futures = FuturesUnordered::new();
         let mut specs = specs;
         let mut result = CollectedSourceMetadata::default();
+        let mut already_encountered_specs = HashSet::new();
+
         loop {
             // Create futures for all encountered specs.
             for (name, spec) in specs.drain(..) {
-                source_futures.push(self.collect_source_metadata(name, spec));
+                if already_encountered_specs.insert(spec.clone()) {
+                    source_futures.push(self.collect_source_metadata(name, spec));
+                }
             }
 
             // Wait for the next future to finish.

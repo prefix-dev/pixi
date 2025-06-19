@@ -27,7 +27,7 @@ pixi init [OPTIONS] [PATH]
 :  Environment.yml file to bootstrap the workspace
 - <a id="arg---format" href="#arg---format">`--format <FORMAT>`</a>
 :  The manifest format to create
-<br>**options**: `pixi`, `pyproject`
+<br>**options**: `pixi`, `pyproject`, `mojoproject`
 - <a id="arg---scm" href="#arg---scm">`--scm (-s) <SCM>`</a>
 :  Source Control Management used for this workspace
 <br>**options**: `github`, `gitlab`, `codeberg`

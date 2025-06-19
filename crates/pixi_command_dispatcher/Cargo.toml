@@ -55,6 +55,7 @@ pixi_utils = { workspace = true }
 indexmap = { workspace = true }
 insta = { workspace = true, features = ["json"] }
 pixi_config = { workspace = true }
+pixi_test_utils = { workspace = true }
 tempfile = { workspace = true }
 text_trees = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }

@@ -17,7 +17,6 @@
 
 use std::{collections::HashMap, fmt::Display};
 
-use crate::event_reporter::Event;
 use itertools::Itertools;
 use pixi_command_dispatcher::reporter::SourceBuildId;
 use pixi_command_dispatcher::{
@@ -30,6 +29,10 @@ use pixi_command_dispatcher::{
 use rattler_conda_types::PackageName;
 use slotmap::SlotMap;
 use text_trees::{FormatCharacters, StringTreeNode, TreeFormatting};
+
+use event_reporter::Event;
+
+use crate::event_reporter;
 
 /// An [`EventTree`] is a hierarchical representation of the events that
 /// occurred in a [`pixi_command_dispatcher::CommandDispatcher`].

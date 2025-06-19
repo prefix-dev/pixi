@@ -4430,7 +4430,7 @@ dependencies = [
 
 [[package]]
 name = "pixi"
-version = "0.48.1"
+version = "0.48.2"
 dependencies = [
  "ahash",
  "anyhow",
@@ -4493,6 +4493,7 @@ dependencies = [
  "pixi_pypi_spec",
  "pixi_record",
  "pixi_spec",
+ "pixi_test_utils",
  "pixi_toml",
  "pixi_utils",
  "pixi_uv_conversions",
@@ -4587,6 +4588,7 @@ dependencies = [
  "pixi_manifest",
  "pixi_spec",
  "pixi_spec_containers",
+ "pixi_test_utils",
  "rattler_conda_types",
  "serde",
  "serde_json",
@@ -4615,6 +4617,7 @@ dependencies = [
  "pixi_manifest",
  "pixi_progress",
  "pixi_spec",
+ "pixi_test_utils",
  "pixi_utils",
  "rattler",
  "rattler_conda_types",
@@ -4687,6 +4690,7 @@ dependencies = [
  "pixi_record",
  "pixi_spec",
  "pixi_spec_containers",
+ "pixi_test_utils",
  "pixi_utils",
  "rattler",
  "rattler_conda_types",

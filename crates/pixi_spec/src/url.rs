@@ -81,6 +81,19 @@ impl UrlSpec {
     }
 }
 
+impl Display for UrlSpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.url)?;
+        if let Some(md5) = &self.md5 {
+            write!(f, " md5={:x}", md5)?;
+        }
+        if let Some(sha256) = &self.sha256 {
+            write!(f, " sha256={:x}", sha256)?;
+        }
+        Ok(())
+    }
+}
+
 /// A specification of a source archive from a URL.
 #[serde_as]
 #[derive(Debug, Clone, Hash, Eq, PartialEq, serde::Serialize)]

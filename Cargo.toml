@@ -193,7 +193,7 @@ license.workspace = true
 name = "pixi"
 readme.workspace = true
 repository.workspace = true
-version = "0.48.1"
+version = "0.48.2"
 
 [features]
 default = ["online_tests", "rustls-tls"]
@@ -386,6 +386,7 @@ async-trait = { workspace = true }
 fake = "4.0.0"
 http = { workspace = true }
 insta = { workspace = true, features = ["yaml", "glob", "filters"] }
+pixi_test_utils = { workspace = true }
 rstest = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["rt"] }

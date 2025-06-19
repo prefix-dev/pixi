@@ -104,7 +104,8 @@ impl<'a> PyPIPrefixUpdaterBuilder<'a> {
             .allow_insecure_host(uv_context.allow_insecure_host.clone())
             .keyring(uv_context.keyring_provider)
             .connectivity(Connectivity::Online)
-            .extra_middleware(uv_context.extra_middleware.clone());
+            .extra_middleware(uv_context.extra_middleware.clone())
+            .index_locations(&index_locations);
 
         for p in &uv_context.proxies {
             uv_client_builder = uv_client_builder.proxy(p.clone())
