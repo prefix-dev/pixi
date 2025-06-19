@@ -65,15 +65,15 @@ pub async fn simple_test() {
     let records = dispatcher
         .solve_pixi_environment(PixiEnvironmentSpec {
             dependencies: DependencyMap::from_iter([(
-                "boost-check".parse().unwrap(),
+                "foobar-desktop".parse().unwrap(),
                 GitSpec {
                     git: "https://github.com/wolfv/pixi-build-examples.git"
                         .parse()
                         .unwrap(),
                     rev: Some(GitReference::Rev(
-                        "a4c27e86a4a5395759486552abb3df8a47d50172".to_owned(),
+                        "8d230eda9b4cdaaefd24aad87fd923d4b7c3c78a".to_owned(),
                     )),
-                    subdirectory: Some(String::from("boost-check")),
+                    subdirectory: Some(String::from("multi-output/recipe")),
                 }
                 .into(),
             )]),

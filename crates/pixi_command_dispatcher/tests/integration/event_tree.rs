@@ -17,20 +17,18 @@
 
 use std::{collections::HashMap, fmt::Display};
 
+use event_reporter::Event;
 use itertools::Itertools;
-use pixi_command_dispatcher::reporter::SourceBuildId;
 use pixi_command_dispatcher::{
     ReporterContext,
     reporter::{
         CondaSolveId, GitCheckoutId, InstantiateToolEnvId, PixiInstallId, PixiSolveId,
-        SourceMetadataId,
+        SourceBuildId, SourceMetadataId,
     },
 };
 use rattler_conda_types::PackageName;
 use slotmap::SlotMap;
 use text_trees::{FormatCharacters, StringTreeNode, TreeFormatting};
-
-use event_reporter::Event;
 
 use crate::event_reporter;
 
@@ -127,7 +125,14 @@ impl EventTree {
                 }
                 Event::SourceMetadataFinished { .. } => {}
                 Event::SourceBuildQueued { id, context, spec } => {
-                    source_build_label.insert(*id, spec.source.source.to_string());
+                    source_build_label.insert(
+                        *id,
+                        format!(
+                            "{} @ {}",
+                            spec.source.package_record.name.as_source(),
+                            spec.source.source.to_string()
+                        ),
+                    );
                     builder.set_event_parent((*id).into(), *context);
                 }
                 Event::SourceBuildStarted { id } => {

@@ -128,7 +128,7 @@ impl SourceBuildSpec {
                         .map(|variants| variants.into_iter().collect()),
                     work_directory: command_dispatcher.cache_dirs().working_dirs().join(
                         WorkDirKey {
-                            source: source_checkout.clone(),
+                            source: Box::new(self.source.clone()).into(),
                             host_platform: self
                                 .host_platform
                                 .as_ref()

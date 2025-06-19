@@ -103,12 +103,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let (_tmp, work_dir) = if incremental {
         // Specify the build directory
         let key = WorkDirKey {
-            source: SourceCheckout::new(
+            source: Box::new(SourceCheckout::new(
                 workspace.root(),
                 PinnedSourceSpec::Path(PinnedPathSpec {
                     path: Utf8TypedPath::derive(&workspace.root().to_string_lossy()).to_path_buf(),
                 }),
-            ),
+            ))
+            .into(),
             host_platform: args.target_platform,
             build_backend: backend.identifier().to_string(),
         }

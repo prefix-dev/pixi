@@ -160,7 +160,7 @@ impl SourceMetadataSpec {
             variant_configuration: self.variants.map(|variants| variants.into_iter().collect()),
             work_directory: command_dispatcher.cache_dirs().working_dirs().join(
                 WorkDirKey {
-                    source: self.source.clone(),
+                    source: Box::new(self.source.clone()).into(),
                     host_platform: self.build_environment.host_platform,
                     build_backend: backend.identifier().to_string(),
                 }
