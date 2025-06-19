@@ -23,8 +23,6 @@ impl CommandDispatcherProcessor {
                 }
             },
             Entry::Vacant(entry) => {
-                dbg!(&task.spec);
-
                 // Notify the reporter that a new checkout has been queued.
                 let reporter_id = self
                     .reporter
