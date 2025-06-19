@@ -280,7 +280,7 @@ pub async fn execute_command(
         #[cfg(feature = "self_update")]
         Command::SelfUpdate(cmd) => self_update::execute(cmd, global_options).await,
         #[cfg(not(feature = "self_update"))]
-        Command::SelfUpdate(cmd) => self_update::execute_stub(cmd).await,
+        Command::SelfUpdate(cmd) => self_update::execute_stub(cmd, global_options).await,
         Command::List(cmd) => list::execute(cmd).await,
         Command::Tree(cmd) => tree::execute(cmd).await,
         Command::Update(cmd) => update::execute(cmd).await,

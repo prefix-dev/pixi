@@ -228,7 +228,6 @@ force-path-style = {{ s3[key]["force-path-style"] }}
 const GITIGNORE_TEMPLATE: &str = r#"
 # pixi environments
 .pixi
-*.egg-info
 "#;
 
 #[derive(Parser, Debug, Clone, PartialEq, ValueEnum)]
@@ -532,7 +531,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     // create a .gitignore if one is missing
-    if let Err(e) = create_or_append_file(&gitignore_path, GITIGNORE_TEMPLATE) {
+    if let Err(e) = create_or_append_file(&gitignore_path, GITIGNORE_TEMPLATE.trim_start()) {
         tracing::warn!(
             "Warning, couldn't update '{}' because of: {}",
             gitignore_path.to_string_lossy(),
