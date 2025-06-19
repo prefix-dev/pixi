@@ -24,7 +24,7 @@ use super::cli_config::LockFileUpdateConfig;
 use crate::{
     Workspace, WorkspaceLocator,
     cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
-    environment::sanity_check_project,
+    environment::sanity_check_workspace,
     lock_file::{ReinstallPackages, UpdateLockFileOptions},
     task::{
         AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
@@ -121,12 +121,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     // Sanity check of prefix location
-    sanity_check_project(&workspace).await?;
+    sanity_check_workspace(&workspace).await?;
 
     let best_platform = environment.best_platform();
 
     // Ensure that the lock-file is up-to-date.
-    let mut lock_file = workspace
+    let lock_file = workspace
         .update_lock_file(UpdateLockFileOptions {
             lock_file_usage: args.lock_file_update_config.lock_file_usage(),
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
@@ -261,7 +261,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .prefix(
                         &executable_task.run_environment,
                         args.prefix_update_config.update_mode(),
-                        ReinstallPackages::default(),
+                        &ReinstallPackages::default(),
                     )
                     .await?;
 

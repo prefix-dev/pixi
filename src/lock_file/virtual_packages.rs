@@ -181,7 +181,7 @@ pub(crate) fn validate_system_meets_environment_requirements(
     let required_virtual_packages =
         get_required_virtual_packages_from_conda_records(&conda_records)?;
 
-    tracing::info!(
+    tracing::debug!(
         "Required virtual packages of environment '{}': {}",
         environment_name.fancy_display(),
         required_virtual_packages

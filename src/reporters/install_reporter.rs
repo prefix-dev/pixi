@@ -97,6 +97,7 @@ pub struct CombinedInstallReporterInner {
     next_id: std::sync::atomic::AtomicUsize,
 
     operation_link_id: HashMap<(TransactionId, usize), usize>,
+    cache_entry_id: HashMap<(TransactionId, usize), usize>,
 
     preparing_progress_bar: BuildDownloadVerifyReporter,
     install_progress_bar: MainProgressBar<PackageWithSize>,
@@ -151,6 +152,7 @@ impl CombinedInstallReporterInner {
             preparing_progress_bar,
             install_progress_bar: link_progress_bar,
             operation_link_id: HashMap::new(),
+            cache_entry_id: HashMap::new(),
         }
     }
 
@@ -173,7 +175,10 @@ impl CombinedInstallReporterInner {
                 );
             }
             if let Some(record) = operation.record_to_install() {
-                self.preparing_progress_bar.on_entry_start(record);
+                self.cache_entry_id.insert(
+                    (id, operation_id),
+                    self.preparing_progress_bar.on_entry_start(record),
+                );
             }
         }
     }
@@ -187,7 +192,7 @@ impl CombinedInstallReporterInner {
         _record: &RepoDataRecord,
     ) -> usize {
         *self
-            .operation_link_id
+            .cache_entry_id
             .get(&(id, operation))
             .expect("missing operation link")
     }
@@ -197,9 +202,9 @@ impl CombinedInstallReporterInner {
         cache_entry
     }
 
-    fn on_validate_complete(&mut self, _id: TransactionId, validate_idx: usize) {
+    fn on_validate_complete(&mut self, _id: TransactionId, cache_entry: usize) {
         self.preparing_progress_bar
-            .on_validation_complete(validate_idx);
+            .on_validation_complete(cache_entry);
     }
 
     fn on_download_start(&mut self, _id: TransactionId, cache_entry: usize) -> usize {
@@ -210,17 +215,17 @@ impl CombinedInstallReporterInner {
     fn on_download_progress(
         &mut self,
         _id: TransactionId,
-        download_idx: usize,
+        cache_entry: usize,
         progress: u64,
         total: Option<u64>,
     ) {
         self.preparing_progress_bar
-            .on_download_progress(download_idx, progress, total);
+            .on_download_progress(cache_entry, progress, total);
     }
 
-    fn on_download_completed(&mut self, _id: TransactionId, download_idx: usize) {
+    fn on_download_completed(&mut self, _id: TransactionId, cache_entry: usize) {
         self.preparing_progress_bar
-            .on_download_complete(download_idx);
+            .on_download_complete(cache_entry);
     }
 
     fn on_populate_cache_complete(&mut self, _id: TransactionId, cache_entry: usize) {
