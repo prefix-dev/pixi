@@ -18,7 +18,6 @@ use rattler_shell::{
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::ffi::OsStr;
 
 // Setting a base prefix for the pixi package
 const PROJECT_PREFIX: &str = "PIXI_PROJECT_";
@@ -282,25 +281,12 @@ pub async fn run_activation(
         _ => PathModificationBehavior::Prepend,
     };
 
-
-    println!("======run_activation before: {:?}", activator);
-
-    let key = OsStr::new("CMAKE_ARGS");
-    let value = OsStr::new("Foo123");
-
-    let mut map: HashMap<&OsStr, &OsStr> = HashMap::new();
-    map.insert(key, value);
-
-    let opt_map: Option<HashMap<&OsStr, &OsStr>> = Some(map);
-
-
-
     let activator_result = match tokio::task::spawn_blocking(move || {
         // Current environment variables
         let current_env = std::env::vars().collect::<HashMap<_, _>>();
 
         // Run and cache the activation script
-        activator.run_activation(
+        let new_activator = activator.run_activation(
             ActivationVariables {
                 // Get the current PATH variable
                 path: Default::default(),
@@ -314,8 +300,17 @@ pub async fn run_activation(
                 // The current environment variables from the shell
                 current_env,
             },
-            opt_map
-        )
+            None
+        );
+
+        // Activator.env_vars should override activator_result for duplicate keys
+       let merged = new_activator.map(|mut map| {
+        for (k, v) in &activator.env_vars {
+            map.insert(k.clone(), v.clone()); // override or insert
+        }
+         map
+       });
+       merged
     })
     .await
     .into_diagnostic()?
@@ -381,7 +376,8 @@ pub async fn run_activation(
             );
         }
     }
-    println!("======run_activation after {:?}", activator_result);
+
+    
     Ok(activator_result)
 }
 
