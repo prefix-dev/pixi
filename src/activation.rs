@@ -306,7 +306,7 @@ pub async fn run_activation(
         // Activator.env_vars should override activator_result for duplicate keys
        let merged = new_activator.map(|mut map| {
         for (k, v) in &activator.env_vars {
-            map.insert(k.clone(), v.clone()); // override or insert
+            map.insert(k.clone(), v.clone()); 
         }
          map
        });
@@ -486,7 +486,7 @@ pub(crate) async fn initialize_env_variables(
         CurrentEnvVarBehavior::Exclude => HashMap::new(),
     };
 
-     let all_variables: HashMap<String, String> = current_shell_env_vars
+    let all_variables: HashMap<String, String> = current_shell_env_vars
         .into_iter()
         .chain(activation_env)
         .collect();
