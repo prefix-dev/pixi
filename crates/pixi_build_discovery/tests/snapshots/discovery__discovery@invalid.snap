@@ -1,10 +1,10 @@
 ---
 source: crates/pixi_build_discovery/tests/discovery.rs
-expression: error_to_snapshot(& err)
+expression: "pixi_test_utils :: format_diagnostic(& err)"
 input_file: tests/data/discovery/invalid/TEST-CASE
 ---
   × missing field 'channels' in table
-   ╭─[file://<ROOT>/pixi.toml:1:1]
+   ╭─[<CARGO_ROOT>/tests/data/discovery/invalid/pixi.toml:1:1]
  1 │ [workspace]
    · ────────────
    ╰────

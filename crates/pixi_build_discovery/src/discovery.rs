@@ -174,7 +174,7 @@ impl DiscoveredBackend {
         })
     }
 
-    /// Try to discover a pixi.yoml file in the source directory.
+    /// Try to discover a pixi.toml file with a `[package]` table in the source directory.
     fn discover_pixi(
         source_path: PathBuf,
         channel_config: &ChannelConfig,

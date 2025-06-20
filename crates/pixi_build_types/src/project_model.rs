@@ -246,7 +246,7 @@ pub struct GitSpecV1 {
     pub subdirectory: Option<String>,
 }
 
-/// A specification of a package from a git repository.
+/// A specification of a package from a path
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PathSpecV1 {

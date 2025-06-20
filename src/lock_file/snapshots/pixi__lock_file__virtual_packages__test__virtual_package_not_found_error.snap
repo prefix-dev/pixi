@@ -1,13 +1,9 @@
 ---
 source: src/lock_file/virtual_packages.rs
-expression: "format!(\"With override:\\n{}\\nWithout override:\\n{}\",\nerror_to_snapshot(&error1), error_to_snapshot(&error2))"
+expression: "format!(\"With override:\\n{}\\nWithout override:\\n{}\",\nformat_diagnostic(&error1), format_diagnostic(&error2))"
 ---
 With override:
-  × Virtual package '__glibc >=2.28' does not match any of the available virtual packages on your
-  │ machine: [__glibc=2.17, __cuda=11.8, __osx=10.14]
-  help:  You can mock the virtual package by overriding the environment variable, e.g.:
-        '`CONDA_OVERRIDE_GLIBC=2.17`'
-
+  × Virtual package '__glibc >=2.28' does not match any of the available virtual packages on your machine: [__glibc=2.17, __cuda=11.8, __osx=10.14]
+  help:  You can mock the virtual package by overriding the environment variable, e.g.: '`CONDA_OVERRIDE_GLIBC=2.17`'
 Without override:
-  × Virtual package '__win >=1.2.3' does not match any of the available virtual packages on your
-  │ machine: [__glibc=2.17, __cuda=11.8, __osx=10.14]
+  × Virtual package '__win >=1.2.3' does not match any of the available virtual packages on your machine: [__glibc=2.17, __cuda=11.8, __osx=10.14]
