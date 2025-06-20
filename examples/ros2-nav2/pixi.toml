@@ -2,15 +2,11 @@
 authors = ["Ruben Arts <ruben@prefix.dev>"]
 channels = ["https://prefix.dev/conda-forge"]
 name = "ros2-nav2"
-platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
+platforms = ["linux-64", "osx-arm64", "osx-64"]
 
 [activation.env]
-TURTLEBOT3_MODEL = "waffle"
-
-[target.unix.activation.env]
 GAZEBO_MODEL_PATH = "$GAZEBO_MODEL_PATH:$CONDA_PREFIX/share/turtlebot3_gazebo/models"
-[target.win.activation.env]
-GAZEBO_MODEL_PATH = "%GAZEBO_MODEL_PATH%:%CONDA_PREFIX%/share/turtlebot3_gazebo/models"
+TURTLEBOT3_MODEL = "waffle"
 
 [tasks]
 start = "ros2 launch nav2_bringup tb3_simulation_launch.py headless:=False"
