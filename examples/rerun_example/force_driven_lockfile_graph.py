@@ -13,18 +13,20 @@ with open(lockfile_path) as file:
     lockfile_data = yaml.safe_load(file)
 
 package_data = lockfile_data["packages"]
-package_names = [package["name"] for package in package_data]
 
 graph = nx.DiGraph()
 for package in package_data:
-    package_name = package["name"]
-    dependencies = package.get("depends", [])
-    graph.add_node(package_name)
-    for i, dep in enumerate(dependencies):
-        graph.add_edge(package_name, dep.split(" ")[0])
+    if "linux" in package.get("conda", ""):
+        package_url = package.get("conda") or package.get("pypi")
+        package_name = (
+            package_url.split("/")[-1].split("-")[0] if package_url else "unknown_package"
+        )
+        dependencies = package.get("depends", [])
+        graph.add_node(package_name)
+        for i, dep in enumerate(dependencies):
+            graph.add_edge(package_name, dep.split(" ")[0])
 
 rr.init("fdg", spawn=True)
-rr.connect()
 
 
 def hash_string_to_int(string):
@@ -79,23 +81,26 @@ def apply_forces_and_log(graph, pos):
                 force[v] += attract * diff / dist
 
         # Update positions with damping
-        for node in graph:
-            pos[node] += force[node] * damping
-            position = np.array(pos[node])
-            color = get_color_for_node(node)  # Retrieve color, memoized
+        if iteration % 1 == 0:
+            for node in graph:
+                pos[node] += force[node] * damping
+                position = np.array(pos[node])
+                color = get_color_for_node(node)  # Retrieve color, memoized
+                rr.log(
+                    f"graph_nodes/{node}",
+                    rr.Points3D(
+                        [position], colors=[color], radii=max(graph.degree(node) / 20, 1.5)
+                    ),
+                    rr.AnyValues(node),
+                )
+
+            edges_array = np.array([[pos[u], pos[v]] for u, v in graph.edges()])
+
+            # Log the edges array
             rr.log(
-                f"graph_nodes/{node}",
-                rr.Points3D([position], colors=[color], radii=max(graph.degree(node) / 20, 0.5)),
-                rr.AnyValues(node),
+                "graph_nodes/graph_edges",
+                rr.LineStrips3D(edges_array, radii=0.2, colors=[1, 1, 1, 0.1]),
             )
-
-        edges_array = np.array([[pos[u], pos[v]] for u, v in graph.edges()])
-
-        # Log the edges array
-        rr.log(
-            "graph_nodes/graph_edges",
-            rr.LineStrips3D(edges_array, radii=0.02, colors=[1, 1, 1, 0.1]),
-        )
 
     return pos
 
