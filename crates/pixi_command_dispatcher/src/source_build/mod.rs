@@ -193,6 +193,7 @@ impl SourceBuildSpec {
 #[derive(Debug, Error, Diagnostic)]
 pub enum SourceBuildError {
     #[error(transparent)]
+    #[diagnostic(transparent)]
     SourceCheckout(#[from] SourceCheckoutError),
 
     #[error(transparent)]

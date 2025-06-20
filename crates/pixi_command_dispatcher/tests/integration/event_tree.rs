@@ -130,7 +130,7 @@ impl EventTree {
                         format!(
                             "{} @ {}",
                             spec.source.package_record.name.as_source(),
-                            spec.source.source.to_string()
+                            spec.source.source
                         ),
                     );
                     builder.set_event_parent((*id).into(), *context);

@@ -261,9 +261,7 @@ impl InstallPixiEnvironmentSpec {
                 enabled_protocols: self.enabled_protocols.clone(),
             })
             .await
-            .map_err_with(|err| {
-                BuildSourceError::BuildError(source_record.source.to_string(), err)
-            })?;
+            .map_err_with(BuildSourceError::BuildError)?;
 
         // Determine the SHA256 hash of the built package.
         let sha = compute_package_sha256(&built_source.output_file).await?;
@@ -422,7 +420,7 @@ pub enum InstallPixiEnvironmentError {
     #[error(transparent)]
     Installer(InstallerError),
 
-    #[error("failed to build source package {} from {}",
+    #[error("failed to build '{}' from '{}'",
         .0.package_record.name.as_source(),
         .0.source)]
     BuildSourceError(
@@ -435,13 +433,9 @@ pub enum InstallPixiEnvironmentError {
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum BuildSourceError {
-    #[error("failed to build a package for {0}")]
-    BuildError(
-        String,
-        #[diagnostic_source]
-        #[source]
-        SourceBuildError,
-    ),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    BuildError(#[from] SourceBuildError),
 
     #[error("failed to calculate sha256 hash of {}", .0.display())]
     CalculateSha256(std::path::PathBuf, #[source] std::io::Error),

@@ -201,6 +201,8 @@ pub async fn execute() -> miette::Result<()> {
         Box::new(
             miette::MietteHandlerOpts::default()
                 .color(use_colors)
+                .rgb_colors()
+                .force_graphical(true)
                 .build(),
         )
     }))?;
