@@ -25,7 +25,7 @@ use crate::{
         InstantiatedToolEnvId, SolveCondaEnvironmentId, SolvePixiEnvironmentId, SourceBuildId,
         SourceMetadataId, TaskSpec,
     },
-    executor::{Executor, ExecutorFutures},
+    executor::ExecutorFutures,
     install_pixi::InstallPixiEnvironmentError,
     instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec},
     reporter,
@@ -259,7 +259,6 @@ impl CommandDispatcherProcessor {
     pub fn spawn(
         inner: Arc<CommandDispatcherData>,
         reporter: Option<Box<dyn Reporter>>,
-        executor: Executor,
     ) -> (
         mpsc::UnboundedSender<ForegroundMessage>,
         std::thread::JoinHandle<()>,
@@ -284,7 +283,7 @@ impl CommandDispatcherProcessor {
                 git_checkouts: HashMap::default(),
                 source_builds: Default::default(),
                 pending_source_builds: Default::default(),
-                pending_futures: ExecutorFutures::new(executor),
+                pending_futures: ExecutorFutures::new(inner.executor),
                 inner,
                 reporter,
             };

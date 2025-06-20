@@ -27,13 +27,14 @@ use reqwest_middleware::ClientWithMiddleware;
 use tokio::sync::{mpsc, oneshot};
 use typed_path::Utf8TypedPath;
 
-use crate::install_pixi::InstallPixiEnvironmentResult;
 use crate::{
-    InvalidPathError, PixiEnvironmentSpec, SolveCondaEnvironmentSpec, SolvePixiEnvironmentError,
-    SourceCheckout, SourceCheckoutError, SourceMetadataSpec,
+    Executor, InvalidPathError, PixiEnvironmentSpec, SolveCondaEnvironmentSpec,
+    SolvePixiEnvironmentError, SourceCheckout, SourceCheckoutError, SourceMetadataSpec,
     build::BuildCache,
     cache_dirs::CacheDirs,
-    install_pixi::{InstallPixiEnvironmentError, InstallPixiEnvironmentSpec},
+    install_pixi::{
+        InstallPixiEnvironmentError, InstallPixiEnvironmentResult, InstallPixiEnvironmentSpec,
+    },
     instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec},
     limits::ResolvedLimits,
     source_build::{BuiltSource, SourceBuildError, SourceBuildSpec},
@@ -129,6 +130,9 @@ pub(crate) struct CommandDispatcherData {
 
     /// True if execution of link scripts is enabled.
     pub execute_link_scripts: bool,
+
+    /// The execution type of the dispatcher.
+    pub executor: Executor,
 }
 
 /// A channel through which to send any messages to the command_dispatcher. Some
@@ -265,6 +269,11 @@ impl CommandDispatcher {
     /// Constructs a new builder for the command dispatcher.
     pub fn builder() -> CommandDispatcherBuilder {
         CommandDispatcherBuilder::default()
+    }
+
+    /// Returns the executor used by the command dispatcher.
+    pub fn executor(&self) -> Executor {
+        self.data.executor
     }
 
     /// Returns the cache for source metadata.

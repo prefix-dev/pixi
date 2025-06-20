@@ -7,7 +7,7 @@ use std::{
 };
 
 use chrono::Utc;
-use futures::{FutureExt, StreamExt, stream::FuturesUnordered};
+use futures::{FutureExt, StreamExt};
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
@@ -30,6 +30,7 @@ use crate::{
     CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt, SourceBuildError,
     SourceBuildSpec, SourceCheckout, SourceCheckoutError,
     build::{BuildCacheError, BuildInput, CachedBuild, CachedBuildSourceInfo},
+    executor::ExecutorFutures,
     install_pixi::reporter::WrappingInstallReporter,
 };
 
@@ -117,7 +118,7 @@ impl InstallPixiEnvironmentSpec {
 
         // Build all the source packages concurrently.
         binary_records.reserve(source_records.len());
-        let mut build_futures = FuturesUnordered::new();
+        let mut build_futures = ExecutorFutures::new(command_dispatcher.executor());
         for source_record in source_records {
             build_futures.push(async {
                 self.build_from_source_with_cache(&command_dispatcher, &source_record)

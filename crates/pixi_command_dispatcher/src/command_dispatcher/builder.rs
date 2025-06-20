@@ -178,10 +178,10 @@ impl CommandDispatcherBuilder {
             package_cache,
             tool_platform,
             execute_link_scripts: self.execute_link_scripts,
+            executor: self.executor,
         });
 
-        let (sender, join_handle) =
-            CommandDispatcherProcessor::spawn(data.clone(), self.reporter, self.executor);
+        let (sender, join_handle) = CommandDispatcherProcessor::spawn(data.clone(), self.reporter);
         CommandDispatcher {
             channel: Some(CommandDispatcherChannel::Strong(sender)),
             context: None,

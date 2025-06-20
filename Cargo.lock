@@ -4654,6 +4654,7 @@ dependencies = [
  "insta",
  "itertools 0.14.0",
  "miette 7.5.0",
+ "pin-project-lite",
  "pixi_build_discovery",
  "pixi_build_frontend",
  "pixi_build_types",
