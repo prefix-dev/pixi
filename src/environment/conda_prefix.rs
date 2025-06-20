@@ -199,8 +199,12 @@ pub async fn update_prefix_conda(
             force_reinstall: reinstall_packages.unwrap_or_default(),
             channels,
             channel_config,
-            variants: None, /* TODO: These apply to the pixi build backends, not sure what to do
-                             * with them here. */
+            variants: Some(
+                build_context
+                    .resolve_variant(host_platform)
+                    .into_iter()
+                    .collect(),
+            ),
             enabled_protocols: Default::default(),
         })
         .await?;

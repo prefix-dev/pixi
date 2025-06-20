@@ -215,8 +215,8 @@ pub async fn execute() -> miette::Result<()> {
         LevelFilter::OFF => (LevelFilter::OFF, LevelFilter::OFF, LevelFilter::OFF),
         LevelFilter::ERROR => (LevelFilter::ERROR, LevelFilter::ERROR, LevelFilter::WARN),
         LevelFilter::WARN => (LevelFilter::WARN, LevelFilter::WARN, LevelFilter::INFO),
-        LevelFilter::INFO => (LevelFilter::WARN, LevelFilter::INFO, LevelFilter::INFO),
-        LevelFilter::DEBUG => (LevelFilter::INFO, LevelFilter::DEBUG, LevelFilter::DEBUG),
+        LevelFilter::INFO => (LevelFilter::WARN, LevelFilter::INFO, LevelFilter::DEBUG),
+        LevelFilter::DEBUG => (LevelFilter::INFO, LevelFilter::DEBUG, LevelFilter::TRACE),
         LevelFilter::TRACE => (LevelFilter::TRACE, LevelFilter::TRACE, LevelFilter::TRACE),
     };
 
