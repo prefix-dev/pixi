@@ -321,6 +321,26 @@ pub async fn store_credentials_from_project(project: &Workspace) -> miette::Resu
     Ok(())
 }
 
+async fn create_file_if_not_exists(
+    path: &Path,
+    contents: &str,
+    error_message: &str,
+) -> miette::Result<()> {
+    if !path.exists() {
+        match tokio::fs::write(path, contents).await {
+            Ok(_) => Ok(()),
+            Err(e) if e.kind() == ErrorKind::ReadOnlyFilesystem => {
+                tracing::debug!("Failed to create file at: {}, error: {}", path.display(), e);
+                Ok(())
+            }
+            Err(e) => Err(e)
+                .into_diagnostic()
+                .wrap_err(format!("{error_message} {}", path.display())),
+        }?;
+    }
+    Ok(())
+}
+
 /// Ensure that the `.pixi/` directory exists and contains a `.gitignore` file.
 /// If the directory doesn't exist, create it.
 /// If the `.gitignore` file doesn't exist, create it with a '*' pattern.
@@ -340,27 +360,19 @@ async fn ensure_pixi_directory_and_gitignore(pixi_dir: &Path) -> miette::Result<
             ))?;
     }
 
-    // Create or check the .gitignore file
-    if !gitignore_path.exists() {
-        tokio::fs::write(&gitignore_path, "*\n")
-            .await
-            .into_diagnostic()
-            .wrap_err(format!(
-                "Failed to create .gitignore file at {}",
-                gitignore_path.display()
-            ))?;
-    }
+    create_file_if_not_exists(
+        &gitignore_path,
+        "*\n",
+        "Failed to create .gitignore file at",
+    )
+    .await?;
 
-    // Create or check the .condapackageignore file
-    if !condapackageignore_path.exists() {
-        tokio::fs::write(&condapackageignore_path, ".pixi\n")
-            .await
-            .into_diagnostic()
-            .wrap_err(format!(
-                "Failed to create .condapackageignore file at {}",
-                condapackageignore_path.display()
-            ))?;
-    }
+    create_file_if_not_exists(
+        &condapackageignore_path,
+        ".pixi\n",
+        "Failed to create .condapackageignore file at",
+    )
+    .await?;
 
     Ok(())
 }
