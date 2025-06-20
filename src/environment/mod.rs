@@ -321,7 +321,11 @@ pub async fn store_credentials_from_project(project: &Workspace) -> miette::Resu
     Ok(())
 }
 
-async fn create_file_if_not_exists(
+/// Create a file at the given path with the given contents if it does not exist.
+/// If the file already exists, it does nothing.
+/// If the file cannot be created due to a read-only filesystem,
+/// we'll ignore the error as it's not that important to the function of pixi.
+async fn best_effort_write_file_if_missing(
     path: &Path,
     contents: &str,
     error_message: &str,
@@ -360,14 +364,14 @@ async fn ensure_pixi_directory_and_gitignore(pixi_dir: &Path) -> miette::Result<
             ))?;
     }
 
-    create_file_if_not_exists(
+    best_effort_write_file_if_missing(
         &gitignore_path,
         "*\n",
         "Failed to create .gitignore file at",
     )
     .await?;
 
-    create_file_if_not_exists(
+    best_effort_write_file_if_missing(
         &condapackageignore_path,
         ".pixi\n",
         "Failed to create .condapackageignore file at",
