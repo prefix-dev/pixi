@@ -599,6 +599,13 @@ class PyPIOptions(StrictBaseModel):
         description="Packages that should NOT be built",
         examples=["true", "false"],
     )
+    dependency_overrides: dict[PyPIPackageName, PyPIRequirement] | None = Field(
+        None,
+        description="A list of PyPI dependencies that override the the resolved dependencies",
+        examples=[
+            {"numpy": ">=1.21.0"},
+        ],
+    )
 
 
 #######################
