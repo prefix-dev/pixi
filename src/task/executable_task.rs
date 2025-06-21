@@ -10,6 +10,7 @@ use deno_task_shell::{
     ShellPipeWriter, ShellState, execute_with_pipes, parser::SequentialList, pipe,
 };
 use fs_err::tokio as tokio_fs;
+use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{Context, Diagnostic};
 use pixi_consts::consts;
@@ -129,7 +130,10 @@ impl<'p> ExecutableTask<'p> {
     }
 
     /// Returns the task as script
-    fn as_script(&self) -> Result<Option<String>, FailedToParseShellScript> {
+    fn as_script(
+        &self,
+        command_env: &HashMap<OsString, OsString>,
+    ) -> Result<Option<String>, FailedToParseShellScript> {
         // Convert the task into an executable string
         let task = self
             .task
@@ -137,7 +141,7 @@ impl<'p> ExecutableTask<'p> {
             .map_err(FailedToParseShellScript::ArgumentReplacement)?;
         if let Some(task) = task {
             // Get the export specific environment variables
-            let export = get_export_specific_task_env(self.task.as_ref());
+            let export = get_export_specific_task_env(self.task.as_ref(), command_env);
 
             // Append the command line arguments verbatim
             let cli_args = if let ArgValues::FreeFormArgs(additional_args) = &self.args {
@@ -167,8 +171,9 @@ impl<'p> ExecutableTask<'p> {
     /// an alias.
     pub(crate) fn as_deno_script(
         &self,
+        command_env: &HashMap<OsString, OsString>,
     ) -> Result<Option<SequentialList>, FailedToParseShellScript> {
-        let full_script = self.as_script()?;
+        let full_script = self.as_script(command_env)?;
 
         if let Some(full_script) = full_script {
             tracing::debug!("Parsing shell script: {}", full_script);
@@ -239,7 +244,7 @@ impl<'p> ExecutableTask<'p> {
         command_env: &HashMap<OsString, OsString>,
         input: Option<&[u8]>,
     ) -> Result<RunOutput, TaskExecutionError> {
-        let Some(script) = self.as_deno_script()? else {
+        let Some(script) = self.as_deno_script(command_env)? else {
             return Ok(RunOutput {
                 exit_code: 0,
                 stdout: String::new(),
@@ -384,20 +389,39 @@ fn get_output_writer_and_handle() -> (ShellPipeWriter, JoinHandle<String>) {
     (writer, handle)
 }
 
-/// Task specific environment variables.
-fn get_export_specific_task_env(task: &Task) -> String {
-    // Append the environment variables if they don't exist
+/// Get the environment variable based on their priority
+fn get_export_specific_task_env(task: &Task, command_env: &HashMap<OsString, OsString>) -> String {
     let mut export = String::new();
-    if let Some(env) = task.env() {
-        for (key, value) in env {
-            if value.contains(format!("${}", key).as_str()) || std::env::var(key.as_str()).is_err()
-            {
-                tracing::info!("Setting environment variable: {}=\"{}\"", key, value);
-                export.push_str(&format!("export \"{}={}\";\n", key, value));
-            } else {
-                tracing::info!("Environment variable {} already set", key);
-            }
+    let mut export_merged: HashMap<String, String> = HashMap::new();
+
+    // Convert OsString to String
+    let command_env_converted: IndexMap<String, String> = command_env
+        .iter()
+        .filter_map(|(k, v)| Some((k.to_str()?.to_string(), v.to_str()?.to_string())))
+        .collect();
+
+    // Env map
+    let mut env_map: HashMap<&'static str, Option<IndexMap<String, String>>> = HashMap::new();
+    // Command env variables
+    env_map.insert("COMMAND_ENV", Some(command_env_converted));
+    // Task specific environment variables
+    env_map.insert(
+        "TASK_SPECIFIC_ENVS",
+        Some(task.env().cloned().unwrap_or_default()),
+    );
+
+    // Merge based on priority: from lowest to higheset
+    let priority = ["COMMAND_ENV", "TASK_SPECIFIC_ENVS"];
+    for key in &priority {
+        if let Some(Some(env_map_key)) = env_map.get(key) {
+            export_merged.extend(env_map_key.clone());
         }
+    }
+
+    // Put all merged environment variables to export.
+    for (key, value) in export_merged {
+        tracing::info!("Setting environment variable: {}=\"{}\"", key, value);
+        export.push_str(&format!("export \"{}={}\";\n", key, value));
     }
     export
 }
@@ -476,8 +500,11 @@ mod tests {
             .default_environment()
             .task(&TaskName::from("test"), None)
             .unwrap();
+        // Environment Variables
+        let mut command_env: HashMap<OsString, OsString> = HashMap::new();
+        command_env.insert(OsString::from("Foo"), OsString::from("foo123"));
 
-        let export = get_export_specific_task_env(task);
+        let export = get_export_specific_task_env(task, &command_env);
 
         assert_eq!(export, "export \"FOO=bar\";\nexport \"BAR=$FOO\";\n");
     }
@@ -507,8 +534,11 @@ mod tests {
             run_environment: workspace.default_environment(),
             args: ArgValues::default(),
         };
+        // Environment Variables
+        let mut command_env: HashMap<OsString, OsString> = HashMap::new();
+        command_env.insert(OsString::from("Foo"), OsString::from("foo123"));
 
-        let script = executable_task.as_script().unwrap().unwrap();
+        let script = executable_task.as_script(&command_env).unwrap().unwrap();
         assert_eq!(script, "export \"FOO=bar\";\n\ntest ");
     }
 

@@ -283,7 +283,7 @@ pub async fn run_activation(
 
     let activator_result = match tokio::task::spawn_blocking(move || {
         // Run and cache the activation script
-        activator.run_activation(
+        let new_activator = activator.run_activation(
             ActivationVariables {
                 // Get the current PATH variable
                 path: Default::default(),
@@ -295,7 +295,15 @@ pub async fn run_activation(
                 path_modification_behavior,
             },
             None,
-        )
+        );
+
+        // Activator.env_vars should override activator_result for duplicate keys
+        new_activator.map(|mut map| {
+            for (k, v) in &activator.env_vars {
+                map.insert(k.clone(), v.clone());
+            }
+            map
+        })
     })
     .await
     .into_diagnostic()?
