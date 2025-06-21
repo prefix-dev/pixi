@@ -12,12 +12,13 @@ TURTLEBOT3_MODEL = "waffle"
 start = "ros2 launch nav2_bringup tb3_simulation_launch.py headless:=False"
 
 [feature.humble]
-channels = ["https://prefix.dev/robostack-humble"]
+channels = ["https://prefix.dev/robostack-staging"]
 
 [feature.humble.dependencies]
 ros-humble-desktop = "*"
 ros-humble-nav2-bringup = "*"
 ros-humble-turtlebot3-gazebo = "*"
+ros2-distro-mutex = "==0.5.0"
 
 [feature.jazzy]
 channels = ["https://prefix.dev/robostack-jazzy"]
