@@ -474,7 +474,7 @@ impl<'p> LockFileDerivedData<'p> {
 
         let uv_context = match &self.uv_context {
             None => {
-                let context = UvResolutionContext::from_workspace(self.workspace)?
+                let context = UvResolutionContext::new(self.workspace.config())?
                     .set_cache_refresh(uv_reinstall, uv_packages);
                 self.uv_context = Some(context.clone());
                 context
@@ -1322,7 +1322,7 @@ impl<'p> UpdateContext<'p> {
             // Get the uv context
             let uv_context = match uv_context.as_ref() {
                 None => uv_context
-                    .insert(UvResolutionContext::from_workspace(project)?)
+                    .insert(UvResolutionContext::new(project.config())?)
                     .clone(),
                 Some(context) => context.clone(),
             };

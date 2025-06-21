@@ -17,6 +17,7 @@ pixi [OPTIONS] <COMMAND>
 | [`clean`](pixi/clean.md) | Cleanup the environments |
 | [`completion`](pixi/completion.md) | Generates a completion script for a shell |
 | [`config`](pixi/config.md) | Configuration management |
+| [`deploy`](pixi/deploy.md) | Install an environment in a lockfile to a target directory |
 | [`exec`](pixi/exec.md) | Run a command and install it in a temporary environment |
 | [`global`](pixi/global.md) | Subcommand for global package management actions |
 | [`info`](pixi/info.md) | Information about the system, workspace and environments for the current machine |
