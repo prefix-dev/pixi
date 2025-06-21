@@ -1,3 +1,4 @@
+# Installation
 To install `pixi` you can run the following command in your terminal:
 
 === "Linux & macOS"
@@ -35,7 +36,9 @@ Now restart your terminal or shell to make the installation effective.
     You can check the installation `sh` script: [download](https://pixi.sh/install.sh) and the `ps1`: [download](https://pixi.sh/install.ps1).
     The scripts are open source and available on [GitHub](https://github.com/prefix-dev/pixi/tree/main/install).
 
-
+!!! note "Don't forget to add autocompletion!"
+    After installing Pixi, you can enable autocompletion for your shell.
+    See the [Autocompletion](#autocompletion) section below for instructions.
 ## Update
 
 Updating is as simple as installing, rerunning the installation script gets you the latest version.
@@ -213,3 +216,22 @@ Add the following to the end of `~/.elvish/rc.elv`:
 
 eval (pixi completion --shell elvish | slurp)
 ```
+
+# Uninstall
+Before un-installation you might want to delete any previous files pixi has installed.
+
+1. Remove any cached data:
+    ```shell
+    pixi clean cache
+    ```
+2. Remove the environments from your pixi projects:
+    ```shell
+    cd path/to/project && pixi clean
+    ```
+3. Remove the `pixi` and it's global environments
+    ```shell
+    rm -r ~/.pixi
+    ```
+4. Remove the pixi binary from your `PATH`:
+   - For Linux and macOS, remove `~/.pixi/bin` from your `PATH` in your shell configuration file (e.g., `~/.bashrc`, `~/.zshrc`).
+   - For Windows, remove `%UserProfile%\.pixi\bin` from your `PATH` environment variable.

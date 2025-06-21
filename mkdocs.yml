@@ -105,8 +105,10 @@ extra:
 
 nav:
   - Home: index.md
-  - Getting Started: getting_started.md
-  - Installation: installation.md
+  - Getting Started:
+      - Installation: installation.md
+      - First project: first_project.md
+      - Basic Usage: getting_started.md
   - Workspace:
       - Environments: workspace/environment.md
       - Tasks: workspace/advanced_tasks.md
