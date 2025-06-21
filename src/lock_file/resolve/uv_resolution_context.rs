@@ -26,6 +26,7 @@ pub struct UvResolutionContext {
     pub shared_state: SharedState,
     pub extra_middleware: ExtraMiddleware,
     pub proxies: Vec<reqwest::Proxy>,
+    pub verify_direct_url_hashes: bool,
 }
 
 impl UvResolutionContext {
@@ -68,7 +69,7 @@ impl UvResolutionContext {
         Ok(Self {
             cache,
             in_flight: InFlight::default(),
-            hash_strategy: HashStrategy::None,
+            hash_strategy: HashStrategy::Verify(Default::default()),
             keyring_provider,
             concurrency: Concurrency::default(),
             source_strategy: SourceStrategy::Enabled,
@@ -77,6 +78,7 @@ impl UvResolutionContext {
             shared_state: SharedState::default(),
             extra_middleware: ExtraMiddleware(uv_middlewares(project.config())),
             proxies: project.config().get_proxies().into_diagnostic()?,
+            verify_direct_url_hashes: project.config().pypi_config.verify_direct_url_hashes,
         })
     }
 

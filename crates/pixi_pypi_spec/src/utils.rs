@@ -1,5 +1,20 @@
 use url::Url;
 
+/// Parses URL fragment parameters into key-value pairs.
+///
+/// URL fragments like `#key1=value1&key2=value2` are parsed into a vector
+/// of (key, value) tuples.
+///
+/// # Examples
+/// - `#subdirectory=pkg_dir` -> `[("subdirectory", "pkg_dir")]`
+/// - `#sha256=abc123&egg=foo` -> `[("sha256", "abc123"), ("egg", "foo")]`
+pub fn parse_url_fragment_parameters(fragment: &str) -> Vec<(&str, &str)> {
+    fragment
+        .split('&')
+        .filter_map(|param| param.split_once('='))
+        .collect()
+}
+
 /// If the URL points to a subdirectory, extract it, as in (git):
 ///   `git+https://git.example.com/MyProject.git@v1.0#subdirectory=pkg_dir`
 ///   `git+https://git.example.com/MyProject.git@v1.0#egg=pkg&subdirectory=pkg_dir`
@@ -8,10 +23,10 @@ use url::Url;
 ///   `https://github.com/foo-labs/foo/archive/master.zip#egg=pkg&subdirectory=packages/bar`
 pub(crate) fn extract_directory_from_url(url: &Url) -> Option<String> {
     let fragment = url.fragment()?;
-    let subdirectory = fragment
-        .split('&')
-        .find_map(|fragment| fragment.strip_prefix("subdirectory="))?;
-    Some(subdirectory.into())
+    parse_url_fragment_parameters(fragment)
+        .into_iter()
+        .find(|(key, _)| *key == "subdirectory")
+        .map(|(_, value)| value.to_string())
 }
 
 #[cfg(test)]
