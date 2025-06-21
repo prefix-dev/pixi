@@ -9648,7 +9648,7 @@ packages:
 - pypi: ./lidar
   name: lidar
   version: 0.1.0
-  sha256: 10fe6d7b3a80959f913aada12c01bfecd6cd9854beaf6a8843a7ecd2215cd4bd
+  sha256: 55c21e77fbd574e76abd63031499e55704bff60ee922a41f4ae2cbf3603c7c1d
   requires_dist:
   - matplotlib
   - numpy
@@ -10278,7 +10278,7 @@ packages:
 - pypi: ./nuscenes_dataset
   name: nuscenes-dataset
   version: 0.1.0
-  sha256: 78903b7670fac2b4c27637efc9aa6f63b7b70502ce3d5f88e4353aef5607cf40
+  sha256: 3851a75de3dbc8b9cd9474c17fe66ec48556bcfa0c70770a95e531be68544846
   requires_dist:
   - matplotlib
   - numpy
