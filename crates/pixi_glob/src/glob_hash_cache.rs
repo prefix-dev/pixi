@@ -4,11 +4,13 @@
 use std::{
     collections::BTreeSet,
     convert::identity,
+    hash::Hash,
     path::PathBuf,
     sync::{Arc, Weak},
 };
 
 use dashmap::{DashMap, Entry};
+use pixi_build_types::ProjectModelV1;
 use tokio::sync::broadcast;
 
 use super::{GlobHash, GlobHashError};
@@ -20,18 +22,28 @@ pub struct GlobHashKey {
     root: PathBuf,
     /// The glob patterns.
     globs: BTreeSet<String>,
+    /// The project model.
+    project_model: Option<ProjectModelV1>,
 }
 
 impl GlobHashKey {
     /// Creates a new `GlobHashKey` from the given root directory and glob patterns.
-    pub fn new(root: impl Into<PathBuf>, globs: BTreeSet<String>) -> Self {
+    pub fn new(
+        root: impl Into<PathBuf>,
+        globs: BTreeSet<String>,
+        project_model: Option<ProjectModelV1>,
+    ) -> Self {
         let mut root = root.into();
         // Ensure that `root` points to a directory, not a file.
         if root.is_file() {
             root = root.parent().expect("Root must be a directory").to_owned();
         }
 
-        Self { root, globs }
+        Self {
+            root,
+            globs,
+            project_model,
+        }
     }
 }
 
@@ -58,11 +70,7 @@ impl GlobHashCache {
     /// cache, it will return the cached value. If the hash is not in the
     /// cache, it will compute the hash (deduplicating any request) and return
     /// it.
-    pub async fn compute_hash(
-        &self,
-        key: impl Into<GlobHashKey>,
-    ) -> Result<GlobHash, GlobHashError> {
-        let key = key.into();
+    pub async fn compute_hash(&self, key: GlobHashKey) -> Result<GlobHash, GlobHashError> {
         match self.cache.entry(key.clone()) {
             Entry::Vacant(entry) => {
                 // Construct a channel over which we will be sending the result and store it in
@@ -79,6 +87,7 @@ impl GlobHashCache {
                     GlobHash::from_patterns(
                         &computation_key.root,
                         computation_key.globs.iter().map(String::as_str),
+                        computation_key.project_model,
                     )
                 })
                 .await

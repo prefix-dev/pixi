@@ -4,6 +4,6 @@ expression: snapshot
 ---
 Globs:
 - tests/data/satisfiability/source-dependency/pixi.toml
-Hash: 0acde3549cf146ff910d07405f8146dea0659c19b25d6292048da9f2d47e667e
+Hash: 79eb279687163fcf2dfde5c64bc24651d9642f361ab284425e91270e5cbeb23a
 Matched files:
 - tests/data/satisfiability/source-dependency/pixi.toml

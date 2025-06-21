@@ -1,0 +1,8 @@
+[package]
+name = "child-package"
+# The version in the lock file is 0.1.0
+# That is included in project model, and therefore the hash
+version = "0.2.0"
+
+[package.build]
+backend = { name = "pixi-build-cmake", version = "0.1.*" }
