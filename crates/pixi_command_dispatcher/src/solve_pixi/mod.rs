@@ -1,4 +1,7 @@
+mod reporter;
 mod source_metadata_collector;
+
+use std::{collections::BTreeMap, path::PathBuf, time::Instant};
 
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
@@ -17,12 +20,10 @@ use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{Channel, ChannelConfig, ChannelUrl, NamelessMatchSpec, Platform};
 use rattler_repodata_gateway::RepoData;
 use rattler_solve::{ChannelPriority, SolveStrategy};
+use reporter::WrappingGatewayReporter;
 use serde::Serialize;
-use std::collections::BTreeMap;
-use std::{path::PathBuf, time::Instant};
 use thiserror::Error;
 use tracing::instrument;
-use url::Url;
 
 /// Contains all information that describes the input of a pixi environment.
 ///
@@ -164,7 +165,10 @@ impl PixiEnvironmentSpec {
             query
         };
 
-        let binary_repodata = query.await.map_err(SolvePixiEnvironmentError::QueryError)?;
+        let binary_repodata = query
+            .await
+            .map_err(SolvePixiEnvironmentError::QueryError)
+            .map_err(CommandDispatcherError::Failed)?;
         let total_records = binary_repodata.iter().map(RepoData::len).sum::<usize>();
         tracing::info!(
             "fetched {total_records} records in {:?}",
@@ -232,49 +236,4 @@ pub enum SolvePixiEnvironmentError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     CollectSourceMetadataError(#[from] CollectSourceMetadataError),
-}
-
-struct WrappingGatewayReporter(Box<dyn rattler_repodata_gateway::Reporter>);
-
-impl rattler_repodata_gateway::Reporter for WrappingGatewayReporter {
-    fn on_download_start(&self, url: &Url) -> usize {
-        self.0.on_download_start(url)
-    }
-    fn on_download_progress(
-        &self,
-        url: &Url,
-        index: usize,
-        bytes_downloaded: usize,
-        total_bytes: Option<usize>,
-    ) {
-        self.0
-            .on_download_progress(url, index, bytes_downloaded, total_bytes)
-    }
-    fn on_download_complete(&self, url: &Url, index: usize) {
-        self.0.on_download_complete(url, index)
-    }
-    fn on_jlap_start(&self) -> usize {
-        self.0.on_jlap_start()
-    }
-    fn on_jlap_decode_start(&self, index: usize) {
-        self.0.on_jlap_decode_start(index)
-    }
-    fn on_jlap_decode_completed(&self, index: usize) {
-        self.0.on_jlap_decode_completed(index)
-    }
-    fn on_jlap_apply_patch(&self, index: usize, patch_index: usize, total: usize) {
-        self.0.on_jlap_apply_patch(index, patch_index, total)
-    }
-    fn on_jlap_apply_patches_completed(&self, index: usize) {
-        self.0.on_jlap_apply_patches_completed(index)
-    }
-    fn on_jlap_encode_start(&self, index: usize) {
-        self.0.on_jlap_encode_start(index)
-    }
-    fn on_jlap_encode_completed(&self, index: usize) {
-        self.0.on_jlap_encode_completed(index)
-    }
-    fn on_jlap_completed(&self, index: usize) {
-        self.0.on_jlap_completed(index)
-    }
 }

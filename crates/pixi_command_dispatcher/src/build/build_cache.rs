@@ -5,13 +5,11 @@ use std::{
     path::PathBuf,
 };
 
-use crate::{
-    build::{SourceCheckout, cache::source_checkout_cache_key},
-    utils::{MoveError, move_file},
-};
+use crate::build::{MoveError, move_file, source_checkout_cache_key};
 use async_fd_lock::{LockWrite, RwLockWriteGuard};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use rattler_conda_types::{GenericVirtualPackage, Platform, RepoDataRecord};
+use pixi_record::PinnedSourceSpec;
+use rattler_conda_types::{ChannelUrl, GenericVirtualPackage, Platform, RepoDataRecord};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
@@ -38,12 +36,8 @@ pub enum BuildCacheError {
 /// Defines additional input besides the source files that are used to compute
 /// the metadata of a source checkout.
 pub struct BuildInput {
-    // TODO: I think this should also include the build backend used! Maybe?
     /// The URL channels used in the build.
-    pub channel_urls: Vec<Url>,
-
-    /// The platform for which the metadata was computed.
-    pub target_platform: Platform,
+    pub channel_urls: Vec<ChannelUrl>,
 
     /// The name of the package
     pub name: String,
@@ -53,6 +47,9 @@ pub struct BuildInput {
 
     /// The build string of the package to build
     pub build: String,
+
+    /// The platform for which the metadata was computed.
+    pub subdir: String,
 
     /// The host platform
     pub host_platform: Platform,
@@ -71,10 +68,10 @@ impl BuildInput {
     pub fn hash_key(&self) -> String {
         let BuildInput {
             channel_urls,
-            target_platform,
             name,
             version,
             build,
+            subdir,
             host_platform,
             host_virtual_packages,
             build_virtual_packages,
@@ -89,35 +86,32 @@ impl BuildInput {
         build_virtual_packages.hash(&mut hasher);
         let hash = URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes());
 
-        format!("{name}-{version}-{target_platform}-{hash}",)
+        format!("{name}-{version}-{subdir}-{hash}",)
     }
 }
 
 impl BuildCache {
+    /// The version identifier that should be used for the cache directory.
+    pub const CACHE_SUFFIX: &'static str = "v0";
+
     /// Constructs a new instance.
-    ///
-    /// An additional directory is created by this cache inside the passed root
-    /// which includes a version number. This is to ensure that the cache is
-    /// never corrupted if the format changes in the future.
     pub fn new(root: PathBuf) -> Self {
-        Self {
-            root: root.join("source-builds-v0"),
-        }
+        Self { root }
     }
 
     /// Returns a cache entry for the given source checkout and input from the
     /// cache. If the cache doesn't contain an entry for this source and input,
     /// it returns `None`.
     ///
-    /// This function also returns a [`CacheEntry`] which can be used to update
-    /// the cache. The [`CacheEntry`] also holds an exclusive lock on the cache
+    /// This function also returns a [`BuildCacheEntry`] which can be used to update
+    /// the cache. The [`BuildCacheEntry`] also holds an exclusive lock on the cache
     /// which prevents other processes from accessing the cache entry. Drop
     /// the entry as soon as possible to release the lock.
     pub async fn entry(
         &self,
-        source: &SourceCheckout,
+        source: &PinnedSourceSpec,
         input: &BuildInput,
-    ) -> Result<(Option<CachedBuild>, CacheEntry), BuildCacheError> {
+    ) -> Result<(Option<CachedBuild>, BuildCacheEntry), BuildCacheError> {
         let input_key = input.hash_key();
 
         // Ensure the cache directory exists
@@ -125,9 +119,15 @@ impl BuildCache {
             .root
             .join(source_checkout_cache_key(source))
             .join(input_key);
-        tokio::fs::create_dir_all(&cache_dir).await.map_err(|e| {
-            BuildCacheError::IoError("creating cache directory".to_string(), cache_dir.clone(), e)
-        })?;
+        fs_err::tokio::create_dir_all(&cache_dir)
+            .await
+            .map_err(|e| {
+                BuildCacheError::IoError(
+                    "creating cache directory".to_string(),
+                    cache_dir.clone(),
+                    e,
+                )
+            })?;
 
         // Try to acquire a lock on the cache file.
         let cache_file_path = cache_dir.join(".lock");
@@ -170,7 +170,7 @@ impl BuildCache {
         let metadata = serde_json::from_str(&cache_file_contents).ok();
         Ok((
             metadata,
-            CacheEntry {
+            BuildCacheEntry {
                 file: locked_cache_file,
                 cache_dir,
                 cache_file_path,
@@ -179,17 +179,16 @@ impl BuildCache {
     }
 }
 
-/// Cached result of calling `conda/getMetadata` on a build backend. This is
-/// returned by [`SourceMetadataCache::entry`].
+/// Cached result of calling `conda/getMetadata` on a build backend.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CachedBuild {
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub source: Option<SourceInfo>,
+    pub source: Option<CachedBuildSourceInfo>,
     pub record: RepoDataRecord,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct SourceInfo {
+pub struct CachedBuildSourceInfo {
     pub globs: BTreeSet<String>,
 }
 
@@ -197,13 +196,13 @@ pub struct SourceInfo {
 /// updating the cache.
 ///
 /// As long as this entry is held, no other process can access this cache entry.
-pub struct CacheEntry {
+pub struct BuildCacheEntry {
     file: RwLockWriteGuard<tokio::fs::File>,
     cache_dir: PathBuf,
     cache_file_path: PathBuf,
 }
 
-impl CacheEntry {
+impl BuildCacheEntry {
     /// Consumes this instance and writes the given metadata to the cache.
     pub async fn insert(
         mut self,

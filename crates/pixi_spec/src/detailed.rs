@@ -1,12 +1,13 @@
 use std::{fmt::Display, sync::Arc};
 
-use crate::BinarySpec;
 use rattler_conda_types::{
-    BuildNumberSpec, ChannelConfig, NamedChannelOrUrl, NamelessMatchSpec, ParseChannelError,
-    StringMatcher, VersionSpec,
+    BuildNumberSpec, ChannelConfig, NamedChannelOrUrl, NamelessMatchSpec, StringMatcher,
+    VersionSpec,
 };
 use rattler_digest::{Md5Hash, Sha256Hash};
 use serde_with::{serde_as, skip_serializing_none};
+
+use crate::{BinarySpec, SpecConversionError};
 
 /// A specification for a package in a conda channel.
 ///
@@ -56,7 +57,7 @@ impl DetailedSpec {
     pub fn try_into_nameless_match_spec(
         self,
         channel_config: &ChannelConfig,
-    ) -> Result<NamelessMatchSpec, ParseChannelError> {
+    ) -> Result<NamelessMatchSpec, SpecConversionError> {
         Ok(NamelessMatchSpec {
             version: self.version,
             build: self.build,
@@ -64,7 +65,11 @@ impl DetailedSpec {
             file_name: self.file_name,
             channel: self
                 .channel
-                .map(|c| c.into_channel(channel_config))
+                .map(|c| {
+                    c.clone()
+                        .into_channel(channel_config)
+                        .map_err(|e| SpecConversionError::InvalidChannel(c.to_string(), e))
+                })
                 .transpose()?
                 .map(Arc::new),
             subdir: self.subdir,

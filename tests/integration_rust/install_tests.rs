@@ -3,6 +3,7 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
     str::FromStr,
+    sync::LazyLock,
 };
 
 use fs_err::tokio as tokio_fs;
@@ -15,18 +16,18 @@ use pixi::{
         run::{self, Args},
     },
     environment::LockFileUsage,
-    lock_file::{CondaPrefixUpdater, IoConcurrencyLimit, ReinstallPackages, UpdateMode},
+    lock_file::{CondaPrefixUpdater, ReinstallPackages, UpdateMode},
     workspace::{HasWorkspaceRef, grouped_environment::GroupedEnvironment},
 };
-use pixi_config::{Config, DetachedEnvironments, RunPostLinkScripts};
+use pixi_config::{Config, DetachedEnvironments};
 use pixi_consts::consts;
 use pixi_manifest::{FeatureName, FeaturesExt};
 use pixi_record::PixiRecord;
-use rattler::package_cache::PackageCache;
 use rattler_conda_types::{ChannelConfig, Platform, RepoDataRecord};
 use tempfile::{TempDir, tempdir};
 use tokio::{fs, task::JoinSet};
 use url::Url;
+use uv_configuration::RAYON_INITIALIZE;
 use uv_python::PythonEnvironment;
 
 use crate::common::{
@@ -939,32 +940,29 @@ async fn test_multiple_prefix_update() {
 
     let group = GroupedEnvironment::from(project.default_environment().clone());
 
+    // Normally in pixi, the RAYON_INITIALIZE is lazily initialized by the reporter
+    // associated with the command dispatcher.
+    LazyLock::force(&RAYON_INITIALIZE);
+
     let channels = group
         .channel_urls(&group.workspace().channel_config())
         .unwrap();
     let name = group.name();
-    let client = group.workspace().authenticated_client().unwrap().clone();
     let prefix = group.prefix();
-    let virtual_packages = group.virtual_packages(current_platform);
 
     let command_dispatcher = project.command_dispatcher_builder().unwrap().finish();
 
     let conda_prefix_updater = CondaPrefixUpdater::new(
         channels,
         name,
-        client,
         prefix,
-        virtual_packages,
         current_platform,
-        PackageCache::new(tmp_dir.path().to_path_buf()),
-        IoConcurrencyLimit::default(),
         BuildContext::new(
             ChannelConfig::default_with_root_dir(tmp_dir.path().to_path_buf()),
             Default::default(),
             command_dispatcher,
         )
         .unwrap(),
-        RunPostLinkScripts::False,
     );
 
     let pixi_records = Vec::from([

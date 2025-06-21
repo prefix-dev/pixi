@@ -12,7 +12,7 @@ pub enum CommandDispatcherError<E> {
 
     /// The operation failed with an error.
     #[error(transparent)]
-    Failed(#[from] E),
+    Failed(E),
 }
 
 impl<E: Diagnostic> Diagnostic for CommandDispatcherError<E> {
@@ -116,5 +116,11 @@ impl<T, E> CommandDispatcherErrorResultExt<T, E> for Result<T, CommandDispatcher
             Err(CommandDispatcherError::Cancelled) => None,
             Err(CommandDispatcherError::Failed(err)) => Some(Err(err)),
         }
+    }
+}
+
+impl<E> From<simple_spawn_blocking::Cancelled> for CommandDispatcherError<E> {
+    fn from(_: simple_spawn_blocking::Cancelled) -> Self {
+        CommandDispatcherError::Cancelled
     }
 }

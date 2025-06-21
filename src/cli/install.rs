@@ -1,26 +1,34 @@
-use crate::cli::cli_config::WorkspaceConfig;
-use crate::environment::get_update_lock_file_and_prefix;
-use crate::lock_file::{ReinstallPackages, UpdateMode};
-use crate::{UpdateLockFileOptions, WorkspaceLocator};
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use pixi_config::ConfigCli;
 
-/// Install an environment, both updating the lockfile and installing the environment.
+use crate::{
+    UpdateLockFileOptions, WorkspaceLocator,
+    cli::cli_config::WorkspaceConfig,
+    environment::get_update_lock_file_and_prefixes,
+    lock_file::{ReinstallPackages, UpdateMode},
+};
+
+/// Install an environment, both updating the lockfile and installing the
+/// environment.
 ///
-/// This command installs an environment, if the lockfile is not up-to-date it will be updated.
+/// This command installs an environment, if the lockfile is not up-to-date it
+/// will be updated.
 ///
 /// `pixi install` only installs one environment at a time,
-/// if you have multiple environments you can select the right one with the `--environment` flag.
-/// If you don't provide an environment, the `default` environment will be installed.
+/// if you have multiple environments you can select the right one with the
+/// `--environment` flag. If you don't provide an environment, the `default`
+/// environment will be installed.
 ///
 /// If you want to install all environments, you can use the `--all` flag.
 ///
-/// Running `pixi install` is not required before running other commands like `pixi run` or `pixi shell`.
-/// These commands will automatically install the environment if it is not already installed.
+/// Running `pixi install` is not required before running other commands like
+/// `pixi run` or `pixi shell`. These commands will automatically install the
+/// environment if it is not already installed.
 ///
-/// You can use `pixi reinstall` to reinstall all environments, one environment or just some packages of an environment.
+/// You can use `pixi reinstall` to reinstall all environments, one environment
+/// or just some packages of an environment.
 #[derive(Parser, Debug)]
 pub struct Args {
     #[clap(flatten)]
@@ -64,25 +72,29 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         vec![workspace.default_environment().name().to_string()]
     };
 
-    let mut installed_envs = Vec::with_capacity(envs.len());
-    for env in envs {
-        let environment = workspace.environment_from_name_or_env_var(Some(env))?;
+    // Get the environments by name
+    let environments = envs
+        .into_iter()
+        .map(|env| workspace.environment_from_name_or_env_var(Some(env)))
+        .collect::<Result<Vec<_>, _>>()?;
 
-        // Update the prefix by installing all packages
-        get_update_lock_file_and_prefix(
-            &environment,
-            UpdateMode::Revalidate,
-            UpdateLockFileOptions {
-                lock_file_usage: args.lock_file_usage.into(),
-                no_install: false,
-                max_concurrent_solves: workspace.config().max_concurrent_solves(),
-            },
-            ReinstallPackages::default(),
-        )
-        .await?;
+    // Update the prefixes by installing all packages
+    get_update_lock_file_and_prefixes(
+        &environments,
+        UpdateMode::Revalidate,
+        UpdateLockFileOptions {
+            lock_file_usage: args.lock_file_usage.into(),
+            no_install: false,
+            max_concurrent_solves: workspace.config().max_concurrent_solves(),
+        },
+        ReinstallPackages::default(),
+    )
+    .await?;
 
-        installed_envs.push(environment.name().clone());
-    }
+    let installed_envs = environments
+        .into_iter()
+        .map(|env| env.name())
+        .collect::<Vec<_>>();
 
     // Message what's installed
     let detached_envs_message =

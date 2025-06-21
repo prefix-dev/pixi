@@ -1,16 +1,20 @@
 /// Derived from `uv-git` implementation
 /// Source: https://github.com/astral-sh/uv/blob/4b8cc3e29e4c2a6417479135beaa9783b05195d3/crates/uv-git/src/sha.rs
-/// This module expose types that represent Git object IDs (OIDs) and SHAs, and some
-/// utility functions to convert to them from strings.
+/// This module expose types that represent Git object IDs (OIDs) and SHAs, and
+/// some utility functions to convert to them from strings.
 use core::str;
+use std::{
+    fmt::{Debug, Display},
+    str::FromStr,
+};
+
 use serde::{Serialize, Serializer};
-use std::{fmt::Display, str::FromStr};
 use thiserror::Error;
 
 /// Unique identity of any Git object (commit, tree, blob, tag).
 ///
 /// Note this type does not validate whether the input is a valid hash.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GitOid {
     len: usize,
     bytes: [u8; 40],
@@ -61,16 +65,25 @@ impl Display for GitOid {
     }
 }
 
-/// A complete Git SHA, i.e., a 40-character hexadecimal representation of a Git commit.
+impl Debug for GitOid {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "GitOid({})", self.as_str())
+    }
+}
+
+/// A complete Git SHA, i.e., a 40-character hexadecimal representation of a Git
+/// commit.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GitSha(GitOid);
 
 impl GitSha {
-    /// Convert the SHA to a truncated representation, i.e., the first 16 characters of the SHA.
+    /// Convert the SHA to a truncated representation, i.e., the first 16
+    /// characters of the SHA.
     pub fn to_short_string(&self) -> String {
         self.0.to_string()[0..16].to_string()
     }
 }
+
 impl Display for GitSha {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)

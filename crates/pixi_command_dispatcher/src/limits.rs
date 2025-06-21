@@ -9,6 +9,11 @@ pub struct Limits {
     ///
     /// Typically, a good value is the number of CPU cores.
     pub max_concurrent_solves: Limit,
+
+    /// The maximum number of concurrent source builds that can be performed.
+    /// Building takes up significant resources so we limit the total number of
+    /// concurrent builds. By default only 1 build is allowed at a time.
+    pub max_concurrent_builds: Limit,
 }
 
 /// Defines the type of limit to apply.
@@ -35,6 +40,9 @@ impl From<usize> for Limit {
 pub(crate) struct ResolvedLimits {
     /// The maximum number of concurrent solves that can be performed.
     pub max_concurrent_solves: Option<usize>,
+
+    /// The maximum number of concurrent source builds that can be performed.
+    pub max_concurrent_builds: Option<usize>,
 }
 
 impl From<Limits> for ResolvedLimits {
@@ -49,8 +57,15 @@ impl From<Limits> for ResolvedLimits {
             ),
         };
 
+        let max_concurrent_builds = match value.max_concurrent_builds {
+            Limit::None => None,
+            Limit::Max(max) => Some(max.get()),
+            Limit::Default => Some(1), // Default to 1 build at a time
+        };
+
         Self {
             max_concurrent_solves,
+            max_concurrent_builds,
         }
     }
 }

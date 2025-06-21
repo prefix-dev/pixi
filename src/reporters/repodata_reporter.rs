@@ -106,12 +106,8 @@ impl RepodataReporterInner {
             .progress_chars(pixi_progress::style::progress_chars(pending_downloads))
             .with_key(
                 "speed",
-                DurationTracker {
-                    inner: self.downloads.clone(),
-                    duration: Duration::ZERO,
-                    len: total_bytes as u64,
-                },
-            ),
+                DurationTracker::new(self.downloads.clone()),
+            )
         );
 
         // Set the title of the progress bar if it is was missing
@@ -214,6 +210,16 @@ struct DurationTracker {
     inner: Arc<RwLock<Vec<TrackedDownload>>>,
     duration: Duration,
     len: u64,
+}
+
+impl DurationTracker {
+    pub fn new(inner: Arc<RwLock<Vec<TrackedDownload>>>) -> Self {
+        Self {
+            inner,
+            duration: Duration::ZERO,
+            len: 0,
+        }
+    }
 }
 
 impl ProgressTracker for DurationTracker {

@@ -563,12 +563,6 @@ impl Project {
                 },
             )
             .into_diagnostic()
-            .wrap_err_with(|| {
-                miette::miette!(
-                    "Failed to determine virtual packages for environment {}",
-                    cloned_env_name.fancy_display()
-                )
-            })
         })
         .await
         .into_diagnostic()??;

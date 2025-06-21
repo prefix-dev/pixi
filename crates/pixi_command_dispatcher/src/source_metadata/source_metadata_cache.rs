@@ -9,13 +9,13 @@ use async_fd_lock::{LockWrite, RwLockWriteGuard};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_build_discovery::EnabledProtocols;
 use pixi_build_types::CondaPackageMetadata;
-use pixi_record::InputHash;
+use pixi_record::{InputHash, PinnedSourceSpec};
 use rattler_conda_types::ChannelUrl;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
-use crate::{BuildEnvironment, SourceCheckout, build::source_checkout_cache_key};
+use crate::{BuildEnvironment, build::source_checkout_cache_key};
 
 /// A cache for caching the metadata of a source checkout.
 ///
@@ -92,7 +92,7 @@ impl SourceMetadataCache {
     /// [`CacheEntry`] is held, another process cannot update the cache.
     pub async fn entry(
         &self,
-        source: &SourceCheckout,
+        source: &PinnedSourceSpec,
         input: &SourceMetadataKey,
     ) -> Result<(Option<CachedCondaMetadata>, CacheEntry), SourceMetadataCacheError> {
         // Locate the cache file and lock it.

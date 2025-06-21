@@ -10,7 +10,7 @@ use super::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs};
 use crate::{
     WorkspaceLocator,
     cli::cli_config::{DependencyConfig, PrefixUpdateConfig, WorkspaceConfig},
-    environment::sanity_check_project,
+    environment::sanity_check_workspace,
     workspace::DependencyType,
 };
 
@@ -109,7 +109,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .locate()?
         .with_cli_config(args.config.clone());
 
-    sanity_check_project(&workspace).await?;
+    sanity_check_workspace(&workspace).await?;
 
     let mut workspace = workspace.modify()?;
 

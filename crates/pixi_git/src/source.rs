@@ -58,7 +58,7 @@ impl GitSource {
     }
 
     /// Fetch the underlying Git repository at the given revision.
-    #[instrument(skip(self), fields(repository = %self.git.repository, rev = ?self.git.precise))]
+    #[instrument(skip(self), fields(repository = %self.git.repository, rev = self.git.precise.map(tracing::field::display)))]
     pub fn fetch(self) -> Result<Fetch, GitError> {
         // Compute the canonical URL for the repository.
         let canonical = RepositoryUrl::new(&self.git.repository);
@@ -125,9 +125,9 @@ impl GitSource {
             .join(short_id.as_str());
 
         tracing::debug!(
-            "Copying git revision {:?} to path {:?}",
+            "Copying git revision `{}` to path `{}`",
             actual_rev,
-            checkout_path
+            checkout_path.display()
         );
         db.copy_to(actual_rev.into(), &checkout_path)?;
 
@@ -138,7 +138,7 @@ impl GitSource {
             }
         }
 
-        tracing::debug!("Finished fetching Git source `{}`", self.git.repository);
+        tracing::trace!("Finished fetching Git source `{}`", self.git.repository);
 
         Ok(Fetch {
             repository: RepositoryReference {

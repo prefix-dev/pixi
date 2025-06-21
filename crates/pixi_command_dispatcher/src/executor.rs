@@ -21,38 +21,44 @@ pub enum Executor {
     Serial,
 }
 
-pub(crate) enum ExecutorFutures<Fut> {
-    Concurrent(FuturesUnordered<Fut>),
-    Serial(Vec<Fut>),
+pin_project_lite::pin_project! {
+    #[project = ExecutorFuturesProj]
+    pub(crate) enum ExecutorFutures<Fut> {
+        Concurrent { #[pin] futures: FuturesUnordered<Fut> },
+        Serial { futures: Vec<Pin<Box<Fut>>> },
+    }
 }
 
 impl<Fut> ExecutorFutures<Fut> {
     pub fn new(executor: Executor) -> Self {
         match executor {
-            Executor::Concurrent => Self::Concurrent(FuturesUnordered::new()),
-            Executor::Serial => Self::Serial(Vec::new()),
+            Executor::Concurrent => Self::Concurrent {
+                futures: FuturesUnordered::new(),
+            },
+            Executor::Serial => Self::Serial {
+                futures: Vec::new(),
+            },
         }
     }
 
     pub fn push(&mut self, fut: Fut) {
         match self {
-            ExecutorFutures::Concurrent(futures) => futures.push(fut),
-            ExecutorFutures::Serial(futures) => futures.push(fut),
+            ExecutorFutures::Concurrent { futures } => futures.push(fut),
+            ExecutorFutures::Serial { futures } => futures.push(Box::pin(fut)),
         }
     }
 }
 
 impl<Fut> Stream for ExecutorFutures<Fut>
 where
-    Fut: Future + Unpin,
+    Fut: Future,
 {
     type Item = Fut::Output;
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let this = self.get_mut();
-        match this {
-            ExecutorFutures::Concurrent(futures) => Pin::new(futures).poll_next(cx),
-            ExecutorFutures::Serial(futures) => {
+        match self.project() {
+            ExecutorFuturesProj::Concurrent { futures } => futures.poll_next(cx),
+            ExecutorFuturesProj::Serial { futures } => {
                 if let Some(mut fut) = futures.last_mut() {
                     match Pin::new(&mut fut).poll(cx) {
                         Poll::Ready(result) => {
@@ -70,8 +76,8 @@ where
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         match self {
-            ExecutorFutures::Concurrent(futures) => futures.size_hint(),
-            ExecutorFutures::Serial(futures) => (futures.len(), Some(futures.len())),
+            ExecutorFutures::Concurrent { futures } => futures.size_hint(),
+            ExecutorFutures::Serial { futures } => (futures.len(), Some(futures.len())),
         }
     }
 }

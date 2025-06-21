@@ -26,7 +26,8 @@ impl CommandDispatcher {
 
         let git_url = GitUrl::try_from(git_spec.git)
             .map_err(GitError::from)
-            .map_err(SourceCheckoutError::GitError)?
+            .map_err(SourceCheckoutError::GitError)
+            .map_err(CommandDispatcherError::Failed)?
             .with_reference(git_reference.clone());
 
         // Fetch the git url in the background

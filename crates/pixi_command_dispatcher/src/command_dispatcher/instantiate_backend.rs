@@ -98,11 +98,13 @@ impl CommandDispatcher {
                 // Get the activation scripts
                 let activator =
                     Activator::from_path(prefix.path(), ShellEnum::default(), tool_platform)
-                        .map_err(InstantiateBackendError::from)?;
+                        .map_err(InstantiateBackendError::from)
+                        .map_err(CommandDispatcherError::Failed)?;
 
                 let activation_scripts = activator
                     .run_activation(ActivationVariables::from_env().unwrap_or_default(), None)
-                    .map_err(InstantiateBackendError::from)?;
+                    .map_err(InstantiateBackendError::from)
+                    .map_err(CommandDispatcherError::Failed)?;
 
                 Tool::from(IsolatedTool::new(
                     env_spec.command.unwrap_or(backend_spec.name),

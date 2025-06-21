@@ -1,12 +1,14 @@
 use std::sync::{Arc, Mutex};
 
+use futures::{Stream, StreamExt};
 use pixi_command_dispatcher::{
     CondaSolveReporter, GitCheckoutReporter, InstallPixiEnvironmentSpec,
     InstantiateToolEnvironmentSpec, PixiEnvironmentSpec, PixiInstallReporter, PixiSolveReporter,
-    Reporter, ReporterContext, SolveCondaEnvironmentSpec, SourceMetadataSpec,
+    Reporter, ReporterContext, SolveCondaEnvironmentSpec, SourceBuildSpec, SourceMetadataSpec,
     reporter::{
         CondaSolveId, GitCheckoutId, InstantiateToolEnvId, InstantiateToolEnvironmentReporter,
-        PixiInstallId, PixiSolveId, SourceMetadataId, SourceMetadataReporter,
+        PixiInstallId, PixiSolveId, SourceBuildId, SourceBuildReporter, SourceMetadataId,
+        SourceMetadataReporter,
     },
 };
 use pixi_git::resolver::RepositoryReference;
@@ -83,6 +85,20 @@ pub enum Event {
     },
     SourceMetadataFinished {
         id: SourceMetadataId,
+    },
+
+    SourceBuildQueued {
+        id: SourceBuildId,
+        #[serde(flatten)]
+        spec: SourceBuildSpec,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        context: Option<ReporterContext>,
+    },
+    SourceBuildStarted {
+        id: SourceBuildId,
+    },
+    SourceBuildFinished {
+        id: SourceBuildId,
     },
 
     InstantiateToolEnvQueued {
@@ -320,6 +336,49 @@ impl InstantiateToolEnvironmentReporter for EventReporter {
     }
 }
 
+impl SourceBuildReporter for EventReporter {
+    fn on_queued(
+        &mut self,
+        context: Option<ReporterContext>,
+        spec: &SourceBuildSpec,
+    ) -> SourceBuildId {
+        let next_id = SourceBuildId(self.next_source_metadata_id);
+        self.next_source_metadata_id += 1;
+
+        let event = Event::SourceBuildQueued {
+            id: next_id,
+            spec: spec.clone(),
+            context,
+        };
+        println!("{}", serde_json::to_string_pretty(&event).unwrap());
+        self.events.lock().unwrap().push(event);
+        next_id
+    }
+
+    fn on_started(
+        &mut self,
+        id: SourceBuildId,
+        backend_output_stream: Box<dyn Stream<Item = String> + Unpin + Send>,
+    ) {
+        let event = Event::SourceBuildStarted { id };
+        println!("{}", serde_json::to_string_pretty(&event).unwrap());
+        self.events.lock().unwrap().push(event);
+
+        tokio::spawn(async move {
+            let mut output_stream = backend_output_stream;
+            while let Some(line) = output_stream.next().await {
+                println!("{}", line);
+            }
+        });
+    }
+
+    fn on_finished(&mut self, id: SourceBuildId) {
+        let event = Event::SourceBuildFinished { id };
+        println!("{}", serde_json::to_string_pretty(&event).unwrap());
+        self.events.lock().unwrap().push(event);
+    }
+}
+
 impl Reporter for EventReporter {
     fn as_git_reporter(&mut self) -> Option<&mut dyn GitCheckoutReporter> {
         Some(self)
@@ -344,6 +403,9 @@ impl Reporter for EventReporter {
     }
 
     fn as_source_metadata_reporter(&mut self) -> Option<&mut dyn SourceMetadataReporter> {
+        Some(self)
+    }
+    fn as_source_build_reporter(&mut self) -> Option<&mut dyn SourceBuildReporter> {
         Some(self)
     }
 }
