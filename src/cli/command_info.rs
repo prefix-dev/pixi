@@ -1,5 +1,4 @@
 use is_executable::IsExecutable;
-use itertools::Itertools;
 use std::env;
 use std::path::PathBuf;
 
@@ -47,121 +46,12 @@ pub fn execute_external_command(args: Vec<String>) -> miette::Result<()> {
 
         Ok(())
     } else {
-        // Command not found, try to find similar commands
-        let suggestions = find_similar_commands(cmd);
-        let help_message = if suggestions.is_empty() {
-            "help: view all installed commands with `pixi --list`".to_string()
-        } else {
-            format!(
-                "help: view all installed commands with `pixi --list`\n\nDid you mean '{}'?",
-                suggestions.join("', '")
-            )
-        };
-
+        // Command not found
         Err(miette::miette!(
-            "No such command: `pixi {}`\n\n{}",
-            cmd,
-            help_message
+            "No such command: `pixi {}`\n\nhelp: view all installed commands with `pixi --list`",
+            cmd
         ))
     }
-}
-
-///fuzzy matching (built-in + external)
-fn find_similar_commands(cmd: &str) -> Vec<String> {
-    let mut all_commands = Vec::new();
-
-    //built-in commands
-    let builtin_commands = vec![
-        "add",
-        "auth",
-        "build",
-        "clean",
-        "completion",
-        "config",
-        "exec",
-        "global",
-        "info",
-        "init",
-        "install",
-        "list",
-        "lock",
-        "reinstall",
-        "remove",
-        "run",
-        "search",
-        "self-update",
-        "shell",
-        "shell-hook",
-        "task",
-        "tree",
-        "update",
-        "upgrade",
-        "upload",
-        "workspace",
-        // Include visible aliases
-        "a",
-        "x",
-        "g",
-        "i",
-        "ls",
-        "rm",
-        "r",
-        "s",
-        "t",
-    ];
-    all_commands.extend(builtin_commands.iter().map(|s| s.to_string()));
-
-    // Add external commands by discovering them
-    if let Ok(external_commands) = find_external_commands() {
-        // Strip "pixi-" prefix from external commands
-        let external_names: Vec<String> = external_commands
-            .iter()
-            .filter_map(|path| {
-                path.file_name()
-                    .and_then(|name| name.to_str())
-                    .and_then(|name| name.strip_prefix("pixi-"))
-                    .map(|name| name.to_string())
-            })
-            .collect();
-        all_commands.extend(external_names);
-    }
-
-    // Find similar commands using Jaro similarity
-    all_commands
-        .iter()
-        .filter_map(|command| {
-            let distance = strsim::jaro(cmd, command);
-            if distance > 0.6 {
-                Some((command.clone(), distance))
-            } else {
-                None
-            }
-        })
-        .sorted_by(|(_, a), (_, b)| b.partial_cmp(a).unwrap_or(std::cmp::Ordering::Equal))
-        .take(3) // Show top 3 suggestions
-        .map(|(command, _)| command)
-        .collect()
-}
-
-/// Find all external commands available in PATH
-fn find_external_commands() -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
-    let mut external_commands = Vec::new();
-    let prefix = "pixi-";
-
-    for dir in search_directories() {
-        if let Ok(entries) = fs_err::read_dir(&dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if let Some(filename) = path.file_name().and_then(|n| n.to_str()) {
-                    if filename.starts_with(prefix) && path.is_executable() {
-                        external_commands.push(path);
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(external_commands)
 }
 
 /// Get directories to search for external commands
