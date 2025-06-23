@@ -6,10 +6,11 @@ use std::path::PathBuf;
 /// Based on cargo's find_external_subcommand function
 pub fn find_external_subcommand(cmd: &str) -> Option<PathBuf> {
     let command_exe = format!("pixi-{}{}", cmd, env::consts::EXE_SUFFIX);
-    search_directories()
-        .iter()
-        .map(|dir| dir.join(&command_exe))
-        .find(|path| path.is_executable())
+    search_directories().and_then(|dirs| {
+        dirs.into_iter()
+            .map(|dir| dir.join(&command_exe))
+            .find(|path| path.is_executable())
+    })
 }
 
 /// Execute an external subcommand
@@ -54,11 +55,9 @@ pub fn execute_external_command(args: Vec<String>) -> miette::Result<()> {
     }
 }
 
-/// Get directories to search for external commands
-fn search_directories() -> Vec<PathBuf> {
-    if let Some(val) = env::var_os("PATH") {
-        env::split_paths(&val).collect()
-    } else {
-        vec![]
-    }
+/// Get directories to search for external commands (pixi extensions)
+fn search_directories() -> Option<Vec<PathBuf>> {
+    // Right now, we only search the PATH environment variable.
+    // In the future, we might want to pixi global directories.
+    env::var_os("PATH").map(|paths| env::split_paths(&paths).collect())
 }

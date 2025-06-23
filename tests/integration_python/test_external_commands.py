@@ -3,7 +3,6 @@ import platform
 import stat
 from pathlib import Path
 
-import pytest
 
 from .common import ExitCode, exec_extension, verify_cli_command
 
@@ -18,14 +17,6 @@ def create_external_command(command_path: Path, script_content: str) -> Path:
         command_path.chmod(current_mode | stat.S_IEXEC)
 
     return command_path
-
-
-@pytest.fixture
-def external_commands_dir(tmp_path: Path) -> Path:
-    """Create a temporary directory for external pixi commands"""
-    commands_dir = tmp_path / "external_commands"
-    commands_dir.mkdir()
-    return commands_dir
 
 
 def test_external_command_execution(
