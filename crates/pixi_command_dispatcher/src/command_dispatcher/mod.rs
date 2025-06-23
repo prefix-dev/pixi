@@ -21,7 +21,7 @@ use pixi_glob::GlobHashCache;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec, PixiRecord};
 use pixi_spec::SourceSpec;
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{GenericVirtualPackage, Platform, prefix::Prefix};
+use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 use tokio::sync::{mpsc, oneshot};
@@ -35,7 +35,10 @@ use crate::{
     install_pixi::{
         InstallPixiEnvironmentError, InstallPixiEnvironmentResult, InstallPixiEnvironmentSpec,
     },
-    instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec},
+    instantiate_tool_env::{
+        InstantiateToolEnvironmentError, InstantiateToolEnvironmentResult,
+        InstantiateToolEnvironmentSpec,
+    },
     limits::ResolvedLimits,
     source_build::{BuiltSource, SourceBuildError, SourceBuildSpec},
     source_metadata::{SourceMetadata, SourceMetadataCache, SourceMetadataError},
@@ -250,7 +253,7 @@ impl TaskSpec for SourceBuildSpec {
 
 /// Instantiates a tool environment.
 impl TaskSpec for InstantiateToolEnvironmentSpec {
-    type Output = Prefix;
+    type Output = InstantiateToolEnvironmentResult;
     type Error = InstantiateToolEnvironmentError;
 }
 
@@ -451,7 +454,10 @@ impl CommandDispatcher {
     pub async fn instantiate_tool_environment(
         &self,
         spec: InstantiateToolEnvironmentSpec,
-    ) -> Result<Prefix, CommandDispatcherError<InstantiateToolEnvironmentError>> {
+    ) -> Result<
+        InstantiateToolEnvironmentResult,
+        CommandDispatcherError<InstantiateToolEnvironmentError>,
+    > {
         self.execute_task(spec).await
     }
 

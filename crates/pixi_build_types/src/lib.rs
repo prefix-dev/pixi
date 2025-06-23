@@ -44,6 +44,31 @@ pub static PIXI_BUILD_API_VERSION_SPEC: LazyLock<VersionSpec> = LazyLock::new(||
     )
 });
 
+/// A type that represents the version of the Pixi Build API.
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+pub struct PixiBuildApiVersion(pub u64);
+
+impl PixiBuildApiVersion {
+    /// Constructs this type from a `Version` object.
+    pub fn from_version(version: &Version) -> Option<Self> {
+        let first_segment = version.segments().next()?;
+        if first_segment.component_count() == 1 {
+            first_segment
+                .components()
+                .next()
+                .and_then(|c| c.as_number())
+                .map(PixiBuildApiVersion)
+        } else {
+            None
+        }
+    }
+
+    /// Returns the "current" version of the Pixi Build API.
+    pub fn current() -> Self {
+        PixiBuildApiVersion(PIXI_BUILD_API_VERSION_UPPER - 1)
+    }
+}
+
 /// A platform and associated virtual packages
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

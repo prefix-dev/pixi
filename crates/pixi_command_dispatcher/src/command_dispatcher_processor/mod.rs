@@ -12,9 +12,9 @@ use std::{
 use futures::{StreamExt, future::LocalBoxFuture};
 use pixi_git::{GitError, resolver::RepositoryReference, source::Fetch};
 use pixi_record::PixiRecord;
-use rattler_conda_types::prefix::Prefix;
 use tokio::sync::{mpsc, oneshot};
 
+use crate::instantiate_tool_env::InstantiateToolEnvironmentResult;
 use crate::{
     BuiltSource, CommandDispatcherErrorResultExt, InstallPixiEnvironmentResult, Reporter,
     SolveCondaEnvironmentSpec, SolvePixiEnvironmentError, SourceBuildError, SourceBuildSpec,
@@ -123,7 +123,10 @@ enum TaskResult {
     ),
     InstantiateToolEnv(
         InstantiatedToolEnvId,
-        Result<Prefix, CommandDispatcherError<InstantiateToolEnvironmentError>>,
+        Result<
+            InstantiateToolEnvironmentResult,
+            CommandDispatcherError<InstantiateToolEnvironmentError>,
+        >,
     ),
     SourceBuild(
         SourceBuildId,

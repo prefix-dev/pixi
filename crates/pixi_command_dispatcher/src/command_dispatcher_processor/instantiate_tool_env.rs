@@ -1,11 +1,11 @@
 use super::{CommandDispatcherProcessor, PendingDeduplicatingTask, TaskResult};
 use crate::command_dispatcher::{InstantiatedToolEnvId, Task};
 use crate::instantiate_tool_env::{
-    InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec,
+    InstantiateToolEnvironmentError, InstantiateToolEnvironmentResult,
+    InstantiateToolEnvironmentSpec,
 };
 use crate::{CommandDispatcherError, Reporter, command_dispatcher::CommandDispatcherContext};
 use futures::FutureExt;
-use rattler_conda_types::prefix::Prefix;
 use std::collections::hash_map::Entry;
 
 impl CommandDispatcherProcessor {
@@ -84,7 +84,10 @@ impl CommandDispatcherProcessor {
     pub(crate) fn on_instantiate_tool_environment_result(
         &mut self,
         id: InstantiatedToolEnvId,
-        result: Result<Prefix, CommandDispatcherError<InstantiateToolEnvironmentError>>,
+        result: Result<
+            InstantiateToolEnvironmentResult,
+            CommandDispatcherError<InstantiateToolEnvironmentError>,
+        >,
     ) {
         if let Some((reporter, reporter_id)) = self
             .reporter
