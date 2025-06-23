@@ -33,7 +33,7 @@ ros-jazzy-nav2-bringup = "*"
 RMW_IMPLEMENTATION = "rmw_cyclonedds_cpp"
 
 [feature.jazzy.tasks]
-start-tb4 = "ros2 launch nav2_bringup tb4_simulation_launch.py"
+start-tb4 = "ros2 launch nav2_bringup tb4_simulation_launch.py headless:=False"
 
 [environments]
 default = { features = ["humble"] }
