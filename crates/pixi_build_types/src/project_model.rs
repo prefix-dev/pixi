@@ -156,8 +156,6 @@ impl FromStr for TargetSelectorV1 {
 pub struct TargetsV1 {
     pub default_target: Option<TargetV1>,
 
-    /// We use an [`IndexMap`] to preserve the order in which the items where
-    /// defined in the manifest.
     pub targets: Option<HashMap<TargetSelectorV1, TargetV1>>,
 }
 
