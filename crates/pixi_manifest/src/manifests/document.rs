@@ -18,6 +18,7 @@ use toml_edit::{Array, DocumentMut, Item, Table, Value, value};
 pub enum ManifestDocument {
     PyProjectToml(TomlDocument),
     PixiToml(TomlDocument),
+    MojoProjectToml(TomlDocument),
 }
 
 impl fmt::Display for ManifestDocument {
@@ -25,6 +26,7 @@ impl fmt::Display for ManifestDocument {
         match self {
             ManifestDocument::PyProjectToml(document) => write!(f, "{}", document),
             ManifestDocument::PixiToml(document) => write!(f, "{}", document),
+            ManifestDocument::MojoProjectToml(document) => write!(f, "{}", document),
         }
     }
 }
@@ -99,6 +101,7 @@ impl ManifestDocument {
         let document = match self {
             ManifestDocument::PyProjectToml(document) => document,
             ManifestDocument::PixiToml(document) => document,
+            ManifestDocument::MojoProjectToml(document) => document,
         };
         document
             .to_string()
@@ -131,6 +134,7 @@ impl ManifestDocument {
         match provenance.kind {
             ManifestKind::Pyproject => Ok(ManifestDocument::PyProjectToml(toml)),
             ManifestKind::Pixi => Ok(ManifestDocument::PixiToml(toml)),
+            ManifestKind::MojoProject => Ok(ManifestDocument::MojoProjectToml(toml)),
         }
     }
 
@@ -139,6 +143,7 @@ impl ManifestDocument {
         match self {
             ManifestDocument::PyProjectToml(_) => ManifestKind::Pyproject,
             ManifestDocument::PixiToml(_) => ManifestKind::Pixi,
+            ManifestDocument::MojoProjectToml(_) => ManifestKind::MojoProject,
         }
     }
 
@@ -152,6 +157,7 @@ impl ManifestDocument {
         match self {
             ManifestDocument::PyProjectToml(_) => Some(consts::PYPROJECT_PIXI_PREFIX),
             ManifestDocument::PixiToml(_) => None,
+            ManifestDocument::MojoProjectToml(_) => None,
         }
     }
 
@@ -159,6 +165,7 @@ impl ManifestDocument {
         match self {
             ManifestDocument::PyProjectToml(document) => document,
             ManifestDocument::PixiToml(document) => document,
+            ManifestDocument::MojoProjectToml(document) => document,
         }
     }
 
@@ -167,6 +174,7 @@ impl ManifestDocument {
         match self {
             ManifestDocument::PyProjectToml(document) => document,
             ManifestDocument::PixiToml(document) => document,
+            ManifestDocument::MojoProjectToml(document) => document,
         }
     }
 
@@ -221,6 +229,7 @@ impl ManifestDocument {
         match self {
             ManifestDocument::PyProjectToml(document) => document.as_table_mut(),
             ManifestDocument::PixiToml(document) => document.as_table_mut(),
+            ManifestDocument::MojoProjectToml(document) => document.as_table_mut(),
         }
     }
 
