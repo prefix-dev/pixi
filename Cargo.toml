@@ -61,6 +61,7 @@ miette = { version = "7.5.0" }
 minijinja = "2.7.0"
 nix = { version = "0.29.0", default-features = false }
 once_cell = "1.20.3"
+ordermap = "0.5.7"
 parking_lot = "0.12.3"
 pathdiff = "0.2.3"
 pep440_rs = "0.7.3"
