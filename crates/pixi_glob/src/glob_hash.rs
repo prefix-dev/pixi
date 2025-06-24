@@ -3,7 +3,6 @@
 //! This is useful for finding out if you need to rebuild a target based on the files that match a glob pattern.
 use std::{
     fs::File,
-    hash::Hash,
     io::{self, BufRead, Read, Write},
     path::{Path, PathBuf},
 };
@@ -78,15 +77,7 @@ impl GlobHash {
         }
 
         if let Some(additional_hash) = additional_hash {
-            // Use xxh3 hash functionality to incorporate the additional hash
-            use std::hash::Hasher;
-            use xxhash_rust::xxh3::Xxh3;
-
-            let mut xxh3_hasher = Xxh3::new();
-            additional_hash.hash(&mut xxh3_hasher);
-            let hash_value = xxh3_hasher.finish();
-
-            rattler_digest::digest::Update::update(&mut hasher, &hash_value.to_le_bytes());
+            rattler_digest::digest::Update::update(&mut hasher, &additional_hash);
         }
 
         let hash = hasher.finalize();
