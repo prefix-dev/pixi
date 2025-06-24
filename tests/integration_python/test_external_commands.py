@@ -4,7 +4,7 @@ import stat
 from pathlib import Path
 
 
-from .common import ExitCode, exec_extension, verify_cli_command
+from .common import ExitCode, bat_extension, verify_cli_command
 
 
 def create_external_command(command_path: Path, script_content: str) -> Path:
@@ -31,7 +31,7 @@ def test_external_command_execution(
         script_content = "#!/bin/bash\necho 'Hello from pixi-test extension!'\necho \"Args: $@\""
 
     # Create pixi-test command
-    external_cmd = external_commands_dir / exec_extension("pixi-test")
+    external_cmd = external_commands_dir / bat_extension("pixi-test")
     create_external_command(external_cmd, script_content)
 
     # Add external commands directory to PATH
