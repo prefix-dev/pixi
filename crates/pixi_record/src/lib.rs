@@ -44,6 +44,14 @@ impl PixiRecord {
         }
     }
 
+    /// Converts this instance into a source record if it is a source
+    pub fn into_source(self) -> Option<SourceRecord> {
+        match self {
+            PixiRecord::Binary(_) => None,
+            PixiRecord::Source(record) => Some(record),
+        }
+    }
+
     /// Returns a mutable reference to the binary record if it is a binary
     /// record.
     pub fn as_binary_mut(&mut self) -> Option<&mut RepoDataRecord> {

@@ -15,6 +15,7 @@ use miette::Diagnostic;
 use pixi_build_types::{
     FrontendCapabilities, ProjectModelV1, VersionedProjectModel, procedures,
     procedures::{
+        conda_build::{CondaBuildParams, CondaBuildResult},
         conda_metadata::{CondaMetadataParams, CondaMetadataResult},
         initialize::{InitializeParams, InitializeResult},
         negotiate_capabilities::{NegotiateCapabilitiesParams, NegotiateCapabilitiesResult},
@@ -27,12 +28,22 @@ use tokio::{
     sync::{Mutex, oneshot},
 };
 
+use super::stderr::{stderr_buffer, stream_stderr};
 use crate::{
+    backend::BackendOutputStream,
     error::BackendError,
     jsonrpc::{RpcParams, stdio_transport},
-    protocols::{BuildBackendSetupError, stderr::stderr_buffer},
     tool::Tool,
 };
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum BuildBackendSetupError {
+    #[error("an unexpected io error occurred while communicating with the pixi build backend")]
+    Io(#[from] std::io::Error),
+
+    #[error("the build backend executable '{0}' appears to be missing")]
+    MissingExecutable(String),
+}
 
 /// An error that can occur when communicating with a build backend.
 #[derive(Debug, Error, Diagnostic)]
@@ -250,7 +261,7 @@ impl JsonRpcBackend {
     /// Call the `conda/getMetadata` method on the backend.
     pub async fn conda_get_metadata(
         &self,
-        request: &CondaMetadataParams,
+        request: CondaMetadataParams,
     ) -> Result<CondaMetadataResult, CommunicationError> {
         // Capture all of stderr and discard it
         let stderr = self.stderr.as_ref().map(|stderr| {
@@ -292,6 +303,57 @@ impl JsonRpcBackend {
                 self.backend_identifier.clone(),
                 err,
                 procedures::conda_metadata::METHOD_NAME,
+                self.manifest_path.parent().unwrap_or(&self.manifest_path),
+                backend_output,
+            )
+        })
+    }
+
+    pub async fn conda_build<W: BackendOutputStream + Send + 'static>(
+        &self,
+        request: CondaBuildParams,
+        output_stream: W,
+    ) -> Result<CondaBuildResult, CommunicationError> {
+        // Capture all of stderr and discard it
+        let stderr = self.stderr.as_ref().map(|stderr| {
+            // Cancellation signal
+            let (cancel_tx, cancel_rx) = oneshot::channel();
+            // Spawn the stderr forwarding task
+            let handle = tokio::spawn(stream_stderr(stderr.clone(), cancel_rx, output_stream));
+            (cancel_tx, handle)
+        });
+
+        let result = self
+            .client
+            .request(
+                procedures::conda_build::METHOD_NAME,
+                RpcParams::from(request),
+            )
+            .await;
+
+        // Wait for the stderr sink to finish, by signaling it to stop
+        let backend_output = if let Some((cancel_tx, handle)) = stderr {
+            // Cancel the stderr forwarding. Ignore any error because that means the
+            // tasks also finished.
+            let _err = cancel_tx.send(());
+            let lines = handle.await.map_or_else(
+                |e| match e.try_into_panic() {
+                    Ok(panic) => std::panic::resume_unwind(panic),
+                    Err(_) => Err(CommunicationError::StdErrPipeStopped),
+                },
+                |e| e.map_err(|_| CommunicationError::StdErrPipeStopped),
+            )?;
+
+            Some(lines)
+        } else {
+            None
+        };
+
+        result.map_err(|err| {
+            CommunicationError::from_client_error(
+                self.backend_identifier.clone(),
+                err,
+                procedures::conda_build::METHOD_NAME,
                 self.manifest_path.parent().unwrap_or(&self.manifest_path),
                 backend_output,
             )

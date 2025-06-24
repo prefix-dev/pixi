@@ -19,8 +19,7 @@
 //!
 //! The [`CommandDispatcher`] is built around a task-based execution model:
 //!
-//! 1. Each operation is represented as a task implementing the `TaskSpec`
-//!    trait
+//! 1. Each operation is represented as a task implementing the `TaskSpec` trait
 //! 2. Tasks are submitted to a central queue and processed asynchronously
 //! 3. Duplicate tasks are detected and consolidated to avoid redundant work
 //! 4. Dependencies between tasks are tracked to ensure proper execution order
@@ -33,7 +32,7 @@
 //! created and awaited concurrently. This enables parallel execution while
 //! maintaining a simple API surface.
 
-mod build;
+pub mod build;
 mod cache_dirs;
 mod command_dispatcher;
 mod command_dispatcher_processor;
@@ -44,6 +43,7 @@ mod limits;
 pub mod reporter;
 mod solve_conda;
 mod solve_pixi;
+mod source_build;
 mod source_checkout;
 mod source_metadata;
 
@@ -54,7 +54,9 @@ pub use command_dispatcher::{
     CommandDispatcherErrorResultExt, InstantiateBackendError, InstantiateBackendSpec,
 };
 pub use executor::Executor;
-pub use install_pixi::{InstallPixiEnvironmentError, InstallPixiEnvironmentSpec};
+pub use install_pixi::{
+    InstallPixiEnvironmentError, InstallPixiEnvironmentResult, InstallPixiEnvironmentSpec,
+};
 pub use instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec};
 pub use limits::Limits;
 pub use reporter::{
@@ -63,6 +65,7 @@ pub use reporter::{
 };
 pub use solve_conda::SolveCondaEnvironmentSpec;
 pub use solve_pixi::{PixiEnvironmentSpec, SolvePixiEnvironmentError};
+pub use source_build::{BuiltSource, SourceBuildError, SourceBuildSpec};
 pub use source_checkout::{InvalidPathError, SourceCheckout, SourceCheckoutError};
 pub use source_metadata::{SourceMetadata, SourceMetadataError, SourceMetadataSpec};
 
