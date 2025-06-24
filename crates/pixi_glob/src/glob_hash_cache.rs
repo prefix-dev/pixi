@@ -16,21 +16,21 @@ use super::{GlobHash, GlobHashError};
 
 /// A key for the cache of glob hashes.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub struct GlobHashKey<H: Hash> {
+pub struct GlobHashKey {
     /// The root directory of the glob patterns.
     root: PathBuf,
     /// The glob patterns.
     globs: BTreeSet<String>,
-    /// Additional hash for further differentiation.
-    additional_hash: Option<H>,
+    /// Additional hash which should invalidate the cache if it changes.
+    additional_hash: Option<Vec<u8>>,
 }
 
-impl<H: Hash + Clone> GlobHashKey<H> {
+impl GlobHashKey {
     /// Creates a new `GlobHashKey` from the given root directory and glob patterns.
     pub fn new(
         root: impl Into<PathBuf>,
         globs: BTreeSet<String>,
-        additional_hash: Option<&H>,
+        additional_hash: Option<Vec<u8>>,
     ) -> Self {
         let mut root = root.into();
         // Ensure that `root` points to a directory, not a file.
@@ -41,7 +41,7 @@ impl<H: Hash + Clone> GlobHashKey<H> {
         Self {
             root,
             globs,
-            additional_hash: additional_hash.cloned(),
+            additional_hash,
         }
     }
 }
@@ -60,16 +60,16 @@ enum HashCacheEntry {
 ///
 /// Its is safe and efficient to use this object from multiple threads.
 #[derive(Debug, Default, Clone)]
-pub struct GlobHashCache<H: Hash + Clone> {
-    cache: Arc<DashMap<GlobHashKey<H>, HashCacheEntry>>,
+pub struct GlobHashCache {
+    cache: Arc<DashMap<GlobHashKey, HashCacheEntry>>,
 }
 
-impl<H: Hash + Clone + Send + 'static> GlobHashCache<H> {
+impl GlobHashCache {
     /// Computes the input hash of the given key. If the hash is already in the
     /// cache, it will return the cached value. If the hash is not in the
     /// cache, it will compute the hash (deduplicating any request) and return
     /// it.
-    pub async fn compute_hash(&self, key: GlobHashKey<H>) -> Result<GlobHash, GlobHashError> {
+    pub async fn compute_hash(&self, key: GlobHashKey) -> Result<GlobHash, GlobHashError> {
         match self.cache.entry(key.clone()) {
             Entry::Vacant(entry) => {
                 // Construct a channel over which we will be sending the result and store it in

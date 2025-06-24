@@ -7,12 +7,10 @@
 //! interesting
 
 use ordermap::OrderMap;
-use std::collections::HashMap;
 // Namespace to pbt, *please use* exclusively so we do not get confused between the two
 // different types
 use pixi_build_types as pbt;
 
-use ordermap::OrderMap;
 use pixi_manifest::{PackageManifest, PackageTarget, TargetSelector, Targets};
 use pixi_spec::{GitReference, PixiSpec, SpecConversionError};
 use rattler_conda_types::{ChannelConfig, PackageName};

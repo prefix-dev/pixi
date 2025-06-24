@@ -2,6 +2,7 @@ use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
     fmt::{Display, Formatter},
+    hash::{Hash, Hasher},
     ops::Sub,
     path::{Path, PathBuf},
     str::FromStr,
@@ -37,6 +38,7 @@ use uv_distribution_types::RequirementSource;
 use uv_git_types::GitReference;
 use uv_pypi_types::ParsedUrlError;
 use uv_resolver::RequiresPython;
+use xxhash_rust::xxh3::Xxh3;
 
 use super::{
     PixiRecordsByName, PypiRecord, PypiRecordsByName, package_identifier::ConversionError,
@@ -1484,11 +1486,22 @@ pub(crate) async fn verify_package_platform_satisfiability(
         .map_err(PlatformUnsat::BackendDiscovery)
         .map_err(Box::new)?;
 
+        let project_model_hash =
+            discovered_backend
+                .init_params
+                .project_model
+                .as_ref()
+                .map(|project_model| {
+                    let mut hasher = Xxh3::new();
+                    project_model.hash(&mut hasher);
+                    hasher.finish().to_ne_bytes().to_vec()
+                });
+
         let input_hash = input_hash_cache
             .compute_hash(GlobHashKey::new(
                 source_dir,
                 locked_input_hash.globs.clone(),
-                discovered_backend.init_params.project_model,
+                project_model_hash,
             ))
             .await
             .map_err(PlatformUnsat::FailedToComputeInputHash)

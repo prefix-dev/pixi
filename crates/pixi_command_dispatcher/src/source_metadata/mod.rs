@@ -1,4 +1,7 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    hash::{Hash, Hasher},
+};
 
 use miette::Diagnostic;
 use pixi_build_discovery::{DiscoveredBackend, EnabledProtocols};
@@ -11,6 +14,7 @@ use pixi_glob::GlobHashKey;
 use pixi_record::{InputHash, SourceRecord};
 use rattler_conda_types::{ChannelConfig, ChannelUrl, PackageRecord};
 use thiserror::Error;
+use xxhash_rust::xxh3::Xxh3;
 
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
@@ -93,12 +97,23 @@ impl SourceMetadataSpec {
 
             // Check if the input hash is still valid.
             if let Some(input_globs) = &metadata.input_hash {
+                let project_model_hash =
+                    discovered_backend
+                        .init_params
+                        .project_model
+                        .as_ref()
+                        .map(|project_model| {
+                            let mut hasher = Xxh3::new();
+                            project_model.hash(&mut hasher);
+                            hasher.finish().to_ne_bytes().to_vec()
+                        });
+
                 let new_hash = command_dispatcher
                     .glob_hash_cache()
                     .compute_hash(GlobHashKey::new(
                         self.source.path.clone(),
                         input_globs.globs.clone(),
-                        discovered_backend.init_params.project_model.clone(),
+                        project_model_hash,
                     ))
                     .await
                     .map_err(SourceMetadataError::GlobHash)
@@ -131,7 +146,6 @@ impl SourceMetadataSpec {
         }
 
         // Instantiate the backend with the discovered information.
-        let manifest_path = discovered_backend.init_params.manifest_path.clone();
         let project_model = discovered_backend.init_params.project_model.clone();
 
         let backend = command_dispatcher
@@ -211,12 +225,17 @@ impl SourceMetadataSpec {
         } else {
             // Compute the input hash based on the project model and the input globs.
             let input_globs = input_globs.unwrap_or_default();
+            let project_model_hash = project_model.as_ref().map(|project_model| {
+                let mut hasher = Xxh3::new();
+                project_model.hash(&mut hasher);
+                hasher.finish().to_ne_bytes().to_vec()
+            });
             let input_hash = command_queue
                 .glob_hash_cache()
                 .compute_hash(GlobHashKey::new(
                     &source.path,
                     input_globs.clone(),
-                    project_model,
+                    project_model_hash,
                 ))
                 .await
                 .map_err(SourceMetadataError::GlobHash)

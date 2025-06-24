@@ -38,10 +38,10 @@ pub enum GlobHashError {
 
 impl GlobHash {
     /// Calculate a hash of the files that match the given glob patterns.
-    pub fn from_patterns<'a, H: Hash>(
+    pub fn from_patterns<'a>(
         root_dir: &Path,
         globs: impl IntoIterator<Item = &'a str>,
-        additional_hash: Option<H>,
+        additional_hash: Option<Vec<u8>>,
     ) -> Result<Self, GlobHashError> {
         // If the root is not a directory or does not exist, return an empty map.
         if !root_dir.is_dir() {
