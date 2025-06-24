@@ -1,10 +1,9 @@
-import os
 import platform
 import stat
 from pathlib import Path
 
 
-from .common import ExitCode, bat_extension, verify_cli_command
+from .common import ExitCode, verify_cli_command
 
 
 def create_external_command(command_path: Path, script_content: str) -> Path:
@@ -19,43 +18,65 @@ def create_external_command(command_path: Path, script_content: str) -> Path:
     return command_path
 
 
-def test_external_command_execution(
-    pixi: Path, tmp_pixi_workspace: Path, external_commands_dir: Path
-) -> None:
-    """Test that external pixi commands can be discovered and executed"""
+def test_external_extension(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
 
-    # Create a simple external command
-    if platform.system() == "Windows":
-        script_content = "@echo off\necho Hello from pixi-test extension!\necho Args: %*"
-    else:
-        script_content = "#!/bin/bash\necho 'Hello from pixi-test extension!'\necho \"Args: $@\""
+    pixi_foobar = tmp_pixi_workspace / "bin"
 
-    # Create pixi-test command
-    external_cmd = external_commands_dir / bat_extension("pixi-test")
-    create_external_command(external_cmd, script_content)
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "pixi-foobar",
+        ],
+        env=env,
+    )
 
     # Add external commands directory to PATH
-    env = {"PATH": f"{external_commands_dir}{os.pathsep}{os.environ.get('PATH', '')}"}
+    env = {"PATH": str(pixi_foobar)}
 
     # Test external command execution
     verify_cli_command(
-        [pixi, "test", "arg1", "arg2"],
+        [pixi, "foobar", "arg1", "arg2"],
         env=env,
         cwd=tmp_pixi_workspace,
         stdout_contains=[
-            "Hello from pixi-test extension!",
-            "Args: arg1 arg2",
+            "arg1 arg2",
         ],
     )
 
 
-def test_external_command_not_found(pixi: Path, tmp_pixi_workspace: Path) -> None:
+def test_external_command_not_found(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
     """Test that non-existent external commands provide error messages"""
+    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
 
-    # Test unknown command
+    pixi_foobar = tmp_pixi_workspace / "bin"
+
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "pixi-foobar",
+        ],
+        env=env,
+    )
+
+    # Add external commands directory to PATH
+    env = {"PATH": str(pixi_foobar)}
+
+    # Test external command execution
     verify_cli_command(
         [pixi, "nonexistent"],
-        ExitCode.FAILURE,
+        env=env,
         cwd=tmp_pixi_workspace,
         stderr_contains="No such command: `pixi nonexistent`",
+        expected_exit_code=ExitCode.FAILURE,
     )

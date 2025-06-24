@@ -11,13 +11,13 @@
       "depends": [
         "dummy-c"
       ],
-      "md5": "31b7d35cb59af7caf0cdf83fee99c452",
+      "md5": "58e643fbde076cafb1df63861e08dbf1",
       "name": "dummy-a",
       "platform": "osx",
-      "sha256": "8b020dd949f5dd5708fc36b14f2c9a41755c8698a89cd1abb9851c0058c19059",
-      "size": 1323,
+      "sha256": "7371e695b0bdb4daa0b2d45c8c2d112ab0d7309a7d04d3ecd9088681d2f84a06",
+      "size": 1325,
       "subdir": "osx-64",
-      "timestamp": 1741687107807,
+      "timestamp": 1750776708868,
       "version": "0.1.0"
     },
     "dummy-b-0.1.0-h0dc7051_0.conda": {
@@ -25,13 +25,13 @@
       "build": "h0dc7051_0",
       "build_number": 0,
       "depends": [],
-      "md5": "6433159560ccd4cec36c30214daf40a7",
+      "md5": "f7fb101e6d54aef6cc6802d613d4d261",
       "name": "dummy-b",
       "platform": "osx",
-      "sha256": "36f014dccbf1b8fc155d4bcae15ac2d4097860baff4ce6398bfd950f26a0280a",
-      "size": 1149,
+      "sha256": "c9a1d54e38468175c2b18fcdcd17559742dca4221eadc0bd2d556ecb675a461a",
+      "size": 1151,
       "subdir": "osx-64",
-      "timestamp": 1741687107807,
+      "timestamp": 1750776708868,
       "version": "0.1.0"
     },
     "dummy-c-0.1.0-h0dc7051_0.conda": {
@@ -39,13 +39,13 @@
       "build": "h0dc7051_0",
       "build_number": 0,
       "depends": [],
-      "md5": "e847af055ebe1bf95277a1af0dac9985",
+      "md5": "fed8c579edd89d99327fd1a55bec804e",
       "name": "dummy-c",
       "platform": "osx",
-      "sha256": "35a9e9a65b0eeb053a23d154d1fdb542ab07c748436b318df6c741578f7a0845",
-      "size": 1148,
+      "sha256": "e96e058183a0211567c707a9747386dd403a91758d3c8d4ae5e0953e6c502ab6",
+      "size": 1150,
       "subdir": "osx-64",
-      "timestamp": 1741687107807,
+      "timestamp": 1750776708868,
       "version": "0.1.0"
     },
     "dummy-d-0.1.0-h0dc7051_0.conda": {
@@ -55,13 +55,13 @@
       "depends": [
         "dummy-x"
       ],
-      "md5": "dace74866418b2f180a6530d626d022d",
+      "md5": "650b4622fc76f472c2e24414f4e8a9f3",
       "name": "dummy-d",
       "platform": "osx",
-      "sha256": "304c19812279ee185abdec165e3281a7b50cde6416ee3147081c89a8bd8b3485",
+      "sha256": "56c8fcb9a89d198f90de2c980f340992296865f4a8e2d98b51b3c2fe25f9bad2",
       "size": 1165,
       "subdir": "osx-64",
-      "timestamp": 1741687107807,
+      "timestamp": 1750776708868,
       "version": "0.1.0"
     },
     "dummy-f-0.1.0-h0dc7051_0.conda": {
@@ -69,13 +69,13 @@
       "build": "h0dc7051_0",
       "build_number": 0,
       "depends": [],
-      "md5": "7a0784e29a6afe9f6da4b360bcad1f1a",
+      "md5": "d831e597c9cc6cf7f3af1ad78a422f51",
       "name": "dummy-f",
       "platform": "osx",
-      "sha256": "52b7d930556348beb36e5e3c9a475e90cd8be273fda47e77e3e25c49f108eb81",
-      "size": 1173,
+      "sha256": "9d300f7a767c8eb5415e5906b89e92c5f77a5ed49676393dadd442faf31f35ca",
+      "size": 1174,
       "subdir": "osx-64",
-      "timestamp": 1741687107807,
+      "timestamp": 1750776708868,
       "version": "0.1.0"
     },
     "dummy-g-0.1.0-h0dc7051_0.conda": {
@@ -85,13 +85,13 @@
       "depends": [
         "dummy-b"
       ],
-      "md5": "a0215c0e62d3e0eeb7eabb7c3f92c36f",
+      "md5": "88ba7ccd6023217f0057123edb3e7801",
       "name": "dummy-g",
       "platform": "osx",
-      "sha256": "12effdafd64bc4f9f539aead0e1cdd15387e419b85199abd8db582653fe64ca6",
-      "size": 1182,
+      "sha256": "a723e1fbc30e9130d9bb12460e8956c5d53dcd932877033ba8cfc014f5fe2f88",
+      "size": 1184,
       "subdir": "osx-64",
-      "timestamp": 1741687107806,
+      "timestamp": 1750776708868,
       "version": "0.1.0"
     },
     "dummy_e-0.1.0-h0dc7051_0.conda": {
@@ -99,13 +99,27 @@
       "build": "h0dc7051_0",
       "build_number": 0,
       "depends": [],
-      "md5": "c9460feccbe1ae40fe0fabbb37f02fd5",
+      "md5": "5823ceaf83bd5c3bc4397d868ced191e",
       "name": "dummy_e",
       "platform": "osx",
-      "sha256": "a5544d67b69fc71be16fcf5e978fd2f847c7c70f5a3ac5b8ca991cff2a6806fb",
-      "size": 1149,
+      "sha256": "07bfe6fde13211e126e2efbe452c581655e680c39673b97d4c28baa52301368f",
+      "size": 1150,
       "subdir": "osx-64",
-      "timestamp": 1741687107807,
+      "timestamp": 1750776708868,
+      "version": "0.1.0"
+    },
+    "pixi-foobar-0.1.0-h0dc7051_0.conda": {
+      "arch": "x86_64",
+      "build": "h0dc7051_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "fad88ca86e9e02503ee9bc4e22ec20be",
+      "name": "pixi-foobar",
+      "platform": "osx",
+      "sha256": "d704460f53f1322b412fb85b4f2bdd7db74f3119a9f679905e1597929ffd84d7",
+      "size": 1186,
+      "subdir": "osx-64",
+      "timestamp": 1750776708868,
       "version": "0.1.0"
     }
   },
