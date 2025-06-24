@@ -6,11 +6,10 @@
 //! This will mostly be boilerplate conversions but some of these are a bit more
 //! interesting
 
+use ordermap::OrderMap;
 use std::collections::HashMap;
-
 // Namespace to pbt, *please use* exclusively so we do not get confused between the two
 // different types
-use indexmap::IndexMap;
 use pixi_build_types as pbt;
 use pixi_manifest::{PackageManifest, PackageTarget, TargetSelector, Targets};
 use pixi_spec::{GitReference, PixiSpec, SpecConversionError};
@@ -65,8 +64,8 @@ fn to_pixi_spec_v1(
                 file_name: nameless.file_name,
                 channel: nameless.channel.map(|c| c.base_url.url().clone().into()),
                 subdir: nameless.subdir,
-                md5: nameless.md5.map(Into::into),
-                sha256: nameless.sha256.map(Into::into),
+                md5: nameless.md5,
+                sha256: nameless.sha256,
             }))
         }
     };
@@ -78,12 +77,12 @@ fn to_pixi_spec_v1(
 fn to_pbt_dependencies<'a>(
     iter: impl Iterator<Item = (&'a PackageName, &'a PixiSpec)>,
     channel_config: &ChannelConfig,
-) -> Result<IndexMap<pbt::SourcePackageName, pbt::PackageSpecV1>, SpecConversionError> {
+) -> Result<OrderMap<pbt::SourcePackageName, pbt::PackageSpecV1>, SpecConversionError> {
     iter.map(|(name, spec)| {
         let converted = to_pixi_spec_v1(spec, channel_config)?;
         Ok((name.as_normalized().to_string(), converted))
     })
-    .collect::<Result<IndexMap<_, _>, _>>()
+    .collect::<Result<OrderMap<_, _>, _>>()
 }
 
 /// Converts a [`PackageTarget`] to a [`pbt::TargetV1`].

@@ -196,11 +196,16 @@ pub async fn execute() -> miette::Result<()> {
     let args = Args::parse();
     set_console_colors(&args);
     let use_colors = console::colors_enabled_stderr();
+    let in_ci = matches!(env::var("CI").as_deref(), Ok("1" | "true"));
+    let no_wrap = matches!(env::var("PIXI_NO_WRAP").as_deref(), Ok("1" | "true"));
     // Set up the default miette handler based on whether we want colors or not.
     miette::set_hook(Box::new(move |_| {
         Box::new(
             miette::MietteHandlerOpts::default()
                 .color(use_colors)
+                // Don't wrap lines in CI environments or when explicitly specified to avoid
+                // breaking logs and tests.
+                .wrap_lines(!in_ci && !no_wrap)
                 .build(),
         )
     }))?;
@@ -214,8 +219,8 @@ pub async fn execute() -> miette::Result<()> {
         LevelFilter::OFF => (LevelFilter::OFF, LevelFilter::OFF, LevelFilter::OFF),
         LevelFilter::ERROR => (LevelFilter::ERROR, LevelFilter::ERROR, LevelFilter::WARN),
         LevelFilter::WARN => (LevelFilter::WARN, LevelFilter::WARN, LevelFilter::INFO),
-        LevelFilter::INFO => (LevelFilter::WARN, LevelFilter::INFO, LevelFilter::INFO),
-        LevelFilter::DEBUG => (LevelFilter::INFO, LevelFilter::DEBUG, LevelFilter::DEBUG),
+        LevelFilter::INFO => (LevelFilter::WARN, LevelFilter::INFO, LevelFilter::DEBUG),
+        LevelFilter::DEBUG => (LevelFilter::INFO, LevelFilter::DEBUG, LevelFilter::TRACE),
         LevelFilter::TRACE => (LevelFilter::TRACE, LevelFilter::TRACE, LevelFilter::TRACE),
     };
 
