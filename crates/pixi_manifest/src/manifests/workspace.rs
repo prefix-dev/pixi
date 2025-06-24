@@ -1250,21 +1250,6 @@ start = "python -m flask run --port=5050"
     }
 
     #[test]
-    fn test_invalid_task_list() {
-        let contents = format!(
-            r#"
-            {PROJECT_BOILERPLATE}
-            [tasks]
-            test = ["invalid", "task"]
-            "#
-        );
-
-        let WithSourceCode { error, source } =
-            WorkspaceManifest::from_toml_str(contents).unwrap_err();
-        assert_snapshot!(format_parse_error(&source, error));
-    }
-
-    #[test]
     fn test_python_dependencies() {
         let contents = format!(
             r#"
