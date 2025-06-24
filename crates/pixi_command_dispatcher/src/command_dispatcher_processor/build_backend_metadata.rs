@@ -4,33 +4,36 @@ use futures::FutureExt;
 
 use super::{CommandDispatcherProcessor, PendingDeduplicatingTask, TaskResult};
 use crate::{
-    CommandDispatcherError, Reporter, SourceMetadata, SourceMetadataError,
-    command_dispatcher::{CommandDispatcherContext, SourceMetadataId, SourceMetadataTask},
+    BuildBackendMetadata, BuildBackendMetadataError, CommandDispatcherError, Reporter,
+    command_dispatcher::{
+        BuildBackendMetadataId, BuildBackendMetadataTask, CommandDispatcherContext,
+    },
 };
 
 impl CommandDispatcherProcessor {
-    /// Called when a [`crate::command_dispatcher::SourceMetadataTask`]
+    /// Called when a [`crate::command_dispatcher::BuildBackendMetadataTask`]
     /// task was received.
-    pub(crate) fn on_source_metadata(&mut self, task: SourceMetadataTask) {
+    pub(crate) fn on_build_backend_metadata(&mut self, task: BuildBackendMetadataTask) {
         // Lookup the id of the source metadata to avoid deduplication.
         let source_metadata_id = {
-            match self.source_metadata_ids.get(&task.spec) {
+            match self.build_backend_metadata_ids.get(&task.spec) {
                 Some(id) => *id,
                 None => {
                     // If the source metadata is not in the map, we need to
                     // create a new id for it.
-                    let id = SourceMetadataId(self.source_metadata_ids.len());
-                    self.source_metadata_ids.insert(task.spec.clone(), id);
+                    let id = BuildBackendMetadataId(self.build_backend_metadata_ids.len());
+                    self.build_backend_metadata_ids
+                        .insert(task.spec.clone(), id);
                     id
                 }
             }
         };
 
-        match self.source_metadata.entry(source_metadata_id) {
+        match self.build_backend_metadata.entry(source_metadata_id) {
             Entry::Occupied(mut entry) => match entry.get_mut() {
                 PendingDeduplicatingTask::Pending(pending, _) => pending.push(task.tx),
-                PendingDeduplicatingTask::Result(result, _) => {
-                    let _ = task.tx.send(Ok(result.clone()));
+                PendingDeduplicatingTask::Result(fetch, _) => {
+                    let _ = task.tx.send(Ok(fetch.clone()));
                 }
                 PendingDeduplicatingTask::Errored => {
                     // Drop the sender, this will cause a cancellation on the other side.
@@ -48,31 +51,34 @@ impl CommandDispatcherProcessor {
                 let reporter_id = self
                     .reporter
                     .as_deref_mut()
-                    .and_then(Reporter::as_source_metadata_reporter)
+                    .and_then(Reporter::as_build_backend_metadata_reporter)
                     .map(|reporter| reporter.on_queued(parent_context, &task.spec));
 
                 if let Some(reporter_id) = reporter_id {
-                    self.source_metadata_reporters
+                    self.build_backend_metadata_reporters
                         .insert(source_metadata_id, reporter_id);
                 }
 
                 if let Some((reporter, reporter_id)) = self
                     .reporter
                     .as_deref_mut()
-                    .and_then(Reporter::as_source_metadata_reporter)
+                    .and_then(Reporter::as_build_backend_metadata_reporter)
                     .zip(reporter_id)
                 {
                     reporter.on_started(reporter_id)
                 }
 
                 let dispatcher = self.create_task_command_dispatcher(
-                    CommandDispatcherContext::SourceMetadata(source_metadata_id),
+                    CommandDispatcherContext::BuildBackendMetadata(source_metadata_id),
                 );
                 self.pending_futures.push(
                     task.spec
                         .request(dispatcher)
                         .map(move |result| {
-                            TaskResult::SourceMetadata(source_metadata_id, result.map(Arc::new))
+                            TaskResult::BuildBackendMetadata(
+                                source_metadata_id,
+                                result.map(Arc::new),
+                            )
                         })
                         .boxed_local(),
                 );
@@ -80,26 +86,29 @@ impl CommandDispatcherProcessor {
         }
     }
 
-    /// Called when a [`super::TaskResult::SourceMetadata`] task was
+    /// Called when a [`super::TaskResult::BuildBackendMetadata`] task was
     /// received.
     ///
     /// This function will relay the result of the task back to the
     /// [`super::CommandDispatcher`] that issues it.
-    pub(crate) fn on_source_metadata_result(
+    pub(crate) fn on_build_backend_metadata_result(
         &mut self,
-        id: SourceMetadataId,
-        result: Result<Arc<SourceMetadata>, CommandDispatcherError<SourceMetadataError>>,
+        id: BuildBackendMetadataId,
+        result: Result<
+            Arc<BuildBackendMetadata>,
+            CommandDispatcherError<BuildBackendMetadataError>,
+        >,
     ) {
         if let Some((reporter, reporter_id)) = self
             .reporter
             .as_deref_mut()
-            .and_then(Reporter::as_source_metadata_reporter)
-            .zip(self.source_metadata_reporters.remove(&id))
+            .and_then(Reporter::as_build_backend_metadata_reporter)
+            .zip(self.build_backend_metadata_reporters.remove(&id))
         {
             reporter.on_finished(reporter_id);
         }
 
-        self.source_metadata
+        self.build_backend_metadata
             .get_mut(&id)
             .expect("cannot find pending build backend metadata task")
             .on_pending_result(result)

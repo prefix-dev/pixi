@@ -12,10 +12,10 @@ use rattler_conda_types::{ChannelConfig, ChannelUrl, MatchSpec, ParseStrictness}
 use thiserror::Error;
 
 use crate::{
-    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    SourceCheckoutError, BuildBackendMetadataSpec,
+    BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, CommandDispatcherError,
+    CommandDispatcherErrorResultExt, SourceCheckoutError, SourceMetadataSpec,
     executor::ExecutorFutures,
-    source_metadata::{BuildBackendMetadata, SourceMetadataError},
+    source_metadata::{SourceMetadata, SourceMetadataError},
 };
 
 /// An object that is responsible for recursively collecting metadata of source
@@ -33,7 +33,7 @@ pub struct SourceMetadataCollector {
 pub struct CollectedSourceMetadata {
     /// Information about all queried source packages. This can be used as
     /// repodata.
-    pub source_repodata: Vec<Arc<BuildBackendMetadata>>,
+    pub source_repodata: Vec<Arc<SourceMetadata>>,
 
     /// A list of transitive dependencies of all collected source records.
     pub transitive_dependencies: Vec<MatchSpec>,
@@ -141,7 +141,7 @@ impl SourceMetadataCollector {
         &self,
         name: rattler_conda_types::PackageName,
         spec: SourceSpec,
-    ) -> Result<Arc<BuildBackendMetadata>, CommandDispatcherError<CollectSourceMetadataError>> {
+    ) -> Result<Arc<SourceMetadata>, CommandDispatcherError<CollectSourceMetadataError>> {
         // Get the source for the particular package.
         let source = self
             .command_queue
@@ -156,13 +156,16 @@ impl SourceMetadataCollector {
         // Extract information for the particular source spec.
         let source_metadata = self
             .command_queue
-            .source_metadata(BuildBackendMetadataSpec {
-                source,
-                channel_config: self.channel_config.clone(),
-                channels: self.channels.clone(),
-                build_environment: self.build_environment.clone(),
-                variants: self.variants.clone(),
-                enabled_protocols: self.enabled_protocols.clone(),
+            .source_metadata(SourceMetadataSpec {
+                package: name.clone(),
+                backend_metadata: BuildBackendMetadataSpec {
+                    source: source.pinned,
+                    channel_config: self.channel_config.clone(),
+                    channels: self.channels.clone(),
+                    build_environment: self.build_environment.clone(),
+                    variants: self.variants.clone(),
+                    enabled_protocols: self.enabled_protocols.clone(),
+                },
             })
             .await
             .map_err_with(|err| CollectSourceMetadataError::SourceMetadataError {
@@ -172,15 +175,11 @@ impl SourceMetadataCollector {
 
         // Make sure that a package with the name defined in spec is available from the
         // backend.
-        if !source_metadata
-            .records
-            .iter()
-            .any(|record| record.package_record.name == name)
-        {
+        if source_metadata.records.is_empty() {
             return Err(CommandDispatcherError::Failed(
                 CollectSourceMetadataError::PackageMetadataNotFound {
                     name: name.as_source().to_string(),
-                    pinned_source: Box::new(source_metadata.source.pinned.clone()),
+                    pinned_source: Box::new(source_metadata.source.clone()),
                     help: Self::create_metadata_not_found_help(
                         name,
                         source_metadata.records.clone(),

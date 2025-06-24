@@ -24,6 +24,13 @@ impl Display for LazySourceCheckout {
 }
 
 impl LazySourceCheckout {
+    pub fn new(spec: PinnedSourceSpec) -> Self {
+        Self {
+            spec,
+            checkout: OnceCell::new(),
+        }
+    }
+
     /// Returns the pinned source spec
     pub fn as_pinned(&self) -> &PinnedSourceSpec {
         &self.spec
@@ -31,7 +38,7 @@ impl LazySourceCheckout {
 
     /// Checkout the source if it is not already checked out.
     pub async fn checkout(
-        &self,
+        &mut self,
         dispatcher: &CommandDispatcher,
     ) -> Result<&SourceCheckout, CommandDispatcherError<SourceCheckoutError>> {
         if let Some(checkout) = self.checkout.get() {
@@ -42,9 +49,14 @@ impl LazySourceCheckout {
         Ok(self.checkout.get_or_init(|| checkout))
     }
 
-    /// Converts this instance into a `SourceCheckout` if it has been checked
-    /// out.
-    pub fn into_checkout(self) -> Option<SourceCheckout> {
-        self.checkout.into_inner()
+    /// Checkout the source and consume this instance.
+    pub async fn into_checkout(
+        self,
+        dispatcher: &CommandDispatcher,
+    ) -> Result<SourceCheckout, CommandDispatcherError<SourceCheckoutError>> {
+        match self.checkout.into_inner() {
+            Some(checkout) => Ok(checkout),
+            None => dispatcher.checkout_pinned_source(self.spec.clone()).await,
+        }
     }
 }

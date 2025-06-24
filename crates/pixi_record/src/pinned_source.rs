@@ -109,6 +109,16 @@ impl PinnedSourceSpec {
     pub fn is_immutable(&self) -> bool {
         !matches!(self, PinnedSourceSpec::Path(_))
     }
+
+    /// Returns a URL that uniquely identifies this path spec. This URL is not
+    /// portable, e.g. it might result in a different URL on different systems.
+    pub fn identifiable_url(&self) -> Url {
+        match self {
+            PinnedSourceSpec::Url(spec) => spec.identifiable_url(),
+            PinnedSourceSpec::Git(spec) => spec.identifiable_url(),
+            PinnedSourceSpec::Path(spec) => spec.identifiable_url(),
+        }
+    }
 }
 
 impl MutablePinnedSourceSpec {
@@ -147,6 +157,17 @@ pub struct PinnedUrlSpec {
     /// The md5 hash of the archive.
     #[serde_as(as = "Option<rattler_digest::serde::SerializableHash<rattler_digest::Md5>>")]
     pub md5: Option<Md5Hash>,
+}
+
+impl PinnedUrlSpec {
+    /// Returns a URL that uniquely identifies this path spec. This URL is not
+    /// portable, e.g. it might result in a different URL on different systems.
+    pub fn identifiable_url(&self) -> Url {
+        let mut url = self.url.clone();
+        url.query_pairs_mut()
+            .append_pair("sha256", &format!("{:x}", self.sha256));
+        url
+    }
 }
 
 impl From<PinnedUrlSpec> for PinnedSourceSpec {
@@ -257,6 +278,12 @@ impl PinnedGitSpec {
         Self { git, source }
     }
 
+    /// Returns a URL that uniquely identifies this path spec. This URL is not
+    /// portable, e.g. it might result in a different URL on different systems.
+    pub fn identifiable_url(&self) -> Url {
+        self.into_locked_git_url().to_url()
+    }
+
     /// Construct the lockfile-compatible [`Url`] from [`PinnedGitSpec`].
     pub fn into_locked_git_url(&self) -> LockedGitUrl {
         let mut url = self.git.clone();
@@ -338,6 +365,12 @@ impl PinnedPathSpec {
         } else {
             project_root.join(native_path)
         }
+    }
+
+    /// Returns a URL that uniquely identifies this path spec. This URL is not
+    /// portable, e.g. it might result in a different URL on different systems.
+    pub fn identifiable_url(&self) -> Url {
+        Url::from_directory_path(self.resolve(Path::new("/"))).expect("expected valid URL")
     }
 }
 

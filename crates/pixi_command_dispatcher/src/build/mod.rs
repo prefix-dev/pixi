@@ -3,8 +3,8 @@
 mod build_cache;
 mod build_environment;
 mod move_file;
+pub(crate) mod source_metadata_cache;
 mod work_dir_key;
-pub mod unresolved_source_record;
 
 use std::hash::{Hash, Hasher};
 

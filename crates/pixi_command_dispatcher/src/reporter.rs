@@ -3,8 +3,9 @@ use pixi_git::resolver::RepositoryReference;
 use serde::Serialize;
 
 use crate::{
-    PixiEnvironmentSpec, SolveCondaEnvironmentSpec, SourceBuildSpec, BuildBackendMetadataSpec,
-    install_pixi::InstallPixiEnvironmentSpec, instantiate_tool_env::InstantiateToolEnvironmentSpec,
+    BuildBackendMetadataSpec, PixiEnvironmentSpec, SolveCondaEnvironmentSpec, SourceBuildSpec,
+    SourceMetadataSpec, install_pixi::InstallPixiEnvironmentSpec,
+    instantiate_tool_env::InstantiateToolEnvironmentSpec,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
@@ -128,6 +129,25 @@ pub trait InstantiateToolEnvironmentReporter {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
 #[serde(transparent)]
+pub struct BuildBackendMetadataId(pub usize);
+
+pub trait BuildBackendMetadataReporter {
+    /// Called when an operation was queued on the [`crate::CommandDispatcher`].
+    fn on_queued(
+        &mut self,
+        reason: Option<ReporterContext>,
+        env: &BuildBackendMetadataSpec,
+    ) -> BuildBackendMetadataId;
+
+    /// Called when the operation has started.
+    fn on_started(&mut self, id: BuildBackendMetadataId);
+
+    /// Called when the operation has finished.
+    fn on_finished(&mut self, id: BuildBackendMetadataId);
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(transparent)]
 pub struct SourceMetadataId(pub usize);
 
 pub trait SourceMetadataReporter {
@@ -135,7 +155,7 @@ pub trait SourceMetadataReporter {
     fn on_queued(
         &mut self,
         reason: Option<ReporterContext>,
-        env: &BuildBackendMetadataSpec,
+        env: &SourceMetadataSpec,
     ) -> SourceMetadataId;
 
     /// Called when the operation has started.
@@ -213,6 +233,15 @@ pub trait Reporter: Send {
     ) -> Option<&mut dyn InstantiateToolEnvironmentReporter> {
         None
     }
+
+    /// Returns a mutable reference to a reporter that reports on the progress
+    /// of fetching build backend metadata.
+    fn as_build_backend_metadata_reporter(
+        &mut self,
+    ) -> Option<&mut dyn BuildBackendMetadataReporter> {
+        None
+    }
+
     /// Returns a mutable reference to a reporter that reports on the progress
     /// of fetching source metadata.
     fn as_source_metadata_reporter(&mut self) -> Option<&mut dyn SourceMetadataReporter> {
@@ -249,6 +278,7 @@ pub enum ReporterContext {
     SolveConda(CondaSolveId),
     InstallPixi(PixiInstallId),
     SourceMetadata(SourceMetadataId),
+    BuildBackendMetadata(BuildBackendMetadataId),
     InstantiateToolEnv(InstantiateToolEnvId),
     SourceBuild(SourceBuildId),
 }

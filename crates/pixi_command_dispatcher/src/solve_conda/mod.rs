@@ -14,7 +14,7 @@ use rattler_solve::{ChannelPriority, SolveStrategy, SolverImpl};
 use tokio::task::JoinError;
 use url::Url;
 
-use crate::{CommandDispatcherError, SourceCheckout, source_metadata::BuildBackendMetadata};
+use crate::{CommandDispatcherError, SourceMetadata};
 
 /// Contains all information that describes the input of a conda environment.
 /// All information about both binary and source packages is stored in the
@@ -44,7 +44,7 @@ pub struct SolveCondaEnvironmentSpec {
 
     /// Available source repodata records.
     #[serde(skip)]
-    pub source_repodata: Vec<Arc<BuildBackendMetadata>>,
+    pub source_repodata: Vec<Arc<SourceMetadata>>,
 
     /// Available Binary repodata records.
     #[serde(skip)]
@@ -135,7 +135,7 @@ impl SolveCondaEnvironmentSpec {
             let mut url_to_source_package = HashMap::new();
             for source_metadata in &self.source_repodata {
                 for record in &source_metadata.records {
-                    let url = unique_url(&source_metadata.source, record);
+                    let url = unique_url(record);
                     let repodata_record = RepoDataRecord {
                         package_record: record.package_record.clone(),
                         url: url.clone(),
@@ -214,9 +214,8 @@ impl SolveCondaEnvironmentSpec {
 }
 
 /// Generates a unique URL for a source record.
-fn unique_url(checkout: &SourceCheckout, source: &SourceRecord) -> Url {
-    let mut url = Url::from_directory_path(&checkout.path)
-        .expect("expected source checkout to be a valid url");
+fn unique_url(source: &SourceRecord) -> Url {
+    let mut url = source.source.identifiable_url();
 
     // Add unique identifiers to the URL.
     url.query_pairs_mut()

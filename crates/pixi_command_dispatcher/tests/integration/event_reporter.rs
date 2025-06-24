@@ -2,13 +2,13 @@ use std::sync::{Arc, Mutex};
 
 use futures::{Stream, StreamExt};
 use pixi_command_dispatcher::{
-    CondaSolveReporter, GitCheckoutReporter, InstallPixiEnvironmentSpec,
+    BuildBackendMetadataSpec, CondaSolveReporter, GitCheckoutReporter, InstallPixiEnvironmentSpec,
     InstantiateToolEnvironmentSpec, PixiEnvironmentSpec, PixiInstallReporter, PixiSolveReporter,
-    Reporter, ReporterContext, SolveCondaEnvironmentSpec, SourceBuildSpec, BuildBackendMetadataSpec,
+    Reporter, ReporterContext, SolveCondaEnvironmentSpec, SourceBuildSpec, SourceMetadataSpec,
     reporter::{
-        CondaSolveId, GitCheckoutId, InstantiateToolEnvId, InstantiateToolEnvironmentReporter,
-        PixiInstallId, PixiSolveId, SourceBuildId, SourceBuildReporter, SourceMetadataId,
-        SourceMetadataReporter,
+        BuildBackendMetadataId, BuildBackendMetadataReporter, CondaSolveId, GitCheckoutId,
+        InstantiateToolEnvId, InstantiateToolEnvironmentReporter, PixiInstallId, PixiSolveId,
+        SourceBuildId, SourceBuildReporter, SourceMetadataId, SourceMetadataReporter,
     },
 };
 use pixi_git::resolver::RepositoryReference;
@@ -73,10 +73,24 @@ pub enum Event {
         id: GitCheckoutId,
     },
 
+    BuildBackendMetadataQueued {
+        id: BuildBackendMetadataId,
+        #[serde(flatten)]
+        spec: BuildBackendMetadataSpec,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        context: Option<ReporterContext>,
+    },
+    BuildBackendMetadataStarted {
+        id: BuildBackendMetadataId,
+    },
+    BuildBackendMetadataFinished {
+        id: BuildBackendMetadataId,
+    },
+
     SourceMetadataQueued {
         id: SourceMetadataId,
         #[serde(flatten)]
-        spec: BuildBackendMetadataSpec,
+        spec: SourceMetadataSpec,
         #[serde(skip_serializing_if = "Option::is_none")]
         context: Option<ReporterContext>,
     },
@@ -272,11 +286,43 @@ impl GitCheckoutReporter for EventReporter {
     }
 }
 
-impl SourceMetadataReporter for EventReporter {
+impl BuildBackendMetadataReporter for EventReporter {
     fn on_queued(
         &mut self,
         context: Option<ReporterContext>,
         spec: &BuildBackendMetadataSpec,
+    ) -> BuildBackendMetadataId {
+        let next_id = BuildBackendMetadataId(self.next_source_metadata_id);
+        self.next_source_metadata_id += 1;
+
+        let event = Event::BuildBackendMetadataQueued {
+            id: next_id,
+            spec: spec.clone(),
+            context,
+        };
+        println!("{}", serde_json::to_string_pretty(&event).unwrap());
+        self.events.lock().unwrap().push(event);
+        next_id
+    }
+
+    fn on_started(&mut self, id: BuildBackendMetadataId) {
+        let event = Event::BuildBackendMetadataStarted { id };
+        println!("{}", serde_json::to_string_pretty(&event).unwrap());
+        self.events.lock().unwrap().push(event);
+    }
+
+    fn on_finished(&mut self, id: BuildBackendMetadataId) {
+        let event = Event::BuildBackendMetadataFinished { id };
+        println!("{}", serde_json::to_string_pretty(&event).unwrap());
+        self.events.lock().unwrap().push(event);
+    }
+}
+
+impl SourceMetadataReporter for EventReporter {
+    fn on_queued(
+        &mut self,
+        context: Option<ReporterContext>,
+        spec: &SourceMetadataSpec,
     ) -> SourceMetadataId {
         let next_id = SourceMetadataId(self.next_source_metadata_id);
         self.next_source_metadata_id += 1;
@@ -402,6 +448,11 @@ impl Reporter for EventReporter {
         Some(self)
     }
 
+    fn as_build_backend_metadata_reporter(
+        &mut self,
+    ) -> Option<&mut dyn BuildBackendMetadataReporter> {
+        Some(self)
+    }
     fn as_source_metadata_reporter(&mut self) -> Option<&mut dyn SourceMetadataReporter> {
         Some(self)
     }

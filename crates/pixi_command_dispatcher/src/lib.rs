@@ -33,12 +33,14 @@
 //! maintaining a simple API surface.
 
 pub mod build;
+mod build_backend_metadata;
 mod cache_dirs;
 mod command_dispatcher;
 mod command_dispatcher_processor;
 mod executor;
 mod install_pixi;
 mod instantiate_tool_env;
+mod lazy_source_checkout;
 mod limits;
 pub mod reporter;
 mod solve_conda;
@@ -46,9 +48,11 @@ mod solve_pixi;
 mod source_build;
 mod source_checkout;
 mod source_metadata;
-mod lazy_source_checkout;
 
 pub use build::BuildEnvironment;
+pub use build_backend_metadata::{
+    BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec,
+};
 pub use cache_dirs::CacheDirs;
 pub use command_dispatcher::{
     CommandDispatcher, CommandDispatcherBuilder, CommandDispatcherError,
@@ -68,7 +72,7 @@ pub use solve_conda::SolveCondaEnvironmentSpec;
 pub use solve_pixi::{PixiEnvironmentSpec, SolvePixiEnvironmentError};
 pub use source_build::{BuiltSource, SourceBuildError, SourceBuildSpec};
 pub use source_checkout::{InvalidPathError, SourceCheckout, SourceCheckoutError};
-pub use source_metadata::{BuildBackendMetadata, SourceMetadataError, BuildBackendMetadataSpec};
+pub use source_metadata::{SourceMetadata, SourceMetadataError, SourceMetadataSpec};
 
 /// A helper function to check if a value is the default value for its type.
 fn is_default<T: Default + PartialEq>(value: &T) -> bool {

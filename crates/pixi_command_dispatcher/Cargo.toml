@@ -19,6 +19,7 @@ futures = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
 pin-project-lite = { workspace = true }
+rand = { workspace = true }
 reqwest-middleware = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

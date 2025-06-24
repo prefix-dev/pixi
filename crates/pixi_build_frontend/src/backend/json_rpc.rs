@@ -3,6 +3,13 @@ use std::{
     sync::Arc,
 };
 
+use super::stderr::{stderr_buffer, stream_stderr};
+use crate::{
+    backend::BackendOutputStream,
+    error::BackendError,
+    jsonrpc::{RpcParams, stdio_transport},
+    tool::Tool,
+};
 use jsonrpsee::{
     async_client::{Client, ClientBuilder},
     core::{
@@ -12,6 +19,7 @@ use jsonrpsee::{
     types::ErrorCode,
 };
 use miette::Diagnostic;
+use pixi_build_types::procedures::conda_outputs::{CondaOutputsParams, CondaOutputsResult};
 use pixi_build_types::{
     FrontendCapabilities, ProjectModelV1, VersionedProjectModel, procedures,
     procedures::{
@@ -26,14 +34,6 @@ use tokio::{
     io::{AsyncBufReadExt, BufReader, Lines},
     process::ChildStderr,
     sync::{Mutex, oneshot},
-};
-use pixi_build_types::procedures::conda_outputs::{CondaOutputsParams, CondaOutputsResult};
-use super::stderr::{stderr_buffer, stream_stderr};
-use crate::{
-    backend::BackendOutputStream,
-    error::BackendError,
-    jsonrpc::{RpcParams, stdio_transport},
-    tool::Tool,
 };
 
 #[derive(Debug, Error, Diagnostic)]

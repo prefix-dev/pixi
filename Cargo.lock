@@ -4678,6 +4678,7 @@ dependencies = [
  "pixi_spec_containers",
  "pixi_test_utils",
  "pixi_utils",
+ "rand 0.9.1",
  "rattler",
  "rattler_conda_types",
  "rattler_digest",

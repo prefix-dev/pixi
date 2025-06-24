@@ -6,14 +6,14 @@
 //!
 //! This API was introduced in Pixi Build API version 1.
 
-use std::{
-    collections::{BTreeSet, HashMap},
-    path::PathBuf,
-};
 use ordermap::OrderMap;
 use rattler_conda_types::{NoArchType, PackageName, Platform, VersionWithSource};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use std::{
+    collections::{BTreeSet, HashMap},
+    path::PathBuf,
+};
 
 use crate::SourcePackageSpecV1;
 
