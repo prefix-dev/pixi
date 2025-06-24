@@ -34,14 +34,14 @@ packages:
   timestamp: 1650670423406
 - conda: child-package
   name: child-package
-  version: 0.1.0
+  version: 0.1.3
   build: hbf21a9e_0
   subdir: linux-64
   depends:
   - libstdcxx >=15
   - libgcc >=15
   input:
-    hash: bbd882aad6a767060cde2c52ec9c2d551ce4d8a26441e9f90d1acee1ac9d2b5f
+    hash: ba88b9c1df60dd5ca438d3974deea12501b57e974b1bb79725630d44401cf0d9
     globs: []
 - conda: https://prefix.dev/conda-forge/linux-64/libgcc-15.1.0-h767d61c_2.conda
   sha256: 0024f9ab34c09629621aefd8603ef77bf9d708129b0dd79029e502c39ffc2195

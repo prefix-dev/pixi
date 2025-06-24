@@ -4,6 +4,7 @@
 use std::{
     collections::BTreeSet,
     convert::identity,
+    hash::Hash,
     path::PathBuf,
     sync::{Arc, Weak},
 };
@@ -15,23 +16,33 @@ use super::{GlobHash, GlobHashError};
 
 /// A key for the cache of glob hashes.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub struct GlobHashKey {
+pub struct GlobHashKey<H: Hash> {
     /// The root directory of the glob patterns.
     root: PathBuf,
     /// The glob patterns.
     globs: BTreeSet<String>,
+    /// Additional hash for further differentiation.
+    additional_hash: Option<H>,
 }
 
-impl GlobHashKey {
+impl<H: Hash + Clone> GlobHashKey<H> {
     /// Creates a new `GlobHashKey` from the given root directory and glob patterns.
-    pub fn new(root: impl Into<PathBuf>, globs: BTreeSet<String>) -> Self {
+    pub fn new(
+        root: impl Into<PathBuf>,
+        globs: BTreeSet<String>,
+        additional_hash: Option<&H>,
+    ) -> Self {
         let mut root = root.into();
         // Ensure that `root` points to a directory, not a file.
         if root.is_file() {
             root = root.parent().expect("Root must be a directory").to_owned();
         }
 
-        Self { root, globs }
+        Self {
+            root,
+            globs,
+            additional_hash: additional_hash.cloned(),
+        }
     }
 }
 
@@ -49,20 +60,16 @@ enum HashCacheEntry {
 ///
 /// Its is safe and efficient to use this object from multiple threads.
 #[derive(Debug, Default, Clone)]
-pub struct GlobHashCache {
-    cache: Arc<DashMap<GlobHashKey, HashCacheEntry>>,
+pub struct GlobHashCache<H: Hash + Clone> {
+    cache: Arc<DashMap<GlobHashKey<H>, HashCacheEntry>>,
 }
 
-impl GlobHashCache {
+impl<H: Hash + Clone + Send + 'static> GlobHashCache<H> {
     /// Computes the input hash of the given key. If the hash is already in the
     /// cache, it will return the cached value. If the hash is not in the
     /// cache, it will compute the hash (deduplicating any request) and return
     /// it.
-    pub async fn compute_hash(
-        &self,
-        key: impl Into<GlobHashKey>,
-    ) -> Result<GlobHash, GlobHashError> {
-        let key = key.into();
+    pub async fn compute_hash(&self, key: GlobHashKey<H>) -> Result<GlobHash, GlobHashError> {
         match self.cache.entry(key.clone()) {
             Entry::Vacant(entry) => {
                 // Construct a channel over which we will be sending the result and store it in
@@ -79,6 +86,7 @@ impl GlobHashCache {
                     GlobHash::from_patterns(
                         &computation_key.root,
                         computation_key.globs.iter().map(String::as_str),
+                        computation_key.additional_hash,
                     )
                 })
                 .await

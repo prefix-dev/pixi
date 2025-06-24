@@ -4,7 +4,7 @@ expression: snapshot
 ---
 Globs:
 - tests/data/satisfiability/source-dependency/**/*
-Hash: bcec5beb36091c68ee58f72f1f4d33f3658b98732912f2cbe5827898d8a666f9
+Hash: 102d09fa574a095794f0aad9e6831b6c4a30abae9d3bcbac0e7d5a72250d03b5
 Matched files:
 - tests/data/satisfiability/source-dependency/child-package/pixi.toml
 - tests/data/satisfiability/source-dependency/pixi.lock

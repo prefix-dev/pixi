@@ -4784,12 +4784,15 @@ dependencies = [
  "insta",
  "itertools 0.14.0",
  "memchr",
+ "pixi_build_types",
  "rattler_digest",
  "rstest",
+ "serde_json",
  "tempfile",
  "thiserror 2.0.12",
  "tokio",
  "wax",
+ "xxhash-rust",
 ]
 
 [[package]]
