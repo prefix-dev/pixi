@@ -143,7 +143,7 @@ exposed = { bird = "bat" }
 ```
 
 This means that executable `bat` will be exposed under the name `bird`.
-You can learn more about how executables are detected in the [concepts chapter](./concepts.md#automatically-exposed-executables).
+You can learn more about how executables are detected in the [concepts chapter](#automatically-exposed-executables).
 
 ### Automatically Exposed Executables
 

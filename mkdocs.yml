@@ -191,6 +191,7 @@ validation:
 
 not_in_nav: |
   reference/cli/
+  partials/
 
 plugins:
   - redirects:

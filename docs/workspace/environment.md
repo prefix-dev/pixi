@@ -12,10 +12,10 @@ To do the activation we have multiple options:
 
 - `pixi shell`: start a shell with the environment activated.
 - `pixi shell-hook`: print the command to activate the environment in your current shell.
-- `pixi run` run a command or [task](./workspace/advanced_tasks.md) in the environment.
+- `pixi run` run a command or [task](./advanced_tasks.md) in the environment.
 
 Where the `run` command is special as it runs its own cross-platform shell and has the ability to run tasks.
-More information about tasks can be found in the [tasks documentation](./workspace/advanced_tasks.md).
+More information about tasks can be found in the [tasks documentation](./advanced_tasks.md).
 
 Using the `pixi shell-hook` in Pixi you would get the following output:
 
