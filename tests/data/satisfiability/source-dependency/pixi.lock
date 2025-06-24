@@ -41,7 +41,7 @@ packages:
   - libstdcxx >=15
   - libgcc >=15
   input:
-    hash: bbd882aad6a767060cde2c52ec9c2d551ce4d8a26441e9f90d1acee1ac9d2b5f
+    hash: 72fa8a2c7ea2b5bb6515a2ea6d5fc385f7d2dd7b0d3e41ed85c6406d6de55e15
     globs: []
 - conda: https://prefix.dev/conda-forge/linux-64/libgcc-15.1.0-h767d61c_2.conda
   sha256: 0024f9ab34c09629621aefd8603ef77bf9d708129b0dd79029e502c39ffc2195
