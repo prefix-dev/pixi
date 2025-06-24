@@ -5,6 +5,7 @@ use crate::{GitSpec, PathSourceSpec, SourceSpec, UrlSourceSpec};
 /// `SourceAnchor` represents the resolved base location of a `SourceSpec`.
 /// It serves as a reference point for interpreting relative or recursive
 /// source specifications, enabling consistent resolution of nested sources.
+#[derive(Clone)]
 pub enum SourceAnchor {
     /// The source is relative to the workspace root.
     Workspace,

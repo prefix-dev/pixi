@@ -1,15 +1,8 @@
 mod reporter;
 mod source_metadata_collector;
 
-use std::{collections::BTreeMap, path::PathBuf, time::Instant};
+use std::{borrow::Borrow, collections::BTreeMap, path::PathBuf, time::Instant};
 
-use crate::{
-    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    SolveCondaEnvironmentSpec,
-    solve_pixi::source_metadata_collector::{
-        CollectSourceMetadataError, CollectedSourceMetadata, SourceMetadataCollector,
-    },
-};
 use chrono::{DateTime, Utc};
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
@@ -24,6 +17,14 @@ use reporter::WrappingGatewayReporter;
 use serde::Serialize;
 use thiserror::Error;
 use tracing::instrument;
+
+use crate::{
+    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
+    SolveCondaEnvironmentSpec,
+    solve_pixi::source_metadata_collector::{
+        CollectSourceMetadataError, CollectedSourceMetadata, SourceMetadataCollector,
+    },
+};
 
 /// Contains all information that describes the input of a pixi environment.
 ///
@@ -236,4 +237,10 @@ pub enum SolvePixiEnvironmentError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     CollectSourceMetadataError(#[from] CollectSourceMetadataError),
+}
+
+impl Borrow<dyn Diagnostic> for Box<SolvePixiEnvironmentError> {
+    fn borrow(&self) -> &(dyn Diagnostic + 'static) {
+        self.as_ref()
+    }
 }

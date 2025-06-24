@@ -15,7 +15,4 @@ Pixi solve (foobar-desktop)
 Pixi install (test-env)
 ├── Source build (foobar @ https://github.com/wolfv/pixi-build-examples@8d230eda9b4cdaaefd24aad87fd923d4b7c3c78a)
 │   └── Instantiate tool environment (pixi-build-rattler-build)
-│       ├── Pixi solve (pixi-build-rattler-build)
-│       │   └── Conda solve #2
-│       └── Pixi install (pixi-build-rattler-build)
-└── Source build (foobar-desktop @ https://github.com/wolfv/pixi-build-examples@8d230eda9b4cdaaefd24aad87fd923d4b7c3c78a)
+│       ├── Pixi solve (pixi-build-rattler-build
