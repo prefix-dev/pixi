@@ -27,11 +27,6 @@ pub fn execute_external_command(args: Vec<String>) -> miette::Result<()> {
         let mut command = std::process::Command::new(&path);
         command.args(cmd_args);
 
-        // Set environment variables that extensions might need
-        if let Ok(current_dir) = env::current_dir() {
-            command.env("PIXI_PROJECT_ROOT", current_dir);
-        }
-
         let status = command
             .status()
             .map_err(|e| miette::miette!("Failed to execute external command '{}': {}", cmd, e))?;
