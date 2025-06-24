@@ -4790,7 +4790,6 @@ dependencies = [
  "thiserror 2.0.12",
  "tokio",
  "wax",
- "xxhash-rust",
 ]
 
 [[package]]

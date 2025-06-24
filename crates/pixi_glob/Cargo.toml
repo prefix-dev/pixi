@@ -18,7 +18,6 @@ rattler_digest = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["sync", "rt"] }
 wax = { workspace = true }
-xxhash-rust = { workspace = true, features = ["xxh3"] }
 
 [dev-dependencies]
 insta = { workspace = true }
