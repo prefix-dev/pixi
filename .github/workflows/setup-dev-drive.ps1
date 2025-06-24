@@ -10,7 +10,7 @@ if (Test-Path "D:\") {
     Write-Output "Using existing drive at D:"
     $Drive = "D:"
 } else {
-	# The size (20 GB) is chosen empirically to be large enough for our
+	# The size is chosen empirically to be large enough for our
 	# workflows; larger drives can take longer to set up.
 	$Volume = New-VHD -Path C:/pixi_dev_drive.vhdx -Dynamic -SizeBytes 100GB |
 						Mount-VHD -Passthru |
