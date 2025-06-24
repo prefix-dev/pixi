@@ -145,6 +145,39 @@ exposed = { bird = "bat" }
 This means that executable `bat` will be exposed under the name `bird`.
 You can learn more about how executables are detected in the [concepts chapter](./concepts.md#automatically-exposed-executables).
 
+### Automatically Exposed Executables
+
+There is some added automatic behavior, if you install a package with the same name as the environment, it will be exposed with the same name.
+Even if the binary name is only exposed through dependencies of the package
+For example, running:
+```
+pixi global install ansible
+```
+will create the following entry in the manifest:
+```toml
+[envs.ansible]
+channels = ["conda-forge"]
+dependencies = { ansible = "*" }
+exposed = { ansible = "ansible" } # (1)!
+```
+
+1. The `ansible` binary is exposed even though it is installed by a dependency of `ansible`, the `ansible-core` package.
+
+It's also possible to expose an executable which is located in a nested directory.
+For example dotnet.exe executable is located in a dotnet folder,
+to expose `dotnet` you must specify its relative path :
+
+```
+pixi global install dotnet --expose dotnet=dotnet\dotnet
+```
+
+Which will create the following entry in the manifest:
+```toml
+[envs.dotnet]
+channels = ["conda-forge"]
+dependencies = { dotnet = "*" }
+exposed = { dotnet = 'dotnet\dotnet' }
+```
 
 ## Shortcuts
 
