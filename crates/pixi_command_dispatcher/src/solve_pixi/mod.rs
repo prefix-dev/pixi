@@ -8,7 +8,7 @@ use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_record::PixiRecord;
-use pixi_spec::{PixiSpec, SourceSpec};
+use pixi_spec::{BinarySpec, PixiSpec, SourceSpec};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{Channel, ChannelConfig, ChannelUrl, NamelessMatchSpec, Platform};
 use rattler_repodata_gateway::RepoData;
@@ -48,7 +48,7 @@ pub struct PixiEnvironmentSpec {
 
     /// Additional constraints of the environment
     #[serde(skip_serializing_if = "DependencyMap::is_empty")]
-    pub constraints: DependencyMap<rattler_conda_types::PackageName, NamelessMatchSpec>,
+    pub constraints: DependencyMap<rattler_conda_types::PackageName, BinarySpec>,
 
     /// The records of the packages that are currently already installed. These
     /// are used as hints to reduce the difference between individual solves.

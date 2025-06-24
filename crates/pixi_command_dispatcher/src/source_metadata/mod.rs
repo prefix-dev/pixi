@@ -1,5 +1,9 @@
-use std::collections::HashMap;
-
+use crate::{
+    BuildBackendMetadataError, BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher,
+    CommandDispatcherError, CommandDispatcherErrorResultExt, PixiEnvironmentSpec,
+    SolvePixiEnvironmentError, build::source_metadata_cache::MetadataKind,
+    executor::ExecutorFutures,
+};
 use futures::TryStreamExt;
 use itertools::Either;
 use miette::Diagnostic;
@@ -7,21 +11,18 @@ use pixi_build_frontend::types::{CondaPackageMetadata, SourcePackageSpecV1};
 use pixi_build_types::procedures::conda_outputs::{
     CondaOutputDependencies, CondaOutputIgnoreRunExports, CondaOutputMetadata,
 };
+use pixi_build_types::{BinaryPackageSpecV1, PackageSpecV1};
 use pixi_record::{InputHash, PinnedSourceSpec, PixiRecord, SourceRecord};
-use pixi_spec::{PixiSpec, SourceAnchor, SourceSpec};
+use pixi_spec::{BinarySpec, DetailedSpec, PixiSpec, SourceAnchor, SourceSpec, UrlBinarySpec};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
-    ChannelConfig, MatchSpec, NamelessMatchSpec, PackageName, PackageRecord, ParseStrictness,
-    Platform, package::RunExportsJson,
+    Channel, ChannelConfig, MatchSpec, NamedChannelOrUrl, NamelessMatchSpec, PackageName,
+    PackageRecord, ParseStrictness, Platform, VersionSpec, package::RunExportsJson,
 };
+use std::collections::HashMap;
+use std::str::FromStr;
+use std::sync::Arc;
 use thiserror::Error;
-
-use crate::{
-    BuildBackendMetadataError, BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher,
-    CommandDispatcherError, CommandDispatcherErrorResultExt, PixiEnvironmentSpec,
-    SolvePixiEnvironmentError, build::source_metadata_cache::MetadataKind,
-    executor::ExecutorFutures,
-};
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize)]
 pub struct SourceMetadataSpec {
@@ -104,13 +105,7 @@ impl SourceMetadataSpec {
         let build_dependencies = output
             .build_dependencies
             .as_ref()
-            .map(|deps| {
-                Dependencies::new(
-                    deps,
-                    source_anchor.clone(),
-                    &self.backend_metadata.channel_config,
-                )
-            })
+            .map(|deps| Dependencies::new(deps, source_anchor.clone()))
             .unwrap_or_default();
         let build_records = self
             .solve_dependencies(
@@ -131,13 +126,7 @@ impl SourceMetadataSpec {
         let host_dependencies = output
             .build_dependencies
             .as_ref()
-            .map(|deps| {
-                Dependencies::new(
-                    deps,
-                    source_anchor.clone(),
-                    &self.backend_metadata.channel_config,
-                )
-            })
+            .map(|deps| Dependencies::new(deps, source_anchor.clone()))
             .unwrap_or_default()
             .with_host_run_exports(&build_run_exports, &self.backend_metadata.channel_config);
         let host_records = self
@@ -154,18 +143,15 @@ impl SourceMetadataSpec {
             host_dependencies.run_exports(&host_records, &output.ignore_run_exports);
 
         // Gather the dependencies for the output.
-        let (depends, constrains, sources) = Dependencies::new(
-            &output.run_dependencies,
-            source_anchor,
-            &self.backend_metadata.channel_config,
-        )
-        .with_run_run_exports(
-            host_run_exports,
-            build_run_exports,
-            output.identifier.subdir,
-            &self.backend_metadata.channel_config,
-        )
-        .into_source_record_fields(&self.backend_metadata.channel_config);
+        let (depends, constrains, sources) =
+            Dependencies::new(&output.run_dependencies, source_anchor)
+                .with_run_run_exports(
+                    host_run_exports,
+                    build_run_exports,
+                    output.identifier.subdir,
+                    &self.backend_metadata.channel_config,
+                )
+                .into_source_record_fields(&self.backend_metadata.channel_config);
 
         // Gather the run exports for the output.
         let run_exports = RunExportsJson {
@@ -265,56 +251,33 @@ impl SourceMetadataSpec {
 #[derive(Clone, Default)]
 struct Dependencies {
     pub dependencies: DependencyMap<rattler_conda_types::PackageName, PixiSpec>,
-    pub constraints: DependencyMap<rattler_conda_types::PackageName, NamelessMatchSpec>,
+    pub constraints: DependencyMap<rattler_conda_types::PackageName, BinarySpec>,
 }
 
 impl Dependencies {
-    pub fn new(
-        output: &CondaOutputDependencies,
-        source_anchor: SourceAnchor,
-        channel_config: &ChannelConfig,
-    ) -> Self {
+    pub fn new(output: &CondaOutputDependencies, source_anchor: SourceAnchor) -> Self {
         let mut dependencies = DependencyMap::default();
         let mut constraints = DependencyMap::default();
 
         for depend in &output.depends {
-            let (name, spec) =
-                if let Ok(spec) = MatchSpec::from_str(depend, ParseStrictness::Lenient) {
-                    if let Some((name, source_spec)) = spec.name.as_ref().and_then(|name| {
-                        output
-                            .sources
-                            .get(name.as_normalized())
-                            .map(|source_spec| (name.clone(), source_spec.clone()))
-                    }) {
-                        let spec = from_pixi_source_spec_v1(source_spec);
-                        (name, PixiSpec::from(source_anchor.resolve(spec)))
-                    } else if let (Some(name), spec) = spec.into_nameless() {
-                        (
-                            name,
-                            PixiSpec::from_nameless_matchspec(spec, channel_config),
-                        )
-                    } else {
-                        // TODO(baszalmstra): Should we also be able to handle specs without a name?
-                        continue;
-                    }
-                } else {
-                    // TODO(baszalmstra): Should we handle this error?
-                    continue;
-                };
-            dependencies.insert(name, spec);
+            let Some(name) = PackageName::from_str(&depend.name).ok() else {
+                continue;
+            };
+            match from_package_spec_v1(depend.spec.clone()).into_source_or_binary() {
+                Either::Left(source) => {
+                    dependencies.insert(name, PixiSpec::from(source_anchor.resolve(source)));
+                }
+                Either::Right(binary) => {
+                    dependencies.insert(name, PixiSpec::from(binary));
+                }
+            }
         }
 
         for constraint in &output.constraints {
-            if let Ok(spec) = MatchSpec::from_str(constraint, ParseStrictness::Lenient) {
-                if let (Some(name), spec) = spec.into_nameless() {
-                    constraints.insert(name, spec);
-                } else {
-                    // TODO(baszalmstra): Should we also be able to handle specs
-                    // without a name?
-                }
-            } else {
-                // TODO(baszalmstra): Should we handle this error?
-            }
+            let Some(name) = PackageName::from_str(&constraint.name).ok() else {
+                continue;
+            };
+            constraints.insert(name, binary_spec_to_nameless(constraint.spec.clone()));
         }
 
         Self {
@@ -328,19 +291,12 @@ impl Dependencies {
         build_run_exports: &FilteredRunExports,
         channel_config: &ChannelConfig,
     ) -> Self {
-        for strong in &build_run_exports.strong {
-            if let (Some(name), spec) = strong.clone().into_nameless() {
-                self.dependencies.insert(
-                    name,
-                    PixiSpec::from_nameless_matchspec(spec, channel_config),
-                );
-            }
+        for (name, spec) in &build_run_exports.strong {
+            self.dependencies.insert(name.clone(), spec.clone());
         }
 
-        for strong_constraint in &build_run_exports.strong_constrains {
-            if let (Some(name), spec) = strong_constraint.clone().into_nameless() {
-                self.constraints.insert(name, spec);
-            }
+        for (name, spec) in &build_run_exports.strong_constrains {
+            self.constraints.insert(name.clone(), spec.clone());
         }
 
         self
@@ -394,20 +350,75 @@ impl Dependencies {
     ) -> FilteredRunExports {
         let mut filter_run_exports = FilteredRunExports::default();
 
-        let filter_specs = |specs: &[String]| {
+        fn filter_match_specs<T: From<BinarySpec>>(
+            specs: &[String],
+            ignore: &CondaOutputIgnoreRunExports,
+        ) -> Vec<(PackageName, T)> {
             specs
                 .into_iter()
                 .filter_map(move |spec| {
-                    let spec = MatchSpec::from_str(spec, ParseStrictness::Lenient).ok()?;
-                    if let Some(name) = &spec.name {
-                        if ignore.by_name.contains(name) {
-                            return None;
-                        }
+                    let (Some(name), spec) = MatchSpec::from_str(spec, ParseStrictness::Lenient)
+                        .ok()?
+                        .into_nameless()
+                    else {
+                        return None;
+                    };
+                    if ignore.by_name.contains(&name) {
+                        return None;
                     }
-                    Some(spec)
+
+                    let binary_spec = match spec {
+                        NamelessMatchSpec {
+                            url: Some(url),
+                            sha256,
+                            md5,
+                            ..
+                        } => BinarySpec::Url(UrlBinarySpec { url, sha256, md5 }),
+                        NamelessMatchSpec {
+                            version,
+                            build: None,
+                            build_number: None,
+                            file_name: None,
+                            extras: None,
+                            channel: None,
+                            subdir: None,
+                            namespace: None,
+                            md5: None,
+                            sha256: None,
+                            url: _,
+                            license: None,
+                        } => BinarySpec::Version(version.unwrap_or(VersionSpec::Any)),
+                        NamelessMatchSpec {
+                            version,
+                            build,
+                            build_number,
+                            file_name,
+                            extras,
+                            channel,
+                            subdir,
+                            namespace,
+                            md5,
+                            sha256,
+                            url: _,
+                            license,
+                        } => BinarySpec::DetailedVersion(Box::new(DetailedSpec {
+                            version,
+                            build,
+                            build_number,
+                            file_name,
+                            channel: channel
+                                .map(|c| NamedChannelOrUrl::Url(c.base_url.clone().into())),
+                            subdir,
+                            md5,
+                            sha256,
+                            license,
+                        })),
+                    };
+
+                    Some((name, binary_spec.into()))
                 })
-                .collect::<Vec<_>>()
-        };
+                .collect()
+        }
 
         for record in records {
             // Only record run exports for packages that are direct dependencies.
@@ -431,19 +442,19 @@ impl Dependencies {
 
             filter_run_exports
                 .noarch
-                .extend(filter_specs(&run_exports.noarch));
+                .extend(filter_match_specs(&run_exports.noarch, ignore));
             filter_run_exports
                 .strong
-                .extend(filter_specs(&run_exports.strong));
+                .extend(filter_match_specs(&run_exports.strong, ignore));
             filter_run_exports
                 .strong_constrains
-                .extend(filter_specs(&run_exports.strong_constrains));
+                .extend(filter_match_specs(&run_exports.strong_constrains, ignore));
             filter_run_exports
                 .weak
-                .extend(filter_specs(&run_exports.weak));
+                .extend(filter_match_specs(&run_exports.weak, ignore));
             filter_run_exports
                 .weak_constrains
-                .extend(filter_specs(&run_exports.weak_constrains));
+                .extend(filter_match_specs(&run_exports.weak_constrains, ignore));
         }
 
         filter_run_exports
@@ -486,11 +497,11 @@ impl Dependencies {
 /// Filtered run export result
 #[derive(Debug, Default, Clone)]
 pub struct FilteredRunExports {
-    pub noarch: Vec<MatchSpec>,
-    pub strong: Vec<MatchSpec>,
-    pub strong_constrains: Vec<MatchSpec>,
-    pub weak: Vec<MatchSpec>,
-    pub weak_constrains: Vec<MatchSpec>,
+    pub noarch: Vec<(PackageName, PixiSpec)>,
+    pub strong: Vec<(PackageName, PixiSpec)>,
+    pub strong_constrains: Vec<(PackageName, BinarySpec)>,
+    pub weak: Vec<(PackageName, PixiSpec)>,
+    pub weak_constrains: Vec<(PackageName, BinarySpec)>,
 }
 
 pub(crate) fn source_metadata_to_records(
@@ -587,6 +598,89 @@ pub fn from_pixi_source_spec_v1(source: SourcePackageSpecV1) -> pixi_spec::Sourc
         SourcePackageSpecV1::Path(path) => pixi_spec::SourceSpec::Path(pixi_spec::PathSourceSpec {
             path: path.path.into(),
         }),
+    }
+}
+
+pub fn from_pixi_binary_spec_v1(spec: BinaryPackageSpecV1) -> pixi_spec::BinarySpec {
+    match spec {
+        BinaryPackageSpecV1 {
+            url: Some(url),
+            sha256,
+            md5,
+            ..
+        } => BinarySpec::Url(UrlBinarySpec { url, md5, sha256 }),
+        BinaryPackageSpecV1 {
+            version: Some(version),
+            build: None,
+            build_number: None,
+            file_name: None,
+            channel: None,
+            subdir: None,
+            md5: None,
+            sha256: None,
+            license: None,
+            url: _,
+        } => BinarySpec::Version(version),
+        BinaryPackageSpecV1 {
+            version,
+            build,
+            build_number,
+            file_name,
+            channel,
+            subdir,
+            md5,
+            sha256,
+            license,
+            url: _,
+        } => BinarySpec::DetailedVersion(Box::new(DetailedSpec {
+            version,
+            build,
+            build_number,
+            file_name,
+            channel: channel.map(NamedChannelOrUrl::Url),
+            subdir,
+            license,
+            md5,
+            sha256,
+        })),
+    }
+}
+
+pub fn binary_spec_to_nameless(spec: BinaryPackageSpecV1) -> NamelessMatchSpec {
+    let BinaryPackageSpecV1 {
+        version,
+        build,
+        build_number,
+        file_name,
+        channel,
+        subdir,
+        md5,
+        sha256,
+        url,
+        license,
+    } = spec;
+    NamelessMatchSpec {
+        version,
+        build,
+        build_number,
+        file_name,
+        channel: channel.map(Channel::from_url).map(Arc::new),
+        subdir,
+        md5,
+        sha256,
+        url,
+        license,
+
+        // These are explicitly ignored in the conversion
+        extras: None,
+        namespace: None,
+    }
+}
+
+pub fn from_package_spec_v1(source: PackageSpecV1) -> pixi_spec::PixiSpec {
+    match source {
+        PackageSpecV1::Source(source) => from_pixi_source_spec_v1(source).into(),
+        PackageSpecV1::Binary(binary) => from_pixi_binary_spec_v1(*binary).into(),
     }
 }
 

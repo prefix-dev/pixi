@@ -6,7 +6,6 @@
 //!
 //! This API was introduced in Pixi Build API version 1.
 
-use ordermap::OrderMap;
 use rattler_conda_types::{NoArchType, PackageName, Platform, VersionWithSource};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -15,7 +14,8 @@ use std::{
     path::PathBuf,
 };
 
-use crate::SourcePackageSpecV1;
+use crate::project_model::NamedSpecV1;
+use crate::{BinaryPackageSpecV1, PackageSpecV1};
 
 pub const METHOD_NAME: &str = "conda/outputs";
 
@@ -157,17 +157,11 @@ pub struct CondaOutputIdentifier {
 pub struct CondaOutputDependencies {
     /// A list of matchspecs that describe the dependencies of a particular
     /// environment.
-    pub depends: Vec<String>,
+    pub depends: Vec<NamedSpecV1<PackageSpecV1>>,
 
     /// Additional constraints that apply to the environment in which the
     /// dependencies are solved. Constraints are represented as matchspecs.
-    pub constraints: Vec<String>,
-
-    /// Describes any packages from `depends` that should be built from a
-    /// particular source. Any package in this map that is referenced by a
-    /// matchspec in `depends` will be built from the source specified in this
-    /// map.
-    pub sources: OrderMap<String, SourcePackageSpecV1>,
+    pub constraints: Vec<NamedSpecV1<BinaryPackageSpecV1>>,
 }
 
 /// Describes which run-exports should be ignored for a particular output.
@@ -187,22 +181,22 @@ pub struct CondaOutputIgnoreRunExports {
 #[serde(rename_all = "camelCase")]
 pub struct CondaRunExports {
     /// weak run exports apply a dependency from host to run
-    pub weak: Vec<String>,
+    pub weak: Vec<NamedSpecV1<PackageSpecV1>>,
 
     /// strong run exports apply a dependency from build to host and run
-    pub strong: Vec<String>,
+    pub strong: Vec<NamedSpecV1<PackageSpecV1>>,
 
     /// noarch run exports apply a run export only to noarch packages (other run
     /// exports are ignored) for example, python uses this to apply a
     /// dependency on python to all noarch packages, but not to
     /// the python_abi package
-    pub noarch: Vec<String>,
+    pub noarch: Vec<NamedSpecV1<PackageSpecV1>>,
 
     /// weak constrains apply a constrain dependency from host to build, or run
     /// to host
-    pub weak_constrains: Vec<String>,
+    pub weak_constrains: Vec<NamedSpecV1<BinaryPackageSpecV1>>,
 
     /// strong constrains apply a constrain dependency from build to host and
     /// run
-    pub strong_constrains: Vec<String>,
+    pub strong_constrains: Vec<NamedSpecV1<BinaryPackageSpecV1>>,
 }

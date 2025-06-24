@@ -182,6 +182,15 @@ pub enum PackageSpecV1 {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct NamedSpecV1<T> {
+    pub name: SourcePackageName,
+
+    #[serde(flatten)]
+    pub spec: T,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
 pub enum SourcePackageSpecV1 {
     /// The spec is represented as an archive that can be downloaded from the
     /// specified URL. The package should be retrieved from the URL and can
@@ -294,6 +303,10 @@ pub struct BinaryPackageSpecV1 {
     /// The sha256 hash of the package
     #[serde_as(as = "Option<SerializableHash<Sha256>>")]
     pub sha256: Option<Sha256Hash>,
+    /// The URL of the package, if it is available
+    pub url: Option<Url>,
+    /// The license of the package
+    pub license: Option<String>,
 }
 
 impl From<VersionSpec> for BinaryPackageSpecV1 {

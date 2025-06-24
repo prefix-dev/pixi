@@ -13,7 +13,7 @@ use pixi_build_discovery::EnabledProtocols;
 use pixi_build_types::{
     PIXI_BUILD_API_VERSION_NAME, PIXI_BUILD_API_VERSION_SPEC, PixiBuildApiVersion,
 };
-use pixi_spec::PixiSpec;
+use pixi_spec::{BinarySpec, PixiSpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_utils::AsyncPrefixGuard;
 use rattler_conda_types::{
@@ -42,7 +42,7 @@ pub struct InstantiateToolEnvironmentSpec {
 
     /// Additional constraints applied to the environment.
     #[serde(skip_serializing_if = "DependencyMap::is_empty")]
-    pub constraints: DependencyMap<rattler_conda_types::PackageName, NamelessMatchSpec>,
+    pub constraints: DependencyMap<rattler_conda_types::PackageName, BinarySpec>,
 
     /// The platform to instantiate the tool environment for.
     pub build_environment: BuildEnvironment,
@@ -181,10 +181,7 @@ impl InstantiateToolEnvironmentSpec {
             let mut constraints = self.constraints;
             constraints.insert(
                 PIXI_BUILD_API_VERSION_NAME.clone(),
-                NamelessMatchSpec {
-                    version: Some(PIXI_BUILD_API_VERSION_SPEC.clone()),
-                    ..NamelessMatchSpec::default()
-                },
+                BinarySpec::Version(PIXI_BUILD_API_VERSION_SPEC.clone()),
             );
             constraints
         };
