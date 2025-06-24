@@ -1,6 +1,6 @@
 ## Overview
 
-Sometimes our dependency (direct dependency) declares outdated dependency (intermediate dependency), or is too tight to solve with other direct dependencies. In this case, we can override the intermediate dependency in our `pyproject.toml`or `pixi.toml` file.
+Sometimes our direct dependency declares outdated intermediate dependency) or is too tight to solve with other direct dependencies. In this case, we can override the intermediate dependency in our `pyproject.toml`or `pixi.toml` file.
 
 Note that this is not recommended unless you know what you are doing, as uv will ignore all the version constraints of the dependency and use the version you specified.
 
