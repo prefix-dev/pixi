@@ -1969,7 +1969,7 @@ UNUSED = "unused"
             verify-direct-url-hashes = true
         "#;
         let (config, _) = Config::from_toml(toml, None).unwrap();
-        assert_eq!(config.pypi_config().verify_direct_url_hashes, true);
+        assert!(config.pypi_config().verify_direct_url_hashes);
 
         // Test default value
         let toml = r#"
@@ -1977,7 +1977,7 @@ UNUSED = "unused"
             index-url = "https://pypi.org/simple"
         "#;
         let (config, _) = Config::from_toml(toml, None).unwrap();
-        assert_eq!(config.pypi_config().verify_direct_url_hashes, false);
+        assert!(!config.pypi_config().verify_direct_url_hashes);
 
         // Test CLI override
         let cli = ConfigCli {
@@ -1989,7 +1989,7 @@ UNUSED = "unused"
             concurrent_downloads: None,
         };
         let config = Config::from(cli);
-        assert_eq!(config.pypi_config().verify_direct_url_hashes, true);
+        assert!(config.pypi_config().verify_direct_url_hashes);
     }
 
     #[test]
