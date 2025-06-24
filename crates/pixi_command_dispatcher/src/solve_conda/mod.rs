@@ -14,7 +14,7 @@ use rattler_solve::{ChannelPriority, SolveStrategy, SolverImpl};
 use tokio::task::JoinError;
 use url::Url;
 
-use crate::{CommandDispatcherError, SourceCheckout, source_metadata::SourceMetadata};
+use crate::{CommandDispatcherError, SourceCheckout, source_metadata::BuildBackendMetadata};
 
 /// Contains all information that describes the input of a conda environment.
 /// All information about both binary and source packages is stored in the
@@ -44,7 +44,7 @@ pub struct SolveCondaEnvironmentSpec {
 
     /// Available source repodata records.
     #[serde(skip)]
-    pub source_repodata: Vec<Arc<SourceMetadata>>,
+    pub source_repodata: Vec<Arc<BuildBackendMetadata>>,
 
     /// Available Binary repodata records.
     #[serde(skip)]

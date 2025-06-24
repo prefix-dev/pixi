@@ -29,7 +29,7 @@ use typed_path::Utf8TypedPath;
 
 use crate::{
     Executor, InvalidPathError, PixiEnvironmentSpec, SolveCondaEnvironmentSpec,
-    SolvePixiEnvironmentError, SourceCheckout, SourceCheckoutError, SourceMetadataSpec,
+    SolvePixiEnvironmentError, SourceCheckout, SourceCheckoutError, BuildBackendMetadataSpec,
     build::BuildCache,
     cache_dirs::CacheDirs,
     install_pixi::{
@@ -41,7 +41,7 @@ use crate::{
     },
     limits::ResolvedLimits,
     source_build::{BuiltSource, SourceBuildError, SourceBuildSpec},
-    source_metadata::{SourceMetadata, SourceMetadataCache, SourceMetadataError},
+    source_metadata::{BuildBackendMetadata, SourceMetadataCache, SourceMetadataError},
 };
 
 mod builder;
@@ -237,10 +237,10 @@ impl TaskSpec for SolveCondaEnvironmentSpec {
 
 /// A message that is send to the background task to requesting the metadata for
 /// a particular source spec.
-pub(crate) type SourceMetadataTask = Task<SourceMetadataSpec>;
+pub(crate) type SourceMetadataTask = Task<BuildBackendMetadataSpec>;
 
-impl TaskSpec for SourceMetadataSpec {
-    type Output = Arc<SourceMetadata>;
+impl TaskSpec for BuildBackendMetadataSpec {
+    type Output = Arc<BuildBackendMetadata>;
     type Error = SourceMetadataError;
 }
 
@@ -381,8 +381,8 @@ impl CommandDispatcher {
     /// Returns the metadata of the source spec.
     pub async fn source_metadata(
         &self,
-        spec: SourceMetadataSpec,
-    ) -> Result<Arc<SourceMetadata>, CommandDispatcherError<SourceMetadataError>> {
+        spec: BuildBackendMetadataSpec,
+    ) -> Result<Arc<BuildBackendMetadata>, CommandDispatcherError<SourceMetadataError>> {
         self.execute_task(spec).await
     }
 

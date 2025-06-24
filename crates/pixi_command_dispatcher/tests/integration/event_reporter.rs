@@ -4,7 +4,7 @@ use futures::{Stream, StreamExt};
 use pixi_command_dispatcher::{
     CondaSolveReporter, GitCheckoutReporter, InstallPixiEnvironmentSpec,
     InstantiateToolEnvironmentSpec, PixiEnvironmentSpec, PixiInstallReporter, PixiSolveReporter,
-    Reporter, ReporterContext, SolveCondaEnvironmentSpec, SourceBuildSpec, SourceMetadataSpec,
+    Reporter, ReporterContext, SolveCondaEnvironmentSpec, SourceBuildSpec, BuildBackendMetadataSpec,
     reporter::{
         CondaSolveId, GitCheckoutId, InstantiateToolEnvId, InstantiateToolEnvironmentReporter,
         PixiInstallId, PixiSolveId, SourceBuildId, SourceBuildReporter, SourceMetadataId,
@@ -76,7 +76,7 @@ pub enum Event {
     SourceMetadataQueued {
         id: SourceMetadataId,
         #[serde(flatten)]
-        spec: SourceMetadataSpec,
+        spec: BuildBackendMetadataSpec,
         #[serde(skip_serializing_if = "Option::is_none")]
         context: Option<ReporterContext>,
     },
@@ -276,7 +276,7 @@ impl SourceMetadataReporter for EventReporter {
     fn on_queued(
         &mut self,
         context: Option<ReporterContext>,
-        spec: &SourceMetadataSpec,
+        spec: &BuildBackendMetadataSpec,
     ) -> SourceMetadataId {
         let next_id = SourceMetadataId(self.next_source_metadata_id);
         self.next_source_metadata_id += 1;

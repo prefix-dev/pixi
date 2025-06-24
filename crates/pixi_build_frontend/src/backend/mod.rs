@@ -63,6 +63,20 @@ impl Backend {
             }
         }
     }
+
+    /// Returns the outputs that this backend can produce.
+    pub async fn conda_outputs(
+        &self,
+        params: CondaOutputsParams,
+    ) -> Result<CondaOutputsResult, CommunicationError> {
+        assert!(
+            self.api_version.0 >= 1,
+            "This backend does not support the conda outputs procedure"
+        );
+        match &self.inner {
+            BackendImplementation::JsonRpc(json_rpc) => json_rpc.conda_outputs(params).await,
+        }
+    }
 }
 
 pub trait BackendOutputStream {

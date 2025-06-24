@@ -3,7 +3,7 @@ use pixi_git::resolver::RepositoryReference;
 use serde::Serialize;
 
 use crate::{
-    PixiEnvironmentSpec, SolveCondaEnvironmentSpec, SourceBuildSpec, SourceMetadataSpec,
+    PixiEnvironmentSpec, SolveCondaEnvironmentSpec, SourceBuildSpec, BuildBackendMetadataSpec,
     install_pixi::InstallPixiEnvironmentSpec, instantiate_tool_env::InstantiateToolEnvironmentSpec,
 };
 
@@ -135,7 +135,7 @@ pub trait SourceMetadataReporter {
     fn on_queued(
         &mut self,
         reason: Option<ReporterContext>,
-        env: &SourceMetadataSpec,
+        env: &BuildBackendMetadataSpec,
     ) -> SourceMetadataId;
 
     /// Called when the operation has started.

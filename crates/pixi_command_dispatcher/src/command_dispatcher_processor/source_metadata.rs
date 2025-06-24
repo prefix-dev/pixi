@@ -6,7 +6,7 @@ use super::{CommandDispatcherProcessor, PendingSourceMetadata, TaskResult};
 use crate::{
     CommandDispatcherError, CommandDispatcherErrorResultExt, Reporter,
     command_dispatcher::{CommandDispatcherContext, SourceMetadataId, SourceMetadataTask},
-    source_metadata::{SourceMetadata, SourceMetadataError},
+    source_metadata::{BuildBackendMetadata, SourceMetadataError},
 };
 
 impl CommandDispatcherProcessor {
@@ -86,7 +86,7 @@ impl CommandDispatcherProcessor {
     pub(crate) fn on_source_metadata_result(
         &mut self,
         id: SourceMetadataId,
-        result: Result<Arc<SourceMetadata>, CommandDispatcherError<SourceMetadataError>>,
+        result: Result<Arc<BuildBackendMetadata>, CommandDispatcherError<SourceMetadataError>>,
     ) {
         if let Some((reporter, reporter_id)) = self
             .reporter

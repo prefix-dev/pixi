@@ -46,6 +46,7 @@ mod solve_pixi;
 mod source_build;
 mod source_checkout;
 mod source_metadata;
+mod lazy_source_checkout;
 
 pub use build::BuildEnvironment;
 pub use cache_dirs::CacheDirs;
@@ -67,7 +68,7 @@ pub use solve_conda::SolveCondaEnvironmentSpec;
 pub use solve_pixi::{PixiEnvironmentSpec, SolvePixiEnvironmentError};
 pub use source_build::{BuiltSource, SourceBuildError, SourceBuildSpec};
 pub use source_checkout::{InvalidPathError, SourceCheckout, SourceCheckoutError};
-pub use source_metadata::{SourceMetadata, SourceMetadataError, SourceMetadataSpec};
+pub use source_metadata::{BuildBackendMetadata, SourceMetadataError, BuildBackendMetadataSpec};
 
 /// A helper function to check if a value is the default value for its type.
 fn is_default<T: Default + PartialEq>(value: &T) -> bool {

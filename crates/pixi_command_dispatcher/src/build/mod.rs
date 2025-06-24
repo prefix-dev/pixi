@@ -4,6 +4,7 @@ mod build_cache;
 mod build_environment;
 mod move_file;
 mod work_dir_key;
+pub mod unresolved_source_record;
 
 use std::hash::{Hash, Hasher};
 

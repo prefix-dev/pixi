@@ -22,12 +22,12 @@ use rattler_conda_types::{
 use serde::{Deserialize, Serialize};
 
 /// The constraint for the pixi build api version package
-/// Adding this constraint when solving a pixi build backend environment ensures that
-/// a backend is selected that uses the same interface version as Pixi does
+/// Adding this constraint when solving a pixi build backend environment ensures
+/// that a backend is selected that uses the same interface version as Pixi does
 pub static PIXI_BUILD_API_VERSION_NAME: LazyLock<PackageName> =
     LazyLock::new(|| PackageName::new_unchecked("pixi-build-api-version"));
 pub const PIXI_BUILD_API_VERSION_LOWER: u64 = 0;
-pub const PIXI_BUILD_API_VERSION_UPPER: u64 = 1;
+pub const PIXI_BUILD_API_VERSION_UPPER: u64 = 2;
 pub static PIXI_BUILD_API_VERSION_SPEC: LazyLock<VersionSpec> = LazyLock::new(|| {
     VersionSpec::Group(
         LogicalOperator::And,
@@ -66,6 +66,11 @@ impl PixiBuildApiVersion {
     /// Returns the "current" version of the Pixi Build API.
     pub fn current() -> Self {
         PixiBuildApiVersion(PIXI_BUILD_API_VERSION_UPPER - 1)
+    }
+
+    /// Returns true if the Pixi Build API version supports the `conda/outputs` call.
+    pub fn supports_conda_outputs(&self) -> bool {
+        self.0 >= 1
     }
 }
 

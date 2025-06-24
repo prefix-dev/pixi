@@ -13,9 +13,9 @@ use thiserror::Error;
 
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    SourceCheckoutError, SourceMetadataSpec,
+    SourceCheckoutError, BuildBackendMetadataSpec,
     executor::ExecutorFutures,
-    source_metadata::{SourceMetadata, SourceMetadataError},
+    source_metadata::{BuildBackendMetadata, SourceMetadataError},
 };
 
 /// An object that is responsible for recursively collecting metadata of source
@@ -33,7 +33,7 @@ pub struct SourceMetadataCollector {
 pub struct CollectedSourceMetadata {
     /// Information about all queried source packages. This can be used as
     /// repodata.
-    pub source_repodata: Vec<Arc<SourceMetadata>>,
+    pub source_repodata: Vec<Arc<BuildBackendMetadata>>,
 
     /// A list of transitive dependencies of all collected source records.
     pub transitive_dependencies: Vec<MatchSpec>,
@@ -141,7 +141,7 @@ impl SourceMetadataCollector {
         &self,
         name: rattler_conda_types::PackageName,
         spec: SourceSpec,
-    ) -> Result<Arc<SourceMetadata>, CommandDispatcherError<CollectSourceMetadataError>> {
+    ) -> Result<Arc<BuildBackendMetadata>, CommandDispatcherError<CollectSourceMetadataError>> {
         // Get the source for the particular package.
         let source = self
             .command_queue
@@ -156,7 +156,7 @@ impl SourceMetadataCollector {
         // Extract information for the particular source spec.
         let source_metadata = self
             .command_queue
-            .source_metadata(SourceMetadataSpec {
+            .source_metadata(BuildBackendMetadataSpec {
                 source,
                 channel_config: self.channel_config.clone(),
                 channels: self.channels.clone(),

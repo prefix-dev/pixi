@@ -18,7 +18,7 @@ use crate::instantiate_tool_env::InstantiateToolEnvironmentResult;
 use crate::{
     BuiltSource, CommandDispatcherErrorResultExt, InstallPixiEnvironmentResult, Reporter,
     SolveCondaEnvironmentSpec, SolvePixiEnvironmentError, SourceBuildError, SourceBuildSpec,
-    SourceMetadataSpec,
+    BuildBackendMetadataSpec,
     command_dispatcher::{
         CommandDispatcher, CommandDispatcherChannel, CommandDispatcherContext,
         CommandDispatcherData, CommandDispatcherError, ForegroundMessage, InstallPixiEnvironmentId,
@@ -29,7 +29,7 @@ use crate::{
     install_pixi::InstallPixiEnvironmentError,
     instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec},
     reporter,
-    source_metadata::{SourceMetadata, SourceMetadataError},
+    source_metadata::{BuildBackendMetadata, SourceMetadataError},
 };
 
 mod git;
@@ -72,7 +72,7 @@ pub(crate) struct CommandDispatcherProcessor {
     /// A mapping of source metadata to the metadata id that
     source_metadata: HashMap<SourceMetadataId, PendingSourceMetadata>,
     source_metadata_reporters: HashMap<SourceMetadataId, reporter::SourceMetadataId>,
-    source_metadata_ids: HashMap<SourceMetadataSpec, SourceMetadataId>,
+    source_metadata_ids: HashMap<BuildBackendMetadataSpec, SourceMetadataId>,
 
     /// A mapping of instantiated tool environments
     instantiated_tool_envs:
@@ -114,7 +114,7 @@ enum TaskResult {
     ),
     SourceMetadata(
         SourceMetadataId,
-        Result<Arc<SourceMetadata>, CommandDispatcherError<SourceMetadataError>>,
+        Result<Arc<BuildBackendMetadata>, CommandDispatcherError<SourceMetadataError>>,
     ),
     GitCheckedOut(RepositoryReference, Result<Fetch, GitError>),
     InstallPixiEnvironment(
@@ -243,10 +243,10 @@ where
 /// Information about a request for metadata of a particular source spec.
 enum PendingSourceMetadata {
     Pending(
-        Vec<oneshot::Sender<Result<Arc<SourceMetadata>, SourceMetadataError>>>,
+        Vec<oneshot::Sender<Result<Arc<BuildBackendMetadata>, SourceMetadataError>>>,
         Option<CommandDispatcherContext>,
     ),
-    Result(Arc<SourceMetadata>, Option<CommandDispatcherContext>),
+    Result(Arc<BuildBackendMetadata>, Option<CommandDispatcherContext>),
     Errored,
 }
 

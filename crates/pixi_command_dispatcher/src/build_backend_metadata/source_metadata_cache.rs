@@ -14,7 +14,7 @@ use rattler_conda_types::ChannelUrl;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
-
+use pixi_build_types::procedures::conda_outputs::CondaOutputMetadata;
 use crate::{BuildEnvironment, build::source_checkout_cache_key};
 
 /// A cache for caching the metadata of a source checkout.
@@ -205,5 +205,12 @@ impl CacheEntry {
 pub struct CachedCondaMetadata {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub input_hash: Option<InputHash>,
+
+    /// The result from a `conda/getMetadata` request.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub packages: Vec<CondaPackageMetadata>,
+
+    /// The result from a `conda/outputs` request.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outputs: Vec<CondaOutputMetadata>,
 }

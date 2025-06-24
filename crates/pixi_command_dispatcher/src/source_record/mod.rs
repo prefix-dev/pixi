@@ -5,9 +5,15 @@ use std::{
 
 use miette::Diagnostic;
 use pixi_build_discovery::{DiscoveredBackend, EnabledProtocols};
-use pixi_build_frontend::types::{
-    ChannelConfiguration, CondaPackageMetadata, PlatformAndVirtualPackages, SourcePackageSpecV1,
-    procedures::conda_metadata::CondaMetadataParams,
+use pixi_build_frontend::{
+    Backend,
+    types::{
+        ChannelConfiguration, CondaPackageMetadata, PlatformAndVirtualPackages,
+        SourcePackageSpecV1, procedures::conda_metadata::CondaMetadataParams,
+    },
+};
+use pixi_build_types::procedures::conda_outputs::{
+    CondaOutputMetadata, CondaOutputsParams, CondaOutputsResult,
 };
 use pixi_glob::GlobHashKey;
 use pixi_record::{InputHash, SourceRecord};
@@ -24,125 +30,94 @@ mod source_metadata_cache;
 use source_metadata_cache::SourceMetadataKey;
 pub use source_metadata_cache::{SourceMetadataCache, SourceMetadataCacheError};
 
-use crate::source_metadata::source_metadata_cache::CachedCondaMetadata;
+use crate::source_metadata::source_metadata_cache::{CacheEntry, CachedCondaMetadata};
 
-/// Represents a request for source metadata.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize)]
-pub struct SourceMetadataSpec {
-    /// The source specification
-    pub source: SourceCheckout,
+pub struct BuildSourceRecordSpec {
+    /// The name of the package to build.
+    pub package: PackageName,
 
-    /// The channel configuration to use when resolving metadata
-    pub channel_config: ChannelConfig,
-
-    /// The channels to use for solving.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub channels: Vec<ChannelUrl>,
-
-    /// Information about the build environment.
-    pub build_environment: BuildEnvironment,
-
-    /// Variant configuration
-    pub variants: Option<BTreeMap<String, Vec<String>>>,
-
-    /// The protocols that are enabled for this source
-    #[serde(skip_serializing_if = "crate::is_default")]
-    pub enabled_protocols: EnabledProtocols,
+    /// The request for source metadata from which to construct the record.
+    pub source_metadata: SourceMetadataSpec,
 }
 
-/// The metadata of a source checkout.
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct SourceMetadata {
-    /// The source checkout that the manifest was extracted from.
-    pub source: SourceCheckout,
-
-    /// All the records that can be extracted from the source.
+/// The result of building a particular source record.
+pub struct BuildSourceRecordResult {
     pub records: Vec<SourceRecord>,
 }
 
-impl SourceMetadataSpec {
+impl BuildSourceRecordSpec {
     pub(crate) async fn request(
         self,
         command_dispatcher: CommandDispatcher,
-    ) -> Result<SourceMetadata, CommandDispatcherError<SourceMetadataError>> {
-        tracing::debug!(
-            "Requesting source metadata for source spec: {}",
-            self.source.pinned
-        );
+    ) -> Result<BuildSourceRecordResult, CommandDispatcherError<SourceMetadataError>> {
 
-        // Check the source metadata cache, short circuit if we have it.
-        let cache_key = self.cache_key();
-        let (metadata, entry) = command_dispatcher
-            .source_metadata_cache()
-            .entry(&self.source.pinned, &cache_key)
+    }
+
+    /// Use the `conda/outputs` procedure to get the metadata for the source
+    /// checkout.
+    async fn call_conda_outputs(
+        self,
+        command_dispatcher: CommandDispatcher,
+        entry: CacheEntry,
+        manifest_path: PathBuf,
+        backend: Backend,
+    ) -> Result<SourceMetadata, CommandDispatcherError<SourceMetadataError>> {
+        let params = CondaOutputsParams {
+            host_platform: self.build_environment.host_platform,
+            variant_configuration: self.variants.map(|variants| variants.into_iter().collect()),
+            work_directory: command_dispatcher.cache_dirs().working_dirs().join(
+                WorkDirKey {
+                    source: Box::new(self.source.clone()).into(),
+                    host_platform: self.build_environment.host_platform,
+                    build_backend: backend.identifier().to_string(),
+                }
+                .key(),
+            ),
+        };
+        let outputs = backend
+            .conda_outputs(params)
+            .await
+            .map_err(SourceMetadataError::Communication)
+            .map_err(CommandDispatcherError::Failed)?;
+
+        // Compute the input globs for the mutable source checkouts.
+        let input_hash = Self::compute_input_hash(
+            command_dispatcher,
+            &self.source,
+            manifest_path,
+            outputs.input_globs.clone(),
+        )
+        .await?;
+
+        // Store the metadata in the cache for later retrieval
+        entry
+            .insert(CachedCondaMetadata {
+                input_hash: input_hash.clone(),
+                packages: Vec::new(),
+                outputs: outputs.outputs.clone(),
+            })
             .await
             .map_err(SourceMetadataError::Cache)
             .map_err(CommandDispatcherError::Failed)?;
-        if let Some(metadata) = metadata {
-            tracing::debug!(
-                "Found source metadata in cache for source spec: {}",
-                self.source.pinned
-            );
 
-            // Check if the input hash is still valid.
-            if let Some(input_globs) = &metadata.input_hash {
-                let new_hash = command_dispatcher
-                    .glob_hash_cache()
-                    .compute_hash(GlobHashKey::new(
-                        self.source.path.clone(),
-                        input_globs.globs.clone(),
-                    ))
-                    .await
-                    .map_err(SourceMetadataError::GlobHash)
-                    .map_err(CommandDispatcherError::Failed)?;
-                if new_hash.hash == input_globs.hash {
-                    tracing::debug!("found up-to-date cached metadata.");
-                    return Ok(SourceMetadata {
-                        records: source_metadata_to_records(
-                            &self.source,
-                            metadata.packages,
-                            metadata.input_hash,
-                        ),
-                        source: self.source,
-                    });
-                } else {
-                    tracing::debug!("found stale cached metadata.");
-                }
-            } else {
-                tracing::debug!("found cached metadata.");
-                // No input hash so just assume it is still valid.
-                return Ok(SourceMetadata {
-                    records: source_metadata_to_records(
-                        &self.source,
-                        metadata.packages,
-                        metadata.input_hash,
-                    ),
-                    source: self.source,
-                });
-            }
-        }
+        Ok(SourceMetadata {
+            metadata: Metadata::Outputs(CondaOutputsOutput {
+                outputs: outputs.outputs,
+                input_hash,
+            }),
+            source: self.source,
+        })
+    }
 
-        // Discover information about the build backend from the source code.
-        let discovered_backend = DiscoveredBackend::discover(
-            &self.source.path,
-            &self.channel_config,
-            &self.enabled_protocols,
-        )
-        .map_err(SourceMetadataError::Discovery)
-        .map_err(CommandDispatcherError::Failed)?;
-
-        // Instantiate the backend with the discovered information.
-        let manifest_path = discovered_backend.init_params.manifest_path.clone();
-        let backend = command_dispatcher
-            .instantiate_backend(InstantiateBackendSpec {
-                backend_spec: discovered_backend.backend_spec,
-                init_params: discovered_backend.init_params,
-                channel_config: self.channel_config.clone(),
-                enabled_protocols: self.enabled_protocols,
-            })
-            .await
-            .map_err_with(SourceMetadataError::Initialize)?;
-
+    /// Use the `conda/getMetadata` procedure to get the metadata for the source
+    async fn call_conda_get_metadata(
+        self,
+        command_dispatcher: CommandDispatcher,
+        entry: CacheEntry,
+        manifest_path: PathBuf,
+        backend: Backend,
+    ) -> Result<SourceMetadata, CommandDispatcherError<SourceMetadataError>> {
         // Query the backend for metadata.
         let params = CondaMetadataParams {
             build_platform: Some(PlatformAndVirtualPackages {
@@ -178,7 +153,7 @@ impl SourceMetadataSpec {
             command_dispatcher,
             &self.source,
             manifest_path,
-            metadata.input_globs,
+            metadata.input_globs.clone(),
         )
         .await?;
 
@@ -187,13 +162,16 @@ impl SourceMetadataSpec {
             .insert(CachedCondaMetadata {
                 input_hash: input_hash.clone(),
                 packages: metadata.packages.clone(),
+                outputs: Vec::new(),
             })
             .await
             .map_err(SourceMetadataError::Cache)
             .map_err(CommandDispatcherError::Failed)?;
 
         Ok(SourceMetadata {
-            records: source_metadata_to_records(&self.source, metadata.packages, input_hash),
+            metadata: Metadata::GetMetadata(CondaGetMetadataOutput {
+                packages: source_metadata_to_records(&self.source, metadata.packages, input_hash),
+            }),
             source: self.source,
         })
     }
