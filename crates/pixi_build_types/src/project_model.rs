@@ -15,7 +15,7 @@
 //!
 //! Only the whole ProjectModel is versioned explicitly in an enum.
 //! When making a change to one of the types, be sure to add another enum declaration if it is breaking.
-use indexmap::IndexMap;
+use ordermap::OrderMap;
 use rattler_conda_types::{BuildNumberSpec, StringMatcher, Version, VersionSpec};
 use rattler_digest::{Md5, Md5Hash, Sha256, Sha256Hash, serde::SerializableHash};
 use serde::{Deserialize, Serialize};
@@ -156,25 +156,23 @@ impl FromStr for TargetSelectorV1 {
 pub struct TargetsV1 {
     pub default_target: Option<TargetV1>,
 
-    /// We use an [`IndexMap`] to preserve the order in which the items where
-    /// defined in the manifest.
     pub targets: Option<HashMap<TargetSelectorV1, TargetV1>>,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Hash, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct TargetV1 {
     /// Host dependencies of the project
-    pub host_dependencies: Option<IndexMap<SourcePackageName, PackageSpecV1>>,
+    pub host_dependencies: Option<OrderMap<SourcePackageName, PackageSpecV1>>,
 
     /// Build dependencies of the project
-    pub build_dependencies: Option<IndexMap<SourcePackageName, PackageSpecV1>>,
+    pub build_dependencies: Option<OrderMap<SourcePackageName, PackageSpecV1>>,
 
     /// Run dependencies of the project
-    pub run_dependencies: Option<IndexMap<SourcePackageName, PackageSpecV1>>,
+    pub run_dependencies: Option<OrderMap<SourcePackageName, PackageSpecV1>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum PackageSpecV1 {
     /// This is a binary dependency
@@ -183,7 +181,7 @@ pub enum PackageSpecV1 {
     Source(SourcePackageSpecV1),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
 pub enum SourcePackageSpecV1 {
     /// The spec is represented as an archive that can be downloaded from the
     /// specified URL. The package should be retrieved from the URL and can
@@ -202,7 +200,7 @@ pub enum SourcePackageSpecV1 {
 }
 
 #[serde_as]
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct UrlSpecV1 {
     /// The URL of the package
@@ -233,7 +231,7 @@ impl std::fmt::Debug for UrlSpecV1 {
 }
 
 /// A specification of a package from a git repository.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct GitSpecV1 {
     /// The git url of the package which can contain git+ prefixes.
@@ -246,8 +244,8 @@ pub struct GitSpecV1 {
     pub subdirectory: Option<String>,
 }
 
-/// A specification of a package from a git repository.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// A specification of a package from a path
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct PathSpecV1 {
     /// The path to the package
@@ -255,7 +253,7 @@ pub struct PathSpecV1 {
 }
 
 /// A reference to a specific commit in a git repository.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum GitReferenceV1 {
     /// The HEAD commit of a branch.
@@ -273,7 +271,7 @@ pub enum GitReferenceV1 {
 
 /// Similar to a [`rattler_conda_types::NamelessMatchSpec`]
 #[serde_as]
-#[derive(Clone, Serialize, Deserialize, Default)]
+#[derive(Clone, Serialize, Deserialize, Default, Hash, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct BinaryPackageSpecV1 {
     /// The version spec of the package (e.g. `1.2.3`, `>=1.2.3`, `1.2.*`)
@@ -291,9 +289,11 @@ pub struct BinaryPackageSpecV1 {
     /// The subdir of the channel
     pub subdir: Option<String>,
     /// The md5 hash of the package
-    pub md5: Option<SerializableHash<Md5>>,
+    #[serde_as(as = "Option<SerializableHash<Md5>>")]
+    pub md5: Option<Md5Hash>,
     /// The sha256 hash of the package
-    pub sha256: Option<SerializableHash<Sha256>>,
+    #[serde_as(as = "Option<SerializableHash<Sha256>>")]
+    pub sha256: Option<Sha256Hash>,
 }
 
 impl From<VersionSpec> for BinaryPackageSpecV1 {
@@ -337,10 +337,10 @@ impl std::fmt::Debug for BinaryPackageSpecV1 {
             debug_struct.field("subdir", subdir);
         }
         if let Some(md5) = &self.md5 {
-            debug_struct.field("md5", &format!("{:x}", md5.0));
+            debug_struct.field("md5", &format!("{:x}", md5));
         }
         if let Some(sha256) = &self.sha256 {
-            debug_struct.field("sha256", &format!("{:x}", sha256.0));
+            debug_struct.field("sha256", &format!("{:x}", sha256));
         }
 
         debug_struct.finish()
@@ -353,15 +353,15 @@ mod tests {
 
     fn create_sample_target_v1() -> TargetV1 {
         TargetV1 {
-            host_dependencies: Some(IndexMap::from([(
+            host_dependencies: Some(OrderMap::from([(
                 "host_dep1".to_string(),
                 PackageSpecV1::Binary(Box::default()),
             )])),
-            build_dependencies: Some(IndexMap::from([(
+            build_dependencies: Some(OrderMap::from([(
                 "build_dep1".to_string(),
                 PackageSpecV1::Binary(Box::default()),
             )])),
-            run_dependencies: Some(IndexMap::from([(
+            run_dependencies: Some(OrderMap::from([(
                 "run_dep1".to_string(),
                 PackageSpecV1::Binary(Box::default()),
             )])),

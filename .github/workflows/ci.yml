@@ -178,14 +178,14 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - uses: prefix-dev/setup-pixi@main
         with:
-          cache: ${{ github.ref == 'refs/heads/main' }}
+          cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
       - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
         with:
           workspaces: ". -> target/pixi"
           key: ${{ hashFiles('pixi.lock') }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Test pixi
-        run: pixi run test-slow
+        run: pixi run test-slow --retries 2
         env:
           PIXI_TEST_R2_ACCESS_KEY_ID: ${{ secrets.PIXI_TEST_R2_ACCESS_KEY_ID }}
           PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
@@ -200,14 +200,14 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - uses: prefix-dev/setup-pixi@main
         with:
-          cache: ${{ github.ref == 'refs/heads/main' }}
+          cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
       - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
         with:
           workspaces: ". -> target/pixi"
           key: ${{ hashFiles('pixi.lock') }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Test pixi
-        run: pixi run test-slow
+        run: pixi run test-slow --retries 2
         env:
           PIXI_TEST_R2_ACCESS_KEY_ID: ${{ secrets.PIXI_TEST_R2_ACCESS_KEY_ID }}
           PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
@@ -222,14 +222,14 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - uses: prefix-dev/setup-pixi@main
         with:
-          cache: ${{ github.ref == 'refs/heads/main' }}
+          cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
       - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
         with:
           workspaces: ". -> target/pixi"
           key: ${{ hashFiles('pixi.lock') }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Test pixi
-        run: pixi run test-slow
+        run: pixi run test-slow --retries 2
         env:
           PIXI_TEST_R2_ACCESS_KEY_ID: ${{ secrets.PIXI_TEST_R2_ACCESS_KEY_ID }}
           PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
@@ -241,20 +241,22 @@ jobs:
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
     runs-on: windows_x64_2025_large
     steps:
+      # We don't use the dev drive here since we run out of space otherwise
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - name: Create Dev Drive
         run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
       - uses: prefix-dev/setup-pixi@main
         with:
-          cache: ${{ github.ref == 'refs/heads/main' }}
+          cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
       - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
         with:
-          workspaces: ". -> target/pixi"
+          cache-directories: ${{ env.DEV_DRIVE }}/target
           key: ${{ hashFiles('pixi.lock') }}
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Test pixi
-        run: pixi run test-slow
+        run: pixi run test-slow --retries 2
         env:
+          CARGO_TARGET_DIR: ${{ env.DEV_DRIVE }}/target
           PIXI_TEST_R2_ACCESS_KEY_ID: ${{ secrets.PIXI_TEST_R2_ACCESS_KEY_ID }}
           PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
 
@@ -269,7 +271,7 @@ jobs:
     name: "build binary | linux x86_64"
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: rui314/setup-mold@b3958095189f34b95d402a680b6e96b7f194f7b9 # v1
+      - uses: rui314/setup-mold@85c79d00377f0d32cdbae595a46de6f7c2fa6599 # v1
       - name: "Setup musl"
         run: |
           sudo apt-get install musl-tools
@@ -296,7 +298,7 @@ jobs:
     name: "build binary | macos aarch64"
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: rui314/setup-mold@b3958095189f34b95d402a680b6e96b7f194f7b9 # v1
+      - uses: rui314/setup-mold@85c79d00377f0d32cdbae595a46de6f7c2fa6599 # v1
       - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
       - name: "Build"
         run: >
@@ -318,7 +320,7 @@ jobs:
     name: "build binary | macos x86_64"
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: rui314/setup-mold@b3958095189f34b95d402a680b6e96b7f194f7b9 # v1
+      - uses: rui314/setup-mold@85c79d00377f0d32cdbae595a46de6f7c2fa6599 # v1
       - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
       - name: "Build"
         run: >
@@ -846,7 +848,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - name: Setup ucrt64 msys2
-        uses: msys2/setup-msys2@61f9e5e925871ba6c9e3e8da24ede83ea27fa91f # v2
+        uses: msys2/setup-msys2@40677d36a502eb2cf0fb808cc9dec31bf6152638 # v2
         with:
           msystem: UCRT64
           install: unzip
@@ -868,7 +870,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - name: Setup ucrt64 msys2
-        uses: msys2/setup-msys2@61f9e5e925871ba6c9e3e8da24ede83ea27fa91f # v2
+        uses: msys2/setup-msys2@40677d36a502eb2cf0fb808cc9dec31bf6152638 # v2
         with:
           msystem: UCRT64
       - name: "Install"
@@ -890,7 +892,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - name: Setup ucrt64 msys2
-        uses: msys2/setup-msys2@61f9e5e925871ba6c9e3e8da24ede83ea27fa91f # v2
+        uses: msys2/setup-msys2@40677d36a502eb2cf0fb808cc9dec31bf6152638 # v2
         with:
           msystem: UCRT64
       - name: "Before Install"
@@ -917,7 +919,6 @@ jobs:
       - name: Set up pixi
         uses: prefix-dev/setup-pixi@main
         with:
-          cache: true
           cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
 
       - name: Download pixi artifacts
@@ -959,7 +960,6 @@ jobs:
         uses: prefix-dev/setup-pixi@main
         with:
           manifest-path: ${{ env.PIXI_WORKSPACE }}/pixi.toml
-          cache: true
           cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
 
       - name: Download pixi artifacts
@@ -994,7 +994,6 @@ jobs:
       - name: Set up pixi
         uses: prefix-dev/setup-pixi@main
         with:
-          cache: true
           cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
 
       - name: Download pixi artifacts

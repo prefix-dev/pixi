@@ -11,6 +11,7 @@ use std::{
     sync::Arc,
 };
 
+pub use builder::CommandDispatcherBuilder;
 pub use error::{CommandDispatcherError, CommandDispatcherErrorResultExt};
 pub(crate) use git::GitCheckoutTask;
 pub use instantiate_backend::{InstantiateBackendError, InstantiateBackendSpec};
@@ -20,10 +21,8 @@ use pixi_glob::GlobHashCache;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec, PixiRecord};
 use pixi_spec::SourceSpec;
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::prefix::Prefix;
-use rattler_conda_types::{GenericVirtualPackage, Platform};
-use rattler_repodata_gateway::{Gateway, MaxConcurrency};
-use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
+use rattler_conda_types::{GenericVirtualPackage, Platform, prefix::Prefix};
+use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 use tokio::sync::{mpsc, oneshot};
 use typed_path::Utf8TypedPath;
@@ -31,15 +30,18 @@ use typed_path::Utf8TypedPath;
 use crate::{
     Executor, InvalidPathError, PixiEnvironmentSpec, SolveCondaEnvironmentSpec,
     SolvePixiEnvironmentError, SourceCheckout, SourceCheckoutError, SourceMetadataSpec,
+    build::BuildCache,
     cache_dirs::CacheDirs,
-    command_dispatcher_processor::CommandDispatcherProcessor,
-    install_pixi::{InstallPixiEnvironmentError, InstallPixiEnvironmentSpec},
+    install_pixi::{
+        InstallPixiEnvironmentError, InstallPixiEnvironmentResult, InstallPixiEnvironmentSpec,
+    },
     instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec},
-    limits::{Limits, ResolvedLimits},
-    reporter::Reporter,
+    limits::ResolvedLimits,
+    source_build::{BuiltSource, SourceBuildError, SourceBuildSpec},
     source_metadata::{SourceMetadata, SourceMetadataCache, SourceMetadataError},
 };
 
+mod builder;
 mod error;
 mod git;
 mod instantiate_backend;
@@ -48,9 +50,39 @@ mod instantiate_backend;
 /// different conda environments.
 #[derive(Clone)]
 pub struct CommandDispatcher {
-    pub(crate) channel: CommandDispatcherChannel,
+    /// The channel through which messages are sent to the command dispatcher.
+    ///
+    /// This is an option so we can drop this field in the `Drop`
+    /// implementation. It should only ever be `None` when the command
+    /// dispatcher is dropped.
+    pub(crate) channel: Option<CommandDispatcherChannel>,
+
+    /// The context in which the command dispatcher is operating. If a command
+    /// dispatcher is created for a background task, this context will indicate
+    /// from which task it was created.
     pub(crate) context: Option<CommandDispatcherContext>,
+
+    /// Holds the shared data required by the command dispatcher.
     pub(crate) data: Arc<CommandDispatcherData>,
+
+    /// Holds a strong reference to the process thread handle, this allows us to
+    /// wait for the background thread to finish once the last (user facing)
+    /// command dispatcher is dropped.
+    pub(crate) processor_handle: Option<Arc<std::thread::JoinHandle<()>>>,
+}
+
+impl Drop for CommandDispatcher {
+    fn drop(&mut self) {
+        // Release our strong reference to the main thread channel. If this is the last
+        // strong reference to the channel, the thread will shut down.
+        drop(self.channel.take());
+
+        // If this instance holds the last strong reference to the background thread
+        // join handle this will await its shutdown.
+        if let Some(handle) = self.processor_handle.take().and_then(Arc::into_inner) {
+            let _err = handle.join();
+        }
+    }
 }
 
 /// Contains shared data required by the [`CommandDispatcher`].
@@ -63,6 +95,9 @@ pub(crate) struct CommandDispatcherData {
 
     /// Source metadata cache used to store metadata for source packages.
     pub source_metadata_cache: SourceMetadataCache,
+
+    /// Build cache used to store build artifacts for source packages.
+    pub build_cache: BuildCache,
 
     /// The resolver of git repositories.
     pub git_resolver: GitResolver,
@@ -88,9 +123,16 @@ pub(crate) struct CommandDispatcherData {
     /// The package cache used to store packages.
     pub package_cache: PackageCache,
 
-    /// The platform (and virtual packages) to use for tools that should run on the current system.
-    /// Usually this is the current platform, but it can be a different platform.
+    /// The platform (and virtual packages) to use for tools that should run on
+    /// the current system. Usually this is the current platform, but it can
+    /// be a different platform.
     pub tool_platform: (Platform, Vec<GenericVirtualPackage>),
+
+    /// True if execution of link scripts is enabled.
+    pub execute_link_scripts: bool,
+
+    /// The execution type of the dispatcher.
+    pub executor: Executor,
 }
 
 /// A channel through which to send any messages to the command_dispatcher. Some
@@ -123,6 +165,7 @@ pub(crate) enum CommandDispatcherContext {
     SolveCondaEnvironment(SolveCondaEnvironmentId),
     SolvePixiEnvironment(SolvePixiEnvironmentId),
     SourceMetadata(SourceMetadataId),
+    SourceBuild(SourceBuildId),
     InstallPixiEnvironment(InstallPixiEnvironmentId),
     InstantiateToolEnv(InstantiatedToolEnvId),
 }
@@ -132,10 +175,16 @@ slotmap::new_key_type! {
     pub(crate) struct SolveCondaEnvironmentId;
 
     /// An id that uniquely identifies a conda environment that is being solved.
+    pub(crate) struct SourceBuildId;
+
+    /// An id that uniquely identifies a conda environment that is being solved.
     pub(crate) struct SolvePixiEnvironmentId;
 
     /// An id that uniquely identifies an installation of an environment.
     pub(crate) struct InstallPixiEnvironmentId;
+
+    /// A unique id that identifies a git source checkout.
+    pub(crate) struct GitCheckoutId;
 }
 
 /// An id that uniquely identifies a source metadata request.
@@ -152,9 +201,11 @@ pub(crate) enum ForegroundMessage {
     SolveCondaEnvironment(SolveCondaEnvironmentTask),
     SolvePixiEnvironment(SolvePixiEnvironmentTask),
     SourceMetadata(SourceMetadataTask),
+    SourceBuild(SourceBuildTask),
     GitCheckout(GitCheckoutTask),
     InstallPixiEnvironment(InstallPixiEnvironmentTask),
     InstantiateToolEnvironment(Task<InstantiateToolEnvironmentSpec>),
+    ClearReporter(oneshot::Sender<()>),
 }
 
 /// A message that is send to the background task to start solving a particular
@@ -169,7 +220,7 @@ impl TaskSpec for PixiEnvironmentSpec {
 /// pixi environment.
 pub(crate) type InstallPixiEnvironmentTask = Task<InstallPixiEnvironmentSpec>;
 impl TaskSpec for InstallPixiEnvironmentSpec {
-    type Output = ();
+    type Output = InstallPixiEnvironmentResult;
     type Error = InstallPixiEnvironmentError;
 }
 
@@ -188,6 +239,13 @@ pub(crate) type SourceMetadataTask = Task<SourceMetadataSpec>;
 impl TaskSpec for SourceMetadataSpec {
     type Output = Arc<SourceMetadata>;
     type Error = SourceMetadataError;
+}
+
+pub(crate) type SourceBuildTask = Task<SourceBuildSpec>;
+
+impl TaskSpec for SourceBuildSpec {
+    type Output = BuiltSource;
+    type Error = SourceBuildError;
 }
 
 /// Instantiates a tool environment.
@@ -213,9 +271,19 @@ impl CommandDispatcher {
         CommandDispatcherBuilder::default()
     }
 
+    /// Returns the executor used by the command dispatcher.
+    pub fn executor(&self) -> Executor {
+        self.data.executor
+    }
+
     /// Returns the cache for source metadata.
     pub fn source_metadata_cache(&self) -> &SourceMetadataCache {
         &self.data.source_metadata_cache
+    }
+
+    /// Returns the build cache for source packages.
+    pub fn build_cache(&self) -> &BuildCache {
+        &self.data.build_cache
     }
 
     /// Returns the gateway used to query conda repodata.
@@ -253,6 +321,18 @@ impl CommandDispatcher {
         (self.data.tool_platform.0, &self.data.tool_platform.1)
     }
 
+    /// Returns true if execution of link scripts is enabled.
+    pub fn allow_execute_link_scripts(&self) -> bool {
+        self.data.execute_link_scripts
+    }
+
+    /// Returns the channel used to send messages to the command dispatcher.
+    fn channel(&self) -> &CommandDispatcherChannel {
+        self.channel
+            .as_ref()
+            .expect("command dispatcher has been dropped")
+    }
+
     /// Sends a task to the command dispatcher and waits for the result.
     async fn execute_task<T: TaskSpec>(
         &self,
@@ -261,7 +341,7 @@ impl CommandDispatcher {
     where
         ForegroundMessage: From<Task<T>>,
     {
-        let Some(sender) = self.channel.sender() else {
+        let Some(sender) = self.channel().sender() else {
             // If this fails, it means the command dispatcher was dropped and the task is
             // immediately canceled.
             return Err(CommandDispatcherError::Cancelled);
@@ -283,11 +363,31 @@ impl CommandDispatcher {
         }
     }
 
+    /// Notifies the progress reporter that it should clear its output.
+    pub async fn clear_reporter(&self) {
+        let Some(sender) = self.channel().sender() else {
+            // If this fails, it means the command dispatcher was dropped and the task is
+            // immediately canceled.
+            return;
+        };
+        let (tx, rx) = oneshot::channel();
+        let _ = sender.send(ForegroundMessage::ClearReporter(tx));
+        let _ = rx.await;
+    }
+
     /// Returns the metadata of the source spec.
     pub async fn source_metadata(
         &self,
         spec: SourceMetadataSpec,
     ) -> Result<Arc<SourceMetadata>, CommandDispatcherError<SourceMetadataError>> {
+        self.execute_task(spec).await
+    }
+
+    /// Builds the source package and returns the built conda package.
+    pub async fn source_build(
+        &self,
+        spec: SourceBuildSpec,
+    ) -> Result<BuiltSource, CommandDispatcherError<SourceBuildError>> {
         self.execute_task(spec).await
     }
 
@@ -320,7 +420,8 @@ impl CommandDispatcher {
     pub async fn install_pixi_environment(
         &self,
         spec: InstallPixiEnvironmentSpec,
-    ) -> Result<(), CommandDispatcherError<InstallPixiEnvironmentError>> {
+    ) -> Result<InstallPixiEnvironmentResult, CommandDispatcherError<InstallPixiEnvironmentError>>
+    {
         self.execute_task(spec).await
     }
 
@@ -378,7 +479,8 @@ impl CommandDispatcher {
                 let source_path = self
                     .data
                     .resolve_typed_path(path.path.to_path())
-                    .map_err(SourceCheckoutError::from)?;
+                    .map_err(SourceCheckoutError::from)
+                    .map_err(CommandDispatcherError::Failed)?;
                 Ok(SourceCheckout {
                     path: source_path,
                     pinned: PinnedSourceSpec::Path(PinnedPathSpec { path: path.path }),
@@ -409,7 +511,8 @@ impl CommandDispatcher {
                 let source_path = self
                     .data
                     .resolve_typed_path(path.path.to_path())
-                    .map_err(SourceCheckoutError::from)?;
+                    .map_err(SourceCheckoutError::from)
+                    .map_err(CommandDispatcherError::Failed)?;
                 Ok(SourceCheckout {
                     path: source_path,
                     pinned: pinned_spec,
@@ -478,164 +581,6 @@ fn normalize_absolute_path(path: &Path) -> Result<PathBuf, InvalidPathError> {
         }
     }
     Ok(ret)
-}
-
-#[derive(Default)]
-pub struct CommandDispatcherBuilder {
-    gateway: Option<Gateway>,
-    root_dir: Option<PathBuf>,
-    reporter: Option<Box<dyn Reporter>>,
-    git_resolver: Option<GitResolver>,
-    download_client: Option<ClientWithMiddleware>,
-    cache_dirs: Option<CacheDirs>,
-    build_backend_overrides: BackendOverride,
-    max_download_concurrency: MaxConcurrency,
-    limits: Limits,
-    executor: Executor,
-    tool_platform: Option<(Platform, Vec<GenericVirtualPackage>)>,
-}
-
-impl CommandDispatcherBuilder {
-    /// Sets the cache directories to use.
-    pub fn with_cache_dirs(self, cache_dirs: CacheDirs) -> Self {
-        Self {
-            cache_dirs: Some(cache_dirs),
-            ..self
-        }
-    }
-
-    /// Sets the gateway to use for querying conda repodata.
-    pub fn with_gateway(self, gateway: Gateway) -> Self {
-        Self {
-            gateway: Some(gateway),
-            ..self
-        }
-    }
-
-    /// Sets the reporter used by the [`CommandDispatcher`] to report progress.
-    pub fn with_reporter<F: Reporter + 'static>(self, reporter: F) -> Self {
-        Self {
-            reporter: Some(Box::new(reporter)),
-            ..self
-        }
-    }
-
-    /// Sets the reqwest client to use for network fetches.
-    pub fn with_download_client(self, client: ClientWithMiddleware) -> Self {
-        Self {
-            download_client: Some(client),
-            ..self
-        }
-    }
-
-    /// Sets the git resolver used to fetch git repositories.
-    pub fn with_git_resolver(self, resolver: GitResolver) -> Self {
-        Self {
-            git_resolver: Some(resolver),
-            ..self
-        }
-    }
-
-    /// Sets the root directory for resolving relative paths.
-    pub fn with_root_dir(self, root_dir: PathBuf) -> Self {
-        Self {
-            root_dir: Some(root_dir),
-            ..self
-        }
-    }
-
-    /// Apply overrides to particular backends.
-    pub fn with_backend_overrides(self, overrides: BackendOverride) -> Self {
-        Self {
-            build_backend_overrides: overrides,
-            ..self
-        }
-    }
-
-    /// Sets the maximum number of concurrent downloads.
-    pub fn with_max_download_concurrency(self, max_concurrency: impl Into<MaxConcurrency>) -> Self {
-        Self {
-            max_download_concurrency: max_concurrency.into(),
-            ..self
-        }
-    }
-
-    /// Sets the tool platform and virtual packages associated with it. This is used when
-    /// instantiating tool environments and defaults to the current platform.
-    pub fn with_tool_platform(
-        self,
-        platform: Platform,
-        virtual_packages: Vec<GenericVirtualPackage>,
-    ) -> Self {
-        Self {
-            tool_platform: Some((platform, virtual_packages)),
-            ..self
-        }
-    }
-
-    /// Set the limits to which this instance should adhere.
-    pub fn with_limits(self, limits: Limits) -> Self {
-        Self { limits, ..self }
-    }
-
-    /// Sets the executor to use for the command dispatcher.
-    pub fn with_executor(self, executor: Executor) -> Self {
-        Self { executor, ..self }
-    }
-
-    /// Completes the builder and returns a new [`CommandDispatcher`].
-    pub fn finish(self) -> CommandDispatcher {
-        let root_dir = self
-            .root_dir
-            .or(std::env::current_dir().ok())
-            .unwrap_or_default();
-        let cache_dirs = self
-            .cache_dirs
-            .unwrap_or_else(|| CacheDirs::new(root_dir.join(".cache")));
-        let download_client = self.download_client.unwrap_or_default();
-        let package_cache = PackageCache::new(cache_dirs.packages());
-        let gateway = self.gateway.unwrap_or_else(|| {
-            Gateway::builder()
-                .with_client(download_client.clone())
-                .with_cache_dir(cache_dirs.root().clone())
-                .with_package_cache(package_cache.clone())
-                .with_max_concurrent_requests(self.max_download_concurrency)
-                .finish()
-        });
-
-        let git_resolver = self.git_resolver.unwrap_or_default();
-        let source_metadata_cache = SourceMetadataCache::new(cache_dirs.source_metadata());
-        let tool_platform = self.tool_platform.unwrap_or_else(|| {
-            let platform = Platform::current();
-            let virtual_packages =
-                VirtualPackages::detect(&VirtualPackageOverrides::default()).unwrap_or_default();
-            (
-                platform,
-                virtual_packages.into_generic_virtual_packages().collect(),
-            )
-        });
-
-        let data = Arc::new(CommandDispatcherData {
-            gateway,
-            source_metadata_cache,
-            root_dir,
-            git_resolver,
-            cache_dirs,
-            download_client,
-            build_backend_overrides: self.build_backend_overrides,
-            glob_hash_cache: GlobHashCache::default(),
-            limits: ResolvedLimits::from(self.limits),
-            package_cache,
-            tool_platform,
-        });
-
-        let sender = CommandDispatcherProcessor::spawn(data.clone(), self.reporter, self.executor);
-        CommandDispatcher {
-            channel: CommandDispatcherChannel::Strong(sender),
-            context: None,
-            data,
-        }
-    }
 }
 
 /// Defines the inputs and outputs of a certain foreground task specification.

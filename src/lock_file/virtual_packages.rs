@@ -181,7 +181,7 @@ pub(crate) fn validate_system_meets_environment_requirements(
     let required_virtual_packages =
         get_required_virtual_packages_from_conda_records(&conda_records)?;
 
-    tracing::info!(
+    tracing::debug!(
         "Required virtual packages of environment '{}': {}",
         environment_name.fancy_display(),
         required_virtual_packages
@@ -292,20 +292,10 @@ pub(crate) fn validate_system_meets_environment_requirements(
 mod test {
     use super::*;
     use insta::assert_snapshot;
-    use miette::{GraphicalReportHandler, GraphicalTheme};
+    use pixi_test_utils::format_diagnostic;
     use rattler_conda_types::ParseStrictness;
     use rattler_virtual_packages::Override;
     use std::path::Path;
-
-    fn error_to_snapshot(diag: &impl Diagnostic) -> String {
-        let mut report_str = String::new();
-        GraphicalReportHandler::new_themed(GraphicalTheme::unicode_nocolor())
-            .without_syntax_highlighting()
-            .with_width(100)
-            .render_report(&mut report_str, diag)
-            .unwrap();
-        report_str
-    }
 
     #[test]
     fn test_get_minimal_virtual_packages() {
@@ -449,8 +439,8 @@ mod test {
 
         assert_snapshot!(format!(
             "With override:\n{}\nWithout override:\n{}",
-            error_to_snapshot(&error1),
-            error_to_snapshot(&error2)
+            format_diagnostic(&error1),
+            format_diagnostic(&error2)
         ));
     }
     #[test]

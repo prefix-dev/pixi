@@ -237,6 +237,15 @@ impl PixiControl {
         Ok(pixi)
     }
 
+    /// Creates a new PixiControl instance from an pyproject manifest
+    pub fn from_pyproject_manifest(pyproject_manifest: &str) -> miette::Result<PixiControl> {
+        let pixi = Self::new()?;
+        fs_err::write(pixi.pyproject_manifest_path(), pyproject_manifest)
+            .into_diagnostic()
+            .context("failed to write pixi.toml")?;
+        Ok(pixi)
+    }
+
     /// Updates the complete manifest
     pub fn update_manifest(&self, manifest: &str) -> miette::Result<()> {
         fs_err::write(self.manifest_path(), manifest)
@@ -288,6 +297,10 @@ impl PixiControl {
         } else {
             self.workspace_path().join(consts::WORKSPACE_MANIFEST)
         }
+    }
+
+    pub(crate) fn pyproject_manifest_path(&self) -> PathBuf {
+        self.workspace_path().join(consts::PYPROJECT_MANIFEST)
     }
 
     /// Get the manifest contents
@@ -485,7 +498,7 @@ impl PixiControl {
             .transpose()?;
 
         // Ensure the lock-file is up-to-date
-        let mut lock_file = project
+        let lock_file = project
             .update_lock_file(UpdateLockFileOptions {
                 lock_file_usage: args.lock_file_update_config.lock_file_usage(),
                 ..UpdateLockFileOptions::default()
@@ -517,7 +530,7 @@ impl PixiControl {
                         .prefix(
                             &task.run_environment,
                             UpdateMode::Revalidate,
-                            ReinstallPackages::default(),
+                            &ReinstallPackages::default(),
                         )
                         .await?;
                     let env =
@@ -597,7 +610,7 @@ impl PixiControl {
         Ok(project
             .update_lock_file(UpdateLockFileOptions::default())
             .await?
-            .lock_file)
+            .into_lock_file())
     }
 
     /// Returns an [`LockBuilder`].

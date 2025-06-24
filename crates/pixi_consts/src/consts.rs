@@ -16,7 +16,7 @@ pub const PYPROJECT_MANIFEST: &str = "pyproject.toml";
 pub const CONFIG_FILE: &str = "config.toml";
 pub const PIXI_VERSION: &str = match option_env!("PIXI_VERSION") {
     Some(v) => v,
-    None => "0.48.0",
+    None => "0.48.2",
 };
 pub const PREFIX_FILE_NAME: &str = "pixi_env_prefix";
 pub const ENVIRONMENTS_DIR: &str = "envs";
@@ -39,7 +39,7 @@ pub const CACHED_ENVS_DIR: &str = "cached-envs-v0";
 pub const _CACHED_BUILD_ENVS_DIR: &str = "cached-build-envs-v0";
 pub const CACHED_BUILD_TOOL_ENVS_DIR: &str = "cached-build-tool-envs-v0";
 pub const CACHED_GIT_DIR: &str = "git-v0";
-pub const CACHED_BUILD_WORK_DIR: &str = "work-v0";
+pub const CACHED_BUILD_WORK_DIR: &str = "work";
 pub const CACHED_BUILD_BACKENDS: &str = "backends-v0";
 pub const CACHED_PACKAGES: &str = "pkgs";
 pub const CACHED_SOURCE_METADATA: &str = "metadata";
@@ -85,6 +85,8 @@ pub static DEFAULT_CHANNELS: LazyLock<Vec<NamedChannelOrUrl>> =
             ]
         }
     });
+
+pub const MOJOPROJECT_MANIFEST: &str = "mojoproject.toml";
 
 pub const CONDA_INSTALLER: &str = "conda";
 

@@ -107,7 +107,7 @@ impl Manifests {
         // Parse the manifest as a workspace based on the type of manifest.
         let manifest_dir = provenance.path.parent().expect("a file must have a parent");
         let parsed_manifests = match provenance.kind {
-            ManifestKind::Pixi => TomlManifest::deserialize(&mut toml)
+            ManifestKind::Pixi | ManifestKind::MojoProject => TomlManifest::deserialize(&mut toml)
                 .map_err(TomlError::from)
                 .and_then(|manifest| {
                     manifest.into_workspace_manifest(
@@ -295,7 +295,7 @@ impl WorkspaceDiscoverer {
                                 ProvenanceError::UnrecognizedManifestFormat,
                             ),
                         )?;
-                        tracing::info!(
+                        tracing::trace!(
                             "Found manifest in directory: {:?}, continuing further.",
                             provenance.path
                         );
@@ -306,7 +306,7 @@ impl WorkspaceDiscoverer {
                     // Check if a pixi.toml file exists in the current directory.
                     let provenance = Self::provenance_from_dir(manifest_dir_path);
                     if provenance.is_some() {
-                        tracing::info!(
+                        tracing::trace!(
                             "Found manifest in directory: {:?}, continuing further.",
                             manifest_dir_path
                         );
@@ -389,7 +389,7 @@ impl WorkspaceDiscoverer {
             // Parse the workspace manifest.
             let manifest_dir = provenance.path.parent().expect("a file must have a parent");
             let parsed_manifest = match provenance.kind {
-                ManifestKind::Pixi => {
+                ManifestKind::Pixi | ManifestKind::MojoProject => {
                     if closest_package_manifest.is_some() && toml.pointer("/workspace").is_none() {
                         // The manifest does not contain a workspace section, and we don't care
                         // about the package section.
@@ -537,12 +537,18 @@ impl WorkspaceDiscoverer {
     fn provenance_from_dir(dir: &Path) -> Option<ManifestProvenance> {
         let pixi_toml_path = dir.join(consts::WORKSPACE_MANIFEST);
         let pyproject_toml_path = dir.join(consts::PYPROJECT_MANIFEST);
+        let mojoproject_toml_path = dir.join(consts::MOJOPROJECT_MANIFEST);
         if pixi_toml_path.is_file() {
             Some(ManifestProvenance::new(pixi_toml_path, ManifestKind::Pixi))
         } else if pyproject_toml_path.is_file() {
             Some(ManifestProvenance::new(
                 pyproject_toml_path,
                 ManifestKind::Pyproject,
+            ))
+        } else if mojoproject_toml_path.is_file() {
+            Some(ManifestProvenance::new(
+                mojoproject_toml_path,
+                ManifestKind::Pixi,
             ))
         } else {
             None

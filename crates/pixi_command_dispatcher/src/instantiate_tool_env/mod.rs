@@ -10,10 +10,13 @@ use futures::TryFutureExt;
 use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
+use pixi_build_types::{PIXI_BUILD_API_VERSION_NAME, PIXI_BUILD_API_VERSION_SPEC};
 use pixi_spec::PixiSpec;
 use pixi_spec_containers::DependencyMap;
 use pixi_utils::AsyncPrefixGuard;
-use rattler_conda_types::{ChannelConfig, ChannelUrl, NamelessMatchSpec, prefix::Prefix};
+use rattler_conda_types::{
+    ChannelConfig, ChannelUrl, NamelessMatchSpec, PackageName, prefix::Prefix,
+};
 use rattler_solve::{ChannelPriority, SolveStrategy};
 use thiserror::Error;
 use xxhash_rust::xxh3::Xxh3;
@@ -101,13 +104,17 @@ impl Hash for InstantiateToolEnvironmentSpec {
 
 impl InstantiateToolEnvironmentSpec {
     /// Constructs a new default instance.
-    pub fn new(package_name: rattler_conda_types::PackageName, requirement: PixiSpec) -> Self {
+    pub fn new(
+        package_name: rattler_conda_types::PackageName,
+        requirement: PixiSpec,
+        channels: Vec<ChannelUrl>,
+    ) -> Self {
         Self {
             requirement: (package_name, requirement),
             additional_requirements: DependencyMap::default(),
             constraints: DependencyMap::default(),
             build_environment: BuildEnvironment::default(),
-            channels: vec![],
+            channels,
             exclude_newer: None,
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from(".")),
             enabled_protocols: EnabledProtocols::default(),
@@ -153,23 +160,27 @@ impl InstantiateToolEnvironmentSpec {
 
         // Determine the cache key for the environment.
         let cache_key = self.cache_key();
+        let name = self.requirement.0.as_source().to_string();
 
         // Construct the prefix for the tool environment.
         let prefix = Prefix::create(command_queue.cache_dirs().build_backends().join(cache_key))
-            .map_err(InstantiateToolEnvironmentError::CreatePrefix)?;
+            .map_err(InstantiateToolEnvironmentError::CreatePrefix)
+            .map_err(CommandDispatcherError::Failed)?;
 
         // Acquire a lock on the tool prefix.
         let mut prefix_guard = AsyncPrefixGuard::new(prefix.path())
             .and_then(|guard| guard.write())
             .await
-            .map_err(InstantiateToolEnvironmentError::AcquireLock)?;
+            .map_err(InstantiateToolEnvironmentError::AcquireLock)
+            .map_err(CommandDispatcherError::Failed)?;
 
         // If the environment already exists, we can return early.
         if prefix_guard.is_ready() {
             prefix_guard
                 .finish()
                 .await
-                .map_err(InstantiateToolEnvironmentError::ReleaseLock)?;
+                .map_err(InstantiateToolEnvironmentError::ReleaseLock)
+                .map_err(CommandDispatcherError::Failed)?;
             return Ok(prefix);
         }
 
@@ -177,49 +188,84 @@ impl InstantiateToolEnvironmentSpec {
         prefix_guard
             .begin()
             .await
-            .map_err(InstantiateToolEnvironmentError::UpdateLock)?;
+            .map_err(InstantiateToolEnvironmentError::UpdateLock)
+            .map_err(CommandDispatcherError::Failed)?;
+
+        let build_api_version_nameless_spec = NamelessMatchSpec {
+            version: Some(PIXI_BUILD_API_VERSION_SPEC.clone()),
+            ..NamelessMatchSpec::default()
+        };
+
+        // Make sure a compatible backend is selected
+        let constraints = {
+            let mut constraints = self.constraints;
+            constraints.insert(
+                PIXI_BUILD_API_VERSION_NAME.clone(),
+                build_api_version_nameless_spec,
+            );
+            constraints
+        };
 
         // Start by solving the environment.
         let target_platform = self.build_environment.host_platform;
         let solved_environment = command_queue
             .solve_pixi_environment(PixiEnvironmentSpec {
+                name: Some(name.clone()),
                 dependencies: self
                     .additional_requirements
                     .into_specs()
-                    .chain([self.requirement])
+                    .chain([self.requirement.clone()])
                     .collect(),
-                constraints: self.constraints,
+                constraints,
                 build_environment: self.build_environment,
                 exclude_newer: self.exclude_newer,
-                channel_config: self.channel_config,
-                channels: self.channels,
-                enabled_protocols: self.enabled_protocols,
+                channel_config: self.channel_config.clone(),
+                channels: self.channels.clone(),
+                enabled_protocols: self.enabled_protocols.clone(),
                 installed: Vec::new(), // Install from scratch
                 channel_priority: ChannelPriority::default(),
-                variants: self.variants,
+                variants: self.variants.clone(),
                 strategy: SolveStrategy::default(),
             })
             .await
             .map_err_with(Box::new)
             .map_err_with(InstantiateToolEnvironmentError::SolveEnvironment)?;
+        // Ensure that solution contains matching api version package
+        if !solved_environment
+            .iter()
+            .any(|r| r.package_record().name == *PIXI_BUILD_API_VERSION_NAME)
+        {
+            return Err(CommandDispatcherError::Failed(
+                InstantiateToolEnvironmentError::NoMatchingBackends {
+                    build_backend: self.requirement,
+                },
+            ));
+        }
 
         // Install the environment
         command_queue
             .install_pixi_environment(InstallPixiEnvironmentSpec {
+                name,
                 records: solved_environment,
                 prefix: prefix.clone(),
                 installed: None,
-                platform: target_platform,
+                target_platform,
                 force_reinstall: Default::default(),
+                channels: self.channels,
+                channel_config: self.channel_config,
+                variants: self.variants,
+                enabled_protocols: self.enabled_protocols,
             })
             .await
+            .map_err_with(Box::new)
             .map_err_with(InstantiateToolEnvironmentError::InstallEnvironment)?;
 
         // Mark the environment as finished.
         prefix_guard
             .finish()
             .await
-            .map_err(InstantiateToolEnvironmentError::UpdateLock)?;
+            .map_err(InstantiateToolEnvironmentError::UpdateLock)
+            .map_err(CommandDispatcherError::Failed)?;
 
         Ok(prefix)
     }
@@ -246,5 +292,13 @@ pub enum InstantiateToolEnvironmentError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    InstallEnvironment(InstallPixiEnvironmentError),
+    InstallEnvironment(Box<InstallPixiEnvironmentError>),
+
+    #[error("The environment for the build backend package (`{} {}`) does not depend on `{}`. Without this package pixi has no way of knowing the API to use to communicate with the backend.", .build_backend.0.as_normalized(), .build_backend.1.to_string(), PIXI_BUILD_API_VERSION_NAME.as_normalized())]
+    #[diagnostic(help(
+        "Modify the requirements on `{}` or contact the maintainers to ensure a dependency on `{}` is added.", .build_backend.0.as_normalized(), PIXI_BUILD_API_VERSION_NAME.as_normalized()
+    ))]
+    NoMatchingBackends {
+        build_backend: (PackageName, PixiSpec),
+    },
 }

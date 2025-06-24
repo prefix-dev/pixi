@@ -20,10 +20,11 @@ use rattler_conda_types::Platform;
 use thiserror::Error;
 use tracing::Level;
 
+use super::cli_config::LockFileUpdateConfig;
 use crate::{
     Workspace, WorkspaceLocator,
     cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
-    environment::sanity_check_project,
+    environment::sanity_check_workspace,
     lock_file::{ReinstallPackages, UpdateLockFileOptions},
     task::{
         AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
@@ -32,15 +33,14 @@ use crate::{
     workspace::{Environment, errors::UnsupportedPlatformError},
 };
 
-use super::cli_config::LockFileUpdateConfig;
-
 /// Runs task in the pixi environment.
 ///
 /// This command is used to run tasks in the pixi environment.
 /// It will activate the environment and run the task in the environment.
 /// It is using the deno_task_shell to run the task.
 ///
-/// `pixi run` will also update the lockfile and install the environment if it is required.
+/// `pixi run` will also update the lockfile and install the environment if it
+/// is required.
 #[derive(Parser, Debug, Default)]
 #[clap(trailing_var_arg = true, disable_help_flag = true)]
 pub struct Args {
@@ -121,21 +121,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     // Sanity check of prefix location
-    sanity_check_project(&workspace).await?;
+    sanity_check_workspace(&workspace).await?;
 
     let best_platform = environment.best_platform();
 
     // Ensure that the lock-file is up-to-date.
-    let mut lock_file = workspace
+    let lock_file = workspace
         .update_lock_file(UpdateLockFileOptions {
             lock_file_usage: args.lock_file_update_config.lock_file_usage(),
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
             ..UpdateLockFileOptions::default()
         })
         .await?;
-
-    // dialoguer doesn't reset the cursor if it's aborted via e.g. SIGINT
-    // So we do it ourselves.
 
     let ctrlc_should_exit_process = Arc::new(AtomicBool::new(true));
     let ctrlc_should_exit_process_clone = Arc::clone(&ctrlc_should_exit_process);
@@ -229,7 +226,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         // check task cache
         let task_cache = match executable_task
-            .can_skip(&lock_file.lock_file)
+            .can_skip(lock_file.as_lock_file())
             .await
             .into_diagnostic()?
         {
@@ -264,14 +261,21 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .prefix(
                         &executable_task.run_environment,
                         args.prefix_update_config.update_mode(),
-                        ReinstallPackages::default(),
+                        &ReinstallPackages::default(),
                     )
                     .await?;
+
+                // Clear the current progress reports.
+                lock_file
+                    .build_context
+                    .command_dispatcher()
+                    .clear_reporter()
+                    .await;
 
                 let command_env = get_task_env(
                     &executable_task.run_environment,
                     args.clean_env || executable_task.task().clean_env(),
-                    Some(&lock_file.lock_file),
+                    Some(lock_file.as_lock_file()),
                     workspace.config().force_activate(),
                     workspace.config().experimental_activation_cache_usage(),
                 )
@@ -308,7 +312,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         // Update the task cache with the new hash
         executable_task
-            .save_cache(&lock_file, task_cache)
+            .save_cache(lock_file.as_lock_file(), task_cache)
             .await
             .into_diagnostic()?;
     }
@@ -341,7 +345,8 @@ fn command_not_found<'p>(workspace: &'p Workspace, explicit_environment: Option<
         );
     }
 
-    // Help user when there is no task available because the platform is not supported
+    // Help user when there is no task available because the platform is not
+    // supported
     if workspace
         .environments()
         .iter()

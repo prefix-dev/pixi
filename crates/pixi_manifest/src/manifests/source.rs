@@ -6,6 +6,7 @@ use miette::{NamedSource, SourceCode};
 pub enum ManifestSource<S> {
     PyProjectToml(S),
     PixiToml(S),
+    MojoProjectToml(S),
 }
 
 impl<S> AsRef<S> for ManifestSource<S> {
@@ -13,6 +14,7 @@ impl<S> AsRef<S> for ManifestSource<S> {
         match self {
             ManifestSource::PyProjectToml(source) => source,
             ManifestSource::PixiToml(source) => source,
+            ManifestSource::MojoProjectToml(source) => source,
         }
     }
 }
@@ -23,6 +25,7 @@ impl<S> ManifestSource<S> {
         match self {
             ManifestSource::PyProjectToml(source) => source,
             ManifestSource::PixiToml(source) => source,
+            ManifestSource::MojoProjectToml(source) => source,
         }
     }
 
@@ -31,6 +34,7 @@ impl<S> ManifestSource<S> {
         match self {
             ManifestSource::PyProjectToml(_) => ManifestKind::Pyproject,
             ManifestSource::PixiToml(_) => ManifestKind::Pixi,
+            ManifestSource::MojoProjectToml(_) => ManifestKind::MojoProject,
         }
     }
 
@@ -39,6 +43,7 @@ impl<S> ManifestSource<S> {
         match self {
             ManifestSource::PyProjectToml(source) => ManifestSource::PyProjectToml(f(source)),
             ManifestSource::PixiToml(source) => ManifestSource::PixiToml(f(source)),
+            ManifestSource::MojoProjectToml(source) => ManifestSource::MojoProjectToml(f(source)),
         }
     }
 

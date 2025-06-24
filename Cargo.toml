@@ -61,11 +61,13 @@ miette = { version = "7.5.0" }
 minijinja = "2.7.0"
 nix = { version = "0.29.0", default-features = false }
 once_cell = "1.20.3"
+ordermap = "0.5.7"
 parking_lot = "0.12.3"
 pathdiff = "0.2.3"
 pep440_rs = "0.7.3"
 pep508_rs = "0.9.2"
 percent-encoding = "2.3.1"
+pin-project-lite = "0.2.16"
 pyproject-toml = "0.13.4"
 regex = "1.11.1"
 reqwest = { version = "0.12.12", default-features = false }
@@ -134,6 +136,7 @@ rattler_repodata_gateway = { version = "0.22.4", default-features = false }
 rattler_shell = { version = "0.22.25", default-features = false }
 rattler_solve = { version = "1.4.3", default-features = false }
 rattler_virtual_packages = { version = "2.0.9", default-features = false }
+simple_spawn_blocking = { version = "1.1.0", default-features = false }
 
 # Bumping this to a higher version breaks the Windows path handling.
 url = "2.5.4"
@@ -192,7 +195,7 @@ license.workspace = true
 name = "pixi"
 readme.workspace = true
 repository.workspace = true
-version = "0.48.0"
+version = "0.48.2"
 
 [features]
 default = ["online_tests", "rustls-tls"]
@@ -222,10 +225,8 @@ performance = ["pixi_allocator"]
 [dependencies]
 ahash = { workspace = true }
 assert_matches = { workspace = true }
-async-fd-lock = { workspace = true }
 async-once-cell = { workspace = true }
 barrier_cell = { path = "crates/barrier_cell" }
-base64 = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true, features = [
   "derive",
@@ -241,6 +242,7 @@ clap_complete_nushell = { workspace = true }
 console = { workspace = true, features = ["windows-console-colors"] }
 crossbeam-channel = { workspace = true }
 csv = { workspace = true }
+dashmap = { workspace = true }
 deno_task_shell = { workspace = true }
 dialoguer = { workspace = true }
 dirs = { workspace = true }
@@ -290,6 +292,7 @@ anyhow = "1.0.97"
 ctrlc = { workspace = true }
 fs-err = { workspace = true, features = ["tokio"] }
 pixi_allocator = { workspace = true, optional = true }
+pixi_build_discovery = { workspace = true }
 pixi_build_frontend = { workspace = true }
 pixi_build_types = { workspace = true }
 pixi_command_dispatcher = { workspace = true }
@@ -383,6 +386,7 @@ async-trait = { workspace = true }
 fake = "4.0.0"
 http = { workspace = true }
 insta = { workspace = true, features = ["yaml", "glob", "filters"] }
+pixi_test_utils = { workspace = true }
 rstest = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["rt"] }

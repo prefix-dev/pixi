@@ -15,6 +15,8 @@ mod source_anchor;
 mod toml;
 mod url;
 
+use std::{fmt::Display, path::PathBuf, str::FromStr};
+
 pub use detailed::DetailedSpec;
 pub use git::{GitReference, GitReferenceError, GitSpec};
 use itertools::Either;
@@ -23,8 +25,6 @@ use rattler_conda_types::{
     ChannelConfig, NamedChannelOrUrl, NamelessMatchSpec, ParseChannelError, VersionSpec,
 };
 pub use source_anchor::SourceAnchor;
-use std::fmt::Display;
-use std::{path::PathBuf, str::FromStr};
 use thiserror::Error;
 pub use toml::{TomlSpec, TomlVersionSpecStr};
 pub use url::{UrlBinarySpec, UrlSourceSpec, UrlSpec};
@@ -46,8 +46,8 @@ pub enum SpecConversionError {
     InvalidPath(String),
 
     /// Encountered an invalid channel url or path
-    #[error("invalid channel '{0}'")]
-    InvalidChannel(#[from] ParseChannelError),
+    #[error("the channel '{0}' could not be resolved")]
+    InvalidChannel(String, #[source] ParseChannelError),
 }
 
 /// A package specification for pixi.
@@ -88,6 +88,18 @@ pub enum PixiSpec {
 impl Default for PixiSpec {
     fn default() -> Self {
         PixiSpec::Version(VersionSpec::Any)
+    }
+}
+
+impl Display for PixiSpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PixiSpec::Version(version) => write!(f, "{}", version),
+            PixiSpec::DetailedVersion(detailed) => write!(f, "{}", detailed),
+            PixiSpec::Url(url) => write!(f, "{}", url),
+            PixiSpec::Git(git) => write!(f, "{}", git),
+            PixiSpec::Path(path) => write!(f, "{}", path),
+        }
     }
 }
 
@@ -456,9 +468,7 @@ impl BinarySpec {
                 version: Some(version),
                 ..NamelessMatchSpec::default()
             }),
-            BinarySpec::DetailedVersion(spec) => spec
-                .try_into_nameless_match_spec(channel_config)
-                .map_err(Into::into),
+            BinarySpec::DetailedVersion(spec) => spec.try_into_nameless_match_spec(channel_config),
             BinarySpec::Url(url) => Ok(url.into()),
             BinarySpec::Path(path) => path.try_into_nameless_match_spec(&channel_config.root_dir),
         }
