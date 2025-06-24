@@ -20,7 +20,7 @@ use pixi_pypi_spec::PixiPypiSpec;
 use pixi_record::PixiRecord;
 use pixi_uv_conversions::{
     ConversionError, as_uv_req, convert_uv_requirements_to_pep508, into_pinned_git_spec,
-    no_build_to_build_options, pypi_options_to_index_locations, to_exclude_newer,
+    pypi_options_to_build_options, pypi_options_to_index_locations, to_exclude_newer,
     to_index_strategy, to_normalize, to_requirements, to_uv_normalize, to_uv_version,
     to_version_specifiers,
 };
@@ -347,7 +347,7 @@ pub async fn resolve_pypi(
     let registry_client = Arc::new(uv_client_builder.build());
 
     let build_options =
-        no_build_to_build_options(&pypi_options.no_build.clone().unwrap_or_default())
+        pypi_options_to_build_options(&pypi_options.no_build.clone().unwrap_or_default(), &pypi_options.no_binary.clone().unwrap_or_default())
             .into_diagnostic()?;
 
     // Resolve the flat indexes from `--find-links`.
