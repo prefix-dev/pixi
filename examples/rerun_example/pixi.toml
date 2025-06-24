@@ -6,11 +6,20 @@ name = "rerun"
 platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
 
 [tasks]
+lidar = "lidar"
+nuscenses = "nuscenes_dataset"
 start = "python force_driven_lockfile_graph.py"
 
 [dependencies]
-networkx = ">=3.3,<4"
-numpy = ">=1.26.4,<1.27"
-python = ">=3.12.3,<3.13"
-pyyaml = ">=6.0.1,<6.1"
-rerun-sdk = ">=0.16.0,<0.17"
+matplotlib = "*"
+networkx = ">=3.5,<4"
+numpy = ">=2.3.0,<3"
+nuscenes-devkit = "*"
+python = ">=3.12.11,<3.14"
+pyyaml = ">=6.0.2,<7"
+rerun-sdk = ">=0.23.3,<0.24"
+scipy = ">=1.15.2,<2"
+
+[pypi-dependencies]
+lidar = { path = "./lidar" }
+nuscenes_dataset = { path = "./nuscenes_dataset" }

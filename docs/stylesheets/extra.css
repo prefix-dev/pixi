@@ -110,6 +110,9 @@ table code {
 .md-typeset .admonition {
   font-size: 0.75rem;
 }
+.md-typeset .admonition, .md-typeset details {
+  font-size: 0.8rem;
+}
 
 
 [data-md-color-accent=prefix-light] .md-typeset .md-button:hover{

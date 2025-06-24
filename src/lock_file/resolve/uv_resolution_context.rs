@@ -42,11 +42,11 @@ impl UvResolutionContext {
 
         let keyring_provider = match project.config().pypi_config().use_keyring() {
             pixi_config::KeyringProvider::Subprocess => {
-                tracing::info!("using uv keyring (subprocess) provider");
+                tracing::debug!("using uv keyring (subprocess) provider");
                 uv_configuration::KeyringProviderType::Subprocess
             }
             pixi_config::KeyringProvider::Disabled => {
-                tracing::info!("uv keyring provider is disabled");
+                tracing::debug!("uv keyring provider is disabled");
                 uv_configuration::KeyringProviderType::Disabled
             }
         };
