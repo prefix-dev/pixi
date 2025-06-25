@@ -1,8 +1,9 @@
+use futures::Stream;
 use pixi_git::resolver::RepositoryReference;
 use serde::Serialize;
 
 use crate::{
-    PixiEnvironmentSpec, SolveCondaEnvironmentSpec, SourceMetadataSpec,
+    PixiEnvironmentSpec, SolveCondaEnvironmentSpec, SourceBuildSpec, SourceMetadataSpec,
     install_pixi::InstallPixiEnvironmentSpec, instantiate_tool_env::InstantiateToolEnvironmentSpec,
 };
 
@@ -144,6 +145,32 @@ pub trait SourceMetadataReporter {
     fn on_finished(&mut self, id: SourceMetadataId);
 }
 
+/// A trait that is used to report the progress of a source build performed by
+/// the [`crate::CommandDispatcher`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(transparent)]
+pub struct SourceBuildId(pub usize);
+
+pub trait SourceBuildReporter {
+    /// Called when an operation was queued on the [`crate::CommandDispatcher`].
+    fn on_queued(
+        &mut self,
+        reason: Option<ReporterContext>,
+        env: &SourceBuildSpec,
+    ) -> SourceBuildId;
+
+    /// Called when the operation has started. The `backend_output_stream`
+    /// stream can be used to capture the output of the build process.
+    fn on_started(
+        &mut self,
+        id: SourceBuildId,
+        backend_output_stream: Box<dyn Stream<Item = String> + Unpin + Send>,
+    );
+
+    /// Called when the operation has finished.
+    fn on_finished(&mut self, id: SourceBuildId);
+}
+
 /// A trait that is used to report the progress of the
 /// [`crate::CommandDispatcher`].
 ///
@@ -192,11 +219,25 @@ pub trait Reporter: Send {
         None
     }
 
-    /// Returns a mutable reference to a reporter that reports gateway progress.
+    /// Returns a reporter that reports gateway progress.
     fn create_gateway_reporter(
         &mut self,
         _reason: Option<ReporterContext>,
     ) -> Option<Box<dyn rattler_repodata_gateway::Reporter>> {
+        None
+    }
+
+    /// Returns a reporter that reports installation progress.
+    fn create_install_reporter(
+        &mut self,
+        _reason: Option<ReporterContext>,
+    ) -> Option<Box<dyn rattler::install::Reporter>> {
+        None
+    }
+
+    /// Returns a mutable reference to a reporter that reports on the progress
+    /// of building source packages.
+    fn as_source_build_reporter(&mut self) -> Option<&mut dyn SourceBuildReporter> {
         None
     }
 }
@@ -209,4 +250,5 @@ pub enum ReporterContext {
     InstallPixi(PixiInstallId),
     SourceMetadata(SourceMetadataId),
     InstantiateToolEnv(InstantiateToolEnvId),
+    SourceBuild(SourceBuildId),
 }
