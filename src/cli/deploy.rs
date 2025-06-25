@@ -3,13 +3,12 @@ use crate::environment::{
     EnvironmentFile, LockedEnvironmentHash, read_environment_file, update_prefix_conda,
     update_prefix_pypi, verify_prefix_location_unchanged, write_environment_file,
 };
+use crate::lock_file::UvResolutionContext;
 use crate::lock_file::virtual_packages::validate_system_meets_environment_requirements;
-use crate::lock_file::{IoConcurrencyLimit, UvResolutionContext};
 use crate::prefix::Prefix;
 use crate::workspace::best_platform;
 use clap::Parser;
 use fancy_display::FancyDisplay;
-use futures::TryFutureExt;
 use indicatif::ProgressBar;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
@@ -25,7 +24,6 @@ use rattler_conda_types::{Arch, ChannelConfig, ChannelUrl, Platform};
 use rattler_lock::LockFile;
 use rattler_shell::activation::{ActivationVariables, Activator, PathModificationBehavior};
 use rattler_shell::shell::{Shell, ShellEnum};
-use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use std::path::PathBuf;
 use url::Url;
 
@@ -133,6 +131,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let config = Config::with_cli_config(&args.config);
     let client = build_reqwest_clients(None, None)?.1;
+    let channel_config = ChannelConfig::default_with_root_dir(lockfile_dir.into());
 
     // Install or update
     fs_err::create_dir_all(&args.target).ok();
@@ -151,21 +150,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into_diagnostic()?
         .unwrap_or_default();
 
-    // Spawn a task to determine the currently installed packages.
-    let prefix_cloned = prefix.clone();
-    let installed_packages_future = tokio::task::spawn_blocking(move || {
-        prefix_cloned.find_installed_packages().into_diagnostic()
-    })
-    .unwrap_or_else(|e| match e.try_into_panic() {
-        Ok(panic) => std::panic::resume_unwind(panic),
-        Err(_err) => Err(miette::miette!("the operation was cancelled")),
-    });
-
-    // Wait until the conda records are available and until the installed packages
-    // for this prefix are available.
-    let installed_packages = installed_packages_future.await?;
-    let has_existing_packages = !installed_packages.is_empty();
-
     // Construct a command dispatcher that will be used to run the tasks.
     let command_dispatcher = CommandDispatcher::builder()
         .with_cache_dirs(CacheDirs::new(pixi_config::get_cache_dir()?))
@@ -180,40 +164,23 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Update the prefix with conda packages
     let python_status = update_prefix_conda(
+        name.to_string(),
         &prefix,
-        command_dispatcher.package_cache().clone(),
-        client.clone(),
-        installed_packages,
         pixi_records.clone(),
-        VirtualPackages::detect(&VirtualPackageOverrides::default())
-            .into_diagnostic()?
-            .into_generic_virtual_packages()
-            .collect(),
         env.channels()
             .iter()
             .filter_map(|c| Url::parse(c.url.as_str()).ok())
             .map(ChannelUrl::from)
             .collect(),
+        channel_config.clone(),
         plat,
-        &format!(
-            "{} conda prefix '{}'",
-            if has_existing_packages {
-                "updating"
-            } else {
-                "creating"
-            },
-            name.fancy_display()
-        ),
-        "  ",
-        IoConcurrencyLimit::default().into(), // default io limit
         BuildContext::new(
-            ChannelConfig::default_with_root_dir(lockfile_dir.into()),
+            channel_config,
             Default::default(), // default variant
             command_dispatcher,
         )
         .into_diagnostic()?,
-        None,
-        Default::default(), /* disable post link scripts */
+        None, // no reinstall packages
     )
     .await?;
 
