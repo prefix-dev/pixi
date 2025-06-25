@@ -11,13 +11,13 @@
       "depends": [
         "dummy-c"
       ],
-      "md5": "211dff6f4ce4243025841b6f84d2e0ed",
+      "md5": "feaa3951400be87e8107b8455d40eb18",
       "name": "dummy-a",
       "platform": "win",
-      "sha256": "b5b79701cd4e45e6845cbd038347112b72e94131f450ca2f1516a84dc3c4318f",
-      "size": 1328,
+      "sha256": "f96724f5bfc0b39e7777d2af41a4f4b9ccdde8760e6223ae140f41120d6795e0",
+      "size": 1329,
       "subdir": "win-64",
-      "timestamp": 1741687107508,
+      "timestamp": 1750776707996,
       "version": "0.1.0"
     },
     "dummy-b-0.1.0-h9490d1a_0.conda": {
@@ -25,13 +25,13 @@
       "build": "h9490d1a_0",
       "build_number": 0,
       "depends": [],
-      "md5": "2f06a69cdd3a4ccd8f1d07eac71e0d3e",
+      "md5": "2d60523bcb4f2242c7457107641a1606",
       "name": "dummy-b",
       "platform": "win",
-      "sha256": "ab1d6ad961c29d1f6462971248caf669fb2f6f6b3b231250ed347aed8273c6e2",
-      "size": 1159,
+      "sha256": "db0328b66977b3f0dd3be9f9c5a4d6b88904bc5d0fa80a77e29fc78c4a76115f",
+      "size": 1158,
       "subdir": "win-64",
-      "timestamp": 1741687107508,
+      "timestamp": 1750776707996,
       "version": "0.1.0"
     },
     "dummy-c-0.1.0-h9490d1a_0.conda": {
@@ -39,13 +39,13 @@
       "build": "h9490d1a_0",
       "build_number": 0,
       "depends": [],
-      "md5": "7ba027d84cad59916e581b26c83d86c0",
+      "md5": "aeedfbd83d74945250273ee7400f4f71",
       "name": "dummy-c",
       "platform": "win",
-      "sha256": "6751bae616cbbc779fdb191b96feba8840875d717324ff1dcb0c8a09a5a904e5",
-      "size": 1158,
+      "sha256": "c63abf8aca6b7f95f2dc6fdbbbcfa497899ff183327dfb9e0975a7ee2f491eec",
+      "size": 1160,
       "subdir": "win-64",
-      "timestamp": 1741687107508,
+      "timestamp": 1750776707996,
       "version": "0.1.0"
     },
     "dummy-d-0.1.0-h9490d1a_0.conda": {
@@ -55,13 +55,13 @@
       "depends": [
         "dummy-x"
       ],
-      "md5": "b5f8517e70e2255a7f12363bed3dae83",
+      "md5": "334653e38abb607c13b17e9a1faed511",
       "name": "dummy-d",
       "platform": "win",
-      "sha256": "efcbb39ee11a868d4ee023e93f62fec7b4107a8fc8e29365b445998bc7497825",
+      "sha256": "2268f4971705accf722dde60b0ed0c980c25cfe4e853b71d5d380e490be1daf3",
       "size": 1175,
       "subdir": "win-64",
-      "timestamp": 1741687107508,
+      "timestamp": 1750776707996,
       "version": "0.1.0"
     },
     "dummy-f-0.1.0-h9490d1a_0.conda": {
@@ -69,13 +69,13 @@
       "build": "h9490d1a_0",
       "build_number": 0,
       "depends": [],
-      "md5": "a4520e8217320ba8b9880b30b5368f40",
+      "md5": "c1cdada447c8a69752e43d5eb45d23af",
       "name": "dummy-f",
       "platform": "win",
-      "sha256": "11d7bf0338f1377a859a63da9fe842e5958f63e9bb4df7fc09d6b8b2facc6f32",
-      "size": 1171,
+      "sha256": "deb40ef6e8a4a00ba1977e5c9ef5254c089fb7a41284674f92ceacde571b3608",
+      "size": 1170,
       "subdir": "win-64",
-      "timestamp": 1741687107508,
+      "timestamp": 1750776707996,
       "version": "0.1.0"
     },
     "dummy-g-0.1.0-h9490d1a_0.conda": {
@@ -85,13 +85,13 @@
       "depends": [
         "dummy-b"
       ],
-      "md5": "95f801ddbef3885c4485ce3cf24d2a73",
+      "md5": "2c3b0ed5ad9f6ede306b5555d6f487d3",
       "name": "dummy-g",
       "platform": "win",
-      "sha256": "59af6589b5f3be8114f4b959871a8f814e9239ebc257ab127408c3b4c0b4d5a0",
+      "sha256": "3ed80d3ddf10bcc42f508fd22e49f8df78ca03be53dc7508ba37ac9d96875b0f",
       "size": 1184,
       "subdir": "win-64",
-      "timestamp": 1741687107508,
+      "timestamp": 1750776707996,
       "version": "0.1.0"
     },
     "dummy_e-0.1.0-h9490d1a_0.conda": {
@@ -99,13 +99,27 @@
       "build": "h9490d1a_0",
       "build_number": 0,
       "depends": [],
-      "md5": "3a1abd039c99f8a669b64f832d297306",
+      "md5": "333089b5bf53406ae31c4d4e66a8e4c0",
       "name": "dummy_e",
       "platform": "win",
-      "sha256": "672d76a27135e6c023360553a7ba732e747af52e8fd9f47b8bf18e48401ee212",
-      "size": 1158,
+      "sha256": "efe6465cc35bee02a75119fd8fb158968bbf5a96743ecb30a30a4e2978f63e77",
+      "size": 1157,
       "subdir": "win-64",
-      "timestamp": 1741687107508,
+      "timestamp": 1750776707996,
+      "version": "0.1.0"
+    },
+    "pixi-foobar-0.1.0-h9490d1a_0.conda": {
+      "arch": "x86_64",
+      "build": "h9490d1a_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "a8087bfef9dd2dd357ffcfeb5cebd37c",
+      "name": "pixi-foobar",
+      "platform": "win",
+      "sha256": "66737ed4ea238ff5e08ce5eb9c792d7e5218b9217e74f952c38586c540778720",
+      "size": 1183,
+      "subdir": "win-64",
+      "timestamp": 1750776707994,
       "version": "0.1.0"
     }
   },

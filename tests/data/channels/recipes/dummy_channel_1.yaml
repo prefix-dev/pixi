@@ -123,3 +123,19 @@ outputs:
             - echo "#!/usr/bin/env bash" > $PREFIX/bin/dummy-g
             - echo "echo unix" >> $PREFIX/bin/dummy-g
             - chmod +x $PREFIX/bin/dummy-g
+
+  - package:
+      name: pixi-foobar
+      version: 0.1.0
+
+    build:
+      script:
+        - mkdir -p $PREFIX/bin
+        - if: win
+          then:
+            - echo "@echo off" > $PREFIX/bin/pixi-foobar.bat
+            - echo "echo %*" >> $PREFIX/bin/pixi-foobar.bat
+          else:
+            - echo '#!/bin/sh' > $PREFIX/bin/pixi-foobar
+            - echo 'echo "$@"' >> $PREFIX/bin/pixi-foobar
+            - chmod +x $PREFIX/bin/pixi-foobar

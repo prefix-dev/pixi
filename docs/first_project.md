@@ -137,9 +137,35 @@ pixi run hello
 ```
 This will execute the command `echo Hello, World!` in the environment.
 
+??? tip "Do you want use more powerful features?"
+    Tasks can be much more powerful for example:
+
+    ```toml
+    [tasks.name-of-powerful-task]
+    cmd = "echo This task can do much more! Like have {{ arguments }} and {{ "minijinja" | capitalize }} templates."
+
+    # List of tasks that must be run before this one.
+    depends-on = ["other-task"]
+
+    # Working directory relative to the root of the project
+    cwd = "current/working/directory"
+
+    # Define required arguments for the task
+    args = [{ arg = "arguments", default = "default arguments" }]
+
+    # Only run if the input files have changed
+    input = ["src"]
+    # Only run if the output files are missing
+    output = ["output.txt"]
+
+    # Set environment variables for the task
+    env = { MY_ENV_VAR = "value" }
+    ```
+    More information about tasks can be found in the [Tasks](./workspace/advanced_tasks.md) section of the documentation.
+
 ## Environments
 Pixi always creates a virtual environment for your project.
-These environments are located in the `.pixi/envs` directory in the root of your project.
+These environments are [located](./reference/pixi_configuration.md#detached-environments "Find out how to move this location if required") in the `.pixi/envs` directory in the root of your project.
 
 Using these environments is as simple as running the `pixi run` or `pixi shell` command.
 These commands will automatically activate the environment and run the command in it.

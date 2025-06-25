@@ -131,3 +131,11 @@ def completions_channel_1(channels: Path) -> str:
 @pytest.fixture
 def doc_pixi_workspaces() -> Path:
     return Path(__file__).parents[2].joinpath("docs", "source_files", "pixi_workspaces")
+
+
+@pytest.fixture
+def external_commands_dir(tmp_path: Path) -> Path:
+    """Create a temporary directory for external pixi commands"""
+    commands_dir = tmp_path / "external_commands"
+    commands_dir.mkdir()
+    return commands_dir
