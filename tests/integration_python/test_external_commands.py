@@ -78,7 +78,7 @@ def test_external_command_not_found(
         env=env,
         cwd=tmp_pixi_workspace,
         stderr_contains="No such command: `pixi nonexistent`",
-        expected_exit_code=ExitCode.FAILURE,
+        expected_exit_code=ExitCode.INCORRECT_USAGE,
     )
 
 
