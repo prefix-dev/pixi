@@ -396,7 +396,7 @@ fn get_export_specific_task_env(task: &Task, command_env: &HashMap<OsString, OsS
     // Define keys that should not be overridden
     let override_excluded_keys: HashSet<&str> = [
         "PIXI_PROJECT_ROOT",
-        "PIXI_PROJECT_NAME", 
+        "PIXI_PROJECT_NAME",
         "PIXI_PROJECT_MANIFEST",
         "PIXI_PROJECT_VERSION",
         "PIXI_PROMPT",
@@ -406,8 +406,11 @@ fn get_export_specific_task_env(task: &Task, command_env: &HashMap<OsString, OsS
         "CONDA_DEFAULT_ENV",
         "PATH",
         "INIT_CWD",
-        "PWD"
-    ].iter().cloned().collect();
+        "PWD",
+    ]
+    .iter()
+    .cloned()
+    .collect();
 
     // Convert OsString to String
     let command_env_converted: IndexMap<String, String> = command_env
@@ -430,7 +433,7 @@ fn get_export_specific_task_env(task: &Task, command_env: &HashMap<OsString, OsS
     for key in &priority {
         if let Some(Some(env_map_key)) = env_map.get(key) {
             export_merged.extend(env_map_key.clone())
-          }
+        }
     }
 
     // Put all merged environment variables to export.
@@ -503,7 +506,8 @@ mod tests {
         "#;
 
     fn create_os_map(entries: &[(&str, &str)]) -> HashMap<OsString, OsString> {
-        entries.iter()
+        entries
+            .iter()
             .map(|(k, v)| (OsString::from(*k), OsString::from(*v)))
             .collect()
     }
@@ -525,18 +529,15 @@ mod tests {
             .task(&TaskName::from("test"), None)
             .unwrap();
         // Environment Variables
-        let command_env = create_os_map(&[
-            ("PATH", "myPath"),
-            ("HOME", "myHome"),
-        ]);
+        let command_env = create_os_map(&[("PATH", "myPath"), ("HOME", "myHome")]);
 
         let result = get_export_specific_task_env(task, &command_env);
-    
+
         assert!(result.contains("export \"FOO=bar\""));
         assert!(result.contains("export \"HOME=myHome\""));
     }
 
-     #[test]
+    #[test]
     fn test_export_specific_task_env_priority() {
         let file_contents = r#"
             [tasks]
@@ -553,10 +554,7 @@ mod tests {
             .task(&TaskName::from("test"), None)
             .unwrap();
         // Environment Variables
-        let command_env = create_os_map(&[
-            ("HOME", "myHome"),
-            ("FOO", "123"),
-        ]);
+        let command_env = create_os_map(&[("HOME", "myHome"), ("FOO", "123")]);
 
         let result = get_export_specific_task_env(task, &command_env);
         // task specific env overrides outside environment variables
@@ -590,10 +588,7 @@ mod tests {
         };
 
         // Environment Variables
-        let command_env = create_os_map(&[
-            ("PATH", "myPath"),
-            ("HOME", "myHome"),
-        ]);
+        let command_env = create_os_map(&[("PATH", "myPath"), ("HOME", "myHome")]);
 
         let result = executable_task.as_script(&command_env).unwrap().unwrap();
 
