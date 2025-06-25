@@ -80,3 +80,40 @@ def test_external_command_not_found(
         stderr_contains="No such command: `pixi nonexistent`",
         expected_exit_code=ExitCode.FAILURE,
     )
+
+
+def test_pixi_internal_wins_over_external(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+
+    pixi_foobar = tmp_pixi_workspace / "bin"
+
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--expose",
+            "pixi-list=pixi-foobar",
+            "--channel",
+            dummy_channel_1,
+            "pixi-foobar",
+        ],
+        env=env,
+    )
+
+    # Add external commands directory to PATH
+    env = {"PATH": str(pixi_foobar)}
+
+    # We want to make sure that pixi list is executed instead of the
+    # external command ( pixi-foobar that we exposed as pixi-list )
+    verify_cli_command(
+        [pixi, "list"],
+        env=env,
+        cwd=tmp_pixi_workspace,
+        stdout_contains=[
+            "Kind",
+            "Build",
+        ],
+    )
