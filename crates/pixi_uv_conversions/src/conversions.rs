@@ -28,8 +28,11 @@ pub enum ConvertFlatIndexLocationError {
     NotAbsolute(PathBuf),
 }
 
-/// Convert PyPI options to build options 
-pub fn pypi_options_to_build_options(no_build: &NoBuild, no_binary: &NoBinary) -> Result<BuildOptions, InvalidNameError> {
+/// Convert PyPI options to build options
+pub fn pypi_options_to_build_options(
+    no_build: &NoBuild,
+    no_binary: &NoBinary,
+) -> Result<BuildOptions, InvalidNameError> {
     let uv_no_build = match no_build {
         NoBuild::None => uv_configuration::NoBuild::None,
         NoBuild::All => uv_configuration::NoBuild::All,
@@ -48,14 +51,9 @@ pub fn pypi_options_to_build_options(no_build: &NoBuild, no_binary: &NoBinary) -
                 .collect::<Result<Vec<_>, _>>()?,
         ),
     };
-    
-    Ok(BuildOptions::new(
-        uv_no_binary,
-        uv_no_build,
-    ))
+
+    Ok(BuildOptions::new(uv_no_binary, uv_no_build))
 }
-
-
 
 /// Convert the subset of pypi-options to index locations
 pub fn pypi_options_to_index_locations(

@@ -8,7 +8,9 @@ use toml_span::{
 };
 use url::Url;
 
-use crate::pypi::pypi_options::{FindLinksUrlOrPath, NoBuild, NoBinary, NoBuildIsolation, PypiOptions};
+use crate::pypi::pypi_options::{
+    FindLinksUrlOrPath, NoBinary, NoBuild, NoBuildIsolation, PypiOptions,
+};
 
 /// A helper struct to deserialize a [`pep508_rs::PackageName`] from a TOML
 /// string.
@@ -65,7 +67,6 @@ impl<'de> toml_span::Deserialize<'de> for NoBuild {
         }
     }
 }
-
 
 impl<'de> toml_span::Deserialize<'de> for NoBinary {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
@@ -308,7 +309,7 @@ mod test {
         assert_debug_snapshot!(options);
     }
 
-     #[test]
+    #[test]
     fn test_no_binary_packages() {
         let input = r#"
         no-binary = ["package1"]

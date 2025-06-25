@@ -505,7 +505,7 @@ impl<'p> LockFileDerivedData<'p> {
                     .no_binary
                     .clone()
                     .unwrap_or_default();
-                
+
                 // Update the prefix with Pypi records
                 environment::update_prefix_pypi(
                     environment.name(),

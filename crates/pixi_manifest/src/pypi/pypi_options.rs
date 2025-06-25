@@ -84,8 +84,6 @@ impl NoBuild {
     }
 }
 
-
-
 /// Don't install pre-built wheels for all or certain packages
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, strum::Display)]
 #[strum(serialize_all = "kebab-case")]
