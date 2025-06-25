@@ -37,7 +37,7 @@ jobs:
       - name: Update lockfiles
         run: |
           set -o pipefail
-          pixi update --json | pixi exec pixi-diff-to-markdown >> diff.md
+          pixi update --json | pixi exec pixi diff-to-markdown >> diff.md
       - name: Create pull request
         uses: peter-evans/create-pull-request@v7
         with:
