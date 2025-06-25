@@ -2611,11 +2611,10 @@
 <p>In this tutorial, we will show you how to build the same C++ package as from <a href="../cpp/">Building a C++ Package</a> tutorial using <a href="https://rattler.build"><code>rattler-build</code></a>.
 In this tutorial we assume that you've read the <a href="../cpp/">Building a C++ Package</a> tutorial.
 If you haven't read it yet, we recommend you to do so before continuing.
+You might also want to check out the <a href="https://prefix-dev.github.io/pixi-build-backends/backends/pixi-build-rattler-build/">documentation</a> for the <code>pixi-build-rattler-build</code> backend.
 The project structure and the source code will be the same as in the previous tutorial, so we may skip explicit explanations of some parts.</p>
 <p>This approach may be useful when no build backend for your language or build system exists.
-Another reason to use it is when you would like to have more control over the build process.
-At the time of writing this tutorial, <code>pixi-build-cmake</code> will always build in <code>Release</code> mode.
-By using <code>rattler-build</code>, you have full control of the build process and can build your package in <code>Debug</code> mode instead.</p>
+Another reason to use it is when you would like to have more control over the build process.</p>
 <p>To illustrate this, we will use the same C++ package as in the previous tutorial, but this time we will use <code>rattler-build</code> to build it.
 This will unveil the hidden complexity of the build process, and give you a better grasp of how backends work.</p>
 <div class="admonition warning">
