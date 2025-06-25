@@ -1,6 +1,6 @@
 ## Traditional `conda activate`-like activation
 
-If you prefer to use the traditional `conda activate`-like activation, you could use the `pixi shell-hook` command.
+If you prefer to use the traditional `conda activate`-like activation, you can use the `pixi shell-hook` command.
 
 ```shell
 $ which python
