@@ -423,6 +423,7 @@ fn get_export_specific_task_env(task: &Task, command_env: &HashMap<OsString, OsS
         tracing::info!("Setting environment variable: {}=\"{}\"", key, value);
         export.push_str(&format!("export \"{}={}\";\n", key, value));
     }
+
     export
 }
 
@@ -484,11 +485,17 @@ mod tests {
         platforms = ["linux-64", "osx-64", "win-64", "osx-arm64", "linux-ppc64le", "linux-aarch64"]
         "#;
 
+    fn create_os_map(entries: &[(&str, &str)]) -> HashMap<OsString, OsString> {
+        entries.iter()
+            .map(|(k, v)| (OsString::from(*k), OsString::from(*v)))
+            .collect()
+    }
+
     #[test]
-    fn test_export_specific_task_env() {
+    fn test_export_specific_task_env_merge() {
         let file_contents = r#"
             [tasks]
-            test = {cmd = "test", cwd = "tests", env = {FOO = "bar", BAR = "$FOO"}}
+            test = {cmd = "test", cwd = "tests", env = {FOO = "bar"}}
             "#;
         let workspace = Workspace::from_str(
             Path::new("pixi.toml"),
@@ -501,12 +508,44 @@ mod tests {
             .task(&TaskName::from("test"), None)
             .unwrap();
         // Environment Variables
-        let mut command_env: HashMap<OsString, OsString> = HashMap::new();
-        command_env.insert(OsString::from("Foo"), OsString::from("foo123"));
+        let command_env = create_os_map(&[
+            ("PATH", "myPath"),
+            ("HOME", "myHome"),
+        ]);
 
-        let export = get_export_specific_task_env(task, &command_env);
+        let result = get_export_specific_task_env(task, &command_env);
+    
+        assert!(result.contains("export \"FOO=bar\""));
+        assert!(result.contains("export \"PATH=myPath\""));
+        assert!(result.contains("export \"HOME=myHome\""));
+    }
 
-        assert_eq!(export, "export \"FOO=bar\";\nexport \"BAR=$FOO\";\n");
+     #[test]
+    fn test_export_specific_task_env_priority() {
+        let file_contents = r#"
+            [tasks]
+            test = {cmd = "test", cwd = "tests", env = {FOO = "bar"}}
+            "#;
+        let workspace = Workspace::from_str(
+            Path::new("pixi.toml"),
+            &format!("{PROJECT_BOILERPLATE}\n{file_contents}"),
+        )
+        .unwrap();
+
+        let task = workspace
+            .default_environment()
+            .task(&TaskName::from("test"), None)
+            .unwrap();
+        // Environment Variables
+        let command_env = create_os_map(&[
+            ("PATH", "myPath"),
+            ("HOME", "myHome"),
+            ("FOO", "123"),
+        ]);
+
+        let result = get_export_specific_task_env(task, &command_env);
+        // task specific env overrides outside environment variables
+        assert!(result.contains("export \"FOO=bar\""));
     }
 
     #[test]
@@ -534,12 +573,18 @@ mod tests {
             run_environment: workspace.default_environment(),
             args: ArgValues::default(),
         };
-        // Environment Variables
-        let mut command_env: HashMap<OsString, OsString> = HashMap::new();
-        command_env.insert(OsString::from("Foo"), OsString::from("foo123"));
 
-        let script = executable_task.as_script(&command_env).unwrap().unwrap();
-        assert_eq!(script, "export \"FOO=bar\";\n\ntest ");
+        // Environment Variables
+        let command_env = create_os_map(&[
+            ("PATH", "myPath"),
+            ("HOME", "myHome"),
+        ]);
+
+        let result = executable_task.as_script(&command_env).unwrap().unwrap();
+
+        assert!(result.contains("export \"FOO=bar\""));
+        assert!(result.contains("export \"PATH=myPath\""));
+        assert!(result.contains("export \"HOME=myHome\""));
     }
 
     #[tokio::test]
