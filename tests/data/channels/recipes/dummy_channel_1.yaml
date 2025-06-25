@@ -39,7 +39,7 @@ outputs:
           then:
             - echo "dummy-b on windows" > $PREFIX/bin/dummy-b.bat
           else:
-            - echo "dummy-b on unix" > $PREFIX/bin/dummy-b
+            - echo "echo dummy-b on unix" > $PREFIX/bin/dummy-b
             - chmod +x $PREFIX/bin/dummy-b
 
   - package:

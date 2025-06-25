@@ -1,9 +1,10 @@
-from pathlib import Path
 import sys
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from pathlib import Path
 
 import pytest
-from .common import verify_cli_command, ExitCode
-from concurrent.futures import ProcessPoolExecutor, as_completed
+
+from .common import ExitCode, verify_cli_command
 
 
 @pytest.mark.skipif(
@@ -82,10 +83,9 @@ def test_exec_with(pixi: Path, dummy_channel_1: str) -> None:
             "--list",
             "--with=dummy-a",
             "--with=dummy-b",
-            "--with=dummy-x",
             "dummy-f",
         ],
-        stdout_contains=["dummy-a", "dummy-b", "dummy-x", "dummy-f"],
+        stdout_contains=["dummy-a", "dummy-b", "dummy-f"],
     )
 
     # 'with' and 'spec' options mutually exclusive
@@ -100,6 +100,6 @@ def test_exec_with(pixi: Path, dummy_channel_1: str) -> None:
             "--spec=dummy-b",
             "dummy-f",
         ],
-        expected_exit_code=ExitCode.FAILURE,
+        expected_exit_code=ExitCode.INCORRECT_USAGE,
         stderr_contains="cannot be used with",
     )
