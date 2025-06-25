@@ -1,6 +1,10 @@
+use clap::CommandFactory;
 use is_executable::IsExecutable;
+use libc::exit;
 use std::env;
 use std::path::PathBuf;
+
+use super::{Command, get_styles};
 
 /// Find a specific external subcommand by name
 /// Based on cargo's find_external_subcommand function
@@ -15,9 +19,9 @@ pub fn find_external_subcommand(cmd: &str) -> Option<PathBuf> {
 
 /// Execute an external subcommand
 pub fn execute_external_command(args: Vec<String>) -> miette::Result<()> {
-    if args.is_empty() {
-        return Err(miette::miette!("No command provided"));
-    }
+    // if args.is_empty() {
+    //     return Err(miette::miette!("No command provided"));
+    // }
 
     let cmd = &args[0];
     let cmd_args = &args[1..];
@@ -26,11 +30,6 @@ pub fn execute_external_command(args: Vec<String>) -> miette::Result<()> {
         // Execution
         let mut command = std::process::Command::new(&path);
         command.args(cmd_args);
-
-        // Set environment variables that extensions might need
-        if let Ok(current_dir) = env::current_dir() {
-            command.env("PIXI_PROJECT_ROOT", current_dir);
-        }
 
         let status = command
             .status()
@@ -47,11 +46,17 @@ pub fn execute_external_command(args: Vec<String>) -> miette::Result<()> {
 
         Ok(())
     } else {
-        // Command not found
-        Err(miette::miette!(
-            "No such command: `pixi {}`\n\nhelp: view all installed commands with `pixi --list`",
-            cmd
-        ))
+        // build the error message
+        // using the same style as clap's derived error messages
+        let styles = get_styles();
+
+        Command::command()
+            .styles(styles)
+            .error(
+                clap::error::ErrorKind::InvalidSubcommand,
+                format!("No such command: `pixi {}`", cmd),
+            )
+            .exit();
     }
 }
 
