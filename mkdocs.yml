@@ -156,9 +156,11 @@ nav:
       - Continuous Integration:
           - GitHub Actions: integration/ci/github_actions.md
           - Lockfile Updates: integration/ci/updates_github_actions.md
+      - Extensions:
+          - Introduction: integration/extensions/introduction.md
+          - Pixi Diff: integration/extensions/pixi_diff.md
+          - Pixi Install-to-prefix: integration/extensions/pixi_install_to_prefix.md
       - Third Party:
-          - Pixi Diff: integration/third_party/pixi_diff.md
-          - Pixi Install-to-prefix: integration/third_party/pixi_install_to_prefix.md
           - Direnv: integration/third_party/direnv.md
           - Starship: integration/third_party/starship.md
   - Advanced:
@@ -216,7 +218,7 @@ plugins:
         "advanced/channel_priority.md": "advanced/channel_logic.md"
         "advanced/github_actions.md": "integration/ci/github_actions.md"
         "advanced/updates_github_actions.md": "integration/ci/updates_github_actions.md"
-        "advanced/lockfile_diffs.md": "integration/third_party/pixi_diff.md"
+        "advanced/lockfile_diffs.md": "integration/extensions/pixi_diff.md"
         "advanced/production_deployment.md": "deployment/container.md"
         "advanced/pyproject_toml.md": "python/pyproject_toml.md"
         "advanced/s3.md": "deployment/s3.md"
