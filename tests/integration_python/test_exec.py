@@ -101,4 +101,5 @@ def test_exec_with(pixi: Path, dummy_channel_1: str) -> None:
             "dummy-f",
         ],
         expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="cannot be used with",
     )
