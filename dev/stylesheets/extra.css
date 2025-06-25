@@ -40,6 +40,11 @@
   --md-accent-bg-color--light: #0000008a
 }
 
+.md-nav__item--section > .md-nav__link {
+  font-size: 0.90rem;
+  font-weight: bold;
+}
+
 .md-typeset a {
   color: var(--md-accent-fg-color);
 }
