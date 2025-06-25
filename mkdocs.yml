@@ -109,13 +109,28 @@ nav:
       - Installation: installation.md
       - First project: first_project.md
       - Basic Usage: getting_started.md
-  - Workspace:
+  - Tutorials:
+      - Python:
+          - Basic Usage: python/tutorial.md
+          - Pyproject.toml: python/pyproject_toml.md
+          - Pytorch Installation: python/pytorch.md
+      - ROS 2: tutorials/ros2.md
+      - Rust: tutorials/rust.md
+      - Switching from:
+          - Poetry: switching_from/poetry.md
+          - Conda/Mamba: switching_from/conda.md
+      - Multi Environment: tutorials/multi_environment.md
+      - Global Tools: global_tools/introduction.md
+  - Concepts:
       - Environments: workspace/environment.md
       - Tasks: workspace/advanced_tasks.md
       - Multi Platform: workspace/multi_platform_configuration.md
       - Multi Environment: workspace/multi_environment.md
       - Lockfile: workspace/lockfile.md
       - System Requirements: workspace/system_requirements.md
+      - Global Tools:
+          - Manifest: global_tools/manifest.md
+          - Trampolines: global_tools/trampolines.md
   - Building:
       - Getting started: build/getting_started.md
       - Tutorials:
@@ -131,15 +146,6 @@ nav:
       - Authentication: deployment/authentication.md
       - Container: deployment/container.md
       - S3: deployment/s3.md
-  - Python:
-      - Tutorial: python/tutorial.md
-      - Pyproject.toml: python/pyproject_toml.md
-      - Pytorch Installation: python/pytorch.md
-  - Global Tools:
-      - Introduction: global_tools/introduction.md
-      - Manifest: global_tools/manifest.md
-      - Concepts: global_tools/concepts.md
-      - Examples: global_tools/examples.md
   - Integration:
       - Editor:
           - VSCode: integration/editor/vscode.md
@@ -155,13 +161,6 @@ nav:
           - Pixi Install-to-prefix: integration/third_party/pixi_install_to_prefix.md
           - Direnv: integration/third_party/direnv.md
           - Starship: integration/third_party/starship.md
-  - Switching from:
-      - Poetry: switching_from/poetry.md
-      - Conda/Mamba: switching_from/conda.md
-  - Tutorials:
-      - ROS 2: tutorials/ros2.md
-      - Rust: tutorials/rust.md
-      - Multi Environment: tutorials/multi_environment.md
   - Advanced:
       - Channel Logic: advanced/channel_logic.md
       - Info Command: advanced/explain_info_command.md
@@ -192,6 +191,7 @@ validation:
 
 not_in_nav: |
   reference/cli/
+  partials/
 
 plugins:
   - redirects:
