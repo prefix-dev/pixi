@@ -49,9 +49,6 @@ theme:
     - navigation.instant
     - navigation.instant.progress
     - navigation.tracking
-    # enables the summary of chapter
-    # by adding index.md to the chapter
-    - navigation.indexes
     - navigation.sections
     - navigation.top
     - navigation.footer
@@ -152,7 +149,7 @@ nav:
           - GitHub Actions: integration/ci/github_actions.md
           - Lockfile Updates: integration/ci/updates_github_actions.md
       - Extensions:
-          - integration/extensions/index.md
+          - Introduction: integration/extensions/introduction.md
           - Pixi Diff: integration/extensions/pixi_diff.md
           - Pixi Install-to-prefix: integration/extensions/pixi_install_to_prefix.md
       - Third Party:
