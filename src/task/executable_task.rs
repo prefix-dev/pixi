@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     ffi::OsString,
     fmt::{Display, Formatter},
     path::PathBuf,
@@ -393,6 +393,21 @@ fn get_output_writer_and_handle() -> (ShellPipeWriter, JoinHandle<String>) {
 fn get_export_specific_task_env(task: &Task, command_env: &HashMap<OsString, OsString>) -> String {
     let mut export = String::new();
     let mut export_merged: HashMap<String, String> = HashMap::new();
+    // Define keys that should not be overridden
+    let override_excluded_keys: HashSet<&str> = [
+        "PIXI_PROJECT_ROOT",
+        "PIXI_PROJECT_NAME", 
+        "PIXI_PROJECT_MANIFEST",
+        "PIXI_PROJECT_VERSION",
+        "PIXI_PROMPT",
+        "PIXI_ENVIRONMENT_NAME",
+        "PIXI_ENVIRONMENT_PLATFORMS",
+        "CONDA_PREFIX",
+        "CONDA_DEFAULT_ENV",
+        "PATH",
+        "INIT_CWD",
+        "PWD"
+    ].iter().cloned().collect();
 
     // Convert OsString to String
     let command_env_converted: IndexMap<String, String> = command_env
@@ -414,16 +429,18 @@ fn get_export_specific_task_env(task: &Task, command_env: &HashMap<OsString, OsS
     let priority = ["COMMAND_ENV", "TASK_SPECIFIC_ENVS"];
     for key in &priority {
         if let Some(Some(env_map_key)) = env_map.get(key) {
-            export_merged.extend(env_map_key.clone());
-        }
+            export_merged.extend(env_map_key.clone())
+          }
     }
 
     // Put all merged environment variables to export.
     for (key, value) in export_merged {
-        tracing::info!("Setting environment variable: {}=\"{}\"", key, value);
-        export.push_str(&format!("export \"{}={}\";\n", key, value));
+        let should_exclude = override_excluded_keys.contains(key.as_str());
+        if !should_exclude {
+            tracing::info!("Setting environment variable: {}=\"{}\"", key, value);
+            export.push_str(&format!("export \"{}={}\";\n", key, value));
+        }
     }
-
     export
 }
 
@@ -516,7 +533,6 @@ mod tests {
         let result = get_export_specific_task_env(task, &command_env);
     
         assert!(result.contains("export \"FOO=bar\""));
-        assert!(result.contains("export \"PATH=myPath\""));
         assert!(result.contains("export \"HOME=myHome\""));
     }
 
@@ -538,7 +554,6 @@ mod tests {
             .unwrap();
         // Environment Variables
         let command_env = create_os_map(&[
-            ("PATH", "myPath"),
             ("HOME", "myHome"),
             ("FOO", "123"),
         ]);
@@ -583,7 +598,6 @@ mod tests {
         let result = executable_task.as_script(&command_env).unwrap().unwrap();
 
         assert!(result.contains("export \"FOO=bar\""));
-        assert!(result.contains("export \"PATH=myPath\""));
         assert!(result.contains("export \"HOME=myHome\""));
     }
 
