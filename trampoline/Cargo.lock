@@ -3019,6 +3019,7 @@ dependencies = [
  "rattler",
  "rattler_conda_types",
  "rattler_networking",
+ "rattler_package_streaming",
  "rattler_repodata_gateway",
  "reqwest",
  "serde",

@@ -6,14 +6,17 @@
 //! This will mostly be boilerplate conversions but some of these are a bit more
 //! interesting
 
+use std::hash::{Hash, Hasher};
+
 use ordermap::OrderMap;
-use std::collections::HashMap;
 // Namespace to pbt, *please use* exclusively so we do not get confused between the two
 // different types
-use pixi_build_types as pbt;
+use pixi_build_types::{self as pbt, ProjectModelV1};
+
 use pixi_manifest::{PackageManifest, PackageTarget, TargetSelector, Targets};
 use pixi_spec::{GitReference, PixiSpec, SpecConversionError};
 use rattler_conda_types::{ChannelConfig, PackageName};
+use xxhash_rust::xxh3::Xxh3;
 
 /// Conversion from a `PixiSpec` to a `pbt::PixiSpecV1`.
 fn to_pixi_spec_v1(
@@ -82,7 +85,7 @@ fn to_pbt_dependencies<'a>(
         let converted = to_pixi_spec_v1(spec, channel_config)?;
         Ok((name.as_normalized().to_string(), converted))
     })
-    .collect::<Result<OrderMap<_, _>, _>>()
+    .collect()
 }
 
 /// Converts a [`PackageTarget`] to a [`pbt::TargetV1`].
@@ -139,7 +142,7 @@ fn to_targets_v1(
                     .map(|target| (to_target_selector_v1(selector), target))
             })
         })
-        .collect::<Result<HashMap<pbt::TargetSelectorV1, pbt::TargetV1>, _>>()?;
+        .collect::<Result<OrderMap<pbt::TargetSelectorV1, pbt::TargetV1>, _>>()?;
 
     Ok(pbt::TargetsV1 {
         default_target: Some(to_target_v1(targets.default(), channel_config)?),
@@ -166,6 +169,14 @@ pub fn to_project_model_v1(
         targets: Some(to_targets_v1(&manifest.targets, channel_config)?),
     };
     Ok(project)
+}
+
+/// This function is used to calculate a stable hash for the project model
+/// This is used to trigger cache invalidation if the project model changes
+pub fn compute_project_model_hash(project_model: &ProjectModelV1) -> Vec<u8> {
+    let mut hasher = Xxh3::new();
+    project_model.hash(&mut hasher);
+    hasher.finish().to_ne_bytes().to_vec()
 }
 
 #[cfg(test)]
