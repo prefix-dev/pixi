@@ -391,6 +391,10 @@ fn get_output_writer_and_handle() -> (ShellPipeWriter, JoinHandle<String>) {
 
 /// Get the environment variable based on their priority
 fn get_export_specific_task_env(task: &Task, command_env: &HashMap<OsString, OsString>) -> String {
+    // Early return if task.env() is empty
+    if task.env().is_none_or(|map| map.is_empty()) {
+        return String::new();
+    }
     let mut export = String::new();
     let mut export_merged: HashMap<String, String> = HashMap::new();
     // Define keys that should not be overridden
