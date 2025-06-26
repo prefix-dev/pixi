@@ -13,10 +13,10 @@ With [henriklovhaug/md-tui](https://github.com/henriklovhaug/md-tui), you can ev
     pixi global install pixi-diff pixi-diff-to-markdown md-tui
     ```
 
-`pixi-diff --before pixi.lock.old --after pixi.lock.new` will output a JSON object that contains the differences between the two lockfiles similar to [`pixi update --json`](../../reference/cli/pixi/update.md).
+`pixi diff --before pixi.lock.old --after pixi.lock.new` will output a JSON object that contains the differences between the two lockfiles similar to [`pixi update --json`](../../reference/cli/pixi/update.md).
 
 ```bash
-$ pixi-diff --before pixi.lock.old --after pixi.lock.new
+$ pixi diff --before pixi.lock.old --after pixi.lock.new
 {
   "version": 1,
   "environment": {
@@ -46,22 +46,22 @@ Named pipes can be handy for comparing lockfiles from different states in your g
 
 ```bash
 # bash / zsh
-pixi-diff --before <(git show HEAD~20:pixi.lock) --after pixi.lock
+pixi diff --before <(git show HEAD~20:pixi.lock) --after pixi.lock
 
 # fish
-pixi-diff --before (git show HEAD~20:pixi.lock | psub) --after pixi.lock
+pixi diff --before (git show HEAD~20:pixi.lock | psub) --after pixi.lock
 ```
 
 Or specify either the "before" or "after" lockfile via stdin:
 
 ```bash
-git show HEAD~20:pixi.lock | pixi-diff --before - --after pixi.lock
+git show HEAD~20:pixi.lock | pixi diff --before - --after pixi.lock
 ```
 
 This can be integrated with [`pixi-diff-to-markdown`](https://github.com/pavelzw/pixi-diff-to-markdown) to generate a markdown file that shows the diff in a human-readable format:
 
 ```bash
-pixi-diff <(git show HEAD~20:pixi.lock) pixi.lock | pixi-diff-to-markdown > diff.md
+pixi diff <(git show HEAD~20:pixi.lock) pixi.lock | pixi diff-to-markdown > diff.md
 ```
 
 !!!tip "pixi-diff-to-markdown in GitHub Actions updates"
