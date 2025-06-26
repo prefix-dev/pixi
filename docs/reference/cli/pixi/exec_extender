@@ -5,11 +5,11 @@
 ```shell
 pixi exec python
 
-# Add a constraint to the python version
-pixi exec --spec python=3.9 --spec numpy python
-
 # Run ipython and include the py-rattler and numpy packages in the environment
 pixi exec --with py-rattler --with numpy ipython
+
+# Specify the specs of the environment
+pixi exec --spec python=3.9 --spec numpy python
 
 # Force reinstall to recreate the environment and get the latest package versions
 pixi exec --force-reinstall --with py-rattler ipython
