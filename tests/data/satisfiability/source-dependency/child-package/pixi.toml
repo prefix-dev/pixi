@@ -1,7 +1,8 @@
-[project]
-channels = ["conda-forge"]
+[package]
 name = "child-package"
-platforms = ["win-64"]
 version = "0.1.0"
 
-[dependencies]
+[package.build]
+backend = { name = "pixi-build-cmake", version = "0.1.*" }
+
+# A comment shouldn't change the project model and therefore, shouldn't change the hash

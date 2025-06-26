@@ -4488,6 +4488,7 @@ dependencies = [
  "pixi_allocator",
  "pixi_build_discovery",
  "pixi_build_frontend",
+ "pixi_build_type_conversions",
  "pixi_build_types",
  "pixi_command_dispatcher",
  "pixi_config",
@@ -4634,6 +4635,7 @@ dependencies = [
  "pixi_spec",
  "rattler_conda_types",
  "rstest",
+ "xxhash-rust",
 ]
 
 [[package]]
@@ -4667,6 +4669,7 @@ dependencies = [
  "pin-project-lite",
  "pixi_build_discovery",
  "pixi_build_frontend",
+ "pixi_build_type_conversions",
  "pixi_build_types",
  "pixi_config",
  "pixi_consts",

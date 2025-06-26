@@ -294,6 +294,7 @@ fs-err = { workspace = true, features = ["tokio"] }
 pixi_allocator = { workspace = true, optional = true }
 pixi_build_discovery = { workspace = true }
 pixi_build_frontend = { workspace = true }
+pixi_build_type_conversions = { workspace = true }
 pixi_build_types = { workspace = true }
 pixi_command_dispatcher = { workspace = true }
 pixi_config = { workspace = true }
