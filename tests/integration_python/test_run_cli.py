@@ -1357,7 +1357,9 @@ def test_task_caching_with_multiple_inputs_args(pixi: Path, tmp_pixi_workspace: 
         ],
     )
 
-# Run with environment variable
+
+# Run with environment variable and sort the priority
+# variable task.env > activation.env > activation.scripts > activation scripts of dependencies > outside environment variable
 def test_run_with_environment_variable_priority(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     script_manifest = tmp_pixi_workspace.joinpath("env_setup.sh")
@@ -1371,12 +1373,17 @@ def test_run_with_environment_variable_priority(pixi: Path, tmp_pixi_workspace: 
     cmd = "echo $TEST_ENV_VAR_FOR_ACTIVATION_TEST"
     [tasks.foo]
     cmd = "echo $TEST_ENV_VAR_FOR_ACTIVATION_TEST"
+    [tasks.pdal]
+    cmd = "echo $PDAL_DRIVER_PATH"
     [tasks.task.env]
     TEST_ENV_VAR_FOR_ACTIVATION_TEST = "test456"
+    # [dependencies]
+    # pdal = "*"
     """
-    test_script_file = f"""
+    test_script_file = """
     #!/bin/bash
     export TEST_ENV_VAR_FOR_ACTIVATION_TEST="activation_script"
+    export PDAL_DRIVER_PATH="activation_script"
     """
     manifest.write_text(toml)
     script_manifest.write_text(test_script_file)
@@ -1404,30 +1411,28 @@ def test_run_with_environment_variable_priority(pixi: Path, tmp_pixi_workspace: 
         ],
     )
 
-    # Test 1: task.env > outside environment variable - should use envrionment variable defined in specific tasks
+    # Test 1: task.env > outside environment variable - should use environment variable defined in specific tasks
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "task"],
         stdout_contains="test456",
-        env={"TEST_ENV_VAR_FOR_ACTIVATION_TEST": "outside_ev"}
+        env={"TEST_ENV_VAR_FOR_ACTIVATION_TEST": "outside_ev"},
     )
 
-     # Test 2: task.env > activation.env - should use envrionment variable defined in specific tasks
+    # Test 2: task.env > activation.env - should use environment variable defined in specific tasks
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "task"],
         stdout_contains="test456",
-    )
-
-   # Test 3: activation.env > outside environment variable - should use activation.env
-    verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "foo"],
-        stdout_contains="test123",
-        env={"TEST_ENV_VAR_FOR_ACTIVATION_TEST": "outside_ev"}
     )
 
     # Test 3: activation.env > outside environment variable - should use activation.env
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "foo"],
         stdout_contains="test123",
+        env={"TEST_ENV_VAR_FOR_ACTIVATION_TEST": "outside_ev"},
     )
 
-   
+    # Test 4: activation.env > activation.script - should use activation.env
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "foo"],
+        stdout_contains="test123",
+    )
