@@ -469,8 +469,6 @@ fn get_export_specific_task_env(task: &Task, command_env: &HashMap<OsString, OsS
                     .replace(";", "^;") // Escape semicolons
                     .replace("\"", "\"\"") // Escape quotes (cmd.exe style)
                     .replace("%", "%%") // Escape percent signs
-                    .replace("(", "^(") // Escape opening parenthesis
-                    .replace(")", "^)") // Escape closing parenthesis
                     .replace("!", "^^!") // Escape exclamation marks (delayed expansion)
                     .replace("<", "^<") // Escape input redirection
                     .replace(">", "^>"); // Escape output redirection
@@ -483,9 +481,7 @@ fn get_export_specific_task_env(task: &Task, command_env: &HashMap<OsString, OsS
                     .replace("\\", "\\\\") // Escape backslashes
                     .replace("\"", "\\\"") // Escape quotes
                     .replace("$", "\\$") // Escape dollar signs
-                    .replace("`", "\\`") // Escape backticks
-                    .replace("(", "^(") // Escape opening parenthesis
-                    .replace(")", "^)");
+                    .replace("`", "\\`"); // Escape backticks
 
                 export.push_str(&format!("export \"{}={}\";\n", key, escaped_value));
             }
