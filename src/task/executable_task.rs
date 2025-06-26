@@ -441,11 +441,26 @@ fn get_export_specific_task_env(task: &Task, command_env: &HashMap<OsString, OsS
         let should_exclude = override_excluded_keys.contains(key.as_str());
         if !should_exclude {
             tracing::info!("Setting environment variable: {}=\"{}\"", key, value);
-            // Platform-specific export format
+            // Platform-specific export format with proper escaping
             if cfg!(windows) {
-                export.push_str(&format!("set \"{}={}\";\n", key, value));
+                // Windows: Escape semicolons and other special characters
+                let escaped_value = value
+                    .replace("&", "^&") // Escape ampersands
+                    .replace("|", "^|") // Escape pipes
+                    .replace(";", "^;") // Escape semicolons
+                    .replace("\"", "\"\"") // Escape quotes
+                    .replace("%", "%%"); // Escape percent signs
+
+                export.push_str(&format!("set \"{}={}\"\r\n", key, escaped_value));
             } else {
-                export.push_str(&format!("export \"{}={}\";\n", key, value));
+                // Unix: Escape shell special characters
+                let escaped_value = value
+                    .replace("\\", "\\\\") // Escape backslashes
+                    .replace("\"", "\\\"") // Escape quotes
+                    .replace("$", "\\$") // Escape dollar signs
+                    .replace("`", "\\`"); // Escape backticks
+
+                export.push_str(&format!("export \"{}={}\";\n", key, escaped_value));
             }
         }
     }
