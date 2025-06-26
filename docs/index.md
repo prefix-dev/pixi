@@ -113,7 +113,7 @@ To install `pixi`, run:
     ```
 
 === "Windows"
-    [Download installer](https://github.com/prefix-dev/pixi/releases/latest/download/pixi-x86_64-pc-windows-msvc.msi){.md-button }
+    [Download installer](https://github.com/prefix-dev/pixi/releases/latest/download/pixi-x86_64-pc-windows-msvc.msi){ .md-button }
 
     Or run:
 
@@ -125,8 +125,7 @@ To install `pixi`, run:
     The installation needs to become effective by restarting your terminal or sourcing your shell.
 
 ??? question "Don't trust our link? Check the script!"
-    You can check the installation `sh` script: [download](https://pixi.sh/install.sh) and the
-    `ps1`: [download](https://pixi.sh/install.ps1).
+    You can check the installation `sh` script: [download](https://pixi.sh/install.sh) and the `ps1`: [download](https://pixi.sh/install.ps1).
     The scripts are open source and available on [GitHub](https://github.com/prefix-dev/pixi/tree/main/install).
 
 [**See all installation options →**](installation.md)
@@ -141,22 +140,18 @@ To install `pixi`, run:
     pixi init hello-world
     cd hello-world
     ```
-
     2. **Add dependencies:**
         ```
         pixi add cowpy python
         ```
-
     3. **Create your script:**
         ```py title="hello.py"
         --8<-- "docs/source_files/pixi_workspaces/introduction/deps_add/hello.py"
         ```
-
     5. **Add a task:**
         ```
         pixi task add start python hello.py
         ```
-
     6. **Run the task:**
         ```
         pixi run start
@@ -172,7 +167,6 @@ To install `pixi`, run:
                     ||----w |
                     ||     ||
         ```
-
     7. **Entry the environment shell:**
         ```
         pixi shell
@@ -184,32 +178,32 @@ To install `pixi`, run:
 
 === "Rust"
     1. **Initialize a workspace:**
-    ```
-    pixi init pixi-rust
-    cd pixi-rust
+        ```
+        pixi init pixi-rust
+        cd pixi-rust
     ```
     2. **Add dependencies:**
-    ```
-    pixi add rust
-    ```
+        ```
+        pixi add rust
+        ```
     3. **Create your project:**
-    ```
-    pixi run cargo init
-    ```
+        ```
+        pixi run cargo init
+        ```
     4. **Add a task:**
-    ```
-    pixi task add start cargo run
-    ```
+        ```
+        pixi task add start cargo run
+        ```
     5. **Run the task:**
-    ```
-    pixi run start
-    ```
-    ```
-    ✨ Pixi task (start): cargo run
-        Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
-         Running `target/debug/pixi-rust`
-    Hello, world!
-    ```
+        ```
+        pixi run start
+        ```
+        ```
+        ✨ Pixi task (start): cargo run
+            Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+             Running `target/debug/pixi-rust`
+        Hello, world!
+        ```
 
     This is more of an example to show off how easy it is to use Pixi with Rust.
     Not a recommended way to build Rust projects.
@@ -217,30 +211,30 @@ To install `pixi`, run:
 
 === "Node.js"
     1. **Initialize a workspace:**
-    ```
-    pixi init pixi-node
-    cd pixi-node
-    ```
+        ```
+        pixi init pixi-node
+        cd pixi-node
+        ```
     2. **Add dependencies:**
-    ```
-    pixi add nodejs
-    ```
+        ```
+        pixi add nodejs
+        ```
     3. **Create your script:**
-    ```js title="hello.js"
-    console.log("Hello Pixi fans!");
-    ```
+        ```js title="hello.js"
+        console.log("Hello Pixi fans!");
+        ```
     4. **Add a task:**
-    ```
-    pixi task add start "node hello.js"
-    ```
+        ```
+        pixi task add start "node hello.js"
+        ```
     5. **Run the task:**
-    ```
-    pixi run start
-    ```
-    ```
-    ✨ Pixi task (start): node hello.js
-    Hello Pixi fans!
-    ```
+        ```
+        pixi run start
+        ```
+        ```
+        ✨ Pixi task (start): node hello.js
+        Hello Pixi fans!
+        ```
 
 === "ROS2"
 
