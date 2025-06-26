@@ -462,15 +462,20 @@ fn get_export_specific_task_env(task: &Task, command_env: &HashMap<OsString, OsS
             // Platform-specific export format with proper escaping
             if cfg!(windows) {
                 // Windows: Escape semicolons and other special characters
-                let escaped_value = value
+                let escaped_value: String = value
+                    .replace("\\", "\\\\") // Escape backslashes first (for file paths)
                     .replace("&", "^&") // Escape ampersands
                     .replace("|", "^|") // Escape pipes
                     .replace(";", "^;") // Escape semicolons
-                    .replace("\"", "\"\"") // Escape quotes
+                    .replace("\"", "\"\"") // Escape quotes (cmd.exe style)
                     .replace("%", "%%") // Escape percent signs
                     .replace("(", "^(") // Escape opening parenthesis
-                    .replace(")", "^)");
+                    .replace(")", "^)") // Escape closing parenthesis
+                    .replace("!", "^^!") // Escape exclamation marks (delayed expansion)
+                    .replace("<", "^<") // Escape input redirection
+                    .replace(">", "^>"); // Escape output redirection
 
+                // Use proper Windows set command format
                 export.push_str(&format!("set \"{}={}\"\r\n", key, escaped_value));
             } else {
                 // Unix: Escape shell special characters
