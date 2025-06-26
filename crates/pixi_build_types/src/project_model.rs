@@ -23,11 +23,10 @@ use serde_with::serde_as;
 use serde_with::{DeserializeFromStr, DisplayFromStr, SerializeDisplay};
 use std::convert::Infallible;
 use std::fmt::Display;
-use std::hash::{Hash, Hasher};
+use std::hash::Hash;
 use std::path::PathBuf;
 use std::str::FromStr;
 use url::Url;
-use xxhash_rust::xxh3::Xxh3;
 
 /// Enum containing all versions of the project model.
 #[derive(Debug, Clone, Serialize, Deserialize)]
