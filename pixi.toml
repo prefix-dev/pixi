@@ -237,4 +237,4 @@ schema = { features = [
   "pytest",
 ], no-default-feature = true, solve-group = "default" }
 test-export = { features = ["micromamba"], no-default-feature = true }
-trampoline = { features = ["trampoline", "rust"], no-default-feature = true }
+trampoline = { features = ["trampoline"], no-default-feature = true }
