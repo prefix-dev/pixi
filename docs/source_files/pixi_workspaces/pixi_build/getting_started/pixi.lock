@@ -26,7 +26,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/mdurl-0.1.2-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/linux-64/ncurses-6.5-h2d0b736_3.conda
       - conda: https://prefix.dev/conda-forge/linux-64/openssl-3.4.1-h7b32b05_0.conda
-      - conda: git+https://github.com/wolfv/pixi-build-examples?subdirectory=boost-check&branch=main#0ba9aa7fbb95d4d5504d0d94adcbf2886cef6d30
+      - conda: git+https://github.com/wolfv/pixi-build-examples?subdirectory=boost-check&branch=main#8d230eda9b4cdaaefd24aad87fd923d4b7c3c78a
         subdir: linux-64
       - conda: https://prefix.dev/conda-forge/noarch/pygments-2.19.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/python-3.12.9-h9e4cc4f_1_cpython.conda
@@ -51,7 +51,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/mdurl-0.1.2-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/osx-64/ncurses-6.5-h0622a9a_3.conda
       - conda: https://prefix.dev/conda-forge/osx-64/openssl-3.4.1-hc426f3f_0.conda
-      - conda: git+https://github.com/wolfv/pixi-build-examples?subdirectory=boost-check&branch=main#0ba9aa7fbb95d4d5504d0d94adcbf2886cef6d30
+      - conda: git+https://github.com/wolfv/pixi-build-examples?subdirectory=boost-check&branch=main#8d230eda9b4cdaaefd24aad87fd923d4b7c3c78a
         subdir: osx-64
       - conda: https://prefix.dev/conda-forge/noarch/pygments-2.19.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/osx-64/python-3.12.9-h9ccd52b_1_cpython.conda
@@ -76,7 +76,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/mdurl-0.1.2-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/ncurses-6.5-h5e97a16_3.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/openssl-3.4.1-h81ee809_0.conda
-      - conda: git+https://github.com/wolfv/pixi-build-examples?subdirectory=boost-check&branch=main#0ba9aa7fbb95d4d5504d0d94adcbf2886cef6d30
+      - conda: git+https://github.com/wolfv/pixi-build-examples?subdirectory=boost-check&branch=main#8d230eda9b4cdaaefd24aad87fd923d4b7c3c78a
         subdir: osx-arm64
       - conda: https://prefix.dev/conda-forge/noarch/pygments-2.19.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/python-3.12.9-hc22306f_1_cpython.conda
@@ -99,7 +99,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/markdown-it-py-3.0.0-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/mdurl-0.1.2-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/win-64/openssl-3.4.1-ha4e3fda_0.conda
-      - conda: git+https://github.com/wolfv/pixi-build-examples?subdirectory=boost-check&branch=main#0ba9aa7fbb95d4d5504d0d94adcbf2886cef6d30
+      - conda: git+https://github.com/wolfv/pixi-build-examples?subdirectory=boost-check&branch=main#8d230eda9b4cdaaefd24aad87fd923d4b7c3c78a
         subdir: win-64
       - conda: https://prefix.dev/conda-forge/noarch/pygments-2.19.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/win-64/python-3.12.9-h3f84c4b_1_cpython.conda
@@ -133,7 +133,7 @@ packages:
   license_family: BSD
   size: 23621
   timestamp: 1650670423406
-- conda: git+https://github.com/wolfv/pixi-build-examples?subdirectory=boost-check&branch=main#0ba9aa7fbb95d4d5504d0d94adcbf2886cef6d30
+- conda: git+https://github.com/wolfv/pixi-build-examples?subdirectory=boost-check&branch=main#8d230eda9b4cdaaefd24aad87fd923d4b7c3c78a
   name: boost-check
   version: 0.1.0
   build: hbf21a9e_0
@@ -142,7 +142,7 @@ packages:
   - libstdcxx >=15
   - libgcc >=15
   channel: null
-- conda: git+https://github.com/wolfv/pixi-build-examples?subdirectory=boost-check&branch=main#0ba9aa7fbb95d4d5504d0d94adcbf2886cef6d30
+- conda: git+https://github.com/wolfv/pixi-build-examples?subdirectory=boost-check&branch=main#8d230eda9b4cdaaefd24aad87fd923d4b7c3c78a
   name: boost-check
   version: 0.1.0
   build: hbf21a9e_0
@@ -150,7 +150,7 @@ packages:
   depends:
   - libcxx >=20
   channel: null
-- conda: git+https://github.com/wolfv/pixi-build-examples?subdirectory=boost-check&branch=main#0ba9aa7fbb95d4d5504d0d94adcbf2886cef6d30
+- conda: git+https://github.com/wolfv/pixi-build-examples?subdirectory=boost-check&branch=main#8d230eda9b4cdaaefd24aad87fd923d4b7c3c78a
   name: boost-check
   version: 0.1.0
   build: hbf21a9e_0
@@ -158,14 +158,15 @@ packages:
   depends:
   - libcxx >=20
   channel: null
-- conda: git+https://github.com/wolfv/pixi-build-examples?subdirectory=boost-check&branch=main#0ba9aa7fbb95d4d5504d0d94adcbf2886cef6d30
+- conda: git+https://github.com/wolfv/pixi-build-examples?subdirectory=boost-check&branch=main#8d230eda9b4cdaaefd24aad87fd923d4b7c3c78a
   name: boost-check
   version: 0.1.0
   build: hbf21a9e_0
   subdir: win-64
   depends:
-  - vc >=14.1,<15
-  - vc14_runtime >=14.16.27033
+  - vc >=14.2,<15
+  - vc14_runtime >=14.29.30139
+  - ucrt >=10.0.20348.0
   channel: null
 - conda: https://prefix.dev/conda-forge/linux-64/bzip2-1.0.8-h4bc722e_7.conda
   sha256: 5ced96500d945fb286c9c838e54fa759aa04a7129c59800f0846b4335cee770d
@@ -728,9 +729,8 @@ packages:
   - rich 13.9.*
   - python
   input:
-    hash: f5284556554f3f5a89df111aa68d8024af67c3d7fa557214a8dded7121639ca7
-    globs:
-    - pixi.toml
+    hash: 3fec4ae3d3b251a9f707071d9d25ff86bf388d75f9ee044798f324e501dcc0db
+    globs: []
 - conda: ./recipe_by_file/recipe.yaml
   name: python_rich_by_file
   version: 0.1.0
