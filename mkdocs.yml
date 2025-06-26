@@ -128,6 +128,7 @@ nav:
       - Multi Environment: workspace/multi_environment.md
       - Lockfile: workspace/lockfile.md
       - System Requirements: workspace/system_requirements.md
+      - Conda & PyPI: concepts/conda_pypi.md
       - Global Tools:
           - Manifest: global_tools/manifest.md
           - Trampolines: global_tools/trampolines.md
