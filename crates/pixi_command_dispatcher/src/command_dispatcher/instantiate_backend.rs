@@ -68,23 +68,12 @@ impl CommandDispatcher {
                     .instantiate_tool_environment(InstantiateToolEnvironmentSpec {
                         requirement: (
                             env_spec.requirement.0,
-                            PixiSpec::from_nameless_matchspec(
-                                env_spec.requirement.1,
-                                &spec.channel_config,
-                            ),
+                            PixiSpec::from(env_spec.requirement.1),
                         ),
                         additional_requirements: env_spec
                             .additional_requirements
                             .into_specs()
-                            .map(|(name, nameless)| {
-                                (
-                                    name,
-                                    PixiSpec::from_nameless_matchspec(
-                                        nameless,
-                                        &spec.channel_config,
-                                    ),
-                                )
-                            })
+                            .map(|(name, spec)| (name, PixiSpec::from(spec)))
                             .collect(),
                         constraints: env_spec.constraints,
                         build_environment: BuildEnvironment {

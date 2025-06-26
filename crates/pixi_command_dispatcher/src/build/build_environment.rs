@@ -19,9 +19,9 @@ impl BuildEnvironment {
     /// Constructs a new build environment where the host environment is the same as the build environment.
     pub fn to_build_from_build(&self) -> Self {
         Self {
-            host_platform: self.build_platform.clone(),
+            host_platform: self.build_platform,
             host_virtual_packages: self.build_virtual_packages.clone(),
-            build_platform: self.build_platform.clone(),
+            build_platform: self.build_platform,
             build_virtual_packages: self.build_virtual_packages.clone(),
         }
     }

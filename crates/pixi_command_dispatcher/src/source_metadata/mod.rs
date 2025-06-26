@@ -11,17 +11,19 @@ use pixi_build_frontend::types::{CondaPackageMetadata, SourcePackageSpecV1};
 use pixi_build_types::procedures::conda_outputs::{
     CondaOutputDependencies, CondaOutputIgnoreRunExports, CondaOutputMetadata,
 };
-use pixi_build_types::{BinaryPackageSpecV1, PackageSpecV1};
+use pixi_build_types::{BinaryPackageSpecV1, NamedSpecV1, PackageSpecV1};
 use pixi_record::{InputHash, PinnedSourceSpec, PixiRecord, SourceRecord};
-use pixi_spec::{BinarySpec, DetailedSpec, PixiSpec, SourceAnchor, SourceSpec, UrlBinarySpec};
+use pixi_spec::{
+    BinarySpec, DetailedSpec, PixiSpec, SourceAnchor, SourceSpec, SpecConversionError,
+    UrlBinarySpec,
+};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
-    Channel, ChannelConfig, MatchSpec, NamedChannelOrUrl, NamelessMatchSpec, PackageName,
-    PackageRecord, ParseStrictness, Platform, VersionSpec, package::RunExportsJson,
+    ChannelConfig, InvalidPackageNameError, MatchSpec, NamedChannelOrUrl, NamelessMatchSpec,
+    PackageName, PackageRecord, ParseStrictness, Platform, VersionSpec, package::RunExportsJson,
 };
 use std::collections::HashMap;
 use std::str::FromStr;
-use std::sync::Arc;
 use thiserror::Error;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize)]
@@ -128,7 +130,7 @@ impl SourceMetadataSpec {
             .as_ref()
             .map(|deps| Dependencies::new(deps, source_anchor.clone()))
             .unwrap_or_default()
-            .with_host_run_exports(&build_run_exports, &self.backend_metadata.channel_config);
+            .with_host_run_exports(&build_run_exports);
         let host_records = self
             .solve_dependencies(
                 format!("{} (host)", self.package.as_source()),
@@ -143,23 +145,100 @@ impl SourceMetadataSpec {
             host_dependencies.run_exports(&host_records, &output.ignore_run_exports);
 
         // Gather the dependencies for the output.
-        let (depends, constrains, sources) =
-            Dependencies::new(&output.run_dependencies, source_anchor)
-                .with_run_run_exports(
-                    host_run_exports,
-                    build_run_exports,
-                    output.identifier.subdir,
-                    &self.backend_metadata.channel_config,
-                )
-                .into_source_record_fields(&self.backend_metadata.channel_config);
+        let PackageRecordDependencies {
+            depends,
+            constrains,
+            mut sources,
+        } = Dependencies::new(&output.run_dependencies, source_anchor.clone())
+            .with_run_run_exports(
+                host_run_exports,
+                build_run_exports,
+                output.identifier.subdir,
+            )
+            .into_package_record_fields(&self.backend_metadata.channel_config)
+            .map_err(SourceMetadataError::SpecConversionError)
+            .map_err(CommandDispatcherError::Failed)?;
+
+        let pixi_spec_to_match_spec = |name: &PackageName,
+                                       spec: &PixiSpec,
+                                       sources: &mut HashMap<PackageName, SourceSpec>|
+         -> Result<MatchSpec, SourceMetadataError> {
+            match spec.clone().into_source_or_binary() {
+                Either::Left(source) => {
+                    let source = source_anchor.resolve(source);
+                    let source = match sources.entry(name.clone()) {
+                        std::collections::hash_map::Entry::Occupied(entry) => {
+                            // If the entry already exists, check if it points to the same source.
+                            if entry.get() == &source {
+                                return Err(SourceMetadataError::DuplicateSourceDependency {
+                                    package: name.clone(),
+                                    source1: Box::new(entry.get().clone()),
+                                    source2: Box::new(source.clone()),
+                                });
+                            }
+                            entry.into_mut()
+                        }
+                        std::collections::hash_map::Entry::Vacant(entry) => entry.insert(source),
+                    };
+                    Ok(MatchSpec::from_nameless(
+                        source.to_nameless_match_spec(),
+                        Some(name.clone()),
+                    ))
+                }
+                Either::Right(binary) => {
+                    let spec = binary
+                        .try_into_nameless_match_spec(&self.backend_metadata.channel_config)
+                        .map_err(SourceMetadataError::SpecConversionError)?;
+                    Ok(MatchSpec::from_nameless(spec, Some(name.clone())))
+                }
+            }
+        };
+
+        let pixi_specs_to_match_spec =
+            |specs: &Vec<NamedSpecV1<PackageSpecV1>>,
+             sources: &mut HashMap<PackageName, SourceSpec>|
+             -> Result<Vec<String>, CommandDispatcherError<SourceMetadataError>> {
+                specs
+                    .iter()
+                    .cloned()
+                    .map(|named_spec| {
+                        let spec = from_package_spec_v1(named_spec.spec);
+                        let name = PackageName::from_str(&named_spec.name).map_err(|e| {
+                            SourceMetadataError::InvalidPackageName(named_spec.name, e)
+                        })?;
+                        Ok(pixi_spec_to_match_spec(&name, &spec, sources)?.to_string())
+                    })
+                    .collect::<Result<Vec<_>, SourceMetadataError>>()
+                    .map_err(CommandDispatcherError::Failed)
+            };
+
+        let binary_specs_to_match_spec = |specs: &Vec<NamedSpecV1<BinaryPackageSpecV1>>| -> Result<
+            Vec<String>,
+            CommandDispatcherError<SourceMetadataError>,
+        > {
+            specs
+                .iter()
+                .cloned()
+                .map(|named_spec| {
+                    let spec = from_pixi_binary_spec_v1(named_spec.spec);
+                    let name = PackageName::from_str(&named_spec.name)
+                        .map_err(|e| SourceMetadataError::InvalidPackageName(named_spec.name, e))?;
+                    let nameless_spec = spec
+                        .try_into_nameless_match_spec(&self.backend_metadata.channel_config)
+                        .map_err(SourceMetadataError::SpecConversionError)?;
+                    Ok(MatchSpec::from_nameless(nameless_spec, Some(name)).to_string())
+                })
+                .collect::<Result<Vec<_>, SourceMetadataError>>()
+                .map_err(CommandDispatcherError::Failed)
+        };
 
         // Gather the run exports for the output.
         let run_exports = RunExportsJson {
-            weak: output.run_exports.weak.clone(),
-            strong: output.run_exports.strong.clone(),
-            noarch: output.run_exports.noarch.clone(),
-            weak_constrains: output.run_exports.weak_constrains.clone(),
-            strong_constrains: output.run_exports.strong_constrains.clone(),
+            weak: pixi_specs_to_match_spec(&output.run_exports.weak, &mut sources)?,
+            strong: pixi_specs_to_match_spec(&output.run_exports.weak, &mut sources)?,
+            noarch: pixi_specs_to_match_spec(&output.run_exports.weak, &mut sources)?,
+            weak_constrains: binary_specs_to_match_spec(&output.run_exports.weak_constrains)?,
+            strong_constrains: binary_specs_to_match_spec(&output.run_exports.strong_constrains)?,
         };
 
         Ok(SourceRecord {
@@ -215,7 +294,10 @@ impl SourceMetadataSpec {
             },
             source,
             input_hash,
-            sources,
+            sources: sources
+                .into_iter()
+                .map(|(name, source)| (name.as_source().to_string(), source))
+                .collect(),
         })
     }
 
@@ -254,6 +336,12 @@ struct Dependencies {
     pub constraints: DependencyMap<rattler_conda_types::PackageName, BinarySpec>,
 }
 
+struct PackageRecordDependencies {
+    pub depends: Vec<String>,
+    pub constrains: Vec<String>,
+    pub sources: HashMap<PackageName, SourceSpec>,
+}
+
 impl Dependencies {
     pub fn new(output: &CondaOutputDependencies, source_anchor: SourceAnchor) -> Self {
         let mut dependencies = DependencyMap::default();
@@ -277,7 +365,7 @@ impl Dependencies {
             let Some(name) = PackageName::from_str(&constraint.name).ok() else {
                 continue;
             };
-            constraints.insert(name, binary_spec_to_nameless(constraint.spec.clone()));
+            constraints.insert(name, from_pixi_binary_spec_v1(constraint.spec.clone()));
         }
 
         Self {
@@ -286,16 +374,12 @@ impl Dependencies {
         }
     }
 
-    pub fn with_host_run_exports(
-        mut self,
-        build_run_exports: &FilteredRunExports,
-        channel_config: &ChannelConfig,
-    ) -> Self {
-        for (name, spec) in &build_run_exports.strong {
+    pub fn with_host_run_exports(mut self, build_run_exports: &FilteredRunExports) -> Self {
+        for (name, spec) in build_run_exports.strong.iter_specs() {
             self.dependencies.insert(name.clone(), spec.clone());
         }
 
-        for (name, spec) in &build_run_exports.strong_constrains {
+        for (name, spec) in build_run_exports.strong_constrains.iter_specs() {
             self.constraints.insert(name.clone(), spec.clone());
         }
 
@@ -307,24 +391,16 @@ impl Dependencies {
         host_run_exports: FilteredRunExports,
         build_run_exports: FilteredRunExports,
         target_platform: Platform,
-        channel_config: &ChannelConfig,
     ) -> Self {
-        let add_dependencies = |this: &mut Self, specs: Vec<MatchSpec>| {
-            for spec in specs {
-                if let (Some(name), spec) = spec.into_nameless() {
-                    this.dependencies.insert(
-                        name,
-                        PixiSpec::from_nameless_matchspec(spec, channel_config),
-                    );
-                }
+        let add_dependencies = |this: &mut Self, specs: DependencyMap<PackageName, PixiSpec>| {
+            for (name, spec) in specs.into_specs() {
+                this.dependencies.insert(name, spec);
             }
         };
 
-        let add_constraints = |this: &mut Self, specs: Vec<MatchSpec>| {
-            for spec in specs {
-                if let (Some(name), spec) = spec.into_nameless() {
-                    this.constraints.insert(name, spec);
-                }
+        let add_constraints = |this: &mut Self, specs: DependencyMap<PackageName, BinarySpec>| {
+            for (name, spec) in specs.into_specs() {
+                this.constraints.insert(name, spec);
             }
         };
 
@@ -355,7 +431,7 @@ impl Dependencies {
             ignore: &CondaOutputIgnoreRunExports,
         ) -> Vec<(PackageName, T)> {
             specs
-                .into_iter()
+                .iter()
                 .filter_map(move |spec| {
                     let (Some(name), spec) = MatchSpec::from_str(spec, ParseStrictness::Lenient)
                         .ok()?
@@ -393,14 +469,18 @@ impl Dependencies {
                             build,
                             build_number,
                             file_name,
-                            extras,
                             channel,
                             subdir,
-                            namespace,
                             md5,
                             sha256,
-                            url: _,
                             license,
+
+                            // Caught in the above case
+                            url: _,
+
+                            // Explicitly ignored
+                            namespace: _,
+                            extras: _,
                         } => BinarySpec::DetailedVersion(Box::new(DetailedSpec {
                             version,
                             build,
@@ -460,13 +540,14 @@ impl Dependencies {
         filter_run_exports
     }
 
-    pub fn into_source_record_fields(
+    pub fn into_package_record_fields(
         self,
         channel_config: &ChannelConfig,
-    ) -> (Vec<String>, Vec<String>, HashMap<String, SourceSpec>) {
+    ) -> Result<PackageRecordDependencies, SpecConversionError> {
         let constraints = self
             .constraints
-            .into_match_specs()
+            .into_match_specs(channel_config)?
+            .into_iter()
             .map(|spec| spec.to_string())
             .collect();
         let mut dependencies = Vec::new();
@@ -481,7 +562,7 @@ impl Dependencies {
                         }
                         .to_string(),
                     );
-                    sources.insert(name.as_source().to_string(), source);
+                    sources.insert(name, source);
                 }
                 Either::Right(binary) => {
                     if let Ok(spec) = binary.try_into_nameless_match_spec(channel_config) {
@@ -490,18 +571,22 @@ impl Dependencies {
                 }
             }
         }
-        (dependencies, constraints, sources)
+        Ok(PackageRecordDependencies {
+            depends: dependencies,
+            constrains: constraints,
+            sources,
+        })
     }
 }
 
 /// Filtered run export result
 #[derive(Debug, Default, Clone)]
 pub struct FilteredRunExports {
-    pub noarch: Vec<(PackageName, PixiSpec)>,
-    pub strong: Vec<(PackageName, PixiSpec)>,
-    pub strong_constrains: Vec<(PackageName, BinarySpec)>,
-    pub weak: Vec<(PackageName, PixiSpec)>,
-    pub weak_constrains: Vec<(PackageName, BinarySpec)>,
+    pub noarch: DependencyMap<PackageName, PixiSpec>,
+    pub strong: DependencyMap<PackageName, PixiSpec>,
+    pub strong_constrains: DependencyMap<PackageName, BinarySpec>,
+    pub weak: DependencyMap<PackageName, PixiSpec>,
+    pub weak_constrains: DependencyMap<PackageName, BinarySpec>,
 }
 
 pub(crate) fn source_metadata_to_records(
@@ -646,37 +731,6 @@ pub fn from_pixi_binary_spec_v1(spec: BinaryPackageSpecV1) -> pixi_spec::BinaryS
     }
 }
 
-pub fn binary_spec_to_nameless(spec: BinaryPackageSpecV1) -> NamelessMatchSpec {
-    let BinaryPackageSpecV1 {
-        version,
-        build,
-        build_number,
-        file_name,
-        channel,
-        subdir,
-        md5,
-        sha256,
-        url,
-        license,
-    } = spec;
-    NamelessMatchSpec {
-        version,
-        build,
-        build_number,
-        file_name,
-        channel: channel.map(Channel::from_url).map(Arc::new),
-        subdir,
-        md5,
-        sha256,
-        url,
-        license,
-
-        // These are explicitly ignored in the conversion
-        extras: None,
-        namespace: None,
-    }
-}
-
 pub fn from_package_spec_v1(source: PackageSpecV1) -> pixi_spec::PixiSpec {
     match source {
         PackageSpecV1::Source(source) => from_pixi_source_spec_v1(source).into(),
@@ -703,4 +757,18 @@ pub enum SourceMetadataError {
         #[source]
         Box<SolvePixiEnvironmentError>,
     ),
+
+    #[error(transparent)]
+    SpecConversionError(#[from] SpecConversionError),
+
+    #[error("backend returned a dependency on an invalid package name: {0}")]
+    InvalidPackageName(String, #[source] InvalidPackageNameError),
+
+    #[error("found two source dependencies for {} but for different sources ({source1} and {source2})", package.as_source()
+    )]
+    DuplicateSourceDependency {
+        package: PackageName,
+        source1: Box<SourceSpec>,
+        source2: Box<SourceSpec>,
+    },
 }

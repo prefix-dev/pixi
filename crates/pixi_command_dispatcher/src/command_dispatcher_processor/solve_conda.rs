@@ -2,6 +2,7 @@ use futures::FutureExt;
 use pixi_record::PixiRecord;
 
 use super::{CommandDispatcherProcessor, PendingSolveCondaEnvironment, TaskResult};
+use crate::solve_conda::SolveCondaEnvironmentError;
 use crate::{
     CommandDispatcherError, CommandDispatcherErrorResultExt, Reporter,
     command_dispatcher::{SolveCondaEnvironmentId, SolveCondaEnvironmentTask},
@@ -76,7 +77,7 @@ impl CommandDispatcherProcessor {
     pub(crate) fn on_solve_conda_environment_result(
         &mut self,
         id: SolveCondaEnvironmentId,
-        result: Result<Vec<PixiRecord>, CommandDispatcherError<rattler_solve::SolveError>>,
+        result: Result<Vec<PixiRecord>, CommandDispatcherError<SolveCondaEnvironmentError>>,
     ) {
         let env = self
             .conda_solves

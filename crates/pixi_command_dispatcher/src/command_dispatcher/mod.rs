@@ -27,6 +27,7 @@ use reqwest_middleware::ClientWithMiddleware;
 use tokio::sync::{mpsc, oneshot};
 use typed_path::Utf8TypedPath;
 
+use crate::solve_conda::SolveCondaEnvironmentError;
 use crate::{
     BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec, Executor,
     InvalidPathError, PixiEnvironmentSpec, SolveCondaEnvironmentSpec, SolvePixiEnvironmentError,
@@ -238,7 +239,7 @@ impl TaskSpec for InstallPixiEnvironmentSpec {
 pub(crate) type SolveCondaEnvironmentTask = Task<SolveCondaEnvironmentSpec>;
 impl TaskSpec for SolveCondaEnvironmentSpec {
     type Output = Vec<PixiRecord>;
-    type Error = rattler_solve::SolveError;
+    type Error = SolveCondaEnvironmentError;
 }
 
 /// A message that is send to the background task to requesting the metadata for
@@ -460,7 +461,7 @@ impl CommandDispatcher {
     pub async fn solve_conda_environment(
         &self,
         spec: SolveCondaEnvironmentSpec,
-    ) -> Result<Vec<PixiRecord>, CommandDispatcherError<rattler_solve::SolveError>> {
+    ) -> Result<Vec<PixiRecord>, CommandDispatcherError<SolveCondaEnvironmentError>> {
         self.execute_task(spec).await
     }
 

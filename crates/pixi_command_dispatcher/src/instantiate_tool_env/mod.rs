@@ -16,9 +16,7 @@ use pixi_build_types::{
 use pixi_spec::{BinarySpec, PixiSpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_utils::AsyncPrefixGuard;
-use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, NamelessMatchSpec, PackageName, prefix::Prefix,
-};
+use rattler_conda_types::{ChannelConfig, ChannelUrl, PackageName, prefix::Prefix};
 use rattler_solve::{ChannelPriority, SolveStrategy};
 use thiserror::Error;
 use xxhash_rust::xxh3::Xxh3;

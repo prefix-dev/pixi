@@ -3,11 +3,10 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use chrono::{DateTime, Utc};
 use itertools::Itertools;
 use pixi_record::{PixiRecord, SourceRecord};
-use pixi_spec::SourceSpec;
+use pixi_spec::{BinarySpec, SourceSpec};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, NamelessMatchSpec, Platform,
-    RepoDataRecord,
+    ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, Platform, RepoDataRecord,
 };
 use rattler_repodata_gateway::RepoData;
 use rattler_solve::{ChannelPriority, SolveStrategy, SolverImpl};
@@ -36,11 +35,11 @@ pub struct SolveCondaEnvironmentSpec {
 
     /// Requirements on binary packages.
     #[serde(skip_serializing_if = "DependencyMap::is_empty")]
-    pub binary_specs: DependencyMap<rattler_conda_types::PackageName, NamelessMatchSpec>,
+    pub binary_specs: DependencyMap<rattler_conda_types::PackageName, BinarySpec>,
 
     /// Additional constraints of the environment
     #[serde(skip_serializing_if = "DependencyMap::is_empty")]
-    pub constraints: DependencyMap<rattler_conda_types::PackageName, NamelessMatchSpec>,
+    pub constraints: DependencyMap<rattler_conda_types::PackageName, BinarySpec>,
 
     /// Available source repodata records.
     #[serde(skip)]
@@ -106,7 +105,7 @@ impl SolveCondaEnvironmentSpec {
     /// Solves this environment
     pub async fn solve(
         self,
-    ) -> Result<Vec<PixiRecord>, CommandDispatcherError<rattler_solve::SolveError>> {
+    ) -> Result<Vec<PixiRecord>, CommandDispatcherError<SolveCondaEnvironmentError>> {
         // Solving is a CPU-intensive task, we spawn this on a background task to allow
         // for more concurrency.
         let solve_result = tokio::task::spawn_blocking(move || {
@@ -129,6 +128,16 @@ impl SolveCondaEnvironmentSpec {
                     ..MatchSpec::default()
                 })
                 .collect::<Vec<_>>();
+
+            let binary_match_specs = self
+                .binary_specs
+                .into_match_specs(&self.channel_config)
+                .map_err(SolveCondaEnvironmentError::SpecConversionError)?;
+
+            let constrains_match_specs = self
+                .constraints
+                .into_match_specs(&self.channel_config)
+                .map_err(SolveCondaEnvironmentError::SpecConversionError)?;
 
             // Construct repodata records for source records so that we can feed them to the
             // solver.
@@ -172,21 +181,21 @@ impl SolveCondaEnvironmentSpec {
             let task = rattler_solve::SolverTask {
                 specs: source_match_specs
                     .into_iter()
-                    .chain(self.binary_specs.into_match_specs())
+                    .chain(binary_match_specs)
                     .collect(),
                 locked_packages: installed,
                 virtual_packages: self.virtual_packages,
                 channel_priority: self.channel_priority,
                 exclude_newer: self.exclude_newer,
                 strategy: self.strategy,
-                constraints: self.constraints.into_match_specs().collect(),
+                constraints: constrains_match_specs,
                 ..rattler_solve::SolverTask::from_iter(solvable_records)
             };
 
             let solver_result = rattler_solve::resolvo::Solver.solve(task)?;
 
             // Convert the results back into pixi records.
-            Ok::<_, rattler_solve::SolveError>(
+            Ok::<_, SolveCondaEnvironmentError>(
                 solver_result
                     .records
                     .into_iter()
@@ -225,4 +234,13 @@ fn unique_url(source: &SourceRecord) -> Url {
         .append_pair("subdir", &source.package_record.subdir);
 
     url
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum SolveCondaEnvironmentError {
+    #[error(transparent)]
+    SolveError(#[from] rattler_solve::SolveError),
+
+    #[error(transparent)]
+    SpecConversionError(#[from] pixi_spec::SpecConversionError),
 }

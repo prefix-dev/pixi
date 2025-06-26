@@ -14,6 +14,7 @@ use pixi_git::{GitError, resolver::RepositoryReference, source::Fetch};
 use pixi_record::PixiRecord;
 use tokio::sync::{mpsc, oneshot};
 
+use crate::solve_conda::SolveCondaEnvironmentError;
 use crate::{
     BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec, BuiltSource,
     CommandDispatcherErrorResultExt, InstallPixiEnvironmentResult, Reporter,
@@ -120,7 +121,7 @@ pub(crate) struct CommandDispatcherProcessor {
 enum TaskResult {
     SolveCondaEnvironment(
         SolveCondaEnvironmentId,
-        Result<Vec<PixiRecord>, CommandDispatcherError<rattler_solve::SolveError>>,
+        Result<Vec<PixiRecord>, CommandDispatcherError<SolveCondaEnvironmentError>>,
     ),
     SolvePixiEnvironment(
         SolvePixiEnvironmentId,
@@ -171,7 +172,7 @@ enum PendingGitCheckout {
 /// background task to keep track of which command_dispatcher is awaiting the
 /// result.
 struct PendingSolveCondaEnvironment {
-    tx: oneshot::Sender<Result<Vec<PixiRecord>, rattler_solve::SolveError>>,
+    tx: oneshot::Sender<Result<Vec<PixiRecord>, SolveCondaEnvironmentError>>,
     reporter_id: Option<reporter::CondaSolveId>,
 }
 
