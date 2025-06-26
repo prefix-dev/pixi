@@ -19,6 +19,7 @@ pub mod command_info;
 pub mod completion;
 pub mod config;
 pub mod exec;
+pub mod extensions;
 pub mod global;
 pub mod has_specs;
 pub mod info;
@@ -43,10 +44,6 @@ pub mod workspace;
 #[derive(Parser, Debug)]
 #[command(
     version(consts::PIXI_VERSION),
-    after_help = format!("{}", {
-        panic!("adwdw");
-        std::process::id()
-    }),
     about = format!("
 Pixi [version {}] - Developer Workflow and Environment Management for Multi-Platform, Language-Agnostic Workspaces.
 
@@ -140,6 +137,7 @@ pub enum Command {
     Config(config::Args),
     #[clap(visible_alias = "x")]
     Exec(exec::Args),
+    Extensions(extensions::Args),
     #[clap(visible_alias = "g")]
     Global(global::Args),
     Info(info::Args),
@@ -300,6 +298,7 @@ pub async fn execute_command(
         Command::Lock(cmd) => lock::execute(cmd).await,
         Command::Exec(args) => exec::execute(args).await,
         Command::Build(args) => build::execute(args).await,
+        Command::Extensions(args) => extensions::execute(args).await,
         Command::External(args) => command_info::execute_external_command(args),
     }
 }

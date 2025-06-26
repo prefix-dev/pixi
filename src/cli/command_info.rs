@@ -1,9 +1,9 @@
 use clap::CommandFactory;
 use is_executable::IsExecutable;
 use miette::{Context, IntoDiagnostic};
-use tracing::warn;
-use std::env;
 use std::path::PathBuf;
+use std::{collections::HashSet, env};
+use tracing::warn;
 
 use super::{Command, get_styles};
 
@@ -18,17 +18,28 @@ pub fn find_external_subcommand(cmd: &str) -> Option<PathBuf> {
     })
 }
 
-pub fn find_all_external_commands() -> Vec<PathBuf> {
+pub fn find_all_external_commands() -> HashSet<PathBuf> {
     let all_search_directories = search_directories().unwrap_or_default();
-    let mut all_executables_on_path = Vec::new();
-    for dir in all_search_directories {
+    let mut all_executables_on_path = HashSet::new();
+
+    for dir in &all_search_directories {
+        if !dir.is_dir() {
+            continue;
+        }
         match std::fs::read_dir(dir) {
             Ok(read_dir) => {
                 for entry in read_dir {
                     match entry {
                         Ok(entry) => {
-                            if entry.path().is_executable() && entry.path().file_name().unwrap().to_string_lossy().starts_with("pixi-") {
-                                all_executables_on_path.push(entry.path());
+                            if entry.path().is_executable()
+                                && entry
+                                    .path()
+                                    .file_name()
+                                    .unwrap()
+                                    .to_string_lossy()
+                                    .starts_with("pixi-")
+                            {
+                                all_executables_on_path.insert(entry.path());
                             }
                         }
                         Err(e) => {
@@ -38,7 +49,11 @@ pub fn find_all_external_commands() -> Vec<PathBuf> {
                 }
             }
             Err(e) => {
-                warn!("Couldn't read directory: {}", e);
+                warn!(
+                    "Couldn't read directory {}: {}",
+                    dir.to_string_lossy().to_string(),
+                    e
+                );
             }
         }
     }
