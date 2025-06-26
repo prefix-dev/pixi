@@ -24,8 +24,8 @@ Here is a non-exhaustive comparison of the features of conda and PyPI ecosystems
 | Feature | Conda | PyPI |
 | ------- | ----- | ---- |
 | Package format | Binary | Source & Binary (wheel) |
-| Package managers | [`conda`](https://github.com/conda/conda), [`mamba`](https://github.com/mamba-org/mamba), [`micromamba`](https://github.com/mamba-org/mamba), [`pixi`](https://github.com/prefix-dev/pixi), [`rattler`](https://github.com/conda/rattler) | [`pip`](https://github.com/pypa/pip), [`poetry`](https://github.com/python-poetry/poetry), [`uv`](https://github.com/astral-sh/uv), [`pdm`](https://github.com/pdm-project/pdm), [`hatch`](https://github.com/pypa/hatch), [`rye`](https://github.com/astral-sh/rye), [`pixi`](https://github.com/prefix-dev/pixi) |
-| Environment management | [`conda`](https://github.com/conda/conda), [`mamba`](https://github.com/mamba-org/mamba), [`micromamba`](https://github.com/mamba-org/mamba), [`pixi`](https://github.com/prefix-dev/pixi) | [`venv`](https://docs.python.org/3/library/venv.html), [`virtualenv`](https://virtualenv.pypa.io/en/latest/), [`pipenv`](https://pipenv.pypa.io/en/latest/), [`pyenv`](https://github.com/pyenv/pyenv), [`uv`](https://github.com/astral-sh/uv), [`rye`](https://github.com/astral-sh/rye), [`poetry`](https://github.com/python-poetry/poetry), [`pixi`](https://github.com/prefix-dev/pixi) |
+| Package managers | [`conda`](https://github.com/conda/conda), [`mamba`](https://github.com/mamba-org/mamba), [`micromamba`](https://github.com/mamba-org/mamba), [`pixi`](https://github.com/prefix-dev/pixi)  | [`pip`](https://github.com/pypa/pip), [`poetry`](https://github.com/python-poetry/poetry), [`uv`](https://github.com/astral-sh/uv), [`pdm`](https://github.com/pdm-project/pdm), [`hatch`](https://github.com/pypa/hatch), [`rye`](https://github.com/astral-sh/rye), [`pixi`](https://github.com/prefix-dev/pixi) |
+| Environment management | [`conda`](https://github.com/conda/conda), [`mamba`](https://github.com/mamba-org/mamba), [`micromamba`](https://github.com/mamba-org/mamba), [`pixi`](https://github.com/prefix-dev/pixi) | [`venv`](https://docs.python.org/3/library/venv.html), [`virtualenv`](https://virtualenv.pypa.io/en/latest/), [`pipenv`](https://pipenv.pypa.io/en/latest/), [`pyenv`](https://github.com/pyenv/pyenv), [`uv`](https://github.com/astral-sh/uv), [`poetry`](https://github.com/python-poetry/poetry), [`pixi`](https://github.com/prefix-dev/pixi) |
 | Package building | [`conda-build`](https://github.com/conda/conda-build), [`pixi`](https://github.com/prefix-dev/pixi) | [`setuptools`](https://github.com/pypa/setuptools), [`poetry`](https://github.com/python-poetry/poetry), [`flit`](https://github.com/pypa/flit), [`hatch`](https://github.com/pypa/hatch), [`uv`](https://github.com/astral-sh/uv), [`rye`](https://github.com/astral-sh/rye) |
 | Package index | [`conda-forge`](https://prefix.dev/channels/conda-forge), [`bioconda`](https://prefix.dev/channels/bioconda), and more | [pypi.org](https://pypi.org) |
 
@@ -37,8 +37,8 @@ We're extremely grateful to the [Astral](https://astral.sh) team for their work 
 
 Initially, next to `pixi` were building a library called `rip` which had the same goals as `uv`, but we decided to switch to `uv` because it quickly became a more mature library, and it has a lot of features that we need.
 
-- Initial blogpost about announcing `rip`: https://prefix.dev/blog/pypi_support_in_pixi
-- Blogpost to announce the switch to `uv`: https://prefix.dev/blog/uv_in_pixi
+- [Initial blogpost about announcing `rip`](https://prefix.dev/blog/pypi_support_in_pixi)
+- [Blogpost to announce the switch to `uv`](https://prefix.dev/blog/uv_in_pixi)
 
 ## Solvers
 Because Pixi supports both ecosystems, it currently needs two different solvers to handle the dependencies.
@@ -47,7 +47,7 @@ Because Pixi supports both ecosystems, it currently needs two different solvers 
 - The [`PubGrub`](https://github.com/pubgrub-rs/pubgrub) library is used to solve the PyPI dependencies. Implemented in [`uv`](https:://github.com/astral-sh/uv).
 
 !!! Note
-    The holy grail of Pixi is to have a single solver that can handle both ecosystems, but this is not yet implemented.
+    The holy grail of Pixi is to have a single solver that can handle both ecosystems.
     Because resolvo is written to support both ecosystems, it is possible to use it for PyPI packages as well, but this is not yet implemented.
 
 Because of these two solvers, we need to make a decision which solver to run first.
