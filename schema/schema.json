@@ -1296,6 +1296,26 @@
             "https://pypi.org/simple"
           ]
         },
+        "no-binary": {
+          "title": "No-Binary",
+          "description": "Don't use pre-built wheels for these packages",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          ],
+          "examples": [
+            "true",
+            "false"
+          ]
+        },
         "no-build": {
           "title": "No-Build",
           "description": "Packages that should NOT be built",
@@ -1336,26 +1356,6 @@
               "numpy"
             ],
             true
-          ]
-        },
-        "no-binary": {
-          "title": "No-Binary",
-          "description": "Don't use pre-build wheels for these packages",
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "minLength": 1
-              }
-            }
-          ],
-          "examples": [
-            "true",
-            "false"
           ]
         }
       }
