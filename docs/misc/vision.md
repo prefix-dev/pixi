@@ -13,7 +13,13 @@ We want to make Pixi a great experience for everyone, so we have a few values th
 
 ## Conda
 
-We are building on top of the conda packaging ecosystem, this means that we have a huge number of packages available for different platforms on [conda-forge](https://conda-forge.org/). We believe the conda packaging ecosystem provides a solid base to manage your dependencies. Conda-forge is community maintained and very open to contributions. It is widely used in data science and scientific computing, robotics and other fields. And has a proven track record.
+We are building on top of the conda packaging ecosystem, this means that we have a huge number of packages available for different platforms on [conda-forge](https://conda-forge.org/).
+We believe the conda packaging ecosystem provides a solid base to manage your dependencies.
+Conda-forge is community maintained and very open to contributions.
+It is widely used in data science and scientific computing, robotics and other fields.
+And has a proven track record.
+
+More info: [Conda & Pypi](../concepts/conda_pypi.md)
 
 ## Target languages
 
