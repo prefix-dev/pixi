@@ -18,7 +18,7 @@ pixi exec pixi-unpack environment.tar
 ```
 
 ![pixi-pack demo](https://raw.githubusercontent.com/quantco/pixi-pack/refs/heads/main/.github/assets/demo/demo-light.gif#only-light)
-![pixi-unpack demo](https://raw.githubusercontent.com/quantco/pixi-pack/refs/heads/main/.github/assets/demo/demo-dark.gif#only-dark)
+![pixi-pack demo](https://raw.githubusercontent.com/quantco/pixi-pack/refs/heads/main/.github/assets/demo/demo-dark.gif#only-dark)
 
 You can pack an environment with
 
@@ -93,8 +93,8 @@ When creating a self-extracting binary, you can specify a custom path or URL to 
 
 You can provide one of the following as the `--pixi-unpack-source`:
 
-- a URL to an `pixi-unpack` executable like `https://my.mirror/pixi-pack/pixi-unpack-x86_64-unknown-linux-musl`
-- a path to an `pixi-unpack` binary like `./pixi-unpack-x86_64-unknown-linux-musl`
+- a URL to a `pixi-unpack` executable like `https://my.mirror/pixi-pack/pixi-unpack-x86_64-unknown-linux-musl`
+- a path to a `pixi-unpack` binary like `./pixi-unpack-x86_64-unknown-linux-musl`
 
 ##### Example Usage
 
