@@ -1081,6 +1081,29 @@
   
   
   
+    <li class="md-nav__item">
+      <a href="concepts/conda_pypi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Conda & PyPI
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
     
     
     
@@ -1092,10 +1115,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_7" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4_8" >
         
           
-          <label class="md-nav__link" for="__nav_4_7" id="__nav_4_7_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_4_8" id="__nav_4_8_label" tabindex="0">
             
   
   
@@ -1108,8 +1131,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_7_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_4_7">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_4_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4_8">
             <span class="md-nav__icon md-icon"></span>
             Global Tools
           </label>
@@ -2715,46 +2738,58 @@
 <h2 id="why-pixi">Why Pixi?<a class="headerlink" href="#why-pixi" title="Permanent link">#</a></h2>
 <p>Pixi is a <strong>fast, modern, and reproducible</strong> package management tool for developers of all backgrounds.</p>
 <div class="feature-grid">
-  <div class="feature-card">
-    <strong>🔄 Reproducibility</strong>
-    <p>Isolated, easily recreated environments with lockfiles built-in</p>
-  </div>
-  <div class="feature-card">
-    <strong>🛠️ Tasks</strong>
-    <p>Manage complex pipelines effortlessly.</p>
-  </div>
-  <div class="feature-card">
-    <strong>🌐 Multi Platform</strong>
-    <p>Works on Linux, macOS, Windows, and more.</p>
-  </div>
-  <div class="feature-card">
-    <strong>🧩 Multi Environment</strong>
-    <p>Compose multiple environments in one manifest.</p>
-  </div>
-  <div class="feature-card">
-    <strong>🐍 Python</strong>
-    <p>Support for <code>pyproject.toml</code> and PyPI through <a href="https://docs.astral.sh/uv/" target="_blank">uv</a>.</p>
-  </div>
-  <div class="feature-card">
-    <strong>🌍 Global Tools</strong>
-    <p>Install global tools, safely isolated. Replacing <code>apt</code>, <code>homebrew</code>, <code>winget</code></p>
-  </div>
+    <a href="/pixi/workspace/lockfile">
+      <div class="feature-card">
+              <strong>🔄 Reproducibility</strong>
+              <p>Isolated, easily recreated environments with lockfiles built-in</p>
+      </div>
+    </a>
+    <a href="/pixi/workspace/advanced_tasks/">
+      <div class="feature-card">
+          <strong>🛠️ Tasks</strong>
+          <p>Manage complex pipelines effortlessly.</p>
+      </div>
+    </a>
+    <a href="/pixi/workspace/multi_platform_configuration/">
+      <div class="feature-card">
+          <strong>🌐 Multi Platform</strong>
+          <p>Works on Linux, macOS, Windows, and more.</p>
+      </div>
+    </a>
+    <a href="/pixi/workspace/multi_environment/">
+      <div class="feature-card">
+          <strong>🧩 Multi Environment</strong>
+          <p>Compose multiple environments in one manifest.</p>
+      </div>
+    </a>
+    <a href="/pixi/python/tutorial/">
+      <div class="feature-card">
+          <strong>🐍 Python</strong>
+          <p>Support for <code>pyproject.toml</code> and PyPI through uv.</p>
+      </div>
+    </a>
+    <a href="/pixi/global_tools/introduction/">
+      <div class="feature-card">
+          <strong>🌍 Global Tools</strong>
+          <p>Install global tools, safely isolated. Replacing <code>apt</code>, <code>homebrew</code>, <code>winget</code></p>
+      </div>
+    </a>
 </div>
 
 <hr />
 <h2 id="quick-demo">Quick Demo<a class="headerlink" href="#quick-demo" title="Permanent link">#</a></h2>
-<p>Project setup is a breeze with Pixi.
+<p>Project setup is a breeze with Pixi.</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>hello-world
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>hello-world
 </span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>pixi<span class="w"> </span>add<span class="w"> </span>python
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>pixi<span class="w"> </span>run<span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;print(&#39;Hello World!&#39;)&quot;</span>
 </span></code></pre></div>
-<img alt="Pixi Demo" src="assets/vhs-tapes/pixi_project_demo_light.gif#only-light" />
+<p><img alt="Pixi Demo" src="assets/vhs-tapes/pixi_project_demo_light.gif#only-light" />
 <img alt="Pixi Demo" src="assets/vhs-tapes/pixi_project_demo_dark.gif#only-dark" /></p>
-<p>Install your favorite tools with a single command.
+<p>Install your favorite tools with a single command.</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>gh<span class="w"> </span>nvim<span class="w"> </span>ipython<span class="w"> </span>btop<span class="w"> </span>ripgrep
 </span></code></pre></div>
-<img alt="Pixi Global Demo" src="assets/vhs-tapes/pixi_global_demo_light.gif#only-light" />
+<p><img alt="Pixi Global Demo" src="assets/vhs-tapes/pixi_global_demo_light.gif#only-light" />
 <img alt="Pixi Global Demo" src="assets/vhs-tapes/pixi_global_demo_dark.gif#only-dark" /></p>
 <hr />
 <h2 id="what-is-the-difference-with-pixi">What is the difference with Pixi?<a class="headerlink" href="#what-is-the-difference-with-pixi" title="Permanent link">#</a></h2>
@@ -2814,7 +2849,8 @@
 </table>
 <hr />
 <h2 id="available-software">Available Software<a class="headerlink" href="#available-software" title="Permanent link">#</a></h2>
-<p>Pixi defaults to the <strong>biggest Conda package repository</strong>, <a href="https://conda-forge.org/">conda-forge</a>, which contains over <strong>30,000 packages</strong>.</p>
+<p>Pixi defaults to the <strong>biggest Conda package repository</strong>, <a href="https://conda-forge.org/">conda-forge</a>, which contains over
+<strong>30,000 packages</strong>.</p>
 <ul>
 <li><strong>Python</strong>: <a href="https://prefix.dev/channels/conda-forge/packages/python"><code>python</code></a>, <a href="https://prefix.dev/channels/conda-forge/packages/scikit-learn"><code>scikit-learn</code></a>, <a href="https://prefix.dev/channels/conda-forge/packages/pytorch"><code>pytorch</code></a></li>
 <li><strong>C/C++</strong>: <a href="https://prefix.dev/channels/conda-forge/packages/clang"><code>clang</code></a>, <a href="https://prefix.dev/channels/conda-forge/packages/boost-cpp"><code>boost</code></a>, <a href="https://prefix.dev/channels/conda-forge/packages/opencv"><code>opencv</code></a>, <a href="https://prefix.dev/channels/conda-forge/packages/ninja"><code>ninja</code></a></li>
@@ -2857,32 +2893,23 @@ The scripts are open source and available on <a href="https://github.com/prefix-
 <div class="tabbed-content">
 <div class="tabbed-block">
 <ol>
-<li>
-<p><strong>Initialize a workspace:</strong>
-    <div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi init hello-world
+<li><strong>Initialize a workspace:</strong>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi init hello-world
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>cd hello-world
-</span></code></pre></div></p>
-</li>
-<li>
-<p><strong>Add dependencies:</strong>
+</span></code></pre></div></li>
+<li><strong>Add dependencies:</strong>
     <div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pixi add cowpy python
-</span></code></pre></div></p>
-</li>
-<li>
-<p><strong>Create your script:</strong>
+</span></code></pre></div></li>
+<li><strong>Create your script:</strong>
     <div class="language-py highlight"><span class="filename">hello.py</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">cowpy.cow</span><span class="w"> </span><span class="kn">import</span> <span class="n">Cowacter</span>
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">message</span> <span class="o">=</span> <span class="n">Cowacter</span><span class="p">()</span><span class="o">.</span><span class="n">milk</span><span class="p">(</span><span class="s2">&quot;Hello Pixi fans!&quot;</span><span class="p">)</span>
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="nb">print</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
-</span></code></pre></div></p>
-</li>
-<li>
-<p><strong>Add a task:</strong>
+</span></code></pre></div></li>
+<li><strong>Add a task:</strong>
     <div class="language-text highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>pixi task add start python hello.py
-</span></code></pre></div></p>
-</li>
-<li>
-<p><strong>Run the task:</strong>
+</span></code></pre></div></li>
+<li><strong>Run the task:</strong>
     <div class="language-text highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>pixi run start
 </span></code></pre></div>
     <div class="language-text highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>✨ Pixi task (start): python hello.py
@@ -2894,40 +2921,36 @@ The scripts are open source and available on <a href="https://github.com/prefix-
 </span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a>          (__)\       )\/\
 </span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>            ||----w |
 </span><span id="__span-9-9"><a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>            ||     ||
-</span></code></pre></div></p>
-</li>
-<li>
-<p><strong>Entry the environment shell:</strong>
+</span></code></pre></div></li>
+<li><strong>Entry the environment shell:</strong>
     <div class="language-text highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>pixi shell
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>python hello.py
 </span><span id="__span-10-3"><a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>exit
-</span></code></pre></div></p>
-</li>
+</span></code></pre></div></li>
 </ol>
 <p>More details on how to use Pixi with Python can be found in the <a href="python/tutorial/">Python tutorial</a>.</p>
 </div>
 <div class="tabbed-block">
 <ol>
 <li><strong>Initialize a workspace:</strong>
-    <div class="language-text highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>pixi init pixi-rust
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>cd pixi-rust
-</span></code></pre></div></li>
+    <code>pixi init pixi-rust
+    cd pixi-rust</code></li>
 <li><strong>Add dependencies:</strong>
-    <div class="language-text highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>pixi add rust
+    <div class="language-text highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>pixi add rust
 </span></code></pre></div></li>
 <li><strong>Create your project:</strong>
-    <div class="language-text highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>pixi run cargo init
+    <div class="language-text highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>pixi run cargo init
 </span></code></pre></div></li>
 <li><strong>Add a task:</strong>
-    <div class="language-text highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>pixi task add start cargo run
+    <div class="language-text highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>pixi task add start cargo run
 </span></code></pre></div></li>
 <li><strong>Run the task:</strong>
-    <div class="language-text highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>pixi run start
+    <div class="language-text highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>pixi run start
 </span></code></pre></div>
-    <div class="language-text highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>✨ Pixi task (start): cargo run
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>     Running `target/debug/pixi-rust`
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>Hello, world!
+    <div class="language-text highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>✨ Pixi task (start): cargo run
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>     Running `target/debug/pixi-rust`
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>Hello, world!
 </span></code></pre></div></li>
 </ol>
 <p>This is more of an example to show off how easy it is to use Pixi with Rust.
@@ -2937,35 +2960,35 @@ More details on how to use Pixi with Rust can be found in the <a href="tutorials
 <div class="tabbed-block">
 <ol>
 <li><strong>Initialize a workspace:</strong>
-    <div class="language-text highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>pixi init pixi-node
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>cd pixi-node
+    <div class="language-text highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>pixi init pixi-node
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>cd pixi-node
 </span></code></pre></div></li>
 <li><strong>Add dependencies:</strong>
-    <div class="language-text highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>pixi add nodejs
+    <div class="language-text highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>pixi add nodejs
 </span></code></pre></div></li>
 <li><strong>Create your script:</strong>
-    <div class="language-js highlight"><span class="filename">hello.js</span><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s2">&quot;Hello Pixi fans!&quot;</span><span class="p">);</span>
+    <div class="language-js highlight"><span class="filename">hello.js</span><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s2">&quot;Hello Pixi fans!&quot;</span><span class="p">);</span>
 </span></code></pre></div></li>
 <li><strong>Add a task:</strong>
-    <div class="language-text highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>pixi task add start &quot;node hello.js&quot;
+    <div class="language-text highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>pixi task add start &quot;node hello.js&quot;
 </span></code></pre></div></li>
 <li><strong>Run the task:</strong>
-    <div class="language-text highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>pixi run start
+    <div class="language-text highlight"><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>pixi run start
 </span></code></pre></div>
-    <div class="language-text highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>✨ Pixi task (start): node hello.js
-</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>Hello Pixi fans!
+    <div class="language-text highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>✨ Pixi task (start): node hello.js
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>Hello Pixi fans!
 </span></code></pre></div></li>
 </ol>
 </div>
 <div class="tabbed-block">
 <ol>
 <li><strong>Initialize a workspace:</strong>
-    <div class="language-text highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>pixi init pixi-ros2 -c https://prefix.dev/conda-forge -c &quot;https://prefix.dev/robostack-humble&quot;
-</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>cd pixi-ros2
+    <div class="language-text highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>pixi init pixi-ros2 -c https://prefix.dev/conda-forge -c &quot;https://prefix.dev/robostack-humble&quot;
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>cd pixi-ros2
 </span></code></pre></div></li>
 <li>
 <p><strong>Add dependencies:</strong>
-    <div class="language-text highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>pixi add ros-humble-desktop
+    <div class="language-text highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>pixi add ros-humble-desktop
 </span></code></pre></div></p>
 <details class="tip">
 <summary>This might take a minute</summary>
@@ -2974,7 +2997,7 @@ More details on how to use Pixi with Rust can be found in the <a href="tutorials
 </li>
 <li>
 <p><strong>Start Rviz</strong>
-    <div class="language-text highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>pixi run rviz2
+    <div class="language-text highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>pixi run rviz2
 </span></code></pre></div></p>
 </li>
 </ol>
@@ -2983,13 +3006,13 @@ More details on how to use Pixi with Rust can be found in the <a href="tutorials
 <div class="tabbed-block">
 <ol>
 <li>Install all your favorite tools with a single command:
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>terraform<span class="w"> </span>ansible<span class="w"> </span>k9s<span class="w"> </span>make
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>terraform<span class="w"> </span>ansible<span class="w"> </span>k9s<span class="w"> </span>make
 </span></code></pre></div></li>
 <li>Use them everywhere:
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>ansible<span class="w"> </span>--version
-</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>terraform<span class="w"> </span>--version
-</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>k9s<span class="w"> </span>version
-</span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a>make<span class="w"> </span>--version
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>ansible<span class="w"> </span>--version
+</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>terraform<span class="w"> </span>--version
+</span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>k9s<span class="w"> </span>version
+</span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a>make<span class="w"> </span>--version
 </span></code></pre></div></li>
 </ol>
 </div>
