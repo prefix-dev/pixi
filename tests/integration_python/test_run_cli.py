@@ -1360,11 +1360,14 @@ def test_task_caching_with_multiple_inputs_args(pixi: Path, tmp_pixi_workspace: 
 
 # Run with environment variable and sort the priority
 # variable task.env > activation.env > activation.scripts > activation scripts of dependencies > outside environment variable
-def test_run_with_environment_variable_priority(pixi: Path, tmp_pixi_workspace: Path) -> None:
+def test_run_with_environment_variable_priority(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     script_manifest = tmp_pixi_workspace.joinpath("env_setup.sh")
     toml = f"""
-    {EMPTY_BOILERPLATE_PROJECT}
+    [project]
+    name = "test"
+    channels = ["{dummy_channel_1}"]
+    platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
     [activation.env]
     TEST_ENV_VAR_FOR_ACTIVATION_TEST = "test123"
     [activation]
@@ -1373,17 +1376,17 @@ def test_run_with_environment_variable_priority(pixi: Path, tmp_pixi_workspace: 
     cmd = "echo $TEST_ENV_VAR_FOR_ACTIVATION_TEST"
     [tasks.foo]
     cmd = "echo $TEST_ENV_VAR_FOR_ACTIVATION_TEST"
-    [tasks.pdal]
-    cmd = "echo $PDAL_DRIVER_PATH"
+    [tasks.foobar]
+    cmd = "echo $FOO_PATH"
     [tasks.task.env]
     TEST_ENV_VAR_FOR_ACTIVATION_TEST = "test456"
-    # [dependencies]
-    # pdal = "*"
+    [dependencies]
+    pixi-foobar = "*"
     """
     test_script_file = """
     #!/bin/bash
     export TEST_ENV_VAR_FOR_ACTIVATION_TEST="activation_script"
-    export PDAL_DRIVER_PATH="activation_script"
+    export FOO_PATH="activation_script"
     """
     manifest.write_text(toml)
     script_manifest.write_text(test_script_file)
@@ -1435,4 +1438,14 @@ def test_run_with_environment_variable_priority(pixi: Path, tmp_pixi_workspace: 
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "foo"],
         stdout_contains="test123",
+    )
+
+    # Test 5: activation.script > activation scripts from dependencies - should use activation.script
+    # Run an actual install
+    verify_cli_command(
+        [pixi, "install", "--manifest-path", manifest],
+    )
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "foobar"],
+        stdout_contains="activation_script",
     )
