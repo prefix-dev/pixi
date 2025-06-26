@@ -395,6 +395,7 @@ fn get_export_specific_task_env(task: &Task, command_env: &HashMap<OsString, OsS
     if task.env().is_none_or(|map| map.is_empty()) {
         return String::new();
     }
+
     let mut export = String::new();
     let mut export_merged: HashMap<String, String> = HashMap::new();
     // Define keys that should not be overridden
@@ -422,21 +423,34 @@ fn get_export_specific_task_env(task: &Task, command_env: &HashMap<OsString, OsS
         .filter_map(|(k, v)| Some((k.to_str()?.to_string(), v.to_str()?.to_string())))
         .collect();
 
-    // Env map
-    let mut env_map: HashMap<&'static str, Option<IndexMap<String, String>>> = HashMap::new();
-    // Command env variables
-    env_map.insert("COMMAND_ENV", Some(command_env_converted));
-    // Task specific environment variables
-    env_map.insert(
-        "TASK_SPECIFIC_ENVS",
-        Some(task.env().cloned().unwrap_or_default()),
-    );
+    if let Some(env) = task.env() {
+        // If task.env() and command_env don't have duplicated keys, simply export task.env().
+        if env.keys().all(|k| !command_env_converted.contains_key(k)) {
+            println!("env.keys() {:?}", env.keys());
+            for key in env.keys() {
+                if let Some(value) = env.get(key) {
+                    export_merged.insert(key.clone(), value.clone());
+                }
+            }
+        } else {
+            // Env map
+            let mut env_map: HashMap<&'static str, Option<IndexMap<String, String>>> =
+                HashMap::new();
+            // Command env variables
+            env_map.insert("COMMAND_ENV", Some(command_env_converted));
+            // Task specific environment variables
+            env_map.insert(
+                "TASK_SPECIFIC_ENVS",
+                Some(task.env().cloned().unwrap_or_default()),
+            );
 
-    // Merge based on priority: from lowest to higheset
-    let priority = ["COMMAND_ENV", "TASK_SPECIFIC_ENVS"];
-    for key in &priority {
-        if let Some(Some(env_map_key)) = env_map.get(key) {
-            export_merged.extend(env_map_key.clone())
+            // Merge based on priority: from lowest to higheset
+            let priority = ["COMMAND_ENV", "TASK_SPECIFIC_ENVS"];
+            for key in &priority {
+                if let Some(Some(env_map_key)) = env_map.get(key) {
+                    export_merged.extend(env_map_key.clone())
+                }
+            }
         }
     }
 
@@ -562,7 +576,6 @@ mod tests {
         let result = get_export_specific_task_env(task, &command_env);
 
         assert!(result.contains("export \"FOO=bar\""));
-        assert!(result.contains("export \"HOME=myHome\""));
     }
 
     #[test]
@@ -586,6 +599,7 @@ mod tests {
 
         let result = get_export_specific_task_env(task, &command_env);
         // task specific env overrides outside environment variables
+        println!("RESULT: {}", result);
         assert!(result.contains("export \"FOO=bar\""));
     }
 
@@ -621,7 +635,6 @@ mod tests {
         let result = executable_task.as_script(&command_env).unwrap().unwrap();
 
         assert!(result.contains("export \"FOO=bar\""));
-        assert!(result.contains("export \"HOME=myHome\""));
     }
 
     #[tokio::test]
