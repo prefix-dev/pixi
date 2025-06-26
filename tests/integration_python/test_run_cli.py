@@ -1371,23 +1371,23 @@ def test_run_with_environment_variable_priority(
     channels = ["{dummy_channel_1}"]
     platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
     [activation.env]
-    TEST_ENV_VAR_FOR_ACTIVATION_TEST = "test123"
+    MY_ENV = "test123"
     [activation]
     scripts = ["env_setup.sh"]
     [tasks.task]
-    cmd = "echo $TEST_ENV_VAR_FOR_ACTIVATION_TEST"
+    cmd = "echo $MY_ENV"
     [tasks.foo]
-    cmd = "echo $TEST_ENV_VAR_FOR_ACTIVATION_TEST"
+    cmd = "echo $MY_ENV"
     [tasks.foobar]
     cmd = "echo $FOO_PATH"
     [tasks.task.env]
-    TEST_ENV_VAR_FOR_ACTIVATION_TEST = "test456"
+    MY_ENV = "test456"
     [dependencies]
     pixi-foobar = "*"
     """
     test_script_file = """
     #!/bin/bash
-    export TEST_ENV_VAR_FOR_ACTIVATION_TEST="activation_script"
+    export MY_ENV="activation_script"
     export FOO_PATH="activation_script"
     """
     manifest.write_text(toml)
@@ -1420,7 +1420,7 @@ def test_run_with_environment_variable_priority(
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "task"],
         stdout_contains="test456",
-        env={"TEST_ENV_VAR_FOR_ACTIVATION_TEST": "outside_ev"},
+        env={"MY_ENV": "outside_ev"},
     )
 
     # Test 2: task.env > activation.env - should use environment variable defined in specific tasks
@@ -1433,7 +1433,7 @@ def test_run_with_environment_variable_priority(
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "foo"],
         stdout_contains="test123",
-        env={"TEST_ENV_VAR_FOR_ACTIVATION_TEST": "outside_ev"},
+        env={"MY_ENV": "outside_ev"},
     )
 
     # Test 4: activation.env > activation.script - should use activation.env
