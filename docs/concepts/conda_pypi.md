@@ -9,7 +9,7 @@ This makes the ecosystem very fast and easy to use.
 It is a much larger ecosystem than conda, especially because the boundary to upload packages is lower.
 This means that there are a lot of packages available, but it also means that the quality of the packages is not always as high as in the conda ecosystem.
 
-Pixi **can** install packages from **both** **ecosystems**, but it uses a **conda-first approach**.
+Pixi can install packages from **both** **ecosystems**, but it uses a **conda-first approach**.
 
 The simplified process is as follows:
 
