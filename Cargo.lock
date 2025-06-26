@@ -4647,6 +4647,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "url",
+ "xxhash-rust",
 ]
 
 [[package]]

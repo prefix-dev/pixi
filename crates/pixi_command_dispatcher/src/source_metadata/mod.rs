@@ -1,6 +1,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
-    hash::{Hash, Hasher},
+    hash::Hash,
 };
 
 use miette::Diagnostic;
@@ -14,7 +14,6 @@ use pixi_glob::GlobHashKey;
 use pixi_record::{InputHash, SourceRecord};
 use rattler_conda_types::{ChannelConfig, ChannelUrl, PackageRecord};
 use thiserror::Error;
-use xxhash_rust::xxh3::Xxh3;
 
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
@@ -89,6 +88,14 @@ impl SourceMetadataSpec {
             .await
             .map_err(SourceMetadataError::Cache)
             .map_err(CommandDispatcherError::Failed)?;
+
+        // Calculate the hash of the project model
+        let project_model_hash = discovered_backend
+            .init_params
+            .project_model
+            .as_ref()
+            .map(ProjectModelV1::calculate_hash);
+
         if let Some(metadata) = metadata {
             tracing::debug!(
                 "Found source metadata in cache for source spec: {}",
@@ -97,23 +104,12 @@ impl SourceMetadataSpec {
 
             // Check if the input hash is still valid.
             if let Some(input_globs) = &metadata.input_hash {
-                let project_model_hash =
-                    discovered_backend
-                        .init_params
-                        .project_model
-                        .as_ref()
-                        .map(|project_model| {
-                            let mut hasher = Xxh3::new();
-                            project_model.hash(&mut hasher);
-                            hasher.finish().to_ne_bytes().to_vec()
-                        });
-
                 let new_hash = command_dispatcher
                     .glob_hash_cache()
                     .compute_hash(GlobHashKey::new(
                         self.source.path.clone(),
                         input_globs.globs.clone(),
-                        project_model_hash,
+                        project_model_hash.clone(),
                     ))
                     .await
                     .map_err(SourceMetadataError::GlobHash)
@@ -146,8 +142,6 @@ impl SourceMetadataSpec {
         }
 
         // Instantiate the backend with the discovered information.
-        let project_model = discovered_backend.init_params.project_model.clone();
-
         let backend = command_dispatcher
             .instantiate_backend(InstantiateBackendSpec {
                 backend_spec: discovered_backend.backend_spec,
@@ -192,7 +186,7 @@ impl SourceMetadataSpec {
         let input_hash = Self::compute_input_hash(
             command_dispatcher,
             &self.source,
-            project_model,
+            project_model_hash,
             metadata.input_globs,
         )
         .await?;
@@ -217,7 +211,7 @@ impl SourceMetadataSpec {
     async fn compute_input_hash(
         command_queue: CommandDispatcher,
         source: &SourceCheckout,
-        project_model: Option<ProjectModelV1>,
+        project_model_hash: Option<Vec<u8>>,
         input_globs: Option<BTreeSet<String>>,
     ) -> Result<Option<InputHash>, CommandDispatcherError<SourceMetadataError>> {
         let input_hash = if source.pinned.is_immutable() {
@@ -225,11 +219,6 @@ impl SourceMetadataSpec {
         } else {
             // Compute the input hash based on the project model and the input globs.
             let input_globs = input_globs.unwrap_or_default();
-            let project_model_hash = project_model.as_ref().map(|project_model| {
-                let mut hasher = Xxh3::new();
-                project_model.hash(&mut hasher);
-                hasher.finish().to_ne_bytes().to_vec()
-            });
             let input_hash = command_queue
                 .glob_hash_cache()
                 .compute_hash(GlobHashKey::new(

@@ -23,9 +23,11 @@ use serde_with::serde_as;
 use serde_with::{DeserializeFromStr, DisplayFromStr, SerializeDisplay};
 use std::convert::Infallible;
 use std::fmt::Display;
+use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 use std::str::FromStr;
 use url::Url;
+use xxhash_rust::xxh3::Xxh3;
 
 /// Enum containing all versions of the project model.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -108,6 +110,14 @@ pub struct ProjectModelV1 {
 impl From<ProjectModelV1> for VersionedProjectModel {
     fn from(value: ProjectModelV1) -> Self {
         VersionedProjectModel::V1(value)
+    }
+}
+
+impl ProjectModelV1 {
+    pub fn calculate_hash(&self) -> Vec<u8> {
+        let mut hasher = Xxh3::new();
+        self.hash(&mut hasher);
+        hasher.finish().to_ne_bytes().to_vec()
     }
 }
 
