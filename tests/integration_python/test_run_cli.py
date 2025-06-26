@@ -1360,7 +1360,9 @@ def test_task_caching_with_multiple_inputs_args(pixi: Path, tmp_pixi_workspace: 
 
 # Run with environment variable and sort the priority
 # variable task.env > activation.env > activation.scripts > activation scripts of dependencies > outside environment variable
-def test_run_with_environment_variable_priority(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
+def test_run_with_environment_variable_priority(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     script_manifest = tmp_pixi_workspace.joinpath("env_setup.sh")
     toml = f"""

@@ -575,7 +575,13 @@ mod tests {
 
         let result = get_export_specific_task_env(task, &command_env);
 
-        assert!(result.contains("export \"FOO=bar\""));
+        let expected_prefix = if cfg!(windows) {
+            "set \"FOO=bar\""
+        } else {
+            "export \"FOO=bar\""
+        };
+
+        assert!(result.contains(expected_prefix));
     }
 
     #[test]
@@ -600,7 +606,13 @@ mod tests {
         let result = get_export_specific_task_env(task, &command_env);
         // task specific env overrides outside environment variables
         println!("RESULT: {}", result);
-        assert!(result.contains("export \"FOO=bar\""));
+        let expected_prefix = if cfg!(windows) {
+            "set \"FOO=bar\""
+        } else {
+            "export \"FOO=bar\""
+        };
+
+        assert!(result.contains(expected_prefix));
     }
 
     #[test]
@@ -634,7 +646,13 @@ mod tests {
 
         let result = executable_task.as_script(&command_env).unwrap().unwrap();
 
-        assert!(result.contains("export \"FOO=bar\""));
+        let expected_prefix = if cfg!(windows) {
+            "set \"FOO=bar\""
+        } else {
+            "export \"FOO=bar\""
+        };
+
+        assert!(result.contains(expected_prefix));
     }
 
     #[tokio::test]
