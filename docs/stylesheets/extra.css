@@ -149,10 +149,6 @@ table code {
   transition: background 0.2s ease;
 }
 
-.feature-grid > a:hover .feature-card {
-  background: #f9f9f9;
-}
-
 .feature-card *:not(a) {
   pointer-events: none;
 }
