@@ -1499,6 +1499,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#setting-maximum-number-of-parallel-downloads" class="md-nav__link">
+    <span class="md-ellipsis">
+      Setting maximum number of parallel downloads
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#cache-downloaded-packages" class="md-nav__link">
     <span class="md-ellipsis">
       Cache Downloaded Packages
@@ -2647,6 +2656,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#setting-maximum-number-of-parallel-downloads" class="md-nav__link">
+    <span class="md-ellipsis">
+      Setting maximum number of parallel downloads
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#cache-downloaded-packages" class="md-nav__link">
     <span class="md-ellipsis">
       Cache Downloaded Packages
@@ -2806,9 +2824,15 @@ we cannot verify that injected wheels are compatible with the target environment
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="n">region</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;eu-central-1&quot;</span>
 </span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="n">force-path-style</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
 </span></code></pre></div>
+<h3 id="setting-maximum-number-of-parallel-downloads">Setting maximum number of parallel downloads<a class="headerlink" href="#setting-maximum-number-of-parallel-downloads" title="Permanent link">#</a></h3>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">[concurrency]</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">downloads</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">5</span>
+</span></code></pre></div>
+<p>Use <code>pixi-pack --config config.toml</code> to use the custom configuration file.
+See <a href="../../reference/pixi_configuration/#concurrency">pixi docs</a> for more information.</p>
 <h3 id="cache-downloaded-packages">Cache Downloaded Packages<a class="headerlink" href="#cache-downloaded-packages" title="Permanent link">#</a></h3>
 <p>You can cache downloaded packages to speed up subsequent pack operations by using the <code>--use-cache</code> flag:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>pixi-pack<span class="w"> </span>pack<span class="w"> </span>--use-cache<span class="w"> </span>~/.pixi-pack/cache
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>pixi-pack<span class="w"> </span>pack<span class="w"> </span>--use-cache<span class="w"> </span>~/.pixi-pack/cache
 </span></code></pre></div>
 <p>This will store all downloaded packages in the specified directory and reuse them in future pack operations. The cache follows the same structure as conda channels, organizing packages by platform subdirectories (e.g., linux-64, win-64, etc.).</p>
 <p>Using a cache is particularly useful when:</p>
@@ -2823,10 +2847,10 @@ we cannot verify that injected wheels are compatible with the target environment
 Just unarchive the <code>environment.tar</code>, then you have a local channel on your system where all necessary packages are available.
 Next to this local channel, you will find an <code>environment.yml</code> file that contains the environment specification.
 You can then install the environment using <code>conda</code> or <code>micromamba</code>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>tar<span class="w"> </span>-xvf<span class="w"> </span>environment.tar
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>micromamba<span class="w"> </span>create<span class="w"> </span>-p<span class="w"> </span>./env<span class="w"> </span>--file<span class="w"> </span>environment.yml
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="c1"># or</span>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>conda<span class="w"> </span>env<span class="w"> </span>create<span class="w"> </span>-p<span class="w"> </span>./env<span class="w"> </span>--file<span class="w"> </span>environment.yml
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>tar<span class="w"> </span>-xvf<span class="w"> </span>environment.tar
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>micromamba<span class="w"> </span>create<span class="w"> </span>-p<span class="w"> </span>./env<span class="w"> </span>--file<span class="w"> </span>environment.yml
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="c1"># or</span>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>conda<span class="w"> </span>env<span class="w"> </span>create<span class="w"> </span>-p<span class="w"> </span>./env<span class="w"> </span>--file<span class="w"> </span>environment.yml
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
