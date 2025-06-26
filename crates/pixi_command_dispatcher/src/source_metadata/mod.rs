@@ -9,7 +9,7 @@ use itertools::Either;
 use miette::Diagnostic;
 use pixi_build_frontend::types::{CondaPackageMetadata, SourcePackageSpecV1};
 use pixi_build_types::procedures::conda_outputs::{
-    CondaOutputDependencies, CondaOutputIgnoreRunExports, CondaOutputMetadata,
+    CondaOutputDependencies, CondaOutputIgnoreRunExports, CondaOutputMetadata, CondaRunExports,
 };
 use pixi_build_types::{BinaryPackageSpecV1, NamedSpecV1, PackageSpecV1};
 use pixi_record::{InputHash, PinnedSourceSpec, PixiRecord, SourceRecord};
@@ -159,6 +159,10 @@ impl SourceMetadataSpec {
             .map_err(SourceMetadataError::SpecConversionError)
             .map_err(CommandDispatcherError::Failed)?;
 
+        // Convert the run exports
+        let run_exports = PixiRunExports::try_from_protocol(&output.run_exports)
+            .map_err(CommandDispatcherError::Failed)?;
+
         let pixi_spec_to_match_spec = |name: &PackageName,
                                        spec: &PixiSpec,
                                        sources: &mut HashMap<PackageName, SourceSpec>|
@@ -194,35 +198,26 @@ impl SourceMetadataSpec {
             }
         };
 
-        let pixi_specs_to_match_spec =
-            |specs: &Vec<NamedSpecV1<PackageSpecV1>>,
-             sources: &mut HashMap<PackageName, SourceSpec>|
-             -> Result<Vec<String>, CommandDispatcherError<SourceMetadataError>> {
-                specs
-                    .iter()
-                    .cloned()
-                    .map(|named_spec| {
-                        let spec = from_package_spec_v1(named_spec.spec);
-                        let name = PackageName::from_str(&named_spec.name).map_err(|e| {
-                            SourceMetadataError::InvalidPackageName(named_spec.name, e)
-                        })?;
-                        Ok(pixi_spec_to_match_spec(&name, &spec, sources)?.to_string())
-                    })
-                    .collect::<Result<Vec<_>, SourceMetadataError>>()
-                    .map_err(CommandDispatcherError::Failed)
-            };
-
-        let binary_specs_to_match_spec = |specs: &Vec<NamedSpecV1<BinaryPackageSpecV1>>| -> Result<
+        let pixi_specs_to_match_spec = |specs: DependencyMap<PackageName, PixiSpec>,
+                                        sources: &mut HashMap<PackageName, SourceSpec>|
+         -> Result<
             Vec<String>,
             CommandDispatcherError<SourceMetadataError>,
         > {
             specs
-                .iter()
-                .cloned()
-                .map(|named_spec| {
-                    let spec = from_pixi_binary_spec_v1(named_spec.spec);
-                    let name = PackageName::from_str(&named_spec.name)
-                        .map_err(|e| SourceMetadataError::InvalidPackageName(named_spec.name, e))?;
+                .into_specs()
+                .map(|(name, spec)| Ok(pixi_spec_to_match_spec(&name, &spec, sources)?.to_string()))
+                .collect::<Result<Vec<_>, SourceMetadataError>>()
+                .map_err(CommandDispatcherError::Failed)
+        };
+
+        let binary_specs_to_match_spec = |specs: DependencyMap<PackageName, BinarySpec>| -> Result<
+            Vec<String>,
+            CommandDispatcherError<SourceMetadataError>,
+        > {
+            specs
+                .into_specs()
+                .map(|(name, spec)| {
                     let nameless_spec = spec
                         .try_into_nameless_match_spec(&self.backend_metadata.channel_config)
                         .map_err(SourceMetadataError::SpecConversionError)?;
@@ -234,11 +229,11 @@ impl SourceMetadataSpec {
 
         // Gather the run exports for the output.
         let run_exports = RunExportsJson {
-            weak: pixi_specs_to_match_spec(&output.run_exports.weak, &mut sources)?,
-            strong: pixi_specs_to_match_spec(&output.run_exports.weak, &mut sources)?,
-            noarch: pixi_specs_to_match_spec(&output.run_exports.weak, &mut sources)?,
-            weak_constrains: binary_specs_to_match_spec(&output.run_exports.weak_constrains)?,
-            strong_constrains: binary_specs_to_match_spec(&output.run_exports.strong_constrains)?,
+            weak: pixi_specs_to_match_spec(run_exports.weak, &mut sources)?,
+            strong: pixi_specs_to_match_spec(run_exports.strong, &mut sources)?,
+            noarch: pixi_specs_to_match_spec(run_exports.noarch, &mut sources)?,
+            weak_constrains: binary_specs_to_match_spec(run_exports.weak_constrains)?,
+            strong_constrains: binary_specs_to_match_spec(run_exports.strong_constrains)?,
         };
 
         Ok(SourceRecord {
@@ -374,7 +369,7 @@ impl Dependencies {
         }
     }
 
-    pub fn with_host_run_exports(mut self, build_run_exports: &FilteredRunExports) -> Self {
+    pub fn with_host_run_exports(mut self, build_run_exports: &PixiRunExports) -> Self {
         for (name, spec) in build_run_exports.strong.iter_specs() {
             self.dependencies.insert(name.clone(), spec.clone());
         }
@@ -388,8 +383,8 @@ impl Dependencies {
 
     pub fn with_run_run_exports(
         mut self,
-        host_run_exports: FilteredRunExports,
-        build_run_exports: FilteredRunExports,
+        host_run_exports: PixiRunExports,
+        build_run_exports: PixiRunExports,
         target_platform: Platform,
     ) -> Self {
         let add_dependencies = |this: &mut Self, specs: DependencyMap<PackageName, PixiSpec>| {
@@ -423,8 +418,8 @@ impl Dependencies {
         &self,
         records: &[PixiRecord],
         ignore: &CondaOutputIgnoreRunExports,
-    ) -> FilteredRunExports {
-        let mut filter_run_exports = FilteredRunExports::default();
+    ) -> PixiRunExports {
+        let mut filter_run_exports = PixiRunExports::default();
 
         fn filter_match_specs<T: From<BinarySpec>>(
             specs: &[String],
@@ -579,14 +574,59 @@ impl Dependencies {
     }
 }
 
-/// Filtered run export result
+/// A variant of [`RunExportsJson`] but with pixi data types.
 #[derive(Debug, Default, Clone)]
-pub struct FilteredRunExports {
+pub struct PixiRunExports {
     pub noarch: DependencyMap<PackageName, PixiSpec>,
     pub strong: DependencyMap<PackageName, PixiSpec>,
-    pub strong_constrains: DependencyMap<PackageName, BinarySpec>,
     pub weak: DependencyMap<PackageName, PixiSpec>,
+
+    pub strong_constrains: DependencyMap<PackageName, BinarySpec>,
     pub weak_constrains: DependencyMap<PackageName, BinarySpec>,
+}
+
+impl PixiRunExports {
+    pub fn try_from_protocol(output: &CondaRunExports) -> Result<Self, SourceMetadataError> {
+        fn convert_package_spec(
+            specs: &[NamedSpecV1<PackageSpecV1>],
+        ) -> Result<DependencyMap<PackageName, PixiSpec>, SourceMetadataError> {
+            specs
+                .iter()
+                .cloned()
+                .map(|named_spec| {
+                    let spec = from_package_spec_v1(named_spec.spec);
+                    let name = PackageName::from_str(&named_spec.name).map_err(|err| {
+                        SourceMetadataError::InvalidPackageName(named_spec.name.to_owned(), err)
+                    })?;
+                    Ok((name, spec))
+                })
+                .collect()
+        }
+
+        fn convert_binary_spec(
+            specs: &[NamedSpecV1<BinaryPackageSpecV1>],
+        ) -> Result<DependencyMap<PackageName, BinarySpec>, SourceMetadataError> {
+            specs
+                .iter()
+                .cloned()
+                .map(|named_spec| {
+                    let spec = from_pixi_binary_spec_v1(named_spec.spec);
+                    let name = PackageName::from_str(&named_spec.name).map_err(|err| {
+                        SourceMetadataError::InvalidPackageName(named_spec.name.to_owned(), err)
+                    })?;
+                    Ok((name, spec))
+                })
+                .collect()
+        }
+
+        Ok(PixiRunExports {
+            weak: convert_package_spec(&output.weak)?,
+            strong: convert_package_spec(&output.strong)?,
+            noarch: convert_package_spec(&output.noarch)?,
+            weak_constrains: convert_binary_spec(&output.weak_constrains)?,
+            strong_constrains: convert_binary_spec(&output.strong_constrains)?,
+        })
+    }
 }
 
 pub(crate) fn source_metadata_to_records(
