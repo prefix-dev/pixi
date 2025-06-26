@@ -1337,6 +1337,26 @@
             ],
             true
           ]
+        },
+        "no-binary": {
+          "title": "No-Binary",
+          "description": "Don't use pre-build wheels for these packages",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          ],
+          "examples": [
+            "true",
+            "false"
+          ]
         }
       }
     },
