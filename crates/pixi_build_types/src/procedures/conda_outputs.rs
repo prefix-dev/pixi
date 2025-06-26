@@ -6,16 +6,16 @@
 //!
 //! This API was introduced in Pixi Build API version 1.
 
-use rattler_conda_types::{NoArchType, PackageName, Platform, VersionWithSource};
-use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
 use std::{
     collections::{BTreeSet, HashMap},
     path::PathBuf,
 };
+use ordermap::OrderSet;
+use rattler_conda_types::{NoArchType, PackageName, Platform, VersionWithSource};
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 
-use crate::project_model::NamedSpecV1;
-use crate::{BinaryPackageSpecV1, PackageSpecV1};
+use crate::{BinaryPackageSpecV1, PackageSpecV1, project_model::NamedSpecV1};
 
 pub const METHOD_NAME: &str = "conda/outputs";
 
@@ -118,6 +118,10 @@ pub struct CondaOutputMetadata {
     /// A cache that might be shared between multiple outputs based on the
     /// contents of the cache.
     pub cache: Option<CondaCacheMetadata>,
+
+    /// Explicit input globs for this specific output. If this is `None`,
+    /// [`CondaOutputsResult::input_globs`] will be used.
+    pub input_globs: Option<BTreeSet<String>>,
 }
 
 #[serde_as]
@@ -147,12 +151,15 @@ pub struct CondaOutputIdentifier {
 
     /// The noarch type of the package
     pub noarch: NoArchType,
+
+    /// Any PURL (Package URL) that is associated with this package.
+    pub purls: Option<OrderSet<rattler_conda_types::PackageUrl>>,
 }
 
 /// Describes dependencies, constraints and source dependencies for a particular
 /// environment.
 #[serde_as]
-#[derive(Debug, Serialize, Deserialize, Clone, Hash, Eq, PartialEq)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone, Hash, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct CondaOutputDependencies {
     /// A list of matchspecs that describe the dependencies of a particular

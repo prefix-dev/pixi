@@ -17,4 +17,3 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_with = { workspace = true }
 url = { workspace = true }
-clap = { version = "4.5.40", features = ["derive"] }

@@ -126,7 +126,7 @@ impl SourceMetadataSpec {
 
         // Solve the host environment for the output.
         let host_dependencies = output
-            .build_dependencies
+            .host_dependencies
             .as_ref()
             .map(|deps| Dependencies::new(deps, source_anchor.clone()))
             .unwrap_or_default()
@@ -135,7 +135,7 @@ impl SourceMetadataSpec {
             .solve_dependencies(
                 format!("{} (host)", self.package.as_source()),
                 command_dispatcher,
-                build_dependencies.clone(),
+                host_dependencies.clone(),
                 self.backend_metadata.build_environment.clone(),
             )
             .await
@@ -245,7 +245,7 @@ impl SourceMetadataSpec {
                 md5: None,
 
                 // TODO(baszalmstra): Decide if it makes sense to include the current
-                // timestamp here.
+                //  timestamp here.
                 timestamp: None,
 
                 // These values are derived from the build backend values.
@@ -273,6 +273,11 @@ impl SourceMetadataSpec {
                 constrains,
                 depends,
                 run_exports: Some(run_exports),
+                purls: output
+                    .identifier
+                    .purls
+                    .as_ref()
+                    .map(|purls| purls.iter().cloned().collect()),
 
                 // These are deprecated and no longer used.
                 features: None,
@@ -280,9 +285,6 @@ impl SourceMetadataSpec {
                 legacy_bz2_md5: None,
                 legacy_bz2_size: None,
                 python_site_packages_path: None,
-
-                // TODO(baszalmstra): Add support for these.
-                purls: None,
 
                 // These are not important at this point.
                 extra_depends: Default::default(),
@@ -325,7 +327,7 @@ impl SourceMetadataSpec {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Debug, Clone, Default)]
 struct Dependencies {
     pub dependencies: DependencyMap<rattler_conda_types::PackageName, PixiSpec>,
     pub constraints: DependencyMap<rattler_conda_types::PackageName, BinarySpec>,

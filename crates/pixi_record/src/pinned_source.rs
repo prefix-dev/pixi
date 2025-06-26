@@ -370,7 +370,12 @@ impl PinnedPathSpec {
     /// Returns a URL that uniquely identifies this path spec. This URL is not
     /// portable, e.g. it might result in a different URL on different systems.
     pub fn identifiable_url(&self) -> Url {
-        Url::from_directory_path(self.resolve(Path::new("/"))).expect("expected valid URL")
+        let resolved = if cfg!(windows) {
+            self.resolve(Path::new("\\\\localhost\\"))
+        } else {
+            self.resolve(Path::new("/"))
+        };
+        Url::from_directory_path(resolved).expect("expected valid URL")
     }
 }
 
