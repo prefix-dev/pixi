@@ -1356,3 +1356,78 @@ def test_task_caching_with_multiple_inputs_args(pixi: Path, tmp_pixi_workspace: 
             "cache hit",
         ],
     )
+
+# Run with environment variable
+def test_run_with_environment_variable_priority(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    script_manifest = tmp_pixi_workspace.joinpath("env_setup.sh")
+    toml = f"""
+    {EMPTY_BOILERPLATE_PROJECT}
+    [activation.env]
+    TEST_ENV_VAR_FOR_ACTIVATION_TEST = "test123"
+    [activation]
+    scripts = ["env_setup.sh"]
+    [tasks.task]
+    cmd = "echo $TEST_ENV_VAR_FOR_ACTIVATION_TEST"
+    [tasks.foo]
+    cmd = "echo $TEST_ENV_VAR_FOR_ACTIVATION_TEST"
+    [tasks.task.env]
+    TEST_ENV_VAR_FOR_ACTIVATION_TEST = "test456"
+    """
+    test_script_file = f"""
+    #!/bin/bash
+    export TEST_ENV_VAR_FOR_ACTIVATION_TEST="activation_script"
+    """
+    manifest.write_text(toml)
+    script_manifest.write_text(test_script_file)
+
+    # Run the default task
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "task"],
+        stdout_contains="test456",
+    )
+
+    # Validate that without experimental it does not use the cache
+    assert not tmp_pixi_workspace.joinpath(".pixi/activation-env-v0").exists()
+
+    # Enable the experimental cache config
+    verify_cli_command(
+        [
+            pixi,
+            "config",
+            "set",
+            "--manifest-path",
+            manifest,
+            "--local",
+            "experimental.use-environment-activation-cache",
+            "true",
+        ],
+    )
+
+    # Test 1: task.env > outside environment variable - should use envrionment variable defined in specific tasks
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "task"],
+        stdout_contains="test456",
+        env={"TEST_ENV_VAR_FOR_ACTIVATION_TEST": "outside_ev"}
+    )
+
+     # Test 2: task.env > activation.env - should use envrionment variable defined in specific tasks
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "task"],
+        stdout_contains="test456",
+    )
+
+   # Test 3: activation.env > outside environment variable - should use activation.env
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "foo"],
+        stdout_contains="test123",
+        env={"TEST_ENV_VAR_FOR_ACTIVATION_TEST": "outside_ev"}
+    )
+
+    # Test 3: activation.env > outside environment variable - should use activation.env
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "foo"],
+        stdout_contains="test123",
+    )
+
+   
