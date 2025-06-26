@@ -16,6 +16,8 @@ on:
         description: "The operating system to run the tests on"
         required: true
 
+permissions: read-all
+
 jobs:
   test_common_wheels:
     name: Test Installation of Common Wheels | ${{ inputs.arch }}
