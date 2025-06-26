@@ -1,1 +1,131 @@
+<<<<<<< HEAD
 {"info":{"subdir":"linux-64"},"packages":{},"packages.conda":{"dummy-a-0.1.0-hb0f4dca_0.conda":{"arch":"x86_64","build":"hb0f4dca_0","build_number":0,"depends":["dummy-c"],"md5":"2c0709e1c1705dbd582f082cb4286d68","name":"dummy-a","platform":"linux","sha256":"d6221522905089619ee534501bd942bcf75aff74dd99b3427cc11cbf9ce22673","size":1403,"subdir":"linux-64","timestamp":1750859506237,"version":"0.1.0"},"dummy-b-0.1.0-hb0f4dca_0.conda":{"arch":"x86_64","build":"hb0f4dca_0","build_number":0,"depends":[],"md5":"293091c02c3bb465486f4dd3584f0088","name":"dummy-b","platform":"linux","sha256":"50064b166cfeb252a18f6fb288df73c75637072f8dbb354ae8c3abb2171d335b","size":1178,"subdir":"linux-64","timestamp":1750859506236,"version":"0.1.0"},"dummy-c-0.1.0-hb0f4dca_0.conda":{"arch":"x86_64","build":"hb0f4dca_0","build_number":0,"depends":[],"md5":"2b012488a479562e1fb161411a3a1583","name":"dummy-c","platform":"linux","sha256":"11d28b4489b61ed1ff540d6f8f42c3aa00b96a863320e1421cbb7b7a01ee0ece","size":1178,"subdir":"linux-64","timestamp":1750859506236,"version":"0.1.0"},"dummy-d-0.1.0-hb0f4dca_0.conda":{"arch":"x86_64","build":"hb0f4dca_0","build_number":0,"depends":["dummy-x"],"md5":"ea6802eb43c839b8800c2d253bf68639","name":"dummy-d","platform":"linux","sha256":"c4e5f053b858faa01f4e7cf0861f972566ad2a10dcd08597d1586ab7b6b94a20","size":1189,"subdir":"linux-64","timestamp":1750859506236,"version":"0.1.0"},"dummy-f-0.1.0-hb0f4dca_0.conda":{"arch":"x86_64","build":"hb0f4dca_0","build_number":0,"depends":[],"md5":"ab6fbd1a51329eeb0bf2b0ea6f53a8d4","name":"dummy-f","platform":"linux","sha256":"126b9afd233aa27e550ed31ae7f988199186572d2fd805bf294ca58bf0b64709","size":1182,"subdir":"linux-64","timestamp":1750859506236,"version":"0.1.0"},"dummy-g-0.1.0-hb0f4dca_0.conda":{"arch":"x86_64","build":"hb0f4dca_0","build_number":0,"depends":["dummy-b"],"md5":"3b62796165fa48be4a671a7541b4b563","name":"dummy-g","platform":"linux","sha256":"378b7c1cea25ec008ae5cdbc70257c7a8b417ed8d59b39cc960cf57f98da7e76","size":1186,"subdir":"linux-64","timestamp":1750859506236,"version":"0.1.0"},"dummy_e-0.1.0-hb0f4dca_0.conda":{"arch":"x86_64","build":"hb0f4dca_0","build_number":0,"depends":[],"md5":"50bcff7b005bf45c59be1f7711466922","name":"dummy_e","platform":"linux","sha256":"30fb6e14b565994fcdfe5f2d01e3d6059f5ec50caa13052757f74c232b19f866","size":1255,"subdir":"linux-64","timestamp":1750859506236,"version":"0.1.0"}},"repodata_version":2}
+=======
+{
+  "info": {
+    "subdir": "linux-64"
+  },
+  "packages": {},
+  "packages.conda": {
+    "dummy-a-0.1.0-hb0f4dca_0.conda": {
+      "arch": "x86_64",
+      "build": "hb0f4dca_0",
+      "build_number": 0,
+      "depends": [
+        "dummy-c"
+      ],
+      "md5": "8117b344b8f41c161d21c8841dff4051",
+      "name": "dummy-a",
+      "platform": "linux",
+      "sha256": "dab02dd801746eb339d0a4d6e4ccdabf3dc4e82affa5da50236330e33a915883",
+      "size": 1326,
+      "subdir": "linux-64",
+      "timestamp": 1750776708315,
+      "version": "0.1.0"
+    },
+    "dummy-b-0.1.0-hb0f4dca_0.conda": {
+      "arch": "x86_64",
+      "build": "hb0f4dca_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "686c733dc338e4e519f603a495eabbd7",
+      "name": "dummy-b",
+      "platform": "linux",
+      "sha256": "7645ab7c0cefb9af50b5aa56cc6df6606e7ba76ed27e69eb5333071baf951b93",
+      "size": 1157,
+      "subdir": "linux-64",
+      "timestamp": 1750776708315,
+      "version": "0.1.0"
+    },
+    "dummy-c-0.1.0-hb0f4dca_0.conda": {
+      "arch": "x86_64",
+      "build": "hb0f4dca_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "4fa55f78ade64990d36f807523ac25e4",
+      "name": "dummy-c",
+      "platform": "linux",
+      "sha256": "01c3ee9050e0713f4adeb73183bacb153120a2452ceb26b8089074b1ab64ed7b",
+      "size": 1158,
+      "subdir": "linux-64",
+      "timestamp": 1750776708315,
+      "version": "0.1.0"
+    },
+    "dummy-d-0.1.0-hb0f4dca_0.conda": {
+      "arch": "x86_64",
+      "build": "hb0f4dca_0",
+      "build_number": 0,
+      "depends": [
+        "dummy-x"
+      ],
+      "md5": "2a314e7c05498630207b830654bea967",
+      "name": "dummy-d",
+      "platform": "linux",
+      "sha256": "5f8e3987befa6c0dc239f951a19dae1e85a06213da581791de2deb34e52135b3",
+      "size": 1167,
+      "subdir": "linux-64",
+      "timestamp": 1750776708315,
+      "version": "0.1.0"
+    },
+    "dummy-f-0.1.0-hb0f4dca_0.conda": {
+      "arch": "x86_64",
+      "build": "hb0f4dca_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "a0a899993be6b96719a9c2c7e5553188",
+      "name": "dummy-f",
+      "platform": "linux",
+      "sha256": "fe56a5907321bd7531c7076cfbb962475f7f5759f6e6cf1ddaf173a7f3a8e6de",
+      "size": 1182,
+      "subdir": "linux-64",
+      "timestamp": 1750776708315,
+      "version": "0.1.0"
+    },
+    "dummy-g-0.1.0-hb0f4dca_0.conda": {
+      "arch": "x86_64",
+      "build": "hb0f4dca_0",
+      "build_number": 0,
+      "depends": [
+        "dummy-b"
+      ],
+      "md5": "87d99c6810dbbde9ef172e378225e95c",
+      "name": "dummy-g",
+      "platform": "linux",
+      "sha256": "913560d37d55f6517cd1236610222d7a3d426e03315e1ff45a33fc03467d8609",
+      "size": 1186,
+      "subdir": "linux-64",
+      "timestamp": 1750776708315,
+      "version": "0.1.0"
+    },
+    "dummy_e-0.1.0-hb0f4dca_0.conda": {
+      "arch": "x86_64",
+      "build": "hb0f4dca_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "c23caac1f78551d1027063e9fa07e3dd",
+      "name": "dummy_e",
+      "platform": "linux",
+      "sha256": "1f5cb56e1e2100662c19ea2d14b505e35ecb77e91921870c2b3b845affe929d9",
+      "size": 1159,
+      "subdir": "linux-64",
+      "timestamp": 1750776708315,
+      "version": "0.1.0"
+    },
+    "pixi-foobar-0.1.0-hb0f4dca_0.conda": {
+      "arch": "x86_64",
+      "build": "hb0f4dca_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "ca9b65a2860179f0a3a3cfa8e1f5cef7",
+      "name": "pixi-foobar",
+      "platform": "linux",
+      "sha256": "d49604a176b00f6dbd3beeeff482a31340afb02bbceb5171f5f918e6cb069d80",
+      "size": 1186,
+      "subdir": "linux-64",
+      "timestamp": 1750776708315,
+      "version": "0.1.0"
+    }
+  },
+  "repodata_version": 2
+}
+>>>>>>> main

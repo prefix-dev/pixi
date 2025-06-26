@@ -1,1 +1,131 @@
+<<<<<<< HEAD
 {"info":{"subdir":"win-64"},"packages":{},"packages.conda":{"dummy-a-0.1.0-h9490d1a_0.conda":{"arch":"x86_64","build":"h9490d1a_0","build_number":0,"depends":["dummy-c"],"md5":"420a57c4c8f5b8b0f75e9a279b6d0bd8","name":"dummy-a","platform":"win","sha256":"b63d20e09d6527fe2433b708945989ca8aba355da735d2307374d5f8ae615a82","size":1329,"subdir":"win-64","timestamp":1750859505994,"version":"0.1.0"},"dummy-b-0.1.0-h9490d1a_0.conda":{"arch":"x86_64","build":"h9490d1a_0","build_number":0,"depends":[],"md5":"87bd5e7bf819924384ec97e110e15dc6","name":"dummy-b","platform":"win","sha256":"b0fae3861ecc4e23bb49bc3415d133e580d52d2052791134ca73b90c7993c3fc","size":1160,"subdir":"win-64","timestamp":1750859505994,"version":"0.1.0"},"dummy-c-0.1.0-h9490d1a_0.conda":{"arch":"x86_64","build":"h9490d1a_0","build_number":0,"depends":[],"md5":"39fd49a6c2adc472e54de780d5d2a09a","name":"dummy-c","platform":"win","sha256":"847c91760a5b46251821dbac1ba0c59768a91d7f1d899bdf4e26e313af8f20cb","size":1160,"subdir":"win-64","timestamp":1750859505994,"version":"0.1.0"},"dummy-d-0.1.0-h9490d1a_0.conda":{"arch":"x86_64","build":"h9490d1a_0","build_number":0,"depends":["dummy-x"],"md5":"6c3ff9a9db0b8b414efa4fb64f82263f","name":"dummy-d","platform":"win","sha256":"0ba816d84c006335d94a744d7cf2f78fb2c042e36267dbe8b523ba5352c91daa","size":1174,"subdir":"win-64","timestamp":1750859505994,"version":"0.1.0"},"dummy-f-0.1.0-h9490d1a_0.conda":{"arch":"x86_64","build":"h9490d1a_0","build_number":0,"depends":[],"md5":"6b0db0e5192096d3834e1c9d4a7b00e8","name":"dummy-f","platform":"win","sha256":"d0c9ec4694d8659b993d7e0bc3b0c5dc0eef26a631e7e4229c9a6e08b82f7851","size":1174,"subdir":"win-64","timestamp":1750859505994,"version":"0.1.0"},"dummy-g-0.1.0-h9490d1a_0.conda":{"arch":"x86_64","build":"h9490d1a_0","build_number":0,"depends":["dummy-b"],"md5":"ce98b7cdab7507fe8576574dbad1bd5b","name":"dummy-g","platform":"win","sha256":"fa4b4f5fd2ec03b934c18360bbd2976f461c61f0bb17f5b5eed5b335adb131c9","size":1185,"subdir":"win-64","timestamp":1750859505994,"version":"0.1.0"},"dummy_e-0.1.0-h9490d1a_0.conda":{"arch":"x86_64","build":"h9490d1a_0","build_number":0,"depends":[],"md5":"fb18945d0e724a5a01cc06dcc5d1cdb4","name":"dummy_e","platform":"win","sha256":"79dbca4a04cc152cdb068dbd86c76fdbd876d090cbb01d7d17e99b58a675526b","size":1158,"subdir":"win-64","timestamp":1750859505994,"version":"0.1.0"}},"repodata_version":2}
+=======
+{
+  "info": {
+    "subdir": "win-64"
+  },
+  "packages": {},
+  "packages.conda": {
+    "dummy-a-0.1.0-h9490d1a_0.conda": {
+      "arch": "x86_64",
+      "build": "h9490d1a_0",
+      "build_number": 0,
+      "depends": [
+        "dummy-c"
+      ],
+      "md5": "feaa3951400be87e8107b8455d40eb18",
+      "name": "dummy-a",
+      "platform": "win",
+      "sha256": "f96724f5bfc0b39e7777d2af41a4f4b9ccdde8760e6223ae140f41120d6795e0",
+      "size": 1329,
+      "subdir": "win-64",
+      "timestamp": 1750776707996,
+      "version": "0.1.0"
+    },
+    "dummy-b-0.1.0-h9490d1a_0.conda": {
+      "arch": "x86_64",
+      "build": "h9490d1a_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "2d60523bcb4f2242c7457107641a1606",
+      "name": "dummy-b",
+      "platform": "win",
+      "sha256": "db0328b66977b3f0dd3be9f9c5a4d6b88904bc5d0fa80a77e29fc78c4a76115f",
+      "size": 1158,
+      "subdir": "win-64",
+      "timestamp": 1750776707996,
+      "version": "0.1.0"
+    },
+    "dummy-c-0.1.0-h9490d1a_0.conda": {
+      "arch": "x86_64",
+      "build": "h9490d1a_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "aeedfbd83d74945250273ee7400f4f71",
+      "name": "dummy-c",
+      "platform": "win",
+      "sha256": "c63abf8aca6b7f95f2dc6fdbbbcfa497899ff183327dfb9e0975a7ee2f491eec",
+      "size": 1160,
+      "subdir": "win-64",
+      "timestamp": 1750776707996,
+      "version": "0.1.0"
+    },
+    "dummy-d-0.1.0-h9490d1a_0.conda": {
+      "arch": "x86_64",
+      "build": "h9490d1a_0",
+      "build_number": 0,
+      "depends": [
+        "dummy-x"
+      ],
+      "md5": "334653e38abb607c13b17e9a1faed511",
+      "name": "dummy-d",
+      "platform": "win",
+      "sha256": "2268f4971705accf722dde60b0ed0c980c25cfe4e853b71d5d380e490be1daf3",
+      "size": 1175,
+      "subdir": "win-64",
+      "timestamp": 1750776707996,
+      "version": "0.1.0"
+    },
+    "dummy-f-0.1.0-h9490d1a_0.conda": {
+      "arch": "x86_64",
+      "build": "h9490d1a_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "c1cdada447c8a69752e43d5eb45d23af",
+      "name": "dummy-f",
+      "platform": "win",
+      "sha256": "deb40ef6e8a4a00ba1977e5c9ef5254c089fb7a41284674f92ceacde571b3608",
+      "size": 1170,
+      "subdir": "win-64",
+      "timestamp": 1750776707996,
+      "version": "0.1.0"
+    },
+    "dummy-g-0.1.0-h9490d1a_0.conda": {
+      "arch": "x86_64",
+      "build": "h9490d1a_0",
+      "build_number": 0,
+      "depends": [
+        "dummy-b"
+      ],
+      "md5": "2c3b0ed5ad9f6ede306b5555d6f487d3",
+      "name": "dummy-g",
+      "platform": "win",
+      "sha256": "3ed80d3ddf10bcc42f508fd22e49f8df78ca03be53dc7508ba37ac9d96875b0f",
+      "size": 1184,
+      "subdir": "win-64",
+      "timestamp": 1750776707996,
+      "version": "0.1.0"
+    },
+    "dummy_e-0.1.0-h9490d1a_0.conda": {
+      "arch": "x86_64",
+      "build": "h9490d1a_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "333089b5bf53406ae31c4d4e66a8e4c0",
+      "name": "dummy_e",
+      "platform": "win",
+      "sha256": "efe6465cc35bee02a75119fd8fb158968bbf5a96743ecb30a30a4e2978f63e77",
+      "size": 1157,
+      "subdir": "win-64",
+      "timestamp": 1750776707996,
+      "version": "0.1.0"
+    },
+    "pixi-foobar-0.1.0-h9490d1a_0.conda": {
+      "arch": "x86_64",
+      "build": "h9490d1a_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "a8087bfef9dd2dd357ffcfeb5cebd37c",
+      "name": "pixi-foobar",
+      "platform": "win",
+      "sha256": "66737ed4ea238ff5e08ce5eb9c792d7e5218b9217e74f952c38586c540778720",
+      "size": 1183,
+      "subdir": "win-64",
+      "timestamp": 1750776707994,
+      "version": "0.1.0"
+    }
+  },
+  "repodata_version": 2
+}
+>>>>>>> main

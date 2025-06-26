@@ -15,6 +15,7 @@ pub mod add;
 mod build;
 pub mod clean;
 pub mod cli_config;
+pub mod command_info;
 pub mod completion;
 pub mod config;
 pub mod exec;
@@ -66,7 +67,7 @@ Ask a question on the Prefix Discord server: https://discord.gg/kKV8ZxyzY4
 For more information, see the documentation at: https://pixi.sh
 ", consts::PIXI_VERSION),
 )]
-#[clap(arg_required_else_help = true, styles=get_styles(), disable_help_flag = true)]
+#[clap(arg_required_else_help = true, styles=get_styles(), disable_help_flag = true, allow_external_subcommands = true)]
 pub struct Args {
     #[command(subcommand)]
     command: Command,
@@ -164,6 +165,8 @@ pub enum Command {
     Upload(upload::Args),
     #[clap(alias = "project")]
     Workspace(workspace::Args),
+    #[command(external_subcommand)]
+    External(Vec<String>),
 }
 
 #[derive(Parser, Debug, Default, Copy, Clone)]
@@ -293,6 +296,7 @@ pub async fn execute_command(
         Command::Lock(cmd) => lock::execute(cmd).await,
         Command::Exec(args) => exec::execute(args).await,
         Command::Build(args) => build::execute(args).await,
+        Command::External(args) => command_info::execute_external_command(args),
     }
 }
 

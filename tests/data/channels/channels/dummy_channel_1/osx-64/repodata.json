@@ -1,1 +1,131 @@
+<<<<<<< HEAD
 {"info":{"subdir":"osx-64"},"packages":{},"packages.conda":{"dummy-a-0.1.0-h0dc7051_0.conda":{"arch":"x86_64","build":"h0dc7051_0","build_number":0,"depends":["dummy-c"],"md5":"83659a509d76115cfdc73774dabed20c","name":"dummy-a","platform":"osx","sha256":"5db7b6845f530c814b036528e9342f7e9b389bad4e769b2da516b1f1bb158060","size":1400,"subdir":"osx-64","timestamp":1750859506705,"version":"0.1.0"},"dummy-b-0.1.0-h0dc7051_0.conda":{"arch":"x86_64","build":"h0dc7051_0","build_number":0,"depends":[],"md5":"726a899c0bcb056d098c2a366e0148f8","name":"dummy-b","platform":"osx","sha256":"1f660cba0a8168bf14446b69952d9f86ee92674a2f7413e8b684ec0b8909cc09","size":1173,"subdir":"osx-64","timestamp":1750859506705,"version":"0.1.0"},"dummy-c-0.1.0-h0dc7051_0.conda":{"arch":"x86_64","build":"h0dc7051_0","build_number":0,"depends":[],"md5":"64295784ac0f026dcaafe9c0c1cd99eb","name":"dummy-c","platform":"osx","sha256":"b3b021de196a068e14c8630ef77f4516497e79fa853dfe6c0b0d2d417ee0d8e8","size":1170,"subdir":"osx-64","timestamp":1750859506705,"version":"0.1.0"},"dummy-d-0.1.0-h0dc7051_0.conda":{"arch":"x86_64","build":"h0dc7051_0","build_number":0,"depends":["dummy-x"],"md5":"afc47fc6cc88f84c8d0d4791a1075d07","name":"dummy-d","platform":"osx","sha256":"d4f0625e41d86f9321f72fb65b8b116b033e520ac5bbce1dd0e5f659fab9251d","size":1187,"subdir":"osx-64","timestamp":1750859506705,"version":"0.1.0"},"dummy-f-0.1.0-h0dc7051_0.conda":{"arch":"x86_64","build":"h0dc7051_0","build_number":0,"depends":[],"md5":"d89b4feebc290239444dbd924f8f630d","name":"dummy-f","platform":"osx","sha256":"7de4b8d37f993fca47d11c0511960198f2b4a2bfc98bc8f2050332ea5f251374","size":1173,"subdir":"osx-64","timestamp":1750859506704,"version":"0.1.0"},"dummy-g-0.1.0-h0dc7051_0.conda":{"arch":"x86_64","build":"h0dc7051_0","build_number":0,"depends":["dummy-b"],"md5":"47cecffc4f1c9ca5c2cb79785187d120","name":"dummy-g","platform":"osx","sha256":"160cb6aee7bf7bccf1e2120d1bc3991067d9a9342c2858b71af3692583d462f1","size":1184,"subdir":"osx-64","timestamp":1750859506704,"version":"0.1.0"},"dummy_e-0.1.0-h0dc7051_0.conda":{"arch":"x86_64","build":"h0dc7051_0","build_number":0,"depends":[],"md5":"72c26b16963c8cbf2918e95026f13ba4","name":"dummy_e","platform":"osx","sha256":"cc9f590c01f35b6595f459a239e1d7d6330330546b0d96ed96a2d63c4be9e94e","size":1249,"subdir":"osx-64","timestamp":1750859506704,"version":"0.1.0"}},"repodata_version":2}
+=======
+{
+  "info": {
+    "subdir": "osx-64"
+  },
+  "packages": {},
+  "packages.conda": {
+    "dummy-a-0.1.0-h0dc7051_0.conda": {
+      "arch": "x86_64",
+      "build": "h0dc7051_0",
+      "build_number": 0,
+      "depends": [
+        "dummy-c"
+      ],
+      "md5": "58e643fbde076cafb1df63861e08dbf1",
+      "name": "dummy-a",
+      "platform": "osx",
+      "sha256": "7371e695b0bdb4daa0b2d45c8c2d112ab0d7309a7d04d3ecd9088681d2f84a06",
+      "size": 1325,
+      "subdir": "osx-64",
+      "timestamp": 1750776708868,
+      "version": "0.1.0"
+    },
+    "dummy-b-0.1.0-h0dc7051_0.conda": {
+      "arch": "x86_64",
+      "build": "h0dc7051_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "f7fb101e6d54aef6cc6802d613d4d261",
+      "name": "dummy-b",
+      "platform": "osx",
+      "sha256": "c9a1d54e38468175c2b18fcdcd17559742dca4221eadc0bd2d556ecb675a461a",
+      "size": 1151,
+      "subdir": "osx-64",
+      "timestamp": 1750776708868,
+      "version": "0.1.0"
+    },
+    "dummy-c-0.1.0-h0dc7051_0.conda": {
+      "arch": "x86_64",
+      "build": "h0dc7051_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "fed8c579edd89d99327fd1a55bec804e",
+      "name": "dummy-c",
+      "platform": "osx",
+      "sha256": "e96e058183a0211567c707a9747386dd403a91758d3c8d4ae5e0953e6c502ab6",
+      "size": 1150,
+      "subdir": "osx-64",
+      "timestamp": 1750776708868,
+      "version": "0.1.0"
+    },
+    "dummy-d-0.1.0-h0dc7051_0.conda": {
+      "arch": "x86_64",
+      "build": "h0dc7051_0",
+      "build_number": 0,
+      "depends": [
+        "dummy-x"
+      ],
+      "md5": "650b4622fc76f472c2e24414f4e8a9f3",
+      "name": "dummy-d",
+      "platform": "osx",
+      "sha256": "56c8fcb9a89d198f90de2c980f340992296865f4a8e2d98b51b3c2fe25f9bad2",
+      "size": 1165,
+      "subdir": "osx-64",
+      "timestamp": 1750776708868,
+      "version": "0.1.0"
+    },
+    "dummy-f-0.1.0-h0dc7051_0.conda": {
+      "arch": "x86_64",
+      "build": "h0dc7051_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "d831e597c9cc6cf7f3af1ad78a422f51",
+      "name": "dummy-f",
+      "platform": "osx",
+      "sha256": "9d300f7a767c8eb5415e5906b89e92c5f77a5ed49676393dadd442faf31f35ca",
+      "size": 1174,
+      "subdir": "osx-64",
+      "timestamp": 1750776708868,
+      "version": "0.1.0"
+    },
+    "dummy-g-0.1.0-h0dc7051_0.conda": {
+      "arch": "x86_64",
+      "build": "h0dc7051_0",
+      "build_number": 0,
+      "depends": [
+        "dummy-b"
+      ],
+      "md5": "88ba7ccd6023217f0057123edb3e7801",
+      "name": "dummy-g",
+      "platform": "osx",
+      "sha256": "a723e1fbc30e9130d9bb12460e8956c5d53dcd932877033ba8cfc014f5fe2f88",
+      "size": 1184,
+      "subdir": "osx-64",
+      "timestamp": 1750776708868,
+      "version": "0.1.0"
+    },
+    "dummy_e-0.1.0-h0dc7051_0.conda": {
+      "arch": "x86_64",
+      "build": "h0dc7051_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "5823ceaf83bd5c3bc4397d868ced191e",
+      "name": "dummy_e",
+      "platform": "osx",
+      "sha256": "07bfe6fde13211e126e2efbe452c581655e680c39673b97d4c28baa52301368f",
+      "size": 1150,
+      "subdir": "osx-64",
+      "timestamp": 1750776708868,
+      "version": "0.1.0"
+    },
+    "pixi-foobar-0.1.0-h0dc7051_0.conda": {
+      "arch": "x86_64",
+      "build": "h0dc7051_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "fad88ca86e9e02503ee9bc4e22ec20be",
+      "name": "pixi-foobar",
+      "platform": "osx",
+      "sha256": "d704460f53f1322b412fb85b4f2bdd7db74f3119a9f679905e1597929ffd84d7",
+      "size": 1186,
+      "subdir": "osx-64",
+      "timestamp": 1750776708868,
+      "version": "0.1.0"
+    }
+  },
+  "repodata_version": 2
+}
+>>>>>>> main

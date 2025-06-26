@@ -136,7 +136,7 @@ If you want to get more details checkout the [actual code](https://github.com/pr
 The lock file has a version number, this is to ensure that the lock file is compatible with the local version of `pixi`.
 
 ```yaml
-version: 4
+version: 6
 ```
 
 Pixi is backward compatible with the lock file, but not forward compatible.
