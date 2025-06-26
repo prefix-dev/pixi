@@ -15,6 +15,8 @@ on:
       - "schema/**"
       - "**/schema.yml"
 
+permissions: read-all
+
 jobs:
   test-schema:
     runs-on: ubuntu-latest

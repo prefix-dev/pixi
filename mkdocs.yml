@@ -128,6 +128,7 @@ nav:
       - Multi Environment: workspace/multi_environment.md
       - Lockfile: workspace/lockfile.md
       - System Requirements: workspace/system_requirements.md
+      - Conda & PyPI: concepts/conda_pypi.md
       - Global Tools:
           - Manifest: global_tools/manifest.md
           - Trampolines: global_tools/trampolines.md
@@ -155,11 +156,14 @@ nav:
           - JupyterLab: integration/editor/jupyterlab.md
       - Continuous Integration:
           - GitHub Actions: integration/ci/github_actions.md
-          - Lockfile Updates: integration/ci/updates_github_actions.md
+          - Pixi Diff-to-markdown: integration/ci/updates_github_actions.md
       - Extensions:
           - Introduction: integration/extensions/introduction.md
           - Pixi Diff: integration/extensions/pixi_diff.md
+          - Pixi Diff-to-markdown: integration/ci/updates_github_actions.md
+          - Pixi Inject: integration/extensions/pixi_inject.md
           - Pixi Install-to-prefix: integration/extensions/pixi_install_to_prefix.md
+          - Pixi Pack: deployment/pixi_pack.md
       - Third Party:
           - Direnv: integration/third_party/direnv.md
           - Starship: integration/third_party/starship.md
