@@ -17,13 +17,16 @@ pixi exec pixi-pack
 pixi exec pixi-unpack environment.tar
 ```
 
+> [!NOTE]
+> You can also write `pixi pack` (and `pixi unpack`) if you have `pixi-pack` and `pixi-unpack` installed globally.
+
 ![pixi-pack demo](https://raw.githubusercontent.com/quantco/pixi-pack/refs/heads/main/.github/assets/demo/demo-light.gif#only-light)
 ![pixi-pack demo](https://raw.githubusercontent.com/quantco/pixi-pack/refs/heads/main/.github/assets/demo/demo-dark.gif#only-dark)
 
 You can pack an environment with
 
 ```bash
-pixi-pack --environment prod --platform linux-64 pixi.toml
+pixi pack --environment prod --platform linux-64 pixi.toml
 ```
 
 This will create an `environment.tar` file that contains all conda packages required to create the environment.
@@ -45,14 +48,14 @@ This will create an `environment.tar` file that contains all conda packages requ
 
 ### Unpacking an Environment
 
-With `pixi-unpack environment.tar`, you can unpack the environment on your target system. This will create a new conda environment in `./env` that contains all packages specified in your `pixi.toml`. It also creates an `activate.sh` (or `activate.bat` on Windows) file that lets you activate the environment without needing to have `conda` or `micromamba` installed.
+With `pixi unpack environment.tar`, you can unpack the environment on your target system. This will create a new conda environment in `./env` that contains all packages specified in your `pixi.toml`. It also creates an `activate.sh` (or `activate.bat` on Windows) file that lets you activate the environment without needing to have `conda` or `micromamba` installed.
 
 ### Cross-platform Packs
 
 Since `pixi-pack` just downloads the `.conda` and `.tar.bz2` files from the conda repositories, you can trivially create packs for different platforms.
 
 ```bash
-pixi-pack --platform win-64
+pixi pack --platform win-64
 ```
 
 !!! note
@@ -65,7 +68,7 @@ This can be useful if you want to distribute the environment to users that don't
 
 === "Linux & macOS"
     ```bash
-    $ pixi-pack --create-executable
+    $ pixi pack --create-executable
     $ ls
     environment.sh
     $ ./environment.sh
@@ -77,7 +80,7 @@ This can be useful if you want to distribute the environment to users that don't
 
 === "Windows"
     ```powershell
-    PS > pixi-pack --create-executable
+    PS > pixi pack --create-executable
     PS > ls
     environment.ps1
     PS > .\environment.ps1
@@ -101,13 +104,13 @@ You can provide one of the following as the `--pixi-unpack-source`:
 Using a URL:
 
 ```bash
-pixi-pack --create-executable --pixi-pack-source https://my.mirror/pixi-pack/pixi-pack-x86_64-unknown-linux-musl
+pixi pack --create-executable --pixi-unpack-source https://my.mirror/pixi-pack/pixi-unpack-x86_64-unknown-linux-musl
 ```
 
 Using a path:
 
 ```bash
-pixi-pack --create-executable --pixi-pack-source ./pixi-pack-x86_64-unknown-linux-musl
+pixi pack --create-executable --pixi-unpack-source ./pixi-unpack-x86_64-unknown-linux-musl
 ```
 
 !!! note
@@ -119,7 +122,7 @@ pixi-pack --create-executable --pixi-pack-source ./pixi-pack-x86_64-unknown-linu
 You can inject additional packages into the environment that are not specified in `pixi.lock` by using the `--inject` flag:
 
 ```bash
-pixi-pack --inject local-package-1.0.0-hbefa133_0.conda pixi.toml
+pixi pack --inject local-package-1.0.0-hbefa133_0.conda pixi.toml
 ```
 
 This can be particularly useful if you build the package itself and want to include the built package in the environment but still want to use `pixi.lock` from the workspace.
@@ -134,7 +137,7 @@ This will skip the bundling of PyPi packages that are source distributions.
 The `--inject` option also supports wheels.
 
 ```bash
-pixi-pack --ignore-pypi-non-wheel --inject my_webserver-0.1.0-py3-none-any.whl
+pixi pack --ignore-pypi-non-wheel --inject my_webserver-0.1.0-py3-none-any.whl
 ```
 
 !!! warning
@@ -175,7 +178,7 @@ See [pixi docs](../reference/pixi_configuration.md#concurrency) for more informa
 You can cache downloaded packages to speed up subsequent pack operations by using the `--use-cache` flag:
 
 ```bash
-pixi-pack --use-cache ~/.pixi-pack/cache
+pixi pack --use-cache ~/.pixi-pack/cache
 ```
 
 This will store all downloaded packages in the specified directory and reuse them in future pack operations. The cache follows the same structure as conda channels, organizing packages by platform subdirectories (e.g., linux-64, win-64, etc.).
