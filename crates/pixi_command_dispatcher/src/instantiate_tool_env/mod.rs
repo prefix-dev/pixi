@@ -233,7 +233,10 @@ impl InstantiateToolEnvironmentSpec {
 
         let packages_str = solved_environment
             .iter()
-            .map(|p| format!("{}", p.package_record()))
+            .map(|p| {
+                let record = p.package_record();
+                format!("{}={}", record.name.as_normalized(), record.version)
+            })
             .collect::<Vec<_>>()
             .join(", ");
         tracing::info!("Packages in tool environment: {}", packages_str);
