@@ -441,7 +441,12 @@ fn get_export_specific_task_env(task: &Task, command_env: &HashMap<OsString, OsS
         let should_exclude = override_excluded_keys.contains(key.as_str());
         if !should_exclude {
             tracing::info!("Setting environment variable: {}=\"{}\"", key, value);
-            export.push_str(&format!("export \"{}={}\";\n", key, value));
+            // Platform-specific export format
+            if cfg!(windows) {
+                export.push_str(&format!("set \"{}={}\";\n", key, value));
+            } else {
+                export.push_str(&format!("export \"{}={}\";\n", key, value));
+            }
         }
     }
     export
