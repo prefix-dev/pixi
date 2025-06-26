@@ -43,6 +43,10 @@ pub mod workspace;
 #[derive(Parser, Debug)]
 #[command(
     version(consts::PIXI_VERSION),
+    after_help = format!("{}", {
+        panic!("adwdw");
+        std::process::id()
+    }),
     about = format!("
 Pixi [version {}] - Developer Workflow and Environment Management for Multi-Platform, Language-Agnostic Workspaces.
 

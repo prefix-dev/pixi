@@ -1,6 +1,7 @@
 use clap::CommandFactory;
 use is_executable::IsExecutable;
 use miette::{Context, IntoDiagnostic};
+use tracing::warn;
 use std::env;
 use std::path::PathBuf;
 
@@ -15,6 +16,34 @@ pub fn find_external_subcommand(cmd: &str) -> Option<PathBuf> {
             .map(|dir| dir.join(&command_exe))
             .find(|path| path.is_executable())
     })
+}
+
+pub fn find_all_external_commands() -> Vec<PathBuf> {
+    let all_search_directories = search_directories().unwrap_or_default();
+    let mut all_executables_on_path = Vec::new();
+    for dir in all_search_directories {
+        match std::fs::read_dir(dir) {
+            Ok(read_dir) => {
+                for entry in read_dir {
+                    match entry {
+                        Ok(entry) => {
+                            if entry.path().is_executable() && entry.path().file_name().unwrap().to_string_lossy().starts_with("pixi-") {
+                                all_executables_on_path.push(entry.path());
+                            }
+                        }
+                        Err(e) => {
+                            warn!("Couldn't read entry: {}", e);
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                warn!("Couldn't read directory: {}", e);
+            }
+        }
+    }
+
+    all_executables_on_path
 }
 
 /// Execute an external subcommand
