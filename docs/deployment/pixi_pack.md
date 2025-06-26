@@ -18,7 +18,7 @@ pixi exec pixi-unpack environment.tar
 ```
 
 > [!NOTE]
-> You can also write `pixi pack` (and `pixi unpack`) if you have `pixi-pack` and `pixi-unpack` installed globally.
+> You can also write `pixi pack` (and `pixi unpack`) if you have `pixi`, and `pixi-pack` and `pixi-unpack` installed globally.
 
 ![pixi-pack demo](https://raw.githubusercontent.com/quantco/pixi-pack/refs/heads/main/.github/assets/demo/demo-light.gif#only-light)
 ![pixi-pack demo](https://raw.githubusercontent.com/quantco/pixi-pack/refs/heads/main/.github/assets/demo/demo-dark.gif#only-dark)
