@@ -113,14 +113,6 @@ impl From<ProjectModelV1> for VersionedProjectModel {
     }
 }
 
-impl ProjectModelV1 {
-    pub fn calculate_hash(&self) -> Vec<u8> {
-        let mut hasher = Xxh3::new();
-        self.hash(&mut hasher);
-        hasher.finish().to_ne_bytes().to_vec()
-    }
-}
-
 /// Represents a target selector. Currently, we only support explicit platform
 /// selection.
 #[derive(Debug, Clone, DeserializeFromStr, SerializeDisplay, Hash, Eq, PartialEq)]

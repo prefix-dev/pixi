@@ -2,7 +2,7 @@ use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
     fmt::{Display, Formatter},
-    hash::{Hash, Hasher},
+    hash::Hash,
     ops::Sub,
     path::{Path, PathBuf},
     str::FromStr,
@@ -12,6 +12,7 @@ use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pixi_build_discovery::{DiscoveredBackend, EnabledProtocols};
+use pixi_build_type_conversions::compute_project_model_hash;
 use pixi_git::url::RepositoryUrl;
 use pixi_glob::{GlobHashCache, GlobHashError, GlobHashKey};
 use pixi_manifest::{FeaturesExt, pypi::pypi_options::NoBuild};
@@ -38,7 +39,6 @@ use uv_distribution_types::RequirementSource;
 use uv_git_types::GitReference;
 use uv_pypi_types::ParsedUrlError;
 use uv_resolver::RequiresPython;
-use xxhash_rust::xxh3::Xxh3;
 
 use super::{
     PixiRecordsByName, PypiRecord, PypiRecordsByName, package_identifier::ConversionError,
@@ -1486,16 +1486,11 @@ pub(crate) async fn verify_package_platform_satisfiability(
         .map_err(PlatformUnsat::BackendDiscovery)
         .map_err(Box::new)?;
 
-        let project_model_hash =
-            discovered_backend
-                .init_params
-                .project_model
-                .as_ref()
-                .map(|project_model| {
-                    let mut hasher = Xxh3::new();
-                    project_model.hash(&mut hasher);
-                    hasher.finish().to_ne_bytes().to_vec()
-                });
+        let project_model_hash = discovered_backend
+            .init_params
+            .project_model
+            .as_ref()
+            .map(compute_project_model_hash);
 
         let input_hash = input_hash_cache
             .compute_hash(GlobHashKey::new(

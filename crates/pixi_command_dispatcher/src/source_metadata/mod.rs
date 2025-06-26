@@ -9,7 +9,7 @@ use pixi_build_frontend::types::{
     ChannelConfiguration, CondaPackageMetadata, PlatformAndVirtualPackages, SourcePackageSpecV1,
     procedures::conda_metadata::CondaMetadataParams,
 };
-use pixi_build_types::ProjectModelV1;
+use pixi_build_type_conversions::compute_project_model_hash;
 use pixi_glob::GlobHashKey;
 use pixi_record::{InputHash, SourceRecord};
 use rattler_conda_types::{ChannelConfig, ChannelUrl, PackageRecord};
@@ -94,7 +94,7 @@ impl SourceMetadataSpec {
             .init_params
             .project_model
             .as_ref()
-            .map(ProjectModelV1::calculate_hash);
+            .map(compute_project_model_hash);
 
         if let Some(metadata) = metadata {
             tracing::debug!(
