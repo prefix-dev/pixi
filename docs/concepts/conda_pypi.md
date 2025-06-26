@@ -15,7 +15,7 @@ The simplified process is as follows:
 
 1. Resolve the conda dependencies.
 2. Map the conda packages to PyPI packages.
-3. Resolve the [remaining]("All pypi dependencies already installed as conda dependencies will not be fetched from PyPI") PyPI dependencies.
+3. Resolve the remaining PyPI dependencies.
 
 
 ## Tool Comparison
