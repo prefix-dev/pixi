@@ -10,37 +10,37 @@ template: home.html
 Pixi is a **fast, modern, and reproducible** package management tool for developers of all backgrounds.
 
 <div class="feature-grid">
-    <a href="/pixi/workspace/lockfile">
+    <a href="workspace/lockfile">
       <div class="feature-card">
               <strong>🔄 Reproducibility</strong>
               <p>Isolated, easily recreated environments with lockfiles built-in</p>
       </div>
     </a>
-    <a href="/pixi/workspace/advanced_tasks/">
+    <a href="workspace/advanced_tasks/">
       <div class="feature-card">
           <strong>🛠️ Tasks</strong>
           <p>Manage complex pipelines effortlessly.</p>
       </div>
     </a>
-    <a href="/pixi/workspace/multi_platform_configuration/">
+    <a href="workspace/multi_platform_configuration/">
       <div class="feature-card">
           <strong>🌐 Multi Platform</strong>
           <p>Works on Linux, macOS, Windows, and more.</p>
       </div>
     </a>
-    <a href="/pixi/workspace/multi_environment/">
+    <a href="workspace/multi_environment/">
       <div class="feature-card">
           <strong>🧩 Multi Environment</strong>
           <p>Compose multiple environments in one manifest.</p>
       </div>
     </a>
-    <a href="/pixi/python/tutorial/">
+    <a href="python/tutorial/">
       <div class="feature-card">
           <strong>🐍 Python</strong>
           <p>Support for <code>pyproject.toml</code> and PyPI through uv.</p>
       </div>
     </a>
-    <a href="/pixi/global_tools/introduction/">
+    <a href="global_tools/introduction/">
       <div class="feature-card">
           <strong>🌍 Global Tools</strong>
           <p>Install global tools, safely isolated. Replacing <code>apt</code>, <code>homebrew</code>, <code>winget</code></p>
