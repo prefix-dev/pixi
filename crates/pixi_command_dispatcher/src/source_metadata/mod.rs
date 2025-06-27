@@ -1,6 +1,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
-    path::PathBuf,
+    hash::Hash,
 };
 
 use miette::Diagnostic;
@@ -9,6 +9,7 @@ use pixi_build_frontend::types::{
     ChannelConfiguration, CondaPackageMetadata, PlatformAndVirtualPackages, SourcePackageSpecV1,
     procedures::conda_metadata::CondaMetadataParams,
 };
+use pixi_build_type_conversions::compute_project_model_hash;
 use pixi_glob::GlobHashKey;
 use pixi_record::{InputHash, SourceRecord};
 use rattler_conda_types::{ChannelConfig, ChannelUrl, PackageRecord};
@@ -16,8 +17,7 @@ use thiserror::Error;
 
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    InstantiateBackendError, InstantiateBackendSpec, SourceCheckout, SourceCheckoutError,
-    build::WorkDirKey,
+    InstantiateBackendError, InstantiateBackendSpec, SourceCheckout, build::WorkDirKey,
 };
 
 mod source_metadata_cache;
@@ -64,20 +64,38 @@ pub struct SourceMetadata {
 impl SourceMetadataSpec {
     pub(crate) async fn request(
         self,
-        command_queue: CommandDispatcher,
+        command_dispatcher: CommandDispatcher,
     ) -> Result<SourceMetadata, CommandDispatcherError<SourceMetadataError>> {
         tracing::debug!(
             "Requesting source metadata for source spec: {}",
             self.source.pinned
         );
 
+        // Discover information about the build backend from the source code.
+        let discovered_backend = DiscoveredBackend::discover(
+            &self.source.path,
+            &self.channel_config,
+            &self.enabled_protocols,
+        )
+        .map_err(SourceMetadataError::Discovery)
+        .map_err(CommandDispatcherError::Failed)?;
+
         // Check the source metadata cache, short circuit if we have it.
         let cache_key = self.cache_key();
-        let (metadata, entry) = command_queue
+        let (metadata, entry) = command_dispatcher
             .source_metadata_cache()
-            .entry(&self.source, &cache_key)
+            .entry(&self.source.pinned, &cache_key)
             .await
-            .map_err(SourceMetadataError::Cache)?;
+            .map_err(SourceMetadataError::Cache)
+            .map_err(CommandDispatcherError::Failed)?;
+
+        // Calculate the hash of the project model
+        let project_model_hash = discovered_backend
+            .init_params
+            .project_model
+            .as_ref()
+            .map(compute_project_model_hash);
+
         if let Some(metadata) = metadata {
             tracing::debug!(
                 "Found source metadata in cache for source spec: {}",
@@ -86,14 +104,16 @@ impl SourceMetadataSpec {
 
             // Check if the input hash is still valid.
             if let Some(input_globs) = &metadata.input_hash {
-                let new_hash = command_queue
+                let new_hash = command_dispatcher
                     .glob_hash_cache()
                     .compute_hash(GlobHashKey::new(
                         self.source.path.clone(),
                         input_globs.globs.clone(),
+                        project_model_hash.clone(),
                     ))
                     .await
-                    .map_err(SourceMetadataError::GlobHash)?;
+                    .map_err(SourceMetadataError::GlobHash)
+                    .map_err(CommandDispatcherError::Failed)?;
                 if new_hash.hash == input_globs.hash {
                     tracing::debug!("found up-to-date cached metadata.");
                     return Ok(SourceMetadata {
@@ -121,17 +141,8 @@ impl SourceMetadataSpec {
             }
         }
 
-        // Discover information about the build backend from the source code.
-        let discovered_backend = DiscoveredBackend::discover(
-            &self.source.path,
-            &self.channel_config,
-            &self.enabled_protocols,
-        )
-        .map_err(SourceMetadataError::Discovery)?;
-
-        // Instantiate the backend with the discovered backend information.
-        let manifest_path = discovered_backend.init_params.manifest_path.clone();
-        let backend = command_queue
+        // Instantiate the backend with the discovered information.
+        let backend = command_dispatcher
             .instantiate_backend(InstantiateBackendSpec {
                 backend_spec: discovered_backend.backend_spec,
                 init_params: discovered_backend.init_params,
@@ -156,9 +167,9 @@ impl SourceMetadataSpec {
                 base_url: self.channel_config.channel_alias.clone(),
             },
             variant_configuration: self.variants.map(|variants| variants.into_iter().collect()),
-            work_directory: command_queue.cache_dirs().working_dirs().join(
+            work_directory: command_dispatcher.cache_dirs().working_dirs().join(
                 WorkDirKey {
-                    source: self.source.clone(),
+                    source: Box::new(self.source.clone()).into(),
                     host_platform: self.build_environment.host_platform,
                     build_backend: backend.identifier().to_string(),
                 }
@@ -166,15 +177,16 @@ impl SourceMetadataSpec {
             ),
         };
         let metadata = backend
-            .conda_get_metadata(&params)
+            .conda_get_metadata(params)
             .await
-            .map_err(SourceMetadataError::Communication)?;
+            .map_err(SourceMetadataError::Communication)
+            .map_err(CommandDispatcherError::Failed)?;
 
         // Compute the input globs for the mutable source checkouts.
         let input_hash = Self::compute_input_hash(
-            command_queue,
+            command_dispatcher,
             &self.source,
-            manifest_path,
+            project_model_hash,
             metadata.input_globs,
         )
         .await?;
@@ -186,7 +198,8 @@ impl SourceMetadataSpec {
                 packages: metadata.packages.clone(),
             })
             .await
-            .map_err(SourceMetadataError::Cache)?;
+            .map_err(SourceMetadataError::Cache)
+            .map_err(CommandDispatcherError::Failed)?;
 
         Ok(SourceMetadata {
             records: source_metadata_to_records(&self.source, metadata.packages, input_hash),
@@ -198,20 +211,24 @@ impl SourceMetadataSpec {
     async fn compute_input_hash(
         command_queue: CommandDispatcher,
         source: &SourceCheckout,
-        manifest_path: PathBuf,
+        project_model_hash: Option<Vec<u8>>,
         input_globs: Option<BTreeSet<String>>,
     ) -> Result<Option<InputHash>, CommandDispatcherError<SourceMetadataError>> {
         let input_hash = if source.pinned.is_immutable() {
             None
         } else {
-            // Compute the input hash based on the manifest path and the input globs.
-            let mut input_globs = input_globs.unwrap_or_default();
-            input_globs.insert(manifest_path.to_string_lossy().into_owned());
+            // Compute the input hash based on the project model and the input globs.
+            let input_globs = input_globs.unwrap_or_default();
             let input_hash = command_queue
                 .glob_hash_cache()
-                .compute_hash(GlobHashKey::new(&source.path, input_globs.clone()))
+                .compute_hash(GlobHashKey::new(
+                    &source.path,
+                    input_globs.clone(),
+                    project_model_hash,
+                ))
                 .await
-                .map_err(SourceMetadataError::GlobHash)?;
+                .map_err(SourceMetadataError::GlobHash)
+                .map_err(CommandDispatcherError::Failed)?;
 
             Some(InputHash {
                 hash: input_hash.hash,
@@ -329,9 +346,6 @@ pub fn from_pixi_source_spec_v1(source: SourcePackageSpecV1) -> pixi_spec::Sourc
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum SourceMetadataError {
-    #[error(transparent)]
-    SourceCheckout(#[from] SourceCheckoutError),
-
     #[error(transparent)]
     #[diagnostic(transparent)]
     Discovery(#[from] pixi_build_discovery::DiscoveryError),

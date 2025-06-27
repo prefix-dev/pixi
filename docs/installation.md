@@ -1,3 +1,4 @@
+## Installation
 To install `pixi` you can run the following command in your terminal:
 
 === "Linux & macOS"
@@ -35,7 +36,9 @@ Now restart your terminal or shell to make the installation effective.
     You can check the installation `sh` script: [download](https://pixi.sh/install.sh) and the `ps1`: [download](https://pixi.sh/install.ps1).
     The scripts are open source and available on [GitHub](https://github.com/prefix-dev/pixi/tree/main/install).
 
-
+!!! note "Don't forget to add autocompletion!"
+    After installing Pixi, you can enable autocompletion for your shell.
+    See the [Autocompletion](#autocompletion) section below for instructions.
 ## Update
 
 Updating is as simple as installing, rerunning the installation script gets you the latest version.
@@ -156,60 +159,66 @@ its [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try).
 To get autocompletion follow the instructions for your shell.
 Afterwards, restart the shell or source the shell config file.
 
+=== "Bash"
+    Add the following to the end of `~/.bashrc`:
+    ```bash title="~/.bashrc"
+    eval "$(pixi completion --shell bash)"
+    ```
 
-### Bash (default on most Linux systems)
+=== "Zsh"
+    Add the following to the end of `~/.zshrc`:
 
-Add the following to the end of `~/.bashrc`:
+    ```zsh title="~/.zshrc"
+    autoload -Uz compinit && compinit  # redundant with Oh My Zsh
+    eval "$(pixi completion --shell zsh)"
+    ```
 
-```bash title="~/.bashrc"
+=== "PowerShell"
+    Add the following to the end of `Microsoft.PowerShell_profile.ps1`.
+    You can check the location of this file by querying the `$PROFILE` variable in PowerShell.
+    Typically the path is `~\Documents\PowerShell\Microsoft.PowerShell_profile.ps1` or
+    `~/.config/powershell/Microsoft.PowerShell_profile.ps1` on -Nix.
 
-eval "$(pixi completion --shell bash)"
-```
-### Zsh (default on macOS)
+    ```pwsh
+    (& pixi completion --shell powershell) | Out-String | Invoke-Expression
+    ```
 
-Add the following to the end of `~/.zshrc`:
+=== "Fish"
+    Add the following to the end of `~/.config/fish/config.fish`:
 
+    ```fish title="~/.config/fish/config.fish"
+    pixi completion --shell fish | source
+    ```
+=== "Nushell"
+    Add the following to your Nushell config file (find it by running `$nu.config-path` in Nushell):
 
-```zsh title="~/.zshrc"
+    ```nushell
+    mkdir $"($nu.data-dir)/vendor/autoload"
+    pixi completion --shell nushell | save --force $"($nu.data-dir)/vendor/autoload/pixi-completions.nu"
+    ```
 
-autoload -Uz compinit && compinit  # redundant with Oh My Zsh
-eval "$(pixi completion --shell zsh)"
-```
+=== "Elvish"
+    Add the following to the end of `~/.elvish/rc.elv`:
 
-### PowerShell (pre-installed on all Windows systems)
+    ```elv title="~/.elvish/rc.elv"
+    eval (pixi completion --shell elvish | slurp)
+    ```
 
-Add the following to the end of `Microsoft.PowerShell_profile.ps1`.
-You can check the location of this file by querying the `$PROFILE` variable in PowerShell.
-Typically the path is `~\Documents\PowerShell\Microsoft.PowerShell_profile.ps1` or
-`~/.config/powershell/Microsoft.PowerShell_profile.ps1` on -Nix.
+## Uninstall
+Before un-installation you might want to delete any previous files pixi has installed.
 
-```pwsh
-(& pixi completion --shell powershell) | Out-String | Invoke-Expression
-```
-
-### Fish
-
-Add the following to the end of `~/.config/fish/config.fish`:
-
-```fish title="~/.config/fish/config.fish"
-
-pixi completion --shell fish | source
-```
-
-### Nushell
-
-Add the following to your Nushell config file (find it by running `$nu.config-path` in Nushell):
-
-```nushell
-mkdir $"($nu.data-dir)/vendor/autoload"
-pixi completion --shell nushell | save --force $"($nu.data-dir)/vendor/autoload/pixi-completions.nu"
-```
-
-### Elvish
-
-Add the following to the end of `~/.elvish/rc.elv`:
-
-```elv title="~/.elvish/rc.elv"
-
-eval (pixi completion --shell elvish | slurp)
-```
+1. Remove any cached data:
+    ```shell
+    pixi clean cache
+    ```
+2. Remove the environments from your pixi projects:
+    ```shell
+    cd path/to/project && pixi clean
+    ```
+3. Remove the `pixi` and it's global environments
+    ```shell
+    rm -r ~/.pixi
+    ```
+4. Remove the pixi binary from your `PATH`:
+   - For Linux and macOS, remove `~/.pixi/bin` from your `PATH` in your shell configuration file (e.g., `~/.bashrc`, `~/.zshrc`).
+   - For Windows, remove `%UserProfile%\.pixi\bin` from your `PATH` environment variable.

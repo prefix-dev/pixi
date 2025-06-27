@@ -13,7 +13,8 @@ use miette::{IntoDiagnostic, Report};
 use pixi_config::{Config, default_channel_config};
 use pixi_progress::await_in_progress;
 use pixi_utils::reqwest::build_reqwest_clients;
-use rattler_conda_types::{MatchSpec, PackageName, Platform, RepoDataRecord};
+use rattler_conda_types::{MatchSpec, PackageName, ParseStrictness, Platform, RepoDataRecord};
+use rattler_lock::Matches;
 use rattler_repodata_gateway::{GatewayError, RepoData};
 use regex::Regex;
 use strsim::jaro;
@@ -169,9 +170,13 @@ pub async fn execute_impl<W: Write>(
             .into_future()
     };
 
-    // When package name filter contains * (wildcard), it will search and display a
-    // list of packages matching this filter
-    let packages = if package_name_filter.contains('*') {
+    let match_spec =
+        MatchSpec::from_str(&package_name_filter, ParseStrictness::Lenient).into_diagnostic();
+
+    let packages = if let Ok(match_spec) = match_spec {
+        search_exact_package(match_spec, all_names, repodata_query_func, out).await?
+    } else if package_name_filter.contains('*') {
+        // If it's not a valid MatchSpec, check for wildcard
         let package_name_without_filter = package_name_filter.replace('*', "");
         let package_name = PackageName::try_from(package_name_without_filter).into_diagnostic()?;
 
@@ -184,12 +189,11 @@ pub async fn execute_impl<W: Write>(
             out,
         )
         .await?
-    }
-    // If package name filter doesn't contain * (wildcard), it will search and display specific
-    // package info (if any package is found)
-    else {
-        let package_name = PackageName::try_from(package_name_filter).into_diagnostic()?;
-        search_exact_package(package_name, all_names, repodata_query_func, out).await?
+    } else {
+        return Err(miette::miette!(
+            "Invalid package specification: {}",
+            package_name_filter
+        ));
     };
 
     Ok(packages)
@@ -202,7 +206,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 }
 
 async fn search_exact_package<W: Write, QF, FR>(
-    package_name: PackageName,
+    package_spec: MatchSpec,
     all_repodata_names: Vec<PackageName>,
     repodata_query_func: QF,
     out: &mut W,
@@ -211,7 +215,10 @@ where
     QF: Fn(Vec<MatchSpec>) -> FR,
     FR: Future<Output = Result<Vec<RepoData>, GatewayError>>,
 {
-    let package_name_search = package_name.clone();
+    let package_name_search = package_spec.name.clone().ok_or_else(|| {
+        miette::miette!("could not find package name in MatchSpec {}", package_spec)
+    })?;
+
     let packages = search_package_by_filter(
         &package_name_search,
         all_repodata_names,
@@ -220,9 +227,18 @@ where
         false,
     )
     .await?;
+
+    if packages.is_empty() {
+        let normalized_package_name = package_name_search.as_normalized();
+        return Err(miette::miette!(
+            "Package {normalized_package_name} not found, please use a wildcard '*' in the search name for a broader result."
+        ));
+    }
+
     // Sort packages by version, build number and build string
     let packages = packages
         .iter()
+        .filter(|&p| package_spec.matches(p))
         .sorted_by(|a, b| {
             Ord::cmp(
                 &(
@@ -241,9 +257,8 @@ where
         .collect::<Vec<RepoDataRecord>>();
 
     if packages.is_empty() {
-        let normalized_package_name = package_name.as_normalized();
         return Err(miette::miette!(
-            "Package {normalized_package_name} not found, please use a wildcard '*' in the search name for a broader result."
+            "Package found, but MatchSpec {package_spec} does not match any record."
         ));
     }
 

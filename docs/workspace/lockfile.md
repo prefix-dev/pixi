@@ -129,14 +129,14 @@ Steps to check if the lock file is satisfiable:
 - All hashes for the `pypi` editable packages are correct.
 - There is only a single entry for every package in the lock file.
 
-If you want to get more details checkout the [actual code](https://github.com/prefix-dev/pixi/blob/main/src/lock_file/satisfiability.rs) as this is a simplification of the actual code.
+If you want to get more details checkout the [actual code](https://github.com/prefix-dev/pixi/blob/main/src/lock_file/satisfiability/mod.rs) as this is a simplification of the actual code.
 
 ## The version of the lock file
 
 The lock file has a version number, this is to ensure that the lock file is compatible with the local version of `pixi`.
 
 ```yaml
-version: 4
+version: 6
 ```
 
 Pixi is backward compatible with the lock file, but not forward compatible.

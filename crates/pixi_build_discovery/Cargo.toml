@@ -35,3 +35,4 @@ insta = { workspace = true, features = [
   "redactions",
 ] }
 pixi_build_discovery = { path = ".", features = ["serde"] }
+pixi_test_utils = { workspace = true }

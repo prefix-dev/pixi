@@ -10,9 +10,9 @@ if (Test-Path "D:\") {
     Write-Output "Using existing drive at D:"
     $Drive = "D:"
 } else {
-	# The size (20 GB) is chosen empirically to be large enough for our
+	# The size is chosen empirically to be large enough for our
 	# workflows; larger drives can take longer to set up.
-	$Volume = New-VHD -Path C:/pixi_dev_drive.vhdx -SizeBytes 20GB |
+	$Volume = New-VHD -Path C:/pixi_dev_drive.vhdx -Dynamic -SizeBytes 100GB |
 						Mount-VHD -Passthru |
 						Initialize-Disk -Passthru |
 						New-Partition -AssignDriveLetter -UseMaximumSize |
@@ -50,13 +50,14 @@ if (Test-Path "C:/Users/runneradmin/.cargo") {
     Copy-Item -Path "C:/Users/runneradmin/.cargo/*" -Destination "$($Drive)/.cargo/" -Recurse -Force
 }
 
+# Set environment variables for GitHub Actions
 Write-Output `
-	"DEV_DRIVE=$($Drive)" `
-	"TMP=$($Tmp)" `
-	"TEMP=$($Tmp)" `
+    "DEV_DRIVE=$($Drive)" `
+    "TMP=$($Tmp)" `
+    "TEMP=$($Tmp)" `
+    "RUSTUP_HOME=$($Drive)/.rustup" `
+    "CARGO_HOME=$($Drive)/.cargo" `
 	"RATTLER_CACHE_DIR=$($Drive)/rattler-cache" `
-	"RUSTUP_HOME=$($Drive)/.rustup" `
-	"CARGO_HOME=$($Drive)/.cargo" `
-	"PIXI_HOME=$($Drive)/.pixi" `
-	"PIXI_WORKSPACE=$($Drive)/pixi" `
-	>> $env:GITHUB_ENV
+    "PIXI_HOME=$($Drive)/.pixi" `
+    "PIXI_WORKSPACE=$($Drive)/pixi" `
+    >> $env:GITHUB_ENV

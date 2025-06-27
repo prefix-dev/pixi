@@ -4095,6 +4095,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ordermap"
+version = "0.5.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d31b8b7a99f71bdff4235faf9ce9eada0ad3562c8fbeb7d607d9f41a6ec569d"
+dependencies = [
+ "indexmap 2.9.0",
+ "serde",
+]
+
+[[package]]
 name = "os_pipe"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4430,16 +4440,14 @@ dependencies = [
 
 [[package]]
 name = "pixi"
-version = "0.48.0"
+version = "0.48.2"
 dependencies = [
  "ahash",
  "anyhow",
  "assert_matches",
- "async-fd-lock",
  "async-once-cell",
  "async-trait",
  "barrier_cell",
- "base64 0.22.1",
  "chrono",
  "clap",
  "clap_complete",
@@ -4448,6 +4456,7 @@ dependencies = [
  "crossbeam-channel",
  "csv",
  "ctrlc",
+ "dashmap",
  "deno_task_shell",
  "dialoguer",
  "dirs",
@@ -4477,7 +4486,9 @@ dependencies = [
  "pep508_rs",
  "percent-encoding",
  "pixi_allocator",
+ "pixi_build_discovery",
  "pixi_build_frontend",
+ "pixi_build_type_conversions",
  "pixi_build_types",
  "pixi_command_dispatcher",
  "pixi_config",
@@ -4491,6 +4502,7 @@ dependencies = [
  "pixi_pypi_spec",
  "pixi_record",
  "pixi_spec",
+ "pixi_test_utils",
  "pixi_toml",
  "pixi_utils",
  "pixi_uv_conversions",
@@ -4585,6 +4597,7 @@ dependencies = [
  "pixi_manifest",
  "pixi_spec",
  "pixi_spec_containers",
+ "pixi_test_utils",
  "rattler_conda_types",
  "serde",
  "serde_json",
@@ -4596,62 +4609,40 @@ dependencies = [
 name = "pixi_build_frontend"
 version = "0.1.0"
 dependencies = [
- "bytes",
- "dashmap",
- "dunce",
  "fs-err",
  "futures",
- "insta",
- "itertools 0.14.0",
  "jsonrpsee",
  "miette 7.5.0",
  "pixi_build_discovery",
- "pixi_build_type_conversions",
  "pixi_build_types",
- "pixi_config",
- "pixi_consts",
- "pixi_manifest",
- "pixi_progress",
- "pixi_spec",
- "pixi_utils",
- "rattler",
- "rattler_conda_types",
- "rattler_repodata_gateway",
- "rattler_shell",
- "rattler_solve",
- "rattler_virtual_packages",
- "reqwest-middleware",
  "serde",
  "serde_json",
- "tempfile",
  "thiserror 2.0.12",
  "tokio",
- "tokio-stream",
  "tokio-util",
  "tracing",
- "url",
- "which",
 ]
 
 [[package]]
 name = "pixi_build_type_conversions"
 version = "0.1.0"
 dependencies = [
- "indexmap 2.9.0",
  "insta",
  "itertools 0.14.0",
+ "ordermap",
  "pixi_build_types",
  "pixi_manifest",
  "pixi_spec",
  "rattler_conda_types",
  "rstest",
+ "xxhash-rust",
 ]
 
 [[package]]
 name = "pixi_build_types"
 version = "0.1.0"
 dependencies = [
- "indexmap 2.9.0",
+ "ordermap",
  "rattler_conda_types",
  "rattler_digest",
  "serde",
@@ -4669,12 +4660,16 @@ dependencies = [
  "chrono",
  "derive_more",
  "dirs",
+ "fs-err",
  "futures",
+ "indexmap 2.9.0",
  "insta",
  "itertools 0.14.0",
  "miette 7.5.0",
+ "pin-project-lite",
  "pixi_build_discovery",
  "pixi_build_frontend",
+ "pixi_build_type_conversions",
  "pixi_build_types",
  "pixi_config",
  "pixi_consts",
@@ -4683,9 +4678,11 @@ dependencies = [
  "pixi_record",
  "pixi_spec",
  "pixi_spec_containers",
+ "pixi_test_utils",
  "pixi_utils",
  "rattler",
  "rattler_conda_types",
+ "rattler_digest",
  "rattler_repodata_gateway",
  "rattler_shell",
  "rattler_solve",
@@ -4693,8 +4690,10 @@ dependencies = [
  "reqwest-middleware",
  "serde",
  "serde_json",
+ "simple_spawn_blocking",
  "slotmap",
  "strsim",
+ "tempfile",
  "text_trees",
  "thiserror 2.0.12",
  "tokio",

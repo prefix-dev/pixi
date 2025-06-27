@@ -53,6 +53,8 @@ pub struct CondaBuildParams {
 }
 
 /// Identifier of an output.
+/// TODO: None of these fields should be optional and we should include a work
+/// directory per output.
 #[derive(Default, Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct CondaOutputIdentifier {
     pub name: Option<String>,

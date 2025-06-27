@@ -5,6 +5,78 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.48.2] - 2025-06-16
+#### ✨ Highlights
+
+This is a minor release with a couple of bugfixes.
+A new feature is the support for `mojoproject.toml` files which is used to develop on projects written in the Mojo programming language.
+This enables users to migrate from the [deprecated](https://docs.modular.com/magic/) Magic package manager to Pixi.
+
+
+#### Added
+
+- Support legacy mojoproject.toml by @zbowling in [#3942](https://github.com/prefix-dev/pixi/pull/3942)
+
+
+#### Changed
+
+- Update pixi-install-to-prefix by @ytausch in [#3924](https://github.com/prefix-dev/pixi/pull/3924)
+- Negotiate pixi build RPC interface through interface package by @Hofer-Julian in [#3927](https://github.com/prefix-dev/pixi/pull/3927)
+
+
+#### Documentation
+
+- Fix `discover_pixi` docstring by @Hofer-Julian in [#3928](https://github.com/prefix-dev/pixi/pull/3928)
+
+
+#### Fixed
+
+- Fix caching by @Hofer-Julian in [#3933](https://github.com/prefix-dev/pixi/pull/3933)
+- Always pass index locations by @nichmor in [#3947](https://github.com/prefix-dev/pixi/pull/3947)
+- Prefer to use MatchSpec instead of wildcard as package filter by @trim21 in [#3926](https://github.com/prefix-dev/pixi/pull/3926)
+- Typo in the doc strings by @Hofer-Julian in [#3954](https://github.com/prefix-dev/pixi/pull/3954)
+
+
+#### Refactor
+
+- Conda solving with command dispatcher by @baszalmstra in [#3909](https://github.com/prefix-dev/pixi/pull/3909)
+
+
+#### Removed
+
+- Remove `error_to_snapshot` by @Hofer-Julian in [#3934](https://github.com/prefix-dev/pixi/pull/3934)
+
+
+
+### [0.48.1] - 2025-06-10
+#### ✨ Highlights
+
+This is a minor release with a couple of bugs fixed.
+Additionally, `pixi self-update` accepts now the flags `--force` and `--no-release-note`.
+
+
+#### Added
+
+- Add cli options for self-update: --force and --no-release-note by @gzm55 in [#3888](https://github.com/prefix-dev/pixi/pull/3888)
+- Add pixi build testsuite by @Hofer-Julian in [#3891](https://github.com/prefix-dev/pixi/pull/3891)
+
+
+#### Fixed
+
+- Discovery error message by @Hofer-Julian in [#3903](https://github.com/prefix-dev/pixi/pull/3903)
+- `pixi lock` reporting by @Hofer-Julian in [#3896](https://github.com/prefix-dev/pixi/pull/3896)
+- Backslashes in editable path by @tdejager in [#3895](https://github.com/prefix-dev/pixi/pull/3895)
+- No longer panics, when a conda dependency is a PyPI get dependency by @ruben-arts in [#3905](https://github.com/prefix-dev/pixi/pull/3905)
+
+
+#### Removed
+
+- Remove pixi build tests by @Hofer-Julian in [#3892](https://github.com/prefix-dev/pixi/pull/3892)
+
+
+#### New Contributors
+* @simonjung1603 made their first contribution in [#3565](https://github.com/prefix-dev/pixi/pull/3565)
+
 ### [0.48.0] - 2025-06-02
 #### ✨ Highlights
 

@@ -1,21 +1,22 @@
+import json
 import os
-from pathlib import Path
-import shutil
 import platform
+import shutil
+import tomllib
+from pathlib import Path
+
+import pytest
 from syrupy.assertion import SnapshotAssertion
 from syrupy.matchers import path_type
 
 from .common import (
-    cwd,
-    verify_cli_command,
-    ExitCode,
-    PIXI_VERSION,
     CURRENT_PLATFORM,
     EMPTY_BOILERPLATE_PROJECT,
+    PIXI_VERSION,
+    ExitCode,
+    cwd,
+    verify_cli_command,
 )
-import tomllib
-import json
-import pytest
 
 
 def test_pixi(pixi: Path) -> None:
@@ -232,6 +233,39 @@ def test_search(pixi: Path) -> None:
         [pixi, "search", "rattler-build", "-c", "https://prefix.dev/conda-forge"],
         ExitCode.SUCCESS,
         stdout_contains="rattler-build",
+    )
+
+
+def test_search_wildcard(pixi: Path, dummy_channel_1: str) -> None:
+    verify_cli_command(
+        [pixi, "search", "this-will-not-be-found", "-c", dummy_channel_1],
+        ExitCode.FAILURE,
+        stderr_contains="not found",
+    )
+
+    verify_cli_command(
+        [pixi, "search", "d*", "-c", dummy_channel_1],
+        ExitCode.SUCCESS,
+        stdout_contains=["dummy-a"],
+    )
+
+
+def test_search_matchspec(pixi: Path, multiple_versions_channel_1: str) -> None:
+    verify_cli_command(
+        [pixi, "search", "package", "--channel", multiple_versions_channel_1],
+        ExitCode.SUCCESS,
+        stdout_contains=["package"],
+    )
+
+    verify_cli_command(
+        [pixi, "search", "package[build_number=0]", "--channel", multiple_versions_channel_1],
+        ExitCode.SUCCESS,
+        stdout_contains=["package"],
+    )
+
+    verify_cli_command(
+        [pixi, "search", "package 0.1.*", "-c", multiple_versions_channel_1],
+        stdout_contains=["package-0.1.0"],
     )
 
 

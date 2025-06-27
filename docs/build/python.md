@@ -1,4 +1,7 @@
 In this tutorial, we will show you how to create a simple Python package with pixi.
+To read more about how building packages work with Pixi see the [Getting Started](./getting_started.md) guide.
+You might also want to check out the [documentation](https://prefix-dev.github.io/pixi-build-backends/backends/pixi-build-python/) for the `pixi-build-python` backend.
+
 
 !!! warning
     `pixi-build` is a preview feature, and will change until it is stabilized.

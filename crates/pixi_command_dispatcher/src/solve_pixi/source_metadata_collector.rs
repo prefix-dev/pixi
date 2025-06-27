@@ -1,6 +1,9 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashSet},
+    sync::Arc,
+};
 
-use futures::{StreamExt, stream::FuturesUnordered};
+use futures::StreamExt;
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_record::{PinnedSourceSpec, SourceRecord};
@@ -11,6 +14,7 @@ use thiserror::Error;
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
     SourceCheckoutError, SourceMetadataSpec,
+    executor::ExecutorFutures,
     source_metadata::{SourceMetadata, SourceMetadataError},
 };
 
@@ -84,13 +88,17 @@ impl SourceMetadataCollector {
         self,
         specs: Vec<(rattler_conda_types::PackageName, SourceSpec)>,
     ) -> Result<CollectedSourceMetadata, CommandDispatcherError<CollectSourceMetadataError>> {
-        let mut source_futures = FuturesUnordered::new();
+        let mut source_futures = ExecutorFutures::new(self.command_queue.executor());
         let mut specs = specs;
         let mut result = CollectedSourceMetadata::default();
+        let mut already_encountered_specs = HashSet::new();
+
         loop {
             // Create futures for all encountered specs.
             for (name, spec) in specs.drain(..) {
-                source_futures.push(self.collect_source_metadata(name, spec));
+                if already_encountered_specs.insert(spec.clone()) {
+                    source_futures.push(self.collect_source_metadata(name, spec));
+                }
             }
 
             // Wait for the next future to finish.
@@ -142,7 +150,8 @@ impl SourceMetadataCollector {
             .map_err(|err| CollectSourceMetadataError::SourceCheckoutError {
                 name: name.as_source().to_string(),
                 error: err,
-            })?;
+            })
+            .map_err(CommandDispatcherError::Failed)?;
 
         // Extract information for the particular source spec.
         let source_metadata = self

@@ -1,4 +1,6 @@
 mod placement;
+pub mod style;
+
 use indicatif::{HumanBytes, MultiProgress, ProgressBar, ProgressDrawTarget, ProgressState};
 use parking_lot::Mutex;
 use std::borrow::Cow;

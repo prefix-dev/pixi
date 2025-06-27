@@ -5,17 +5,6 @@ use std::{
     sync::Arc,
 };
 
-use crate::{
-    Workspace,
-    cli::cli_config::{LockFileUpdateConfig, PrefixUpdateConfig},
-    diff::LockFileDiff,
-    environment::LockFileUsage,
-    lock_file::{LockFileDerivedData, ReinstallPackages, UpdateContext, UpdateMode},
-    workspace::{
-        MatchSpecs, NON_SEMVER_PACKAGES, PypiDeps, SourceSpecs, UpdateDeps,
-        grouped_environment::GroupedEnvironment,
-    },
-};
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, NamedSource};
@@ -32,6 +21,18 @@ use pixi_spec::PixiSpec;
 use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform, Version};
 use rattler_lock::LockFile;
 use toml_edit::DocumentMut;
+
+use crate::{
+    Workspace,
+    cli::cli_config::{LockFileUpdateConfig, PrefixUpdateConfig},
+    diff::LockFileDiff,
+    environment::LockFileUsage,
+    lock_file::{LockFileDerivedData, ReinstallPackages, UpdateContext, UpdateMode},
+    workspace::{
+        MatchSpecs, NON_SEMVER_PACKAGES, PypiDeps, SourceSpecs, UpdateDeps,
+        grouped_environment::GroupedEnvironment,
+    },
+};
 
 struct OriginalContent {
     manifest: WorkspaceManifest,
@@ -105,6 +106,7 @@ impl WorkspaceMut {
         let workspace_manifest_document = match workspace.workspace.provenance.kind {
             ManifestKind::Pyproject => ManifestDocument::PyProjectToml(toml),
             ManifestKind::Pixi => ManifestDocument::PixiToml(toml),
+            ManifestKind::MojoProject => ManifestDocument::MojoProjectToml(toml),
         };
 
         Ok(Self {
@@ -143,6 +145,7 @@ impl WorkspaceMut {
         let workspace_manifest_document = match workspace.workspace.provenance.kind {
             ManifestKind::Pyproject => ManifestDocument::PyProjectToml(toml),
             ManifestKind::Pixi => ManifestDocument::PixiToml(toml),
+            ManifestKind::MojoProject => ManifestDocument::MojoProjectToml(toml),
         };
 
         Ok(Self {
@@ -357,6 +360,7 @@ impl WorkspaceMut {
             build_context,
             glob_hash_cache,
             io_concurrency_limit,
+            was_outdated: _,
         } = UpdateContext::builder(self.workspace())
             .with_lock_file(unlocked_lock_file)
             .with_no_install(
@@ -399,7 +403,7 @@ impl WorkspaceMut {
             self.save_inner().await.into_diagnostic()?;
         }
 
-        let mut updated_lock_file = LockFileDerivedData {
+        let updated_lock_file = LockFileDerivedData {
             workspace: self.workspace(),
             lock_file,
             package_cache,
@@ -409,6 +413,7 @@ impl WorkspaceMut {
             io_concurrency_limit,
             build_context,
             glob_hash_cache,
+            was_outdated: true,
         };
         if !lock_file_update_config.no_lockfile_update && !dry_run {
             updated_lock_file.write_to_disk()?;
@@ -423,13 +428,13 @@ impl WorkspaceMut {
                 .prefix(
                     &self.workspace().default_environment(),
                     UpdateMode::Revalidate,
-                    ReinstallPackages::default(),
+                    &ReinstallPackages::default(),
                 )
                 .await?;
         }
 
         let lock_file_diff =
-            LockFileDiff::from_lock_files(&original_lock_file, &updated_lock_file.lock_file);
+            LockFileDiff::from_lock_files(&original_lock_file, &updated_lock_file.into_lock_file());
 
         Ok(Some(UpdateDeps {
             implicit_constraints,

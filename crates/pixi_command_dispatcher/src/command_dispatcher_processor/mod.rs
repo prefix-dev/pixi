@@ -10,27 +10,24 @@ use std::{
 };
 
 use futures::{StreamExt, future::LocalBoxFuture};
-use pixi_git::{GitError, GitUrl, source::Fetch};
+use pixi_git::{GitError, resolver::RepositoryReference, source::Fetch};
 use pixi_record::PixiRecord;
 use rattler_conda_types::prefix::Prefix;
 use tokio::sync::{mpsc, oneshot};
 
-use crate::command_dispatcher::{
-    CommandDispatcherError, InstallPixiEnvironmentId, InstantiatedToolEnvId, TaskSpec,
-};
-use crate::install_pixi::InstallPixiEnvironmentError;
-use crate::instantiate_tool_env::{
-    InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec,
-};
 use crate::{
-    CommandDispatcherErrorResultExt, Reporter, SolveCondaEnvironmentSpec,
-    SolvePixiEnvironmentError, SourceMetadataSpec,
+    BuiltSource, CommandDispatcherErrorResultExt, InstallPixiEnvironmentResult, Reporter,
+    SolveCondaEnvironmentSpec, SolvePixiEnvironmentError, SourceBuildError, SourceBuildSpec,
+    SourceMetadataSpec,
     command_dispatcher::{
         CommandDispatcher, CommandDispatcherChannel, CommandDispatcherContext,
-        CommandDispatcherData, ForegroundMessage, SolveCondaEnvironmentId, SolvePixiEnvironmentId,
-        SourceMetadataId,
+        CommandDispatcherData, CommandDispatcherError, ForegroundMessage, InstallPixiEnvironmentId,
+        InstantiatedToolEnvId, SolveCondaEnvironmentId, SolvePixiEnvironmentId, SourceBuildId,
+        SourceMetadataId, TaskSpec,
     },
-    executor::{Executor, ExecutorFutures},
+    executor::ExecutorFutures,
+    install_pixi::InstallPixiEnvironmentError,
+    instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec},
     reporter,
     source_metadata::{SourceMetadata, SourceMetadataError},
 };
@@ -40,6 +37,7 @@ mod install_pixi;
 mod instantiate_tool_env;
 mod solve_conda;
 mod solve_pixi;
+mod source_build;
 mod source_metadata;
 
 /// Runs the command_dispatcher background task
@@ -85,7 +83,14 @@ pub(crate) struct CommandDispatcherProcessor {
 
     /// Git checkouts in the process of being checked out, or already checked
     /// out.
-    git_checkouts: HashMap<GitUrl, PendingGitCheckout>,
+    git_checkouts: HashMap<RepositoryReference, PendingGitCheckout>,
+
+    /// Conda environments that are currently being solved.
+    source_builds: slotmap::SlotMap<SourceBuildId, PendingSourceBuild>,
+
+    /// A list of source builds that are pending. These have not yet been queued
+    /// for processing.
+    pending_source_builds: VecDeque<(SourceBuildId, SourceBuildSpec)>,
 
     /// Keeps track of all pending futures. We poll them manually instead of
     /// spawning them so they can be `!Send` and because they are dropped when
@@ -111,14 +116,18 @@ enum TaskResult {
         SourceMetadataId,
         Result<Arc<SourceMetadata>, CommandDispatcherError<SourceMetadataError>>,
     ),
-    GitCheckedOut(GitUrl, Result<Fetch, GitError>),
+    GitCheckedOut(RepositoryReference, Result<Fetch, GitError>),
     InstallPixiEnvironment(
         InstallPixiEnvironmentId,
-        Result<(), CommandDispatcherError<InstallPixiEnvironmentError>>,
+        Result<InstallPixiEnvironmentResult, CommandDispatcherError<InstallPixiEnvironmentError>>,
     ),
     InstantiateToolEnv(
         InstantiatedToolEnvId,
         Result<Prefix, CommandDispatcherError<InstantiateToolEnvironmentError>>,
+    ),
+    SourceBuild(
+        SourceBuildId,
+        Result<BuiltSource, CommandDispatcherError<SourceBuildError>>,
     ),
 }
 
@@ -145,6 +154,14 @@ struct PendingSolveCondaEnvironment {
     reporter_id: Option<reporter::CondaSolveId>,
 }
 
+/// Information about a pending conda environment solve. This is used by the
+/// background task to keep track of which command_dispatcher is awaiting the
+/// result.
+struct PendingSourceBuild {
+    tx: oneshot::Sender<Result<BuiltSource, SourceBuildError>>,
+    reporter_id: Option<reporter::SourceBuildId>,
+}
+
 /// Information about a pending pixi environment solve. This is used by the
 /// background task to keep track of which command_dispatcher is awaiting the
 /// result.
@@ -157,7 +174,7 @@ struct PendingPixiEnvironment {
 /// the background task to keep track of which command_dispatcher is awaiting
 /// the result.
 struct PendingInstallPixiEnvironment {
-    tx: oneshot::Sender<Result<(), InstallPixiEnvironmentError>>,
+    tx: oneshot::Sender<Result<InstallPixiEnvironmentResult, InstallPixiEnvironmentError>>,
     reporter_id: Option<reporter::PixiInstallId>,
 }
 
@@ -242,12 +259,14 @@ impl CommandDispatcherProcessor {
     pub fn spawn(
         inner: Arc<CommandDispatcherData>,
         reporter: Option<Box<dyn Reporter>>,
-        executor: Executor,
-    ) -> mpsc::UnboundedSender<ForegroundMessage> {
+    ) -> (
+        mpsc::UnboundedSender<ForegroundMessage>,
+        std::thread::JoinHandle<()>,
+    ) {
         let (tx, rx) = mpsc::unbounded_channel();
         let weak_tx = tx.downgrade();
         let rt = tokio::runtime::Handle::current();
-        std::thread::spawn(move || {
+        let join_handle = std::thread::spawn(move || {
             let task = Self {
                 receiver: rx,
                 sender: weak_tx,
@@ -262,36 +281,46 @@ impl CommandDispatcherProcessor {
                 instantiated_tool_envs_reporters: HashMap::default(),
                 instantiated_tool_cache_keys: HashMap::default(),
                 git_checkouts: HashMap::default(),
-                pending_futures: ExecutorFutures::new(executor),
+                source_builds: Default::default(),
+                pending_source_builds: Default::default(),
+                pending_futures: ExecutorFutures::new(inner.executor),
                 inner,
                 reporter,
             };
             rt.block_on(task.run());
         });
-        tx
+        (tx, join_handle)
     }
 
     /// The main loop of the command_dispatcher background task. This function
     /// will run until all dispatchers have been dropped.
     async fn run(mut self) {
-        tracing::debug!("Dispatch background task has started");
+        tracing::trace!("Dispatch background task has started");
+        if let Some(reporter) = self.reporter.as_mut() {
+            reporter.on_start();
+        }
         loop {
             tokio::select! {
-                Some(message) = self.receiver.recv() => {
-                    self.on_message(message);
+                message = self.receiver.recv() => {
+                    match message {
+                        Some(message) => self.on_message(message),
+                        None => {
+                            // If all the senders are dropped, the receiver will be closed. When this
+                            // happens, we can stop the command_dispatcher. All remaining tasks will be dropped
+                            // as `self.pending_futures` is dropped.
+                            break;
+                        }
+                    }
                 }
                 Some(result) = self.pending_futures.next() => {
                     self.on_result(result);
                 }
-                else => {
-                    // If all the senders are dropped, the receiver will be closed. When this
-                    // happens, we can stop the command_dispatcher. All remaining tasks will be dropped
-                    // as `self.pending_futures` is dropped.
-                    break
-                },
             }
         }
-        tracing::debug!("Dispatch background task has finished");
+        if let Some(reporter) = self.reporter.as_mut() {
+            reporter.on_finished();
+        }
+        tracing::trace!("Dispatch background task has finished");
     }
 
     /// Called when a message was received from either the command_dispatcher or
@@ -308,6 +337,8 @@ impl CommandDispatcherProcessor {
             }
             ForegroundMessage::SourceMetadata(task) => self.on_source_metadata(task),
             ForegroundMessage::GitCheckout(task) => self.on_checkout_git(task),
+            ForegroundMessage::SourceBuild(task) => self.on_source_build(task),
+            ForegroundMessage::ClearReporter(sender) => self.clear_reporter(sender),
         }
     }
 
@@ -328,19 +359,21 @@ impl CommandDispatcherProcessor {
             TaskResult::InstantiateToolEnv(id, result) => {
                 self.on_instantiate_tool_environment_result(id, result)
             }
+            TaskResult::SourceBuild(id, result) => self.on_source_build_result(id, result),
         }
     }
 
     /// Constructs a new [`CommandDispatcher`] that can be used for tasks
-    /// constructed by the command_dispatcher_processor itself.
+    /// constructed by the command dispatcher process itself.
     fn create_task_command_dispatcher(
         &self,
         context: CommandDispatcherContext,
     ) -> CommandDispatcher {
         CommandDispatcher {
-            channel: CommandDispatcherChannel::Weak(self.sender.clone()),
+            channel: Some(CommandDispatcherChannel::Weak(self.sender.clone())),
             context: Some(context),
             data: self.inner.clone(),
+            processor_handle: None,
         }
     }
 
@@ -402,9 +435,22 @@ impl CommandDispatcherProcessor {
                             PendingDeduplicatingTask::Errored => None,
                         })?
                 }
+                CommandDispatcherContext::SourceBuild(id) => {
+                    return self.source_builds[id]
+                        .reporter_id
+                        .map(reporter::ReporterContext::SourceBuild);
+                }
             };
         }
 
         None
+    }
+
+    /// Called to clear the reporter.
+    fn clear_reporter(&mut self, sender: oneshot::Sender<()>) {
+        if let Some(reporter) = self.reporter.as_mut() {
+            reporter.on_clear()
+        }
+        let _ = sender.send(());
     }
 }
