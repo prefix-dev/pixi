@@ -108,7 +108,7 @@ impl SourceMetadataSpec {
         let build_dependencies = output
             .build_dependencies
             .as_ref()
-            .map(|deps| Dependencies::new(deps, source_anchor.clone()))
+            .map(|deps| Dependencies::new(deps, Some(source_anchor.clone())))
             .transpose()
             .map_err(CommandDispatcherError::Failed)?
             .unwrap_or_default();
@@ -131,7 +131,7 @@ impl SourceMetadataSpec {
         let host_dependencies = output
             .host_dependencies
             .as_ref()
-            .map(|deps| Dependencies::new(deps, source_anchor.clone()))
+            .map(|deps| Dependencies::new(deps, Some(source_anchor.clone())))
             .transpose()
             .map_err(CommandDispatcherError::Failed)?
             .unwrap_or_default()
@@ -155,7 +155,7 @@ impl SourceMetadataSpec {
             depends,
             constrains,
             mut sources,
-        } = Dependencies::new(&output.run_dependencies, source_anchor.clone())
+        } = Dependencies::new(&output.run_dependencies, None)
             .map_err(CommandDispatcherError::Failed)?
             .extend_with_run_exports_from_build_and_host(
                 host_run_exports,
@@ -176,7 +176,6 @@ impl SourceMetadataSpec {
          -> Result<MatchSpec, SourceMetadataError> {
             match spec.clone().into_source_or_binary() {
                 Either::Left(source) => {
-                    let source = source_anchor.resolve(source);
                     let source = match sources.entry(name.clone()) {
                         std::collections::hash_map::Entry::Occupied(entry) => {
                             // If the entry already exists, check if it points to the same source.
@@ -349,7 +348,7 @@ struct PackageRecordDependencies {
 impl Dependencies {
     pub fn new(
         output: &CondaOutputDependencies,
-        source_anchor: SourceAnchor,
+        source_anchor: Option<SourceAnchor>,
     ) -> Result<Self, SourceMetadataError> {
         let mut dependencies = DependencyMap::default();
         let mut constraints = DependencyMap::default();
@@ -360,7 +359,12 @@ impl Dependencies {
             })?;
             match conversion::from_package_spec_v1(depend.spec.clone()).into_source_or_binary() {
                 Either::Left(source) => {
-                    dependencies.insert(name, PixiSpec::from(source_anchor.resolve(source)));
+                    let source = if let Some(anchor) = &source_anchor {
+                        anchor.resolve(source)
+                    } else {
+                        source
+                    };
+                    dependencies.insert(name, PixiSpec::from(source));
                 }
                 Either::Right(binary) => {
                     dependencies.insert(name, PixiSpec::from(binary));
