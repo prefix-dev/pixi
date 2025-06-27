@@ -13,10 +13,7 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_manifest::{
     EnvironmentName, FeatureName,
-    task::{
-        Alias, CmdArgs, Dependency, Execute, GlobPatterns, Task, TaskArg, TaskName, TemplateString,
-        quote,
-    },
+    task::{Alias, CmdArgs, Dependency, Execute, Task, TaskArg, TaskName, quote},
 };
 use rattler_conda_types::Platform;
 use serde::Serialize;
@@ -90,13 +87,6 @@ fn parse_task_arg(s: &str) -> Result<TaskArg, Box<dyn Error + Send + Sync + 'sta
     }
 }
 
-/// Parse a glob pattern list
-/// Format: "pattern1,pattern2,pattern3"
-fn parse_glob_patterns(s: &str) -> Result<GlobPatterns, Box<dyn Error + Send + Sync + 'static>> {
-    let patterns: Vec<TemplateString> = s.split(',').map(|pattern| pattern.trim().into()).collect();
-    Ok(GlobPatterns::new(patterns))
-}
-
 #[derive(Parser, Debug, Clone)]
 #[clap(arg_required_else_help = true)]
 pub struct AddArgs {
@@ -144,16 +134,6 @@ pub struct AddArgs {
     /// Format: 'arg_name' or 'arg_name=default_value'
     #[arg(long = "arg", action = clap::ArgAction::Append, value_parser = parse_task_arg)]
     pub args: Option<Vec<TaskArg>>,
-
-    /// Input glob patterns for the task.
-    /// Format: 'pattern1,pattern2,pattern3'
-    #[arg(long, value_parser = parse_glob_patterns)]
-    pub inputs: Option<GlobPatterns>,
-
-    /// Output glob patterns for the task.
-    /// Format: 'pattern1,pattern2,pattern3'
-    #[arg(long, value_parser = parse_glob_patterns)]
-    pub outputs: Option<GlobPatterns>,
 }
 
 impl AddArgs {
@@ -273,8 +253,6 @@ impl From<AddArgs> for Task {
             && value.env.is_empty()
             && description.is_none()
             && value.args.is_none()
-            && value.inputs.is_none()
-            && value.outputs.is_none()
             && !value.clean_env
         {
             // Create a plain task (simple command with no extra features)
@@ -297,8 +275,8 @@ impl From<AddArgs> for Task {
             Self::Execute(Box::new(Execute {
                 cmd: CmdArgs::Single(cmd_args.into()),
                 depends_on,
-                inputs: value.inputs,
-                outputs: value.outputs,
+                inputs: None,
+                outputs: None,
                 cwd,
                 env,
                 description,
