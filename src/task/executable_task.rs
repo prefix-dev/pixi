@@ -399,7 +399,7 @@ fn get_export_specific_task_env(task: &Task, command_env: &HashMap<OsString, OsS
     let mut export = String::new();
     let mut export_merged: HashMap<String, String> = HashMap::new();
     // Define keys that should not be overridden
-    let override_excluded_keys: HashSet<&str> = [
+    let override_excluded_keys: HashSet<String> = [
         "PIXI_PROJECT_ROOT",
         "PIXI_PROJECT_NAME",
         "PIXI_PROJECT_MANIFEST",
@@ -413,8 +413,8 @@ fn get_export_specific_task_env(task: &Task, command_env: &HashMap<OsString, OsS
         "INIT_CWD",
         "PWD",
     ]
-    .iter()
-    .cloned()
+    .into_iter()
+    .map(|s| s.to_string())
     .collect();
 
     // Convert OsString to String
