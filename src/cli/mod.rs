@@ -169,25 +169,78 @@ pub enum Command {
     External(Vec<String>),
 }
 
+#[derive(Debug, Default, Copy, Clone)]
+/// Lock file usage from the CLI with automatic validation
+pub struct LockFileUsageArgs {
+    inner: LockFileUsageArgsRaw,
+}
+
 #[derive(Parser, Debug, Default, Copy, Clone)]
 #[group(multiple = false)]
-/// Lock file usage from the CLI
-pub struct LockFileUsageConfig {
+/// Raw lock file usage arguments (use LockFileUsageArgs instead)
+struct LockFileUsageArgsRaw {
     /// Install the environment as defined in the lockfile, doesn't update
     /// lockfile if it isn't up-to-date with the manifest file.
     #[clap(long, conflicts_with = "locked", env = "PIXI_FROZEN", help_heading = consts::CLAP_UPDATE_OPTIONS)]
-    pub frozen: bool,
+    frozen: bool,
     /// Check if lockfile is up-to-date before installing the environment,
     /// aborts when lockfile isn't up-to-date with the manifest file.
     #[clap(long, conflicts_with = "frozen", env = "PIXI_LOCKED", help_heading = consts::CLAP_UPDATE_OPTIONS)]
-    pub locked: bool,
+    locked: bool,
 }
 
-impl From<LockFileUsageConfig> for crate::environment::LockFileUsage {
-    fn from(value: LockFileUsageConfig) -> Self {
-        if value.frozen {
+impl LockFileUsageArgs {
+    pub fn frozen(&self) -> bool {
+        self.inner.frozen
+    }
+    
+    pub fn locked(&self) -> bool {
+        self.inner.locked
+    }
+}
+
+// Automatic validation when converting from raw args
+impl TryFrom<LockFileUsageArgsRaw> for LockFileUsageArgs {
+    type Error = miette::Error;
+    
+    fn try_from(raw: LockFileUsageArgsRaw) -> miette::Result<Self> {
+        if raw.frozen && raw.locked {
+            miette::bail!("the argument '--locked' cannot be used with '--frozen'");
+        }
+        Ok(LockFileUsageArgs { inner: raw })
+    }
+}
+
+// For clap flattening - this provides automatic validation
+impl clap::FromArgMatches for LockFileUsageArgs {
+    fn from_arg_matches(matches: &clap::ArgMatches) -> Result<Self, clap::Error> {
+        let raw = LockFileUsageArgsRaw::from_arg_matches(matches)?;
+        raw.try_into().map_err(|e: miette::Error| {
+            clap::Error::raw(clap::error::ErrorKind::ArgumentConflict, e.to_string())
+        })
+    }
+    
+    fn update_from_arg_matches(&mut self, matches: &clap::ArgMatches) -> Result<(), clap::Error> {
+        *self = Self::from_arg_matches(matches)?;
+        Ok(())
+    }
+}
+
+impl clap::Args for LockFileUsageArgs {
+    fn augment_args(cmd: clap::Command) -> clap::Command {
+        LockFileUsageArgsRaw::augment_args(cmd)
+    }
+    
+    fn augment_args_for_update(cmd: clap::Command) -> clap::Command {
+        LockFileUsageArgsRaw::augment_args_for_update(cmd)
+    }
+}
+
+impl From<LockFileUsageArgs> for crate::environment::LockFileUsage {
+    fn from(value: LockFileUsageArgs) -> Self {
+        if value.frozen() {
             Self::Frozen
-        } else if value.locked {
+        } else if value.locked() {
             Self::Locked
         } else {
             Self::Update
