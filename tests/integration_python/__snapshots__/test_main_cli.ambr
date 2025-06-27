@@ -103,7 +103,7 @@
   platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
   
   [tasks]
-  test = { cmd = "echo 'Hello {{name | title}}'", args = ["name"] }
+  test = { cmd = "echo 'Hello {{name | title}}'", args = [{ arg = "name", default = "default" }] }
   test-alias = [{ task = "test" }]
   test-depends-on = [{ task = "test", args = ["arg"], environment = "env" }]
   test-depends-on-two-args = [{ task = "test", args = ["arg", "arg2"], environment = "env" }]

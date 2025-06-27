@@ -1351,7 +1351,7 @@ platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
             "task",
             "add",
             "--arg",
-            "name",
+            "name=default",
             "--manifest-path",
             manifest,
             "test",
