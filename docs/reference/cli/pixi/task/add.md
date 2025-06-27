@@ -39,9 +39,5 @@ pixi task add [OPTIONS] <NAME> [COMMAND]...
 - <a id="arg---arg" href="#arg---arg">`--arg <ARGS>`</a>
 :  The arguments to pass to the task. Format: 'arg_name' or 'arg_name=default_value'
 <br>May be provided more than once.
-- <a id="arg---inputs" href="#arg---inputs">`--inputs <INPUTS>`</a>
-:  Input glob patterns for the task. Format: 'pattern1,pattern2,pattern3'
-- <a id="arg---outputs" href="#arg---outputs">`--outputs <OUTPUTS>`</a>
-:  Output glob patterns for the task. Format: 'pattern1,pattern2,pattern3'
 
 --8<-- "docs/reference/cli/pixi/task/add_extender:example"
