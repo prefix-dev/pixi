@@ -2923,7 +2923,7 @@ If the lock file is not satisfiable, Pixi will generate a new lock file automati
 <li>All hashes for the <code>pypi</code> editable packages are correct.</li>
 <li>There is only a single entry for every package in the lock file.</li>
 </ul>
-<p>If you want to get more details checkout the <a href="https://github.com/prefix-dev/pixi/blob/main/src/lock_file/satisfiability.rs">actual code</a> as this is a simplification of the actual code.</p>
+<p>If you want to get more details checkout the <a href="https://github.com/prefix-dev/pixi/blob/main/src/lock_file/satisfiability/mod.rs">actual code</a> as this is a simplification of the actual code.</p>
 <h2 id="the-version-of-the-lock-file">The version of the lock file<a class="headerlink" href="#the-version-of-the-lock-file" title="Permanent link">#</a></h2>
 <p>The lock file has a version number, this is to ensure that the lock file is compatible with the local version of <code>pixi</code>.</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nt">version</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">6</span>
