@@ -500,4 +500,29 @@ mod tests {
         let error = result.unwrap_err();
         assert!(error.to_string().contains("cannot be used with"));
     }
+
+    #[test]
+    fn test_pixi_frozen_true_with_locked_flag_should_fail() {
+        // Test that PIXI_FROZEN=true with --locked should fail
+        temp_env::with_var("PIXI_FROZEN", Some("true"), || {
+            let result = LockFileUsageConfig::try_parse_from(&["test", "--locked"]);
+
+            assert!(result.is_err(), "Expected error when PIXI_FROZEN=true and --locked are both set");
+            let error = result.unwrap_err();
+            assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict);
+        });
+    }
+
+    #[test]
+    fn test_pixi_frozen_false_with_locked_flag_should_pass() {
+        // Test that when PIXI_FROZEN=false, --locked should pass
+        temp_env::with_var("PIXI_FROZEN", Some("false"), || {
+            let result = LockFileUsageConfig::try_parse_from(&["test", "--locked"]);
+
+            assert!(result.is_ok(), "Expected success when PIXI_FROZEN=false and --locked is used");
+            let parsed = result.unwrap();
+            assert!(parsed.locked, "Expected locked flag to be true");
+            assert!(!parsed.frozen, "Expected frozen flag to be false");
+        });
+    }
 }
