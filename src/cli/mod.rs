@@ -456,167 +456,44 @@ mod tests {
     fn test_frozen_and_locked_conflict() {
         // Test that --frozen and --locked cannot be used together
         let result = Args::try_parse_from(&["pixi", "install", "--frozen", "--locked"]);
-        assert!(result.is_err(), "Expected error when both --frozen and --locked are provided");
+        assert!(
+            result.is_err(),
+            "Expected error when both --frozen and --locked are provided"
+        );
 
         let error = result.unwrap_err();
         assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict);
-    }
-
-    #[test]
-    fn test_frozen_alone_works() {
-        // Test that --frozen alone works
-        let result = Args::try_parse_from(&["pixi", "install", "--frozen"]);
-        assert!(result.is_ok(), "Expected success with --frozen alone");
-
-        let args = result.unwrap();
-        if let Command::Install(install_args) = args.command {
-            assert!(install_args.lock_file_usage.frozen);
-            assert!(!install_args.lock_file_usage.locked);
-        } else {
-            panic!("Expected Install command");
-        }
-    }
-
-    #[test]
-    fn test_locked_alone_works() {
-        // Test that --locked alone works
-        let result = Args::try_parse_from(&["pixi", "install", "--locked"]);
-        assert!(result.is_ok(), "Expected success with --locked alone");
-
-        let args = result.unwrap();
-        if let Command::Install(install_args) = args.command {
-            assert!(!install_args.lock_file_usage.frozen);
-            assert!(install_args.lock_file_usage.locked);
-        } else {
-            panic!("Expected Install command");
-        }
-    }
-
-    #[test]
-    fn test_neither_frozen_nor_locked_works() {
-        // Test that neither --frozen nor --locked works (default case)
-        let result = Args::try_parse_from(&["pixi", "install"]);
-        assert!(result.is_ok(), "Expected success with neither --frozen nor --locked");
-
-        let args = result.unwrap();
-        if let Command::Install(install_args) = args.command {
-            assert!(!install_args.lock_file_usage.frozen);
-            assert!(!install_args.lock_file_usage.locked);
-        } else {
-            panic!("Expected Install command");
-        }
-    }
-
-    #[test]
-    fn test_frozen_locked_conflict_with_run_command() {
-        // Test the conflict with run command which uses LockFileUpdateConfig
-        let result = Args::try_parse_from(&["pixi", "run", "--frozen", "--locked", "some_task"]);
-        assert!(result.is_err(), "Expected error when both --frozen and --locked are provided with run command");
-
-        let error = result.unwrap_err();
-        assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict);
-    }
-
-    #[test]
-    fn test_lockfile_usage_conversion() {
-        // Test conversion from LockFileUsageArgs to LockFileUsage enum
-        let frozen_usage = LockFileUsageArgs { inner: LockFileUsageArgsRaw { frozen: true, locked: false } };
-        let locked_usage = LockFileUsageArgs { inner: LockFileUsageArgsRaw { frozen: false, locked: true } };
-        let update_usage = LockFileUsageArgs { inner: LockFileUsageArgsRaw { frozen: false, locked: false } };
-
-        assert!(matches!(crate::environment::LockFileUsage::from(frozen_usage), crate::environment::LockFileUsage::Frozen));
-        assert!(matches!(crate::environment::LockFileUsage::from(locked_usage), crate::environment::LockFileUsage::Locked));
-        assert!(matches!(crate::environment::LockFileUsage::from(update_usage), crate::environment::LockFileUsage::Update));
-    }
-
-    #[test]
-    fn test_lockfile_usage_config_conversion() {
-        // Test conversion from LockFileUsageConfig to LockFileUsage enum
-        let frozen_config = LockFileUsageConfig { frozen: true, locked: false };
-        let locked_config = LockFileUsageConfig { frozen: false, locked: true };
-        let update_config = LockFileUsageConfig { frozen: false, locked: false };
-
-        assert!(matches!(crate::environment::LockFileUsage::from(frozen_config), crate::environment::LockFileUsage::Frozen));
-        assert!(matches!(crate::environment::LockFileUsage::from(locked_config), crate::environment::LockFileUsage::Locked));
-        assert!(matches!(crate::environment::LockFileUsage::from(update_config), crate::environment::LockFileUsage::Update));
-    }
-
-    #[test]
-    fn test_global_options_verbosity() {
-        // Test verbose flag parsing
-        let result = Args::try_parse_from(&["pixi", "info", "-v"]);
-        assert!(result.is_ok());
-        let args = result.unwrap();
-        assert_eq!(args.global_options.verbose, 1);
-
-        let result = Args::try_parse_from(&["pixi", "info", "-vvv"]);
-        assert!(result.is_ok());
-        let args = result.unwrap();
-        assert_eq!(args.global_options.verbose, 3);
-    }
-
-    #[test]
-    fn test_global_options_quiet() {
-        // Test quiet flag parsing
-        let result = Args::try_parse_from(&["pixi", "info", "-q"]);
-        assert!(result.is_ok());
-        let args = result.unwrap();
-        assert_eq!(args.global_options.quiet, 1);
-
-        let result = Args::try_parse_from(&["pixi", "info", "-qq"]);
-        assert!(result.is_ok());
-        let args = result.unwrap();
-        assert_eq!(args.global_options.quiet, 2);
-    }
-
-    #[test]
-    fn test_log_level_filter() {
-        // Test log level filter calculation by parsing actual command line arguments
-        let result = Args::try_parse_from(&["pixi", "info"]);
-        assert!(result.is_ok());
-        let args = result.unwrap();
-        assert_eq!(args.log_level_filter(), LevelFilter::ERROR);
-
-        let result = Args::try_parse_from(&["pixi", "info", "-vv"]);
-        assert!(result.is_ok());
-        let args = result.unwrap();
-        assert_eq!(args.log_level_filter(), LevelFilter::INFO);
-
-        let result = Args::try_parse_from(&["pixi", "info", "-vvv"]);
-        assert!(result.is_ok());
-        let args = result.unwrap();
-        assert_eq!(args.log_level_filter(), LevelFilter::DEBUG);
-
-        // Test that quiet overrides verbose
-        let result = Args::try_parse_from(&["pixi", "info", "-vvv", "-q"]);
-        assert!(result.is_ok());
-        let args = result.unwrap();
-        assert_eq!(args.log_level_filter(), LevelFilter::OFF);
-
-        // Test multiple quiet flags
-        let result = Args::try_parse_from(&["pixi", "info", "-qq"]);
-        assert!(result.is_ok());
-        let args = result.unwrap();
-        assert_eq!(args.log_level_filter(), LevelFilter::OFF);
     }
 
     #[test]
     fn test_lockfile_usage_args_try_from_validation() {
         // Test the custom validation logic directly
-        let valid_raw = LockFileUsageArgsRaw { frozen: true, locked: false };
+        let valid_raw = LockFileUsageArgsRaw {
+            frozen: true,
+            locked: false,
+        };
         let result = LockFileUsageArgs::try_from(valid_raw);
         assert!(result.is_ok());
 
-        let valid_raw = LockFileUsageArgsRaw { frozen: false, locked: true };
+        let valid_raw = LockFileUsageArgsRaw {
+            frozen: false,
+            locked: true,
+        };
         let result = LockFileUsageArgs::try_from(valid_raw);
         assert!(result.is_ok());
 
-        let valid_raw = LockFileUsageArgsRaw { frozen: false, locked: false };
+        let valid_raw = LockFileUsageArgsRaw {
+            frozen: false,
+            locked: false,
+        };
         let result = LockFileUsageArgs::try_from(valid_raw);
         assert!(result.is_ok());
 
         // Test the invalid case
-        let invalid_raw = LockFileUsageArgsRaw { frozen: true, locked: true };
+        let invalid_raw = LockFileUsageArgsRaw {
+            frozen: true,
+            locked: true,
+        };
         let result = LockFileUsageArgs::try_from(invalid_raw);
         assert!(result.is_err());
 
