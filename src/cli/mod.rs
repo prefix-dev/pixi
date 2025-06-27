@@ -193,7 +193,7 @@ impl LockFileUsageArgs {
     pub fn frozen(&self) -> bool {
         self.inner.frozen
     }
-    
+
     pub fn locked(&self) -> bool {
         self.inner.locked
     }
@@ -202,7 +202,7 @@ impl LockFileUsageArgs {
 // Automatic validation when converting from raw args
 impl TryFrom<LockFileUsageArgsRaw> for LockFileUsageArgs {
     type Error = miette::Error;
-    
+
     fn try_from(raw: LockFileUsageArgsRaw) -> miette::Result<Self> {
         if raw.frozen && raw.locked {
             miette::bail!("the argument '--locked' cannot be used with '--frozen'");
@@ -219,7 +219,7 @@ impl clap::FromArgMatches for LockFileUsageArgs {
             clap::Error::raw(clap::error::ErrorKind::ArgumentConflict, e.to_string())
         })
     }
-    
+
     fn update_from_arg_matches(&mut self, matches: &clap::ArgMatches) -> Result<(), clap::Error> {
         *self = Self::from_arg_matches(matches)?;
         Ok(())
@@ -230,7 +230,7 @@ impl clap::Args for LockFileUsageArgs {
     fn augment_args(cmd: clap::Command) -> clap::Command {
         LockFileUsageArgsRaw::augment_args(cmd)
     }
-    
+
     fn augment_args_for_update(cmd: clap::Command) -> clap::Command {
         LockFileUsageArgsRaw::augment_args_for_update(cmd)
     }
@@ -457,7 +457,7 @@ mod tests {
         // Test that --frozen and --locked cannot be used together
         let result = Args::try_parse_from(&["pixi", "install", "--frozen", "--locked"]);
         assert!(result.is_err(), "Expected error when both --frozen and --locked are provided");
-        
+
         let error = result.unwrap_err();
         assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict);
     }
@@ -467,7 +467,7 @@ mod tests {
         // Test that --frozen alone works
         let result = Args::try_parse_from(&["pixi", "install", "--frozen"]);
         assert!(result.is_ok(), "Expected success with --frozen alone");
-        
+
         let args = result.unwrap();
         if let Command::Install(install_args) = args.command {
             assert!(install_args.lock_file_usage.frozen);
@@ -482,7 +482,7 @@ mod tests {
         // Test that --locked alone works
         let result = Args::try_parse_from(&["pixi", "install", "--locked"]);
         assert!(result.is_ok(), "Expected success with --locked alone");
-        
+
         let args = result.unwrap();
         if let Command::Install(install_args) = args.command {
             assert!(!install_args.lock_file_usage.frozen);
@@ -497,7 +497,7 @@ mod tests {
         // Test that neither --frozen nor --locked works (default case)
         let result = Args::try_parse_from(&["pixi", "install"]);
         assert!(result.is_ok(), "Expected success with neither --frozen nor --locked");
-        
+
         let args = result.unwrap();
         if let Command::Install(install_args) = args.command {
             assert!(!install_args.lock_file_usage.frozen);
@@ -512,7 +512,7 @@ mod tests {
         // Test the conflict with run command which uses LockFileUpdateConfig
         let result = Args::try_parse_from(&["pixi", "run", "--frozen", "--locked", "some_task"]);
         assert!(result.is_err(), "Expected error when both --frozen and --locked are provided with run command");
-        
+
         let error = result.unwrap_err();
         assert_eq!(error.kind(), clap::error::ErrorKind::ArgumentConflict);
     }
@@ -619,7 +619,7 @@ mod tests {
         let invalid_raw = LockFileUsageArgsRaw { frozen: true, locked: true };
         let result = LockFileUsageArgs::try_from(invalid_raw);
         assert!(result.is_err());
-        
+
         let error = result.unwrap_err();
         assert!(error.to_string().contains("cannot be used with"));
     }
