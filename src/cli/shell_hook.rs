@@ -93,6 +93,7 @@ async fn generate_activation_script(
             conda_prefix,
             path,
             path_modification_behavior: PathModificationBehavior::default(),
+            current_env: HashMap::default(),
         })
         .into_diagnostic()?;
 

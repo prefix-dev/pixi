@@ -16,7 +16,7 @@ use rattler_conda_types::{
     version_spec::{EqualityOperator, LogicalOperator, RangeOperator},
 };
 use rattler_networking::s3_middleware;
-use rattler_package_streaming::write::CompressionLevel;
+use rattler_conda_types::compression_level::CompressionLevel;
 use rattler_repodata_gateway::{Gateway, GatewayBuilder, SourceConfig};
 use reqwest::{NoProxy, Proxy};
 use serde::{Deserialize, Serialize, de::Error, de::IntoDeserializer};

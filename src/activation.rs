@@ -293,6 +293,9 @@ pub async fn run_activation(
 
                 // Prepending environment paths so they get found first.
                 path_modification_behavior,
+
+                // TODO: what should we put here?
+                current_env: HashMap::default(),
             },
             None,
         )
