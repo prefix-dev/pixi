@@ -85,9 +85,9 @@ impl TomlPackageBuild {
                 let target = BuildTarget {
                     configuration: target.configuration,
                 };
-                Ok::<_, TomlError>((selector, target))
+                (selector, target)
             })
-            .collect::<Result<_, _>>()?;
+            .collect();
 
         Ok(PackageBuild {
             backend: BuildBackend {
