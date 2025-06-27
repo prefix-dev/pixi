@@ -21,7 +21,7 @@ use jsonrpsee::{
 use miette::Diagnostic;
 use pixi_build_types::procedures::conda_outputs::{CondaOutputsParams, CondaOutputsResult};
 use pixi_build_types::{
-    FrontendCapabilities, ProjectModelV1, VersionedProjectModel, procedures,
+    BackendCapabilities, FrontendCapabilities, ProjectModelV1, VersionedProjectModel, procedures,
     procedures::{
         conda_build::{CondaBuildParams, CondaBuildResult},
         conda_metadata::{CondaMetadataParams, CondaMetadataResult},
@@ -120,6 +120,8 @@ impl CommunicationError {
 pub struct JsonRpcBackend {
     /// The identifier of the backend.
     backend_identifier: String,
+    /// The capabilities of the backend.
+    backend_capabilities: BackendCapabilities,
     /// The JSON-RPC client to communicate with the backend.
     client: Client,
     /// The path to the manifest that is passed to the backend.
@@ -209,7 +211,7 @@ impl JsonRpcBackend {
             .build_with_tokio(sender, receiver);
 
         // Negotiate the capabilities with the backend.
-        let _negotiate_result: NegotiateCapabilitiesResult = client
+        let negotiate_result: NegotiateCapabilitiesResult = client
             .request(
                 procedures::negotiate_capabilities::METHOD_NAME,
                 RpcParams::from(NegotiateCapabilitiesParams {
@@ -253,6 +255,7 @@ impl JsonRpcBackend {
         Ok(Self {
             client,
             backend_identifier,
+            backend_capabilities: negotiate_result.capabilities,
             manifest_path,
             stderr: stderr.map(Mutex::new).map(Arc::new),
         })
@@ -414,5 +417,10 @@ impl JsonRpcBackend {
     /// Returns the backend identifier.
     pub fn identifier(&self) -> &str {
         &self.backend_identifier
+    }
+
+    /// Returns the advertised capabilities of the backend.
+    pub fn capabilities(&self) -> &BackendCapabilities {
+        &self.backend_capabilities
     }
 }

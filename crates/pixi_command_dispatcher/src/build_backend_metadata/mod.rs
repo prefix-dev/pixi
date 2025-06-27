@@ -135,10 +135,10 @@ impl BuildBackendMetadataSpec {
         // Based on the version of the backend, call the appropriate method to get
         // metadata.
         let source = self.source.clone();
-        let metadata = if backend.api_version.supports_conda_outputs() {
+        let metadata = if backend.capabilities().provides_conda_outputs == Some(true) {
             self.call_conda_outputs(command_dispatcher, source_checkout, manifest_path, backend)
                 .await?
-        } else {
+        } else if backend.capabilities().provides_conda_metadata == Some(true) {
             self.call_conda_get_metadata(
                 command_dispatcher,
                 source_checkout,
@@ -146,6 +146,12 @@ impl BuildBackendMetadataSpec {
                 backend,
             )
             .await?
+        } else {
+            return Err(CommandDispatcherError::Failed(
+                BuildBackendMetadataError::BackendMissingCapabilities(
+                    backend.identifier().to_string(),
+                ),
+            ));
         };
 
         // Store the metadata in the cache for later retrieval
@@ -367,6 +373,11 @@ pub enum BuildBackendMetadataError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Communication(#[from] pixi_build_frontend::json_rpc::CommunicationError),
+
+    #[error(
+        "the build backend {0} does not support either the `conda/outputs` or `conda/getMetadata` procedures"
+    )]
+    BackendMissingCapabilities(String),
 
     #[error("could not compute hash of input files")]
     GlobHash(#[from] pixi_glob::GlobHashError),

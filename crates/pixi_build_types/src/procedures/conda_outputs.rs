@@ -113,7 +113,7 @@ pub struct CondaOutputMetadata {
     pub ignore_run_exports: CondaOutputIgnoreRunExports,
 
     /// The run exports of this particular output.
-    pub run_exports: CondaRunExports,
+    pub run_exports: CondaOutputRunExports,
 
     /// A cache that might be shared between multiple outputs based on the
     /// contents of the cache.
@@ -186,7 +186,7 @@ pub struct CondaOutputIgnoreRunExports {
 #[serde_as]
 #[derive(Debug, Default, Deserialize, Serialize, Clone, Hash, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub struct CondaRunExports {
+pub struct CondaOutputRunExports {
     /// weak run exports apply a dependency from host to run
     pub weak: Vec<NamedSpecV1<PackageSpecV1>>,
 

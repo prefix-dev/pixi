@@ -10,7 +10,8 @@ use futures::TryStreamExt;
 use itertools::Either;
 use miette::Diagnostic;
 use pixi_build_types::procedures::conda_outputs::{
-    CondaOutputDependencies, CondaOutputIgnoreRunExports, CondaOutputMetadata, CondaRunExports,
+    CondaOutputDependencies, CondaOutputIgnoreRunExports, CondaOutputMetadata,
+    CondaOutputRunExports,
 };
 use pixi_build_types::{BinaryPackageSpecV1, NamedSpecV1, PackageSpecV1};
 use pixi_record::{InputHash, PinnedSourceSpec, PixiRecord, SourceRecord};
@@ -609,8 +610,8 @@ pub struct PixiRunExports {
 }
 
 impl PixiRunExports {
-    /// Converts a [`CondaRunExports`] to a [`PixiRunExports`].
-    pub fn try_from_protocol(output: &CondaRunExports) -> Result<Self, SourceMetadataError> {
+    /// Converts a [`CondaOutputRunExports`] to a [`PixiRunExports`].
+    pub fn try_from_protocol(output: &CondaOutputRunExports) -> Result<Self, SourceMetadataError> {
         fn convert_package_spec(
             specs: &[NamedSpecV1<PackageSpecV1>],
         ) -> Result<DependencyMap<PackageName, PixiSpec>, SourceMetadataError> {

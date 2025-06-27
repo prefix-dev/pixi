@@ -13,6 +13,9 @@ pub struct BackendCapabilities {
 
     /// The highest supported project model version.
     pub highest_supported_project_model: Option<u32>,
+
+    /// Whether the backend provides the `conda/outputs` API.
+    pub provides_conda_outputs: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

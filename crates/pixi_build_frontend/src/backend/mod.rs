@@ -1,5 +1,5 @@
 use pixi_build_types::{
-    PixiBuildApiVersion,
+    BackendCapabilities, PixiBuildApiVersion,
     procedures::{
         conda_build::{CondaBuildParams, CondaBuildResult},
         conda_metadata::{CondaMetadataParams, CondaMetadataResult},
@@ -40,6 +40,12 @@ impl Backend {
     pub fn identifier(&self) -> String {
         match &self.inner {
             BackendImplementation::JsonRpc(json_rpc) => json_rpc.identifier().to_string(),
+        }
+    }
+
+    pub fn capabilities(&self) -> &BackendCapabilities {
+        match &self.inner {
+            BackendImplementation::JsonRpc(json_rpc) => json_rpc.capabilities(),
         }
     }
 
