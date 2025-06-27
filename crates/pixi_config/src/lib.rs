@@ -10,13 +10,13 @@ use clap::{ArgAction, Parser};
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic, miette};
 use pixi_consts::consts;
+use rattler_conda_types::compression_level::CompressionLevel;
 use rattler_conda_types::{
     ChannelConfig, NamedChannelOrUrl, Version, VersionBumpType, VersionSpec,
     package::ArchiveType,
     version_spec::{EqualityOperator, LogicalOperator, RangeOperator},
 };
 use rattler_networking::s3_middleware;
-use rattler_conda_types::compression_level::CompressionLevel;
 use rattler_repodata_gateway::{Gateway, GatewayBuilder, SourceConfig};
 use reqwest::{NoProxy, Proxy};
 use serde::{Deserialize, Serialize, de::Error, de::IntoDeserializer};
@@ -2507,8 +2507,8 @@ UNUSED = "unused"
 
     use std::str::FromStr;
 
+    use rattler_conda_types::compression_level::CompressionLevel;
     use rattler_conda_types::package::ArchiveType;
-    use rattler_package_streaming::write::CompressionLevel;
 
     use super::PackageFormatAndCompression;
 
