@@ -1,3 +1,5 @@
+mod conversion;
+
 use crate::{
     BuildBackendMetadataError, BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher,
     CommandDispatcherError, CommandDispatcherErrorResultExt, PixiEnvironmentSpec,
@@ -7,7 +9,6 @@ use crate::{
 use futures::TryStreamExt;
 use itertools::Either;
 use miette::Diagnostic;
-use pixi_build_frontend::types::{CondaPackageMetadata, SourcePackageSpecV1};
 use pixi_build_types::procedures::conda_outputs::{
     CondaOutputDependencies, CondaOutputIgnoreRunExports, CondaOutputMetadata, CondaRunExports,
 };
@@ -60,7 +61,7 @@ impl SourceMetadataSpec {
         match &build_backend_metadata.metadata.metadata {
             MetadataKind::GetMetadata { packages } => {
                 // Convert the metadata to source records.
-                let records = source_metadata_to_records(
+                let records = conversion::package_metadata_to_source_records(
                     &build_backend_metadata.source,
                     packages,
                     &self.package,
@@ -108,6 +109,8 @@ impl SourceMetadataSpec {
             .build_dependencies
             .as_ref()
             .map(|deps| Dependencies::new(deps, source_anchor.clone()))
+            .transpose()
+            .map_err(CommandDispatcherError::Failed)?
             .unwrap_or_default();
         let build_records = self
             .solve_dependencies(
@@ -122,15 +125,18 @@ impl SourceMetadataSpec {
             .map_err_with(Box::new)
             .map_err_with(SourceMetadataError::SolveBuildEnvironment)?;
         let build_run_exports =
-            build_dependencies.run_exports(&build_records, &output.ignore_run_exports);
+            build_dependencies.extract_run_exports(&build_records, &output.ignore_run_exports);
 
         // Solve the host environment for the output.
         let host_dependencies = output
             .host_dependencies
             .as_ref()
             .map(|deps| Dependencies::new(deps, source_anchor.clone()))
+            .transpose()
+            .map_err(CommandDispatcherError::Failed)?
             .unwrap_or_default()
-            .with_host_run_exports(&build_run_exports);
+            // Extend with the run exports from the build environment.
+            .extend_with_run_exports_from_build(&build_run_exports);
         let host_records = self
             .solve_dependencies(
                 format!("{} (host)", self.package.as_source()),
@@ -142,7 +148,7 @@ impl SourceMetadataSpec {
             .map_err_with(Box::new)
             .map_err_with(SourceMetadataError::SolveBuildEnvironment)?;
         let host_run_exports =
-            host_dependencies.run_exports(&host_records, &output.ignore_run_exports);
+            host_dependencies.extract_run_exports(&host_records, &output.ignore_run_exports);
 
         // Gather the dependencies for the output.
         let PackageRecordDependencies {
@@ -150,7 +156,8 @@ impl SourceMetadataSpec {
             constrains,
             mut sources,
         } = Dependencies::new(&output.run_dependencies, source_anchor.clone())
-            .with_run_run_exports(
+            .map_err(CommandDispatcherError::Failed)?
+            .extend_with_run_exports_from_build_and_host(
                 host_run_exports,
                 build_run_exports,
                 output.identifier.subdir,
@@ -336,19 +343,22 @@ struct Dependencies {
 struct PackageRecordDependencies {
     pub depends: Vec<String>,
     pub constrains: Vec<String>,
-    pub sources: HashMap<PackageName, SourceSpec>,
+    pub sources: HashMap<rattler_conda_types::PackageName, SourceSpec>,
 }
 
 impl Dependencies {
-    pub fn new(output: &CondaOutputDependencies, source_anchor: SourceAnchor) -> Self {
+    pub fn new(
+        output: &CondaOutputDependencies,
+        source_anchor: SourceAnchor,
+    ) -> Result<Self, SourceMetadataError> {
         let mut dependencies = DependencyMap::default();
         let mut constraints = DependencyMap::default();
 
         for depend in &output.depends {
-            let Some(name) = PackageName::from_str(&depend.name).ok() else {
-                continue;
-            };
-            match from_package_spec_v1(depend.spec.clone()).into_source_or_binary() {
+            let name = rattler_conda_types::PackageName::from_str(&depend.name).map_err(|err| {
+                SourceMetadataError::InvalidPackageName(depend.name.to_owned(), err)
+            })?;
+            match conversion::from_package_spec_v1(depend.spec.clone()).into_source_or_binary() {
                 Either::Left(source) => {
                     dependencies.insert(name, PixiSpec::from(source_anchor.resolve(source)));
                 }
@@ -359,19 +369,26 @@ impl Dependencies {
         }
 
         for constraint in &output.constraints {
-            let Some(name) = PackageName::from_str(&constraint.name).ok() else {
-                continue;
-            };
-            constraints.insert(name, from_pixi_binary_spec_v1(constraint.spec.clone()));
+            let name =
+                rattler_conda_types::PackageName::from_str(&constraint.name).map_err(|err| {
+                    SourceMetadataError::InvalidPackageName(constraint.name.to_owned(), err)
+                })?;
+            constraints.insert(
+                name,
+                conversion::from_binary_spec_v1(constraint.spec.clone()),
+            );
         }
 
-        Self {
+        Ok(Self {
             dependencies,
             constraints,
-        }
+        })
     }
 
-    pub fn with_host_run_exports(mut self, build_run_exports: &PixiRunExports) -> Self {
+    pub fn extend_with_run_exports_from_build(
+        mut self,
+        build_run_exports: &PixiRunExports,
+    ) -> Self {
         for (name, spec) in build_run_exports.strong.iter_specs() {
             self.dependencies.insert(name.clone(), spec.clone());
         }
@@ -383,7 +400,7 @@ impl Dependencies {
         self
     }
 
-    pub fn with_run_run_exports(
+    pub fn extend_with_run_exports_from_build_and_host(
         mut self,
         host_run_exports: PixiRunExports,
         build_run_exports: PixiRunExports,
@@ -416,7 +433,7 @@ impl Dependencies {
     }
 
     /// Extract run exports from the solved environments.
-    pub fn run_exports(
+    pub fn extract_run_exports(
         &self,
         records: &[PixiRecord],
         ignore: &CondaOutputIgnoreRunExports,
@@ -588,6 +605,7 @@ pub struct PixiRunExports {
 }
 
 impl PixiRunExports {
+    /// Converts a [`CondaRunExports`] to a [`PixiRunExports`].
     pub fn try_from_protocol(output: &CondaRunExports) -> Result<Self, SourceMetadataError> {
         fn convert_package_spec(
             specs: &[NamedSpecV1<PackageSpecV1>],
@@ -596,7 +614,7 @@ impl PixiRunExports {
                 .iter()
                 .cloned()
                 .map(|named_spec| {
-                    let spec = from_package_spec_v1(named_spec.spec);
+                    let spec = conversion::from_package_spec_v1(named_spec.spec);
                     let name = PackageName::from_str(&named_spec.name).map_err(|err| {
                         SourceMetadataError::InvalidPackageName(named_spec.name.to_owned(), err)
                     })?;
@@ -612,7 +630,7 @@ impl PixiRunExports {
                 .iter()
                 .cloned()
                 .map(|named_spec| {
-                    let spec = from_pixi_binary_spec_v1(named_spec.spec);
+                    let spec = conversion::from_binary_spec_v1(named_spec.spec);
                     let name = PackageName::from_str(&named_spec.name).map_err(|err| {
                         SourceMetadataError::InvalidPackageName(named_spec.name.to_owned(), err)
                     })?;
@@ -628,155 +646,6 @@ impl PixiRunExports {
             weak_constrains: convert_binary_spec(&output.weak_constrains)?,
             strong_constrains: convert_binary_spec(&output.strong_constrains)?,
         })
-    }
-}
-
-pub(crate) fn source_metadata_to_records(
-    source: &PinnedSourceSpec,
-    packages: &[CondaPackageMetadata],
-    package: &PackageName,
-    input_hash: &Option<InputHash>,
-) -> Vec<SourceRecord> {
-    // Convert the metadata to repodata
-    let packages = packages
-        .iter()
-        .filter(|pkg| pkg.name == *package)
-        .map(|p| {
-            SourceRecord {
-                input_hash: input_hash.clone(),
-                source: source.clone(),
-                sources: p
-                    .sources
-                    .iter()
-                    .map(|(name, source)| (name.clone(), from_pixi_source_spec_v1(source.clone())))
-                    .collect(),
-                package_record: PackageRecord {
-                    // We cannot now these values from the metadata because no actual package
-                    // was built yet.
-                    size: None,
-                    sha256: None,
-                    md5: None,
-
-                    // TODO(baszalmstra): Decide if it makes sense to include the current
-                    // timestamp here.
-                    timestamp: None,
-
-                    // These values are derived from the build backend values.
-                    platform: p.subdir.only_platform().map(ToString::to_string),
-                    arch: p.subdir.arch().as_ref().map(ToString::to_string),
-
-                    // These values are passed by the build backend
-                    name: p.name.clone(),
-                    build: p.build.clone(),
-                    version: p.version.clone(),
-                    build_number: p.build_number,
-                    license: p.license.clone(),
-                    subdir: p.subdir.to_string(),
-                    license_family: p.license_family.clone(),
-                    noarch: p.noarch,
-                    constrains: p.constraints.iter().map(|c| c.to_string()).collect(),
-                    depends: p.depends.iter().map(|c| c.to_string()).collect(),
-
-                    // These are deprecated and no longer used.
-                    features: None,
-                    track_features: vec![],
-                    legacy_bz2_md5: None,
-                    legacy_bz2_size: None,
-                    python_site_packages_path: None,
-
-                    // TODO(baszalmstra): Add support for these.
-                    purls: None,
-
-                    // These are not important at this point.
-                    run_exports: None,
-                    extra_depends: Default::default(),
-                },
-            }
-        })
-        .collect();
-    packages
-}
-
-pub fn from_pixi_source_spec_v1(source: SourcePackageSpecV1) -> pixi_spec::SourceSpec {
-    match source {
-        SourcePackageSpecV1::Url(url) => pixi_spec::SourceSpec::Url(pixi_spec::UrlSourceSpec {
-            url: url.url,
-            md5: url.md5,
-            sha256: url.sha256,
-        }),
-        SourcePackageSpecV1::Git(git) => pixi_spec::SourceSpec::Git(pixi_spec::GitSpec {
-            git: git.git,
-            rev: git.rev.map(|r| match r {
-                pixi_build_frontend::types::GitReferenceV1::Branch(b) => {
-                    pixi_spec::GitReference::Branch(b)
-                }
-                pixi_build_frontend::types::GitReferenceV1::Tag(t) => {
-                    pixi_spec::GitReference::Tag(t)
-                }
-                pixi_build_frontend::types::GitReferenceV1::Rev(rev) => {
-                    pixi_spec::GitReference::Rev(rev)
-                }
-                pixi_build_frontend::types::GitReferenceV1::DefaultBranch => {
-                    pixi_spec::GitReference::DefaultBranch
-                }
-            }),
-            subdirectory: git.subdirectory,
-        }),
-        SourcePackageSpecV1::Path(path) => pixi_spec::SourceSpec::Path(pixi_spec::PathSourceSpec {
-            path: path.path.into(),
-        }),
-    }
-}
-
-pub fn from_pixi_binary_spec_v1(spec: BinaryPackageSpecV1) -> pixi_spec::BinarySpec {
-    match spec {
-        BinaryPackageSpecV1 {
-            url: Some(url),
-            sha256,
-            md5,
-            ..
-        } => BinarySpec::Url(UrlBinarySpec { url, md5, sha256 }),
-        BinaryPackageSpecV1 {
-            version: Some(version),
-            build: None,
-            build_number: None,
-            file_name: None,
-            channel: None,
-            subdir: None,
-            md5: None,
-            sha256: None,
-            license: None,
-            url: _,
-        } => BinarySpec::Version(version),
-        BinaryPackageSpecV1 {
-            version,
-            build,
-            build_number,
-            file_name,
-            channel,
-            subdir,
-            md5,
-            sha256,
-            license,
-            url: _,
-        } => BinarySpec::DetailedVersion(Box::new(DetailedSpec {
-            version,
-            build,
-            build_number,
-            file_name,
-            channel: channel.map(NamedChannelOrUrl::Url),
-            subdir,
-            license,
-            md5,
-            sha256,
-        })),
-    }
-}
-
-pub fn from_package_spec_v1(source: PackageSpecV1) -> pixi_spec::PixiSpec {
-    match source {
-        PackageSpecV1::Source(source) => from_pixi_source_spec_v1(source).into(),
-        PackageSpecV1::Binary(binary) => from_pixi_binary_spec_v1(*binary).into(),
     }
 }
 
