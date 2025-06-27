@@ -3,14 +3,15 @@ use std::collections::BTreeMap;
 use indexmap::IndexMap;
 use itertools::Either;
 use pixi_spec::TomlSpec;
-use pixi_toml::{TomlFromStr, TomlWith};
+use pixi_toml::{Same, TomlFromStr, TomlIndexMap, TomlWith};
 use rattler_conda_types::NamedChannelOrUrl;
 use toml_span::{DeserError, Spanned, Value, de_helpers::TableHelper, value::ValueInner};
 
 use crate::{
     PackageBuild, TargetSelector, TomlError,
-    build_system::BuildBackend,
+    build_system::{BuildBackend, BuildTarget},
     error::GenericError,
+    target::Targets,
     toml::build_target::TomlPackageBuildTarget,
     utils::{PixiSpanned, package_map::UniquePackageMap},
 };
@@ -73,6 +74,23 @@ impl TomlPackageBuild {
             }
         }
 
+        // Create default build target (no configuration since it's stored at the PackageBuild level)
+        let default_build_target = BuildTarget {
+            configuration: None,
+        };
+
+        // Convert target-specific build configurations
+        let targets = self
+            .target
+            .into_iter()
+            .map(|(selector, target)| {
+                let target = BuildTarget {
+                    configuration: target.configuration,
+                };
+                Ok::<_, TomlError>((selector, target))
+            })
+            .collect::<Result<_, _>>()?;
+
         Ok(PackageBuild {
             backend: BuildBackend {
                 name: self.backend.value.name.value,
@@ -81,6 +99,7 @@ impl TomlPackageBuild {
             additional_dependencies,
             channels: self.channels.map(|channels| channels.value),
             configuration: self.configuration,
+            targets: Targets::from_default_and_user_defined(default_build_target, targets),
         })
     }
 }
@@ -146,12 +165,18 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
             .map(|(_, mut value)| convert_toml_to_serde(&mut value))
             .transpose()?;
 
+        let target = th
+            .optional::<TomlWith<_, TomlIndexMap<_, Same>>>("target")
+            .map(TomlWith::into_inner)
+            .unwrap_or_default();
+
         th.finalize(None)?;
         Ok(Self {
             backend: build_backend,
             channels,
             additional_dependencies,
             configuration,
+            target,
         })
     }
 }
