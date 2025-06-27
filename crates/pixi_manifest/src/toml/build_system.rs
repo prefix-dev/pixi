@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use indexmap::IndexMap;
 use itertools::Either;
 use pixi_spec::TomlSpec;
 use pixi_toml::{TomlFromStr, TomlWith};
@@ -7,9 +8,10 @@ use rattler_conda_types::NamedChannelOrUrl;
 use toml_span::{DeserError, Spanned, Value, de_helpers::TableHelper, value::ValueInner};
 
 use crate::{
-    PackageBuild, TomlError,
+    PackageBuild, TargetSelector, TomlError,
     build_system::BuildBackend,
     error::GenericError,
+    toml::build_target::TomlPackageBuildTarget,
     utils::{PixiSpanned, package_map::UniquePackageMap},
 };
 
@@ -19,6 +21,7 @@ pub struct TomlPackageBuild {
     pub channels: Option<PixiSpanned<Vec<NamedChannelOrUrl>>>,
     pub additional_dependencies: UniquePackageMap,
     pub configuration: Option<serde_value::Value>,
+    pub target: IndexMap<PixiSpanned<TargetSelector>, TomlPackageBuildTarget>,
 }
 
 #[derive(Debug)]
@@ -82,7 +85,7 @@ impl TomlPackageBuild {
     }
 }
 
-fn convert_toml_to_serde(value: &mut Value) -> Result<serde_value::Value, DeserError> {
+pub fn convert_toml_to_serde(value: &mut Value) -> Result<serde_value::Value, DeserError> {
     Ok(match value.take() {
         ValueInner::String(s) => serde_value::Value::String(s.to_string()),
         ValueInner::Integer(i) => serde_value::Value::I64(i),
