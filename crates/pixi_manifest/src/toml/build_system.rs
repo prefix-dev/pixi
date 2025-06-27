@@ -74,10 +74,8 @@ impl TomlPackageBuild {
             }
         }
 
-        // Create default build target (no configuration since it's stored at the PackageBuild level)
-        let default_build_target = BuildTarget {
-            configuration: None,
-        };
+        // Create default build target
+        let default_build_target = BuildTarget::default();
 
         // Convert target-specific build configurations
         let targets = self
