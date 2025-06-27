@@ -129,7 +129,7 @@ Steps to check if the lock file is satisfiable:
 - All hashes for the `pypi` editable packages are correct.
 - There is only a single entry for every package in the lock file.
 
-If you want to get more details checkout the [actual code](https://github.com/prefix-dev/pixi/blob/main/src/lock_file/satisfiability.rs) as this is a simplification of the actual code.
+If you want to get more details checkout the [actual code](https://github.com/prefix-dev/pixi/blob/main/src/lock_file/satisfiability/mod.rs) as this is a simplification of the actual code.
 
 ## The version of the lock file
 
