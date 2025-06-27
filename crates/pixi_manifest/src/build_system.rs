@@ -168,7 +168,7 @@ mod tests {
         // Should get the default configuration for any platform
         let config = build.configuration(Some(Platform::Linux64)).unwrap();
         let json_config: serde_json::Value = config.deserialize_into().unwrap();
-        assert_eq!(json_config["noarch"].as_bool().unwrap(), true);
+        assert!(json_config["noarch"].as_bool().unwrap());
         assert_eq!(
             json_config["env"]["SETUPTOOLS_SCM_PRETEND_VERSION"]
                 .as_str()
@@ -179,7 +179,7 @@ mod tests {
         // Should also work with no platform specified
         let config = build.configuration(None).unwrap();
         let json_config: serde_json::Value = config.deserialize_into().unwrap();
-        assert_eq!(json_config["noarch"].as_bool().unwrap(), true);
+        assert!(json_config["noarch"].as_bool().unwrap());
         assert_eq!(
             json_config["env"]["SETUPTOOLS_SCM_PRETEND_VERSION"]
                 .as_str()
@@ -220,7 +220,7 @@ MSVC_VERSION = "2022"
         // Test Linux configuration (should merge default + linux-specific)
         let linux_config = build.configuration(Some(Platform::Linux64)).unwrap();
         let json_linux: serde_json::Value = linux_config.deserialize_into().unwrap();
-        assert_eq!(json_linux["noarch"].as_bool().unwrap(), false); // overridden
+        assert!(!json_linux["noarch"].as_bool().unwrap()); // overridden
         assert_eq!(
             json_linux["debug-dir"].as_str().unwrap(),
             ".build-debug-linux"
@@ -239,7 +239,7 @@ MSVC_VERSION = "2022"
         // Test Windows configuration (should merge default + windows-specific)
         let windows_config = build.configuration(Some(Platform::Win64)).unwrap();
         let json_windows: serde_json::Value = windows_config.deserialize_into().unwrap();
-        assert_eq!(json_windows["noarch"].as_bool().unwrap(), true); // from default
+        assert!(json_windows["noarch"].as_bool().unwrap()); // from default
         assert_eq!(
             json_windows["env"]["SETUPTOOLS_SCM_PRETEND_VERSION"]
                 .as_str()
@@ -263,7 +263,7 @@ MSVC_VERSION = "2022"
         // Test macOS configuration (should only get default)
         let macos_config = build.configuration(Some(Platform::OsxArm64)).unwrap();
         let json_macos: serde_json::Value = macos_config.deserialize_into().unwrap();
-        assert_eq!(json_macos["noarch"].as_bool().unwrap(), true);
+        assert!(json_macos["noarch"].as_bool().unwrap());
         assert_eq!(
             json_macos["env"]["SETUPTOOLS_SCM_PRETEND_VERSION"]
                 .as_str()
@@ -291,7 +291,7 @@ MSVC_VERSION = "2022"
         // Test Linux configuration (should only get linux-specific)
         let linux_config = build.configuration(Some(Platform::Linux64)).unwrap();
         let json_linux: serde_json::Value = linux_config.deserialize_into().unwrap();
-        assert_eq!(json_linux["noarch"].as_bool().unwrap(), false);
+        assert!(!json_linux["noarch"].as_bool().unwrap());
         assert_eq!(json_linux["debug-dir"].as_str().unwrap(), ".build-debug");
         assert_eq!(json_linux["env"]["CFLAGS"].as_str().unwrap(), "-O3");
 
@@ -337,7 +337,7 @@ MSVC_VERSION = "2022"
         assert_eq!(env["CFLAGS"].as_str().unwrap(), "-O3 -march=native"); // linux-specific
 
         // Check other sections are properly merged
-        assert_eq!(json_linux["noarch"].as_bool().unwrap(), false); // overridden
+        assert!(!json_linux["noarch"].as_bool().unwrap()); // overridden
         assert_eq!(json_linux["debug-dir"].as_str().unwrap(), ".build-debug"); // linux-specific
 
         // Check array is preserved from default
@@ -351,7 +351,7 @@ MSVC_VERSION = "2022"
     fn test_merge_serde_values() {
         use serde_json::json;
 
-        let base = serde_value::to_value(&json!({
+        let base = serde_value::to_value(json!({
             "a": 1,
             "b": {
                 "x": "base",
@@ -361,7 +361,7 @@ MSVC_VERSION = "2022"
         }))
         .unwrap();
 
-        let override_val = serde_value::to_value(&json!({
+        let override_val = serde_value::to_value(json!({
             "b": {
                 "x": "override",
                 "z": 3
@@ -409,7 +409,7 @@ MSVC_VERSION = "2022"
         // Test that configuration resolution works correctly
         let linux_config = build.configuration(Some(Platform::Linux64)).unwrap();
         let json_linux: serde_json::Value = linux_config.deserialize_into().unwrap();
-        assert_eq!(json_linux["noarch"].as_bool().unwrap(), false);
+        assert!(!json_linux["noarch"].as_bool().unwrap());
         assert_eq!(
             json_linux["debug-dir"].as_str().unwrap(),
             ".build-debug-linux"
@@ -423,7 +423,7 @@ MSVC_VERSION = "2022"
 
         let windows_config = build.configuration(Some(Platform::Win64)).unwrap();
         let json_windows: serde_json::Value = windows_config.deserialize_into().unwrap();
-        assert_eq!(json_windows["noarch"].as_bool().unwrap(), true);
+        assert!(json_windows["noarch"].as_bool().unwrap());
         assert_eq!(
             json_windows["env"]["SETUPTOOLS_SCM_PRETEND_VERSION"]
                 .as_str()
