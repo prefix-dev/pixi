@@ -472,7 +472,7 @@ mod tests {
     #[test]
     fn test_frozen_and_locked_conflict() {
         // Test that --frozen and --locked conflict is caught by validation
-        let config_result = LockFileUsageConfig::try_parse_from(&["test", "--frozen", "--locked"]);
+        let config_result = LockFileUsageConfig::try_parse_from(["test", "--frozen", "--locked"]);
         assert!(config_result.is_ok(), "Parsing should succeed");
         let parsed = config_result.unwrap();
         assert!(parsed.frozen, "Expected frozen to be true");
@@ -516,6 +516,7 @@ mod tests {
         };
         let result = LockFileUsageArgs::try_from(invalid_raw);
         assert!(result.is_err());
+
         let error = result.unwrap_err();
         assert!(error.to_string().contains("cannot be used with"));
     }
@@ -524,7 +525,8 @@ mod tests {
     fn test_pixi_frozen_true_with_locked_flag_should_fail() {
         // PIXI_FROZEN=true with --locked should fail validation
         temp_env::with_var("PIXI_FROZEN", Some("true"), || {
-            let result = LockFileUsageConfig::try_parse_from(&["test", "--locked"]);
+            let result = LockFileUsageConfig::try_parse_from(["test", "--locked"]);
+
             assert!(
                 result.is_ok(),
                 "Parsing should succeed, but validation should fail"
@@ -543,7 +545,8 @@ mod tests {
     fn test_pixi_frozen_false_with_locked_flag_should_pass() {
         // PIXI_FROZEN=false with --locked should pass validation
         temp_env::with_var("PIXI_FROZEN", Some("false"), || {
-            let result = LockFileUsageConfig::try_parse_from(&["test", "--locked"]);
+            let result = LockFileUsageConfig::try_parse_from(["test", "--locked"]);
+
             assert!(
                 result.is_ok(),
                 "Expected success when PIXI_FROZEN=false and --locked is used"
@@ -559,7 +562,7 @@ mod tests {
     fn test_clap_boolean_env_var_behavior() {
         // Test PIXI_FROZEN=true
         temp_env::with_var("PIXI_FROZEN", Some("true"), || {
-            let result = LockFileUsageConfig::try_parse_from(&["test"]);
+            let result = LockFileUsageConfig::try_parse_from(["test"]);
             assert!(result.is_ok());
             let parsed = result.unwrap();
             assert!(
@@ -570,7 +573,7 @@ mod tests {
 
         // Test PIXI_FROZEN=false
         temp_env::with_var("PIXI_FROZEN", Some("false"), || {
-            let result = LockFileUsageConfig::try_parse_from(&["test"]);
+            let result = LockFileUsageConfig::try_parse_from(["test"]);
             assert!(result.is_ok());
             let parsed = result.unwrap();
             assert!(
@@ -581,7 +584,7 @@ mod tests {
 
         // Test unset
         temp_env::with_var_unset("PIXI_FROZEN", || {
-            let result = LockFileUsageConfig::try_parse_from(&["test"]);
+            let result = LockFileUsageConfig::try_parse_from(["test"]);
             assert!(result.is_ok());
             let parsed = result.unwrap();
             assert!(
@@ -595,7 +598,7 @@ mod tests {
     fn test_cli_args_override_env_vars() {
         // Test that CLI arguments take precedence over environment variables
         temp_env::with_var("PIXI_FROZEN", Some("true"), || {
-            let result = LockFileUsageConfig::try_parse_from(&["test", "--frozen=false"]);
+            let result = LockFileUsageConfig::try_parse_from(["test", "--frozen=false"]);
             assert!(result.is_ok());
             let parsed = result.unwrap();
             assert!(
