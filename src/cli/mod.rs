@@ -181,11 +181,11 @@ pub struct LockFileUsageArgs {
 struct LockFileUsageArgsRaw {
     /// Install the environment as defined in the lockfile, doesn't update
     /// lockfile if it isn't up-to-date with the manifest file.
-    #[clap(long, env = "PIXI_FROZEN", num_args(0..=1), default_missing_value = "true", value_parser = clap::value_parser!(bool), help_heading = consts::CLAP_UPDATE_OPTIONS)]
+    #[clap(long, env = "PIXI_FROZEN", help_heading = consts::CLAP_UPDATE_OPTIONS)]
     frozen: bool,
     /// Check if lockfile is up-to-date before installing the environment,
     /// aborts when lockfile isn't up-to-date with the manifest file.
-    #[clap(long, env = "PIXI_LOCKED", num_args(0..=1), default_missing_value = "true", value_parser = clap::value_parser!(bool), help_heading = consts::CLAP_UPDATE_OPTIONS)]
+    #[clap(long, env = "PIXI_LOCKED", help_heading = consts::CLAP_UPDATE_OPTIONS)]
     locked: bool,
 }
 
@@ -253,11 +253,11 @@ impl From<LockFileUsageArgs> for crate::environment::LockFileUsage {
 pub struct LockFileUsageConfig {
     /// Install the environment as defined in the lockfile, doesn't update
     /// lockfile if it isn't up-to-date with the manifest file.
-    #[clap(long, env = "PIXI_FROZEN", num_args(0..=1), default_missing_value = "true", value_parser = clap::value_parser!(bool), help_heading = consts::CLAP_UPDATE_OPTIONS)]
+    #[clap(long, env = "PIXI_FROZEN", help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub frozen: bool,
     /// Check if lockfile is up-to-date before installing the environment,
     /// aborts when lockfile isn't up-to-date with the manifest file.
-    #[clap(long, env = "PIXI_LOCKED", num_args(0..=1), default_missing_value = "true", value_parser = clap::value_parser!(bool), help_heading = consts::CLAP_UPDATE_OPTIONS)]
+    #[clap(long, env = "PIXI_LOCKED", help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub locked: bool,
 }
 
@@ -597,13 +597,13 @@ mod tests {
     #[test]
     fn test_cli_args_override_env_vars() {
         // Test that CLI arguments take precedence over environment variables
-        temp_env::with_var("PIXI_FROZEN", Some("true"), || {
-            let result = LockFileUsageConfig::try_parse_from(["test", "--frozen=false"]);
+        temp_env::with_var("PIXI_FROZEN", Some("false"), || {
+            let result = LockFileUsageConfig::try_parse_from(["test", "--frozen"]);
             assert!(result.is_ok());
             let parsed = result.unwrap();
             assert!(
-                !parsed.frozen,
-                "Expected CLI argument --frozen=false to override PIXI_FROZEN=true"
+                parsed.frozen,
+                "Expected CLI argument --frozen to override PIXI_FROZEN=false"
             );
         });
     }
