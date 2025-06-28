@@ -568,8 +568,6 @@ mod tests {
 
     #[test]
     fn test_clap_boolean_env_var_behavior() {
-        // Test that our new approach properly handles boolean environment variables
-
         // Test PIXI_FROZEN=true
         temp_env::with_var("PIXI_FROZEN", Some("true"), || {
             let result = LockFileUsageConfig::try_parse_from(&["test"]);
@@ -600,6 +598,20 @@ mod tests {
             assert!(
                 !parsed.frozen,
                 "Expected unset PIXI_FROZEN to set frozen=false"
+            );
+        });
+    }
+
+    #[test]
+    fn test_cli_args_override_env_vars() {
+        // Test that CLI arguments take precedence over environment variables
+        temp_env::with_var("PIXI_FROZEN", Some("true"), || {
+            let result = LockFileUsageConfig::try_parse_from(&["test", "--frozen=false"]);
+            assert!(result.is_ok());
+            let parsed = result.unwrap();
+            assert!(
+                !parsed.frozen,
+                "Expected CLI argument --frozen=false to override PIXI_FROZEN=true"
             );
         });
     }
