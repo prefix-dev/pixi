@@ -9,8 +9,6 @@ use serde::{Serialize, Serializer};
 use thiserror::Error;
 use url::Url;
 
-// use crate::dependencies;
-
 // taken from: https://docs.astral.sh/uv/reference/settings/#index-strategy
 /// The strategy to use when resolving against multiple index URLs.
 /// By default, uv will stop at the first index on which a given package is
@@ -244,9 +242,10 @@ impl PypiOptions {
             (None, None) => None,
         };
         // Set the dependency overrides
-        // notice that self is overridden by other
-        // default feature comes last in the feature_ext
-        // so we
+        // notice that default feature comes last in the feature_ext
+        // so we want self overiting by other
+        // i.e. if same key exists in both, we want the value from `self` to be used
+        // so we extend b with a (a overrides b)
         let dependency_overrides = match (&self.dependency_overrides, &other.dependency_overrides) {
             (Some(a), Some(b)) => {
                 let mut overrides = b.clone();
