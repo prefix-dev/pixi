@@ -22,7 +22,7 @@
     
     
       
-        <title>Lockfile - Pixi by prefix.dev</title>
+        <title>Lock File - Pixi by prefix.dev</title>
       
     
     
@@ -59,7 +59,7 @@
       
         <meta  property="og:type"  content="website" >
       
-        <meta  property="og:title"  content="Lockfile - Pixi by prefix.dev" >
+        <meta  property="og:title"  content="Lock File - Pixi by prefix.dev" >
       
         <meta  property="og:description"  content="None" >
       
@@ -75,7 +75,7 @@
       
         <meta  name="twitter:card"  content="summary_large_image" >
       
-        <meta  name="twitter:title"  content="Lockfile - Pixi by prefix.dev" >
+        <meta  name="twitter:title"  content="Lock File - Pixi by prefix.dev" >
       
         <meta  name="twitter:description"  content="None" >
       
@@ -141,7 +141,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Lockfile
+              Lock File
             
           </span>
         </div>
@@ -389,7 +389,7 @@
   
   
   <span class="md-ellipsis">
-    First project
+    First Project
     
   </span>
   
@@ -548,7 +548,7 @@
   
   
   <span class="md-ellipsis">
-    Pyproject.toml
+    pyproject.toml
     
   </span>
   
@@ -661,7 +661,7 @@
   
   
   <span class="md-ellipsis">
-    Switching from
+    Switching From...
     
   </span>
   
@@ -672,7 +672,7 @@
         <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_3_4">
             <span class="md-nav__icon md-icon"></span>
-            Switching from
+            Switching From...
           </label>
           <ul class="md-nav__list" data-md-scrollfix>
             
@@ -939,7 +939,7 @@
   
   
   <span class="md-ellipsis">
-    Lockfile
+    Lock File
     
   </span>
   
@@ -952,7 +952,7 @@
   
   
   <span class="md-ellipsis">
-    Lockfile
+    Lock File
     
   </span>
   
@@ -1009,9 +1009,9 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#lockfile-satisfiability" class="md-nav__link">
+  <a href="#lock-file-satisfiability" class="md-nav__link">
     <span class="md-ellipsis">
-      Lockfile satisfiability
+      Lock file satisfiability
     </span>
   </a>
   
@@ -1264,7 +1264,7 @@
   
   
   <span class="md-ellipsis">
-    Getting started
+    Getting Started
     
   </span>
   
@@ -2730,9 +2730,9 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#lockfile-satisfiability" class="md-nav__link">
+  <a href="#lock-file-satisfiability" class="md-nav__link">
     <span class="md-ellipsis">
-      Lockfile satisfiability
+      Lock file satisfiability
     </span>
   </a>
   
@@ -2798,7 +2798,7 @@
   
 
 
-  <h1>Lockfile</h1>
+  <h1>Lock File</h1>
 
 <blockquote>
 <p>A lock file is the protector of the environments, and Pixi is the key to unlock it.</p>
@@ -2905,18 +2905,18 @@ The <code>pixi.lock</code> and the manifest file <code>pixi.toml</code>/<code>py
 <p>The lock file is always matched with the whole configuration in the manifest file.
 This means that if you change the manifest file, the lock file will be updated.
 <pre class="mermaid"><code>flowchart TD
-    C[manifest] --&gt; A[lockfile] --&gt; B[environment]</code></pre></p>
+    C[manifest] --&gt; A[lock file] --&gt; B[environment]</code></pre></p>
 </div>
-<h2 id="lockfile-satisfiability">Lockfile satisfiability<a class="headerlink" href="#lockfile-satisfiability" title="Permanent link">#</a></h2>
+<h2 id="lock-file-satisfiability">Lock file satisfiability<a class="headerlink" href="#lock-file-satisfiability" title="Permanent link">#</a></h2>
 <p>The lock file is a description of the environment, and it should always be satisfiable.
-Satisfiable means that the given manifest file and the created environment are in sync with the lockfile.
+Satisfiable means that the given manifest file and the created environment are in sync with the lock file.
 If the lock file is not satisfiable, Pixi will generate a new lock file automatically.</p>
 <p>Steps to check if the lock file is satisfiable:</p>
 <ul>
 <li>All <code>environments</code> in the manifest file are in the lock file</li>
 <li>All <code>channels</code> in the manifest file are in the lock file</li>
 <li>All <code>packages</code> in the manifest file are in the lock file, and the versions in the lock file are compatible with the requirements in the manifest file, for both <code>conda</code> and <code>pypi</code> packages.<ul>
-<li>Conda packages use a <code>matchspec</code> which can match on all the information we store in the lockfile, even <code>timestamp</code>, <code>subdir</code> and <code>license</code>.</li>
+<li>Conda packages use a <code>matchspec</code> which can match on all the information we store in the lock file, even <code>timestamp</code>, <code>subdir</code> and <code>license</code>.</li>
 </ul>
 </li>
 <li>If <code>pypi-dependencies</code> are added, all <code>conda</code> package that are python packages in the lock file have a <code>purls</code> field.</li>
