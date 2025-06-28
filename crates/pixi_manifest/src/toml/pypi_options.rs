@@ -246,10 +246,7 @@ mod test {
                     PypiPackageName::from_str("numpy").unwrap(),
                     pixi_pypi_spec::PixiPypiSpec::RawVersion(
                         pixi_pypi_spec::VersionOrStar::from_str(">=2.0.0").unwrap()
-                    ) // pixi_pypi_spec::PixiPypiSpec::try_from(
-                      //     pep508_rs::Requirement::from_str("numpy>=2.0.0").unwrap()
-                      // )
-                      // .unwrap(),
+                    )
                 )]),),
             },
         );
