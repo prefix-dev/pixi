@@ -33,7 +33,8 @@ This will override the version of `numpy` used by all dependencies in the `dev` 
 If there's another override for the same dependency, the override in the most specific **feature** will be used.
 For example, if you have the following overrides:
 ```toml
-[tool.pixi.pypi-options.dependency-overrides]
+# pixi.toml
+[pypi-options.dependency-overrides]
 numpy = ">=2.1.0"
 [features.dev.pypi-options.dependency-overrides]
 numpy = ">=2.0.0"
