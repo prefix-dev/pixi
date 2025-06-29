@@ -142,6 +142,7 @@ pub async fn update_prefix_pypi(
     platform: Platform,
     non_isolated_packages: &NoBuildIsolation,
     no_build: &pixi_manifest::pypi::pypi_options::NoBuild,
+    no_binary: &pixi_manifest::pypi::pypi_options::NoBinary,
 ) -> miette::Result<()> {
     // Determine global site-packages status
     let python_info = match on_python_interpreter_change(status, prefix, pypi_records).await? {
@@ -168,6 +169,7 @@ pub async fn update_prefix_pypi(
                 platform,
                 non_isolated_packages,
                 no_build,
+                no_binary,
             )
             .await?
             .build(pypi_records)?

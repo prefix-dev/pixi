@@ -12,7 +12,7 @@ use pixi_consts::consts;
 use pixi_manifest::{SystemRequirements, pypi::pypi_options::NoBuildIsolation};
 use pixi_record::PixiRecord;
 use pixi_uv_conversions::{
-    BuildIsolation, locked_indexes_to_index_locations, no_build_to_build_options,
+    BuildIsolation, locked_indexes_to_index_locations, pypi_options_to_build_options,
 };
 use plan::{InstallPlanner, InstallReason, NeedReinstall, PyPIInstallationPlan};
 use pypi_modifiers::{
@@ -81,6 +81,7 @@ impl<'a> PyPIPrefixUpdaterBuilder<'a> {
         platform: Platform,
         non_isolated_packages: &NoBuildIsolation,
         no_build: &pixi_manifest::pypi::pypi_options::NoBuild,
+        no_binary: &pixi_manifest::pypi::pypi_options::NoBinary,
     ) -> miette::Result<Self> {
         // Determine the current environment markers.
         let python_record = pixi_records
@@ -98,7 +99,7 @@ impl<'a> PyPIPrefixUpdaterBuilder<'a> {
             .map(|indexes| locked_indexes_to_index_locations(indexes, lock_file_dir))
             .unwrap_or_else(|| Ok(IndexLocations::default()))
             .into_diagnostic()?;
-        let build_options = no_build_to_build_options(no_build).into_diagnostic()?;
+        let build_options = pypi_options_to_build_options(no_build, no_binary).into_diagnostic()?;
 
         let mut uv_client_builder = RegistryClientBuilder::new(uv_context.cache.clone())
             .allow_insecure_host(uv_context.allow_insecure_host.clone())

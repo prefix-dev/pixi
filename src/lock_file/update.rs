@@ -500,6 +500,11 @@ impl<'p> LockFileDerivedData<'p> {
                     .no_build
                     .clone()
                     .unwrap_or_default();
+                let no_binary = environment
+                    .pypi_options()
+                    .no_binary
+                    .clone()
+                    .unwrap_or_default();
 
                 // Update the prefix with Pypi records
                 environment::update_prefix_pypi(
@@ -517,6 +522,7 @@ impl<'p> LockFileDerivedData<'p> {
                     environment.best_platform(),
                     &non_isolated_packages,
                     &no_build,
+                    &no_binary,
                 )
                 .await
                 .with_context(|| {

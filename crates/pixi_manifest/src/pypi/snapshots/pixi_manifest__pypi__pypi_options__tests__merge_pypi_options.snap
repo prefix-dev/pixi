@@ -16,3 +16,4 @@ no-build-isolation:
   - bar
 index-strategy: ~
 no-build: all
+no-binary: ~

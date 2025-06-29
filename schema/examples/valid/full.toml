@@ -58,6 +58,7 @@ git4 = { git = "https://github.com/prefix-dev/rattler", rev = "v0.1.0", subdirec
 #path2 = { path = "path/to/package" }
 
 [pypi-options]
+no-binary = ["testpypi"]
 no-build = ["foobar"]
 no-build-isolation = ["requests"]
 
