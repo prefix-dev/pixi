@@ -2695,10 +2695,10 @@
 <p>Pixi is built on top of both the conda and PyPI ecosystems.</p>
 <p><strong>Conda</strong> is a cross-platform, cross-language package ecosystem that allows users to install packages and manage environments.
 It is widely used in the data science and machine learning community, but it is also used in other fields.
-It’s power comes from the fact that it always installs binary packages, meaning that it doesn’t need to compile anything.
+Its power comes from the fact that it always installs binary packages, meaning that it doesn’t need to compile anything.
 This makes the ecosystem very fast and easy to use.</p>
 <p><strong>PyPI</strong> is the Python Package Index, which is the main package index for Python packages.
-It is a much larger ecosystem than conda, especially because the boundary to upload packages is lower.
+It is a much larger ecosystem than conda, especially because the barrier to entry for uploading packages is lower.
 This means that there are a lot of packages available, but it also means that the quality of the packages is not always as high as in the conda ecosystem.</p>
 <p>Pixi can install packages from <strong>both</strong> <strong>ecosystems</strong>, but it uses a <strong>conda-first approach</strong>.</p>
 <p>The simplified process is as follows:</p>
@@ -2747,12 +2747,12 @@ This means that there are a lot of packages available, but it also means that th
 </table>
 <h2 id="uv-by-astral"><code>uv</code> by Astral<a class="headerlink" href="#uv-by-astral" title="Permanent link">#</a></h2>
 <p>Pixi uses the <a href="https:://github.com/astral-sh/uv"><code>uv</code></a> library to handle PyPI packages.
-Pixi doesn't install <code>uv</code> the tool itself, because both tools are build in Rust it is used as a library.</p>
+Pixi doesn't install <code>uv</code> (the tool) itself: because both tools are built in Rust, it is used as a library.</p>
 <p>We're extremely grateful to the <a href="https://astral.sh">Astral</a> team for their work on <code>uv</code>, which is a great library that allows us to handle PyPI packages in a much better way than before.</p>
-<p>Initially, next to <code>pixi</code> were building a library called <code>rip</code> which had the same goals as <code>uv</code>, but we decided to switch to <code>uv</code> because it quickly became a more mature library, and it has a lot of features that we need.</p>
+<p>Initially, next to <code>pixi</code> we were building a library called <code>rip</code> which had the same goals as <code>uv</code>, but we decided to switch to <code>uv</code> because it quickly became a more mature library, and it has a lot of features that we need.</p>
 <ul>
-<li><a href="https://prefix.dev/blog/pypi_support_in_pixi">Initial blogpost about announcing <code>rip</code></a></li>
-<li><a href="https://prefix.dev/blog/uv_in_pixi">Blogpost to announce the switch to <code>uv</code></a></li>
+<li><a href="https://prefix.dev/blog/pypi_support_in_pixi">Initial blog post about announcing <code>rip</code></a></li>
+<li><a href="https://prefix.dev/blog/uv_in_pixi">Blog post to announce the switch to <code>uv</code></a></li>
 </ul>
 <h2 id="solvers">Solvers<a class="headerlink" href="#solvers" title="Permanent link">#</a></h2>
 <p>Because Pixi supports both ecosystems, it currently needs two different solvers to handle the dependencies.</p>
@@ -2765,12 +2765,11 @@ Pixi doesn't install <code>uv</code> the tool itself, because both tools are bui
 <p>The holy grail of Pixi is to have a single solver that can handle both ecosystems.
 Because resolvo is written to support both ecosystems, it is possible to use it for PyPI packages as well, but this is not yet implemented.</p>
 </div>
-<p>Because of these two solvers, we need to make a decision which solver to run first.
-This is the conda-first approach, which means that we first solve the conda dependencies and then the PyPI dependencies.</p>
-<p>Pixi first run the conda (<code>rattler</code>) solver, which will resolve the conda dependencies.
-Then it maps the conda packages to PyPI packages, using <a href="https://github.com/prefix-dev/parselmouth"><code>parselmouth</code></a>
+<p>Because PyPI packages need a base environment to install into, we need to use the conda-first approach, which means that we first solve the conda dependencies, then the PyPI dependencies.</p>
+<p>Pixi first runs the conda (<code>rattler</code>) solver, which will resolve the conda dependencies.
+Then it maps the conda packages to PyPI packages, using <a href="https://github.com/prefix-dev/parselmouth"><code>parselmouth</code></a>.
 Then it runs the PyPI (<code>uv</code>) solver, which will resolve the remaining PyPI dependencies.</p>
-<p>The consequence is that Pixi will install the <code>conda</code> package if both are available.</p>
+<p>The consequence is that Pixi will install the conda package (and not the PyPI package) if both are available and specified as dependencies.</p>
 <p>Here is an example of how this works in practice:
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[dependencies]</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.8&quot;</span>
@@ -2782,13 +2781,13 @@ Then it runs the PyPI (<code>uv</code>) solver, which will resolve the remaining
 <p>Which results in the following output:
 <div class="language-output highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="go">➜ pixi list -x</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="go">Package  Version  Build               Size      Kind   Source</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="go">numpy    2.3.1                        43.8 MiB  pypi   numpy-2.3.1-cp313-cp313-macosx_11_0_arm64.whl</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="go">numpy    2.3.0    py313h41a2e72_0     6.2 MiB   conda  https://conda.anaconda.org/conda-forge/</span>
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="go">python   3.13.5   hf3f3da0_102_cp313  12.3 MiB  conda  https://conda.anaconda.org/conda-forge/</span>
 </span></code></pre></div></p>
 <p>In this example, Pixi will first resolve the conda dependencies and install the <code>numpy</code> and <code>python</code> conda packages.
-Then it will map the <code>numpy</code> conda package to the <code>numpy</code> PyPI package and resolve the remaining PyPI dependencies.
-Which is non as it was already installed as a conda package. Thus, no additional PyPI packages will be installed.</p>
-<p>Another example is when you have a PyPI package that is not available as a conda package:
+Then it will map the <code>numpy</code> conda package to the <code>numpy</code> PyPI package and resolve any PyPI dependencies.
+Since there are no remaining PyPI dependencies (as <code>numpy</code> was already installed as a conda package), no PyPI packages will be installed.</p>
+<p>Another example is when you have a PyPI package dependency that is not specified as a conda package dependency:
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[dependencies]</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=3.8&quot;</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
@@ -2802,7 +2801,7 @@ Which results in the following output:
 </span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="go">python   3.13.5   hf3f3da0_102_cp313  12.3 MiB  conda  https://conda.anaconda.org/conda-forge/</span>
 </span></code></pre></div>
 In this example, Pixi will first resolve the conda dependencies and install the <code>python</code> conda package.
-Then since <code>numpy</code> is not available as a conda package, it will resolve the PyPI dependencies and install the <code>numpy</code> PyPI package.</p>
+Then, since <code>numpy</code> is not specified as a conda dependency, Pixi will resolve the PyPI dependencies and install the <code>numpy</code> PyPI package.</p>
 <p>To override or change the mapping of conda packages to PyPI packages, you can use the <a href="../../reference/pixi_manifest/#conda-pypi-map-optional"><code>conda-pypi-map</code></a> field in the <code>pixi.toml</code> file.</p>
 
 
