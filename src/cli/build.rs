@@ -85,6 +85,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         package_manifest,
         &workspace.workspace.value,
         &channel_config,
+        Some(args.target_platform),
     )
     .into_diagnostic()?;
     let backend = command_dispatcher

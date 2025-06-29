@@ -1,15 +1,18 @@
 use std::collections::BTreeMap;
 
+use indexmap::IndexMap;
 use itertools::Either;
 use pixi_spec::TomlSpec;
-use pixi_toml::{TomlFromStr, TomlWith};
+use pixi_toml::{Same, TomlFromStr, TomlIndexMap, TomlWith};
 use rattler_conda_types::NamedChannelOrUrl;
 use toml_span::{DeserError, Spanned, Value, de_helpers::TableHelper, value::ValueInner};
 
 use crate::{
-    PackageBuild, TomlError,
-    build_system::BuildBackend,
+    PackageBuild, TargetSelector, TomlError,
+    build_system::{BuildBackend, BuildTarget},
     error::GenericError,
+    target::Targets,
+    toml::build_target::TomlPackageBuildTarget,
     utils::{PixiSpanned, package_map::UniquePackageMap},
 };
 
@@ -19,6 +22,7 @@ pub struct TomlPackageBuild {
     pub channels: Option<PixiSpanned<Vec<NamedChannelOrUrl>>>,
     pub additional_dependencies: UniquePackageMap,
     pub configuration: Option<serde_value::Value>,
+    pub target: IndexMap<PixiSpanned<TargetSelector>, TomlPackageBuildTarget>,
 }
 
 #[derive(Debug)]
@@ -70,6 +74,21 @@ impl TomlPackageBuild {
             }
         }
 
+        // Create default build target
+        let default_build_target = BuildTarget::default();
+
+        // Convert target-specific build configurations
+        let targets = self
+            .target
+            .into_iter()
+            .map(|(selector, target)| {
+                let target = BuildTarget {
+                    configuration: target.configuration,
+                };
+                (selector, target)
+            })
+            .collect();
+
         Ok(PackageBuild {
             backend: BuildBackend {
                 name: self.backend.value.name.value,
@@ -78,11 +97,12 @@ impl TomlPackageBuild {
             additional_dependencies,
             channels: self.channels.map(|channels| channels.value),
             configuration: self.configuration,
+            targets: Targets::from_default_and_user_defined(default_build_target, targets),
         })
     }
 }
 
-fn convert_toml_to_serde(value: &mut Value) -> Result<serde_value::Value, DeserError> {
+pub fn convert_toml_to_serde(value: &mut Value) -> Result<serde_value::Value, DeserError> {
     Ok(match value.take() {
         ValueInner::String(s) => serde_value::Value::String(s.to_string()),
         ValueInner::Integer(i) => serde_value::Value::I64(i),
@@ -143,12 +163,18 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
             .map(|(_, mut value)| convert_toml_to_serde(&mut value))
             .transpose()?;
 
+        let target = th
+            .optional::<TomlWith<_, TomlIndexMap<_, Same>>>("target")
+            .map(TomlWith::into_inner)
+            .unwrap_or_default();
+
         th.finalize(None)?;
         Ok(Self {
             backend: build_backend,
             channels,
             additional_dependencies,
             configuration,
+            target,
         })
     }
 }
