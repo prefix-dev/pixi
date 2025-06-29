@@ -479,7 +479,7 @@ impl<'p> LockFileDerivedData<'p> {
 
                 let uv_context = self
                     .uv_context
-                    .get_or_try_init(|| UvResolutionContext::from_workspace(self.workspace))?
+                    .get_or_try_init(|| UvResolutionContext::new(self.workspace.config()))?
                     .clone()
                     .set_cache_refresh(uv_reinstall, uv_packages);
 
@@ -1313,7 +1313,7 @@ impl<'p> UpdateContext<'p> {
             .build()?;
 
             let uv_context = uv_context
-                .get_or_try_init(|| UvResolutionContext::from_workspace(project))?
+                .get_or_try_init(|| UvResolutionContext::new(project.config()))?
                 .clone();
 
             let locked_group_records = self

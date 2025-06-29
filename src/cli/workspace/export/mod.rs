@@ -1,5 +1,6 @@
 pub mod conda_environment;
 pub mod conda_explicit_spec;
+pub mod split_lockfile;
 
 use clap::Parser;
 
@@ -17,12 +18,15 @@ pub enum Command {
     CondaExplicitSpec(conda_explicit_spec::Args),
     /// Export workspace environment to a conda environment.yaml file
     CondaEnvironment(conda_environment::Args),
+    /// Split workspace lockfile for each non-empty environment and platform
+    SplitLockfile(split_lockfile::Args),
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     match args.command {
         Command::CondaExplicitSpec(args) => conda_explicit_spec::execute(args).await?,
         Command::CondaEnvironment(args) => conda_environment::execute(args).await?,
+        Command::SplitLockfile(args) => split_lockfile::execute(args).await?,
     };
     Ok(())
 }
