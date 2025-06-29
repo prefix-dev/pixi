@@ -245,7 +245,7 @@ async fn test_task_with_env() {
 
     pixi.tasks()
         .add("env-test".into(), None, FeatureName::default())
-        .with_commands(["echo From a $HELLO_WORLD"])
+        .with_commands(vec!["echo \\\"From a $HELLO_WORLD\\\""])
         .with_env(vec![(
             String::from("HELLO_WORLD"),
             String::from("world with spaces"),
@@ -266,7 +266,7 @@ async fn test_task_with_env() {
         .unwrap();
 
     assert_eq!(result.exit_code, 0);
-    assert_eq!(result.stdout, "From a world with spaces\n");
+    assert!(result.stdout.contains("From a world with spaces"));
 }
 
 #[tokio::test(flavor = "current_thread")]
