@@ -173,7 +173,7 @@ jobs:
           echo "dist ran successfully"
       - name: Attest Builds
         id: attest
-        uses: actions/attest-build-provenance@v1
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
         with:
           subject-path: "target/distrib/*${{ join(matrix.targets, ', ') }}*"
       - run: cp ${{ steps.attest.outputs.bundle-path }} target/distrib/attestations-${{ join(matrix.targets, ', ') }}.intoto.jsonl
