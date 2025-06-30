@@ -53,9 +53,7 @@ pub struct CondaOutputsResult {
     /// The files that were read as part of the computation. These files are
     /// hashed and stored in the lock-file. If the files change, the
     /// lock-file will be invalidated.
-    ///
-    /// If this field is not present, the input manifest will be used.
-    pub input_globs: Option<BTreeSet<String>>,
+    pub input_globs: BTreeSet<String>,
 }
 
 #[serde_as]

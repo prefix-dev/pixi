@@ -1,3 +1,5 @@
+//! This API was introduced in Pixi Build API version 0.
+
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeSet, HashMap},

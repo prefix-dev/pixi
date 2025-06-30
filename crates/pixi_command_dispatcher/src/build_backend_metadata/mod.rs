@@ -1,7 +1,4 @@
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    path::PathBuf,
-};
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
@@ -128,7 +125,6 @@ impl BuildBackendMetadataSpec {
         }
 
         // Instantiate the backend with the discovered information.
-        let manifest_path = discovered_backend.init_params.manifest_path.clone();
         let backend = command_dispatcher
             .instantiate_backend(InstantiateBackendSpec {
                 backend_spec: discovered_backend.backend_spec,
@@ -146,7 +142,6 @@ impl BuildBackendMetadataSpec {
             self.call_conda_outputs(
                 command_dispatcher,
                 source_checkout,
-                manifest_path,
                 backend,
                 project_model_hash,
             )
@@ -155,7 +150,6 @@ impl BuildBackendMetadataSpec {
             self.call_conda_get_metadata(
                 command_dispatcher,
                 source_checkout,
-                manifest_path,
                 backend,
                 project_model_hash,
             )
@@ -231,7 +225,6 @@ impl BuildBackendMetadataSpec {
         self,
         command_dispatcher: CommandDispatcher,
         source_checkout: SourceCheckout,
-        manifest_path: PathBuf,
         backend: Backend,
         project_model_hash: Option<Vec<u8>>,
     ) -> Result<CachedCondaMetadata, CommandDispatcherError<BuildBackendMetadataError>> {
@@ -257,7 +250,6 @@ impl BuildBackendMetadataSpec {
         let input_hash = Self::compute_input_hash(
             command_dispatcher,
             &source_checkout,
-            manifest_path,
             outputs.input_globs.clone(),
             project_model_hash,
         )
@@ -277,7 +269,6 @@ impl BuildBackendMetadataSpec {
         self,
         command_dispatcher: CommandDispatcher,
         source_checkout: SourceCheckout,
-        manifest_path: PathBuf,
         backend: Backend,
         project_model_hash: Option<Vec<u8>>,
     ) -> Result<CachedCondaMetadata, CommandDispatcherError<BuildBackendMetadataError>> {
@@ -315,8 +306,7 @@ impl BuildBackendMetadataSpec {
         let input_hash = Self::compute_input_hash(
             command_dispatcher,
             &source_checkout,
-            manifest_path,
-            metadata.input_globs.clone(),
+            metadata.input_globs.clone().unwrap_or_default(),
             project_model_hash,
         )
         .await?;
@@ -334,16 +324,13 @@ impl BuildBackendMetadataSpec {
     async fn compute_input_hash(
         command_queue: CommandDispatcher,
         source: &SourceCheckout,
-        manifest_path: PathBuf,
-        input_globs: Option<BTreeSet<String>>,
+        input_globs: BTreeSet<String>,
         project_model_hash: Option<Vec<u8>>,
     ) -> Result<Option<InputHash>, CommandDispatcherError<BuildBackendMetadataError>> {
         let input_hash = if source.pinned.is_immutable() {
             None
         } else {
             // Compute the input hash based on the manifest path and the input globs.
-            let mut input_globs = input_globs.unwrap_or_default();
-            input_globs.insert(manifest_path.to_string_lossy().into_owned());
             let input_hash = command_queue
                 .glob_hash_cache()
                 .compute_hash(GlobHashKey::new(
