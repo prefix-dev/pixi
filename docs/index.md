@@ -5,78 +5,92 @@ template: home.html
 
 ![pixi logo](assets/banner.svg)
 
-
 ## Why Pixi?
 
 Pixi is a **fast, modern, and reproducible** package management tool for developers of all backgrounds.
 
 <div class="feature-grid">
-  <div class="feature-card">
-    <strong>🔄 Reproducibility</strong>
-    <p>Isolated, easily recreated environments with lockfiles built-in</p>
-  </div>
-  <div class="feature-card">
-    <strong>🛠️ Tasks</strong>
-    <p>Manage complex pipelines effortlessly.</p>
-  </div>
-  <div class="feature-card">
-    <strong>🌐 Multi Platform</strong>
-    <p>Works on Linux, macOS, Windows, and more.</p>
-  </div>
-  <div class="feature-card">
-    <strong>🧩 Multi Environment</strong>
-    <p>Compose multiple environments in one manifest.</p>
-  </div>
-  <div class="feature-card">
-    <strong>🐍 Python</strong>
-    <p>Support for <code>pyproject.toml</code> and PyPI through <a href="https://docs.astral.sh/uv/" target="_blank">uv</a>.</p>
-  </div>
-  <div class="feature-card">
-    <strong>🌍 Global Tools</strong>
-    <p>Install global tools, safely isolated. Replacing <code>apt</code>, <code>homebrew</code>, <code>winget</code></p>
-  </div>
+    <a href="workspace/lockfile">
+      <div class="feature-card">
+              <strong>🔄 Reproducibility</strong>
+              <p>Isolated, easily recreated environments with lockfiles built-in</p>
+      </div>
+    </a>
+    <a href="workspace/advanced_tasks/">
+      <div class="feature-card">
+          <strong>🛠️ Tasks</strong>
+          <p>Manage complex pipelines effortlessly.</p>
+      </div>
+    </a>
+    <a href="workspace/multi_platform_configuration/">
+      <div class="feature-card">
+          <strong>🌐 Multi Platform</strong>
+          <p>Works on Linux, macOS, Windows, and more.</p>
+      </div>
+    </a>
+    <a href="workspace/multi_environment/">
+      <div class="feature-card">
+          <strong>🧩 Multi Environment</strong>
+          <p>Compose multiple environments in one manifest.</p>
+      </div>
+    </a>
+    <a href="python/tutorial/">
+      <div class="feature-card">
+          <strong>🐍 Python</strong>
+          <p>Support for <code>pyproject.toml</code> and PyPI through uv.</p>
+      </div>
+    </a>
+    <a href="global_tools/introduction/">
+      <div class="feature-card">
+          <strong>🌍 Global Tools</strong>
+          <p>Install global tools, safely isolated. Replacing <code>apt</code>, <code>homebrew</code>, <code>winget</code></p>
+      </div>
+    </a>
 </div>
 
 ---
 
-
 ## Quick Demo
 
 Project setup is a breeze with Pixi.
+
 ```shell
 pixi init hello-world
 cd hello-world
 pixi add python
 pixi run python -c "print('Hello World!')"
 ```
+
 ![Pixi Demo](assets/vhs-tapes/pixi_project_demo_light.gif#only-light)
 ![Pixi Demo](assets/vhs-tapes/pixi_project_demo_dark.gif#only-dark)
 
 Install your favorite tools with a single command.
+
 ```shell
 pixi global install gh nvim ipython btop ripgrep
 ```
+
 ![Pixi Global Demo](assets/vhs-tapes/pixi_global_demo_light.gif#only-light)
 ![Pixi Global Demo](assets/vhs-tapes/pixi_global_demo_dark.gif#only-dark)
 
 ---
 
-
 ## What is the difference with Pixi?
 
-| Builtin Core Features | Pixi | Conda | Pip | Poetry | uv |
-|-----------------------|---|---|---|---|---|
-| Installs Python | ✅ | ✅ | ❌ | ❌ | ✅ |
-| Supports Multiple Languages | ✅ | ✅ | ❌ | ❌ | ❌ |
-| Lockfiles | ✅ | ❌ | ❌ | ✅ | ✅ |
-| Task runner | ✅ | ❌ | ❌ | ❌ | ❌ |
-| Project Management | ✅ | ❌ | ❌ | ✅ | ✅ |
+| Builtin Core Features       | Pixi | Conda | Pip | Poetry | uv |
+|-----------------------------|------|-------|-----|--------|----|
+| Installs Python             | ✅    | ✅     | ❌   | ❌      | ✅  |
+| Supports Multiple Languages | ✅    | ✅     | ❌   | ❌      | ❌  |
+| Lockfiles                   | ✅    | ❌     | ❌   | ✅      | ✅  |
+| Task runner                 | ✅    | ❌     | ❌   | ❌      | ❌  |
+| Project Management          | ✅    | ❌     | ❌   | ✅      | ✅  |
 
 ---
 
 ## Available Software
 
-Pixi defaults to the **biggest Conda package repository**, [conda-forge](https://conda-forge.org/), which contains over **30,000 packages**.
+Pixi defaults to the **biggest Conda package repository**, [conda-forge](https://conda-forge.org/), which contains over
+**30,000 packages**.
 
 - **Python**: [`python`](https://prefix.dev/channels/conda-forge/packages/python), [`scikit-learn`](https://prefix.dev/channels/conda-forge/packages/scikit-learn), [`pytorch`](https://prefix.dev/channels/conda-forge/packages/pytorch)
 - **C/C++**: [`clang`](https://prefix.dev/channels/conda-forge/packages/clang), [`boost`](https://prefix.dev/channels/conda-forge/packages/boost-cpp), [`opencv`](https://prefix.dev/channels/conda-forge/packages/opencv), [`ninja`](https://prefix.dev/channels/conda-forge/packages/ninja)
@@ -122,26 +136,22 @@ To install `pixi`, run:
 
 === "Python"
     1. **Initialize a workspace:**
-        ```
-        pixi init hello-world
-        cd hello-world
-        ```
-
+    ```
+    pixi init hello-world
+    cd hello-world
+    ```
     2. **Add dependencies:**
         ```
         pixi add cowpy python
         ```
-
     3. **Create your script:**
         ```py title="hello.py"
         --8<-- "docs/source_files/pixi_workspaces/introduction/deps_add/hello.py"
         ```
-
     5. **Add a task:**
         ```
         pixi task add start python hello.py
         ```
-
     6. **Run the task:**
         ```
         pixi run start
@@ -157,7 +167,6 @@ To install `pixi`, run:
                     ||----w |
                     ||     ||
         ```
-
     7. **Entry the environment shell:**
         ```
         pixi shell
@@ -172,7 +181,7 @@ To install `pixi`, run:
         ```
         pixi init pixi-rust
         cd pixi-rust
-        ```
+    ```
     2. **Add dependencies:**
         ```
         pixi add rust
@@ -248,6 +257,7 @@ To install `pixi`, run:
         ```
 
     More details on how to use Pixi with ROS2 can be found in the [ROS2 tutorial](tutorials/ros2.md).
+
 === "DevOps"
     1. Install all your favorite tools with a single command:
     ```shell
@@ -284,7 +294,6 @@ To install `pixi`, run:
 </div>
 
 ---
-
 
 ## Useful Links
 

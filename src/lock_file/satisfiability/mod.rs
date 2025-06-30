@@ -2,6 +2,7 @@ use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
     fmt::{Display, Formatter},
+    hash::Hash,
     ops::Sub,
     path::{Path, PathBuf},
     str::FromStr,
@@ -10,6 +11,8 @@ use std::{
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
+use pixi_build_discovery::{DiscoveredBackend, EnabledProtocols};
+use pixi_build_type_conversions::compute_project_model_hash;
 use pixi_git::url::RepositoryUrl;
 use pixi_glob::{GlobHashCache, GlobHashError, GlobHashKey};
 use pixi_manifest::{FeaturesExt, pypi::pypi_options::NoBuild};
@@ -386,6 +389,10 @@ pub enum PlatformUnsat {
 
     #[error("failed to convert between pep508 and uv types: {0}")]
     UvTypesConversionError(#[from] ConversionError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    BackendDiscovery(#[from] pixi_build_discovery::DiscoveryError),
 
     #[error("'{name}' is locked as a conda package but only requested by pypi dependencies")]
     CondaPackageShouldBePypi { name: String },
@@ -1471,10 +1478,25 @@ pub(crate) async fn verify_package_platform_satisfiability(
             ))
         })?;
 
+        let discovered_backend = DiscoveredBackend::discover(
+            &source_dir,
+            &environment.channel_config(),
+            &EnabledProtocols::default(),
+        )
+        .map_err(PlatformUnsat::BackendDiscovery)
+        .map_err(Box::new)?;
+
+        let project_model_hash = discovered_backend
+            .init_params
+            .project_model
+            .as_ref()
+            .map(compute_project_model_hash);
+
         let input_hash = input_hash_cache
             .compute_hash(GlobHashKey::new(
                 source_dir,
                 locked_input_hash.globs.clone(),
+                project_model_hash,
             ))
             .await
             .map_err(PlatformUnsat::FailedToComputeInputHash)

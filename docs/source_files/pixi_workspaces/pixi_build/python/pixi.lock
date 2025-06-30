@@ -711,9 +711,8 @@ packages:
   - rich 13.9.*
   - python
   input:
-    hash: 61ec9a1338709f90a4c158e698237ea45ab26f4029734059a70bea39e9fccd00
-    globs:
-    - pixi.toml
+    hash: 3fec4ae3d3b251a9f707071d9d25ff86bf388d75f9ee044798f324e501dcc0db
+    globs: []
 - conda: https://prefix.dev/conda-forge/linux-64/readline-8.2-h8228510_1.conda
   sha256: 5435cf39d039387fbdc977b0a762357ea909a7694d9528ab40f005e9208744d7
   md5: 47d31b792659ce70f470b5c82fdfb7a4

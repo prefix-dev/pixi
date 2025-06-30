@@ -21,9 +21,9 @@ use rattler_digest::{Md5, Md5Hash, Sha256, Sha256Hash, serde::SerializableHash};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::{DeserializeFromStr, DisplayFromStr, SerializeDisplay};
-use std::collections::HashMap;
 use std::convert::Infallible;
 use std::fmt::Display;
+use std::hash::Hash;
 use std::path::PathBuf;
 use std::str::FromStr;
 use url::Url;
@@ -68,7 +68,7 @@ impl VersionedProjectModel {
 /// The source package name of a package. Not normalized per se.
 pub type SourcePackageName = String;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectModelV1 {
     /// The name of the project
@@ -151,15 +151,17 @@ impl FromStr for TargetSelectorV1 {
 }
 
 /// A collect of targets including a default target.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Hash, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TargetsV1 {
     pub default_target: Option<TargetV1>,
 
-    pub targets: Option<HashMap<TargetSelectorV1, TargetV1>>,
+    /// We use an [`OrderMap`] to preserve the order in which the items where
+    /// defined in the manifest.
+    pub targets: Option<OrderMap<TargetSelectorV1, TargetV1>>,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Hash, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TargetV1 {
     /// Host dependencies of the project
