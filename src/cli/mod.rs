@@ -248,6 +248,21 @@ impl From<LockFileUsageArgs> for crate::environment::LockFileUsage {
     }
 }
 
+impl TryFrom<LockFileUsageConfig> for crate::environment::LockFileUsage {
+    type Error = miette::Error;
+
+    fn try_from(value: LockFileUsageConfig) -> miette::Result<Self> {
+        value.validate()?;
+        if value.frozen {
+            Ok(Self::Frozen)
+        } else if value.locked {
+            Ok(Self::Locked)
+        } else {
+            Ok(Self::Update)
+        }
+    }
+}
+
 /// Configuration for lock file usage, used by LockFileUpdateConfig
 #[derive(Parser, Debug, Default, Clone)]
 pub struct LockFileUsageConfig {
@@ -259,25 +274,6 @@ pub struct LockFileUsageConfig {
     /// aborts when lockfile isn't up-to-date with the manifest file.
     #[clap(long, env = "PIXI_LOCKED", help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub locked: bool,
-}
-
-impl From<LockFileUsageConfig> for crate::environment::LockFileUsage {
-    fn from(value: LockFileUsageConfig) -> Self {
-        // Validate that both frozen and locked are not true simultaneously
-        if value.frozen && value.locked {
-            // Since this is a From implementation, we can't return an error
-            // This should be caught earlier in argument parsing
-            panic!("Both --frozen and --locked cannot be used together");
-        }
-
-        if value.frozen {
-            Self::Frozen
-        } else if value.locked {
-            Self::Locked
-        } else {
-            Self::Update
-        }
-    }
 }
 
 impl LockFileUsageConfig {

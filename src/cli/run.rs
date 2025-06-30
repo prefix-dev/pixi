@@ -128,7 +128,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Ensure that the lock-file is up-to-date.
     let lock_file = workspace
         .update_lock_file(UpdateLockFileOptions {
-            lock_file_usage: args.lock_file_update_config.lock_file_usage(),
+            lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
             ..UpdateLockFileOptions::default()
         })
@@ -300,7 +300,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
             Err(TaskExecutionError::NonZeroExitCode(code)) => {
                 if code == 127 {
-                    command_not_found(&workspace, explicit_environment);
+                    command_not_found(&workspace, explicit_environment.clone());
                 }
                 std::process::exit(code);
             }
