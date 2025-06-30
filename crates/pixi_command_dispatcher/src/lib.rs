@@ -40,7 +40,6 @@ mod command_dispatcher_processor;
 mod executor;
 mod install_pixi;
 mod instantiate_tool_env;
-mod lazy_source_checkout;
 mod limits;
 pub mod reporter;
 mod solve_conda;

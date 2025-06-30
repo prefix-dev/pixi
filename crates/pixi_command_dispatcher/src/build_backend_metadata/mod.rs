@@ -10,7 +10,6 @@ use crate::{
         WorkDirKey,
         source_metadata_cache::{self, CachedCondaMetadata, MetadataKind, SourceMetadataKey},
     },
-    lazy_source_checkout::LazySourceCheckout,
 };
 use miette::Diagnostic;
 use pixi_build_discovery::{DiscoveredBackend, EnabledProtocols};
@@ -127,21 +126,6 @@ impl BuildBackendMetadataSpec {
                 source: source_checkout.pinned,
             });
         }
-
-        // Ensure that the source is checked out before proceeding.
-        let source_checkout = lazy_source
-            .into_checkout(&command_dispatcher)
-            .await
-            .map_err_with(BuildBackendMetadataError::SourceCheckout)?;
-
-        // Discover information about the build backend from the source code.
-        let discovered_backend = DiscoveredBackend::discover(
-            &source_checkout.path,
-            &self.channel_config,
-            &self.enabled_protocols,
-        )
-        .map_err(BuildBackendMetadataError::Discovery)
-        .map_err(CommandDispatcherError::Failed)?;
 
         // Instantiate the backend with the discovered information.
         let manifest_path = discovered_backend.init_params.manifest_path.clone();
