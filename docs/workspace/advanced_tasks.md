@@ -237,6 +237,19 @@ pixi run partial-override
 ✨ Pixi task (base-task in default): echo Base task with override1 and default2
 ```
 
+For a dependent task to accept arguments to pass to the dependency, you can use the same syntax as passing arguments to the command:
+
+```toml title="pixi.toml"
+--8<-- "docs/source_files/pixi_tomls/task_arguments_partial.toml:project_tasks_with_arg"
+```
+
+```shell
+pixi run partial-override-with-arg
+✨ Pixi task (base-task in default): echo Base task with override1 and new-default2
+pixi run partial-override-with-arg cli-arg
+✨ Pixi task (base-task in default): echo Base task with override1 and cli-arg
+```
+
 ### MiniJinja Templating for Task Arguments
 
 Task commands support MiniJinja templating syntax for accessing and formatting argument values. This provides powerful flexibility when constructing commands.
