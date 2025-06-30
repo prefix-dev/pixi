@@ -4,7 +4,100 @@ use miette::{Context, IntoDiagnostic};
 use std::env;
 use std::path::PathBuf;
 
-use super::{Command, get_styles};
+use super::{Args, Command, get_styles};
+
+/// Get all built-in command names including aliases (discovered dynamically from clap)
+fn get_builtin_commands_with_aliases() -> Vec<String> {
+    let mut commands = Vec::new();
+
+    for subcommand in Args::command().get_subcommands() {
+        // Add main command name
+        commands.push(subcommand.get_name().to_string());
+
+        // Add all aliases
+        commands.extend(subcommand.get_all_aliases().map(|alias| alias.to_string()));
+    }
+
+    commands
+}
+
+/// Get all external command names (discovered from PATH)
+fn get_external_command_names() -> Vec<String> {
+    find_external_commands()
+        .into_iter()
+        .map(|(name, _path)| name)
+        .collect()
+}
+
+/// All available commands (built-in + external)
+fn get_all_available_commands() -> Vec<String> {
+    let mut all_commands = Vec::new();
+
+    all_commands.extend(get_builtin_commands_with_aliases());
+
+    all_commands.extend(get_external_command_names());
+
+    all_commands.sort();
+    all_commands.dedup();
+
+    all_commands
+}
+
+/// Find similar commands using Jaro similarity
+fn find_similar_commands(input: &str, threshold: f64) -> Vec<String> {
+    let available_commands = get_all_available_commands();
+    let mut suggestions: Vec<(f64, String)> = Vec::new();
+
+    for command in available_commands {
+        let similarity = strsim::jaro(input, &command);
+        if similarity > threshold {
+            suggestions.push((similarity, command));
+        }
+    }
+
+    // Sort by similarity (ascending), take top 3, reverse to get most similar first
+    suggestions.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    suggestions
+        .into_iter()
+        .rev()
+        .take(3)
+        .map(|(_, cmd)| cmd)
+        .collect()
+}
+
+/// Find all external commands available in PATH
+fn find_external_commands() -> Vec<(String, PathBuf)> {
+    let mut commands = Vec::new();
+
+    if let Some(dirs) = search_directories() {
+        for dir in dirs {
+            if let Ok(entries) = fs_err::read_dir(&dir) {
+                for entry in entries.flatten() {
+                    if let Some(name) = entry.file_name().to_str() {
+                        // Check if it's a pixi extension
+                        if let Some(cmd_name) = name.strip_prefix("pixi-") {
+                            // Remove .exe suffix on Windows
+                            let cmd_name = cmd_name
+                                .strip_suffix(env::consts::EXE_SUFFIX)
+                                .unwrap_or(cmd_name);
+
+                            let path = entry.path();
+                            if path.is_executable() {
+                                commands.push((cmd_name.to_string(), path));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Remove duplicates
+    commands.sort_by(|a, b| a.0.cmp(&b.0));
+    commands.dedup_by(|a, b| a.0 == b.0);
+
+    commands
+}
 
 /// Find a specific external subcommand by name
 /// Based on cargo's find_external_subcommand function
@@ -42,16 +135,30 @@ pub fn execute_external_command(args: Vec<String>) -> miette::Result<()> {
 
         Ok(())
     } else {
-        // build the error message
-        // using the same style as clap's derived error messages
+        // Generate suggestions for similar commands
+        let suggestions = find_similar_commands(cmd, 0.6);
+
+        let mut error_msg = format!("No such command: `pixi {}`", cmd);
+
+        if !suggestions.is_empty() {
+            error_msg.push_str("\n\n");
+            if suggestions.len() == 1 {
+                error_msg.push_str(&format!("Did you mean '{}'?", suggestions[0]));
+            } else {
+                error_msg.push_str("Did you mean one of these?\n");
+                for suggestion in &suggestions {
+                    error_msg.push_str(&format!("    {}\n", suggestion));
+                }
+            }
+        }
+
+        error_msg.push_str("\n\nhelp: view all installed commands with 'pixi --list'");
+
         let styles = get_styles();
 
         Command::command()
             .styles(styles)
-            .error(
-                clap::error::ErrorKind::InvalidSubcommand,
-                format!("No such command: `pixi {}`", cmd),
-            )
+            .error(clap::error::ErrorKind::InvalidSubcommand, error_msg)
             .exit();
     }
 }
