@@ -19,6 +19,8 @@ pixi pack
 It also allows you to use `pixi exec` more easily:
 ```shell
 pixi exec --with numpy python -c "import numpy; print(numpy.__version__)"
+# Previous command is equivalent to:
+pixi exec --spec numpy --spec python python -c "import numpy; print(numpy.__version__)"
 ```
 
 #### Added
