@@ -76,7 +76,7 @@ impl Backend {
         params: CondaOutputsParams,
     ) -> Result<CondaOutputsResult, CommunicationError> {
         assert!(
-            self.api_version.0 >= 1,
+            self.api_version.supports_conda_outputs(),
             "This backend does not support the conda outputs procedure"
         );
         match &self.inner {

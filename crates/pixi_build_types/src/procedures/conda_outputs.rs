@@ -130,6 +130,11 @@ pub struct CondaOutputIdentifier {
 
     /// Any PURL (Package URL) that is associated with this package.
     pub purls: Option<OrderSet<rattler_conda_types::PackageUrl>>,
+
+    /// Optionally, a path within the environment of the site-packages directory.
+    /// This field is only present for "python" interpreter packages.
+    /// This field was introduced with <https://github.com/conda/ceps/blob/main/cep-17.md>.
+    pub python_site_packages_path: Option<String>,
 }
 
 /// Describes dependencies, constraints and source dependencies for a particular

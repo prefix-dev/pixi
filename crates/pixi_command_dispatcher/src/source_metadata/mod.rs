@@ -285,13 +285,13 @@ impl SourceMetadataSpec {
                     .purls
                     .as_ref()
                     .map(|purls| purls.iter().cloned().collect()),
+                python_site_packages_path: output.identifier.python_site_packages_path.clone(),
 
                 // These are deprecated and no longer used.
                 features: None,
                 track_features: vec![],
                 legacy_bz2_md5: None,
                 legacy_bz2_size: None,
-                python_site_packages_path: None,
 
                 // These are not important at this point.
                 extra_depends: Default::default(),
