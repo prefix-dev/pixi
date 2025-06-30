@@ -82,13 +82,9 @@ impl BuildBackendMetadataSpec {
             self.source
         );
 
-        // Create a lazy source checkout that can be used to check out the source only
-        // when needed. Not all code paths require a full source checkout.
-        let mut lazy_source = LazySourceCheckout::new(self.source.clone());
-
         // Ensure that the source is checked out before proceeding.
         let source_checkout = command_dispatcher
-            .checkout_pinned_source(self.source)
+            .checkout_pinned_source(self.source.clone())
             .await
             .map_err_with(BuildBackendMetadataError::SourceCheckout)?;
 
@@ -118,7 +114,7 @@ impl BuildBackendMetadataSpec {
             .map_err(BuildBackendMetadataError::Cache)
             .map_err(CommandDispatcherError::Failed)?;
         if let Some(metadata) = Self::verify_cache_freshness(
-            &mut lazy_source,
+            &source_checkout,
             &command_dispatcher,
             metadata,
             &project_model_hash,
@@ -203,7 +199,7 @@ impl BuildBackendMetadataSpec {
     }
 
     async fn verify_cache_freshness(
-        source: &mut LazySourceCheckout,
+        source_checkout: &SourceCheckout,
         command_dispatcher: &CommandDispatcher,
         metadata: Option<CachedCondaMetadata>,
         project_model_hash: &Option<Vec<u8>>,
@@ -215,7 +211,7 @@ impl BuildBackendMetadataSpec {
 
         tracing::debug!(
             "Found source metadata in cache for source spec: {}",
-            source.as_pinned()
+            source_checkout.pinned
         );
 
         let Some(input_globs) = &metadata.input_hash else {
@@ -223,12 +219,6 @@ impl BuildBackendMetadataSpec {
             tracing::debug!("found cached metadata.");
             return Ok(Some(metadata));
         };
-
-        // Get the source code to check the globs.
-        let source_checkout = source
-            .checkout(command_dispatcher)
-            .await
-            .map_err_with(BuildBackendMetadataError::SourceCheckout)?;
 
         // Check if the input hash is still valid.
         let new_hash = command_dispatcher
