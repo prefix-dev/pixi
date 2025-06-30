@@ -924,10 +924,15 @@ async fn test_multiple_prefix_update() {
         channel: Some("https://repo.prefix.dev/conda-forge/".to_owned()),
     };
 
-    let boltons_package = Package::build("wheel", "0.45.1").finish();
+    let wheel_package = Package::build("wheel", "0.45.1")
+        .with_hashes(
+            "1b34021e815ff89a4d902d879c3bd2040bc1bd6169b32e9427497fa05c55f1ce",
+            "75cb7132eb58d97896e173ef12ac9986",
+        )
+        .finish();
 
-    let boltons_repo_data_record = RepoDataRecord {
-        package_record: boltons_package.package_record,
+    let wheel_repo_data_record = RepoDataRecord {
+        package_record: wheel_package.package_record,
         file_name: "wheel".to_owned(),
         url: Url::parse(
             "https://repo.prefix.dev/conda-forge/noarch/wheel-0.45.1-pyhd8ed1ab_1.conda",
@@ -966,7 +971,7 @@ async fn test_multiple_prefix_update() {
     );
 
     let pixi_records = Vec::from([
-        PixiRecord::Binary(boltons_repo_data_record),
+        PixiRecord::Binary(wheel_repo_data_record),
         PixiRecord::Binary(python_repo_data_record),
     ]);
 
