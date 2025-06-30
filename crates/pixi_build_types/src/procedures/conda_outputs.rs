@@ -59,31 +59,6 @@ pub struct CondaOutputsResult {
 }
 
 #[serde_as]
-#[derive(Debug, Serialize, Deserialize, Clone, Hash, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub struct CondaCacheMetadata {
-    /// An optional name
-    pub name: Option<String>,
-
-    /// The build dependencies of the package. These refer to the packages that
-    /// should be installed in the "build" environment. The build environment
-    /// contains packages for the current architecture that can be used to run
-    /// tools on the current machine like compilers, code generators, etc.
-    pub build_dependencies: Option<CondaOutputDependencies>,
-
-    /// The "host" dependencies of the package. These refer to the package that
-    /// should be installed to be able to refer to them from the build process
-    /// but not run them. They are installed for the "target" architecture (see
-    /// subdir) or for the current architecture if the target is `noarch`.
-    ///
-    /// For C++ packages these would be libraries to link against.
-    pub host_dependencies: Option<CondaOutputDependencies>,
-
-    /// Describes which run-exports should be ignored for this package.
-    pub ignore_run_exports: CondaOutputIgnoreRunExports,
-}
-
-#[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CondaOutputMetadata {
@@ -117,7 +92,8 @@ pub struct CondaOutputMetadata {
 
     /// A cache that might be shared between multiple outputs based on the
     /// contents of the cache.
-    pub cache: Option<CondaCacheMetadata>,
+    /// TODO: No yet supported, see `CondaCacheMetadata`.
+    // pub cache: Option<CondaCacheMetadata>,
 
     /// Explicit input globs for this specific output. If this is `None`,
     /// [`CondaOutputsResult::input_globs`] will be used.
@@ -207,3 +183,29 @@ pub struct CondaOutputRunExports {
     /// run
     pub strong_constrains: Vec<NamedSpecV1<BinaryPackageSpecV1>>,
 }
+
+// TODO: Multi-output caching is not yet supported.
+// #[serde_as]
+// #[derive(Debug, Serialize, Deserialize, Clone, Hash, Eq, PartialEq)]
+// #[serde(rename_all = "camelCase")]
+// pub struct CondaCacheMetadata {
+//     /// An optional name
+//     pub name: Option<String>,
+//
+//     /// The build dependencies of the package. These refer to the packages that
+//     /// should be installed in the "build" environment. The build environment
+//     /// contains packages for the current architecture that can be used to run
+//     /// tools on the current machine like compilers, code generators, etc.
+//     pub build_dependencies: Option<CondaOutputDependencies>,
+//
+//     /// The "host" dependencies of the package. These refer to the package that
+//     /// should be installed to be able to refer to them from the build process
+//     /// but not run them. They are installed for the "target" architecture (see
+//     /// subdir) or for the current architecture if the target is `noarch`.
+//     ///
+//     /// For C++ packages these would be libraries to link against.
+//     pub host_dependencies: Option<CondaOutputDependencies>,
+//
+//     /// Describes which run-exports should be ignored for this package.
+//     pub ignore_run_exports: CondaOutputIgnoreRunExports,
+// }
