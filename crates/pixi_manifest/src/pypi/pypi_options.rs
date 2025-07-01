@@ -2,8 +2,7 @@ use std::{collections::HashSet, hash::Hash, path::PathBuf};
 
 use indexmap::IndexSet;
 use pep508_rs::PackageName;
-use serde::ser::SerializeSeq;
-use serde::{Serialize, Serializer};
+use serde::{Serialize, Serializer, ser::SerializeSeq};
 use thiserror::Error;
 use url::Url;
 
@@ -95,7 +94,7 @@ pub enum NoBinary {
     /// Build all package from source
     All,
     /// Build specific packages from source
-    Packages(HashSet<pep508_rs::PackageName>),
+    Packages(IndexSet<pep508_rs::PackageName>),
 }
 
 impl NoBinary {

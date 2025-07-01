@@ -82,7 +82,7 @@ impl<'de> toml_span::Deserialize<'de> for NoBinary {
         if value.as_array().is_some() {
             match value.take() {
                 ValueInner::Array(array) => {
-                    let mut packages = HashSet::with_capacity(array.len());
+                    let mut packages = IndexSet::with_capacity(array.len());
                     for mut value in array {
                         packages.insert(Pep508PackageName::deserialize(&mut value)?.0);
                     }

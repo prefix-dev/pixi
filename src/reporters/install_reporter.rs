@@ -202,9 +202,9 @@ impl CombinedInstallReporterInner {
         cache_entry
     }
 
-    fn on_validate_complete(&mut self, _id: TransactionId, cache_entry: usize) {
+    fn on_validate_complete(&mut self, _id: TransactionId, validation_id: usize) {
         self.preparing_progress_bar
-            .on_validation_complete(cache_entry);
+            .on_validation_complete(validation_id);
     }
 
     fn on_download_start(&mut self, _id: TransactionId, cache_entry: usize) -> usize {
