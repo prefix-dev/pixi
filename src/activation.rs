@@ -282,6 +282,9 @@ pub async fn run_activation(
     };
 
     let activator_result = match tokio::task::spawn_blocking(move || {
+        // Current environment variables
+        let current_env = std::env::vars().collect::<HashMap<_, _>>();
+
         // Run and cache the activation script
         activator.run_activation(
             ActivationVariables {
@@ -294,8 +297,8 @@ pub async fn run_activation(
                 // Prepending environment paths so they get found first.
                 path_modification_behavior,
 
-                // TODO: what should we put here?
-                current_env: HashMap::default(),
+                // The current environment variables from the shell
+                current_env,
             },
             None,
         )
