@@ -8,7 +8,7 @@ Both tools can be installed via
 pixi global install pixi-pack pixi-unpack
 ```
 
-Or by downloading our pre-built binaries from the [releases page](https://github.com/quantco/pixi-pack/releases).
+Or by downloading our pre-built binaries from the [releases page](https://github.com/Quantco/pixi-pack/releases).
 
 Instead of installing `pixi-pack` and `pixi-unpack` globally, you can also use `pixi exec` to run `pixi-pack` in a temporary environment:
 
@@ -17,8 +17,8 @@ pixi exec pixi-pack
 pixi exec pixi-unpack environment.tar
 ```
 
-> [!NOTE]
-> You can also write `pixi pack` (and `pixi unpack`) if you have `pixi`, and `pixi-pack` and `pixi-unpack` installed globally.
+!!!note ""
+    You can also write `pixi pack` (and `pixi unpack`) if you have `pixi`, and `pixi-pack` and `pixi-unpack` installed globally.
 
 ![pixi-pack demo](https://raw.githubusercontent.com/quantco/pixi-pack/refs/heads/main/.github/assets/demo/demo-light.gif#only-light)
 ![pixi-pack demo](https://raw.githubusercontent.com/quantco/pixi-pack/refs/heads/main/.github/assets/demo/demo-dark.gif#only-dark)
