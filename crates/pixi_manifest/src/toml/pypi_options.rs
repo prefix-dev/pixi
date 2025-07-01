@@ -1,6 +1,7 @@
+use std::{path::PathBuf, str::FromStr};
+
 use indexmap::IndexSet;
 use pixi_toml::{TomlEnum, TomlFromStr, TomlWith};
-use std::{collections::HashSet, path::PathBuf, str::FromStr};
 use toml_span::{
     DeserError, ErrorKind, Value,
     de_helpers::{TableHelper, expected},
@@ -44,7 +45,7 @@ impl<'de> toml_span::Deserialize<'de> for NoBuild {
         if value.as_array().is_some() {
             match value.take() {
                 ValueInner::Array(array) => {
-                    let mut packages = HashSet::with_capacity(array.len());
+                    let mut packages = IndexSet::with_capacity(array.len());
                     for mut value in array {
                         packages.insert(Pep508PackageName::deserialize(&mut value)?.0);
                     }
@@ -82,7 +83,7 @@ impl<'de> toml_span::Deserialize<'de> for NoBinary {
         if value.as_array().is_some() {
             match value.take() {
                 ValueInner::Array(array) => {
-                    let mut packages = HashSet::with_capacity(array.len());
+                    let mut packages = IndexSet::with_capacity(array.len());
                     for mut value in array {
                         packages.insert(Pep508PackageName::deserialize(&mut value)?.0);
                     }
@@ -236,10 +237,11 @@ impl<'de> toml_span::Deserialize<'de> for NoBuildIsolation {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::toml::FromTomlStr;
     use insta::{assert_debug_snapshot, assert_snapshot};
     use pixi_test_utils::format_parse_error;
+
+    use super::*;
+    use crate::toml::FromTomlStr;
 
     #[test]
     fn test_empty() {
