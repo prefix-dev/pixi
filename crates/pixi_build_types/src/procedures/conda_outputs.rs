@@ -178,8 +178,7 @@ pub struct CondaOutputRunExports {
     /// the python_abi package
     pub noarch: Vec<NamedSpecV1<PackageSpecV1>>,
 
-    /// weak constrains apply a constrain dependency from host to build, or run
-    /// to host
+    /// weak constrains apply a constrain dependency from host to run
     pub weak_constrains: Vec<NamedSpecV1<BinaryPackageSpecV1>>,
 
     /// strong constrains apply a constrain dependency from build to host and
