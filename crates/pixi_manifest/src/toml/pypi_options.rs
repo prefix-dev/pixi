@@ -1,4 +1,4 @@
-use std::{collections::HashSet, path::PathBuf, str::FromStr};
+use std::{path::PathBuf, str::FromStr};
 
 use indexmap::IndexSet;
 use pixi_toml::{TomlEnum, TomlFromStr, TomlWith};
@@ -45,7 +45,7 @@ impl<'de> toml_span::Deserialize<'de> for NoBuild {
         if value.as_array().is_some() {
             match value.take() {
                 ValueInner::Array(array) => {
-                    let mut packages = HashSet::with_capacity(array.len());
+                    let mut packages = IndexSet::with_capacity(array.len());
                     for mut value in array {
                         packages.insert(Pep508PackageName::deserialize(&mut value)?.0);
                     }

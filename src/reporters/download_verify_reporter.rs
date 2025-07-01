@@ -312,7 +312,7 @@ impl BuildDownloadVerifyReporter {
 
     fn update(&mut self) {
         let entries = self.entries.read();
-        if !entries.values().any(|d| d.is_active()) {
+        if !entries.values().any(|d| d.is_active() || d.is_finished()) {
             // Don't do anything if nothing has started.
             return;
         }

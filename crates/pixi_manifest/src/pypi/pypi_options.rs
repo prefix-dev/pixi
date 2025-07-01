@@ -1,4 +1,4 @@
-use std::{collections::HashSet, hash::Hash, path::PathBuf};
+use std::{hash::Hash, path::PathBuf};
 
 use indexmap::IndexSet;
 use pep508_rs::PackageName;
@@ -61,7 +61,7 @@ pub enum NoBuild {
     All,
     /// Don't build sdist for specific packages
     // Todo: would be nice to check if these are actually used at some point
-    Packages(HashSet<pep508_rs::PackageName>),
+    Packages(IndexSet<pep508_rs::PackageName>),
 }
 
 impl NoBuild {
@@ -474,27 +474,27 @@ mod tests {
         assert_eq!(NoBuild::All.union(&NoBuild::None), NoBuild::All);
         assert_eq!(NoBuild::None.union(&NoBuild::All), NoBuild::All);
         assert_eq!(
-            NoBuild::All.union(&NoBuild::Packages(HashSet::from_iter([pkg1.clone()]))),
+            NoBuild::All.union(&NoBuild::Packages(IndexSet::from_iter([pkg1.clone()]))),
             NoBuild::All
         );
 
         // Case 2: One is `None`, result should be the other
         assert_eq!(NoBuild::None.union(&NoBuild::None), NoBuild::None);
         assert_eq!(
-            NoBuild::None.union(&NoBuild::Packages(HashSet::from_iter([pkg1.clone()]))),
-            NoBuild::Packages(HashSet::from_iter([pkg1.clone()]))
+            NoBuild::None.union(&NoBuild::Packages(IndexSet::from_iter([pkg1.clone()]))),
+            NoBuild::Packages(IndexSet::from_iter([pkg1.clone()]))
         );
         assert_eq!(
-            NoBuild::Packages(HashSet::from_iter([pkg1.clone()])).union(&NoBuild::None),
-            NoBuild::Packages(HashSet::from_iter([pkg1.clone()]))
+            NoBuild::Packages(IndexSet::from_iter([pkg1.clone()])).union(&NoBuild::None),
+            NoBuild::Packages(IndexSet::from_iter([pkg1.clone()]))
         );
 
         // Case 3: Both are `Packages`, result should be the union of the two
         assert_eq!(
-            NoBuild::Packages(HashSet::from_iter([pkg1.clone(), pkg2.clone()])).union(
-                &NoBuild::Packages(HashSet::from_iter([pkg2.clone(), pkg3.clone()]))
+            NoBuild::Packages(IndexSet::from_iter([pkg1.clone(), pkg2.clone()])).union(
+                &NoBuild::Packages(IndexSet::from_iter([pkg2.clone(), pkg3.clone()]))
             ),
-            NoBuild::Packages(HashSet::from_iter([
+            NoBuild::Packages(IndexSet::from_iter([
                 pkg1.clone(),
                 pkg2.clone(),
                 pkg3.clone()
@@ -512,27 +512,27 @@ mod tests {
         assert_eq!(NoBinary::All.union(&NoBinary::None), NoBinary::All);
         assert_eq!(NoBinary::None.union(&NoBinary::All), NoBinary::All);
         assert_eq!(
-            NoBinary::All.union(&NoBinary::Packages(HashSet::from_iter([pkg1.clone()]))),
+            NoBinary::All.union(&NoBinary::Packages(IndexSet::from_iter([pkg1.clone()]))),
             NoBinary::All
         );
 
         // Case 2: One is `None`, result should be the other
         assert_eq!(NoBinary::None.union(&NoBinary::None), NoBinary::None);
         assert_eq!(
-            NoBinary::None.union(&NoBinary::Packages(HashSet::from_iter([pkg1.clone()]))),
-            NoBinary::Packages(HashSet::from_iter([pkg1.clone()]))
+            NoBinary::None.union(&NoBinary::Packages(IndexSet::from_iter([pkg1.clone()]))),
+            NoBinary::Packages(IndexSet::from_iter([pkg1.clone()]))
         );
         assert_eq!(
-            NoBinary::Packages(HashSet::from_iter([pkg1.clone()])).union(&NoBinary::None),
-            NoBinary::Packages(HashSet::from_iter([pkg1.clone()]))
+            NoBinary::Packages(IndexSet::from_iter([pkg1.clone()])).union(&NoBinary::None),
+            NoBinary::Packages(IndexSet::from_iter([pkg1.clone()]))
         );
 
         // Case 3: Both are `Packages`, result should be the union of the two
         assert_eq!(
-            NoBinary::Packages(HashSet::from_iter([pkg1.clone(), pkg2.clone()])).union(
-                &NoBinary::Packages(HashSet::from_iter([pkg2.clone(), pkg3.clone()]))
+            NoBinary::Packages(IndexSet::from_iter([pkg1.clone(), pkg2.clone()])).union(
+                &NoBinary::Packages(IndexSet::from_iter([pkg2.clone(), pkg3.clone()]))
             ),
-            NoBinary::Packages(HashSet::from_iter([
+            NoBinary::Packages(IndexSet::from_iter([
                 pkg1.clone(),
                 pkg2.clone(),
                 pkg3.clone()
