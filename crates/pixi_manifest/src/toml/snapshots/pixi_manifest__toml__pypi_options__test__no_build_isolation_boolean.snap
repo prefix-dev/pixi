@@ -9,4 +9,5 @@ PypiOptions {
     no_build_isolation: All,
     index_strategy: None,
     no_build: None,
+    no_binary: None,
 }

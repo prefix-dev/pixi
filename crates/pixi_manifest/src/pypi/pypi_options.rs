@@ -84,6 +84,39 @@ impl NoBuild {
     }
 }
 
+/// Don't install pre-built wheels for all or certain packages
+#[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, strum::Display)]
+#[strum(serialize_all = "kebab-case")]
+#[serde(rename_all = "kebab-case")]
+pub enum NoBinary {
+    /// Use pre-built wheels for all package
+    #[default]
+    None,
+    /// Build all package from source
+    All,
+    /// Build specific packages from source
+    Packages(HashSet<pep508_rs::PackageName>),
+}
+
+impl NoBinary {
+    /// Merges two `NoBinary` together, according to the following rules
+    /// - If either is `All`, the result is `All`
+    /// - If either is `None`, the result is the other
+    /// - If both are `Packages`, the result is the union of the two
+    pub fn union(&self, other: &NoBinary) -> NoBinary {
+        match (self, other) {
+            (NoBinary::All, _) | (_, NoBinary::All) => NoBinary::All,
+            (NoBinary::None, _) => other.clone(),
+            (_, NoBinary::None) => self.clone(),
+            (NoBinary::Packages(packages), NoBinary::Packages(other_packages)) => {
+                let mut packages = packages.clone();
+                packages.extend(other_packages.iter().cloned());
+                NoBinary::Packages(packages)
+            }
+        }
+    }
+}
+
 /// Specific options for a PyPI registries
 #[derive(Debug, Clone, PartialEq, Serialize, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
@@ -101,6 +134,8 @@ pub struct PypiOptions {
     pub index_strategy: Option<IndexStrategy>,
     /// Don't build sdist for all or certain packages
     pub no_build: Option<NoBuild>,
+    /// Don't use pre-built wheels all or certain packages
+    pub no_binary: Option<NoBinary>,
 }
 
 /// Clones and deduplicates two iterators of values
@@ -124,6 +159,7 @@ impl PypiOptions {
         no_build_isolation: NoBuildIsolation,
         index_strategy: Option<IndexStrategy>,
         no_build: Option<NoBuild>,
+        no_binary: Option<NoBinary>,
     ) -> Self {
         Self {
             index_url: index,
@@ -132,6 +168,7 @@ impl PypiOptions {
             no_build_isolation,
             index_strategy,
             no_build,
+            no_binary,
         }
     }
 
@@ -236,6 +273,14 @@ impl PypiOptions {
             (None, None) => None,
         };
 
+        // Set the no-binary option
+        let no_binary = match (self.no_binary.as_ref(), other.no_binary.as_ref()) {
+            (Some(a), Some(b)) => Some(a.union(b)),
+            (Some(a), None) => Some(a.clone()),
+            (None, Some(b)) => Some(b.clone()),
+            (None, None) => None,
+        };
+
         Ok(PypiOptions {
             index_url: index,
             extra_index_urls: extra_indexes,
@@ -243,6 +288,7 @@ impl PypiOptions {
             no_build_isolation,
             index_strategy,
             no_build,
+            no_binary,
         })
     }
 }
@@ -396,6 +442,7 @@ mod tests {
             ]),
             index_strategy: None,
             no_build: None,
+            no_binary: Default::default(),
         };
 
         // Create the second set of options
@@ -409,6 +456,7 @@ mod tests {
             no_build_isolation: NoBuildIsolation::from_iter(["foo".parse().unwrap()]),
             index_strategy: None,
             no_build: Some(NoBuild::All),
+            no_binary: Default::default(),
         };
 
         // Merge the two options
@@ -456,6 +504,44 @@ mod tests {
     }
 
     #[test]
+    fn test_no_binary_union() {
+        let pkg1 = pep508_rs::PackageName::new("pkg1".to_string()).unwrap();
+        let pkg2 = pep508_rs::PackageName::new("pkg1".to_string()).unwrap();
+        let pkg3 = pep508_rs::PackageName::new("pkg1".to_string()).unwrap();
+
+        // Case 1: One is `All`, result should be `All`
+        assert_eq!(NoBinary::All.union(&NoBinary::None), NoBinary::All);
+        assert_eq!(NoBinary::None.union(&NoBinary::All), NoBinary::All);
+        assert_eq!(
+            NoBinary::All.union(&NoBinary::Packages(HashSet::from_iter([pkg1.clone()]))),
+            NoBinary::All
+        );
+
+        // Case 2: One is `None`, result should be the other
+        assert_eq!(NoBinary::None.union(&NoBinary::None), NoBinary::None);
+        assert_eq!(
+            NoBinary::None.union(&NoBinary::Packages(HashSet::from_iter([pkg1.clone()]))),
+            NoBinary::Packages(HashSet::from_iter([pkg1.clone()]))
+        );
+        assert_eq!(
+            NoBinary::Packages(HashSet::from_iter([pkg1.clone()])).union(&NoBinary::None),
+            NoBinary::Packages(HashSet::from_iter([pkg1.clone()]))
+        );
+
+        // Case 3: Both are `Packages`, result should be the union of the two
+        assert_eq!(
+            NoBinary::Packages(HashSet::from_iter([pkg1.clone(), pkg2.clone()])).union(
+                &NoBinary::Packages(HashSet::from_iter([pkg2.clone(), pkg3.clone()]))
+            ),
+            NoBinary::Packages(HashSet::from_iter([
+                pkg1.clone(),
+                pkg2.clone(),
+                pkg3.clone()
+            ]))
+        );
+    }
+
+    #[test]
     fn test_error_on_multiple_primary_indexes() {
         // Create the first set of options
         let opts = PypiOptions {
@@ -465,6 +551,7 @@ mod tests {
             no_build_isolation: NoBuildIsolation::default(),
             index_strategy: None,
             no_build: Default::default(),
+            no_binary: Default::default(),
         };
 
         // Create the second set of options
@@ -475,6 +562,7 @@ mod tests {
             no_build_isolation: NoBuildIsolation::default(),
             index_strategy: None,
             no_build: Default::default(),
+            no_binary: Default::default(),
         };
 
         // Merge the two options
@@ -493,6 +581,7 @@ mod tests {
             no_build_isolation: NoBuildIsolation::default(),
             index_strategy: Some(IndexStrategy::FirstIndex),
             no_build: Default::default(),
+            no_binary: Default::default(),
         };
 
         // Create the second set of options
@@ -503,6 +592,7 @@ mod tests {
             no_build_isolation: NoBuildIsolation::default(),
             index_strategy: Some(IndexStrategy::UnsafeBestMatch),
             no_build: Default::default(),
+            no_binary: Default::default(),
         };
 
         // Merge the two options
