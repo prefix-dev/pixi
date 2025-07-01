@@ -22,6 +22,7 @@ jobs:
   test_common_wheels:
     name: Test Installation of Common Wheels | ${{ inputs.arch }}
     runs-on: ${{ inputs.runs-on }}
+    timeout-minutes: 15
     env:
       TARGET_RELEASE: "${{ github.workspace }}/target/release"
       LOGS_DIR: "${{ github.workspace }}/tests/wheel_tests/.logs"
