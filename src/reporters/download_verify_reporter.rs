@@ -1,5 +1,6 @@
 use std::{
     borrow::Cow,
+    collections::HashMap,
     fmt::Write,
     sync::Arc,
     time::{Duration, Instant},
@@ -16,7 +17,8 @@ pub struct BuildDownloadVerifyReporter {
     multi_progress: MultiProgress,
     pb: ProgressBar,
     title: Option<String>,
-    entries: Arc<RwLock<Vec<Entry>>>,
+    entries: Arc<RwLock<HashMap<usize, Entry>>>,
+    next_entry_id: usize,
 }
 
 struct Entry {
@@ -95,7 +97,8 @@ impl BuildDownloadVerifyReporter {
             multi_progress,
             pb,
             title: Some(title),
-            entries: Arc::new(RwLock::new(Vec::new())),
+            entries: Arc::new(RwLock::new(HashMap::new())),
+            next_entry_id: 0,
         }
     }
 
@@ -112,7 +115,7 @@ impl BuildDownloadVerifyReporter {
         }
 
         // Clear all items that have finished processing.
-        entries.retain(|item| !item.is_finished());
+        entries.retain(|_, item| !item.is_finished());
 
         // Clear or update the progress bar.
         if entries.is_empty() {
@@ -132,12 +135,16 @@ impl BuildDownloadVerifyReporter {
 
     pub fn on_build_queued(&mut self, spec: &SourceBuildSpec) -> usize {
         let mut entries = self.entries.write();
-        let id = entries.len();
-        entries.push(Entry {
-            name: format!("building {}", spec.source.package_record.name.as_source()),
-            size: None,
-            state: EntryState::Pending,
-        });
+        let id = self.next_entry_id;
+        self.next_entry_id += 1;
+        entries.insert(
+            id,
+            Entry {
+                name: format!("building {}", spec.source.package_record.name.as_source()),
+                size: None,
+                state: EntryState::Pending,
+            },
+        );
         drop(entries);
         self.update();
         id
@@ -145,19 +152,25 @@ impl BuildDownloadVerifyReporter {
 
     pub fn on_build_start(&mut self, index: usize) {
         let mut entries = self.entries.write();
-        entries[index].state = EntryState::Building;
+        entries
+            .get_mut(&index)
+            .expect("entry is missing from tracker")
+            .state = EntryState::Building;
         drop(entries);
         self.update();
     }
 
     pub fn on_build_finished(&mut self, index: usize) {
         let mut entries = self.entries.write();
-        match &mut entries[index].state {
+        let entry = entries
+            .get_mut(&index)
+            .expect("entry is missing from tracker");
+        match entry.state {
             EntryState::Building => {
-                entries[index].state = EntryState::Finished { download: None };
+                entry.state = EntryState::Finished { download: None };
             }
             EntryState::Pending | EntryState::Validating => {
-                entries[index].state = EntryState::Finished { download: None };
+                entry.state = EntryState::Finished { download: None };
             }
             _ => {}
         };
@@ -167,12 +180,16 @@ impl BuildDownloadVerifyReporter {
 
     pub fn on_entry_start(&mut self, record: &RepoDataRecord) -> usize {
         let mut entries = self.entries.write();
-        let id = entries.len();
-        entries.push(Entry {
-            name: record.package_record.name.as_normalized().to_string(),
-            size: record.package_record.size,
-            state: EntryState::Pending,
-        });
+        let id = self.next_entry_id;
+        self.next_entry_id += 1;
+        entries.insert(
+            id,
+            Entry {
+                name: record.package_record.name.as_normalized().to_string(),
+                size: record.package_record.size,
+                state: EntryState::Pending,
+            },
+        );
         drop(entries);
         self.update();
         id
@@ -180,24 +197,32 @@ impl BuildDownloadVerifyReporter {
 
     pub fn on_validation_start(&mut self, index: usize) {
         let mut entries = self.entries.write();
-        entries[index].state = EntryState::Validating;
+        entries
+            .get_mut(&index)
+            .expect("entry is missing from tracker")
+            .state = EntryState::Validating;
         drop(entries);
         self.update();
     }
 
     pub fn on_validation_complete(&mut self, index: usize) {
         let mut entries = self.entries.write();
-        let EntryState::Validating = &mut entries[index].state else {
+        let entry = entries
+            .get_mut(&index)
+            .expect("entry is missing from tracker");
+        let EntryState::Validating = entry.state else {
             panic!("Expected entry to be in downloading state");
         };
-        entries[index].state = EntryState::Finished { download: None };
+        entry.state = EntryState::Finished { download: None };
         drop(entries);
         self.update();
     }
 
     pub fn on_download_start(&mut self, index: usize) {
         let mut entries = self.entries.write();
-        let entry = &mut entries[index];
+        let entry = entries
+            .get_mut(&index)
+            .expect("entry is missing from tracker");
         entry.state = EntryState::Downloading {
             started: Instant::now(),
             total_bytes: None,
@@ -214,11 +239,14 @@ impl BuildDownloadVerifyReporter {
         new_total_bytes: Option<u64>,
     ) {
         let mut entries = self.entries.write();
+        let entry = entries
+            .get_mut(&index)
+            .expect("entry is missing from tracker");
         let EntryState::Downloading {
             total_bytes,
             bytes_downloaded,
             ..
-        } = &mut entries[index].state
+        } = &mut entry.state
         else {
             panic!("Expected entry to be in downloading state");
         };
@@ -232,15 +260,18 @@ impl BuildDownloadVerifyReporter {
 
     pub fn on_download_complete(&mut self, index: usize) {
         let mut entries = self.entries.write();
+        let entry = entries
+            .get_mut(&index)
+            .expect("entry is missing from tracker");
         let EntryState::Downloading {
             total_bytes,
             bytes_downloaded,
             started,
-        } = &mut entries[index].state
+        } = &mut entry.state
         else {
             panic!("Expected entry to be in downloading state");
         };
-        entries[index].state = EntryState::Finished {
+        entry.state = EntryState::Finished {
             download: Some((
                 *started,
                 Instant::now(),
@@ -253,13 +284,16 @@ impl BuildDownloadVerifyReporter {
 
     pub fn on_entry_finished(&mut self, index: usize) {
         let mut entries = self.entries.write();
-        match &entries[index].state {
+        let entry = entries
+            .get_mut(&index)
+            .expect("entry is missing from tracker");
+        match &entry.state {
             EntryState::Downloading {
                 bytes_downloaded,
                 total_bytes,
                 started,
             } => {
-                entries[index].state = EntryState::Finished {
+                entry.state = EntryState::Finished {
                     download: Some((
                         *started,
                         Instant::now(),
@@ -268,7 +302,7 @@ impl BuildDownloadVerifyReporter {
                 };
             }
             EntryState::Pending | EntryState::Validating => {
-                entries[index].state = EntryState::Finished { download: None };
+                entry.state = EntryState::Finished { download: None };
             }
             _ => {}
         };
@@ -278,16 +312,16 @@ impl BuildDownloadVerifyReporter {
 
     fn update(&mut self) {
         let entries = self.entries.read();
-        if !entries.iter().any(|d| d.is_active()) {
+        if !entries.values().any(|d| d.is_active() || d.is_finished()) {
             // Don't do anything if nothing has started.
             return;
         }
 
-        let total_bytes = entries.iter().map(|d| d.size()).sum::<u64>();
-        let bytes_downloaded = entries.iter().map(|d| d.progress()).sum::<u64>();
+        let total_bytes = entries.values().map(|d| d.size()).sum::<u64>();
+        let bytes_downloaded = entries.values().map(|d| d.progress()).sum::<u64>();
 
         // Find the biggest pending entry
-        let (first, running_count, is_downloading) = find_max_and_multiple(&entries);
+        let (first, running_count, is_downloading) = find_max_and_multiple(entries.values());
         let wide_msg = match (first, running_count) {
             (None, _) => Cow::Borrowed(""),
             (Some(first), 1) => Cow::Borrowed(first.name.as_str()),
@@ -339,9 +373,12 @@ impl BuildDownloadVerifyReporter {
 /// The function calculates the total active download time from a slice of
 /// `Entry` items, considering their start and finish times, and
 /// returns the result as a `Duration`.
-fn total_duration_and_size(items: &[Entry], now: Instant) -> (Duration, u64) {
+fn total_duration_and_size<'a>(
+    items: impl IntoIterator<Item = &'a Entry>,
+    now: Instant,
+) -> (Duration, u64) {
     let mut intervals: Vec<(Instant, Instant, u64)> = items
-        .iter()
+        .into_iter()
         .filter_map(|d| match d.state {
             EntryState::Downloading {
                 started,
@@ -383,8 +420,10 @@ fn total_duration_and_size(items: &[Entry], now: Instant) -> (Duration, u64) {
     (total, total_size)
 }
 
-fn find_max_and_multiple(entries: &[Entry]) -> (Option<&Entry>, usize, bool) {
-    let mut iter = entries.iter().filter(|entry| entry.is_active());
+fn find_max_and_multiple<'a>(
+    entries: impl IntoIterator<Item = &'a Entry>,
+) -> (Option<&'a Entry>, usize, bool) {
+    let mut iter = entries.into_iter().filter(|entry| entry.is_active());
     let Some(mut max) = iter.next() else {
         return (None, 0, false);
     };
@@ -404,13 +443,13 @@ fn find_max_and_multiple(entries: &[Entry]) -> (Option<&Entry>, usize, bool) {
 /// while taking into account the total active time of all downloads.
 #[derive(Clone)]
 pub(super) struct DurationTracker {
-    inner: Arc<RwLock<Vec<Entry>>>,
+    inner: Arc<RwLock<HashMap<usize, Entry>>>,
     duration: Duration,
     len: u64,
 }
 
 impl DurationTracker {
-    fn new(inner: Arc<RwLock<Vec<Entry>>>) -> Self {
+    fn new(inner: Arc<RwLock<HashMap<usize, Entry>>>) -> Self {
         Self {
             inner,
             duration: Duration::ZERO,
@@ -426,7 +465,7 @@ impl ProgressTracker for DurationTracker {
 
     fn tick(&mut self, _state: &ProgressState, now: std::time::Instant) {
         let inner = self.inner.read();
-        let (duration, len) = total_duration_and_size(&inner, now);
+        let (duration, len) = total_duration_and_size(inner.values(), now);
         self.duration = duration;
         self.len = len;
     }
@@ -450,12 +489,12 @@ impl ProgressTracker for DurationTracker {
 }
 
 struct PosCount {
-    trackers: Arc<RwLock<Vec<Entry>>>,
+    trackers: Arc<RwLock<HashMap<usize, Entry>>>,
     count: usize,
 }
 
 impl PosCount {
-    pub fn new(trackers: Arc<RwLock<Vec<Entry>>>) -> Self {
+    pub fn new(trackers: Arc<RwLock<HashMap<usize, Entry>>>) -> Self {
         Self { trackers, count: 0 }
     }
 }
@@ -471,7 +510,7 @@ impl ProgressTracker for PosCount {
         self.count = self
             .trackers
             .read()
-            .iter()
+            .values()
             .filter(|item| item.is_finished())
             .count();
     }
@@ -482,12 +521,12 @@ impl ProgressTracker for PosCount {
 }
 
 struct TotalCount {
-    trackers: Arc<RwLock<Vec<Entry>>>,
+    trackers: Arc<RwLock<HashMap<usize, Entry>>>,
     count: usize,
 }
 
 impl TotalCount {
-    pub fn new(trackers: Arc<RwLock<Vec<Entry>>>) -> Self {
+    pub fn new(trackers: Arc<RwLock<HashMap<usize, Entry>>>) -> Self {
         Self { trackers, count: 0 }
     }
 }
