@@ -106,6 +106,44 @@ impl<'de> toml_span::Deserialize<'de> for NoBinary {
     }
 }
 
+impl<'de> toml_span::Deserialize<'de> for NoBinary {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        // It can be either `true` or `false` or an array of strings
+        if value.as_bool().is_some() {
+            if bool::deserialize(value)? {
+                return Ok(NoBinary::All);
+            } else {
+                return Ok(NoBinary::None);
+            }
+        }
+        // We assume it's an array of strings
+        if value.as_array().is_some() {
+            match value.take() {
+                ValueInner::Array(array) => {
+                    let mut packages = HashSet::with_capacity(array.len());
+                    for mut value in array {
+                        packages.insert(Pep508PackageName::deserialize(&mut value)?.0);
+                    }
+                    Ok(NoBinary::Packages(packages))
+                }
+                _ => Err(expected(
+                    "an array of packages e.g. [\"foo\", \"bar\"]",
+                    value.take(),
+                    value.span,
+                )
+                .into()),
+            }
+        } else {
+            Err(expected(
+                r#"either "all", "none" or an array of packages e.g. ["foo", "bar"] "#,
+                value.take(),
+                value.span,
+            )
+            .into())
+        }
+    }
+}
+
 impl<'de> toml_span::Deserialize<'de> for PypiOptions {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         let mut th = TableHelper::new(value)?;
