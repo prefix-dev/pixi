@@ -16,6 +16,7 @@ pixi_build_types = { workspace = true }
 pixi_manifest = { workspace = true }
 pixi_spec = { workspace = true }
 rattler_conda_types = { workspace = true }
+xxhash-rust = { workspace = true, features = ["xxh3"] }
 
 [dev-dependencies]
 insta = { workspace = true, features = ["json"] }

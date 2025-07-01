@@ -107,16 +107,16 @@ nav:
   - Home: index.md
   - Getting Started:
       - Installation: installation.md
-      - First project: first_project.md
+      - First Project: first_project.md
       - Basic Usage: getting_started.md
   - Tutorials:
       - Python:
           - Basic Usage: python/tutorial.md
-          - Pyproject.toml: python/pyproject_toml.md
+          - pyproject.toml: python/pyproject_toml.md
           - Pytorch Installation: python/pytorch.md
       - ROS 2: tutorials/ros2.md
       - Rust: tutorials/rust.md
-      - Switching from:
+      - Switching From...:
           - Poetry: switching_from/poetry.md
           - Conda/Mamba: switching_from/conda.md
       - Multi Environment: tutorials/multi_environment.md
@@ -126,13 +126,14 @@ nav:
       - Tasks: workspace/advanced_tasks.md
       - Multi Platform: workspace/multi_platform_configuration.md
       - Multi Environment: workspace/multi_environment.md
-      - Lockfile: workspace/lockfile.md
+      - Lock File: workspace/lockfile.md
       - System Requirements: workspace/system_requirements.md
+      - Conda & PyPI: concepts/conda_pypi.md
       - Global Tools:
           - Manifest: global_tools/manifest.md
           - Trampolines: global_tools/trampolines.md
   - Building:
-      - Getting started: build/getting_started.md
+      - Getting Started: build/getting_started.md
       - Tutorials:
           - Building a Python Package: build/python.md
           - Building a C++ Package: build/cpp.md
@@ -155,11 +156,14 @@ nav:
           - JupyterLab: integration/editor/jupyterlab.md
       - Continuous Integration:
           - GitHub Actions: integration/ci/github_actions.md
-          - Lockfile Updates: integration/ci/updates_github_actions.md
+          - Pixi Diff-to-markdown: integration/ci/updates_github_actions.md
       - Extensions:
           - Introduction: integration/extensions/introduction.md
           - Pixi Diff: integration/extensions/pixi_diff.md
+          - Pixi Diff-to-markdown: integration/ci/updates_github_actions.md
+          - Pixi Inject: integration/extensions/pixi_inject.md
           - Pixi Install-to-prefix: integration/extensions/pixi_install_to_prefix.md
+          - Pixi Pack: deployment/pixi_pack.md
       - Third Party:
           - Direnv: integration/third_party/direnv.md
           - Starship: integration/third_party/starship.md

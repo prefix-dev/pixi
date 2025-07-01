@@ -87,7 +87,7 @@ git add FILES_YOU_CHANGED
 # This is the conventional commit convention:
 git commit -m "<type>[optional scope]: <description>"
 # An example:
-git commit -m "feat: add xxx to the pixi.toml"
+git commit -m "feat(exec): add xxx option"
 ```
 
 ## Color decisions in the ui code

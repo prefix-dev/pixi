@@ -230,6 +230,19 @@ impl InstantiateToolEnvironmentSpec {
             .await
             .map_err_with(Box::new)
             .map_err_with(InstantiateToolEnvironmentError::SolveEnvironment)?;
+
+        if tracing::event_enabled!(tracing::Level::INFO) {
+            let packages_str = solved_environment
+                .iter()
+                .map(|p| {
+                    let record = p.package_record();
+                    format!("{}={}", record.name.as_normalized(), record.version)
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            tracing::info!("Packages in tool environment: {}", packages_str);
+        }
+
         // Ensure that solution contains matching api version package
         if !solved_environment
             .iter()
