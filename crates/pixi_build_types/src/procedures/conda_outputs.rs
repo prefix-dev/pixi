@@ -22,7 +22,7 @@ pub const METHOD_NAME: &str = "conda/outputs";
 /// Parameters for the `conda/outputs` request.
 ///
 /// The result of this request should be a list of packages that can be built by
-/// this particular backend.
+/// this particular source dependency.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CondaOutputsParams {
