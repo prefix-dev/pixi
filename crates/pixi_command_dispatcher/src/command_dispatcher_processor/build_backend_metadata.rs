@@ -14,7 +14,7 @@ impl CommandDispatcherProcessor {
     /// Called when a [`crate::command_dispatcher::BuildBackendMetadataTask`]
     /// task was received.
     pub(crate) fn on_build_backend_metadata(&mut self, task: BuildBackendMetadataTask) {
-        // Lookup the id of the source metadata to avoid deduplication.
+        // Lookup the id of the source metadata to avoid duplication.
         let source_metadata_id = {
             match self.build_backend_metadata_ids.get(&task.spec) {
                 Some(id) => *id,
