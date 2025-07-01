@@ -6,6 +6,7 @@ use pixi_build_types::{
         conda_outputs::{CondaOutputsParams, CondaOutputsResult},
     },
 };
+use pixi_build_types::procedures::conda_build_v2::{CondaBuildV2Params, CondaBuildV2Result};
 
 mod stderr;
 
@@ -70,13 +71,27 @@ impl Backend {
         }
     }
 
+    pub async fn conda_build_v2<W: BackendOutputStream + Send + 'static>(
+        &self,
+        params: CondaBuildV2Params,
+        output_stream: W,
+    ) -> Result<CondaBuildV2Result, CommunicationError> {
+        match &self.inner {
+            BackendImplementation::JsonRpc(json_rpc) => {
+                json_rpc.conda_build_v2(params, output_stream).await
+            }
+        }
+    }
+
     /// Returns the outputs that this backend can produce.
     pub async fn conda_outputs(
         &self,
         params: CondaOutputsParams,
     ) -> Result<CondaOutputsResult, CommunicationError> {
         assert!(
-            self.api_version.supports_conda_outputs(),
+            self.capabilities()
+                .provides_conda_outputs
+                .unwrap_or(false),
             "This backend does not support the conda outputs procedure"
         );
         match &self.inner {

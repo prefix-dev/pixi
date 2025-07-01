@@ -95,7 +95,7 @@ pub async fn simple_test() {
             records: records.clone(),
             prefix: Prefix::create(&prefix_dir).unwrap(),
             installed: None,
-            target_platform: tool_platform,
+            build_environment: build_env,
             force_reinstall: Default::default(),
             channels: vec![
                 Url::from_str("https://prefix.dev/conda-forge")

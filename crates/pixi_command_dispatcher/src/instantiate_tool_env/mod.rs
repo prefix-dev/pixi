@@ -186,7 +186,6 @@ impl InstantiateToolEnvironmentSpec {
 
         // Start by solving the environment.
         let name = self.requirement.0.as_source().to_string();
-        let target_platform = self.build_environment.host_platform;
         let solved_environment = command_queue
             .solve_pixi_environment(PixiEnvironmentSpec {
                 name: Some(name.clone()),
@@ -196,7 +195,7 @@ impl InstantiateToolEnvironmentSpec {
                     .chain([self.requirement.clone()])
                     .collect(),
                 constraints,
-                build_environment: self.build_environment,
+                build_environment: self.build_environment.clone(),
                 exclude_newer: self.exclude_newer,
                 channel_config: self.channel_config.clone(),
                 channels: self.channels.clone(),
@@ -250,7 +249,7 @@ impl InstantiateToolEnvironmentSpec {
                 records: solved_environment,
                 prefix: prefix.clone(),
                 installed: None,
-                target_platform,
+                build_environment: self.build_environment,
                 force_reinstall: Default::default(),
                 channels: self.channels,
                 channel_config: self.channel_config,

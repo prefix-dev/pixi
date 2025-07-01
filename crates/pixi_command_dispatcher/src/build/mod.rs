@@ -2,6 +2,8 @@
 
 mod build_cache;
 mod build_environment;
+pub mod conversion;
+mod dependencies;
 mod move_file;
 pub(crate) mod source_metadata_cache;
 mod work_dir_key;
@@ -13,6 +15,7 @@ pub use build_cache::{
     BuildCache, BuildCacheEntry, BuildCacheError, BuildInput, CachedBuild, CachedBuildSourceInfo,
 };
 pub use build_environment::BuildEnvironment;
+pub use dependencies::{Dependencies, DependenciesError, PixiRunExports};
 pub(crate) use move_file::{MoveError, move_file};
 use pixi_record::PinnedSourceSpec;
 use url::Url;

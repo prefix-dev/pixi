@@ -16,6 +16,9 @@ pub struct BackendCapabilities {
 
     /// Whether the backend provides the `conda/outputs` API.
     pub provides_conda_outputs: Option<bool>,
+
+    /// Whether the backend provides the `conda/build_v2` API.
+    pub provides_conda_build_v2: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

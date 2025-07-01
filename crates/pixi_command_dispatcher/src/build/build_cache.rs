@@ -4,7 +4,7 @@ use std::{
     io::SeekFrom,
     path::PathBuf,
 };
-
+use std::path::Path;
 use crate::build::{MoveError, move_file, source_checkout_cache_key};
 use async_fd_lock::{LockWrite, RwLockWriteGuard};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
@@ -203,6 +203,11 @@ pub struct BuildCacheEntry {
 }
 
 impl BuildCacheEntry {
+    /// The directory where the cache is stored.
+    pub fn cache_dir(&self) -> &Path {
+        &self.cache_dir
+    }
+
     /// Consumes this instance and writes the given metadata to the cache.
     pub async fn insert(
         mut self,

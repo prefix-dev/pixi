@@ -67,11 +67,6 @@ impl PixiBuildApiVersion {
     pub fn current() -> Self {
         PixiBuildApiVersion(PIXI_BUILD_API_VERSION_UPPER - 1)
     }
-
-    /// Returns true if the Pixi Build API version supports the `conda/outputs` call.
-    pub fn supports_conda_outputs(&self) -> bool {
-        self.0 >= 1
-    }
 }
 
 /// A platform and associated virtual packages
