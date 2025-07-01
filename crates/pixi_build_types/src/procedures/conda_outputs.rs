@@ -6,14 +6,14 @@
 //!
 //! This API was introduced in Pixi Build API version 1.
 
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::PathBuf,
+};
 use ordermap::OrderSet;
 use rattler_conda_types::{NoArchType, PackageName, Platform, VersionWithSource};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use std::{
-    collections::{BTreeSet, HashMap},
-    path::PathBuf,
-};
 
 use crate::{BinaryPackageSpecV1, PackageSpecV1, project_model::NamedSpecV1};
 
@@ -33,7 +33,7 @@ pub struct CondaOutputsParams {
     pub host_platform: Platform,
 
     /// The possible variants by the pixi workspace.
-    pub variant_configuration: Option<HashMap<String, Vec<String>>>,
+    pub variant_configuration: Option<BTreeMap<String, Vec<String>>>,
 
     /// A directory that can be used by the backend to store files for
     /// subsequent requests. This directory is unique for each separate source
@@ -129,10 +129,13 @@ pub struct CondaOutputMetadata {
     /// Any PURL (Package URL) that is associated with this package.
     pub purls: Option<OrderSet<rattler_conda_types::PackageUrl>>,
 
-    /// Optionally, a path within the environment of the site-packages directory.
-    /// This field is only present for "python" interpreter packages.
-    /// This field was introduced with <https://github.com/conda/ceps/blob/main/cep-17.md>.
+    /// Optionally, a path within the environment of the site-packages
+    /// directory. This field is only present for "python" interpreter
+    /// packages. This field was introduced with <https://github.com/conda/ceps/blob/main/cep-17.md>.
     pub python_site_packages_path: Option<String>,
+
+    /// The variants that were used for this output.
+    pub variant: BTreeMap<String, String>,
 }
 
 /// Describes dependencies, constraints and source dependencies for a particular
@@ -194,17 +197,17 @@ pub struct CondaOutputRunExports {
 //     /// An optional name
 //     pub name: Option<String>,
 //
-//     /// The build dependencies of the package. These refer to the packages that
-//     /// should be installed in the "build" environment. The build environment
-//     /// contains packages for the current architecture that can be used to run
-//     /// tools on the current machine like compilers, code generators, etc.
-//     pub build_dependencies: Option<CondaOutputDependencies>,
+//     /// The build dependencies of the package. These refer to the packages
+// that     /// should be installed in the "build" environment. The build
+// environment     /// contains packages for the current architecture that can
+// be used to run     /// tools on the current machine like compilers, code
+// generators, etc.     pub build_dependencies: Option<CondaOutputDependencies>,
 //
-//     /// The "host" dependencies of the package. These refer to the package that
-//     /// should be installed to be able to refer to them from the build process
-//     /// but not run them. They are installed for the "target" architecture (see
-//     /// subdir) or for the current architecture if the target is `noarch`.
-//     ///
+//     /// The "host" dependencies of the package. These refer to the package
+// that     /// should be installed to be able to refer to them from the build
+// process     /// but not run them. They are installed for the "target"
+// architecture (see     /// subdir) or for the current architecture if the
+// target is `noarch`.     ///
 //     /// For C++ packages these would be libraries to link against.
 //     pub host_dependencies: Option<CondaOutputDependencies>,
 //
