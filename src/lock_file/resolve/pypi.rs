@@ -617,7 +617,9 @@ enum GetUrlOrPathError {
     InvalidUrl(#[from] ToUrlError),
 }
 
-/// Convert an absolute path to a relative path from the project root if possible
+/// Convert an absolute path to a path relative to the project root if it's inside it,
+/// prefixing the result with `./`. If the path lies outside the project root,
+/// return the original absolute path unchanged.
 fn make_relative_or_absolute(
     absolute: PathBuf,
     abs_project_root: &Path,

@@ -119,6 +119,49 @@ pub fn parse_hash_from_url_fragment(
     Ok(None)
 }
 
+/// Updates or adds a hash parameter to a URL fragment while preserving other parameters
+///
+/// For example:
+/// - "egg=foo" + sha256 hash -> "egg=foo&sha256=abc123"
+/// - "sha256=old&egg=foo" + new sha256 -> "sha256=new&egg=foo"
+/// - "" + sha256 hash -> "sha256=abc123"
+pub fn update_fragment_with_hash(fragment: Option<&str>, hash: &PackageHashes) -> String {
+    // Convert hash to fragment format
+    let hash_param = match hash {
+        PackageHashes::Sha256(sha256) => format!("sha256={:x}", sha256),
+        PackageHashes::Md5(md5) => format!("md5={:x}", md5),
+        PackageHashes::Md5Sha256(_md5, sha256) => {
+            // Prefer SHA256 for direct URLs
+            format!("sha256={:x}", sha256)
+        }
+    };
+
+    match fragment {
+        None | Some("") => hash_param,
+        Some(existing) => {
+            // Parse existing parameters
+            let mut params: Vec<String> = existing.split('&').map(|s| s.to_string()).collect();
+            let mut hash_updated = false;
+
+            // Update existing hash parameter if present
+            for param in &mut params {
+                if param.starts_with("sha256=") || param.starts_with("md5=") {
+                    *param = hash_param.clone();
+                    hash_updated = true;
+                    break;
+                }
+            }
+
+            // If no hash parameter was found, add it
+            if !hash_updated {
+                params.push(hash_param);
+            }
+
+            params.join("&")
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -161,5 +204,81 @@ mod tests {
         // Invalid hex
         let result = parse_hash_from_url_fragment("sha256=xyz", &"test-package");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_update_fragment_with_hash() {
+        let sha256_hash = parse_digest_from_hex::<Sha256>(
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        )
+        .unwrap();
+        let md5_hash = parse_digest_from_hex::<Md5>("d41d8cd98f00b204e9800998ecf8427e").unwrap();
+
+        // Test 1: No existing fragment
+        let result = update_fragment_with_hash(None, &PackageHashes::Sha256(sha256_hash));
+        assert_eq!(
+            result,
+            "sha256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+
+        // Test 2: Empty fragment
+        let result = update_fragment_with_hash(Some(""), &PackageHashes::Sha256(sha256_hash));
+        assert_eq!(
+            result,
+            "sha256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+
+        // Test 3: Fragment with egg parameter
+        let result =
+            update_fragment_with_hash(Some("egg=mypackage"), &PackageHashes::Sha256(sha256_hash));
+        assert_eq!(
+            result,
+            "egg=mypackage&sha256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+
+        // Test 4: Fragment with multiple parameters
+        let result = update_fragment_with_hash(
+            Some("egg=mypackage&subdirectory=src"),
+            &PackageHashes::Sha256(sha256_hash),
+        );
+        assert_eq!(
+            result,
+            "egg=mypackage&subdirectory=src&sha256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+
+        // Test 5: Fragment with existing sha256 hash
+        let result = update_fragment_with_hash(
+            Some("sha256=oldhash&egg=mypackage"),
+            &PackageHashes::Sha256(sha256_hash),
+        );
+        assert_eq!(
+            result,
+            "sha256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855&egg=mypackage"
+        );
+
+        // Test 6: Fragment with existing md5 hash, updating with sha256
+        let result = update_fragment_with_hash(
+            Some("md5=oldhash&egg=mypackage"),
+            &PackageHashes::Sha256(sha256_hash),
+        );
+        assert_eq!(
+            result,
+            "sha256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855&egg=mypackage"
+        );
+
+        // Test 7: MD5 hash
+        let result =
+            update_fragment_with_hash(Some("egg=mypackage"), &PackageHashes::Md5(md5_hash));
+        assert_eq!(result, "egg=mypackage&md5=d41d8cd98f00b204e9800998ecf8427e");
+
+        // Test 8: Md5Sha256 hash (should prefer SHA256)
+        let result = update_fragment_with_hash(
+            Some("egg=mypackage"),
+            &PackageHashes::Md5Sha256(md5_hash, sha256_hash),
+        );
+        assert_eq!(
+            result,
+            "egg=mypackage&sha256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
     }
 }

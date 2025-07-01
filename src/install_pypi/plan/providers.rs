@@ -79,12 +79,20 @@ impl<'a> CachedDistProvider<'a> for RegistryWheelIndex<'a> {
 
             // If we have an expected hash, verify it matches
             if let Some(expected) = expected_hash {
-                // Check if any of the cached hashes match the expected hash
-                let has_matching_hash = entry
-                    .dist
-                    .hashes
-                    .iter()
-                    .any(|hash| hash_matches_expected(hash, hash.algorithm(), expected));
+                // Determine which hash algorithms are required and ensure each matches
+                let required_algorithms = match *expected {
+                    rattler_lock::PackageHashes::Md5Sha256(_, _) => {
+                        vec![HashAlgorithm::Md5, HashAlgorithm::Sha256]
+                    }
+                    rattler_lock::PackageHashes::Md5(_) => vec![HashAlgorithm::Md5],
+                    rattler_lock::PackageHashes::Sha256(_) => vec![HashAlgorithm::Sha256],
+                };
+                let has_matching_hash = required_algorithms.iter().all(|algorithm| {
+                    entry.dist.hashes.iter().any(|hash| {
+                        hash.algorithm() == *algorithm
+                            && hash_matches_expected(hash, *algorithm, expected)
+                    })
+                });
 
                 if !has_matching_hash {
                     return false;
