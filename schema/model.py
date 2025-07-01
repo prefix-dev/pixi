@@ -599,6 +599,11 @@ class PyPIOptions(StrictBaseModel):
         description="Packages that should NOT be built",
         examples=["true", "false"],
     )
+    no_binary: bool | list[PyPIPackageName] | None = Field(
+        None,
+        description="Don't use pre-built wheels for these packages",
+        examples=["true", "false"],
+    )
 
 
 #######################

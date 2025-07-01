@@ -21,9 +21,12 @@ outputs:
             - echo "dummy-aa on windows" > $PREFIX/bin/dummy-aa.bat
             - echo "nested dummy on windows" > $PREFIX/nested/dummy.bat
           else:
-            - echo "dummy-a on unix" > $PREFIX/bin/dummy-a
-            - echo "dummy-aa on unix" > $PREFIX/bin/dummy-aa
-            - echo "nested dummy on unix" > $PREFIX/nested/dummy.sh
+            - echo "#!/usr/bin/env bash" > $PREFIX/bin/dummy-a
+            - echo "#!/usr/bin/env bash" > $PREFIX/bin/dummy-aa
+            - echo "#!/usr/bin/env bash" > $PREFIX/nested/dummy-sh
+            - echo "dummy-a on unix" >> $PREFIX/bin/dummy-a
+            - echo "dummy-aa on unix" >> $PREFIX/bin/dummy-aa
+            - echo "nested dummy on unix" >> $PREFIX/nested/dummy.sh
             - chmod +x $PREFIX/bin/dummy-a
             - chmod +x $PREFIX/bin/dummy-aa
             - chmod +x $PREFIX/nested/dummy.sh
@@ -39,7 +42,8 @@ outputs:
           then:
             - echo "dummy-b on windows" > $PREFIX/bin/dummy-b.bat
           else:
-            - echo "dummy-b on unix" > $PREFIX/bin/dummy-b
+            - echo "#!/usr/bin/env bash" > $PREFIX/bin/dummy-b
+            - echo "echo dummy-b on unix" >> $PREFIX/bin/dummy-b
             - chmod +x $PREFIX/bin/dummy-b
 
   - package:
@@ -53,7 +57,8 @@ outputs:
           then:
             - echo "dummy-c on windows" > $PREFIX/bin/dummy-c.bat
           else:
-            - echo "dummy-c on unix" > $PREFIX/bin/dummy-c
+            - echo "#!/usr/bin/env bash" > $PREFIX/bin/dummy-c
+            - echo "dummy-c on unix" >> $PREFIX/bin/dummy-c
             - chmod +x $PREFIX/bin/dummy-c
 
   - package:
@@ -71,7 +76,8 @@ outputs:
           then:
             - echo "dummy-d on windows" > $PREFIX/bin/dummy-d.bat
           else:
-            - echo "dummy-d on unix" > $PREFIX/bin/dummy-d
+            - echo "#!/usr/bin/env bash" > $PREFIX/bin/dummy-d
+            - echo "dummy-d on unix" >> $PREFIX/bin/dummy-d
             - chmod +x $PREFIX/bin/dummy-d
 
   - package:
@@ -85,7 +91,8 @@ outputs:
           then:
             - echo "dummy_e on windows" > $PREFIX/bin/dummy_e.bat
           else:
-            - echo "dummy_e on unix" > $PREFIX/bin/dummy_e
+            - echo "#!/usr/bin/env bash" > $PREFIX/bin/dummy-e
+            - echo "dummy_e on unix" >> $PREFIX/bin/dummy_e
             - chmod +x $PREFIX/bin/dummy_e
 
   - package:
@@ -123,3 +130,19 @@ outputs:
             - echo "#!/usr/bin/env bash" > $PREFIX/bin/dummy-g
             - echo "echo unix" >> $PREFIX/bin/dummy-g
             - chmod +x $PREFIX/bin/dummy-g
+
+  - package:
+      name: pixi-foobar
+      version: 0.1.0
+
+    build:
+      script:
+        - mkdir -p $PREFIX/bin
+        - if: win
+          then:
+            - echo "@echo off" > $PREFIX/bin/pixi-foobar.bat
+            - echo "echo %*" >> $PREFIX/bin/pixi-foobar.bat
+          else:
+            - echo '#!/bin/sh' > $PREFIX/bin/pixi-foobar
+            - echo 'echo "$@"' >> $PREFIX/bin/pixi-foobar
+            - chmod +x $PREFIX/bin/pixi-foobar

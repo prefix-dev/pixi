@@ -1,6 +1,56 @@
 Pixi is a tool to manage virtual environments.
 This document explains what an environment looks like and how to use it.
 
+## Activation
+
+An environment is nothing more than a set of files that are installed into a certain location, that somewhat mimics a global system install.
+You need to activate the environment to use it.
+In the most simple sense that mean adding the `bin` directory of the environment to the `PATH` variable.
+But there is more to it in a conda environment, as it also sets some environment variables.
+
+To do the activation we have multiple options:
+
+- `pixi shell`: start a shell with the environment activated.
+- `pixi shell-hook`: print the command to activate the environment in your current shell.
+- `pixi run` run a command or [task](./advanced_tasks.md) in the environment.
+
+Where the `run` command is special as it runs its own cross-platform shell and has the ability to run tasks.
+More information about tasks can be found in the [tasks documentation](./advanced_tasks.md).
+
+Using the `pixi shell-hook` in Pixi you would get the following output:
+
+```shell
+export PATH="/home/user/development/pixi/.pixi/envs/default/bin:/home/user/.local/bin:/home/user/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/home/user/.pixi/bin"
+export CONDA_PREFIX="/home/user/development/pixi/.pixi/envs/default"
+export PIXI_PROJECT_NAME="pixi"
+export PIXI_PROJECT_ROOT="/home/user/development/pixi"
+export PIXI_PROJECT_VERSION="0.12.0"
+export PIXI_PROJECT_MANIFEST="/home/user/development/pixi/pixi.toml"
+export CONDA_DEFAULT_ENV="pixi"
+export PIXI_ENVIRONMENT_PLATFORMS="osx-64,linux-64,win-64,osx-arm64"
+export PIXI_ENVIRONMENT_NAME="default"
+export PIXI_PROMPT="(pixi) "
+. "/home/user/development/pixi/.pixi/envs/default/etc/conda/activate.d/activate-binutils_linux-64.sh"
+. "/home/user/development/pixi/.pixi/envs/default/etc/conda/activate.d/activate-gcc_linux-64.sh"
+. "/home/user/development/pixi/.pixi/envs/default/etc/conda/activate.d/activate-gfortran_linux-64.sh"
+. "/home/user/development/pixi/.pixi/envs/default/etc/conda/activate.d/activate-gxx_linux-64.sh"
+. "/home/user/development/pixi/.pixi/envs/default/etc/conda/activate.d/libglib_activate.sh"
+. "/home/user/development/pixi/.pixi/envs/default/etc/conda/activate.d/rust.sh"
+```
+
+It sets the `PATH` and some more environment variables. But more importantly it also runs activation scripts that are presented by the installed packages.
+An example of this would be the [`libglib_activate.sh`](https://github.com/conda-forge/glib-feedstock/blob/52ba1944dffdb2d882d824d6548325155b58819b/recipe/scripts/activate.sh) script.
+Thus, just adding the `bin` directory to the `PATH` is not enough.
+
+You can modify the activation with the `activation` table in the manifest, you can add more activation scripts or inject environment variables into the activation scripts.
+```toml
+--8<-- "docs/source_files/pixi_tomls/activation.toml:activation"
+```
+Find the reference for the `activation` table [here](../reference/pixi_manifest.md#the-activation-table).
+
+--8<-- "docs/partials/conda-style-activation.md"
+
+
 ## Structure
 
 A Pixi environment is located in the `.pixi/envs` directory of the workspace by default.
@@ -63,78 +113,16 @@ By default, all lock file modifying commands will always use the revalidation an
 If you want to clean up the environments, you can simply delete the `.pixi/envs` directory, and Pixi will recreate the environments when needed.
 
 ```shell
-# either:
+pixi clean
+# or manually:
 rm -rf .pixi/envs
 
 # or per environment:
+pixi clean --environment cuda
+# or manually:
 rm -rf .pixi/envs/default
 rm -rf .pixi/envs/cuda
 ```
-
-## Activation
-
-An environment is nothing more than a set of files that are installed into a certain location, that somewhat mimics a global system install.
-You need to activate the environment to use it.
-In the most simple sense that mean adding the `bin` directory of the environment to the `PATH` variable.
-But there is more to it in a conda environment, as it also sets some environment variables.
-
-To do the activation we have multiple options:
-
-- Use the `pixi shell` command to open a shell with the environment activated.
-- Use the `pixi shell-hook` command to print the command to activate the environment in your current shell.
-- Use the `pixi run` command to run a command in the environment.
-
-Where the `run` command is special as it runs its own cross-platform shell and has the ability to run tasks.
-More information about tasks can be found in the [tasks documentation](advanced_tasks.md).
-
-Using the `pixi shell-hook` in Pixi you would get the following output:
-
-```shell
-export PATH="/home/user/development/pixi/.pixi/envs/default/bin:/home/user/.local/bin:/home/user/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/home/user/.pixi/bin"
-export CONDA_PREFIX="/home/user/development/pixi/.pixi/envs/default"
-export PIXI_PROJECT_NAME="pixi"
-export PIXI_PROJECT_ROOT="/home/user/development/pixi"
-export PIXI_PROJECT_VERSION="0.12.0"
-export PIXI_PROJECT_MANIFEST="/home/user/development/pixi/pixi.toml"
-export CONDA_DEFAULT_ENV="pixi"
-export PIXI_ENVIRONMENT_PLATFORMS="osx-64,linux-64,win-64,osx-arm64"
-export PIXI_ENVIRONMENT_NAME="default"
-export PIXI_PROMPT="(pixi) "
-. "/home/user/development/pixi/.pixi/envs/default/etc/conda/activate.d/activate-binutils_linux-64.sh"
-. "/home/user/development/pixi/.pixi/envs/default/etc/conda/activate.d/activate-gcc_linux-64.sh"
-. "/home/user/development/pixi/.pixi/envs/default/etc/conda/activate.d/activate-gfortran_linux-64.sh"
-. "/home/user/development/pixi/.pixi/envs/default/etc/conda/activate.d/activate-gxx_linux-64.sh"
-. "/home/user/development/pixi/.pixi/envs/default/etc/conda/activate.d/libglib_activate.sh"
-. "/home/user/development/pixi/.pixi/envs/default/etc/conda/activate.d/rust.sh"
-```
-
-It sets the `PATH` and some more environment variables. But more importantly it also runs activation scripts that are presented by the installed packages.
-An example of this would be the [`libglib_activate.sh`](https://github.com/conda-forge/glib-feedstock/blob/52ba1944dffdb2d882d824d6548325155b58819b/recipe/scripts/activate.sh) script.
-Thus, just adding the `bin` directory to the `PATH` is not enough.
-
-You can modify the activation with the `activation` table in the manifest, you can add more activation scripts or inject environment variables into the activation scripts.
-```toml
---8<-- "docs/source_files/pixi_tomls/activation.toml:activation"
-```
-Find the reference for the `activation` table [here](../reference/pixi_manifest.md#the-activation-table).
-
-## Traditional `conda activate`-like activation
-
-If you prefer to use the traditional `conda activate`-like activation, you could use the `pixi shell-hook` command.
-
-```shell
-$ which python
-python not found
-$ eval "$(pixi shell-hook)"
-$ (default) which python
-/path/to/project/.pixi/envs/default/bin/python
-```
-
-!!! warning
-    It is not encouraged to use the traditional `conda activate`-like activation, as deactivating the environment is not really possible. Use `pixi shell` instead.
-
-!!! tip ""
-    See our [direnv page](../integration/third_party/direnv.md) on how to leverage `pixi shell-hook` to integrate with direnv.
 
 ## Solving environments
 

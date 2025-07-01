@@ -500,6 +500,11 @@ impl<'p> LockFileDerivedData<'p> {
                     .no_build
                     .clone()
                     .unwrap_or_default();
+                let no_binary = environment
+                    .pypi_options()
+                    .no_binary
+                    .clone()
+                    .unwrap_or_default();
 
                 // Update the prefix with Pypi records
                 environment::update_prefix_pypi(
@@ -517,6 +522,7 @@ impl<'p> LockFileDerivedData<'p> {
                     environment.best_platform(),
                     &non_isolated_packages,
                     &no_build,
+                    &no_binary,
                 )
                 .await
                 .with_context(|| {
@@ -1298,9 +1304,11 @@ impl<'p> UpdateContext<'p> {
             let repodata_solve_platform_future = self
                 .get_latest_group_repodata_records(&group, platform)
                 .ok_or_else(|| make_unsupported_pypi_platform_error(environment))?;
-            let repodata_current_platform = self
+            // Construct an optional future that will resolve for building the pypi sources,
+            // the error is delayed to raise at the time when building the sources.
+            let repodata_building_env = self
                 .get_latest_group_repodata_records(&group, environment.best_platform())
-                .ok_or_else(|| make_unsupported_pypi_platform_error(environment))?;
+                .ok_or_else(|| make_unsupported_pypi_platform_error(environment));
 
             // Creates an object to initiate an update at a later point
             let conda_prefix_updater = CondaPrefixUpdaterBuilder::new(
@@ -1329,7 +1337,7 @@ impl<'p> UpdateContext<'p> {
                 project_variables,
                 platform,
                 repodata_solve_platform_future,
-                repodata_current_platform,
+                repodata_building_env,
                 conda_prefix_updater,
                 self.pypi_solve_semaphore.clone(),
                 project.root().to_path_buf(),
@@ -2014,7 +2022,7 @@ async fn spawn_solve_pypi_task<'p>(
     project_variables: HashMap<EnvironmentName, EnvironmentVars>,
     platform: Platform,
     repodata_solve_records: impl Future<Output = Arc<PixiRecordsByName>>,
-    repodata_current_records: impl Future<Output = Arc<PixiRecordsByName>>,
+    repodata_building_records: miette::Result<impl Future<Output = Arc<PixiRecordsByName>>>,
     prefix_task: CondaPrefixUpdater,
     semaphore: Arc<Semaphore>,
     project_root: PathBuf,
@@ -2039,11 +2047,21 @@ async fn spawn_solve_pypi_task<'p>(
     let system_requirements = grouped_environment.system_requirements();
 
     // Wait until the conda records and prefix are available.
-    let (repodata_records, repodata_current_records, _guard) = tokio::join!(
-        repodata_solve_records,
-        repodata_current_records,
-        semaphore.acquire_owned()
-    );
+    let (repodata_records, repodata_building_records) = match repodata_building_records {
+        Ok(repodata_building_records) => {
+            let (repodata_records, repodata_building_records, _guard) = tokio::join!(
+                repodata_solve_records,
+                repodata_building_records,
+                semaphore.acquire_owned()
+            );
+            (repodata_records, Ok(repodata_building_records))
+        }
+        Err(err) => {
+            let (repodata_records, _guard) =
+                tokio::join!(repodata_solve_records, semaphore.acquire_owned());
+            (repodata_records, Err(err))
+        }
+    };
 
     let environment_name = grouped_environment.name().clone();
 
@@ -2080,7 +2098,7 @@ async fn spawn_solve_pypi_task<'p>(
             &pb.pb,
             &project_root,
             prefix_task,
-            repodata_current_records,
+            repodata_building_records,
             project_variables,
             environment,
             disallow_install_conda_prefix,

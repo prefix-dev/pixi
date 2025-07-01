@@ -20,7 +20,7 @@ use pixi_pypi_spec::PixiPypiSpec;
 use pixi_record::PixiRecord;
 use pixi_uv_conversions::{
     ConversionError, as_uv_req, convert_uv_requirements_to_pep508, into_pinned_git_spec,
-    no_build_to_build_options, pypi_options_to_index_locations, to_exclude_newer,
+    pypi_options_to_build_options, pypi_options_to_index_locations, to_exclude_newer,
     to_index_strategy, to_normalize, to_requirements, to_uv_normalize, to_uv_version,
     to_version_specifiers,
 };
@@ -214,7 +214,7 @@ pub async fn resolve_pypi(
     pb: &ProgressBar,
     project_root: &Path,
     prefix_updater: CondaPrefixUpdater,
-    platform_repodata_records: Arc<PixiRecordsByName>,
+    repodata_building_records: miette::Result<Arc<PixiRecordsByName>>,
     project_env_vars: HashMap<EnvironmentName, EnvironmentVars>,
     environment_name: Environment<'_>,
     disallow_install_conda_prefix: bool,
@@ -347,9 +347,11 @@ pub async fn resolve_pypi(
 
     let registry_client = Arc::new(uv_client_builder.build());
 
-    let build_options =
-        no_build_to_build_options(&pypi_options.no_build.clone().unwrap_or_default())
-            .into_diagnostic()?;
+    let build_options = pypi_options_to_build_options(
+        &pypi_options.no_build.clone().unwrap_or_default(),
+        &pypi_options.no_binary.clone().unwrap_or_default(),
+    )
+    .into_diagnostic()?;
 
     // Resolve the flat indexes from `--find-links`.
     // In UV 0.7.8, we need to fetch flat index entries from the index locations
@@ -415,7 +417,7 @@ pub async fn resolve_pypi(
         prefix_updater,
         project_env_vars,
         environment_name,
-        platform_repodata_records.records.clone(),
+        repodata_building_records.map(|r| r.records.clone()),
         pypi_options.no_build_isolation.clone(),
         &lazy_build_dispatch_dependencies,
         disallow_install_conda_prefix,

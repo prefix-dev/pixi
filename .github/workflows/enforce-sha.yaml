@@ -5,6 +5,8 @@ on:
 
 name: Security
 
+permissions: read-all
+
 jobs:
   ensure-pinned-actions:
     runs-on: ubuntu-latest
