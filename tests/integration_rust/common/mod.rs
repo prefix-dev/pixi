@@ -246,6 +246,24 @@ impl PixiControl {
         Ok(pixi)
     }
 
+    /// Creates a new PixiControl instance from an existing manifest and config
+    pub fn from_manifest_and_config(manifest: &str, config: &str) -> miette::Result<PixiControl> {
+        let pixi = Self::new()?;
+
+        // Write the manifest
+        fs_err::write(pixi.manifest_path(), manifest)
+            .into_diagnostic()
+            .context("failed to write pixi.toml")?;
+
+        // Write the custom config (overwriting the default one)
+        let pixi_path = pixi.workspace_path().join(".pixi");
+        fs_err::write(pixi_path.join("config.toml"), config)
+            .into_diagnostic()
+            .context("failed to write config.toml")?;
+
+        Ok(pixi)
+    }
+
     /// Updates the complete manifest
     pub fn update_manifest(&self, manifest: &str) -> miette::Result<()> {
         fs_err::write(self.manifest_path(), manifest)
