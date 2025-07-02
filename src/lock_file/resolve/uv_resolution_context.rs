@@ -105,7 +105,6 @@ mod tests {
         let _check_field_exists = |context: &UvResolutionContext| -> bool { context.tls_no_verify };
 
         // This test passes just by compiling successfully
-        assert!(true, "UvResolutionContext has tls_no_verify field");
     }
 
     #[test]
@@ -116,9 +115,5 @@ mod tests {
 
         // Test the function used to create UvResolutionContext works with our changes
         // This validates that our structural changes don't break the creation process
-        assert!(
-            true,
-            "UvResolutionContext creation logic is structurally sound"
-        );
     }
 }

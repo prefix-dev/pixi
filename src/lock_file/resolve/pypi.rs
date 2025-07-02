@@ -999,9 +999,8 @@ mod tests {
 
         if tls_no_verify {
             for host in &test_hosts {
-                match to_uv_trusted_host(&host.to_string()) {
-                    Ok(trusted_host) => allow_insecure_hosts.push(trusted_host),
-                    Err(_) => {}
+                if let Ok(trusted_host) = to_uv_trusted_host(host) {
+                    allow_insecure_hosts.push(trusted_host);
                 }
             }
         }
@@ -1027,9 +1026,8 @@ mod tests {
         if tls_no_verify {
             // This should not execute
             for host in &test_hosts {
-                match to_uv_trusted_host(&host.to_string()) {
-                    Ok(trusted_host) => allow_insecure_hosts.push(trusted_host),
-                    Err(_) => {}
+                if let Ok(trusted_host) = to_uv_trusted_host(host) {
+                    allow_insecure_hosts.push(trusted_host);
                 }
             }
         }

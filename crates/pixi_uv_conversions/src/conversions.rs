@@ -470,7 +470,7 @@ pub fn configure_insecure_hosts_for_tls_bypass(
         // This is a workaround since UV doesn't have a global SSL disable option
         for index_url in index_locations.allowed_indexes() {
             if let Some(host) = index_url.url().host_str() {
-                match to_uv_trusted_host(&host.to_string()) {
+                match to_uv_trusted_host(host) {
                     Ok(trusted_host) => allow_insecure_hosts.push(trusted_host),
                     Err(e) => tracing::warn!("Failed to add host {} as insecure: {}", host, e),
                 }
