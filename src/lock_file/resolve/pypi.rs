@@ -338,6 +338,7 @@ pub async fn resolve_pypi(
         .markers(&marker_environment)
         .keyring(context.keyring_provider)
         .connectivity(Connectivity::Online)
+        .native_tls(true)
         .extra_middleware(context.extra_middleware.clone());
 
     for p in &context.proxies {

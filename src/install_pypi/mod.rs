@@ -106,6 +106,7 @@ impl<'a> PyPIPrefixUpdaterBuilder<'a> {
             .keyring(uv_context.keyring_provider)
             .connectivity(Connectivity::Online)
             .extra_middleware(uv_context.extra_middleware.clone())
+            .native_tls(true)
             .index_locations(&index_locations);
 
         for p in &uv_context.proxies {
