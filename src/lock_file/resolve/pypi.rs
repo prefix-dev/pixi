@@ -22,7 +22,7 @@ use pixi_uv_conversions::{
     ConversionError, as_uv_req, configure_insecure_hosts_for_tls_bypass,
     convert_uv_requirements_to_pep508, into_pinned_git_spec, pypi_options_to_build_options,
     pypi_options_to_index_locations, to_exclude_newer, to_index_strategy, to_normalize,
-    to_requirements, to_uv_normalize, to_uv_trusted_host, to_uv_version, to_version_specifiers,
+    to_requirements, to_uv_normalize, to_uv_version, to_version_specifiers,
 };
 use pypi_modifiers::{
     pypi_marker_env::determine_marker_environment,
@@ -986,6 +986,7 @@ mod tests {
 
     #[test]
     fn test_tls_no_verify_host_conversion() {
+        use pixi_uv_conversions::to_uv_trusted_host;
         // Test the logic for converting hosts to trusted hosts when tls_no_verify is enabled
         let test_hosts = vec![
             "pypi.org",
@@ -1016,6 +1017,7 @@ mod tests {
 
     #[test]
     fn test_tls_verify_enabled_preserves_empty_list() {
+        use pixi_uv_conversions::to_uv_trusted_host;
         // Test that when tls_no_verify is false, no hosts are added
         let test_hosts = vec!["pypi.org", "test-index.example.com"];
 
