@@ -292,6 +292,109 @@ async fn test_allow_insecure_host() {
 
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn test_tls_no_verify_with_pypi_dependencies() {
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+        [project]
+        name = "pypi-tls-test"
+        platforms = ["{platform}"]
+        channels = ["https://prefix.dev/conda-forge"]
+
+        [dependencies]
+        python = "~=3.12.0"
+
+        [pypi-dependencies]
+        sh = "*"
+
+        [pypi-options]
+        extra-index-urls = ["https://expired.badssl.com/"]"#,
+        platform = Platform::current(),
+    ))
+    .unwrap();
+    
+    // First verify that it fails with SSL errors when tls-no-verify is not set
+    assert!(
+        pixi.update_lock_file().await.is_err(),
+        "should fail with SSL error when tls-no-verify is not enabled"
+    );
+
+    // Now set tls-no-verify = true in the project config
+    let config_path = pixi.workspace().unwrap().pixi_dir().join("config.toml");
+    fs_err::create_dir_all(config_path.parent().unwrap()).unwrap();
+    let mut file = File::create(config_path).unwrap();
+    file.write_all(
+        r#"
+        tls-no-verify = true"#
+            .as_bytes(),
+    )
+    .unwrap();
+    
+    // With tls-no-verify = true, this should now succeed or fail for non-SSL reasons
+    let result = pixi.update_lock_file().await;
+    
+    // The test should succeed because tls-no-verify bypasses SSL verification
+    // If it fails, it should not be due to SSL certificate issues
+    match result {
+        Ok(_) => {
+            // Success - TLS verification was bypassed
+        }
+        Err(e) => {
+            let error_msg = format!("{:?}", e);
+            // If it fails, it should NOT be due to SSL/TLS certificate issues
+            assert!(
+                !error_msg.to_lowercase().contains("certificate") &&
+                !error_msg.to_lowercase().contains("ssl") &&
+                !error_msg.to_lowercase().contains("tls"),
+                "Error should not be SSL/TLS related when tls-no-verify is enabled. Got: {}",
+                error_msg
+            );
+        }
+    }
+}
+
+#[tokio::test]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn test_tls_verify_still_fails_without_config() {
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+        [project]
+        name = "pypi-tls-verify-test"
+        platforms = ["{platform}"]
+        channels = ["https://prefix.dev/conda-forge"]
+
+        [dependencies]
+        python = "~=3.12.0"
+
+        [pypi-dependencies]
+        sh = "*"
+
+        [pypi-options]
+        extra-index-urls = ["https://expired.badssl.com/"]"#,
+        platform = Platform::current(),
+    ))
+    .unwrap();
+    
+    // Without tls-no-verify, this should fail with SSL errors
+    let result = pixi.update_lock_file().await;
+    assert!(
+        result.is_err(),
+        "should fail with SSL error when tls-no-verify is not enabled"
+    );
+    
+    let error_msg = format!("{:?}", result.unwrap_err());
+    // The error should be SSL/TLS related
+    assert!(
+        error_msg.to_lowercase().contains("certificate") ||
+        error_msg.to_lowercase().contains("ssl") ||
+        error_msg.to_lowercase().contains("tls") ||
+        error_msg.contains("expired.badssl.com"),
+        "Error should be SSL/TLS related. Got: {}",
+        error_msg
+    );
+}
+
+#[tokio::test]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_indexes_are_passed_when_solving_build_pypi_dependencies() {
     let pypi_indexes = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/pypi-indexes");
     let pypi_indexes_url = Url::from_directory_path(pypi_indexes.clone()).unwrap();

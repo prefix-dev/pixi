@@ -101,8 +101,24 @@ impl<'a> PyPIPrefixUpdaterBuilder<'a> {
             .into_diagnostic()?;
         let build_options = pypi_options_to_build_options(no_build, no_binary).into_diagnostic()?;
 
+        // Configure insecure hosts for TLS verification bypass
+        let mut allow_insecure_hosts = uv_context.allow_insecure_host.clone();
+        if uv_context.tls_no_verify {
+            // When tls_no_verify is enabled, add all index hosts to the insecure list
+            // This is a workaround since UV doesn't have a global SSL disable option
+            for index_url in index_locations.allowed_indexes() {
+                if let Some(host) = index_url.url().host_str() {
+                    match pixi_uv_conversions::to_uv_trusted_host(&host.to_string()) {
+                        Ok(trusted_host) => allow_insecure_hosts.push(trusted_host),
+                        Err(e) => tracing::warn!("Failed to add host {} as insecure: {}", host, e),
+                    }
+                }
+            }
+            tracing::warn!("TLS verification is disabled for PyPI operations. This is insecure and should only be used for testing or internal networks.");
+        }
+
         let mut uv_client_builder = RegistryClientBuilder::new(uv_context.cache.clone())
-            .allow_insecure_host(uv_context.allow_insecure_host.clone())
+            .allow_insecure_host(allow_insecure_hosts)
             .keyring(uv_context.keyring_provider)
             .connectivity(Connectivity::Online)
             .extra_middleware(uv_context.extra_middleware.clone())
