@@ -311,7 +311,7 @@ async fn test_tls_no_verify_with_pypi_dependencies() {
         platform = Platform::current(),
     ))
     .unwrap();
-    
+
     // First verify that it fails with SSL errors when tls-no-verify is not set
     assert!(
         pixi.update_lock_file().await.is_err(),
@@ -328,10 +328,10 @@ async fn test_tls_no_verify_with_pypi_dependencies() {
             .as_bytes(),
     )
     .unwrap();
-    
+
     // With tls-no-verify = true, this should now succeed or fail for non-SSL reasons
     let result = pixi.update_lock_file().await;
-    
+
     // The test should succeed because tls-no-verify bypasses SSL verification
     // If it fails, it should not be due to SSL certificate issues
     match result {
@@ -342,9 +342,9 @@ async fn test_tls_no_verify_with_pypi_dependencies() {
             let error_msg = format!("{:?}", e);
             // If it fails, it should NOT be due to SSL/TLS certificate issues
             assert!(
-                !error_msg.to_lowercase().contains("certificate") &&
-                !error_msg.to_lowercase().contains("ssl") &&
-                !error_msg.to_lowercase().contains("tls"),
+                !error_msg.to_lowercase().contains("certificate")
+                    && !error_msg.to_lowercase().contains("ssl")
+                    && !error_msg.to_lowercase().contains("tls"),
                 "Error should not be SSL/TLS related when tls-no-verify is enabled. Got: {}",
                 error_msg
             );
@@ -373,21 +373,21 @@ async fn test_tls_verify_still_fails_without_config() {
         platform = Platform::current(),
     ))
     .unwrap();
-    
+
     // Without tls-no-verify, this should fail with SSL errors
     let result = pixi.update_lock_file().await;
     assert!(
         result.is_err(),
         "should fail with SSL error when tls-no-verify is not enabled"
     );
-    
+
     let error_msg = format!("{:?}", result.unwrap_err());
     // The error should be SSL/TLS related
     assert!(
-        error_msg.to_lowercase().contains("certificate") ||
-        error_msg.to_lowercase().contains("ssl") ||
-        error_msg.to_lowercase().contains("tls") ||
-        error_msg.contains("expired.badssl.com"),
+        error_msg.to_lowercase().contains("certificate")
+            || error_msg.to_lowercase().contains("ssl")
+            || error_msg.to_lowercase().contains("tls")
+            || error_msg.contains("expired.badssl.com"),
         "Error should be SSL/TLS related. Got: {}",
         error_msg
     );
