@@ -1,11 +1,12 @@
 ---
 source: crates/pixi_manifest/src/discovery.rs
+assertion_line: 647
 expression: snapshot
 ---
   × the workspace does not define a 'version'
     ╭─[<CARGO_ROOT>/tests/data/workspace-discovery/3tier-resolution-pyproject/pyproject.toml:10:11]
-  9 │ name = "explicit-package-name"     # Tier 1: Direct value
- 10 │ version = { workspace = true }     # Tier 2: Workspace inheritance
+  9 │ name = "explicit-package-name" # Tier 1: Direct value
+ 10 │ version = { workspace = true } # Tier 2: Workspace inheritance
     ·           ────────────────────
  11 │ # authors not specified - should use tier 3 project defaults
     ╰────

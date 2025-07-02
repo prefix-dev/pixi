@@ -1,0 +1,21 @@
+{
+//   "json": {
+//     "lineWidth": 100,
+//     "array.preferSingleLine": true,
+//   },
+  "toml": {
+    "lineWidth": 100,
+    "comment.forceLeadingSpace": false
+  },
+  "yaml": {
+    "printWidth": 100,
+    "formatComments": true,
+    "braceSpacing": false,
+  },
+  "excludes": ["**/*-lock.json", "**/*.lock", "**/node_modules/", "dist/"],
+  "plugins": [
+    "https://plugins.dprint.dev/g-plane/pretty_yaml-v0.5.1.wasm",
+    // "https://plugins.dprint.dev/json-0.20.0.wasm",
+    "https://plugins.dprint.dev/toml-0.7.0.wasm",
+  ],
+}
