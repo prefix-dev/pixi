@@ -18,7 +18,7 @@ Then follow the instructions in our [Direnv doc page](../third_party/direnv.md).
 ## Devcontainer Extension
 
 [VSCode Devcontainers](https://code.visualstudio.com/docs/devcontainers/containers) are a popular tool to develop on a workspace with a consistent environment.
-They are also used in [GitHub Codespaces](https://github.com/environments/codespaces) which makes it a great way to develop on a workspace without having to install anything on your local machine.
+They are also used in [GitHub Codespaces](https://github.com/features/codespaces) which makes it a great way to develop on a workspace without having to install anything on your local machine.
 
 To use pixi inside of a devcontainer, follow these steps:
 
@@ -28,7 +28,7 @@ Then, create the following two files in the `.devcontainer` directory:
 ```dockerfile title=".devcontainer/Dockerfile"
 FROM mcr.microsoft.com/devcontainers/base:jammy
 
-ARG PIXI_VERSION=v0.48.1
+ARG PIXI_VERSION=v0.49.0
 
 RUN curl -L -o /usr/local/bin/pixi -fsSL --compressed "https://github.com/prefix-dev/pixi/releases/download/${PIXI_VERSION}/pixi-$(uname -m)-unknown-linux-musl" \
     && chmod +x /usr/local/bin/pixi \

@@ -9,7 +9,7 @@ use pixi_git::{
     git::GitReference as PixiGitReference, sha::GitSha as PixiGitSha, url::RepositoryUrl,
 };
 use pixi_manifest::pypi::pypi_options::{
-    FindLinksUrlOrPath, IndexStrategy, NoBuild, NoBuildIsolation, PypiOptions,
+    FindLinksUrlOrPath, IndexStrategy, NoBinary, NoBuild, NoBuildIsolation, PypiOptions,
 };
 use pixi_record::{LockedGitUrl, PinnedGitCheckout, PinnedGitSpec};
 use pixi_spec::GitReference as PixiReference;
@@ -29,7 +29,10 @@ pub enum ConvertFlatIndexLocationError {
 }
 
 /// Convert PyPI options to build options
-pub fn no_build_to_build_options(no_build: &NoBuild) -> Result<BuildOptions, InvalidNameError> {
+pub fn pypi_options_to_build_options(
+    no_build: &NoBuild,
+    no_binary: &NoBinary,
+) -> Result<BuildOptions, InvalidNameError> {
     let uv_no_build = match no_build {
         NoBuild::None => uv_configuration::NoBuild::None,
         NoBuild::All => uv_configuration::NoBuild::All,
@@ -39,10 +42,17 @@ pub fn no_build_to_build_options(no_build: &NoBuild) -> Result<BuildOptions, Inv
                 .collect::<Result<Vec<_>, _>>()?,
         ),
     };
-    Ok(BuildOptions::new(
-        uv_configuration::NoBinary::default(),
-        uv_no_build,
-    ))
+    let uv_no_binary = match no_binary {
+        NoBinary::None => uv_configuration::NoBinary::None,
+        NoBinary::All => uv_configuration::NoBinary::All,
+        NoBinary::Packages(vec) => uv_configuration::NoBinary::Packages(
+            vec.iter()
+                .map(|s| PackageName::from_str(s.as_ref()))
+                .collect::<Result<Vec<_>, _>>()?,
+        ),
+    };
+
+    Ok(BuildOptions::new(uv_no_binary, uv_no_build))
 }
 
 /// Convert the subset of pypi-options to index locations

@@ -112,7 +112,7 @@ mod tests {
     #[tokio::test]
     async fn test_environment_specs_in_sync() {
         let home = tempfile::tempdir().unwrap();
-        let env_root = EnvRoot::new(home.into_path()).unwrap();
+        let env_root = EnvRoot::new(home.keep()).unwrap();
         let env_name = EnvironmentName::from_str("test").unwrap();
         let env_dir = EnvDir::from_env_root(env_root, &env_name).await.unwrap();
 

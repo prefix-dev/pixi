@@ -8,7 +8,7 @@ use typed_path::{Utf8NativePathBuf, Utf8TypedPathBuf};
 
 use crate::{BinarySpec, SpecConversionError};
 
-/// A specification of a package from a git repository.
+/// A specification of a package from a path.
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct PathSpec {
     /// The path to the package

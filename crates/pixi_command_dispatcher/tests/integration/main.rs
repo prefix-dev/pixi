@@ -5,12 +5,17 @@ use std::{path::Path, str::FromStr};
 
 use event_reporter::EventReporter;
 use pixi_command_dispatcher::{
-    CacheDirs, CommandDispatcher, Executor, InstantiateToolEnvironmentSpec, PixiEnvironmentSpec,
+    BuildEnvironment, CacheDirs, CommandDispatcher, Executor, InstallPixiEnvironmentSpec,
+    InstantiateToolEnvironmentSpec, PixiEnvironmentSpec,
 };
+use pixi_config::default_channel_config;
 use pixi_spec::{GitReference, GitSpec, PixiSpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_test_utils::format_diagnostic;
-use rattler_conda_types::{PackageName, VersionSpec};
+use rattler_conda_types::{
+    GenericVirtualPackage, PackageName, Platform, VersionSpec, prefix::Prefix,
+};
+use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use url::Url;
 
 use crate::event_tree::EventTree;
@@ -20,27 +25,55 @@ fn default_cache_dirs() -> CacheDirs {
     CacheDirs::new(pixi_config::get_cache_dir().unwrap())
 }
 
+/// Returns the tool platform that is appropriate for the current platform.
+///
+/// Specifically, it normalizes `WinArm64` to `Win64` to increase compatibility.
+/// TODO: Once conda-forge supports `WinArm64`, we can remove this
+/// normalization.
+fn tool_platform() -> (Platform, Vec<GenericVirtualPackage>) {
+    let platform = match Platform::current() {
+        Platform::WinArm64 => Platform::Win64,
+        platform => platform,
+    };
+    let virtual_packages = VirtualPackages::detect(&VirtualPackageOverrides::default())
+        .unwrap()
+        .into_generic_virtual_packages()
+        .collect();
+    (platform, virtual_packages)
+}
+
 #[tokio::test]
 pub async fn simple_test() {
     let (reporter, events) = EventReporter::new();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let tempdir = tempfile::tempdir().unwrap();
+    let prefix_dir = tempdir.path().join("prefix");
     let dispatcher = CommandDispatcher::builder()
-        .with_cache_dirs(default_cache_dirs())
+        .with_cache_dirs(default_cache_dirs().with_workspace(tempdir.path().to_path_buf()))
         .with_reporter(reporter)
         .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages.clone())
         .finish();
 
-    let _result = dispatcher
+    let build_env = BuildEnvironment {
+        host_platform: tool_platform,
+        host_virtual_packages: tool_virtual_packages.clone(),
+        build_platform: tool_platform,
+        build_virtual_packages: tool_virtual_packages.clone(),
+    };
+
+    let records = dispatcher
         .solve_pixi_environment(PixiEnvironmentSpec {
             dependencies: DependencyMap::from_iter([(
-                "boost-check".parse().unwrap(),
+                "foobar-desktop".parse().unwrap(),
                 GitSpec {
                     git: "https://github.com/wolfv/pixi-build-examples.git"
                         .parse()
                         .unwrap(),
                     rev: Some(GitReference::Rev(
-                        "a4c27e86a4a5395759486552abb3df8a47d50172".to_owned(),
+                        "8d230eda9b4cdaaefd24aad87fd923d4b7c3c78a".to_owned(),
                     )),
-                    subdirectory: Some(String::from("boost-check")),
+                    subdirectory: Some(String::from("multi-output/recipe")),
                 }
                 .into(),
             )]),
@@ -49,10 +82,36 @@ pub async fn simple_test() {
                     .unwrap()
                     .into(),
             ],
+            build_environment: build_env.clone(),
             ..PixiEnvironmentSpec::default()
         })
         .await
         .unwrap();
+
+    dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            name: "test-env".to_owned(),
+            records: records.clone(),
+            prefix: Prefix::create(&prefix_dir).unwrap(),
+            installed: None,
+            target_platform: tool_platform,
+            force_reinstall: Default::default(),
+            channels: vec![
+                Url::from_str("https://prefix.dev/conda-forge")
+                    .unwrap()
+                    .into(),
+            ],
+            channel_config: default_channel_config(),
+            variants: None,
+            enabled_protocols: Default::default(),
+        })
+        .await
+        .unwrap();
+
+    println!(
+        "Built the environment successfully: {}",
+        prefix_dir.display()
+    );
 
     let event_tree = EventTree::new(events.lock().unwrap().iter());
     insta::assert_snapshot!(event_tree.to_string());

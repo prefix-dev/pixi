@@ -1,12 +1,11 @@
 In this tutorial, we will show you how to build the same C++ package as from [Building a C++ Package](cpp.md) tutorial using [`rattler-build`](https://rattler.build).
 In this tutorial we assume that you've read the [Building a C++ Package](cpp.md) tutorial.
 If you haven't read it yet, we recommend you to do so before continuing.
+You might also want to check out the [documentation](https://prefix-dev.github.io/pixi-build-backends/backends/pixi-build-rattler-build/) for the `pixi-build-rattler-build` backend.
 The project structure and the source code will be the same as in the previous tutorial, so we may skip explicit explanations of some parts.
 
 This approach may be useful when no build backend for your language or build system exists.
 Another reason to use it is when you would like to have more control over the build process.
-At the time of writing this tutorial, `pixi-build-cmake` will always build in `Release` mode.
-By using `rattler-build`, you have full control of the build process and can build your package in `Debug` mode instead.
 
 
 To illustrate this, we will use the same C++ package as in the previous tutorial, but this time we will use `rattler-build` to build it.

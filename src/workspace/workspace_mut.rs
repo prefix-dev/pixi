@@ -106,6 +106,7 @@ impl WorkspaceMut {
         let workspace_manifest_document = match workspace.workspace.provenance.kind {
             ManifestKind::Pyproject => ManifestDocument::PyProjectToml(toml),
             ManifestKind::Pixi => ManifestDocument::PixiToml(toml),
+            ManifestKind::MojoProject => ManifestDocument::MojoProjectToml(toml),
         };
 
         Ok(Self {
@@ -144,6 +145,7 @@ impl WorkspaceMut {
         let workspace_manifest_document = match workspace.workspace.provenance.kind {
             ManifestKind::Pyproject => ManifestDocument::PyProjectToml(toml),
             ManifestKind::Pixi => ManifestDocument::PixiToml(toml),
+            ManifestKind::MojoProject => ManifestDocument::MojoProjectToml(toml),
         };
 
         Ok(Self {
@@ -401,7 +403,7 @@ impl WorkspaceMut {
             self.save_inner().await.into_diagnostic()?;
         }
 
-        let mut updated_lock_file = LockFileDerivedData {
+        let updated_lock_file = LockFileDerivedData {
             workspace: self.workspace(),
             lock_file,
             package_cache,
@@ -426,7 +428,7 @@ impl WorkspaceMut {
                 .prefix(
                     &self.workspace().default_environment(),
                     UpdateMode::Revalidate,
-                    ReinstallPackages::default(),
+                    &ReinstallPackages::default(),
                 )
                 .await?;
         }

@@ -37,6 +37,11 @@ pub struct Args {
     #[clap(long = "spec", short = 's', value_name = "SPEC")]
     pub specs: Vec<MatchSpec>,
 
+    /// Matchspecs of package to install, while also guessing a package
+    /// from the command.
+    #[clap(long, short = 'w', conflicts_with = "specs")]
+    pub with: Vec<MatchSpec>,
+
     #[clap(flatten)]
     channels: ChannelsConfig,
 
@@ -153,7 +158,9 @@ pub async fn create_exec_prefix(
             guessed_spec
         );
 
-        vec![guessed_spec]
+        let mut with_specs = args.with.clone();
+        with_specs.push(guessed_spec);
+        with_specs
     } else {
         args.specs.clone()
     };

@@ -105,7 +105,7 @@ go-shfmt = ">=3.11.0,<4"
 pre-commit = ">=4.1.0,<5"
 pre-commit-hooks = ">=5.0.0,<6"
 prettier = ">=3.5.2,<4"
-ruff = ">=0.11.5,<0.12"
+ruff = ">=0.12,<0.13"
 shellcheck = ">=0.10.0,<0.11"
 taplo = ">=0.10,<0.11"
 typos = ">=1.29.10,<2"
@@ -118,7 +118,7 @@ check-openssl = "python tests/scripts/check-openssl.py"
 lint = { cmd = "pre-commit run --all-files --hook-stage=manual", description = "Run all linters and formatters on all code" }
 pre-commit-install = "pre-commit install --install-hooks -t=pre-commit -t=pre-push"
 pre-commit-install-minimal = "pre-commit install -t=pre-commit"
-pre-commit-run = "pre-commit run --all-files"
+pre-commit-run = "pre-commit run --all-files --hook-stage manual"
 prettier-fmt = { cmd = "prettier --write" }
 ruff-format = "ruff format --force-exclude"
 ruff-lint = "ruff check --fix --exit-non-zero-on-fix --force-exclude"
@@ -203,7 +203,7 @@ description = "Build the trampolines"
 # Feature to build recipes
 #
 [feature.recipes.dependencies]
-rattler-build = ">=0.43,<0.44"
+rattler-build = ">=0.44,<0.45"
 
 [feature.recipes.tasks.build-backends]
 cmd = "rattler-build build --recipe-dir empty --output-dir ."
@@ -238,4 +238,4 @@ schema = { features = [
   "pytest",
 ], no-default-feature = true, solve-group = "default" }
 test-export = { features = ["micromamba"], no-default-feature = true }
-trampoline = { features = ["trampoline", "rust"], no-default-feature = true }
+trampoline = { features = ["trampoline"], no-default-feature = true }
