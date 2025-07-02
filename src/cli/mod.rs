@@ -15,6 +15,7 @@ pub mod add;
 mod build;
 pub mod clean;
 pub mod cli_config;
+pub mod command_info;
 pub mod completion;
 pub mod config;
 pub mod exec;
@@ -66,7 +67,7 @@ Ask a question on the Prefix Discord server: https://discord.gg/kKV8ZxyzY4
 For more information, see the documentation at: https://pixi.sh
 ", consts::PIXI_VERSION),
 )]
-#[clap(arg_required_else_help = true, styles=get_styles(), disable_help_flag = true)]
+#[clap(arg_required_else_help = true, styles=get_styles(), disable_help_flag = true, allow_external_subcommands = true)]
 pub struct Args {
     #[command(subcommand)]
     command: Command,
@@ -164,6 +165,8 @@ pub enum Command {
     Upload(upload::Args),
     #[clap(alias = "project")]
     Workspace(workspace::Args),
+    #[command(external_subcommand)]
+    External(Vec<String>),
 }
 
 #[derive(Parser, Debug, Default, Copy, Clone)]
@@ -196,11 +199,16 @@ pub async fn execute() -> miette::Result<()> {
     let args = Args::parse();
     set_console_colors(&args);
     let use_colors = console::colors_enabled_stderr();
+    let in_ci = matches!(env::var("CI").as_deref(), Ok("1" | "true"));
+    let no_wrap = matches!(env::var("PIXI_NO_WRAP").as_deref(), Ok("1" | "true"));
     // Set up the default miette handler based on whether we want colors or not.
     miette::set_hook(Box::new(move |_| {
         Box::new(
             miette::MietteHandlerOpts::default()
                 .color(use_colors)
+                // Don't wrap lines in CI environments or when explicitly specified to avoid
+                // breaking logs and tests.
+                .wrap_lines(!in_ci && !no_wrap)
                 .build(),
         )
     }))?;
@@ -214,8 +222,8 @@ pub async fn execute() -> miette::Result<()> {
         LevelFilter::OFF => (LevelFilter::OFF, LevelFilter::OFF, LevelFilter::OFF),
         LevelFilter::ERROR => (LevelFilter::ERROR, LevelFilter::ERROR, LevelFilter::WARN),
         LevelFilter::WARN => (LevelFilter::WARN, LevelFilter::WARN, LevelFilter::INFO),
-        LevelFilter::INFO => (LevelFilter::WARN, LevelFilter::INFO, LevelFilter::INFO),
-        LevelFilter::DEBUG => (LevelFilter::INFO, LevelFilter::DEBUG, LevelFilter::DEBUG),
+        LevelFilter::INFO => (LevelFilter::WARN, LevelFilter::INFO, LevelFilter::DEBUG),
+        LevelFilter::DEBUG => (LevelFilter::INFO, LevelFilter::DEBUG, LevelFilter::TRACE),
         LevelFilter::TRACE => (LevelFilter::TRACE, LevelFilter::TRACE, LevelFilter::TRACE),
     };
 
@@ -250,11 +258,14 @@ pub async fn execute() -> miette::Result<()> {
         .init();
 
     // Execute the command
-    execute_command(args.command).await
+    execute_command(args.command, &args.global_options).await
 }
 
 /// Execute the actual command
-pub async fn execute_command(command: Command) -> miette::Result<()> {
+pub async fn execute_command(
+    command: Command,
+    global_options: &GlobalOptions,
+) -> miette::Result<()> {
     match command {
         Command::Completion(cmd) => completion::execute(cmd),
         Command::Config(cmd) => config::execute(cmd).await,
@@ -275,9 +286,9 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::Workspace(cmd) => workspace::execute(cmd).await,
         Command::Remove(cmd) => remove::execute(cmd).await,
         #[cfg(feature = "self_update")]
-        Command::SelfUpdate(cmd) => self_update::execute(cmd).await,
+        Command::SelfUpdate(cmd) => self_update::execute(cmd, global_options).await,
         #[cfg(not(feature = "self_update"))]
-        Command::SelfUpdate(cmd) => self_update::execute_stub(cmd).await,
+        Command::SelfUpdate(cmd) => self_update::execute_stub(cmd, global_options).await,
         Command::List(cmd) => list::execute(cmd).await,
         Command::Tree(cmd) => tree::execute(cmd).await,
         Command::Update(cmd) => update::execute(cmd).await,
@@ -285,6 +296,7 @@ pub async fn execute_command(command: Command) -> miette::Result<()> {
         Command::Lock(cmd) => lock::execute(cmd).await,
         Command::Exec(args) => exec::execute(args).await,
         Command::Build(args) => build::execute(args).await,
+        Command::External(args) => command_info::execute_external_command(args),
     }
 }
 

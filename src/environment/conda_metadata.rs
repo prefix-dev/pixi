@@ -43,7 +43,7 @@ pub fn create_prefix_location_file(environment_dir: &Path) -> miette::Result<()>
 
         write_file(&prefix_file_path, contents.as_bytes()).into_diagnostic()?;
 
-        tracing::info!("Prefix file updated with: '{}'.", contents);
+        tracing::debug!("Prefix file updated with: '{}'.", contents);
     }
     Ok(())
 }
@@ -53,7 +53,7 @@ pub fn create_prefix_location_file(environment_dir: &Path) -> miette::Result<()>
 pub fn create_history_file(environment_dir: &Path) -> miette::Result<()> {
     let history_file = environment_dir.join(consts::CONDA_META_DIR).join("history");
 
-    tracing::info!("Verify history file exists: {}", history_file.display());
+    tracing::debug!("Verify history file exists: {}", history_file.display());
 
     write_file(
         history_file,

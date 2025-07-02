@@ -171,6 +171,7 @@ impl MappingClient {
                 path: get_cache_dir()
                     .expect("missing cache directory")
                     .join(pixi_consts::consts::CONDA_PYPI_MAPPING_CACHE_DIR),
+                remove_opts: Default::default(),
             },
             options: HttpCacheOptions::default(),
         });

@@ -165,7 +165,7 @@ impl<'a> UvBuildDispatchParams<'a> {
 pub struct LazyBuildDispatch<'a> {
     pub params: UvBuildDispatchParams<'a>,
     pub prefix_updater: CondaPrefixUpdater,
-    pub repodata_records: Vec<PixiRecord>,
+    pub repodata_records: miette::Result<Vec<PixiRecord>>,
 
     pub build_dispatch: AsyncCell<BuildDispatch<'a>>,
 
@@ -236,7 +236,7 @@ impl<'a> LazyBuildDispatch<'a> {
         prefix_updater: CondaPrefixUpdater,
         project_env_vars: HashMap<EnvironmentName, EnvironmentVars>,
         environment: Environment<'a>,
-        repodata_records: Vec<PixiRecord>,
+        repodata_records: miette::Result<Vec<PixiRecord>>,
         no_build_isolation: NoBuildIsolation,
         lazy_deps: &'a LazyBuildDispatchDependencies,
         disallow_install_conda_prefix: bool,
@@ -268,9 +268,17 @@ impl<'a> LazyBuildDispatch<'a> {
                 "PyPI solve requires instantiation of conda prefix for '{}'",
                 self.prefix_updater.name().as_str()
             );
+
+            let repodata_records = self.repodata_records.as_ref().map_err(|err| {
+                LazyBuildDispatchError::InitializationError(format!(
+                    "failed to get repodata of the building conda prefix: {}",
+                    err
+                ))
+            })?;
+
             let prefix = self
                 .prefix_updater
-                .update(self.repodata_records.clone(), None)
+                .update(repodata_records.to_vec(), None)
                 .await
                 .map_err(|err| {
                     LazyBuildDispatchError::InitializationError(format!(

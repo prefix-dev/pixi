@@ -8,6 +8,9 @@ on:
         description: "Specific tag name"
         required: true
         type: string
+
+permissions: read-all
+
 jobs:
   publish:
     runs-on: windows-latest

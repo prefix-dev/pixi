@@ -7,6 +7,9 @@ on:
       - edited
       - synchronize
 
+permissions:
+  pull-requests: read
+
 jobs:
   check-title:
     runs-on: ubuntu-latest
