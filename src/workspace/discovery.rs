@@ -197,9 +197,9 @@ impl WorkspaceLocator {
             // Check if a pyproject.toml exists in the discovery source directory
             let pyproject_path = discovery_source.join(consts::PYPROJECT_MANIFEST);
             if pyproject_path.is_file() {
-                // Check if it's a valid Python project by looking for basic project metadata
+                // Check if it's a valid Python project by looking for project metadata
                 if let Ok(content) = fs_err::read_to_string(&pyproject_path) {
-                    if content.contains("[project]") || content.contains("name") {
+                    if content.contains("[project]") {
                         return Err(WorkspaceLocatorError::PyprojectWithoutPixi(
                             discovery_source,
                         ));
