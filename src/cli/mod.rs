@@ -66,10 +66,10 @@ Ask a question on the Prefix Discord server: https://discord.gg/kKV8ZxyzY4
 For more information, see the documentation at: https://pixi.sh
 ", consts::PIXI_VERSION),
 )]
-#[clap(arg_required_else_help = true, styles=get_styles(), disable_help_flag = true, allow_external_subcommands = true)]
+#[clap(styles=get_styles(), disable_help_flag = true, disable_help_subcommand = true, allow_external_subcommands = true)]
 pub struct Args {
     #[command(subcommand)]
-    command: Command,
+    command: Option<Command>,
 
     #[clap(flatten)]
     global_options: GlobalOptions,
@@ -78,11 +78,11 @@ pub struct Args {
 #[derive(Debug, Parser)]
 pub struct GlobalOptions {
     /// Display help information
-    #[clap(long, short, global = true, action = clap::ArgAction::Help, help_heading = consts::CLAP_GLOBAL_OPTIONS)]
-    help: Option<bool>,
+    #[clap(long, short, global = true, help_heading = consts::CLAP_GLOBAL_OPTIONS)]
+    help: bool,
 
     /// Increase logging verbosity (-v for warnings, -vv for info, -vvv for debug, -vvvv for trace)
-    #[clap(short, long, action = clap::ArgAction::Count, global = true, help_heading = consts::CLAP_GLOBAL_OPTIONS)]
+    #[clap(short = 'v', long, action = clap::ArgAction::Count, global = true, help_heading = consts::CLAP_GLOBAL_OPTIONS)]
     verbose: u8,
 
     /// Decrease logging verbosity (quiet mode)
@@ -138,6 +138,7 @@ pub enum Command {
     Exec(exec::Args),
     #[clap(visible_alias = "g")]
     Global(global::Args),
+    Help,
     Info(info::Args),
     Init(init::Args),
     Import(import::Args),
@@ -294,19 +295,24 @@ impl LockFileUsageConfig {
 }
 
 pub async fn execute() -> miette::Result<()> {
-    // Check for help case before parsing to intercept and show custom help with extensions
-    let raw_args: Vec<String> = std::env::args().collect();
+    let args = Args::parse();
 
-    // If just "pixi" or "pixi --help" or "pixi -h" or "pixi help", show custom help
-    if raw_args.len() == 1
-        || (raw_args.len() == 2
-            && (raw_args[1] == "--help" || raw_args[1] == "-h" || raw_args[1] == "help"))
-    {
+    // Handle help flag
+    if args.global_options.help {
         show_help_with_extensions();
         return Ok(());
     }
 
-    let args = Args::parse();
+    // If no command provided, show help with extensions
+    if args.command.is_none() {
+        show_help_with_extensions();
+        return Ok(());
+    }
+
+    // Extract values we need before moving args
+    let no_progress = args.no_progress();
+    let log_level_filter = args.log_level_filter();
+
     set_console_colors(&args);
     let use_colors = console::colors_enabled_stderr();
     let in_ci = matches!(env::var("CI").as_deref(), Ok("1" | "true"));
@@ -324,7 +330,7 @@ pub async fn execute() -> miette::Result<()> {
     }))?;
 
     // Hide all progress bars if the user requested it.
-    if args.no_progress() {
+    if no_progress {
         global_multi_progress().set_draw_target(ProgressDrawTarget::hidden());
     }
 
@@ -427,6 +433,10 @@ pub async fn execute_command(
         Command::Exec(args) => exec::execute(args).await,
         Command::Build(args) => build::execute(args).await,
         Command::External(args) => command_info::execute_external_command(args),
+        Command::Help => {
+            show_help_with_extensions();
+            Ok(())
+        }
     }
 }
 
@@ -646,9 +656,11 @@ mod tests {
 }
 /// Display help with extensions section appended
 fn show_help_with_extensions() {
-    let mut cmd = Args::command();
+    let styles = get_styles();
+    let mut cmd = Args::command().styles(styles);
 
-    println!("{}", cmd.render_help());
+    let _ = cmd.write_help(&mut std::io::stdout());
+    println!();
 
     // Add extensions section
     let external_commands = command_info::find_external_commands();
