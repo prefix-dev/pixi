@@ -2,6 +2,11 @@
 source: crates/pixi_manifest/src/discovery.rs
 expression: snapshot
 ---
-Discovered workspace at: nested-pyproject-workspace/pyproject.toml
-- Name: nested-pyproject-workspace
-Package: nested-pyproject @ 0.1.0
+  × missing field 'name' in table
+   ╭─[<CARGO_ROOT>/tests/data/workspace-discovery/nested-pyproject-workspace/nested-pyproject/pyproject.toml:5:1]
+ 4 │
+ 5 │ [tool.pixi.package]
+   · ────────────────────
+ 6 │ # name etc should be derived from the project itself
+ 7 │
+   ╰────

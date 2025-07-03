@@ -22,7 +22,7 @@ use crate::{
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
     toml::{
         create_unsupported_selector_warning, environment::TomlEnvironmentList, task::TomlTask,
-        ExternalPackageProperties, PlatformSpan, TomlFeature, TomlPackage, TomlTarget,
+        WorkspacePackageProperties, PlatformSpan, TomlFeature, TomlPackage, TomlTarget,
         TomlWorkspace,
     },
     utils::{package_map::UniquePackageMap, PixiSpanned},
@@ -79,7 +79,7 @@ impl TomlManifest {
     /// paths are not checked.
     pub fn into_package_manifest(
         self,
-        external: ExternalPackageProperties,
+        external: WorkspacePackageProperties,
         workspace: &WorkspaceManifest,
         root_directory: Option<&Path>,
     ) -> Result<(PackageManifest, Vec<Warning>), TomlError> {
@@ -383,7 +383,7 @@ impl TomlManifest {
             .package
             .as_ref()
             .and_then(|p| p.value.name.as_ref())
-            .cloned();
+            .and_then(|field| field.clone().value());
 
         let WithWarnings {
             warnings: mut workspace_warnings,
@@ -426,14 +426,18 @@ impl TomlManifest {
                 value: package_manifest,
                 warnings: mut package_warnings,
             } = package.into_manifest(
-                ExternalPackageProperties {
+                WorkspacePackageProperties {
                     name: Some(workspace.name.clone()),
                     version: workspace.version.clone(),
                     description: workspace.description.clone(),
                     authors: workspace.authors.clone(),
                     license: workspace.license.clone(),
-                    license_file: workspace.license_file.clone(),
-                    readme: workspace.readme.clone(),
+                    license_file: workspace.license_file.as_ref().and_then(|path| {
+                        root_directory.map(|root| root.join(path))
+                    }),
+                    readme: workspace.readme.as_ref().and_then(|path| {
+                        root_directory.map(|root| root.join(path))
+                    }),
                     homepage: workspace.homepage.clone(),
                     repository: workspace.repository.clone(),
                     documentation: workspace.documentation.clone(),
@@ -598,6 +602,7 @@ mod test {
         preview = ["pixi-build"]
 
         [package]
+        name = { workspace = true }
 
         [package.build]
         backend = { name = "foobar", version = "*" }

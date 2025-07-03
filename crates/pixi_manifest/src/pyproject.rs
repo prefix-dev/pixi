@@ -23,7 +23,7 @@ use crate::{
     manifests::PackageManifest,
     toml::{
         pyproject::{TomlContact, TomlDependencyGroups, TomlProject},
-        ExternalPackageProperties, ExternalWorkspaceProperties, FromTomlStr, PyProjectToml,
+        WorkspacePackageProperties, ExternalWorkspaceProperties, FromTomlStr, PyProjectToml,
         TomlManifest,
     },
     FeatureName, Warning,
@@ -259,7 +259,7 @@ impl PyProjectManifest {
         // could change these types or we can convert. Let's decide when we make it.
         // etc.
         pixi.into_package_manifest(
-            ExternalPackageProperties {
+            WorkspacePackageProperties {
                 name: project.name.map(Spanned::take),
                 version: project
                     .version
