@@ -1,6 +1,7 @@
 use clap::CommandFactory;
 use is_executable::IsExecutable;
 use miette::{Context, IntoDiagnostic};
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::path::PathBuf;
 
@@ -21,32 +22,22 @@ fn get_builtin_commands_with_aliases() -> Vec<String> {
     commands
 }
 
-/// Get all external command names (discovered from PATH)
-fn get_external_command_names() -> Vec<String> {
-    find_external_commands()
-        .into_iter()
-        .map(|(name, _path)| name)
-        .collect()
-}
-
 /// All available commands (built-in + external)
 fn get_all_available_commands() -> Vec<String> {
-    let mut all_commands = Vec::new();
+    let mut all_commands = HashSet::new();
 
     all_commands.extend(get_builtin_commands_with_aliases());
 
-    all_commands.extend(get_external_command_names());
+    all_commands.extend(find_external_commands().into_keys());
 
-    all_commands.sort();
-    all_commands.dedup();
-
-    all_commands
+    all_commands.into_iter().collect()
 }
 
 /// Find similar commands using Jaro similarity
-fn find_similar_commands(input: &str, threshold: f64) -> Vec<String> {
+fn find_similar_commands(input: &str) -> Vec<String> {
     let available_commands = get_all_available_commands();
     let mut suggestions: Vec<(f64, String)> = Vec::new();
+    let threshold = 0.6;
 
     for command in available_commands {
         let similarity = strsim::jaro(input, &command);
@@ -55,19 +46,14 @@ fn find_similar_commands(input: &str, threshold: f64) -> Vec<String> {
         }
     }
 
-    // Sort by similarity (ascending), take top 3, reverse to get most similar first
+    // Sort by similarity (ascending), (most similar at the end)
     suggestions.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
-    suggestions
-        .into_iter()
-        .rev()
-        .take(3)
-        .map(|(_, cmd)| cmd)
-        .collect()
+    suggestions.into_iter().map(|(_, cmd)| cmd).collect()
 }
 
 /// Find all external commands available in PATH
-fn find_external_commands() -> Vec<(String, PathBuf)> {
-    let mut commands = Vec::new();
+fn find_external_commands() -> HashMap<String, PathBuf> {
+    let mut commands = HashMap::new();
 
     if let Some(dirs) = search_directories() {
         for dir in dirs {
@@ -83,7 +69,7 @@ fn find_external_commands() -> Vec<(String, PathBuf)> {
 
                             let path = entry.path();
                             if path.is_executable() {
-                                commands.push((cmd_name.to_string(), path));
+                                commands.insert(cmd_name.to_string(), path);
                             }
                         }
                     }
@@ -91,10 +77,6 @@ fn find_external_commands() -> Vec<(String, PathBuf)> {
             }
         }
     }
-
-    // Remove duplicates
-    commands.sort_by(|a, b| a.0.cmp(&b.0));
-    commands.dedup_by(|a, b| a.0 == b.0);
 
     commands
 }
@@ -136,23 +118,18 @@ pub fn execute_external_command(args: Vec<String>) -> miette::Result<()> {
         Ok(())
     } else {
         // Generate suggestions for similar commands
-        let suggestions = find_similar_commands(cmd, 0.6);
+        let mut suggestions = find_similar_commands(cmd);
 
-        let mut error_msg = format!("No such command: `pixi {}`", cmd);
+        let mut error_msg = format!("unexpected argument '{}' found", cmd);
 
-        if !suggestions.is_empty() {
-            error_msg.push_str("\n\n");
-            if suggestions.len() == 1 {
-                error_msg.push_str(&format!("Did you mean '{}'?", suggestions[0]));
-            } else {
-                error_msg.push_str("Did you mean one of these?\n");
-                for suggestion in &suggestions {
-                    error_msg.push_str(&format!("    {}\n", suggestion));
-                }
-            }
+        if let Some(most_similar) = suggestions.pop() {
+            error_msg.push_str(&format!(
+                "\n\n  tip: a similar subcommand exists: '{}'",
+                most_similar
+            ));
         }
 
-        error_msg.push_str("\n\nhelp: view all installed commands with 'pixi --list'");
+        error_msg.push_str("\n\nhelp: view all installed commands with 'pixi --help'");
 
         let styles = get_styles();
 
