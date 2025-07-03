@@ -10,8 +10,7 @@ use futures::TryStreamExt;
 use itertools::Either;
 use miette::Diagnostic;
 use pixi_build_types::procedures::conda_outputs::{
-    CondaOutputDependencies, CondaOutputIgnoreRunExports, CondaOutput,
-    CondaOutputRunExports,
+    CondaOutput, CondaOutputDependencies, CondaOutputIgnoreRunExports, CondaOutputRunExports,
 };
 use pixi_build_types::{BinaryPackageSpecV1, NamedSpecV1, PackageSpecV1};
 use pixi_record::{InputHash, PinnedSourceSpec, PixiRecord, SourceRecord};
