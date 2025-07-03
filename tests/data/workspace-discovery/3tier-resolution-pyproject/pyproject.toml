@@ -1,0 +1,14 @@
+[project]
+name = "default-workspace-name"
+version = "2.0.0"
+description = "Default workspace description"
+
+[tool.pixi.package]
+# Demonstrate all 3 tiers:
+name = "explicit-package-name"          # Tier 1: Direct value
+version = { workspace = true }          # Tier 2: Workspace inheritance
+description = { workspace = true }      # Tier 2: Workspace inheritance
+# authors not specified - should use tier 3 project defaults
+
+[tool.pixi.package.build]
+backend = { name = "bla", version = "*" }

@@ -1,0 +1,7 @@
+---
+source: crates/pixi_manifest/src/discovery.rs
+expression: snapshot
+---
+Discovered workspace at: 3tier-resolution-pyproject/pyproject.toml
+- Name: explicit-package-name
+Package: explicit-package-name @ 2.0.0

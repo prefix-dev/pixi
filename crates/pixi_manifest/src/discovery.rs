@@ -534,6 +534,12 @@ mod test {
     )]
     #[case::non_pixi_build("non-pixi-build")]
     #[case::non_pixi_build_project("non-pixi-build/project")]
+    #[case::tier_resolution_mixed("3tier-resolution-mixed")]
+    #[case::tier_resolution_mixed_package("3tier-resolution-mixed/package-with-pyproject")]
+    #[case::tier_resolution_pyproject("3tier-resolution-pyproject")]
+    #[case::tier_resolution_separate("3tier-resolution-separate")]
+    #[case::tier_resolution_separate_package("3tier-resolution-separate/package-dir")]
+    #[case::tier_resolution_error("3tier-resolution-error")]
     fn test_workspace_discoverer(#[case] subdir: &str) {
         let test_data_root = dunce::canonicalize(
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/workspace-discovery"),

@@ -1,0 +1,17 @@
+[project]
+name = "project-default-name"
+version = "1.0.0"
+description = "Project default description"
+authors = [{name = "Project Author"}]
+
+[tool.pixi.package]
+# name should inherit from workspace (tier 2)
+name = { workspace = true }
+# version should use project default (tier 3)
+# description should use direct value (tier 1)
+description = "Direct package description"
+# authors should inherit from workspace (tier 2)
+authors = { workspace = true }
+
+[tool.pixi.package.build]
+backend = { name = "bla", version = "*" }

@@ -1,0 +1,16 @@
+[project]
+name = "error-test-workspace"
+
+[tool.pixi.workspace]
+channels = []
+platforms = []
+preview = ["pixi-build"]
+# Missing description that will be requested by package
+
+[tool.pixi.package]
+name = "package-name"
+version = "1.0.0"
+description = { workspace = true }  # This should error - workspace doesn't define description
+
+[tool.pixi.package.build]
+backend = { name = "bla", version = "*" }

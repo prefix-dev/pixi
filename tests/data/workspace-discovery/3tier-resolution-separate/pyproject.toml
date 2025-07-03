@@ -1,0 +1,10 @@
+[project]
+name = "separate-workspace"
+version = "1.0.0"
+
+[tool.pixi.workspace]
+channels = []
+platforms = []
+preview = ["pixi-build"]
+description = "Separate workspace description"
+license = "Apache-2.0"

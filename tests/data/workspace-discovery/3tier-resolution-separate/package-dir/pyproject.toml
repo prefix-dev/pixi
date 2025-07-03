@@ -1,0 +1,17 @@
+[project]
+name = "package-default-name"
+version = "3.0.0"
+description = "Package default description"
+authors = [{name = "Package Default Author"}]
+
+[tool.pixi.package]
+# name should use project default (tier 3)
+# version should inherit from workspace but workspace doesn't have it, so use project default (tier 3)
+# description should inherit from workspace (tier 2)
+description = { workspace = true }
+# authors should use project default (tier 3)
+# license should inherit from workspace (tier 2)
+license = { workspace = true }
+
+[tool.pixi.package.build]
+backend = { name = "bla", version = "*" }
