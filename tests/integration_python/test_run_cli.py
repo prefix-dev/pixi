@@ -12,6 +12,7 @@ from .common import (
 import tempfile
 import os
 import tomli
+import platform
 
 
 def test_run_in_shell_environment(pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -1364,16 +1365,21 @@ def test_run_with_environment_variable_priority(
     pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
 ) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
-    script_manifest = tmp_pixi_workspace.joinpath("env_setup.sh")
+    if platform.system() == "Windows":
+        script_manifest = tmp_pixi_workspace.joinpath("env_setup.bat")
+    else:
+        script_manifest = tmp_pixi_workspace.joinpath("env_setup.sh")
     toml = f"""
-    [project]
+    [workspace]
     name = "test"
     channels = ["{dummy_channel_1}"]
     platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
     [activation.env]
     MY_ENV = "test123"
-    [activation]
+    [target.unix.activation]
     scripts = ["env_setup.sh"]
+    [target.win-64.activation]
+    scripts = ["env_setup.bat"]
     [tasks.task]
     cmd = "echo $MY_ENV"
     [tasks.foo]
@@ -1385,13 +1391,18 @@ def test_run_with_environment_variable_priority(
     [dependencies]
     pixi-foobar = "*"
     """
-    test_script_file = """
-    #!/bin/bash
-    export MY_ENV="activation_script"
-    export FOO_PATH="activation_script"
-    """
     manifest.write_text(toml)
-    script_manifest.write_text(test_script_file)
+    if platform.system() == "Windows":
+        script_manifest.write_text("""@echo off
+set "MY_ENV=activation_script"
+set "FOO_PATH=activation_script"
+""")
+    else:
+        script_manifest.write_text("""
+        #!/bin/bash
+        export MY_ENV="activation_script"
+        export FOO_PATH="activation_script"
+        """)
 
     # Run the default task
     verify_cli_command(

@@ -132,7 +132,7 @@ impl<'p> ExecutableTask<'p> {
     /// Returns the task as script
     fn as_script(
         &self,
-        command_env: &HashMap<OsString, OsString>,
+        command_env: IndexMap<String, String>,
     ) -> Result<Option<String>, FailedToParseShellScript> {
         // Convert the task into an executable string
         let task = self
@@ -173,7 +173,11 @@ impl<'p> ExecutableTask<'p> {
         &self,
         command_env: &HashMap<OsString, OsString>,
     ) -> Result<Option<SequentialList>, FailedToParseShellScript> {
-        let full_script = self.as_script(command_env)?;
+        let command_env_converted: IndexMap<String, String> = command_env
+            .iter()
+            .filter_map(|(k, v)| Some((k.to_str()?.to_string(), v.to_str()?.to_string())))
+            .collect();
+        let full_script = self.as_script(command_env_converted)?;
 
         if let Some(full_script) = full_script {
             tracing::debug!("Parsing shell script: {}", full_script);
@@ -390,7 +394,7 @@ fn get_output_writer_and_handle() -> (ShellPipeWriter, JoinHandle<String>) {
 }
 
 /// Get the environment variable based on their priority
-fn get_export_specific_task_env(task: &Task, command_env: &HashMap<OsString, OsString>) -> String {
+fn get_export_specific_task_env(task: &Task, command_env: IndexMap<String, String>) -> String {
     // Early return if task.env() is empty
     if task.env().is_none_or(|map| map.is_empty()) {
         return String::new();
@@ -398,6 +402,7 @@ fn get_export_specific_task_env(task: &Task, command_env: &HashMap<OsString, OsS
 
     let mut export = String::new();
     let mut export_merged: HashMap<String, String> = HashMap::new();
+
     // Define keys that should not be overridden
     let override_excluded_keys: HashSet<&str> = [
         "PIXI_PROJECT_ROOT",
@@ -417,16 +422,9 @@ fn get_export_specific_task_env(task: &Task, command_env: &HashMap<OsString, OsS
     .cloned()
     .collect();
 
-    // Convert OsString to String
-    let command_env_converted: IndexMap<String, String> = command_env
-        .iter()
-        .filter_map(|(k, v)| Some((k.to_str()?.to_string(), v.to_str()?.to_string())))
-        .collect();
-
     if let Some(env) = task.env() {
         // If task.env() and command_env don't have duplicated keys, simply export task.env().
-        if env.keys().all(|k| !command_env_converted.contains_key(k)) {
-            println!("env.keys() {:?}", env.keys());
+        if env.keys().all(|k| !command_env.contains_key(k)) {
             for key in env.keys() {
                 if let Some(value) = env.get(key) {
                     export_merged.insert(key.clone(), value.clone());
@@ -437,14 +435,14 @@ fn get_export_specific_task_env(task: &Task, command_env: &HashMap<OsString, OsS
             let mut env_map: HashMap<&'static str, Option<IndexMap<String, String>>> =
                 HashMap::new();
             // Command env variables
-            env_map.insert("COMMAND_ENV", Some(command_env_converted));
+            env_map.insert("COMMAND_ENV", Some(command_env));
             // Task specific environment variables
             env_map.insert(
                 "TASK_SPECIFIC_ENVS",
                 Some(task.env().cloned().unwrap_or_default()),
             );
 
-            // Merge based on priority: from lowest to higheset
+            // Merge based on priority: from lowest to highest
             let priority = ["COMMAND_ENV", "TASK_SPECIFIC_ENVS"];
             for key in &priority {
                 if let Some(Some(env_map_key)) = env_map.get(key) {
@@ -456,34 +454,17 @@ fn get_export_specific_task_env(task: &Task, command_env: &HashMap<OsString, OsS
 
     // Put all merged environment variables to export.
     for (key, value) in export_merged {
+        // FIX: Convert String to &str using as_str()
         let should_exclude = override_excluded_keys.contains(key.as_str());
         if !should_exclude {
             tracing::info!("Setting environment variable: {}=\"{}\"", key, value);
+
             // Platform-specific export format with proper escaping
             if cfg!(windows) {
-                // Windows: Escape semicolons and other special characters
-                let escaped_value: String = value
-                    .replace("\\", "\\\\") // Escape backslashes first (for file paths)
-                    .replace("&", "^&") // Escape ampersands
-                    .replace("|", "^|") // Escape pipes
-                    .replace(";", "^;") // Escape semicolons
-                    .replace("\"", "\"\"") // Escape quotes (cmd.exe style)
-                    .replace("%", "%%") // Escape percent signs
-                    .replace("!", "^^!") // Escape exclamation marks (delayed expansion)
-                    .replace("<", "^<") // Escape input redirection
-                    .replace(">", "^>"); // Escape output redirection
-
                 // Use proper Windows set command format
-                export.push_str(&format!("set \"{}={}\"\r\n", key, escaped_value));
+                export.push_str(&format!("set \"{}={}\"\r\n", key, value));
             } else {
-                // Unix: Escape shell special characters
-                let escaped_value = value
-                    .replace("\\", "\\\\") // Escape backslashes
-                    .replace("\"", "\\\"") // Escape quotes
-                    .replace("$", "\\$") // Escape dollar signs
-                    .replace("`", "\\`"); // Escape backticks
-
-                export.push_str(&format!("export \"{}={}\";\n", key, escaped_value));
+                export.push_str(&format!("export \"{}={}\";\n", key, value));
             }
         }
     }
@@ -548,13 +529,6 @@ mod tests {
         platforms = ["linux-64", "osx-64", "win-64", "osx-arm64", "linux-ppc64le", "linux-aarch64"]
         "#;
 
-    fn create_os_map(entries: &[(&str, &str)]) -> HashMap<OsString, OsString> {
-        entries
-            .iter()
-            .map(|(k, v)| (OsString::from(*k), OsString::from(*v)))
-            .collect()
-    }
-
     #[test]
     fn test_export_specific_task_env_merge() {
         let file_contents = r#"
@@ -572,9 +546,12 @@ mod tests {
             .task(&TaskName::from("test"), None)
             .unwrap();
         // Environment Variables
-        let command_env = create_os_map(&[("PATH", "myPath"), ("HOME", "myHome")]);
+        let mut my_map: IndexMap<String, String> = IndexMap::new();
 
-        let result = get_export_specific_task_env(task, &command_env);
+        my_map.insert("PATH".to_string(), "myPath".to_string());
+        my_map.insert("HOME".to_string(), "myHome".to_string());
+
+        let result = get_export_specific_task_env(task, my_map);
 
         let expected_prefix = if cfg!(windows) {
             "set \"FOO=bar\""
@@ -602,11 +579,13 @@ mod tests {
             .task(&TaskName::from("test"), None)
             .unwrap();
         // Environment Variables
-        let command_env = create_os_map(&[("HOME", "myHome"), ("FOO", "123")]);
+        let mut my_map: IndexMap<String, String> = IndexMap::new();
 
-        let result = get_export_specific_task_env(task, &command_env);
+        my_map.insert("FOO".to_string(), "123".to_string());
+        my_map.insert("HOME".to_string(), "myHome".to_string());
+
+        let result = get_export_specific_task_env(task, my_map);
         // task specific env overrides outside environment variables
-        println!("RESULT: {}", result);
         let expected_prefix = if cfg!(windows) {
             "set \"FOO=bar\""
         } else {
@@ -643,9 +622,12 @@ mod tests {
         };
 
         // Environment Variables
-        let command_env = create_os_map(&[("PATH", "myPath"), ("HOME", "myHome")]);
+        let mut my_map: IndexMap<String, String> = IndexMap::new();
 
-        let result = executable_task.as_script(&command_env).unwrap().unwrap();
+        my_map.insert("PATH".to_string(), "myPath".to_string());
+        my_map.insert("HOME".to_string(), "myHome".to_string());
+
+        let result = executable_task.as_script(my_map);
 
         let expected_prefix = if cfg!(windows) {
             "set \"FOO=bar\""
@@ -653,7 +635,8 @@ mod tests {
             "export \"FOO=bar\""
         };
 
-        assert!(result.contains(expected_prefix));
+        let script = result.unwrap().expect("Script should not be None");
+        assert!(script.contains(expected_prefix));
     }
 
     #[tokio::test]
