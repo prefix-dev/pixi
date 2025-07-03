@@ -1,11 +1,12 @@
 use clap::Parser;
 use clap::builder::styling::{AnsiColor, Color, Style};
 use indicatif::ProgressDrawTarget;
-use miette::IntoDiagnostic;
+use miette::{Diagnostic, IntoDiagnostic};
 use pixi_consts::consts;
 use pixi_progress::global_multi_progress;
 use pixi_utils::indicatif::IndicatifWriter;
 use std::{env, io::IsTerminal};
+use thiserror::Error;
 use tracing_subscriber::{
     EnvFilter, filter::LevelFilter, prelude::__tracing_subscriber_SubscriberExt,
     util::SubscriberInitExt,
@@ -39,6 +40,12 @@ pub mod update;
 pub mod upgrade;
 pub mod upload;
 pub mod workspace;
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum LockFileUsageError {
+    #[error("the argument '--locked' cannot be used together with '--frozen'")]
+    FrozenAndLocked,
+}
 
 #[derive(Parser, Debug)]
 #[command(
@@ -201,11 +208,11 @@ impl LockFileUsageArgs {
 
 // Automatic validation when converting from raw args
 impl TryFrom<LockFileUsageArgsRaw> for LockFileUsageArgs {
-    type Error = miette::Error;
+    type Error = LockFileUsageError;
 
-    fn try_from(raw: LockFileUsageArgsRaw) -> miette::Result<Self> {
+    fn try_from(raw: LockFileUsageArgsRaw) -> Result<Self, LockFileUsageError> {
         if raw.frozen && raw.locked {
-            miette::bail!("the argument '--locked' cannot be used with '--frozen'");
+            return Err(LockFileUsageError::FrozenAndLocked);
         }
         Ok(LockFileUsageArgs { inner: raw })
     }
@@ -215,7 +222,7 @@ impl TryFrom<LockFileUsageArgsRaw> for LockFileUsageArgs {
 impl clap::FromArgMatches for LockFileUsageArgs {
     fn from_arg_matches(matches: &clap::ArgMatches) -> Result<Self, clap::Error> {
         let raw = LockFileUsageArgsRaw::from_arg_matches(matches)?;
-        raw.try_into().map_err(|e: miette::Error| {
+        raw.try_into().map_err(|e: LockFileUsageError| {
             clap::Error::raw(clap::error::ErrorKind::ArgumentConflict, e.to_string())
         })
     }
@@ -249,9 +256,9 @@ impl From<LockFileUsageArgs> for crate::environment::LockFileUsage {
 }
 
 impl TryFrom<LockFileUsageConfig> for crate::environment::LockFileUsage {
-    type Error = miette::Error;
+    type Error = LockFileUsageError;
 
-    fn try_from(value: LockFileUsageConfig) -> miette::Result<Self> {
+    fn try_from(value: LockFileUsageConfig) -> Result<Self, LockFileUsageError> {
         value.validate()?;
         if value.frozen {
             Ok(Self::Frozen)
@@ -278,9 +285,9 @@ pub struct LockFileUsageConfig {
 
 impl LockFileUsageConfig {
     /// Validate that the configuration is valid
-    pub fn validate(&self) -> miette::Result<()> {
+    pub fn validate(&self) -> Result<(), LockFileUsageError> {
         if self.frozen && self.locked {
-            miette::bail!("the argument '--locked' cannot be used with '--frozen'");
+            return Err(LockFileUsageError::FrozenAndLocked);
         }
         Ok(())
     }
@@ -464,6 +471,7 @@ pub fn get_styles() -> clap::builder::Styles {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use temp_env;
 
     #[test]
     fn test_frozen_and_locked_conflict() {
@@ -514,7 +522,7 @@ mod tests {
         assert!(result.is_err());
 
         let error = result.unwrap_err();
-        assert!(error.to_string().contains("cannot be used with"));
+        assert!(error.to_string().contains("cannot be used together with"));
     }
 
     #[test]

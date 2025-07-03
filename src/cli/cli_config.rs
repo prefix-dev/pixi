@@ -113,7 +113,8 @@ pub struct LockFileUpdateConfig {
 
 impl LockFileUpdateConfig {
     pub fn lock_file_usage(&self) -> miette::Result<LockFileUsage> {
-        let usage: LockFileUsage = self.lock_file_usage.clone().try_into()?;
+        let usage: LockFileUsage = self.lock_file_usage.clone().try_into()
+            .map_err(|e: crate::cli::LockFileUsageError| miette::miette!(e))?;
         if self.no_lockfile_update {
             Ok(LockFileUsage::Frozen)
         } else {
