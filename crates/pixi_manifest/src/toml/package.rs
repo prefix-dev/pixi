@@ -241,7 +241,7 @@ impl From<ExternalWorkspaceProperties> for WorkspacePackageProperties {
 
 /// Defines package defaults that can be used as fallback values.
 ///
-/// This contains the package-level defaults (e.g., from [project] section in pyproject.toml).
+/// This contains the package-level defaults (e.g., from `[project]` section in pyproject.toml).
 #[derive(Debug, Clone, Default)]
 pub struct PackageDefaults {
     pub name: Option<String>,

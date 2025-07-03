@@ -2170,6 +2170,7 @@
         "workspace": {
           "title": "Workspace",
           "description": "Must be true to inherit from workspace",
+          "type": "boolean",
           "const": true
         }
       }
