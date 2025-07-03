@@ -212,7 +212,7 @@ enum LazyBuildDispatchError {
         "installation of conda environment is required to solve PyPI source dependencies but `--no-install` flag has been set"
     )]
     InstallationRequiredButDisallowed,
-    #[error("failed to initialize build dispatch: '{0}'")]
+    #[error("failed to initialize python build process: {0}")]
     InitializationError(String),
     #[error(transparent)]
     Uv(#[from] BuildDispatchError),
@@ -269,12 +269,10 @@ impl<'a> LazyBuildDispatch<'a> {
                 self.prefix_updater.name().as_str()
             );
 
-            let repodata_records = self.repodata_records.as_ref().map_err(|err| {
-                LazyBuildDispatchError::InitializationError(format!(
-                    "failed to get repodata of the building conda prefix: {}",
-                    err
-                ))
-            })?;
+            let repodata_records = self
+                .repodata_records
+                .as_ref()
+                .map_err(|err| LazyBuildDispatchError::InitializationError(format!("{}", err)))?;
 
             let prefix = self
                 .prefix_updater
