@@ -67,7 +67,7 @@ Ask a question on the Prefix Discord server: https://discord.gg/kKV8ZxyzY4
 For more information, see the documentation at: https://pixi.sh
 ", consts::PIXI_VERSION),
 )]
-#[clap(arg_required_else_help = true, styles=get_styles(), disable_help_flag = true, allow_external_subcommands = true)]
+#[clap(styles=get_styles(), disable_help_flag = true, disable_help_subcommand = true, allow_external_subcommands = true)]
 pub struct Args {
     #[command(subcommand)]
     command: Option<Command>,
@@ -93,7 +93,7 @@ pub struct GlobalOptions {
     help: Option<bool>,
 
     /// Increase logging verbosity (-v for warnings, -vv for info, -vvv for debug, -vvvv for trace)
-    #[clap(short, long, action = clap::ArgAction::Count, global = true, help_heading = consts::CLAP_GLOBAL_OPTIONS)]
+    #[clap(short = 'v', long, action = clap::ArgAction::Count, global = true, help_heading = consts::CLAP_GLOBAL_OPTIONS)]
     verbose: u8,
 
     /// Decrease logging verbosity (quiet mode)
@@ -285,18 +285,6 @@ pub struct LockFileUsageConfig {
 }
 
 pub async fn execute() -> miette::Result<()> {
-    // Check for help case before parsing to intercept and show custom help with extensions
-    let raw_args: Vec<String> = std::env::args().collect();
-
-    // If just "pixi" or "pixi --help" or "pixi -h" or "pixi help", show custom help
-    if raw_args.len() == 1
-        || (raw_args.len() == 2
-            && (raw_args[1] == "--help" || raw_args[1] == "-h" || raw_args[1] == "help"))
-    {
-        show_help_with_extensions();
-        return Ok(());
-    }
-
     let args = Args::parse();
 
     // Extract values we need before moving args
@@ -433,7 +421,7 @@ pub async fn execute_command(
         Command::Lock(cmd) => lock::execute(cmd).await,
         Command::Exec(args) => exec::execute(args).await,
         Command::Build(args) => build::execute(args).await,
-        Command::External(args) => command_info::execute_external_command(args),
+        Command::External(args) => command_info::execute_external_command(args), 
     }
 }
 
