@@ -1,3 +1,4 @@
+use pixi_build_types::procedures::conda_build_v2::{CondaBuildV2Params, CondaBuildV2Result};
 use pixi_build_types::{
     BackendCapabilities, PixiBuildApiVersion,
     procedures::{
@@ -6,7 +7,6 @@ use pixi_build_types::{
         conda_outputs::{CondaOutputsParams, CondaOutputsResult},
     },
 };
-use pixi_build_types::procedures::conda_build_v2::{CondaBuildV2Params, CondaBuildV2Result};
 
 mod stderr;
 
@@ -89,9 +89,7 @@ impl Backend {
         params: CondaOutputsParams,
     ) -> Result<CondaOutputsResult, CommunicationError> {
         assert!(
-            self.capabilities()
-                .provides_conda_outputs
-                .unwrap_or(false),
+            self.capabilities().provides_conda_outputs.unwrap_or(false),
             "This backend does not support the conda outputs procedure"
         );
         match &self.inner {

@@ -1,16 +1,16 @@
-use std::{
-    collections::BTreeSet,
-    hash::{Hash, Hasher},
-    io::SeekFrom,
-    path::PathBuf,
-};
-use std::path::Path;
 use crate::build::{MoveError, move_file, source_checkout_cache_key};
 use async_fd_lock::{LockWrite, RwLockWriteGuard};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_record::PinnedSourceSpec;
 use rattler_conda_types::{ChannelUrl, GenericVirtualPackage, Platform, RepoDataRecord};
 use serde::{Deserialize, Serialize};
+use std::path::Path;
+use std::{
+    collections::BTreeSet,
+    hash::{Hash, Hasher},
+    io::SeekFrom,
+    path::PathBuf,
+};
 use thiserror::Error;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use url::Url;

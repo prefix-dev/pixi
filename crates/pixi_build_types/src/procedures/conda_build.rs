@@ -1,7 +1,7 @@
 //! This API was introduced in Pixi Build API version 0.
 
 use std::{
-    collections::{BTreeSet, BTreeMap},
+    collections::{BTreeMap, BTreeSet},
     path::PathBuf,
 };
 

@@ -27,9 +27,9 @@ use tracing::instrument;
 
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    InstallPixiEnvironmentError,
-    InstallPixiEnvironmentSpec, InstantiateBackendError, InstantiateBackendSpec,
-    PixiEnvironmentSpec, SolvePixiEnvironmentError, SourceCheckout, SourceCheckoutError,
+    InstallPixiEnvironmentError, InstallPixiEnvironmentSpec, InstantiateBackendError,
+    InstantiateBackendSpec, PixiEnvironmentSpec, SolvePixiEnvironmentError, SourceCheckout,
+    SourceCheckoutError,
     build::{Dependencies, DependenciesError, WorkDirKey},
 };
 
