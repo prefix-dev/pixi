@@ -2,6 +2,10 @@
 source: crates/pixi_manifest/src/discovery.rs
 expression: snapshot
 ---
-Discovered workspace at: 3tier-resolution-pyproject/pyproject.toml
-- Name: explicit-package-name
-Package: explicit-package-name @ 2.0.0
+  × the workspace does not define a 'version'
+    ╭─[<CARGO_ROOT>/tests/data/workspace-discovery/3tier-resolution-pyproject/pyproject.toml:9:11]
+  8 │ name = "explicit-package-name"          # Tier 1: Direct value
+  9 │ version = { workspace = true }          # Tier 2: Workspace inheritance
+    ·           ────────────────────
+ 10 │ description = { workspace = true }      # Tier 2: Workspace inheritance
+    ╰────

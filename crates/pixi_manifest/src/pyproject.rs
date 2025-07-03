@@ -340,6 +340,31 @@ impl PyProjectManifest {
                 )
             })
             .collect();
+        // Extract and convert project authors to Vec<String> format for reuse
+        let project_authors = project.authors.map(contacts_to_authors).or(poetry.authors.clone());
+        
+        // Extract package defaults from [project] section  
+        let package_defaults = PackageDefaults {
+            name: project.name.as_ref().map(|name| name.value.clone()),
+            version: project
+                .version
+                .as_ref()
+                .and_then(|v| v.value.to_string().parse().ok())
+                .or(poetry.version.as_ref().and_then(|v| v.parse().ok())),
+            description: project
+                .description
+                .as_ref()
+                .map(|desc| desc.value.clone())
+                .or(poetry.description.clone()),
+            authors: project_authors.clone(),
+            license: None,
+            license_file: None,
+            readme: None,
+            homepage: None,
+            repository: None,
+            documentation: None,
+        };
+
         let (mut workspace_manifest, package_manifest, warnings) = pixi.into_workspace_manifest(
             ExternalWorkspaceProperties {
                 name: project.name.map(Spanned::take),
@@ -351,7 +376,7 @@ impl PyProjectManifest {
                     .description
                     .map(Spanned::take)
                     .or(poetry.description),
-                authors: project.authors.map(contacts_to_authors).or(poetry.authors),
+                authors: project_authors,
                 license: None,
                 license_file: None,
                 readme: None,
@@ -360,6 +385,7 @@ impl PyProjectManifest {
                 documentation: None,
                 features: implicit_pypi_features,
             },
+            package_defaults,
             root_directory,
         )?;
 

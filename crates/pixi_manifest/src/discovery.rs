@@ -112,6 +112,7 @@ impl Manifests {
                 .and_then(|manifest| {
                     manifest.into_workspace_manifest(
                         ExternalWorkspaceProperties::default(),
+                        PackageDefaults::default(),
                         Some(manifest_dir),
                     )
                 }),
@@ -367,6 +368,7 @@ impl WorkspaceDiscoverer {
                         // Parse the manifest as a workspace manifest if it contains a workspace
                         manifest.into_workspace_manifest(
                             ExternalWorkspaceProperties::default(),
+                            PackageDefaults::default(),
                             Some(manifest_dir),
                         )
                     } else {

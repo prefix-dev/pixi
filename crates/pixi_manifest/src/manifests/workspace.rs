@@ -8,7 +8,7 @@ use rattler_conda_types::{Platform, Version};
 use toml_edit::Value;
 
 use crate::manifests::document::ManifestDocument;
-use crate::toml::ExternalWorkspaceProperties;
+use crate::toml::{ExternalWorkspaceProperties, PackageDefaults};
 use crate::{
     consts,
     environment::{Environment, EnvironmentName},
@@ -50,7 +50,7 @@ impl WorkspaceManifest {
     ) -> Result<Self, WithSourceCode<TomlError, S>> {
         TomlManifest::from_toml_str(source.as_ref())
             .and_then(|manifest| {
-                manifest.into_workspace_manifest(ExternalWorkspaceProperties::default(), None)
+                manifest.into_workspace_manifest(ExternalWorkspaceProperties::default(), PackageDefaults::default(), None)
             })
             .map(|manifests| manifests.0)
             .map_err(|e| WithSourceCode { source, error: e })
