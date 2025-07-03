@@ -2,7 +2,7 @@ use std::{collections::HashSet, sync::Arc};
 
 use async_once_cell::OnceCell as AsyncOnceCell;
 use miette::IntoDiagnostic;
-use pixi_command_dispatcher::InstallPixiEnvironmentSpec;
+use pixi_command_dispatcher::{BuildEnvironment, InstallPixiEnvironmentSpec};
 use pixi_manifest::FeaturesExt;
 use pixi_record::PixiRecord;
 use rattler::install::link_script::LinkScriptType;
@@ -188,15 +188,21 @@ pub async fn update_prefix_conda(
     try_increase_rlimit_to_sensible();
 
     // Run the installation through the command dispatcher.
-    let result = build_context
-        .command_dispatcher()
+    let command_dispatcher = build_context.command_dispatcher();
+    let build_environment = BuildEnvironment {
+        host_platform,
+        host_virtual_packages: vec![],
+        build_platform: command_dispatcher.tool_platform().0,
+        build_virtual_packages: command_dispatcher.tool_platform().1.to_vec(),
+    };
+    let result = command_dispatcher
         .install_pixi_environment(InstallPixiEnvironmentSpec {
             name,
             records: pixi_records,
             prefix: rattler_conda_types::prefix::Prefix::create(prefix.root()).into_diagnostic()?,
             installed: None,
-            target_platform: host_platform,
             force_reinstall: reinstall_packages.unwrap_or_default(),
+            build_environment,
             channels,
             channel_config,
             variants: Some(
@@ -205,6 +211,7 @@ pub async fn update_prefix_conda(
                     .into_iter()
                     .collect(),
             ),
+
             enabled_protocols: Default::default(),
         })
         .await?;
@@ -215,10 +222,7 @@ pub async fn update_prefix_conda(
 
     // Check in the prefix if there are any `post-link` scripts that have not been
     // executed, and if yes, issue a one-time warning to the user.
-    if !build_context
-        .command_dispatcher()
-        .allow_execute_link_scripts()
-    {
+    if !command_dispatcher.allow_execute_link_scripts() {
         let mut skipped_scripts = Vec::new();
 
         for package in result.transaction.installed_packages() {

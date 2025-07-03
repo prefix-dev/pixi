@@ -3,13 +3,7 @@ use std::collections::HashMap;
 use futures::TryStreamExt;
 use itertools::Either;
 use miette::Diagnostic;
-use pixi_build_types::{
-    BinaryPackageSpecV1, NamedSpecV1, PackageSpecV1,
-    procedures::conda_outputs::{
-        CondaOutput, CondaOutputDependencies, CondaOutputIgnoreRunExports, CondaOutputMetadata,
-        CondaOutputRunExports,
-    },
-};
+use pixi_build_types::procedures::conda_outputs::CondaOutput;
 use pixi_record::{InputHash, PinnedSourceSpec, PixiRecord, SourceRecord};
 use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceSpec, SpecConversionError};
 use pixi_spec_containers::DependencyMap;

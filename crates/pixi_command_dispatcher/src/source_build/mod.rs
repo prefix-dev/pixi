@@ -266,10 +266,10 @@ impl SourceBuildSpec {
             .outputs
             .into_iter()
             .find(|output| {
-                output.identifier.name == self.source.package_record.name
-                    && output.identifier.version == self.source.package_record.version
-                    && output.identifier.build == self.source.package_record.build
-                    && output.identifier.subdir.as_str() == self.source.package_record.subdir
+                output.metadata.name == self.source.package_record.name
+                    && output.metadata.version == self.source.package_record.version
+                    && output.metadata.build == self.source.package_record.build
+                    && output.metadata.subdir.as_str() == self.source.package_record.subdir
             })
             .ok_or_else(|| {
                 CommandDispatcherError::Failed(SourceBuildError::MissingOutput {
@@ -375,11 +375,11 @@ impl SourceBuildSpec {
                     build_prefix: Some(directories.build_prefix),
                     host_prefix: Some(directories.host_prefix),
                     output: CondaBuildV2Output {
-                        name: output.identifier.name,
-                        version: Some(output.identifier.version),
-                        build: Some(output.identifier.build),
-                        subdir: output.identifier.subdir,
-                        variant: output.identifier.variant,
+                        name: output.metadata.name,
+                        version: Some(output.metadata.version),
+                        build: Some(output.metadata.build),
+                        subdir: output.metadata.subdir,
+                        variant: output.metadata.variant,
                     },
                     work_directory,
                     output_directory: self.output_directory,

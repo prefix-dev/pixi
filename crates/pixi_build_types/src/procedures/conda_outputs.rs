@@ -10,6 +10,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     path::PathBuf,
 };
+
 use ordermap::OrderSet;
 use rattler_conda_types::{NoArchType, PackageName, Platform, VersionWithSource};
 use serde::{Deserialize, Serialize};
