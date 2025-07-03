@@ -224,8 +224,9 @@ enum LazyBuildDispatchError {
     UvFrontend(#[from] uv_build_frontend::Error),
     #[error("failed to query interpreter in instantiated prefix")]
     QueryInterpreterError(#[from] InterpreterError),
-    #[error("missing python interpreter from conda prefix: {prefix},")]
-    #[diagnostic(help("Use `pixi add python` to install the latest python interpreter."))]
+    #[error(
+        "missing python interpreter from conda prefix: {prefix},\nUse `pixi add python` to install the latest python interpreter."
+    )]
     PythonMissingError { prefix: String },
 }
 
