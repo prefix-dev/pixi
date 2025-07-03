@@ -212,7 +212,7 @@ enum LazyBuildDispatchError {
         "installation of conda environment is required to solve PyPI source dependencies but `--no-install` flag has been set"
     )]
     InstallationRequiredButDisallowed,
-    #[error("failed to initialize python build process: {0}")]
+    #[error("failed to initialize Python build process: {0}")]
     InitializationError(String),
     #[error(transparent)]
     Uv(#[from] BuildDispatchError),
