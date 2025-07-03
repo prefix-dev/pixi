@@ -15,6 +15,7 @@ from pydantic import (
     Field,
     PositiveFloat,
     StringConstraints,
+    field_validator,
 )
 
 #: latest version currently supported by the `taplo` TOML linter and language server
@@ -68,6 +69,12 @@ class StrictBaseModel(BaseModel):
     class Config:
         extra = "forbid"
         alias_generator = hyphenize
+
+
+class WorkspaceInheritance(StrictBaseModel):
+    """Indicates that a field should inherit its value from the workspace."""
+
+    workspace: Literal[True] = Field(description="Must be true to inherit from workspace")
 
 
 ###################
@@ -571,32 +578,47 @@ class PyPIOptions(StrictBaseModel):
 class Package(StrictBaseModel):
     """The package's metadata information."""
 
-    name: NonEmptyStr | None = Field(None, description="The name of the package")
-    version: NonEmptyStr | None = Field(
+    name: NonEmptyStr | WorkspaceInheritance | None = Field(
         None,
-        description="The version of the project; we advise use of [SemVer](https://semver.org)",
-        examples=["1.2.3"],
+        description="The name of the package. Can be a string or { workspace = true } to inherit from workspace",
     )
-    description: NonEmptyStr | None = Field(None, description="A short description of the project")
-    authors: list[NonEmptyStr] | None = Field(
-        None, description="The authors of the project", examples=["John Doe <j.doe@prefix.dev>"]
-    )
-    license: NonEmptyStr | None = Field(
+    version: NonEmptyStr | WorkspaceInheritance | None = Field(
         None,
-        description="The license of the project; we advise using an [SPDX](https://spdx.org/licenses/) identifier.",
+        description="The version of the project; we advise use of [SemVer](https://semver.org). Can be a string or { workspace = true } to inherit from workspace",
+        examples=["1.2.3", {"workspace": True}],
     )
-    license_file: PathNoBackslash | None = Field(
-        None, description="The path to the license file of the project"
+    description: NonEmptyStr | WorkspaceInheritance | None = Field(
+        None,
+        description="A short description of the project. Can be a string or { workspace = true } to inherit from workspace",
     )
-    readme: PathNoBackslash | None = Field(
-        None, description="The path to the readme file of the project"
+    authors: list[NonEmptyStr] | WorkspaceInheritance | None = Field(
+        None,
+        description="The authors of the project. Can be a list of strings or { workspace = true } to inherit from workspace",
+        examples=[["John Doe <j.doe@prefix.dev>"], {"workspace": True}],
     )
-    homepage: AnyHttpUrl | None = Field(None, description="The URL of the homepage of the project")
-    repository: AnyHttpUrl | None = Field(
-        None, description="The URL of the repository of the project"
+    license: NonEmptyStr | WorkspaceInheritance | None = Field(
+        None,
+        description="The license of the project; we advise using an [SPDX](https://spdx.org/licenses/) identifier. Can be a string or { workspace = true } to inherit from workspace",
     )
-    documentation: AnyHttpUrl | None = Field(
-        None, description="The URL of the documentation of the project"
+    license_file: PathNoBackslash | WorkspaceInheritance | None = Field(
+        None,
+        description="The path to the license file of the project. Can be a path or { workspace = true } to inherit from workspace",
+    )
+    readme: PathNoBackslash | WorkspaceInheritance | None = Field(
+        None,
+        description="The path to the readme file of the project. Can be a path or { workspace = true } to inherit from workspace",
+    )
+    homepage: AnyHttpUrl | WorkspaceInheritance | None = Field(
+        None,
+        description="The URL of the homepage of the project. Can be a URL or { workspace = true } to inherit from workspace",
+    )
+    repository: AnyHttpUrl | WorkspaceInheritance | None = Field(
+        None,
+        description="The URL of the repository of the project. Can be a URL or { workspace = true } to inherit from workspace",
+    )
+    documentation: AnyHttpUrl | WorkspaceInheritance | None = Field(
+        None,
+        description="The URL of the documentation of the project. Can be a URL or { workspace = true } to inherit from workspace",
     )
 
     build: Build = Field(..., description="The build configuration of the package")
