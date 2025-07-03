@@ -10,7 +10,7 @@ use futures::TryStreamExt;
 use itertools::Either;
 use miette::Diagnostic;
 use pixi_build_types::procedures::conda_outputs::{
-    CondaOutputDependencies, CondaOutputIgnoreRunExports, CondaOutputMetadata,
+    CondaOutputDependencies, CondaOutputIgnoreRunExports, CondaOutput,
     CondaOutputRunExports,
 };
 use pixi_build_types::{BinaryPackageSpecV1, NamedSpecV1, PackageSpecV1};
@@ -77,7 +77,7 @@ impl SourceMetadataSpec {
             MetadataKind::Outputs { outputs } => {
                 let mut futures = ExecutorFutures::new(command_dispatcher.executor());
                 for output in outputs {
-                    if output.identifier.name != self.package {
+                    if output.metadata.name != self.package {
                         continue;
                     }
                     futures.push(self.resolve_output(
@@ -99,7 +99,7 @@ impl SourceMetadataSpec {
     async fn resolve_output(
         &self,
         command_dispatcher: &CommandDispatcher,
-        output: &CondaOutputMetadata,
+        output: &CondaOutput,
         input_hash: Option<InputHash>,
         source: PinnedSourceSpec,
     ) -> Result<SourceRecord, CommandDispatcherError<SourceMetadataError>> {
@@ -161,7 +161,7 @@ impl SourceMetadataSpec {
             .extend_with_run_exports_from_build_and_host(
                 host_run_exports,
                 build_run_exports,
-                output.identifier.subdir,
+                output.metadata.subdir,
             )
             .into_package_record_fields(&self.backend_metadata.channel_config)
             .map_err(SourceMetadataError::SpecConversionError)
@@ -257,35 +257,35 @@ impl SourceMetadataSpec {
 
                 // These values are derived from the build backend values.
                 platform: output
-                    .identifier
+                    .metadata
                     .subdir
                     .only_platform()
                     .map(ToString::to_string),
                 arch: output
-                    .identifier
+                    .metadata
                     .subdir
                     .arch()
                     .as_ref()
                     .map(ToString::to_string),
 
                 // These values are passed by the build backend
-                name: output.identifier.name.clone(),
-                build: output.identifier.build.clone(),
-                version: output.identifier.version.clone(),
-                build_number: output.identifier.build_number,
-                license: output.identifier.license.clone(),
-                subdir: output.identifier.subdir.to_string(),
-                license_family: output.identifier.license_family.clone(),
-                noarch: output.identifier.noarch,
+                name: output.metadata.name.clone(),
+                build: output.metadata.build.clone(),
+                version: output.metadata.version.clone(),
+                build_number: output.metadata.build_number,
+                license: output.metadata.license.clone(),
+                subdir: output.metadata.subdir.to_string(),
+                license_family: output.metadata.license_family.clone(),
+                noarch: output.metadata.noarch,
                 constrains,
                 depends,
                 run_exports: Some(run_exports),
                 purls: output
-                    .identifier
+                    .metadata
                     .purls
                     .as_ref()
                     .map(|purls| purls.iter().cloned().collect()),
-                python_site_packages_path: output.identifier.python_site_packages_path.clone(),
+                python_site_packages_path: output.metadata.python_site_packages_path.clone(),
 
                 // These are deprecated and no longer used.
                 features: None,

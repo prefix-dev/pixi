@@ -8,7 +8,7 @@ use std::{
 use async_fd_lock::{LockWrite, RwLockWriteGuard};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_build_discovery::EnabledProtocols;
-use pixi_build_types::{CondaPackageMetadata, procedures::conda_outputs::CondaOutputMetadata};
+use pixi_build_types::{CondaPackageMetadata, procedures::conda_outputs::CondaOutput};
 use pixi_record::{InputHash, PinnedSourceSpec};
 use rattler_conda_types::ChannelUrl;
 use serde::{Deserialize, Serialize};
@@ -229,5 +229,5 @@ pub enum MetadataKind {
     GetMetadata { packages: Vec<CondaPackageMetadata> },
 
     /// The result of calling `conda/outputs` on a build backend.
-    Outputs { outputs: Vec<CondaOutputMetadata> },
+    Outputs { outputs: Vec<CondaOutput> },
 }

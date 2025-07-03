@@ -48,7 +48,7 @@ pub struct CondaOutputsParams {
 #[serde(rename_all = "camelCase")]
 pub struct CondaOutputsResult {
     /// Metadata of all the packages that can be built.
-    pub outputs: Vec<CondaOutputMetadata>,
+    pub outputs: Vec<CondaOutput>,
 
     /// The files that were read as part of the computation. These files are
     /// hashed and stored in the lock-file. If the files change, the
@@ -59,9 +59,9 @@ pub struct CondaOutputsResult {
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct CondaOutputMetadata {
+pub struct CondaOutput {
     /// The identifier of the output.
-    pub identifier: CondaOutputIdentifier,
+    pub metadata: CondaOutputMetadata,
 
     /// The build dependencies of the package. These refer to the packages that
     /// should be installed in the "build" environment. The build environment
@@ -101,7 +101,7 @@ pub struct CondaOutputMetadata {
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct CondaOutputIdentifier {
+pub struct CondaOutputMetadata {
     /// The name of the package.
     pub name: PackageName,
 
