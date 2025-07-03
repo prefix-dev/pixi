@@ -88,11 +88,14 @@ async fn generate_activation_script(
     // If we are in a conda environment, we need to deactivate it before activating
     // the host / build prefix
     let conda_prefix = std::env::var("CONDA_PREFIX").ok().map(|p| p.into());
+    let current_env = std::env::vars().collect::<HashMap<_, _>>();
+
     let mut result = activator
         .activation(ActivationVariables {
             conda_prefix,
             path,
             path_modification_behavior: PathModificationBehavior::default(),
+            current_env,
         })
         .into_diagnostic()?;
 

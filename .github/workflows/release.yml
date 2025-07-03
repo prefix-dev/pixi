@@ -107,6 +107,9 @@ jobs:
     needs:
       - plan
     if: ${{ fromJson(needs.plan.outputs.val).ci.github.artifacts_matrix.include != null && (needs.plan.outputs.publishing == 'true' || fromJson(needs.plan.outputs.val).ci.github.pr_run_mode == 'upload') || inputs.tag == 'dry-run' }}
+    permissions:
+      attestations: write
+      id-token: write
     strategy:
       fail-fast: false
       # Target platforms/runners are computed by dist in create-release.
@@ -168,6 +171,12 @@ jobs:
           # Actually do builds and make zips and whatnot
           dist build ${{ needs.plan.outputs.tag-flag }} --print=linkage --output-format=json ${{ matrix.dist_args }} > dist-manifest.json
           echo "dist ran successfully"
+      - name: Attest Builds
+        id: attest
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-path: "target/distrib/*${{ join(matrix.targets, ', ') }}"
+      - run: cp ${{ steps.attest.outputs.bundle-path }} target/distrib/attestations-${{ join(matrix.targets, ', ') }}.intoto.jsonl
       - id: cargo-dist
         name: Post-build
         # We force bash here just because github makes it really hard to get values up
@@ -188,6 +197,7 @@ jobs:
           path: |
             ${{ steps.cargo-dist.outputs.paths }}
             ${{ env.BUILD_MANIFEST_NAME }}
+            target/distrib/attestations-${{ join(matrix.targets, ', ') }}.intoto.jsonl
 
   # Build and package all the platform-agnostic(ish) things
   build-global-artifacts:

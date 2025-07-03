@@ -45,7 +45,6 @@ pub fn execute_external_command(args: Vec<String>) -> miette::Result<()> {
         // build the error message
         // using the same style as clap's derived error messages
         let styles = get_styles();
-
         Command::command()
             .styles(styles)
             .error(
