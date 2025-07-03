@@ -23,7 +23,7 @@ use crate::{
     manifests::PackageManifest,
     toml::{
         pyproject::{TomlContact, TomlDependencyGroups, TomlProject},
-        WorkspacePackageProperties, ExternalWorkspaceProperties, FromTomlStr, PyProjectToml,
+        WorkspacePackageProperties, PackageDefaults, ExternalWorkspaceProperties, FromTomlStr, PyProjectToml,
         TomlManifest,
     },
     FeatureName, Warning,
@@ -253,30 +253,43 @@ impl PyProjectManifest {
             .map(PyProjectFields::from)
             .unwrap_or_default();
 
-        // TODO:  would be nice to add license, license-file, readme, homepage,
-        // repository, documentation, regarding the above, the types are a bit
-        // different than we expect, so the conversion is not straightforward we
-        // could change these types or we can convert. Let's decide when we make it.
-        // etc.
+        // Extract workspace properties from [tool.pixi.workspace] section (handled by workspace parameter)
+        let workspace_properties = WorkspacePackageProperties {
+            name: Some(workspace.workspace.name.clone()),
+            version: workspace.workspace.version.clone(),
+            description: workspace.workspace.description.clone(),
+            authors: workspace.workspace.authors.clone(),
+            license: workspace.workspace.license.clone(),
+            license_file: workspace.workspace.license_file.clone(),
+            readme: workspace.workspace.readme.clone(),
+            homepage: workspace.workspace.homepage.clone(),
+            repository: workspace.workspace.repository.clone(),
+            documentation: workspace.workspace.documentation.clone(),
+        };
+
+        // Extract package defaults from [project] section
+        let package_defaults = PackageDefaults {
+            name: project.name.map(Spanned::take),
+            version: project
+                .version
+                .and_then(|v| v.take().to_string().parse().ok())
+                .or(poetry.version.and_then(|v| v.parse().ok())),
+            description: project
+                .description
+                .map(Spanned::take)
+                .or(poetry.description),
+            authors: project.authors.map(contacts_to_authors).or(poetry.authors),
+            license: None,
+            license_file: None,
+            readme: None,
+            homepage: None,
+            repository: None,
+            documentation: None,
+        };
+
         pixi.into_package_manifest(
-            WorkspacePackageProperties {
-                name: project.name.map(Spanned::take),
-                version: project
-                    .version
-                    .and_then(|v| v.take().to_string().parse().ok())
-                    .or(poetry.version.and_then(|v| v.parse().ok())),
-                description: project
-                    .description
-                    .map(Spanned::take)
-                    .or(poetry.description),
-                authors: project.authors.map(contacts_to_authors).or(poetry.authors),
-                license: None,
-                license_file: None,
-                readme: None,
-                homepage: None,
-                repository: None,
-                documentation: None,
-            },
+            workspace_properties,
+            package_defaults,
             workspace,
             root_directory,
         )

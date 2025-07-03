@@ -14,7 +14,7 @@ use toml_span::Deserialize;
 use crate::toml::ExternalWorkspaceProperties;
 use crate::{
     pyproject::PyProjectManifest,
-    toml::{WorkspacePackageProperties, TomlManifest},
+    toml::{WorkspacePackageProperties, PackageDefaults, TomlManifest},
     utils::WithSourceCode,
     warning::WarningWithSource,
     AssociateProvenance, ManifestKind, ManifestProvenance, ManifestSource, PackageManifest,
@@ -452,6 +452,7 @@ impl WorkspaceDiscoverer {
                     let package_manifest = match package_manifest {
                         EitherManifest::Pixi(manifest) => manifest.into_package_manifest(
                             WorkspacePackageProperties::default(),
+                            PackageDefaults::default(),
                             &workspace_manifest,
                             Some(manifest_dir),
                         ),

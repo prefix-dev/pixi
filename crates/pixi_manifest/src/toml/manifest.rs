@@ -22,7 +22,7 @@ use crate::{
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
     toml::{
         create_unsupported_selector_warning, environment::TomlEnvironmentList, task::TomlTask,
-        WorkspacePackageProperties, PlatformSpan, TomlFeature, TomlPackage, TomlTarget,
+        WorkspacePackageProperties, PackageDefaults, PlatformSpan, TomlFeature, TomlPackage, TomlTarget,
         TomlWorkspace,
     },
     utils::{package_map::UniquePackageMap, PixiSpanned},
@@ -80,6 +80,7 @@ impl TomlManifest {
     pub fn into_package_manifest(
         self,
         external: WorkspacePackageProperties,
+        package_defaults: PackageDefaults,
         workspace: &WorkspaceManifest,
         root_directory: Option<&Path>,
     ) -> Result<(PackageManifest, Vec<Warning>), TomlError> {
@@ -110,7 +111,7 @@ impl TomlManifest {
         let WithWarnings {
             value: package,
             warnings,
-        } = package.into_manifest(external, workspace.preview(), root_directory)?;
+        } = package.into_manifest(external, package_defaults, workspace.preview(), root_directory)?;
         Ok((package, warnings))
     }
 
@@ -442,6 +443,7 @@ impl TomlManifest {
                     repository: workspace.repository.clone(),
                     documentation: workspace.documentation.clone(),
                 },
+                PackageDefaults::default(),
                 &workspace_manifest.workspace.preview,
                 root_directory,
             )?;

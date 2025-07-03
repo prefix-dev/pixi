@@ -239,6 +239,25 @@ impl From<ExternalWorkspaceProperties> for WorkspacePackageProperties {
     }
 }
 
+/// Defines package defaults that can be used as fallback values.
+///
+/// This contains the package-level defaults (e.g., from [project] section in pyproject.toml).
+#[derive(Debug, Clone, Default)]
+pub struct PackageDefaults {
+    pub name: Option<String>,
+    pub version: Option<Version>,
+    pub description: Option<String>,
+    pub authors: Option<Vec<String>>,
+    pub license: Option<String>,
+    // The absolute path to the license file
+    pub license_file: Option<PathBuf>,
+    // The absolute path to the README
+    pub readme: Option<PathBuf>,
+    pub homepage: Option<Url>,
+    pub repository: Option<Url>,
+    pub documentation: Option<Url>,
+}
+
 #[derive(Debug, Error)]
 pub enum PackageError {
     #[error("missing `name` in `[package]` section")]
@@ -252,10 +271,16 @@ pub enum PackageError {
 }
 
 impl TomlPackage {
-    /// Helper function to resolve a required field with proper error messages
-    fn resolve_required_field<T>(
+
+    /// Helper function to resolve a required field with 3-tier hierarchy:
+    /// 1. Direct value (from package)
+    /// 2. Workspace inheritance (from workspace)
+    /// 3. Package defaults (from [project] section)
+    /// 4. Error if missing at all levels
+    fn resolve_required_field_with_defaults<T>(
         field: Option<WorkspaceInheritableField<T>>,
         workspace_value: Option<T>,
+        default_value: Option<T>,
         field_name: &'static str,
         package_span: Span,
     ) -> Result<T, Error> {
@@ -268,11 +293,42 @@ impl TomlPackage {
                     line_info: None,
                 })
             },
-            None => Err(Error {
-                kind: ErrorKind::MissingField(field_name),
-                span: package_span,
-                line_info: None,
-            }),
+            None => {
+                // Fall back to package defaults
+                default_value.ok_or_else(|| Error {
+                    kind: ErrorKind::MissingField(field_name),
+                    span: package_span,
+                    line_info: None,
+                })
+            },
+        }
+    }
+
+    /// Helper function to resolve an optional field with 3-tier hierarchy:
+    /// 1. Direct value (from package)
+    /// 2. Workspace inheritance (from workspace) - ERROR if explicitly requested but missing
+    /// 3. Package defaults (from [project] section)
+    /// 4. None if missing at all levels
+    fn resolve_optional_field_with_defaults<T>(
+        field: Option<WorkspaceInheritableField<T>>,
+        workspace_value: Option<T>,
+        default_value: Option<T>,
+        field_name: &'static str,
+    ) -> Result<Option<T>, Error> {
+        match field {
+            Some(WorkspaceInheritableField::Value(v)) => Ok(Some(v)),
+            Some(WorkspaceInheritableField::Workspace(span)) => {
+                // If workspace inheritance is explicitly requested, the workspace must provide the value
+                match workspace_value {
+                    Some(value) => Ok(Some(value)),
+                    None => Err(Error {
+                        kind: ErrorKind::Custom(format!("the workspace does not define a '{}'", field_name).into()),
+                        span,
+                        line_info: None,
+                    }),
+                }
+            },
+            None => Ok(default_value),
         }
     }
 
@@ -281,14 +337,15 @@ impl TomlPackage {
     pub fn into_manifest(
         self,
         workspace: WorkspacePackageProperties,
+        package_defaults: PackageDefaults,
         preview: &Preview,
         root_directory: Option<&Path>,
     ) -> Result<WithWarnings<PackageManifest>, TomlError> {
         let warnings = Vec::new();
 
-        // Resolve fields with explicit inheritance
-        let name = Self::resolve_required_field(self.name, workspace.name, "name", self.span)?;
-        let version = Self::resolve_required_field(self.version, workspace.version, "version", self.span)?;
+        // Resolve fields with 3-tier hierarchy: direct → workspace → package defaults → error
+        let name = Self::resolve_required_field_with_defaults(self.name, workspace.name, package_defaults.name, "name", self.span)?;
+        let version = Self::resolve_required_field_with_defaults(self.version, workspace.version, package_defaults.version, "version", self.span)?;
 
         let default_package_target = TomlPackageTarget {
             run_dependencies: self.run_dependencies,
@@ -321,17 +378,22 @@ impl TomlPackage {
             }
         }
 
-        // Check file existence for resolved paths
+        // Check file existence for resolved paths with 3-tier hierarchy
         fn check_resolved_file(
             root_directory: Option<&Path>,
             field: Option<WorkspaceInheritableField<Spanned<PathBuf>>>,
             workspace_value: Option<PathBuf>,
+            default_value: Option<PathBuf>,
         ) -> Result<Option<PathBuf>, TomlError> {
             let Some(root_directory) = root_directory else {
                 return Ok(None);
             };
             match field {
-                None => Ok(None),
+                None => {
+                    // Fall back to package defaults
+                    Ok(default_value
+                        .and_then(|value| pathdiff::diff_paths(value, root_directory)))
+                },
                 Some(WorkspaceInheritableField::Workspace(_)) => {
                     Ok(workspace_value
                         .and_then(|value| pathdiff::diff_paths(value, root_directory)))
@@ -354,33 +416,51 @@ impl TomlPackage {
         }
 
         let license_file =
-            check_resolved_file(root_directory, self.license_file, workspace.license_file)?;
-        let readme = check_resolved_file(root_directory, self.readme, workspace.readme)?;
+            check_resolved_file(root_directory, self.license_file, workspace.license_file, package_defaults.license_file)?;
+        let readme = check_resolved_file(root_directory, self.readme, workspace.readme, package_defaults.readme)?;
 
         Ok(WithWarnings::from(PackageManifest {
             package: Package {
                 name,
                 version,
-                description: self
-                    .description
-                    .and_then(|field| field.resolve(workspace.description)),
-                authors: self
-                    .authors
-                    .and_then(|field| field.resolve(workspace.authors)),
-                license: self
-                    .license
-                    .and_then(|field| field.map(Spanned::take).resolve(workspace.license)),
+                description: Self::resolve_optional_field_with_defaults(
+                    self.description,
+                    workspace.description,
+                    package_defaults.description,
+                    "description",
+                )?,
+                authors: Self::resolve_optional_field_with_defaults(
+                    self.authors,
+                    workspace.authors,
+                    package_defaults.authors,
+                    "authors",
+                )?,
+                license: Self::resolve_optional_field_with_defaults(
+                    self.license.map(|field| field.map(Spanned::take)),
+                    workspace.license,
+                    package_defaults.license,
+                    "license",
+                )?,
                 license_file,
                 readme,
-                homepage: self
-                    .homepage
-                    .and_then(|field| field.resolve(workspace.homepage)),
-                repository: self
-                    .repository
-                    .and_then(|field| field.resolve(workspace.repository)),
-                documentation: self
-                    .documentation
-                    .and_then(|field| field.resolve(workspace.documentation)),
+                homepage: Self::resolve_optional_field_with_defaults(
+                    self.homepage,
+                    workspace.homepage,
+                    package_defaults.homepage,
+                    "homepage",
+                )?,
+                repository: Self::resolve_optional_field_with_defaults(
+                    self.repository,
+                    workspace.repository,
+                    package_defaults.repository,
+                    "repository",
+                )?,
+                documentation: Self::resolve_optional_field_with_defaults(
+                    self.documentation,
+                    workspace.documentation,
+                    package_defaults.documentation,
+                    "documentation",
+                )?,
             },
             build: self.build.into_build_system()?,
             targets: Targets::from_default_and_user_defined(default_package_target, targets),
@@ -442,6 +522,7 @@ mod test {
             .and_then(|w| {
                 w.into_manifest(
                     WorkspacePackageProperties::default(),
+                    PackageDefaults::default(),
                     &Preview::default(),
                     Some(path),
                 )
@@ -473,6 +554,7 @@ mod test {
             .and_then(|w| {
                 w.into_manifest(
                     WorkspacePackageProperties::default(),
+                    PackageDefaults::default(),
                     &Preview::default(),
                     Some(path),
                 )
@@ -508,7 +590,7 @@ mod test {
             ..Default::default()
         };
         
-        let manifest = package.into_manifest(workspace, &Preview::default(), None).unwrap();
+        let manifest = package.into_manifest(workspace, PackageDefaults::default(), &Preview::default(), None).unwrap();
         assert_eq!(manifest.value.package.name, "workspace-name");
         assert_eq!(manifest.value.package.version.to_string(), "1.0.0");
         assert_eq!(manifest.value.package.description, Some("Package description".to_string()));
@@ -540,7 +622,7 @@ mod test {
         let package = TomlPackage::from_toml_str(input).unwrap();
         let workspace = WorkspacePackageProperties::default();
         
-        let parse_error = package.into_manifest(workspace, &Preview::default(), None).unwrap_err();
+        let parse_error = package.into_manifest(workspace, PackageDefaults::default(), &Preview::default(), None).unwrap_err();
         assert_snapshot!(format_parse_error(input, parse_error));
     }
 
@@ -565,7 +647,7 @@ mod test {
             ..Default::default()
         };
         
-        let manifest = package.into_manifest(workspace, &Preview::default(), None).unwrap();
+        let manifest = package.into_manifest(workspace, PackageDefaults::default(), &Preview::default(), None).unwrap();
         assert_eq!(manifest.value.package.name, "workspace-name");
         assert_eq!(manifest.value.package.version.to_string(), "2.0.0");
         assert_eq!(manifest.value.package.description, Some("Workspace description".to_string()));
@@ -589,7 +671,7 @@ mod test {
             ..Default::default()
         };
         
-        let parse_error = package.into_manifest(workspace, &Preview::default(), None).unwrap_err();
+        let parse_error = package.into_manifest(workspace, PackageDefaults::default(), &Preview::default(), None).unwrap_err();
         assert_snapshot!(format_parse_error(input, parse_error));
     }
 
@@ -610,7 +692,111 @@ mod test {
             ..Default::default()
         };
         
-        let parse_error = package.into_manifest(workspace, &Preview::default(), None).unwrap_err();
+        let parse_error = package.into_manifest(workspace, PackageDefaults::default(), &Preview::default(), None).unwrap_err();
+        assert_snapshot!(format_parse_error(input, parse_error));
+    }
+
+    #[test]
+    fn test_package_defaults_3tier_hierarchy() {
+        let input = r#"
+        description = "Package description"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+        "#;
+        
+        let package = TomlPackage::from_toml_str(input).unwrap();
+        let workspace = WorkspacePackageProperties::default(); // Empty workspace
+        let package_defaults = PackageDefaults {
+            name: Some("default-name".to_string()),
+            version: Some("2.0.0".parse().unwrap()),
+            description: Some("Default description".to_string()),
+            authors: Some(vec!["Default Author".to_string()]),
+            ..Default::default()
+        };
+        
+        let manifest = package.into_manifest(workspace, package_defaults, &Preview::default(), None).unwrap();
+        // Should use package defaults for name and version
+        assert_eq!(manifest.value.package.name, "default-name");
+        assert_eq!(manifest.value.package.version.to_string(), "2.0.0");
+        // Should use direct value for description
+        assert_eq!(manifest.value.package.description, Some("Package description".to_string()));
+        // Should use package defaults for authors
+        assert_eq!(manifest.value.package.authors, Some(vec!["Default Author".to_string()]));
+    }
+
+    #[test]
+    fn test_workspace_inheritance_overrides_package_defaults() {
+        let input = r#"
+        name = { workspace = true }
+        version = { workspace = true }
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+        "#;
+        
+        let package = TomlPackage::from_toml_str(input).unwrap();
+        let workspace = WorkspacePackageProperties {
+            name: Some("workspace-name".to_string()),
+            version: Some("3.0.0".parse().unwrap()),
+            ..Default::default()
+        };
+        let package_defaults = PackageDefaults {
+            name: Some("default-name".to_string()),
+            version: Some("2.0.0".parse().unwrap()),
+            description: Some("Default description".to_string()),
+            ..Default::default()
+        };
+        
+        let manifest = package.into_manifest(workspace, package_defaults, &Preview::default(), None).unwrap();
+        // Should use workspace values for name and version (overrides defaults)
+        assert_eq!(manifest.value.package.name, "workspace-name");
+        assert_eq!(manifest.value.package.version.to_string(), "3.0.0");
+        // Should use package defaults for description (not specified anywhere else)
+        assert_eq!(manifest.value.package.description, Some("Default description".to_string()));
+    }
+
+    #[test]
+    fn test_missing_required_field_no_defaults_no_workspace() {
+        let input = r#"
+        version = "1.0.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+        "#;
+        
+        let package = TomlPackage::from_toml_str(input).unwrap();
+        let workspace = WorkspacePackageProperties::default(); // Empty workspace
+        let package_defaults = PackageDefaults::default(); // Empty defaults
+        
+        let parse_error = package.into_manifest(workspace, package_defaults, &Preview::default(), None).unwrap_err();
+        assert_snapshot!(format_parse_error(input, parse_error));
+    }
+
+    #[test]
+    fn test_optional_workspace_inheritance_missing_workspace_value() {
+        let input = r#"
+        name = "package-name"
+        version = "1.0.0"
+        description = { workspace = true }
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+        "#;
+        
+        let package = TomlPackage::from_toml_str(input).unwrap();
+        let workspace = WorkspacePackageProperties {
+            name: Some("workspace-name".to_string()),
+            version: Some("1.0.0".parse().unwrap()),
+            // description is missing from workspace
+            ..Default::default()
+        };
+        let package_defaults = PackageDefaults {
+            description: Some("Default description".to_string()),
+            ..Default::default()
+        };
+        
+        let parse_error = package.into_manifest(workspace, package_defaults, &Preview::default(), None).unwrap_err();
         assert_snapshot!(format_parse_error(input, parse_error));
     }
 }
