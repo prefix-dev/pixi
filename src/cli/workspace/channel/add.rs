@@ -1,7 +1,7 @@
 use crate::{
-    environment::{get_update_lock_file_and_prefix, LockFileUsage},
-    lock_file::UpdateMode,
     UpdateLockFileOptions, WorkspaceLocator,
+    environment::{LockFileUsage, get_update_lock_file_and_prefix},
+    lock_file::{ReinstallPackages, UpdateMode},
 };
 use miette::IntoDiagnostic;
 
@@ -11,7 +11,7 @@ pub async fn execute(args: AddRemoveArgs) -> miette::Result<()> {
     let mut workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?
-        .with_cli_config(args.clone().prefix_update_config.config)
+        .with_cli_config(args.config.clone())
         .modify()?;
 
     // Add the channels to the manifest
@@ -27,9 +27,11 @@ pub async fn execute(args: AddRemoveArgs) -> miette::Result<()> {
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
             lock_file_usage: LockFileUsage::Update,
-            no_install: args.prefix_update_config.no_install(),
+            no_install: args.prefix_update_config.no_install
+                && args.lock_file_update_config.no_lockfile_update,
             max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
         },
+        ReinstallPackages::default(),
     )
     .await?;
 

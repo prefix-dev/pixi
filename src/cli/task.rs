@@ -1,6 +1,7 @@
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     error::Error,
+    io::Write,
     path::PathBuf,
     str::FromStr,
 };
@@ -11,8 +12,8 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_manifest::{
-    task::{quote, Alias, CmdArgs, Execute, Task, TaskName},
     EnvironmentName, FeatureName,
+    task::{Alias, CmdArgs, Dependency, Execute, Task, TaskArg, TaskName, quote},
 };
 use rattler_conda_types::Platform;
 use serde::Serialize;
@@ -20,9 +21,9 @@ use serde_with::serde_as;
 
 use crate::workspace::virtual_packages::verify_current_platform_can_run_environment;
 use crate::{
+    Workspace, WorkspaceLocator,
     cli::cli_config::WorkspaceConfig,
     workspace::{Environment, WorkspaceMut},
-    Workspace, WorkspaceLocator,
 };
 
 #[derive(Parser, Debug)]
@@ -47,14 +48,15 @@ pub enum Operation {
 #[derive(Parser, Debug)]
 #[clap(arg_required_else_help = true)]
 pub struct RemoveArgs {
-    /// Task names to remove
+    /// Task name to remove.
+    #[arg(value_name = "TASK_NAME")]
     pub names: Vec<TaskName>,
 
-    /// The platform for which the task should be removed
+    /// The platform for which the task should be removed.
     #[arg(long, short)]
     pub platform: Option<Platform>,
 
-    /// The feature for which the task should be removed
+    /// The feature for which the task should be removed.
     #[arg(long, short)]
     pub feature: Option<String>,
 }
@@ -62,32 +64,32 @@ pub struct RemoveArgs {
 #[derive(Parser, Debug, Clone)]
 #[clap(arg_required_else_help = true)]
 pub struct AddArgs {
-    /// Task name
+    /// Task name.
     pub name: TaskName,
 
-    /// One or more commands to actually execute
-    #[clap(required = true, num_args = 1..)]
+    /// One or more commands to actually execute.
+    #[clap(required = true, num_args = 1.., id = "COMMAND")]
     pub commands: Vec<String>,
 
-    /// Depends on these other commands
+    /// Depends on these other commands.
     #[clap(long)]
     #[clap(num_args = 1..)]
-    pub depends_on: Option<Vec<TaskName>>,
+    pub depends_on: Option<Vec<Dependency>>,
 
-    /// The platform for which the task should be added
+    /// The platform for which the task should be added.
     #[arg(long, short)]
     pub platform: Option<Platform>,
 
-    /// The feature for which the task should be added
+    /// The feature for which the task should be added.
     #[arg(long, short)]
     pub feature: Option<String>,
 
-    /// The working directory relative to the root of the workspace
+    /// The working directory relative to the root of the workspace.
     #[arg(long)]
     pub cwd: Option<PathBuf>,
 
     /// The environment variable to set, use --env key=value multiple times for
-    /// more than one variable
+    /// more than one variable.
     #[arg(long, value_parser = parse_key_val)]
     pub env: Vec<(String, String)>,
 
@@ -96,9 +98,13 @@ pub struct AddArgs {
     pub description: Option<String>,
 
     /// Isolate the task from the shell environment, and only use the pixi
-    /// environment to run the task
+    /// environment to run the task.
     #[arg(long)]
     pub clean_env: bool,
+
+    /// The arguments to pass to the task
+    #[arg(long = "arg", action = clap::ArgAction::Append)]
+    pub args: Option<Vec<TaskArg>>,
 }
 
 /// Parse a single key-value pair
@@ -119,7 +125,7 @@ pub struct AliasArgs {
 
     /// Depends on these tasks to execute
     #[clap(required = true, num_args = 1..)]
-    pub depends_on: Vec<TaskName>,
+    pub depends_on: Vec<Dependency>,
 
     /// The platform for which the alias should be added
     #[arg(long, short)]
@@ -160,20 +166,19 @@ impl From<AddArgs> for Task {
         let description = value.description;
 
         // Convert the arguments into a single string representation
-        let cmd_args = if value.commands.len() == 1 {
-            value
-                .commands
-                .into_iter()
-                .next()
-                .expect("we just checked that the length is 1")
-        } else {
-            // Simply concatenate all arguments
-            value
-                .commands
-                .into_iter()
-                .map(|arg| quote(&arg).into_owned())
-                .join(" ")
-        };
+        let cmd_args = value
+            .commands
+            .iter()
+            .exactly_one()
+            .map(|c| c.to_string())
+            .unwrap_or_else(|_| {
+                // Simply concatenate all arguments
+                value
+                    .commands
+                    .iter()
+                    .map(|arg| quote(arg).into_owned())
+                    .join(" ")
+            });
 
         // Depending on whether the task has a command, and depends_on or not we create
         // a plain or complex, or alias command.
@@ -181,13 +186,15 @@ impl From<AddArgs> for Task {
             Self::Alias(Alias {
                 depends_on,
                 description,
+                args: value.args,
             })
         } else if depends_on.is_empty()
             && value.cwd.is_none()
             && value.env.is_empty()
             && description.is_none()
+            && value.args.is_none()
         {
-            Self::Plain(cmd_args)
+            Self::Plain(cmd_args.into())
         } else {
             let clean_env = value.clean_env;
             let cwd = value.cwd;
@@ -200,9 +207,10 @@ impl From<AddArgs> for Task {
                 }
                 Some(env)
             };
+            let args = value.args;
 
-            Self::Execute(Execute {
-                cmd: CmdArgs::Single(cmd_args),
+            Self::Execute(Box::new(Execute {
+                cmd: CmdArgs::Single(cmd_args.into()),
                 depends_on,
                 inputs: None,
                 outputs: None,
@@ -210,7 +218,8 @@ impl From<AddArgs> for Task {
                 env,
                 description,
                 clean_env,
-            })
+                args,
+            }))
         }
     }
 }
@@ -220,6 +229,7 @@ impl From<AliasArgs> for Task {
         Self::Alias(Alias {
             depends_on: value.depends_on,
             description: value.description,
+            args: None,
         })
     }
 }
@@ -241,7 +251,12 @@ fn print_heading(value: &str) {
     eprintln!("{}\n{:-<2$}", bold.apply_to(value), "", value.len(),);
 }
 
-fn print_tasks(task_map: HashMap<Environment, HashMap<TaskName, &Task>>, summary: bool) {
+/// Create a human-readable representation of a list of tasks.
+/// Using a tabwriter for described tasks.
+fn print_tasks(
+    task_map: HashMap<Environment, HashMap<TaskName, &Task>>,
+    summary: bool,
+) -> Result<(), std::io::Error> {
     if summary {
         print_heading("Tasks per environment:");
         for (env, tasks) in task_map {
@@ -252,7 +267,7 @@ fn print_tasks(task_map: HashMap<Environment, HashMap<TaskName, &Task>>, summary
                 .join(", ");
             eprintln!("{}: {}", env.name().fancy_display().bold(), formatted);
         }
-        return;
+        return Ok(());
     }
 
     let mut all_tasks: BTreeSet<TaskName> = BTreeSet::new();
@@ -264,11 +279,7 @@ fn print_tasks(task_map: HashMap<Environment, HashMap<TaskName, &Task>>, summary
             if let Some(description) = task.description() {
                 formatted_descriptions.insert(
                     taskname.clone(),
-                    format!(
-                        " - {:<15} {}",
-                        taskname.fancy_display(),
-                        console::style(description).italic()
-                    ),
+                    format!("{}", console::style(description).italic()),
                 );
             }
         });
@@ -278,8 +289,19 @@ fn print_tasks(task_map: HashMap<Environment, HashMap<TaskName, &Task>>, summary
     let formatted_tasks: String = all_tasks.iter().map(|name| name.fancy_display()).join(", ");
     eprintln!("{}", formatted_tasks);
 
-    let formatted_descriptions: String = formatted_descriptions.values().join("\n");
-    eprintln!("\n{}", formatted_descriptions);
+    let mut writer = tabwriter::TabWriter::new(std::io::stdout());
+    let header_style = console::Style::new().bold().cyan();
+    let header = format!(
+        "{}\t{}",
+        header_style.apply_to("Task"),
+        header_style.apply_to("Description"),
+    );
+    writeln!(writer, "{}", &header)?;
+    for (taskname, row) in formatted_descriptions {
+        writeln!(writer, "{}\t{}", taskname.fancy_display(), row)?;
+    }
+
+    writer.flush()
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -355,18 +377,17 @@ async fn list_tasks(workspace: Workspace, args: ListArgs) -> miette::Result<()> 
         .map(|(env, task_names)| {
             let task_map = task_names
                 .into_iter()
-                .map(|task_name| {
-                    let task = env
-                        .task(&task_name, None)
-                        .expect("task should be available here");
-                    (task_name, task)
+                .flat_map(|task_name| {
+                    env.task(&task_name, Some(env.best_platform()))
+                        .ok()
+                        .map(|task| (task_name, task))
                 })
                 .collect();
             (env, task_map)
         })
         .collect();
 
-    print_tasks(tasks_per_env, args.summary);
+    print_tasks(tasks_per_env, args.summary).into_diagnostic()?;
     Ok(())
 }
 
@@ -377,7 +398,7 @@ async fn alias_task(mut workspace: WorkspaceMut, args: AliasArgs) -> miette::Res
         name.clone(),
         task.clone(),
         args.platform,
-        &FeatureName::Default,
+        &FeatureName::DEFAULT,
     )?;
     workspace.save().await.into_diagnostic()?;
     eprintln!(
@@ -393,7 +414,7 @@ async fn remove_tasks(mut workspace: WorkspaceMut, args: RemoveArgs) -> miette::
     let mut to_remove = Vec::new();
     let feature = args
         .feature
-        .map_or(FeatureName::Default, FeatureName::Named);
+        .map_or_else(FeatureName::default, FeatureName::from);
     for name in args.names.iter() {
         if let Some(platform) = args.platform {
             if !workspace
@@ -457,7 +478,7 @@ async fn add_task(mut workspace: WorkspaceMut, args: AddArgs) -> miette::Result<
     let task: Task = args.clone().into();
     let feature = args
         .feature
-        .map_or(FeatureName::Default, FeatureName::Named);
+        .map_or_else(FeatureName::default, FeatureName::from);
     workspace
         .manifest()
         .add_task(name.clone(), task.clone(), args.platform, &feature)?;
@@ -543,7 +564,8 @@ impl From<(&FeatureName, &HashMap<&TaskName, &Task>)> for SerializableFeature {
 pub struct TaskInfo {
     cmd: Option<String>,
     description: Option<String>,
-    depends_on: Vec<TaskName>,
+    depends_on: Vec<Dependency>,
+    args: Option<Vec<TaskArg>>,
     cwd: Option<PathBuf>,
     env: Option<IndexMap<String, String>>,
     clean_env: bool,
@@ -554,18 +576,28 @@ pub struct TaskInfo {
 impl From<&Task> for TaskInfo {
     fn from(task: &Task) -> Self {
         TaskInfo {
-            cmd: task.as_single_command().map(|cmd| cmd.to_string()),
+            cmd: task
+                .as_single_command_no_render()
+                .ok()
+                .and_then(|cmd| cmd.map(|c| c.to_string())),
             description: task.description().map(|desc| desc.to_string()),
             depends_on: task.depends_on().to_vec(),
+            args: task.args().map(|args| args.to_vec()),
             cwd: task.working_directory().map(PathBuf::from),
             env: task.env().cloned(),
             clean_env: task.clean_env(),
-            inputs: task
-                .inputs()
-                .map(|inputs| inputs.iter().map(String::from).collect()),
-            outputs: task
-                .outputs()
-                .map(|outputs| outputs.iter().map(String::from).collect()),
+            inputs: task.inputs().map(|inputs| {
+                inputs
+                    .iter()
+                    .map(|input| input.source().to_string())
+                    .collect()
+            }),
+            outputs: task.outputs().map(|outputs| {
+                outputs
+                    .iter()
+                    .map(|output| output.source().to_string())
+                    .collect()
+            }),
         }
     }
 }

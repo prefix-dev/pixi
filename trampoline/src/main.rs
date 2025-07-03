@@ -14,23 +14,28 @@ use std::process::{Command, Stdio};
 pub const TRAMPOLINE_CONFIGURATION: &str = "trampoline_configuration";
 
 #[derive(Deserialize, Debug)]
-struct Metadata {
-    exe: String,
-    env: HashMap<String, String>,
+pub struct Configuration {
+    /// Path to the original executable.
+    pub exe: PathBuf,
+    /// Root path of the original executable that should be prepended to the PATH.
+    pub path_diff: String,
+    /// Environment variables to be set before executing the original executable.
+    pub env: HashMap<String, String>,
 }
 
-fn read_metadata(current_exe: &Path) -> miette::Result<Metadata> {
-    // the metadata file is next to the current executable parent folder,
+fn read_configuration(current_exe: &Path) -> miette::Result<Configuration> {
+    // the configuration file is next to the current executable parent folder,
     // under trampoline_configuration/current_exe_name.json
     if let Some(exe_parent) = current_exe.parent() {
-        let metadata_path = exe_parent
+        let configuration_path = exe_parent
             .join(TRAMPOLINE_CONFIGURATION)
             .join(format!("{}.json", executable_from_path(current_exe),));
-        let metadata_file = File::open(&metadata_path)
+        let configuration_file = File::open(&configuration_path)
             .into_diagnostic()
-            .wrap_err(format!("Couldn't open {:?}", metadata_path))?;
-        let metadata: Metadata = serde_json::from_reader(metadata_file).into_diagnostic()?;
-        return Ok(metadata);
+            .wrap_err(format!("Couldn't open {:?}", configuration_path))?;
+        let configuration: Configuration =
+            serde_json::from_reader(configuration_file).into_diagnostic()?;
+        return Ok(configuration);
     }
     miette::bail!(
         "Couldn't get the parent folder of the current executable: {:?}",
@@ -39,25 +44,28 @@ fn read_metadata(current_exe: &Path) -> miette::Result<Metadata> {
 }
 
 /// Compute the difference between two PATH variables (the entries split by `;` or `:`)
-fn update_path(cached_path: &str) -> String {
-    // Get current PATH
-    let current_path = std::env::var("PATH").unwrap_or_default();
+fn setup_path(path_diff: &str) -> miette::Result<String> {
+    let current_path = std::env::var("PATH").into_diagnostic()?;
+    let current_paths = std::env::split_paths(&current_path);
+    let path_diffs = std::env::split_paths(path_diff);
 
-    // Split paths into vectors using platform-specific delimiter
-    let current_paths: Vec<PathBuf> = std::env::split_paths(&current_path).collect();
-    let cached_paths: Vec<PathBuf> = std::env::split_paths(cached_path).collect();
+    let paths: Vec<PathBuf> = if let Ok(base_path) = std::env::var("PIXI_BASE_PATH") {
+        let base_paths: Vec<PathBuf> = std::env::split_paths(&base_path).collect();
+        let new_parts: Vec<PathBuf> = current_paths
+            .filter(|current| base_paths.contains(current).not())
+            .collect();
+        new_parts
+            .into_iter()
+            .chain(path_diffs)
+            .chain(base_paths)
+            .collect()
+    } else {
+        path_diffs.chain(current_paths).collect()
+    };
 
-    // Stick all new elements in the front of the cached path
-    let new_elements = current_paths
-        .iter()
-        .filter(|p| cached_paths.contains(p).not());
-
-    // Join the new elements with the current path
-    let new_path = std::env::join_paths(new_elements.chain(cached_paths.iter()))
+    std::env::join_paths(paths)
+        .into_diagnostic()
         .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or(cached_path.to_string());
-
-    new_path
 }
 
 fn trampoline() -> miette::Result<()> {
@@ -72,20 +80,18 @@ fn trampoline() -> miette::Result<()> {
         .into_diagnostic()
         .wrap_err("Couldn't set the ctrl-c handler")?;
 
-    let metadata = read_metadata(&current_exe)?;
+    let configuration = read_configuration(&current_exe)?;
 
     // Create a new Command for the specified executable
-    let mut cmd = Command::new(metadata.exe);
+    let mut cmd = Command::new(configuration.exe);
 
     // Set any additional environment variables
-    for (key, value) in metadata.env.iter() {
-        // Special case for PATH, which needs to be updated with the current PATH elements
-        if key.to_uppercase() == "PATH" {
-            cmd.env("PATH", update_path(value));
-        } else {
-            cmd.env(key, value);
-        }
+    for (key, value) in configuration.env.iter() {
+        cmd.env(key, value);
     }
+
+    // Special case for PATH
+    cmd.env("PATH", setup_path(&configuration.path_diff)?);
 
     // Add any additional arguments
     cmd.args(&args[1..]);
@@ -97,7 +103,11 @@ fn trampoline() -> miette::Result<()> {
 
     // Spawn the child process
     #[cfg(target_family = "unix")]
-    cmd.exec();
+    {
+        let err = cmd.exec();
+        eprintln!("Failed to execute command: {:?}", err);
+        std::process::exit(1);
+    }
 
     #[cfg(target_os = "windows")]
     {
@@ -115,7 +125,6 @@ fn trampoline() -> miette::Result<()> {
         // Exit with the same status code as the child process
         std::process::exit(status.code().unwrap_or(1));
     }
-    Ok(())
 }
 
 // Entry point for the trampoline

@@ -1,6 +1,6 @@
 
 # --8<-- [start:project]
-[project]
+[workspace]
 channels = ["conda-forge"]
 name = "project-name"
 platforms = ["linux-64"]

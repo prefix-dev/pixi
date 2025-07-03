@@ -16,13 +16,20 @@
 //! the parameters needed to create a `BuildContext` uv implementation.
 //! and holds struct that is used to instantiate the conda prefix when its
 //! needed.
+use std::cell::Cell;
 use std::{collections::HashMap, path::Path};
 
+use crate::environment::{CondaPrefixUpdated, CondaPrefixUpdater};
+use crate::{
+    activation::CurrentEnvVarBehavior,
+    workspace::{Environment, EnvironmentVars, get_activated_environment_variables},
+};
 use async_once_cell::OnceCell as AsyncCell;
 use once_cell::sync::OnceCell;
 use pixi_manifest::EnvironmentName;
+use pixi_manifest::pypi::pypi_options::NoBuildIsolation;
 use pixi_record::PixiRecord;
-use pixi_uv_conversions::{isolated_names_to_packages, names_to_build_isolation};
+use pixi_uv_conversions::BuildIsolation;
 use tokio::runtime::Handle;
 use uv_build_frontend::SourceBuild;
 use uv_cache::Cache;
@@ -33,21 +40,15 @@ use uv_configuration::{
 };
 use uv_dispatch::{BuildDispatch, BuildDispatchError, SharedState};
 use uv_distribution_filename::DistFilename;
+use uv_distribution_types::Requirement;
 use uv_distribution_types::{
     CachedDist, DependencyMetadata, IndexLocations, IsBuildBackendError, Resolution, SourceDist,
 };
 use uv_install_wheel::LinkMode;
-use uv_pep508::PackageName;
-use uv_pypi_types::Requirement;
 use uv_python::{Interpreter, InterpreterError, PythonEnvironment};
 use uv_resolver::{ExcludeNewer, FlatIndex};
 use uv_types::{BuildContext, BuildStack, HashStrategy};
-
-use crate::environment::{CondaPrefixUpdated, CondaPrefixUpdater};
-use crate::{
-    activation::CurrentEnvVarBehavior,
-    workspace::{get_activated_environment_variables, Environment, EnvironmentVars},
-};
+use uv_workspace::WorkspaceCache;
 
 /// This structure holds all the parameters needed to create a `BuildContext` uv implementation.
 pub struct UvBuildDispatchParams<'a> {
@@ -165,7 +166,7 @@ impl<'a> UvBuildDispatchParams<'a> {
 pub struct LazyBuildDispatch<'a> {
     pub params: UvBuildDispatchParams<'a>,
     pub prefix_updater: CondaPrefixUpdater,
-    pub repodata_records: Vec<PixiRecord>,
+    pub repodata_records: Cell<Option<miette::Result<Vec<PixiRecord>>>>,
 
     pub build_dispatch: AsyncCell<BuildDispatch<'a>>,
 
@@ -179,13 +180,15 @@ pub struct LazyBuildDispatch<'a> {
     pub environment: Environment<'a>,
 
     // what pkgs we dont need to activate
-    pub no_build_isolation: Option<Vec<String>>,
+    pub no_build_isolation: NoBuildIsolation,
 
     // we need to tie the interpreter to the build dispatch
     pub lazy_deps: &'a LazyBuildDispatchDependencies,
 
     /// Whether to disallow installing the conda prefix.
     pub disallow_install_conda_prefix: bool,
+
+    workspace_cache: WorkspaceCache,
 }
 
 /// These are resources for the [`BuildDispatch`] that need to be lazily
@@ -199,23 +202,32 @@ pub struct LazyBuildDispatchDependencies {
     /// The initialized python interpreter
     interpreter: OnceCell<Interpreter>,
     /// The non isolated packages
-    non_isolated_packages: OnceCell<Option<Vec<PackageName>>>,
+    non_isolated_packages: OnceCell<BuildIsolation>,
     /// The python environment
     python_env: OnceCell<PythonEnvironment>,
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
 enum LazyBuildDispatchError {
-    #[error("installation of conda environment is required to solve PyPI source dependencies but `--no-install` flag has been set")]
+    #[error(
+        "installation of conda environment is required to solve PyPI source dependencies but `--no-install` flag has been set"
+    )]
     InstallationRequiredButDisallowed,
-    #[error("failed to initialize build dispatch: '{0}'")]
-    InitializationError(String),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    InitializationError(Box<dyn miette::Diagnostic + Send + Sync>),
+    #[error(transparent)]
+    ConversionError(#[from] pixi_uv_conversions::ConversionError),
     #[error(transparent)]
     Uv(#[from] BuildDispatchError),
     #[error(transparent)]
     UvFrontend(#[from] uv_build_frontend::Error),
     #[error("failed to query interpreter in instantiated prefix")]
     QueryInterpreterError(#[from] InterpreterError),
+    #[error(
+        "missing python interpreter from conda prefix: {prefix},\nUse `pixi add python` to install the latest python interpreter."
+    )]
+    PythonMissingError { prefix: String },
 }
 
 impl IsBuildBackendError for LazyBuildDispatchError {
@@ -232,8 +244,8 @@ impl<'a> LazyBuildDispatch<'a> {
         prefix_updater: CondaPrefixUpdater,
         project_env_vars: HashMap<EnvironmentName, EnvironmentVars>,
         environment: Environment<'a>,
-        repodata_records: Vec<PixiRecord>,
-        no_build_isolation: Option<Vec<String>>,
+        repodata_records: miette::Result<Vec<PixiRecord>>,
+        no_build_isolation: NoBuildIsolation,
         lazy_deps: &'a LazyBuildDispatchDependencies,
         disallow_install_conda_prefix: bool,
     ) -> Self {
@@ -243,11 +255,12 @@ impl<'a> LazyBuildDispatch<'a> {
             conda_task: None,
             project_env_vars,
             environment,
-            repodata_records,
+            repodata_records: Cell::new(Some(repodata_records)),
             no_build_isolation,
             build_dispatch: AsyncCell::new(),
             lazy_deps,
             disallow_install_conda_prefix,
+            workspace_cache: WorkspaceCache::default(),
         }
     }
 
@@ -263,16 +276,18 @@ impl<'a> LazyBuildDispatch<'a> {
                 "PyPI solve requires instantiation of conda prefix for '{}'",
                 self.prefix_updater.name().as_str()
             );
+
+            let repodata_records = self
+                .repodata_records
+                .replace(None)
+                .expect("this function cannot be called twice")
+                .map_err(|err| LazyBuildDispatchError::InitializationError(err.into()))?;
+
             let prefix = self
                 .prefix_updater
-                .update(self.repodata_records.clone())
+                .update(repodata_records.to_vec(), None)
                 .await
-                .map_err(|err| {
-                    LazyBuildDispatchError::InitializationError(format!(
-                        "failed to update conda prefix: {}",
-                        err
-                    ))
-                })?;
+                .map_err(|err| LazyBuildDispatchError::InitializationError(err.into()))?;
 
             // get the activation vars
             let env_vars = get_activated_environment_variables(
@@ -284,18 +299,14 @@ impl<'a> LazyBuildDispatch<'a> {
                 false,
             )
             .await
-            .map_err(|err| LazyBuildDispatchError::InitializationError(format!("{}", err)))?;
+            .map_err(|err| LazyBuildDispatchError::InitializationError(err.into()))?;
 
             let python_path = prefix
                 .python_status
                 .location()
                 .map(|path| prefix.prefix.root().join(path))
-                .ok_or_else(|| {
-                    LazyBuildDispatchError::InitializationError(format!(
-                        "missing python interpreter from conda prefix {}. \n {}",
-                        prefix.prefix.root().display(),
-                        "Use `pixi add python` to install the latest python interpreter.",
-                    ))
+                .ok_or_else(|| LazyBuildDispatchError::PythonMissingError {
+                    prefix: prefix.prefix.root().display().to_string(),
                 })?;
 
             let interpreter = self
@@ -304,18 +315,17 @@ impl<'a> LazyBuildDispatch<'a> {
                 .get_or_try_init(|| Interpreter::query(python_path, self.cache()))
                 .map_err(LazyBuildDispatchError::from)?;
 
-            let env = self
-                .lazy_deps
-                .python_env
-                .get_or_init(|| PythonEnvironment::from_interpreter(interpreter.clone()));
-
             let non_isolated_packages = self
                 .lazy_deps
                 .non_isolated_packages
-                .get_or_try_init(|| isolated_names_to_packages(self.no_build_isolation.as_deref()))
-                .map_err(|err| LazyBuildDispatchError::InitializationError(format!("{}", err)))?;
+                .get_or_try_init(|| BuildIsolation::try_from(self.no_build_isolation.clone()))
+                .map_err(LazyBuildDispatchError::from)?;
 
-            let build_isolation = names_to_build_isolation(non_isolated_packages.as_deref(), env);
+            let build_isolation = non_isolated_packages.to_uv_with(|| {
+                self.lazy_deps
+                    .python_env
+                    .get_or_init(|| PythonEnvironment::from_interpreter(interpreter.clone()))
+            });
 
             let build_dispatch = BuildDispatch::new(
                 self.params.client,
@@ -334,6 +344,7 @@ impl<'a> LazyBuildDispatch<'a> {
                 self.params.hasher,
                 self.params.exclude_newer,
                 self.params.sources,
+                WorkspaceCache::default(),
                 self.params.concurrency,
                 self.params.preview_mode,
             )
@@ -485,5 +496,10 @@ impl BuildContext for LazyBuildDispatch<'_> {
             .direct_build(source, subdirectory, output_dir, build_kind, version_id)
             .await
             .map_err(LazyBuildDispatchError::from)
+    }
+
+    /// Workspace discovery caching.
+    fn workspace_cache(&self) -> &WorkspaceCache {
+        &self.workspace_cache
     }
 }

@@ -1,8 +1,8 @@
 use super::{EnvDir, EnvironmentName, ExposedName, StateChanges};
 use crate::{
     global::{
-        trampoline::{Configuration, Trampoline},
         BinDir, StateChange,
+        trampoline::{Configuration, Trampoline},
     },
     prefix::Executable,
     prefix::Prefix,
@@ -14,7 +14,8 @@ use pixi_utils::{executable_from_path, is_binary_folder};
 use rattler_conda_types::{
     MatchSpec, Matches, PackageName, ParseStrictness, Platform, RepoDataRecord,
 };
-use std::{path::PathBuf, str::FromStr};
+use rattler_shell::activation::prefix_path_entries;
+use std::{env, path::PathBuf, str::FromStr};
 
 use fs_err::tokio as tokio_fs;
 
@@ -100,7 +101,15 @@ pub(crate) async fn create_executable_trampolines(
 
     let mut state_changes = StateChanges::default();
 
-    let activation_variables = prefix.run_activation().await?;
+    // Get PATH environment variables
+    let path_current = std::env::var("PATH").into_diagnostic()?;
+    let mut activation_variables = prefix.run_activation().await?;
+    let path_after_activation = activation_variables
+        .remove("PATH")
+        .or_else(|| activation_variables.remove("Path"))
+        .unwrap_or_else(|| path_current.clone());
+
+    let path_diff = path_diff(&path_current, &path_after_activation, prefix)?;
 
     for ScriptExecMapping {
         global_script_path,
@@ -109,15 +118,8 @@ pub(crate) async fn create_executable_trampolines(
     {
         tracing::debug!("Create trampoline {}", global_script_path.display());
         let exe = prefix.root().join(original_executable);
-        let path = prefix
-            .root()
-            .join(original_executable.parent().ok_or_else(|| {
-                miette::miette!(
-                    "Cannot find parent directory of '{}'",
-                    original_executable.display()
-                )
-            })?);
-        let metadata = Configuration::new(exe, path, Some(activation_variables.clone()));
+
+        let metadata = Configuration::new(exe, path_diff.clone(), activation_variables.clone());
 
         let parent_dir = global_script_path.parent().ok_or_else(|| {
             miette::miette!(
@@ -145,18 +147,21 @@ pub(crate) async fn create_executable_trampolines(
         // Read previous metadata if it exists and update `changed` accordingly
         if matches!(changed, AddedOrChanged::Unchanged) {
             if json_path.exists() {
-                let previous_manifest_data_bytes = tokio_fs::read_to_string(&json_path)
+                let previous_configuration_data_bytes = tokio_fs::read_to_string(&json_path)
                     .await
                     .into_diagnostic()?;
 
-                let previous_manifest_metadata: Configuration =
-                    serde_json::from_str(&previous_manifest_data_bytes).into_diagnostic()?;
-
-                changed = if previous_manifest_metadata == metadata {
-                    AddedOrChanged::Unchanged
+                if let Ok(previous_manifest_metadata) =
+                    serde_json::from_str::<Configuration>(&previous_configuration_data_bytes)
+                {
+                    changed = if previous_manifest_metadata == metadata {
+                        AddedOrChanged::Unchanged
+                    } else {
+                        AddedOrChanged::Changed
+                    };
                 } else {
-                    AddedOrChanged::Changed
-                };
+                    changed = AddedOrChanged::Changed
+                }
             } else {
                 changed = AddedOrChanged::Added;
             }
@@ -190,6 +195,25 @@ pub(crate) async fn create_executable_trampolines(
         }
     }
     Ok(state_changes)
+}
+
+/// Compute the difference between two PATH variables (the entries split by `;` or `:`)
+fn path_diff(path_before: &str, path_after: &str, prefix: &Prefix) -> miette::Result<String> {
+    // Split paths into vectors using platform-specific delimiter
+    let paths_before: Vec<PathBuf> = std::env::split_paths(&path_before).collect();
+    let paths_after: Vec<PathBuf> = std::env::split_paths(path_after).collect();
+
+    let prefix_path_entries = prefix_path_entries(prefix.root(), &Platform::current());
+
+    // Calculate the PATH diff
+    let path_diff = paths_after
+        .iter()
+        .filter(|p| !paths_before.contains(p) || prefix_path_entries.contains(p))
+        .unique();
+
+    env::join_paths(path_diff)
+        .map(|p| p.to_string_lossy().to_string())
+        .into_diagnostic()
 }
 
 /// Checks if the local environment matches the given specifications.
@@ -385,11 +409,10 @@ mod tests {
         ripgrep_specs: IndexSet<MatchSpec>,
         ripgrep_bat_specs: IndexSet<MatchSpec>,
     ) {
-        assert!(!local_environment_matches_spec(
-            ripgrep_bat_records.clone(),
-            &ripgrep_specs,
-            None
-        ), "The function needs to detect that records coming from ripgrep and bat don't match ripgrep alone.");
+        assert!(
+            !local_environment_matches_spec(ripgrep_bat_records.clone(), &ripgrep_specs, None),
+            "The function needs to detect that records coming from ripgrep and bat don't match ripgrep alone."
+        );
 
         assert!(
             local_environment_matches_spec(ripgrep_bat_records, &ripgrep_bat_specs, None),

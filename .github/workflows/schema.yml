@@ -15,12 +15,14 @@ on:
       - "schema/**"
       - "**/schema.yml"
 
+permissions: read-all
+
 jobs:
   test-schema:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: prefix-dev/setup-pixi@v0.8.3
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: prefix-dev/setup-pixi@main
         with:
           cache: true
           environments: schema

@@ -5,20 +5,20 @@ use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pixi_config::{self, Config, ConfigCli};
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
-use pixi_utils::{reqwest::build_reqwest_clients, AsyncPrefixGuard, EnvironmentHash};
+use pixi_utils::{AsyncPrefixGuard, EnvironmentHash, reqwest::build_reqwest_clients};
 use rattler::{
     install::{IndicatifReporter, Installer},
     package_cache::PackageCache,
 };
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, PackageName, Platform};
-use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
+use rattler_solve::{SolverImpl, SolverTask, resolvo::Solver};
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use reqwest_middleware::ClientWithMiddleware;
 use uv_configuration::RAYON_INITIALIZE;
 
 use super::cli_config::ChannelsConfig;
 use crate::{
-    environment::list::{print_package_table, PackageToOutput},
+    environment::list::{PackageToOutput, print_package_table},
     prefix::Prefix,
 };
 
@@ -32,10 +32,15 @@ pub struct Args {
     #[clap(num_args = 1.., value_hint = ValueHint::CommandWithArguments)]
     pub command: Vec<String>,
 
-    /// Matchspecs of packages to install. If this is not provided, the package
-    /// is guessed from the command.
-    #[clap(long = "spec", short = 's')]
+    /// Matchspecs of package to install.
+    /// If this is not provided, the package is guessed from the command.
+    #[clap(long = "spec", short = 's', value_name = "SPEC")]
     pub specs: Vec<MatchSpec>,
+
+    /// Matchspecs of package to install, while also guessing a package
+    /// from the command.
+    #[clap(long, short = 'w', conflicts_with = "specs")]
+    pub with: Vec<MatchSpec>,
 
     #[clap(flatten)]
     channels: ChannelsConfig,
@@ -141,7 +146,7 @@ pub async fn create_exec_prefix(
         .context("failed to write lock status to prefix guard")?;
 
     // Construct a gateway to get repodata.
-    let gateway = config.gateway(client.clone());
+    let gateway = config.gateway().with_client(client.clone()).finish();
 
     // Determine the specs to use for the environment
     let specs = if args.specs.is_empty() {
@@ -153,7 +158,9 @@ pub async fn create_exec_prefix(
             guessed_spec
         );
 
-        vec![guessed_spec]
+        let mut with_specs = args.with.clone();
+        with_specs.push(guessed_spec);
+        with_specs
     } else {
         args.specs.clone()
     };
@@ -236,13 +243,7 @@ fn list_exec_environment(
     solved_records: rattler_conda_types::SolverResult,
     regex: String,
 ) -> Result<(), miette::Error> {
-    let regex = {
-        if regex.is_empty() {
-            None
-        } else {
-            Some(regex)
-        }
-    };
+    let regex = { if regex.is_empty() { None } else { Some(regex) } };
     let mut packages_to_output = solved_records
         .records
         .iter()

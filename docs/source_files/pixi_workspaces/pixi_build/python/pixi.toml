@@ -7,13 +7,13 @@ platforms = ["win-64", "linux-64", "osx-arm64", "osx-64"]
 preview = ["pixi-build"]
 
 [dependencies] # (2)!
-rich_example = { path = "." }
+python_rich = { path = "." }
 
 [tasks] # (3)!
 start = "rich-example-main"
 
 [package] # (4)!
-name = "rich_example"
+name = "python_rich"
 version = "0.1.0"
 
 [package.build] # (5)!

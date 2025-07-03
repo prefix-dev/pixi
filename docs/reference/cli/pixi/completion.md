@@ -4,7 +4,7 @@
 ## About
 Generates a completion script for a shell
 
---8<-- "docs/reference/cli/pixi/completion_extender.md:description"
+--8<-- "docs/reference/cli/pixi/completion_extender:description"
 
 ## Usage
 ```
@@ -17,4 +17,4 @@ pixi completion --shell <SHELL>
 <br>**required**: `true`
 <br>**options**: `bash`, `elvish`, `fish`, `nushell`, `powershell`, `zsh`
 
---8<-- "docs/reference/cli/pixi/completion_extender.md:example"
+--8<-- "docs/reference/cli/pixi/completion_extender:example"

@@ -15,8 +15,8 @@ use rattler_conda_types::MatchSpec;
 #[derive(Parser, Debug, Clone)]
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
-    /// Specifies the packages that are to be added to the environment.
-    #[arg(num_args = 1.., required = true)]
+    /// Specifies the package that should be added to the environment.
+    #[arg(num_args = 1.., required = true, value_name = "PACKAGE")]
     packages: Vec<String>,
 
     /// Specifies the environment that the dependencies need to be added to.
@@ -46,7 +46,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_cli_config(config.clone());
 
     if project_original.environment(&args.environment).is_none() {
-        miette::bail!("Environment {} doesn't exist. You can create a new environment with `pixi global install`.", &args.environment);
+        miette::bail!(
+            "Environment {} doesn't exist. You can create a new environment with `pixi global install`.",
+            &args.environment
+        );
     }
 
     async fn apply_changes(
@@ -76,6 +79,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         // Figure out added packages and their corresponding versions
         state_changes |= project.added_packages(specs, env_name).await?;
+
+        state_changes |= project.sync_completions(env_name).await?;
 
         project.manifest.save().await?;
 

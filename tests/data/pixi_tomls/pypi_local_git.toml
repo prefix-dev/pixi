@@ -1,0 +1,11 @@
+[workspace]
+channels = ["https://prefix.dev/conda-forge"]
+name = "test-example"
+platforms = ["CURRENT_PLATFORM"]
+
+
+[dependencies]
+python = "3.12.*"
+
+[pypi-dependencies]
+rich-table = { "git" = "file://" }

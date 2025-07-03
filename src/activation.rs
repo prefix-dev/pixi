@@ -1,5 +1,5 @@
+use crate::{Workspace, workspace::Environment};
 use crate::{task::EnvironmentHash, workspace::HasWorkspaceRef};
-use crate::{workspace::Environment, Workspace};
 use fs_err::tokio as tokio_fs;
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -48,7 +48,10 @@ impl Workspace {
                 format!("{PROJECT_PREFIX}ROOT"),
                 self.root().to_string_lossy().into_owned(),
             ),
-            (format!("{PROJECT_PREFIX}NAME"), self.name().to_string()),
+            (
+                format!("{PROJECT_PREFIX}NAME"),
+                self.display_name().to_string(),
+            ),
             (
                 format!("{PROJECT_PREFIX}MANIFEST"),
                 self.workspace
@@ -89,9 +92,9 @@ impl Environment<'_> {
     pub(crate) fn get_metadata_env(&self) -> IndexMap<String, String> {
         let prompt = match self.name() {
             EnvironmentName::Named(name) => {
-                format!("{}:{}", self.workspace().name(), name)
+                format!("{}:{}", self.workspace().display_name(), name)
             }
-            EnvironmentName::Default => self.workspace().name().to_string(),
+            EnvironmentName::Default => self.workspace().display_name().to_string(),
         };
         let mut map = IndexMap::from_iter([
             (format!("{ENV_PREFIX}NAME"), self.name().to_string()),
@@ -137,9 +140,17 @@ pub(crate) fn get_activator<'p>(
     for script in additional_activation_scripts.iter() {
         let extension = script.extension().unwrap_or_default();
         if platform.is_windows() && extension != "bat" {
-            tracing::warn!("The activation script '{}' does not have the correct extension for the platform '{}'. The extension should be '.bat'.", script.display(), platform);
+            tracing::warn!(
+                "The activation script '{}' does not have the correct extension for the platform '{}'. The extension should be '.bat'.",
+                script.display(),
+                platform
+            );
         } else if !platform.is_windows() && extension != "sh" && extension != "bash" {
-            tracing::warn!("The activation script '{}' does not have the correct extension for the platform '{}'. The extension should be '.sh' or '.bash'.", script.display(), platform);
+            tracing::warn!(
+                "The activation script '{}' does not have the correct extension for the platform '{}'. The extension should be '.sh' or '.bash'.",
+                script.display(),
+                platform
+            );
         }
     }
 
@@ -271,6 +282,9 @@ pub async fn run_activation(
     };
 
     let activator_result = match tokio::task::spawn_blocking(move || {
+        // Current environment variables
+        let current_env = std::env::vars().collect::<HashMap<_, _>>();
+
         // Run and cache the activation script
         activator.run_activation(
             ActivationVariables {
@@ -282,6 +296,9 @@ pub async fn run_activation(
 
                 // Prepending environment paths so they get found first.
                 path_modification_behavior,
+
+                // The current environment variables from the shell
+                current_env,
             },
             None,
         )
@@ -299,13 +316,13 @@ pub async fn run_activation(
                     status,
                 } => {
                     return Err(miette::miette!(format!(
-                            "Failed to run activation script for {:?}. Status: {}. Stdout: {}. Stderr: {}. Script: {}",
-                            environment.name(), // Make sure `environment` is accessible here
-                            status,
-                            stdout,
-                            stderr,
-                            script,
-                        )));
+                        "Failed to run activation script for {:?}. Status: {}. Stdout: {}. Stderr: {}. Script: {}",
+                        environment.name(), // Make sure `environment` is accessible here
+                        status,
+                        stdout,
+                        stderr,
+                        script,
+                    )));
                 }
                 _ => {
                     // Handle other activation errors
@@ -364,8 +381,10 @@ pub(crate) fn get_static_environment_variables<'p>(
 
     // Add the conda default env variable so that the existing tools know about the env.
     let env_name = match environment.name() {
-        EnvironmentName::Named(name) => format!("{}:{}", environment.workspace().name(), name),
-        EnvironmentName::Default => environment.workspace().name().to_string(),
+        EnvironmentName::Named(name) => {
+            format!("{}:{}", environment.workspace().display_name(), name)
+        }
+        EnvironmentName::Default => environment.workspace().display_name().to_string(),
     };
     let mut shell_env = HashMap::new();
     shell_env.insert("CONDA_DEFAULT_ENV".to_string(), env_name);
@@ -517,7 +536,10 @@ mod tests {
         let project = Workspace::from_str(Path::new("pixi.toml"), project).unwrap();
         let env = project.get_metadata_env();
 
-        assert_eq!(env.get("PIXI_PROJECT_NAME").unwrap(), project.name());
+        assert_eq!(
+            env.get("PIXI_PROJECT_NAME").unwrap(),
+            project.display_name()
+        );
         assert_eq!(
             env.get("PIXI_PROJECT_ROOT").unwrap(),
             project.root().to_str().unwrap()
@@ -628,10 +650,12 @@ mod tests {
         .await
         .unwrap();
         assert!(project.activation_env_cache_folder().exists());
-        assert!(project
-            .activation_env_cache_folder()
-            .join(project.default_environment().activation_cache_name())
-            .exists());
+        assert!(
+            project
+                .activation_env_cache_folder()
+                .join(project.default_environment().activation_cache_name())
+                .exists()
+        );
 
         // Verify that the cache is used, by overwriting the cache and checking if that persisted
         let cache_file = project.default_environment().activation_cache_file_path();

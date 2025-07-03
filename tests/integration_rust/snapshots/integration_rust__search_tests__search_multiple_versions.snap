@@ -1,6 +1,5 @@
 ---
 source: tests/integration_rust/search_tests.rs
-assertion_line: 137
 expression: output
 ---
 foo-0.2.0-h60d57d3_1 (+ 1 build)
@@ -17,6 +16,8 @@ MD5                 046ee97456e4c968d514dcb0b4632a8c
 SHA256              a19e6a97fb5def2f6bd7385348ba603c54859500a30d168455cb19d3b347c7e7
 
 Dependencies:
+
+Run exports: not available in repodata
 
 Other Versions (1):
 Version  Build      

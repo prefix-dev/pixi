@@ -4,7 +4,7 @@
 ## About
 Set the workspace version
 
---8<-- "docs/reference/cli/pixi/workspace/version/set_extender.md:description"
+--8<-- "docs/reference/cli/pixi/workspace/version/set_extender:description"
 
 ## Usage
 ```
@@ -16,4 +16,4 @@ pixi workspace version set <VERSION>
 :  The new workspace version
 <br>**required**: `true`
 
---8<-- "docs/reference/cli/pixi/workspace/version/set_extender.md:example"
+--8<-- "docs/reference/cli/pixi/workspace/version/set_extender:example"

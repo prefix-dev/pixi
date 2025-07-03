@@ -4,12 +4,13 @@ use std::{
 };
 
 use crate::{
-    cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
-    lock_file::UpdateLockFileOptions,
     WorkspaceLocator,
+    cli::cli_config::{LockFileUpdateConfig, WorkspaceConfig},
+    lock_file::UpdateLockFileOptions,
 };
 use clap::Parser;
 use miette::{Context, IntoDiagnostic};
+use pixi_config::ConfigCli;
 use rattler_conda_types::{
     ExplicitEnvironmentEntry, ExplicitEnvironmentSpec, PackageRecord, Platform, RepoDataRecord,
 };
@@ -42,7 +43,10 @@ pub struct Args {
     pub ignore_source_errors: bool,
 
     #[clap(flatten)]
-    pub prefix_update_config: PrefixUpdateConfig,
+    pub lock_file_update_config: LockFileUpdateConfig,
+
+    #[clap(flatten)]
+    config: ConfigCli,
 }
 
 fn build_explicit_spec<'a>(
@@ -114,10 +118,10 @@ fn render_env_platform(
             }
             LockedPackageRef::Conda(CondaPackageData::Source(_)) => {
                 miette::bail!(
-                        "Conda source packages are not supported in a conda explicit spec. \
+                    "Conda source packages are not supported in a conda explicit spec. \
                         Specify `--ignore-source-errors` to ignore this error and create \
                         a spec file containing only the binary conda dependencies from the lockfile."
-                    );
+                );
             }
             LockedPackageRef::Pypi(pypi, _) => {
                 if ignore_pypi_errors {
@@ -162,16 +166,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?
-        .with_cli_config(args.prefix_update_config.config.clone());
+        .with_cli_config(args.config.clone());
 
     let lockfile = workspace
         .update_lock_file(UpdateLockFileOptions {
-            lock_file_usage: args.prefix_update_config.lock_file_usage(),
-            no_install: args.prefix_update_config.no_install,
+            lock_file_usage: args.lock_file_update_config.lock_file_usage(),
+            no_install: args.lock_file_update_config.no_lockfile_update,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         })
         .await?
-        .lock_file;
+        .into_lock_file();
 
     let mut environments = Vec::new();
     if let Some(env_names) = args.environment {

@@ -1,24 +1,33 @@
 use self::trampoline::{Configuration, ConfigurationParseError, Trampoline};
 use super::{
-    common::{get_install_changes, shortcut_sync_status, EnvironmentUpdate},
+    BinDir, EnvRoot, StateChange, StateChanges,
+    common::{EnvironmentUpdate, get_install_changes, shortcuts_sync_status},
     install::find_binary_by_name,
     trampoline::{self, GlobalExecutable},
-    BinDir, EnvRoot, StateChange, StateChanges,
 };
 use crate::{
     global::{
+        EnvDir,
         common::{
             channel_url_to_prioritized_channel, expose_scripts_sync_status, find_package_records,
         },
         find_executables, find_executables_for_many_records,
         install::{create_executable_trampolines, script_exec_mapping},
         project::environment::environment_specs_in_sync,
-        EnvDir,
     },
     prefix::{Executable, Prefix},
     repodata::Repodata,
     rlimit::try_increase_rlimit_to_sensible,
 };
+
+use std::{
+    ffi::OsStr,
+    fmt::{Debug, Formatter},
+    path::{Path, PathBuf},
+    str::FromStr,
+    sync::{Arc, LazyLock},
+};
+
 use ahash::HashSet;
 pub(crate) use environment::EnvironmentName;
 use fancy_display::FancyDisplay;
@@ -29,12 +38,12 @@ use indexmap::{IndexMap, IndexSet};
 use is_executable::IsExecutable;
 use itertools::Itertools;
 pub(crate) use manifest::{ExposedType, Manifest, Mapping};
-use miette::{miette, Context, IntoDiagnostic};
+use miette::{Context, IntoDiagnostic, miette};
 use once_cell::sync::OnceCell;
 use parsed_manifest::ParsedManifest;
 pub(crate) use parsed_manifest::{ExposedName, ParsedEnvironment};
-use pixi_config::{default_channel_config, pixi_home, Config};
-use pixi_consts::consts;
+use pixi_config::{Config, default_channel_config, pixi_home};
+use pixi_consts::consts::{self, CACHED_PACKAGES};
 use pixi_manifest::PrioritizedChannel;
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
 use pixi_utils::{executable_from_path, reqwest::build_reqwest_clients};
@@ -43,21 +52,15 @@ use rattler::{
     package_cache::PackageCache,
 };
 use rattler_conda_types::{
-    menuinst::MenuMode, ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform,
-    PrefixRecord,
+    ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, PrefixRecord,
+    menuinst::MenuMode,
 };
 use rattler_lock::Matches;
 use rattler_repodata_gateway::Gateway;
-use rattler_solve::{resolvo::Solver, SolverImpl, SolverTask};
+use rattler_solve::{SolverImpl, SolverTask, resolvo::Solver};
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use reqwest_middleware::ClientWithMiddleware;
-use std::sync::LazyLock;
-use std::{
-    ffi::OsStr,
-    fmt::{Debug, Formatter},
-    path::{Path, PathBuf},
-    str::FromStr,
-};
+use tokio::sync::Semaphore;
 use toml_edit::DocumentMut;
 use uv_configuration::RAYON_INITIALIZE;
 
@@ -91,6 +94,8 @@ pub struct Project {
     /// This is wrapped in a `OnceCell` to allow for lazy initialization.
     // TODO: once https://github.com/rust-lang/rust/issues/109737 is stabilized, switch to OnceLock
     repodata_gateway: OnceCell<Gateway>,
+    /// The concurrent request semaphore
+    concurrent_downloads_semaphore: OnceCell<Arc<Semaphore>>,
 }
 
 impl Debug for Project {
@@ -268,6 +273,7 @@ impl Project {
             bin_dir,
             client,
             repodata_gateway,
+            concurrent_downloads_semaphore: OnceCell::new(),
         }
     }
 
@@ -309,9 +315,9 @@ impl Project {
                 );
                 return Self::try_from_existing_installation(&manifest_path, env_root, bin_dir)
                     .await
-                    .wrap_err_with(|| {
-                        "Failed to create global manifest from existing installation"
-                    });
+                    .wrap_err_with(
+                        || "Failed to create global manifest from existing installation",
+                    );
             } else {
                 tracing::debug!("Create an empty global manifest.");
                 tokio_fs::File::create(&manifest_path)
@@ -557,12 +563,6 @@ impl Project {
                 },
             )
             .into_diagnostic()
-            .wrap_err_with(|| {
-                miette::miette!(
-                    "Failed to determine virtual packages for environment {}",
-                    cloned_env_name.fancy_display()
-                )
-            })
         })
         .await
         .into_diagnostic()??;
@@ -574,7 +574,7 @@ impl Project {
         LazyLock::force(&RAYON_INITIALIZE);
 
         // Install the environment
-        let package_cache = PackageCache::new(pixi_config::get_cache_dir()?.join("pkgs"));
+        let package_cache = PackageCache::new(pixi_config::get_cache_dir()?.join(CACHED_PACKAGES));
         let prefix = self.environment_prefix(env_name).await?;
         let authenticated_client = self.authenticated_client()?.clone();
         let result = await_in_progress(
@@ -612,10 +612,16 @@ impl Project {
         &mut self,
         env_name: &EnvironmentName,
     ) -> miette::Result<StateChanges> {
+        // Check if the environment exists in the manifest first, before creating any directories
+        if !self.manifest.parsed.envs.contains_key(env_name) {
+            miette::bail!("Environment {} doesn't exist.", env_name.fancy_display());
+        }
+
         let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
         let mut state_changes = StateChanges::new_with_env(env_name.clone());
 
-        // Remove all shortcuts, using the information still available in the environment
+        // Remove all shortcuts, using the information still available in the
+        // environment
         state_changes |= self.remove_shortcuts(env_name).await?;
 
         // Remove the environment from the manifest, if it exists, otherwise ignore
@@ -638,6 +644,13 @@ impl Project {
                 env_name,
                 StateChange::RemovedExposed(binary_path.exposed_name()),
             );
+        }
+
+        #[cfg(unix)] // Completions are only supported on unix-like systems
+        {
+            // Prune old completions
+            let completions_dir = super::completions::CompletionsDir::from_env().await?;
+            completions_dir.prune_old_completions()?;
         }
 
         state_changes.insert_change(env_name, StateChange::RemovedEnvironment);
@@ -685,7 +698,8 @@ impl Project {
         Ok(all_executables)
     }
 
-    /// Get installed executables of direct dependencies of a specific environment.
+    /// Get installed executables of direct dependencies of a specific
+    /// environment.
     pub async fn executables_of_direct_dependencies(
         &self,
         env_name: &EnvironmentName,
@@ -746,8 +760,14 @@ impl Project {
             .iter()
             .filter_map(|mapping| {
                 // If the executable isn't requested, remove the mapping
+                // Use file name of executable relname here for custom exposed path.
+                // `exposed = {dotnet = 'dotnet\dotnet' }`, file_name will be `dotnet`, eg.
+                let executable_file_name = PathBuf::from(mapping.executable_relname())
+                    .file_name()?
+                    .to_string_lossy()
+                    .to_string();
                 if execs_all.iter().all(|executable| {
-                    executable_from_path(&executable.path) != mapping.executable_relname()
+                    executable_from_path(&executable.path) != executable_file_name
                 }) {
                     Some(mapping.exposed_name().clone())
                 } else {
@@ -844,10 +864,8 @@ impl Project {
         let env_dir =
             EnvDir::from_path(self.env_root.clone().path().join(env_name.clone().as_str()));
 
-        let prefix_records = self
-            .environment_prefix(env_name)
-            .await?
-            .find_installed_packages()?;
+        let prefix = self.environment_prefix(env_name).await?;
+        let prefix_records = prefix.find_installed_packages()?;
         let specs_in_sync =
             environment_specs_in_sync(&prefix_records, &specs, environment.platform).await?;
         if !specs_in_sync {
@@ -870,7 +888,7 @@ impl Project {
         tracing::debug!("Verify that the shortcuts are in sync with the environment");
         let shortcuts = environment.shortcuts.clone().unwrap_or_default();
         let (shortcuts_to_remove, shortcuts_to_add) =
-            shortcut_sync_status(shortcuts, prefix_records)?;
+            shortcuts_sync_status(shortcuts, prefix_records, prefix.root())?;
         if !shortcuts_to_remove.is_empty() || !shortcuts_to_add.is_empty() {
             tracing::debug!(
                 "Environment {} shortcuts are not in sync: to_remove: {}, to_add: {}",
@@ -1001,8 +1019,11 @@ impl Project {
         // Expose executables
         state_changes |= self.expose_executables_from_environment(env_name).await?;
 
-        // Install shortcuts
+        // Sync shortcuts
         state_changes |= self.sync_shortcuts(env_name).await?;
+
+        // Sync completions
+        state_changes |= self.sync_completions(env_name).await?;
 
         Ok(state_changes)
     }
@@ -1058,7 +1079,8 @@ impl Project {
             if !env_set.contains(&env_name) {
                 // Test if the environment directory is a conda environment
                 if let Ok(true) = env_path.join(consts::CONDA_META_DIR).try_exists() {
-                    // Remove all shortcuts, using the information still available in the environment
+                    // Remove all shortcuts, using the information still available in the
+                    // environment
                     state_changes |= self.remove_shortcuts(&env_name).await?;
 
                     // Remove the conda environment
@@ -1116,7 +1138,7 @@ impl Project {
 
         let shortcuts = environment.shortcuts.clone().unwrap_or_default();
         let (records_to_install, records_to_uninstall) =
-            shortcut_sync_status(shortcuts, prefix_records)?;
+            shortcuts_sync_status(shortcuts, prefix_records, prefix.root())?;
 
         for record in records_to_install {
             rattler_menuinst::install_menuitems_for_record(
@@ -1141,7 +1163,7 @@ impl Project {
         }
 
         for record in records_to_uninstall {
-            rattler_menuinst::remove_menu_items(&record.installed_system_menus)
+            rattler_menuinst::remove_menuitems_for_record(prefix.root(), record.clone())
                 .into_diagnostic()?;
 
             state_changes.insert_change(
@@ -1183,6 +1205,71 @@ impl Project {
         }
         Ok(state_changes)
     }
+
+    #[cfg(unix)] // Completions are only supported on unix like systems
+    pub async fn sync_completions(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<StateChanges> {
+        let mut state_changes = StateChanges::default();
+
+        let environment = self.environment(env_name).ok_or(miette::miette!(
+            "Environment {} not found in manifest.",
+            env_name.fancy_display()
+        ))?;
+        let prefix = self.environment_prefix(env_name).await?;
+        let execs_all = self
+            .executables_of_all_dependencies(env_name)
+            .await?
+            .into_iter()
+            .map(|exec| exec.name)
+            .collect();
+
+        let completions_dir = crate::global::completions::CompletionsDir::from_env().await?;
+        let (completions_to_remove, completions_to_add) =
+            super::completions::completions_sync_status(
+                environment.exposed.clone(),
+                execs_all,
+                prefix.root(),
+                &completions_dir,
+            )
+            .await?;
+
+        for completion_to_remove in completions_to_remove {
+            let state_change = completion_to_remove.remove().await?;
+            state_changes.insert_change(env_name, state_change);
+        }
+
+        for completion_to_add in completions_to_add {
+            let Some(state_change) = completion_to_add.install().await? else {
+                continue;
+            };
+
+            state_changes.insert_change(env_name, state_change);
+        }
+
+        Ok(state_changes)
+    }
+
+    #[cfg(not(unix))]
+    pub async fn sync_completions(
+        &self,
+        _env_name: &EnvironmentName,
+    ) -> miette::Result<StateChanges> {
+        let state_changes = StateChanges::default();
+        Ok(state_changes)
+    }
+
+    /// Returns a semaphore than can be used to limit the number of concurrent
+    /// according to the user configuration.
+    fn concurrent_downloads_semaphore(&self) -> Arc<Semaphore> {
+        self.concurrent_downloads_semaphore
+            .get_or_init(|| {
+                let max_concurrent_downloads = self.config().max_concurrent_downloads();
+                Arc::new(Semaphore::new(max_concurrent_downloads))
+            })
+            .clone()
+    }
 }
 
 impl Repodata for Project {
@@ -1190,7 +1277,13 @@ impl Repodata for Project {
     fn repodata_gateway(&self) -> miette::Result<&Gateway> {
         self.repodata_gateway.get_or_try_init(|| {
             let client = self.authenticated_client()?.clone();
-            Ok(self.config().gateway(client))
+            let concurrent_downloads = self.concurrent_downloads_semaphore();
+            Ok(self
+                .config()
+                .gateway()
+                .with_client(client)
+                .with_max_concurrent_requests(concurrent_downloads)
+                .finish())
         })
     }
 }
@@ -1199,7 +1292,7 @@ impl Repodata for Project {
 mod tests {
     use std::{collections::HashMap, io::Write};
 
-    use fake::{faker::filesystem::zh_tw::FilePath, Fake};
+    use fake::{Fake, faker::filesystem::en::FilePath};
     use itertools::Itertools;
     use rattler_conda_types::{
         NamedChannelOrUrl, PackageRecord, Platform, RepoDataRecord, VersionWithSource,
@@ -1301,11 +1394,8 @@ mod tests {
             .unwrap();
         tokio_fs::File::create(&non_exposed_env_path).await.unwrap();
 
-        let non_exposed_manifest = Configuration::new(
-            non_exposed_env_path,
-            project.env_root.path().join("test/bin"),
-            None,
-        );
+        let non_exposed_manifest =
+            Configuration::new(non_exposed_env_path, String::new(), HashMap::new());
         let non_exposed_trampoline = Trampoline::new(
             non_exposed_name.clone(),
             project.bin_dir.path().to_path_buf(),
@@ -1330,11 +1420,8 @@ mod tests {
             .await
             .unwrap();
 
-        let exposed_manifest = Configuration::new(
-            python_exposed_env_path,
-            project.env_root.path().join("test/bin"),
-            None,
-        );
+        let exposed_manifest =
+            Configuration::new(python_exposed_env_path, String::new(), HashMap::new());
         let exposed_trampoline = Trampoline::new(
             python,
             project.bin_dir.path().to_path_buf(),

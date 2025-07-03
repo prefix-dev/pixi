@@ -1,18 +1,22 @@
+import json
 import os
-from pathlib import Path
+import platform
 import shutil
+import tomllib
+from pathlib import Path
+
+import pytest
+from syrupy.assertion import SnapshotAssertion
+from syrupy.matchers import path_type
 
 from .common import (
-    cwd,
-    verify_cli_command,
-    ExitCode,
-    PIXI_VERSION,
     CURRENT_PLATFORM,
     EMPTY_BOILERPLATE_PROJECT,
+    PIXI_VERSION,
+    ExitCode,
+    cwd,
+    verify_cli_command,
 )
-import tomllib
-import json
-import pytest
 
 
 def test_pixi(pixi: Path) -> None:
@@ -229,6 +233,39 @@ def test_search(pixi: Path) -> None:
         [pixi, "search", "rattler-build", "-c", "https://prefix.dev/conda-forge"],
         ExitCode.SUCCESS,
         stdout_contains="rattler-build",
+    )
+
+
+def test_search_wildcard(pixi: Path, dummy_channel_1: str) -> None:
+    verify_cli_command(
+        [pixi, "search", "this-will-not-be-found", "-c", dummy_channel_1],
+        ExitCode.FAILURE,
+        stderr_contains="not found",
+    )
+
+    verify_cli_command(
+        [pixi, "search", "d*", "-c", dummy_channel_1],
+        ExitCode.SUCCESS,
+        stdout_contains=["dummy-a"],
+    )
+
+
+def test_search_matchspec(pixi: Path, multiple_versions_channel_1: str) -> None:
+    verify_cli_command(
+        [pixi, "search", "package", "--channel", multiple_versions_channel_1],
+        ExitCode.SUCCESS,
+        stdout_contains=["package"],
+    )
+
+    verify_cli_command(
+        [pixi, "search", "package[build_number=0]", "--channel", multiple_versions_channel_1],
+        ExitCode.SUCCESS,
+        stdout_contains=["package"],
+    )
+
+    verify_cli_command(
+        [pixi, "search", "package 0.1.*", "-c", multiple_versions_channel_1],
+        stdout_contains=["package-0.1.0"],
     )
 
 
@@ -1003,9 +1040,17 @@ def test_pixi_lock(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -
     dot_pixi = tmp_pixi_workspace / ".pixi"
     shutil.rmtree(dot_pixi)
 
-    # Run pixi lock to recreate the lock file
+    # Run pixi lock to recreate the lock file and validate the return code with --check is 1
     verify_cli_command(
-        [pixi, "lock", "--manifest-path", manifest_path], stderr_contains=["+", "dummy-a"]
+        [pixi, "lock", "--manifest-path", manifest_path, "--check"],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains=["+", "dummy-a"],
+    )
+
+    # Run pixi lock again to validate that the return code with --check is 0
+    verify_cli_command(
+        [pixi, "lock", "--manifest-path", manifest_path, "--check"],
+        expected_exit_code=ExitCode.SUCCESS,
     )
 
     # Read the recreated lock file content
@@ -1167,30 +1212,48 @@ def test_shell_hook_autocompletion(pixi: Path, tmp_pixi_workspace: Path) -> None
         """
     manifest.write_text(toml)
 
-    bash_comp_dir = ".pixi/envs/default/share/bash-completion/completions"
-    tmp_pixi_workspace.joinpath(bash_comp_dir).mkdir(parents=True, exist_ok=True)
-    tmp_pixi_workspace.joinpath(bash_comp_dir, "pixi.sh").touch()
+    # PowerShell completions are handled via PowerShell profile, not shell hook
     verify_cli_command(
-        [pixi, "shell-hook", "--manifest-path", manifest, "--shell", "bash"],
-        stdout_contains=["source", "share/bash-completion/completions"],
+        [pixi, "shell-hook", "--manifest-path", manifest, "--shell", "powershell"],
+        stdout_excludes=[
+            "Scripts/_pixi.ps1"
+        ],  # PowerShell doesn't source completions in shell hook
     )
 
-    zsh_comp_dir = ".pixi/envs/default/share/zsh/site-functions"
-    tmp_pixi_workspace.joinpath(zsh_comp_dir).mkdir(parents=True, exist_ok=True)
-    tmp_pixi_workspace.joinpath(zsh_comp_dir, "_pixi").touch()
-    verify_cli_command(
-        [pixi, "shell-hook", "--manifest-path", manifest, "--shell", "zsh"],
-        stdout_contains=["fpath+=", "share/zsh/site-functions", "autoload -Uz compinit"],
-    )
+    if platform.system() == "Windows":
+        # Test cmd.exe completions (Windows-only)
+        cmd_comp_dir = ".pixi/envs/default/Scripts"
+        tmp_pixi_workspace.joinpath(cmd_comp_dir).mkdir(parents=True, exist_ok=True)
+        tmp_pixi_workspace.joinpath(cmd_comp_dir, "pixi.cmd").touch()
+        verify_cli_command(
+            [pixi, "shell-hook", "--manifest-path", manifest, "--shell", "cmd"],
+            stdout_contains=['@SET "Path=', "Scripts", "@PROMPT"],
+        )
+    else:
+        # Test Unix shell completions
+        bash_comp_dir = ".pixi/envs/default/share/bash-completion/completions"
+        tmp_pixi_workspace.joinpath(bash_comp_dir).mkdir(parents=True, exist_ok=True)
+        tmp_pixi_workspace.joinpath(bash_comp_dir, "pixi.sh").touch()
+        verify_cli_command(
+            [pixi, "shell-hook", "--manifest-path", manifest, "--shell", "bash"],
+            stdout_contains=["source", "share/bash-completion/completions"],
+        )
 
-    fish_comp_dir = ".pixi/envs/default/share/fish/vendor_completions.d"
-    tmp_pixi_workspace.joinpath(fish_comp_dir).mkdir(parents=True, exist_ok=True)
-    tmp_pixi_workspace.joinpath(fish_comp_dir, "pixi.fish").touch()
+        zsh_comp_dir = ".pixi/envs/default/share/zsh/site-functions"
+        tmp_pixi_workspace.joinpath(zsh_comp_dir).mkdir(parents=True, exist_ok=True)
+        tmp_pixi_workspace.joinpath(zsh_comp_dir, "_pixi").touch()
+        verify_cli_command(
+            [pixi, "shell-hook", "--manifest-path", manifest, "--shell", "zsh"],
+            stdout_contains=["fpath+=", "share/zsh/site-functions", "autoload -Uz compinit"],
+        )
 
-    verify_cli_command(
-        [pixi, "shell-hook", "--manifest-path", manifest, "--shell", "fish"],
-        stdout_contains=["for file in", "source", "share/fish/vendor_completions.d"],
-    )
+        fish_comp_dir = ".pixi/envs/default/share/fish/vendor_completions.d"
+        tmp_pixi_workspace.joinpath(fish_comp_dir).mkdir(parents=True, exist_ok=True)
+        tmp_pixi_workspace.joinpath(fish_comp_dir, "pixi.fish").touch()
+        verify_cli_command(
+            [pixi, "shell-hook", "--manifest-path", manifest, "--shell", "fish"],
+            stdout_contains=["for file in", "source", "share/fish/vendor_completions.d"],
+        )
 
 
 def test_pixi_info_tasks(pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -1212,3 +1275,168 @@ def test_pixi_info_tasks(pixi: Path, tmp_pixi_workspace: Path) -> None:
         """
     manifest.write_text(toml)
     verify_cli_command([pixi, "info", "--manifest-path", manifest], stdout_contains="foo, bar")
+
+
+def test_pixi_task_list_platforms(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = """
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+
+        [tasks]
+        foo = "echo foo"
+
+        [target.unix.tasks]
+        bar = "echo bar"
+
+        [target.win.tasks]
+        bar = "echo bar"
+        """
+    manifest.write_text(toml)
+    verify_cli_command(
+        [pixi, "task", "list", "--manifest-path", manifest], stderr_contains=["foo", "bar"]
+    )
+
+
+def test_pixi_add_alias(pixi: Path, tmp_pixi_workspace: Path, snapshot: SnapshotAssertion) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = """
+[workspace]
+name = "test"
+channels = []
+platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+"""
+    manifest.write_text(toml)
+
+    # Test simple task alias
+    verify_cli_command(
+        [pixi, "task", "alias", "dummy-a", "dummy-b", "dummy-c", "--manifest-path", manifest]
+    )
+
+    # Test platform-specific task alias
+    verify_cli_command(
+        [
+            pixi,
+            "task",
+            "alias",
+            "--platform",
+            "linux-64",
+            "linux-alias",
+            "dummy-b",
+            "dummy-c",
+            "--manifest-path",
+            manifest,
+        ]
+    )
+
+    assert manifest.read_text() == snapshot
+
+
+def test_pixi_add_task(pixi: Path, tmp_pixi_workspace: Path, snapshot: SnapshotAssertion) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = """
+[workspace]
+name = "test"
+channels = []
+platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+"""
+    manifest.write_text(toml)
+
+    verify_cli_command(
+        [
+            pixi,
+            "task",
+            "add",
+            "--arg",
+            "name",
+            "--manifest-path",
+            manifest,
+            "test",
+            "echo 'Hello {{name | title}}'",
+        ]
+    )
+
+    verify_cli_command(
+        [pixi, "task", "add", "--depends-on", "test", "--manifest-path", manifest, "test-alias", ""]
+    )
+
+    assert manifest.read_text() == snapshot
+
+
+def test_pixi_task_list_json(
+    pixi: Path, tmp_pixi_workspace: Path, snapshot: SnapshotAssertion
+) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = """
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+
+        [tasks]
+        test-task = { cmd = "echo 'Hello {{name | title}}'", args = [{arg = "name", default = "World"}] }
+        """
+    manifest.write_text(toml)
+
+    result = verify_cli_command(
+        [pixi, "task", "list", "--json", "--manifest-path", manifest], ExitCode.SUCCESS
+    )
+
+    task_data = json.loads(result.stdout)
+
+    assert task_data == snapshot
+
+
+def test_info_output_extended(
+    pixi: Path, tmp_pixi_workspace: Path, snapshot: SnapshotAssertion
+) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = """
+        [workspace]
+        name = "test"
+        channels = ["conda-forge"]
+        platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+
+        [feature.py312.dependencies]
+        python = "~=3.12.0"
+
+        [environments]
+        py312 = ["py312"]
+    """
+    manifest.write_text(toml)
+
+    verify_cli_command([pixi, "install", "--manifest-path", manifest, "--all"])
+
+    result = verify_cli_command(
+        [pixi, "info", "--manifest-path", manifest, "--extended", "--json"], ExitCode.SUCCESS
+    )
+    info_data = json.loads(result.stdout)
+
+    # Stub out path, size and other dynamic data from snapshot
+    path_matcher = path_type(
+        {
+            "auth_dir": (str,),
+            "cache_dir": (str,),
+            "cache_size": (str,),
+            "config_locations": (list,),
+            "environments_info.0.prefix": (str,),
+            "environments_info.0.environment_size": (str,),
+            "environments_info.0.platforms": (list,),
+            "environments_info.1.prefix": (str,),
+            "environments_info.1.environment_size": (str,),
+            "environments_info.1.platforms": (list,),
+            "global_info.bin_dir": (str,),
+            "global_info.env_dir": (str,),
+            "global_info.manifest": (str,),
+            "platform": (str,),
+            "project_info.manifest_path": (str,),
+            "project_info.pixi_folder_size": (str,),
+            "project_info.last_updated": (str,),
+            "version": (str,),
+            "virtual_packages": (list,),
+        }
+    )
+
+    assert info_data == snapshot(matcher=path_matcher)

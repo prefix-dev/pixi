@@ -4,7 +4,7 @@
 ## About
 Clean the cache of your system which are touched by pixi
 
---8<-- "docs/reference/cli/pixi/clean/cache_extender.md:description"
+--8<-- "docs/reference/cli/pixi/clean/cache_extender:description"
 
 ## Usage
 ```
@@ -12,14 +12,14 @@ pixi clean cache [OPTIONS]
 ```
 
 ## Options
-- <a id="arg---conda" href="#arg---conda">`--conda`</a>
-:  Clean only the conda related cache
-- <a id="arg---exec" href="#arg---exec">`--exec`</a>
-:  Clean only `exec` cache
-- <a id="arg---mapping" href="#arg---mapping">`--mapping`</a>
-:  Clean only the mapping cache
 - <a id="arg---pypi" href="#arg---pypi">`--pypi`</a>
 :  Clean only the pypi related cache
+- <a id="arg---conda" href="#arg---conda">`--conda`</a>
+:  Clean only the conda related cache
+- <a id="arg---mapping" href="#arg---mapping">`--mapping`</a>
+:  Clean only the mapping cache
+- <a id="arg---exec" href="#arg---exec">`--exec`</a>
+:  Clean only `exec` cache
 - <a id="arg---repodata" href="#arg---repodata">`--repodata`</a>
 :  Clean only the repodata cache
 - <a id="arg---tool" href="#arg---tool">`--tool`</a>
@@ -33,4 +33,4 @@ Clean the cache of your system which are touched by pixi.
 Specify the cache type to clean with the flags.
 
 
---8<-- "docs/reference/cli/pixi/clean/cache_extender.md:example"
+--8<-- "docs/reference/cli/pixi/clean/cache_extender:example"

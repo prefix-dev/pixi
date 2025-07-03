@@ -1,4 +1,3 @@
-# --8<-- [start:workspace]
 [workspace]
 channels = [
   "https://prefix.dev/pixi-build-backends",
@@ -8,16 +7,14 @@ platforms = ["win-64", "linux-64", "osx-arm64", "osx-64"]
 preview = ["pixi-build"]
 
 [dependencies]
-python_bindings = { path = "packages/python_bindings" }
-rich_example = { path = "." }
-# --8<-- [end:workspace]
+python_rich = { path = "." }
 
 
 [tasks]
 start = "rich-example-main"
 
 [package]
-name = "rich_example"
+name = "python_rich"
 version = "0.1.0"
 
 [package.build]
@@ -26,5 +23,8 @@ backend = { name = "pixi-build-python", version = "0.1.*" }
 [package.host-dependencies]
 hatchling = "==1.26.3"
 
+# --8<-- [start:run-dependencies]
 [package.run-dependencies]
+cpp_math = { path = "packages/cpp_math" }
 rich = "13.9.*"
+# --8<-- [end:run-dependencies]

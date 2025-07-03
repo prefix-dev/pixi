@@ -1,5 +1,6 @@
 ---
 source: crates/pixi_manifest/src/toml/pypi_options.rs
+assertion_line: 299
 expression: options
 ---
 PypiOptions {
@@ -74,15 +75,29 @@ PypiOptions {
             ),
         ],
     ),
-    no_build_isolation: Some(
-        [
-            "sigma",
-        ],
+    no_build_isolation: Packages(
+        {
+            PackageName(
+                "sigma",
+            ),
+        },
     ),
     index_strategy: Some(
         FirstIndex,
     ),
     no_build: Some(
         All,
+    ),
+    no_binary: Some(
+        Packages(
+            {
+                PackageName(
+                    "package1",
+                ),
+                PackageName(
+                    "package2",
+                ),
+            },
+        ),
     ),
 }

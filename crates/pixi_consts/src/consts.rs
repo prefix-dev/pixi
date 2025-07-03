@@ -16,7 +16,7 @@ pub const PYPROJECT_MANIFEST: &str = "pyproject.toml";
 pub const CONFIG_FILE: &str = "config.toml";
 pub const PIXI_VERSION: &str = match option_env!("PIXI_VERSION") {
     Some(v) => v,
-    None => "0.42.1",
+    None => "0.49.0",
 };
 pub const PREFIX_FILE_NAME: &str = "pixi_env_prefix";
 pub const ENVIRONMENTS_DIR: &str = "envs";
@@ -38,7 +38,15 @@ pub const CACHED_ENVS_DIR: &str = "cached-envs-v0";
 // TODO: CACHED_BUILD_ENVS_DIR was deprecated in favor of CACHED_BUILD_ENVS_DIR. This constant will be removed in a future release.
 pub const _CACHED_BUILD_ENVS_DIR: &str = "cached-build-envs-v0";
 pub const CACHED_BUILD_TOOL_ENVS_DIR: &str = "cached-build-tool-envs-v0";
-pub const CACHED_GIT_DIR: &str = "git-cache-v0";
+pub const CACHED_GIT_DIR: &str = "git-v0";
+pub const CACHED_BUILD_WORK_DIR: &str = "work";
+pub const CACHED_BUILD_BACKENDS: &str = "backends-v0";
+pub const CACHED_PACKAGES: &str = "pkgs";
+pub const CACHED_SOURCE_METADATA: &str = "metadata";
+pub const CACHED_SOURCE_BUILDS: &str = "pkgs";
+
+/// The directory relative to the .pixi folder that stores build related caches.
+pub const WORKSPACE_CACHE_DIR: &str = "build";
 
 /// The default config directory for pixi, typically at $XDG_CONFIG_HOME/$PIXI_CONFIG_DIR or $HOME/.config/$PIXI_CONFIG_DIR.
 pub const CONFIG_DIR: &str = match option_env!("PIXI_CONFIG_DIR") {
@@ -71,10 +79,14 @@ pub static DEFAULT_CHANNELS: LazyLock<Vec<NamedChannelOrUrl>> =
             .map(|s| NamedChannelOrUrl::from_str(s).expect("unable to parse default channel"))
             .collect(),
         None => {
-            vec![NamedChannelOrUrl::from_str("conda-forge")
-                .expect("unable to parse default channel")]
+            vec![
+                NamedChannelOrUrl::from_str("conda-forge")
+                    .expect("unable to parse default channel"),
+            ]
         }
     });
+
+pub const MOJOPROJECT_MANIFEST: &str = "mojoproject.toml";
 
 pub const CONDA_INSTALLER: &str = "conda";
 
@@ -82,9 +94,19 @@ pub const ONE_TIME_MESSAGES_DIR: &str = "one-time-messages";
 
 pub const ENVIRONMENT_FILE_NAME: &str = "pixi";
 
+// Note: no trailing slash!
 pub const RELEASES_URL: &str = "https://github.com/prefix-dev/pixi/releases";
+pub const RELEASES_API_BY_TAG: &str = "https://api.github.com/repos/prefix-dev/pixi/releases/tags";
+pub const RELEASES_API_LATEST: &str =
+    "https://api.github.com/repos/prefix-dev/pixi/releases/latest";
+
+pub const CLAP_CONFIG_OPTIONS: &str = "Config Options";
+pub const CLAP_GIT_OPTIONS: &str = "Git Options";
+pub const CLAP_GLOBAL_OPTIONS: &str = "Global Options";
+pub const CLAP_UPDATE_OPTIONS: &str = "Update Options";
 
 pub static TASK_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().blue());
+pub static TASK_ERROR_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().red());
 pub static PLATFORM_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().yellow());
 pub static ENVIRONMENT_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().magenta());
 pub static EXPOSED_NAME_STYLE: LazyLock<Style> = LazyLock::new(|| Style::new().yellow());

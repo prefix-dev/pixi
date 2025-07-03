@@ -3,13 +3,12 @@
 //! This is useful for finding out if you need to rebuild a target based on the files that match a glob pattern.
 use std::{
     fs::File,
-    io,
-    io::{BufRead, Read, Write},
+    io::{self, BufRead, Read, Write},
     path::{Path, PathBuf},
 };
 
 use itertools::Itertools;
-use rattler_digest::{digest::Digest, Sha256, Sha256Hash};
+use rattler_digest::{Sha256, Sha256Hash, digest::Digest};
 use thiserror::Error;
 
 use crate::glob_set::{self, GlobSet};
@@ -41,6 +40,7 @@ impl GlobHash {
     pub fn from_patterns<'a>(
         root_dir: &Path,
         globs: impl IntoIterator<Item = &'a str>,
+        additional_hash: Option<Vec<u8>>,
     ) -> Result<Self, GlobHashError> {
         // If the root is not a directory or does not exist, return an empty map.
         if !root_dir.is_dir() {
@@ -75,6 +75,11 @@ impl GlobHash {
                 .and_then(|mut file| normalize_line_endings(&mut file, &mut hasher))
                 .map_err(move |e| GlobHashError::NormalizeLineEnds(entry, e))?;
         }
+
+        if let Some(additional_hash) = additional_hash {
+            rattler_digest::digest::Update::update(&mut hasher, &additional_hash);
+        }
+
         let hash = hasher.finalize();
 
         Ok(Self {
@@ -183,7 +188,7 @@ mod test {
             .parent()
             .and_then(Path::parent)
             .unwrap();
-        let glob_hash = GlobHash::from_patterns(root_dir, globs.iter().copied()).unwrap();
+        let glob_hash = GlobHash::from_patterns(root_dir, globs.iter().copied(), None).unwrap();
         let snapshot = format!(
             "Globs:\n{}\nHash: {:x}\nMatched files:\n{}",
             globs

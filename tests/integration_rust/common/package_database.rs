@@ -4,11 +4,12 @@
 // There are a bunch of functions that remain unused in tests but might be useful in the future.
 #![allow(dead_code)]
 
+use chrono::{DateTime, Utc};
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{
-    package::ArchiveType, ChannelInfo, PackageName, PackageRecord, Platform, RepoData,
-    VersionWithSource,
+    ChannelInfo, PackageName, PackageRecord, Platform, RepoData, VersionWithSource,
+    package::ArchiveType,
 };
 use std::{collections::HashSet, path::Path};
 use tempfile::TempDir;
@@ -63,7 +64,7 @@ impl PackageDatabase {
 
             let repodata = RepoData {
                 info: Some(ChannelInfo {
-                    subdir: platform.to_string(),
+                    subdir: Some(platform.to_string()),
                     base_url: None,
                 }),
                 packages: self
@@ -142,6 +143,9 @@ pub struct PackageBuilder {
     depends: Vec<String>,
     subdir: Option<Platform>,
     archive_type: ArchiveType,
+    timestamp: Option<DateTime<Utc>>,
+    md5: Option<String>,
+    sha256: Option<String>,
 }
 
 impl Package {
@@ -155,6 +159,9 @@ impl Package {
             depends: vec![],
             subdir: None,
             archive_type: ArchiveType::Conda,
+            timestamp: None,
+            sha256: None,
+            md5: None,
         }
     }
 
@@ -201,20 +208,48 @@ impl PackageBuilder {
         self
     }
 
+    /// Sets the timestamp of the package.
+    pub fn with_timestamp(mut self, timestamp: DateTime<Utc>) -> Self {
+        self.timestamp = Some(timestamp);
+        self
+    }
+
+    pub fn with_hashes(mut self, sha256: &str, md5: &str) -> Self {
+        self.sha256 = Some(sha256.to_string());
+        self.md5 = Some(md5.to_string());
+        self
+    }
+
     /// Finish construction of the package
     pub fn finish(self) -> Package {
         let subdir = self.subdir.unwrap_or(Platform::NoArch);
         let build_number = self.build_number.unwrap_or(0);
         let build = self.build.unwrap_or_else(|| format!("{build_number}"));
-        let hash = format!(
-            "{}-{}-{}{}",
-            &self.name,
-            &self.version,
-            &build,
-            self.archive_type.extension()
-        );
-        let md5 = rattler_digest::compute_bytes_digest::<rattler_digest::Md5>(&hash);
-        let sha256 = rattler_digest::compute_bytes_digest::<rattler_digest::Sha256>(&hash);
+        let (sha256, md5) = match (self.sha256, self.md5) {
+            (Some(sha256), Some(md5)) => {
+                let sha256 =
+                    rattler_digest::parse_digest_from_hex::<rattler_digest::Sha256>(&sha256)
+                        .expect("Invalid sha256 hash format");
+                let md5 = rattler_digest::parse_digest_from_hex::<rattler_digest::Md5>(&md5)
+                    .expect("Invalid md5 hash format");
+                (Some(sha256), Some(md5))
+            }
+            (None, None) => {
+                // Calculate a random wrong hash for snapshot tests
+                let hash = format!(
+                    "{}-{}-{}{}",
+                    &self.name,
+                    &self.version,
+                    &build,
+                    self.archive_type.extension()
+                );
+                let md5 = rattler_digest::compute_bytes_digest::<rattler_digest::Md5>(&hash);
+                let sha256 = rattler_digest::compute_bytes_digest::<rattler_digest::Sha256>(&hash);
+                (Some(sha256), Some(md5))
+            }
+            _ => panic!("Either both sha256 and md5 should be set or none of them"),
+        };
+
         Package {
             package_record: PackageRecord {
                 arch: None,
@@ -227,14 +262,14 @@ impl PackageBuilder {
                 legacy_bz2_size: None,
                 license: None,
                 license_family: None,
-                md5: Some(md5),
+                md5,
                 name: PackageName::new_unchecked(self.name),
                 noarch: Default::default(),
                 platform: None,
-                sha256: Some(sha256),
+                sha256,
                 size: None,
                 subdir: subdir.to_string(),
-                timestamp: None,
+                timestamp: self.timestamp,
                 track_features: vec![],
                 version: self.version,
                 purls: None,

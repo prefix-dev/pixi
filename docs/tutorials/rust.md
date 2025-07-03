@@ -1,5 +1,3 @@
-# Tutorial: Develop a Rust package using `pixi`
-
 In this tutorial, we will show you how to develop a Rust package using `pixi`.
 The tutorial is written to be executed from top to bottom, missing steps might result in errors.
 
@@ -63,7 +61,7 @@ pixi run cargo init
 ```
 
 `pixi run` is pixi's way to run commands in the `pixi` environment, it will make sure that the environment is set up correctly for the command to run.
-It runs its own cross-platform shell, if you want more information checkout the [`tasks` documentation](../environments/advanced_tasks.md).
+It runs its own cross-platform shell, if you want more information checkout the [`tasks` documentation](../workspace/advanced_tasks.md).
 You can also activate the environment in your own shell by running `pixi shell`, after that you don't need `pixi run ...` anymore.
 
 Now we can build a `cargo` project using `pixi`.

@@ -12,25 +12,26 @@ use pep440_rs::VersionSpecifiers;
 use pep508_rs::{Requirement, VersionOrUrl::VersionSpecifier};
 use pixi_config::PinningStrategy;
 use pixi_manifest::{
-    pypi::PyPiPackageName, toml::TomlDocument, utils::WithSourceCode, DependencyOverwriteBehavior,
-    FeatureName, FeaturesExt, HasFeaturesIter, LoadManifestsError, ManifestDocument, ManifestKind,
-    PypiDependencyLocation, SpecType, TomlError, WorkspaceManifest, WorkspaceManifestMut,
+    DependencyOverwriteBehavior, FeatureName, FeaturesExt, HasFeaturesIter, LoadManifestsError,
+    ManifestDocument, ManifestKind, PypiDependencyLocation, SpecType, TomlError, WorkspaceManifest,
+    WorkspaceManifestMut, toml::TomlDocument, utils::WithSourceCode,
 };
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform, Version};
 use rattler_lock::LockFile;
 use toml_edit::DocumentMut;
 
 use crate::{
-    cli::cli_config::PrefixUpdateConfig,
+    Workspace,
+    cli::cli_config::{LockFileUpdateConfig, PrefixUpdateConfig},
     diff::LockFileDiff,
     environment::LockFileUsage,
-    lock_file::{LockFileDerivedData, UpdateContext, UpdateMode},
+    lock_file::{LockFileDerivedData, ReinstallPackages, UpdateContext, UpdateMode},
     workspace::{
-        grouped_environment::GroupedEnvironment, MatchSpecs, PypiDeps, SourceSpecs, UpdateDeps,
-        NON_SEMVER_PACKAGES,
+        MatchSpecs, NON_SEMVER_PACKAGES, PypiDeps, SourceSpecs, UpdateDeps,
+        grouped_environment::GroupedEnvironment,
     },
-    Workspace,
 };
 
 struct OriginalContent {
@@ -98,13 +99,14 @@ impl WorkspaceMut {
                     ),
                     error: TomlError::from(err),
                 })
-                .into())
+                .into());
             }
         };
 
         let workspace_manifest_document = match workspace.workspace.provenance.kind {
             ManifestKind::Pyproject => ManifestDocument::PyProjectToml(toml),
             ManifestKind::Pixi => ManifestDocument::PixiToml(toml),
+            ManifestKind::MojoProject => ManifestDocument::MojoProjectToml(toml),
         };
 
         Ok(Self {
@@ -133,7 +135,7 @@ impl WorkspaceMut {
                     source: NamedSource::new(manifest_path.to_string_lossy(), Arc::from(contents)),
                     error: TomlError::from(err),
                 })
-                .into())
+                .into());
             }
         };
 
@@ -143,6 +145,7 @@ impl WorkspaceMut {
         let workspace_manifest_document = match workspace.workspace.provenance.kind {
             ManifestKind::Pyproject => ManifestDocument::PyProjectToml(toml),
             ManifestKind::Pixi => ManifestDocument::PixiToml(toml),
+            ManifestKind::MojoProject => ManifestDocument::MojoProjectToml(toml),
         };
 
         Ok(Self {
@@ -233,6 +236,7 @@ impl WorkspaceMut {
         pypi_deps: PypiDeps,
         source_specs: SourceSpecs,
         prefix_update_config: &PrefixUpdateConfig,
+        lock_file_update_config: &LockFileUpdateConfig,
         feature_name: &FeatureName,
         platforms: &[Platform],
         editable: bool,
@@ -278,18 +282,19 @@ impl WorkspaceMut {
             )?;
         }
 
-        for (name, (spec, location)) in pypi_deps {
+        for (name, (spec, pixi_spec, location)) in pypi_deps {
             let added = self.manifest().add_pep508_dependency(
-                &spec,
+                (&spec, pixi_spec.as_ref()),
                 platforms,
                 feature_name,
                 Some(editable),
                 DependencyOverwriteBehavior::Overwrite,
-                &location,
+                location.as_ref(),
             )?;
             if added {
                 if spec.version_or_url.is_none() {
-                    pypi_specs_to_add_constraints_for.insert(name.clone(), (spec, location));
+                    pypi_specs_to_add_constraints_for
+                        .insert(name.clone(), (spec, pixi_spec, location));
                 }
                 pypi_packages.insert(name.as_normalized().clone());
             }
@@ -302,7 +307,7 @@ impl WorkspaceMut {
             self.save_inner().await.into_diagnostic()?;
         }
 
-        if prefix_update_config.lock_file_usage() != LockFileUsage::Update {
+        if lock_file_update_config.lock_file_usage() != LockFileUsage::Update {
             return Ok(None);
         }
 
@@ -355,9 +360,13 @@ impl WorkspaceMut {
             build_context,
             glob_hash_cache,
             io_concurrency_limit,
+            was_outdated: _,
         } = UpdateContext::builder(self.workspace())
             .with_lock_file(unlocked_lock_file)
-            .with_no_install(prefix_update_config.no_install() || dry_run)
+            .with_no_install(
+                (prefix_update_config.no_install && lock_file_update_config.no_lockfile_update)
+                    || dry_run,
+            )
             .finish()
             .await?
             .update()
@@ -394,7 +403,7 @@ impl WorkspaceMut {
             self.save_inner().await.into_diagnostic()?;
         }
 
-        let mut updated_lock_file = LockFileDerivedData {
+        let updated_lock_file = LockFileDerivedData {
             workspace: self.workspace(),
             lock_file,
             package_cache,
@@ -404,11 +413,13 @@ impl WorkspaceMut {
             io_concurrency_limit,
             build_context,
             glob_hash_cache,
+            was_outdated: true,
         };
-        if !prefix_update_config.no_lockfile_update && !dry_run {
+        if !lock_file_update_config.no_lockfile_update && !dry_run {
             updated_lock_file.write_to_disk()?;
         }
-        if !prefix_update_config.no_install()
+        if !prefix_update_config.no_install
+            && !lock_file_update_config.no_lockfile_update
             && !dry_run
             && self.workspace().environments().len() == 1
             && default_environment_is_affected
@@ -417,12 +428,13 @@ impl WorkspaceMut {
                 .prefix(
                     &self.workspace().default_environment(),
                     UpdateMode::Revalidate,
+                    &ReinstallPackages::default(),
                 )
                 .await?;
         }
 
         let lock_file_diff =
-            LockFileDiff::from_lock_files(&original_lock_file, &updated_lock_file.lock_file);
+            LockFileDiff::from_lock_files(&original_lock_file, &updated_lock_file.into_lock_file());
 
         Ok(Some(UpdateDeps {
             implicit_constraints,
@@ -509,8 +521,12 @@ impl WorkspaceMut {
         &mut self,
         updated_lock_file: &LockFile,
         pypi_specs_to_add_constraints_for: IndexMap<
-            PyPiPackageName,
-            (Requirement, Option<PypiDependencyLocation>),
+            PypiPackageName,
+            (
+                Requirement,
+                Option<PixiPypiSpec>,
+                Option<PypiDependencyLocation>,
+            ),
         >,
         affect_environment_and_platforms: Vec<(String, Platform)>,
         feature_name: &FeatureName,
@@ -541,7 +557,7 @@ impl WorkspaceMut {
             .unwrap_or_default();
 
         // Determine the versions of the packages in the lock-file
-        for (name, (req, location)) in pypi_specs_to_add_constraints_for {
+        for (name, (req, pixi_req, location)) in pypi_specs_to_add_constraints_for {
             let version_constraint = pinning_strategy.determine_version_constraint(
                 pypi_records
                     .iter()
@@ -564,13 +580,14 @@ impl WorkspaceMut {
                     version_or_url: Some(VersionSpecifier(version_spec)),
                     ..req
                 };
+
                 self.manifest().add_pep508_dependency(
-                    &req,
+                    (&req, pixi_req.as_ref()),
                     platforms,
                     feature_name,
                     Some(editable),
                     DependencyOverwriteBehavior::Overwrite,
-                    &location,
+                    location.as_ref(),
                 )?;
             }
         }

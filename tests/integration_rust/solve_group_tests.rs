@@ -1,9 +1,11 @@
 use std::{
     collections::{BTreeSet, HashMap},
+    path::Path,
     str::FromStr,
+    sync::Arc,
 };
 
-use pypi_mapping::{self, PurlSource};
+use pypi_mapping::{self, CustomMapping, MappingLocation, MappingSource, PurlSource};
 use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
 use rattler_lock::DEFAULT_ENVIRONMENT_NAME;
 use reqwest_middleware::ClientBuilder;
@@ -11,10 +13,10 @@ use tempfile::TempDir;
 use url::Url;
 
 use crate::common::{
+    LockFileExt, PixiControl,
     builders::{HasDependencyConfig, HasPrefixUpdateConfig},
     client::OfflineMiddleware,
     package_database::{Package, PackageDatabase},
-    LockFileExt, PixiControl,
 };
 
 #[tokio::test]
@@ -179,31 +181,22 @@ async fn test_purl_are_missing_for_non_conda_forge() {
         channel: Some("dummy-channel".to_owned()),
     };
 
-    let packages = vec![repo_data_record.clone()];
-
-    let conda_mapping =
-        pypi_mapping::prefix_pypi_name_mapping::conda_pypi_name_mapping(client, &packages, None)
-            .await
-            .unwrap();
-    // We are using custom mapping
-    let compressed_mapping =
-        HashMap::from([("foo-bar-car".to_owned(), Some("my-test-name".to_owned()))]);
-
-    pypi_mapping::prefix_pypi_name_mapping::amend_pypi_purls_for_record(
-        &mut repo_data_record,
-        &conda_mapping,
-        &compressed_mapping,
-    )
-    .unwrap();
+    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    mapping_client
+        .amend_purls(&MappingSource::Prefix, vec![&mut repo_data_record], None)
+        .await
+        .unwrap();
 
     // Because foo-bar-car is not from conda-forge channel
     // We verify that purls are missing for non-conda-forge packages
-    assert!(repo_data_record
-        .package_record
-        .purls
-        .as_ref()
-        .and_then(BTreeSet::first)
-        .is_none());
+    assert!(
+        repo_data_record
+            .package_record
+            .purls
+            .as_ref()
+            .and_then(BTreeSet::first)
+            .is_none()
+    );
 }
 
 #[tokio::test]
@@ -223,22 +216,23 @@ async fn test_purl_are_generated_using_custom_mapping() {
         channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
 
-    let packages = vec![repo_data_record.clone()];
-
-    let conda_mapping =
-        pypi_mapping::prefix_pypi_name_mapping::conda_pypi_name_mapping(client, &packages, None)
-            .await
-            .unwrap();
     // We are using custom mapping
     let compressed_mapping =
         HashMap::from([("foo-bar-car".to_owned(), Some("my-test-name".to_owned()))]);
+    let source = HashMap::from([(
+        "https://conda.anaconda.org/conda-forge".to_owned(),
+        MappingLocation::Memory(compressed_mapping),
+    )]);
 
-    pypi_mapping::prefix_pypi_name_mapping::amend_pypi_purls_for_record(
-        &mut repo_data_record,
-        &conda_mapping,
-        &compressed_mapping,
-    )
-    .unwrap();
+    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    mapping_client
+        .amend_purls(
+            &MappingSource::Custom(Arc::new(CustomMapping::new(source))),
+            vec![&mut repo_data_record],
+            None,
+        )
+        .await
+        .unwrap();
 
     let first_purl = repo_data_record
         .package_record
@@ -268,24 +262,13 @@ async fn test_compressed_mapping_catch_not_pandoc_not_a_python_package() {
         channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
 
-    let packages = vec![repo_data_record.clone()];
+    let packages = vec![&mut repo_data_record];
 
-    let conda_mapping =
-        pypi_mapping::prefix_pypi_name_mapping::conda_pypi_name_mapping(client, &packages, None)
-            .await
-            .unwrap();
-
-    let compressed_mapping =
-        pypi_mapping::prefix_pypi_name_mapping::conda_pypi_name_compressed_mapping(client)
-            .await
-            .unwrap();
-
-    pypi_mapping::prefix_pypi_name_mapping::amend_pypi_purls_for_record(
-        &mut repo_data_record,
-        &conda_mapping,
-        &compressed_mapping,
-    )
-    .unwrap();
+    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    mapping_client
+        .amend_purls(&MappingSource::Prefix, packages, None)
+        .await
+        .unwrap();
 
     // pandoc is not a python package
     // so purls for it should be empty
@@ -327,31 +310,24 @@ async fn test_dont_record_not_present_package_as_purl() {
         channel: Some("https://conda.anaconda.org/conda-forge/".to_owned()),
     };
 
-    let packages = vec![repo_data_record.clone(), boltons_repo_data_record.clone()];
+    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    mapping_client
+        .amend_purls(
+            project.pypi_name_mapping_source().unwrap(),
+            vec![&mut repo_data_record, &mut boltons_repo_data_record],
+            None,
+        )
+        .await
+        .unwrap();
 
-    let conda_mapping =
-        pypi_mapping::prefix_pypi_name_mapping::conda_pypi_name_mapping(client, &packages, None)
-            .await
-            .unwrap();
-
-    let compressed_mapping =
-        pypi_mapping::prefix_pypi_name_mapping::conda_pypi_name_compressed_mapping(client)
-            .await
-            .unwrap();
-
-    pypi_mapping::prefix_pypi_name_mapping::amend_pypi_purls_for_record(
-        &mut repo_data_record,
-        &conda_mapping,
-        &compressed_mapping,
-    )
-    .unwrap();
-
-    pypi_mapping::prefix_pypi_name_mapping::amend_pypi_purls_for_record(
-        &mut boltons_repo_data_record,
-        &conda_mapping,
-        &compressed_mapping,
-    )
-    .unwrap();
+    mapping_client
+        .amend_purls(
+            project.pypi_name_mapping_source().unwrap(),
+            vec![&mut repo_data_record, &mut boltons_repo_data_record],
+            None,
+        )
+        .await
+        .unwrap();
 
     let first_purl = repo_data_record
         .package_record
@@ -380,17 +356,37 @@ async fn test_dont_record_not_present_package_as_purl() {
     );
 }
 
+fn absolute_custom_mapping_path() -> String {
+    dunce::simplified(
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/mapping_files/custom_mapping.json"),
+    )
+    .display()
+    .to_string()
+    .replace("\\", "/")
+}
+
+fn absolute_compressed_mapping_path() -> String {
+    dunce::simplified(
+        &Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/data/mapping_files/compressed_mapping.json"),
+    )
+    .display()
+    .to_string()
+    .replace("\\", "/")
+}
+
 #[tokio::test]
 async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
-    let pixi = PixiControl::from_manifest(
+    let pixi = PixiControl::from_manifest(&format!(
         r#"
     [project]
     name = "test-channel-change"
     channels = ["conda-forge"]
     platforms = ["linux-64"]
-    conda-pypi-map = { 'conda-forge' = "tests/data/mapping_files/compressed_mapping.json" }
+    conda-pypi-map = {{ 'conda-forge' = "{}" }}
     "#,
-    )
+        absolute_compressed_mapping_path()
+    ))
     .unwrap();
 
     let project = pixi.workspace().unwrap();
@@ -424,13 +420,13 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
 
     let mut packages = vec![repo_data_record, boltons_repo_data_record];
 
-    let mapping_map = project
-        .pypi_name_mapping_source()
-        .unwrap()
-        .custom()
-        .unwrap();
-
-    pypi_mapping::custom_pypi_mapping::amend_pypi_purls(client, &mapping_map, &mut packages, None)
+    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    mapping_client
+        .amend_purls(
+            project.pypi_name_mapping_source().unwrap(),
+            &mut packages,
+            None,
+        )
         .await
         .unwrap();
 
@@ -442,6 +438,8 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
         .as_ref()
         .and_then(BTreeSet::first)
         .unwrap();
+
+    println!("{boltons_first_purl}");
 
     // for boltons we have a mapping record
     // so we test that we also record source=project-defined-mapping qualifier
@@ -469,14 +467,16 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
 
 #[tokio::test]
 async fn test_custom_mapping_channel_with_suffix() {
-    let pixi = PixiControl::from_manifest(r#"
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
      [project]
      name = "test-channel-change"
      channels = ["conda-forge"]
      platforms = ["linux-64"]
-     conda-pypi-map = { "https://conda.anaconda.org/conda-forge/" = "tests/data/mapping_files/custom_mapping.json" }
+     conda-pypi-map = {{ "https://conda.anaconda.org/conda-forge/" = "{}" }}
      "#,
-    )
+        absolute_custom_mapping_path()
+    ))
     .unwrap();
 
     let project = pixi.workspace().unwrap();
@@ -494,11 +494,13 @@ async fn test_custom_mapping_channel_with_suffix() {
 
     let mut packages = vec![repo_data_record];
 
-    let mapping_source = project.pypi_name_mapping_source().unwrap();
-
-    let mapping_map = mapping_source.custom().unwrap();
-
-    pypi_mapping::custom_pypi_mapping::amend_pypi_purls(client, &mapping_map, &mut packages, None)
+    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    mapping_client
+        .amend_purls(
+            project.pypi_name_mapping_source().unwrap(),
+            &mut packages,
+            None,
+        )
         .await
         .unwrap();
 
@@ -520,14 +522,16 @@ async fn test_custom_mapping_channel_with_suffix() {
 
 #[tokio::test]
 async fn test_repo_data_record_channel_with_suffix() {
-    let pixi = PixiControl::from_manifest(r#"
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
      [project]
      name = "test-channel-change"
      channels = ["conda-forge"]
      platforms = ["linux-64"]
-     conda-pypi-map = { "https://conda.anaconda.org/conda-forge" = "tests/data/mapping_files/custom_mapping.json" }
+     conda-pypi-map = {{ "https://conda.anaconda.org/conda-forge" = "{}" }}
      "#,
-    )
+        absolute_custom_mapping_path(),
+    ))
     .unwrap();
 
     let project = pixi.workspace().unwrap();
@@ -545,11 +549,13 @@ async fn test_repo_data_record_channel_with_suffix() {
 
     let mut packages = vec![repo_data_record];
 
-    let mapping_source = project.pypi_name_mapping_source().unwrap();
-
-    let mapping_map = mapping_source.custom().unwrap();
-
-    pypi_mapping::custom_pypi_mapping::amend_pypi_purls(client, &mapping_map, &mut packages, None)
+    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    mapping_client
+        .amend_purls(
+            project.pypi_name_mapping_source().unwrap(),
+            &mut packages,
+            None,
+        )
         .await
         .unwrap();
 
@@ -570,15 +576,16 @@ async fn test_repo_data_record_channel_with_suffix() {
 
 #[tokio::test]
 async fn test_path_channel() {
-    let pixi = PixiControl::from_manifest(
+    let pixi = PixiControl::from_manifest(&format!(
         r#"
      [project]
      name = "test-channel-change"
      channels = ["file:///home/user/staged-recipes/build_artifacts"]
      platforms = ["linux-64"]
-     conda-pypi-map = {"file:///home/user/staged-recipes/build_artifacts" = "tests/data/mapping_files/custom_mapping.json"}
+     conda-pypi-map = {{"file:///home/user/staged-recipes/build_artifacts" = "{}" }}
      "#,
-    )
+        absolute_custom_mapping_path()
+    ))
     .unwrap();
 
     let project = pixi.workspace().unwrap();
@@ -596,11 +603,13 @@ async fn test_path_channel() {
 
     let mut packages = vec![repo_data_record];
 
-    let mapping_source = project.pypi_name_mapping_source().unwrap();
-
-    let mapping_map = mapping_source.custom().unwrap();
-
-    pypi_mapping::custom_pypi_mapping::amend_pypi_purls(client, &mapping_map, &mut packages, None)
+    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    mapping_client
+        .amend_purls(
+            project.pypi_name_mapping_source().unwrap(),
+            &mut packages,
+            None,
+        )
         .await
         .unwrap();
 
@@ -670,10 +679,13 @@ async fn test_file_url_as_mapping_location() {
 
     let mut packages = vec![repo_data_record];
 
-    let mapping_source = project.pypi_name_mapping_source().unwrap();
-
-    let mapping_map = mapping_source.custom().unwrap();
-    pypi_mapping::custom_pypi_mapping::amend_pypi_purls(client, &mapping_map, &mut packages, None)
+    let mapping_client = pypi_mapping::MappingClient::builder(client.clone()).finish();
+    mapping_client
+        .amend_purls(
+            project.pypi_name_mapping_source().unwrap(),
+            &mut packages,
+            None,
+        )
         .await
         .unwrap();
 
@@ -699,7 +711,7 @@ async fn test_disabled_mapping() {
         r#"
     [project]
     name = "test-channel-change"
-    channels = ["conda-forge"]
+    channels = ["https://prefix.dev/conda-forge"]
     platforms = ["linux-64"]
     conda-pypi-map = { }
     "#,
@@ -727,14 +739,15 @@ async fn test_disabled_mapping() {
 
     let mut packages = vec![boltons_repo_data_record];
 
-    pypi_mapping::amend_pypi_purls(
-        blocked_client,
-        project.pypi_name_mapping_source().unwrap(),
-        &mut packages,
-        None,
-    )
-    .await
-    .unwrap();
+    let mapping_client = pypi_mapping::MappingClient::builder(blocked_client).finish();
+    mapping_client
+        .amend_purls(
+            project.pypi_name_mapping_source().unwrap(),
+            &mut packages,
+            None,
+        )
+        .await
+        .unwrap();
 
     let boltons_package = packages.pop().unwrap();
 

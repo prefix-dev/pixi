@@ -1,10 +1,11 @@
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use pixi_consts::consts;
 use pixi_record::LockedGitUrl;
 use pixi_uv_conversions::{
-    to_parsed_git_url, to_uv_normalize, to_uv_version, to_uv_version_specifiers, ConversionError,
+    ConversionError, to_parsed_git_url, to_uv_normalize, to_uv_version, to_uv_version_specifiers,
 };
 use rattler_lock::{PackageHashes, PypiPackageData, UrlOrPath};
 use url::Url;
@@ -58,9 +59,9 @@ pub fn locked_data_to_file(
         .transpose()?;
 
     Ok(uv_distribution_types::File {
-        filename: filename.to_string(),
+        filename: filename.into(),
         dist_info_metadata: false,
-        hashes,
+        hashes: hashes.into(),
         requires_python: uv_requires_python,
         upload_time_utc_ms: None,
         yanked: None,
@@ -131,7 +132,7 @@ pub fn convert_to_dist(
             let filename_raw = url
                 .path_segments()
                 .expect("url should have path segments")
-                .last()
+                .next_back()
                 .expect("url should have at least one path segment");
 
             // Decode the filename to avoid issues with the HTTP coding like `%2B` to `+`
@@ -159,9 +160,9 @@ pub fn convert_to_dist(
                         // When upgrading uv and running into problems we would need to sort this
                         // out but it would require adding the indexes to
                         // the lock file
-                        index: IndexUrl::Pypi(uv_pep508::VerbatimUrl::from_url(
+                        index: IndexUrl::Pypi(Arc::new(uv_pep508::VerbatimUrl::from_url(
                             consts::DEFAULT_PYPI_INDEX_URL.clone(),
-                        )),
+                        ))),
                     }],
                     best_wheel_index: 0,
                     sdist: None,
@@ -174,9 +175,9 @@ pub fn convert_to_dist(
                     version: pkg_version,
                     file: Box::new(file),
                     // This should be fine because currently it is only used for caching
-                    index: IndexUrl::Pypi(uv_pep508::VerbatimUrl::from_url(
+                    index: IndexUrl::Pypi(Arc::new(uv_pep508::VerbatimUrl::from_url(
                         consts::DEFAULT_PYPI_INDEX_URL.clone(),
-                    )),
+                    ))),
                     // I don't think this really matters for the install
                     wheels: vec![],
                     ext: SourceDistExtension::from_path(Path::new(filename_raw)).map_err(|e| {
@@ -195,7 +196,7 @@ pub fn convert_to_dist(
 
             let absolute_url = uv_pep508::VerbatimUrl::from_absolute_path(&abs_path)?;
             let pkg_name =
-                uv_normalize::PackageName::new(pkg.name.to_string()).expect("should be correct");
+                uv_normalize::PackageName::from_str(pkg.name.as_ref()).expect("should be correct");
             if abs_path.is_dir() {
                 Dist::from_directory_url(pkg_name, absolute_url, &abs_path, pkg.editable, false)?
             } else {

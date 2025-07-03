@@ -1,18 +1,24 @@
 use pixi_uv_conversions::{
-    to_normalize, to_uv_normalize, to_uv_version, ConversionError as PixiConversionError,
+    ConversionError as PixiConversionError, to_normalize, to_uv_normalize, to_uv_version,
 };
 use rattler_conda_types::{PackageRecord, PackageUrl, RepoDataRecord};
 use std::{collections::HashSet, str::FromStr};
 use thiserror::Error;
 
-use pixi_manifest::pypi::PyPiPackageName;
+use crate::lock_file::PlatformUnsat;
+use crate::lock_file::PlatformUnsat::{
+    DirectUrlDependencyOnCondaInstalledPackage, DirectoryDependencyOnCondaInstalledPackage,
+    GitDependencyOnCondaInstalledPackage, PathDependencyOnCondaInstalledPackage,
+};
+use pixi_consts::consts;
+use pixi_pypi_spec::PypiPackageName;
 use uv_normalize::{ExtraName, InvalidNameError};
 
 /// Defines information about a Pypi package extracted from either a python
 /// package or from a conda package. That can be used for comparison in both
 #[derive(Debug)]
 pub struct PypiPackageIdentifier {
-    pub name: PyPiPackageName,
+    pub name: PypiPackageName,
     pub version: pep440_rs::Version,
     pub extras: HashSet<ExtraName>,
 }
@@ -78,7 +84,7 @@ impl PypiPackageIdentifier {
                 let pep_name = to_normalize(&name)?;
 
                 result.push(PypiPackageIdentifier {
-                    name: PyPiPackageName::from_normalized(pep_name),
+                    name: PypiPackageName::from_normalized(pep_name),
                     version,
                     // TODO: We can't really tell which python extras are enabled in a conda
                     // package.
@@ -125,7 +131,7 @@ impl PypiPackageIdentifier {
         let pep_name = to_normalize(&name)?;
 
         Ok(Self {
-            name: PyPiPackageName::from_normalized(pep_name),
+            name: PypiPackageName::from_normalized(pep_name),
             version,
             extras,
         })
@@ -135,32 +141,60 @@ impl PypiPackageIdentifier {
     /// in this package identifier.
     pub(crate) fn satisfies(
         &self,
-        requirement: &uv_pypi_types::Requirement,
-    ) -> Result<bool, ConversionError> {
+        requirement: &uv_distribution_types::Requirement,
+    ) -> Result<bool, Box<PlatformUnsat>> {
         // Verify the name of the package
-        let uv_normalized = to_uv_normalize(self.name.as_normalized())?;
+        let uv_normalized = to_uv_normalize(self.name.as_normalized())
+            .map_err::<ConversionError, _>(From::from)
+            .map_err::<PlatformUnsat, _>(From::from)?;
         if uv_normalized != requirement.name {
             return Ok(false);
         }
 
         // Check the version of the requirement
         match &requirement.source {
-            uv_pypi_types::RequirementSource::Registry { specifier, .. } => {
-                let uv_version = to_uv_version(&self.version)?;
+            uv_distribution_types::RequirementSource::Registry { specifier, .. } => {
+                let uv_version = to_uv_version(&self.version)
+                    .map_err::<ConversionError, _>(From::from)
+                    .map_err::<PlatformUnsat, _>(From::from)?;
                 Ok(specifier.contains(&uv_version))
             }
             // a pypi -> conda requirement on these versions are not supported
-            uv_pypi_types::RequirementSource::Url { .. } => {
-                unreachable!("direct url requirement on conda package is not supported")
+            uv_distribution_types::RequirementSource::Url { .. } => {
+                tracing::warn!(
+                    "PyPI requirement: {} as an url dependency is currently not supported because it is already selected as a conda package",
+                    consts::PYPI_PACKAGE_STYLE.apply_to(requirement.name.as_str())
+                );
+                Err(Box::new(DirectUrlDependencyOnCondaInstalledPackage(
+                    requirement.name.clone(),
+                )))
             }
-            uv_pypi_types::RequirementSource::Git { .. } => {
-                unreachable!("git requirement on conda package is not supported")
+            uv_distribution_types::RequirementSource::Git { .. } => {
+                tracing::warn!(
+                    "PyPI requirement: {} as a Git dependency is currently not supported because it is already selected as a conda package",
+                    consts::PYPI_PACKAGE_STYLE.apply_to(requirement.name.as_str())
+                );
+                Err(Box::new(GitDependencyOnCondaInstalledPackage(
+                    requirement.name.clone(),
+                )))
             }
-            uv_pypi_types::RequirementSource::Path { .. } => {
-                unreachable!("path requirement on conda package is not supported")
+            uv_distribution_types::RequirementSource::Path { .. } => {
+                tracing::warn!(
+                    "PyPI requirement: {} as a path dependency is currently not supported because it is already selected as a conda package",
+                    consts::PYPI_PACKAGE_STYLE.apply_to(requirement.name.as_str())
+                );
+                Err(Box::new(PathDependencyOnCondaInstalledPackage(
+                    requirement.name.clone(),
+                )))
             }
-            uv_pypi_types::RequirementSource::Directory { .. } => {
-                unreachable!("directory requirement on conda package is not supported")
+            uv_distribution_types::RequirementSource::Directory { .. } => {
+                tracing::warn!(
+                    "PyPI requirement: {} as directory dependency is currently not supported because it is already selected as a conda package",
+                    consts::PYPI_PACKAGE_STYLE.apply_to(requirement.name.as_str())
+                );
+                Err(Box::new(DirectoryDependencyOnCondaInstalledPackage(
+                    requirement.name.clone(),
+                )))
             }
         }
     }
@@ -175,6 +209,6 @@ pub enum ConversionError {
     Version(String),
     // #[error("'{0}' is not a valid python extra")]
     // Extra(String),
-    #[error("Failed to convert to pypi package name")]
+    #[error(transparent)]
     NameConversion(#[from] PixiConversionError),
 }

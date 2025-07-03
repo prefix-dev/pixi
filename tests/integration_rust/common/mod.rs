@@ -5,30 +5,31 @@ pub mod client;
 pub mod package_database;
 
 use std::{
+    ffi::OsString,
     path::{Path, PathBuf},
     process::Output,
     str::FromStr,
 };
 
-use builders::SearchBuilder;
+use builders::{LockBuilder, SearchBuilder};
 use indicatif::ProgressDrawTarget;
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use pixi::{
+    UpdateLockFileOptions, Workspace,
     cli::{
-        add,
-        cli_config::{ChannelsConfig, PrefixUpdateConfig, WorkspaceConfig},
+        LockFileUsageConfig, add,
+        cli_config::{ChannelsConfig, LockFileUpdateConfig, PrefixUpdateConfig, WorkspaceConfig},
         init::{self, GitAttributes},
         install::Args,
-        remove, run, search,
+        lock, remove, run, search,
         task::{self, AddArgs, AliasArgs},
-        update, workspace, LockFileUsageArgs,
+        update, workspace,
     },
-    lock_file::UpdateMode,
+    lock_file::{ReinstallPackages, UpdateMode},
     task::{
-        get_task_env, ExecutableTask, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph,
-        TaskGraphError, TaskName,
+        ExecutableTask, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph,
+        TaskGraphError, TaskName, get_task_env,
     },
-    UpdateLockFileOptions, Workspace,
 };
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeatureName};
@@ -236,6 +237,15 @@ impl PixiControl {
         Ok(pixi)
     }
 
+    /// Creates a new PixiControl instance from an pyproject manifest
+    pub fn from_pyproject_manifest(pyproject_manifest: &str) -> miette::Result<PixiControl> {
+        let pixi = Self::new()?;
+        fs_err::write(pixi.pyproject_manifest_path(), pyproject_manifest)
+            .into_diagnostic()
+            .context("failed to write pixi.toml")?;
+        Ok(pixi)
+    }
+
     /// Updates the complete manifest
     pub fn update_manifest(&self, manifest: &str) -> miette::Result<()> {
         fs_err::write(self.manifest_path(), manifest)
@@ -287,6 +297,10 @@ impl PixiControl {
         } else {
             self.workspace_path().join(consts::WORKSPACE_MANIFEST)
         }
+    }
+
+    pub(crate) fn pyproject_manifest_path(&self) -> PathBuf {
+        self.workspace_path().join(consts::PYPROJECT_MANIFEST)
     }
 
     /// Get the manifest contents
@@ -348,12 +362,15 @@ impl PixiControl {
                 },
                 dependency_config: AddBuilder::dependency_config_with_specs(specs),
                 prefix_update_config: PrefixUpdateConfig {
-                    no_lockfile_update: false,
                     no_install: true,
-                    lock_file_usage: LockFileUsageArgs::default(),
-                    config: Default::default(),
+
                     revalidate: false,
                 },
+                lock_file_update_config: LockFileUpdateConfig {
+                    no_lockfile_update: false,
+                    lock_file_usage: LockFileUsageConfig::default(),
+                },
+                config: Default::default(),
                 editable: false,
             },
         }
@@ -384,12 +401,14 @@ impl PixiControl {
                 },
                 dependency_config: AddBuilder::dependency_config_with_specs(vec![spec]),
                 prefix_update_config: PrefixUpdateConfig {
-                    no_lockfile_update: false,
                     no_install: true,
-                    lock_file_usage: LockFileUsageArgs::default(),
-                    config: Default::default(),
                     revalidate: false,
                 },
+                lock_file_update_config: LockFileUpdateConfig {
+                    no_lockfile_update: false,
+                    lock_file_usage: LockFileUsageConfig::default(),
+                },
+                config: Default::default(),
             },
         }
     }
@@ -403,12 +422,14 @@ impl PixiControl {
                 },
                 channel: vec![],
                 prefix_update_config: PrefixUpdateConfig {
-                    no_lockfile_update: false,
                     no_install: true,
-                    lock_file_usage: LockFileUsageArgs::default(),
-                    config: Default::default(),
                     revalidate: false,
                 },
+                lock_file_update_config: LockFileUpdateConfig {
+                    no_lockfile_update: false,
+                    lock_file_usage: LockFileUsageConfig::default(),
+                },
+                config: Default::default(),
                 feature: None,
                 priority: None,
                 prepend: false,
@@ -426,12 +447,14 @@ impl PixiControl {
                 },
                 channel: vec![],
                 prefix_update_config: PrefixUpdateConfig {
-                    no_lockfile_update: false,
                     no_install: true,
-                    lock_file_usage: LockFileUsageArgs::default(),
-                    config: Default::default(),
                     revalidate: false,
                 },
+                lock_file_update_config: LockFileUpdateConfig {
+                    no_lockfile_update: false,
+                    lock_file_usage: LockFileUsageConfig::default(),
+                },
+                config: Default::default(),
                 feature: None,
                 priority: None,
                 prepend: false,
@@ -475,9 +498,9 @@ impl PixiControl {
             .transpose()?;
 
         // Ensure the lock-file is up-to-date
-        let mut lock_file = project
+        let lock_file = project
             .update_lock_file(UpdateLockFileOptions {
-                lock_file_usage: args.prefix_update_config.lock_file_usage(),
+                lock_file_usage: args.lock_file_update_config.lock_file_usage(),
                 ..UpdateLockFileOptions::default()
             })
             .await?;
@@ -504,7 +527,11 @@ impl PixiControl {
             let task_env = match task_env.as_ref() {
                 None => {
                     lock_file
-                        .prefix(&task.run_environment, UpdateMode::Revalidate)
+                        .prefix(
+                            &task.run_environment,
+                            UpdateMode::Revalidate,
+                            &ReinstallPackages::default(),
+                        )
                         .await?;
                     let env =
                         get_task_env(&task.run_environment, args.clean_env, None, false, false)
@@ -514,7 +541,12 @@ impl PixiControl {
                 Some(task_env) => task_env,
             };
 
-            let output = task.execute_with_pipes(task_env, None).await?;
+            let task_env = task_env
+                .iter()
+                .map(|(k, v)| (OsString::from(k), OsString::from(v)))
+                .collect();
+
+            let output = task.execute_with_pipes(&task_env, None).await?;
             result.stdout.push_str(&output.stdout);
             result.stderr.push_str(&output.stderr);
             result.exit_code = output.exit_code;
@@ -535,7 +567,7 @@ impl PixiControl {
                 project_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                 },
-                lock_file_usage: LockFileUsageArgs {
+                lock_file_usage: LockFileUsageConfig {
                     frozen: false,
                     locked: false,
                 },
@@ -578,7 +610,21 @@ impl PixiControl {
         Ok(project
             .update_lock_file(UpdateLockFileOptions::default())
             .await?
-            .lock_file)
+            .into_lock_file())
+    }
+
+    /// Returns an [`LockBuilder`].
+    /// To execute the command and await the result, call `.await` on the return value.
+    pub fn lock(&self) -> LockBuilder {
+        LockBuilder {
+            args: lock::Args {
+                workspace_config: WorkspaceConfig {
+                    manifest_path: Some(self.manifest_path()),
+                },
+                check: false,
+                json: false,
+            },
+        }
     }
 
     pub fn tasks(&self) -> TasksControl {
@@ -599,7 +645,6 @@ impl TasksControl<'_> {
         platform: Option<Platform>,
         feature_name: FeatureName,
     ) -> TaskAddBuilder {
-        let feature = feature_name.name().map(|s| s.to_string());
         TaskAddBuilder {
             manifest_path: Some(self.pixi.manifest_path()),
             args: AddArgs {
@@ -607,11 +652,12 @@ impl TasksControl<'_> {
                 commands: vec![],
                 depends_on: None,
                 platform,
-                feature,
+                feature: feature_name.non_default().map(str::to_owned),
                 cwd: None,
                 env: Default::default(),
                 description: None,
                 clean_env: false,
+                args: None,
             },
         }
     }

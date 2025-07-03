@@ -6,6 +6,7 @@ use miette::{NamedSource, SourceCode};
 pub enum ManifestSource<S> {
     PyProjectToml(S),
     PixiToml(S),
+    MojoProjectToml(S),
 }
 
 impl<S> AsRef<S> for ManifestSource<S> {
@@ -13,6 +14,7 @@ impl<S> AsRef<S> for ManifestSource<S> {
         match self {
             ManifestSource::PyProjectToml(source) => source,
             ManifestSource::PixiToml(source) => source,
+            ManifestSource::MojoProjectToml(source) => source,
         }
     }
 }
@@ -23,6 +25,7 @@ impl<S> ManifestSource<S> {
         match self {
             ManifestSource::PyProjectToml(source) => source,
             ManifestSource::PixiToml(source) => source,
+            ManifestSource::MojoProjectToml(source) => source,
         }
     }
 
@@ -31,6 +34,7 @@ impl<S> ManifestSource<S> {
         match self {
             ManifestSource::PyProjectToml(_) => ManifestKind::Pyproject,
             ManifestSource::PixiToml(_) => ManifestKind::Pixi,
+            ManifestSource::MojoProjectToml(_) => ManifestKind::MojoProject,
         }
     }
 
@@ -39,6 +43,7 @@ impl<S> ManifestSource<S> {
         match self {
             ManifestSource::PyProjectToml(source) => ManifestSource::PyProjectToml(f(source)),
             ManifestSource::PixiToml(source) => ManifestSource::PixiToml(f(source)),
+            ManifestSource::MojoProjectToml(source) => ManifestSource::MojoProjectToml(f(source)),
         }
     }
 
@@ -139,7 +144,7 @@ mod test {
     fn test_add_empty_system_requirement_environment(#[case] mut source: ManifestDocument) {
         let empty_requirements = SystemRequirements::default();
         source
-            .add_system_requirements(&empty_requirements, &FeatureName::Default)
+            .add_system_requirements(&empty_requirements, &FeatureName::DEFAULT)
             .unwrap();
 
         let manifests = Manifests::from_workspace_source(source.into_source_with_provenance())
@@ -164,7 +169,7 @@ mod test {
             ..SystemRequirements::default()
         };
         source
-            .add_system_requirements(&single_system_requirements, &FeatureName::Default)
+            .add_system_requirements(&single_system_requirements, &FeatureName::DEFAULT)
             .unwrap();
 
         let manifests = Manifests::from_workspace_source(source.into_source_with_provenance())
@@ -192,7 +197,7 @@ mod test {
             archspec: Some("x86_64".to_string()),
         };
         source
-            .add_system_requirements(&full_system_requirements, &FeatureName::Default)
+            .add_system_requirements(&full_system_requirements, &FeatureName::DEFAULT)
             .unwrap();
 
         let kind = source.kind();
@@ -233,7 +238,7 @@ mod test {
             ..SystemRequirements::default()
         };
         source
-            .add_system_requirements(&family_system_requirements, &FeatureName::Default)
+            .add_system_requirements(&family_system_requirements, &FeatureName::DEFAULT)
             .unwrap();
 
         let kind = source.kind();

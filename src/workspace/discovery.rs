@@ -4,8 +4,8 @@ use itertools::Itertools;
 use miette::{Diagnostic, NamedSource, Report};
 use pixi_consts::consts;
 use pixi_manifest::{
-    utils::WithSourceCode, ExplicitManifestError, LoadManifestsError, Manifests, TomlError,
-    WarningWithSource, WithWarnings, WorkspaceDiscoveryError,
+    ExplicitManifestError, LoadManifestsError, Manifests, TomlError, WarningWithSource,
+    WithWarnings, WorkspaceDiscoveryError, utils::WithSourceCode,
 };
 use thiserror::Error;
 
@@ -40,6 +40,7 @@ pub struct WorkspaceLocator {
     with_closest_package: bool,
     emit_warnings: bool,
     consider_environment: bool,
+    ignore_pixi_version_check: bool,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -59,11 +60,20 @@ pub enum WorkspaceLocatorError {
 
     /// The workspace could not be located.
     #[error(
-        "could not find {project_manifest} or {pyproject_manifest} at directory {0}",
+        "could not find {project_manifest} or {pyproject_manifest} with {pyproject_prefix} at directory {0}",
         project_manifest = consts::WORKSPACE_MANIFEST,
-        pyproject_manifest = consts::PYPROJECT_MANIFEST
+        pyproject_manifest = consts::PYPROJECT_MANIFEST,
+        pyproject_prefix = consts::PYPROJECT_PIXI_PREFIX
     )]
     WorkspaceNotFound(PathBuf),
+
+    /// A pyproject.toml file exists but lacks [tool.pixi] configuration.
+    #[error(
+        "found {pyproject_manifest} without {pyproject_prefix} section at directory {0}\n\nSuggestion: Run 'pixi init' to initialize pixi support in the existing {pyproject_manifest}",
+        pyproject_manifest = consts::PYPROJECT_MANIFEST,
+        pyproject_prefix = consts::PYPROJECT_PIXI_PREFIX
+    )]
+    PyprojectWithoutPixi(PathBuf),
 
     #[error("unable to canonicalize '{}'", .path.display())]
     Canonicalize {
@@ -118,6 +128,15 @@ impl WorkspaceLocator {
         }
     }
 
+    /// When the current version conflicts with the workspace requirement,
+    /// whether to generate an error.
+    pub fn with_ignore_pixi_version_check(self, ignore_pixi_version_check: bool) -> Self {
+        Self {
+            ignore_pixi_version_check,
+            ..self
+        }
+    }
+
     /// Called to locate the workspace or error out if none could be located.
     pub fn locate(self) -> Result<Workspace, WorkspaceLocatorError> {
         // Determine the search root
@@ -140,14 +159,14 @@ impl WorkspaceLocator {
         {
             Ok(manifests) => manifests,
             Err(WorkspaceDiscoveryError::Toml(err)) => {
-                return Err(WorkspaceLocatorError::Toml(err))
+                return Err(WorkspaceLocatorError::Toml(err));
             }
             Err(WorkspaceDiscoveryError::Io(err)) => return Err(WorkspaceLocatorError::Io(err)),
             Err(WorkspaceDiscoveryError::ExplicitManifestError(err)) => {
-                return Err(WorkspaceLocatorError::ExplicitManifestError(err))
+                return Err(WorkspaceLocatorError::ExplicitManifestError(err));
             }
             Err(WorkspaceDiscoveryError::Canonicalize(source, path)) => {
-                return Err(WorkspaceLocatorError::Canonicalize { path, source })
+                return Err(WorkspaceLocatorError::Canonicalize { path, source });
             }
         };
 
@@ -175,6 +194,18 @@ impl WorkspaceLocator {
 
         // Early out if discovery failed.
         let Some(discovered_manifests) = workspace_manifests else {
+            // Check if a pyproject.toml exists in the discovery source directory
+            let pyproject_path = discovery_source.join(consts::PYPROJECT_MANIFEST);
+            if pyproject_path.is_file() {
+                // Check if it's a valid Python project by looking for project metadata
+                if let Ok(content) = fs_err::read_to_string(&pyproject_path) {
+                    if content.contains("[project]") {
+                        return Err(WorkspaceLocatorError::PyprojectWithoutPixi(
+                            discovery_source,
+                        ));
+                    }
+                }
+            }
             return Err(WorkspaceLocatorError::WorkspaceNotFound(discovery_source));
         };
 
@@ -191,7 +222,13 @@ impl WorkspaceLocator {
             );
         }
 
-        Ok(Workspace::from_manifests(discovered_manifests))
+        let workspace = Workspace::from_manifests(discovered_manifests);
+
+        if !self.ignore_pixi_version_check {
+            workspace.verify_current_pixi_meets_requirement()?;
+        }
+
+        Ok(workspace)
     }
 
     /// Apply any environment overrides to a potentially discovered workspace.
@@ -210,10 +247,10 @@ impl WorkspaceLocator {
             if let Some(env_manifest_path) = env_manifest_path {
                 if &env_manifest_path != discovered_manifest_path && in_shell && emit_warnings {
                     tracing::warn!(
-                            "Using local manifest {} rather than {} from environment variable `PIXI_PROJECT_MANIFEST`",
-                            discovered_manifest_path.display(),
-                            env_manifest_path.display(),
-                        );
+                        "Using local manifest {} rather than {} from environment variable `PIXI_PROJECT_MANIFEST`",
+                        discovered_manifest_path.display(),
+                        env_manifest_path.display(),
+                    );
                 }
             }
         // Else, if we didn't find a workspace manifest, but we there is an
@@ -226,7 +263,7 @@ impl WorkspaceLocator {
                 Err(LoadManifestsError::ProvenanceError(err)) => {
                     return Err(WorkspaceLocatorError::ExplicitManifestError(
                         ExplicitManifestError::InvalidManifest(err),
-                    ))
+                    ));
                 }
             }
         }
@@ -289,5 +326,44 @@ mod test {
         );
         let workspace = workspace_locator.locate().unwrap();
         assert_eq!(workspace.root, PathBuf::from(project_root));
+    }
+
+    #[test]
+    fn test_pyproject_without_pixi_error() {
+        use tempfile::TempDir;
+
+        // Create a temporary directory
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        // Create a pyproject.toml file without [tool.pixi] section
+        let pyproject_content = r#"
+[project]
+name = "test-project"
+version = "0.1.0"
+description = "A test project"
+dependencies = []
+"#;
+        let pyproject_path = temp_path.join("pyproject.toml");
+        fs_err::write(&pyproject_path, pyproject_content).unwrap();
+
+        // Try to locate workspace - should return PyprojectWithoutPixi error
+        let workspace_locator = WorkspaceLocator::default()
+            .with_search_start(DiscoveryStart::SearchRoot(temp_path.to_path_buf()));
+
+        let result = workspace_locator.locate();
+        assert!(result.is_err());
+
+        let error = result.unwrap_err();
+        assert!(matches!(
+            error,
+            WorkspaceLocatorError::PyprojectWithoutPixi(_)
+        ));
+
+        // Check that the error message contains the suggestion
+        let error_message = error.to_string();
+        assert!(error_message.contains("pixi init"));
+        assert!(error_message.contains("pyproject.toml"));
+        assert!(error_message.contains("tool.pixi"));
     }
 }

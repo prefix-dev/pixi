@@ -4,7 +4,7 @@
 ## About
 Unset a configuration value
 
---8<-- "docs/reference/cli/pixi/config/unset_extender.md:description"
+--8<-- "docs/reference/cli/pixi/config/unset_extender:description"
 
 ## Usage
 ```
@@ -16,11 +16,11 @@ pixi config unset [OPTIONS] <KEY>
 :  Configuration key to unset
 <br>**required**: `true`
 
-## Options
-- <a id="arg---global" href="#arg---global">`--global (-g)`</a>
-:  Operation on global configuration
+## Config Options
 - <a id="arg---local" href="#arg---local">`--local (-l)`</a>
 :  Operation on project-local configuration
+- <a id="arg---global" href="#arg---global">`--global (-g)`</a>
+:  Operation on global configuration
 - <a id="arg---system" href="#arg---system">`--system (-s)`</a>
 :  Operation on system configuration
 
@@ -34,4 +34,4 @@ Unset a configuration value
 Example: `pixi config unset default-channels`
 
 
---8<-- "docs/reference/cli/pixi/config/unset_extender.md:example"
+--8<-- "docs/reference/cli/pixi/config/unset_extender:example"

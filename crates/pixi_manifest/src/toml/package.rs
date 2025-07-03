@@ -5,16 +5,16 @@ pub use pixi_toml::TomlFromStr;
 use pixi_toml::{DeserializeAs, Same, TomlIndexMap, TomlWith};
 use rattler_conda_types::Version;
 use thiserror::Error;
-use toml_span::{de_helpers::TableHelper, DeserError, Error, ErrorKind, Span, Spanned, Value};
+use toml_span::{DeserError, Error, ErrorKind, Span, Spanned, Value, de_helpers::TableHelper};
 use url::Url;
 
 use crate::toml::manifest::ExternalWorkspaceProperties;
 use crate::{
+    PackageManifest, Preview, TargetSelector, Targets, TomlError, WithWarnings,
     error::GenericError,
     package::Package,
-    toml::{package_target::TomlPackageTarget, TomlPackageBuild},
-    utils::{package_map::UniquePackageMap, PixiSpanned},
-    PackageManifest, Preview, TargetSelector, Targets, TomlError, WithWarnings,
+    toml::{TomlPackageBuild, package_target::TomlPackageTarget},
+    utils::{PixiSpanned, package_map::UniquePackageMap},
 };
 
 /// Represents a field that can either have a direct value or inherit from workspace
@@ -494,10 +494,10 @@ impl TomlPackage {
 
 #[cfg(test)]
 mod test {
-    use insta::assert_snapshot;
-
     use super::*;
-    use crate::{toml::FromTomlStr, utils::test_utils::format_parse_error};
+    use crate::toml::FromTomlStr;
+    use insta::assert_snapshot;
+    use pixi_test_utils::format_parse_error;
 
     #[must_use]
     fn expect_parse_failure(pixi_toml: &str) -> String {

@@ -1,5 +1,5 @@
-use crate::install_pypi::plan::providers::{CachedDistProvider, InstalledDistProvider};
 use crate::install_pypi::plan::InstallPlanner;
+use crate::install_pypi::plan::providers::{CachedDistProvider, InstalledDistProvider};
 use pixi_consts::consts;
 use rattler_lock::{PypiPackageData, UrlOrPath};
 use std::collections::HashMap;
@@ -20,15 +20,15 @@ struct InstalledDistBuilder;
 
 impl InstalledDistBuilder {
     pub fn registry<S: AsRef<str>>(name: S, version: S, path: PathBuf) -> InstalledDist {
-        let name =
-            uv_pep508::PackageName::new(name.as_ref().to_owned()).expect("unable to normalize");
+        let name = uv_pep508::PackageName::from_owned(name.as_ref().to_owned())
+            .expect("unable to normalize");
         let version =
             uv_pep440::Version::from_str(version.as_ref()).expect("cannot parse pep440 version");
 
         let registry = InstalledRegistryDist {
             name,
             version,
-            path,
+            path: path.into(),
             cache_info: None,
         };
         InstalledDist::Registry(registry)
@@ -41,8 +41,8 @@ impl InstalledDistBuilder {
         source_path: PathBuf,
         editable: bool,
     ) -> (InstalledDist, DirectUrl) {
-        let name =
-            uv_pep508::PackageName::new(name.as_ref().to_owned()).expect("unable to normalize");
+        let name = uv_pep508::PackageName::from_owned(name.as_ref().to_owned())
+            .expect("unable to normalize");
         let version =
             uv_pep440::Version::from_str(version.as_ref()).expect("cannot parse pep440 version");
         let directory_url = Url::from_file_path(&source_path).unwrap();
@@ -52,6 +52,7 @@ impl InstalledDistBuilder {
             dir_info: uv_pypi_types::DirInfo {
                 editable: Some(editable),
             },
+            subdirectory: None,
         };
 
         let installed_direct_url = InstalledDirectUrlDist {
@@ -60,7 +61,7 @@ impl InstalledDistBuilder {
             direct_url: Box::new(direct_url.clone()),
             url: directory_url,
             editable,
-            path: install_path,
+            path: install_path.into(),
             cache_info: None,
         };
         (InstalledDist::Url(installed_direct_url), direct_url)
@@ -72,8 +73,8 @@ impl InstalledDistBuilder {
         install_path: PathBuf,
         url: Url,
     ) -> (InstalledDist, DirectUrl) {
-        let name =
-            uv_pep508::PackageName::new(name.as_ref().to_owned()).expect("unable to normalize");
+        let name = uv_pep508::PackageName::from_owned(name.as_ref().to_owned())
+            .expect("unable to normalize");
         let version =
             uv_pep440::Version::from_str(version.as_ref()).expect("cannot parse pep440 version");
 
@@ -92,7 +93,7 @@ impl InstalledDistBuilder {
             direct_url: Box::new(direct_url.clone()),
             url,
             editable: false,
-            path: install_path,
+            path: install_path.into(),
             cache_info: None,
         };
         (InstalledDist::Url(installed_direct_url), direct_url)
@@ -104,8 +105,8 @@ impl InstalledDistBuilder {
         install_path: PathBuf,
         url: Url,
     ) -> (InstalledDist, DirectUrl) {
-        let name =
-            uv_pep508::PackageName::new(name.as_ref().to_owned()).expect("unable to normalize");
+        let name = uv_pep508::PackageName::from_owned(name.as_ref().to_owned())
+            .expect("unable to normalize");
         let version =
             uv_pep440::Version::from_str(version.as_ref()).expect("cannot parse pep440 version");
 
@@ -131,7 +132,7 @@ impl InstalledDistBuilder {
             version,
             direct_url: Box::new(direct_url.clone()),
             url,
-            path: install_path,
+            path: install_path.into(),
             editable: false,
             cache_info: None,
         };
@@ -356,12 +357,7 @@ impl PyPIPackageDataBuilder {
         }
     }
 
-    fn directory<S: AsRef<str>>(
-        name: S,
-        version: S,
-        path: PathBuf,
-        editable: bool,
-    ) -> PypiPackageData {
+    fn path<S: AsRef<str>>(name: S, version: S, path: PathBuf, editable: bool) -> PypiPackageData {
         PypiPackageData {
             name: pep508_rs::PackageName::new(name.as_ref().to_owned()).unwrap(),
             version: pep440_rs::Version::from_str(version.as_ref()).unwrap(),
@@ -418,8 +414,8 @@ impl<'a> CachedDistProvider<'a> for AllCached {
                 .unwrap();
         let dist = uv_distribution_types::CachedRegistryDist {
             filename: wheel_filename,
-            path: Default::default(),
-            hashes: vec![],
+            path: PathBuf::new().into(),
+            hashes: vec![].into(),
             cache_info: Default::default(),
         };
         Some(dist)
@@ -439,8 +435,8 @@ impl RequiredPackages {
 
     /// Add a registry package to the required packages
     pub fn add_registry<S: AsRef<str>>(mut self, name: S, version: S) -> Self {
-        let package_name =
-            uv_normalize::PackageName::new(name.as_ref().to_owned()).expect("should be correct");
+        let package_name = uv_normalize::PackageName::from_owned(name.as_ref().to_owned())
+            .expect("should be correct");
         let data = PyPIPackageDataBuilder::registry(name, version);
         self.required.insert(package_name, data);
         self
@@ -454,24 +450,32 @@ impl RequiredPackages {
         path: PathBuf,
         editable: bool,
     ) -> Self {
-        let package_name =
-            uv_normalize::PackageName::new(name.as_ref().to_owned()).expect("should be correct");
-        let data = PyPIPackageDataBuilder::directory(name, version, path, editable);
+        let package_name = uv_normalize::PackageName::from_owned(name.as_ref().to_owned())
+            .expect("should be correct");
+        let data = PyPIPackageDataBuilder::path(name, version, path, editable);
+        self.required.insert(package_name, data);
+        self
+    }
+
+    pub fn add_local_wheel<S: AsRef<str>>(mut self, name: S, version: S, path: PathBuf) -> Self {
+        let package_name = uv_normalize::PackageName::from_owned(name.as_ref().to_owned())
+            .expect("should be correct");
+        let data = PyPIPackageDataBuilder::path(name, version, path, false);
         self.required.insert(package_name, data);
         self
     }
 
     pub fn add_archive<S: AsRef<str>>(mut self, name: S, version: S, url: Url) -> Self {
-        let package_name =
-            uv_normalize::PackageName::new(name.as_ref().to_owned()).expect("should be correct");
+        let package_name = uv_normalize::PackageName::from_owned(name.as_ref().to_owned())
+            .expect("should be correct");
         let data = PyPIPackageDataBuilder::url(name, version, url, UrlType::Direct);
         self.required.insert(package_name, data);
         self
     }
 
     pub fn add_git<S: AsRef<str>>(mut self, name: S, version: S, url: Url) -> Self {
-        let package_name =
-            uv_normalize::PackageName::new(name.as_ref().to_owned()).expect("should be correct");
+        let package_name = uv_normalize::PackageName::from_owned(name.as_ref().to_owned())
+            .expect("should be correct");
         let data = PyPIPackageDataBuilder::url(name, version, url, UrlType::Other);
         self.required.insert(package_name, data);
         self
@@ -487,6 +491,10 @@ impl RequiredPackages {
 /// Simple function to create an installation planner
 pub fn install_planner() -> InstallPlanner {
     InstallPlanner::new(uv_cache::Cache::temp().unwrap(), PathBuf::new())
+}
+
+pub fn install_planner_with_lock_dir(lock_dir: PathBuf) -> InstallPlanner {
+    InstallPlanner::new(uv_cache::Cache::temp().unwrap(), lock_dir)
 }
 
 /// Create a fake pyproject.toml file in a temp dir
@@ -513,4 +521,11 @@ pub fn fake_pyproject_toml(
         pyproject_toml.sync_all().unwrap();
     }
     (temp_dir, pyproject_toml)
+}
+
+pub fn fake_wheel(name: &str) -> (TempDir, std::fs::File, PathBuf) {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let wheel_path = temp_dir.path().join(format!("{}.whl", name));
+    let wheel = std::fs::File::create(wheel_path.clone()).unwrap();
+    (temp_dir, wheel, wheel_path)
 }

@@ -4,7 +4,7 @@
 ## About
 Store authentication information for a given host
 
---8<-- "docs/reference/cli/pixi/auth/login_extender.md:description"
+--8<-- "docs/reference/cli/pixi/auth/login_extender:description"
 
 ## Usage
 ```
@@ -17,19 +17,19 @@ pixi auth login [OPTIONS] <HOST>
 <br>**required**: `true`
 
 ## Options
-- <a id="arg---conda-token" href="#arg---conda-token">`--conda-token <CONDA_TOKEN>`</a>
-:  The token to use on anaconda.org / quetz authentication
+- <a id="arg---token" href="#arg---token">`--token <TOKEN>`</a>
+:  The token to use (for authentication with prefix.dev)
+- <a id="arg---username" href="#arg---username">`--username <USERNAME>`</a>
+:  The username to use (for basic HTTP authentication)
 - <a id="arg---password" href="#arg---password">`--password <PASSWORD>`</a>
 :  The password to use (for basic HTTP authentication)
+- <a id="arg---conda-token" href="#arg---conda-token">`--conda-token <CONDA_TOKEN>`</a>
+:  The token to use on anaconda.org / quetz authentication
 - <a id="arg---s3-access-key-id" href="#arg---s3-access-key-id">`--s3-access-key-id <S3_ACCESS_KEY_ID>`</a>
 :  The S3 access key ID
 - <a id="arg---s3-secret-access-key" href="#arg---s3-secret-access-key">`--s3-secret-access-key <S3_SECRET_ACCESS_KEY>`</a>
 :  The S3 secret access key
 - <a id="arg---s3-session-token" href="#arg---s3-session-token">`--s3-session-token <S3_SESSION_TOKEN>`</a>
 :  The S3 session token
-- <a id="arg---token" href="#arg---token">`--token <TOKEN>`</a>
-:  The token to use (for authentication with prefix.dev)
-- <a id="arg---username" href="#arg---username">`--username <USERNAME>`</a>
-:  The username to use (for basic HTTP authentication)
 
---8<-- "docs/reference/cli/pixi/auth/login_extender.md:example"
+--8<-- "docs/reference/cli/pixi/auth/login_extender:example"

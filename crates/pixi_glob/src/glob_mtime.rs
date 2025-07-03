@@ -37,8 +37,9 @@ impl GlobModificationTime {
         globs: impl IntoIterator<Item = &'a str>,
     ) -> Result<Self, GlobModificationTimeError> {
         // If the root is not a directory or does not exist, return NoMatches.
-        if !root_dir.is_dir() {
-            return Ok(Self::NoMatches);
+        let mut root = root_dir.to_owned();
+        if !root.is_dir() {
+            root.pop();
         }
 
         let glob_set = GlobSet::create(globs)?;

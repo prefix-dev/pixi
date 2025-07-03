@@ -57,7 +57,7 @@ class MacOSConfig(PlatformConfig):
 
 class WindowsConfig(PlatformConfig):
     def _shortcut_paths(self, data_home: Path, name: str) -> List[Path]:
-        return [data_home / "Desktop" / f"{name}.lnk", data_home / "Quick Launch" / f"{name}.lnk"]
+        return [data_home / "Desktop" / f"{name}.lnk"]
 
     def shortcut_exists(self, data_home: Path, name: str) -> bool:
         for path in self._shortcut_paths(data_home, name):
@@ -303,4 +303,78 @@ def test_install_no_shortcut(
     verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=False)
 
 
-# TODO: test more files on macOS and Windows
+def test_remove_shortcut(
+    pixi: Path,
+    setup_data: SetupData,
+    shortcuts_channel_1: str,
+) -> None:
+    # Verify no shortcuts exist after sync
+    verify_cli_command(
+        [pixi, "global", "install", "--channel", shortcuts_channel_1, "pixi-editor"],
+        ExitCode.SUCCESS,
+        env=setup_data.env,
+    )
+
+    # Verify manifest
+    manifest = setup_data.pixi_home.joinpath("manifests", "pixi-global.toml")
+    parsed_toml = tomllib.loads(manifest.read_text())
+    assert parsed_toml["envs"]["pixi-editor"]["shortcuts"] == ["pixi-editor"]
+
+    # Verify shortcut exists
+    verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=True)
+
+    # Remove shortcut
+    verify_cli_command(
+        [pixi, "global", "shortcut", "remove", "pixi-editor"],
+        ExitCode.SUCCESS,
+        env=setup_data.env,
+    )
+
+    # Verify removal from manifest
+    parsed_toml = tomllib.loads(manifest.read_text())
+    assert parsed_toml["envs"]["pixi-editor"]["shortcuts"] != ["pixi-editor"]
+
+    # Verify shortcut does not exist
+    verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=False)
+
+
+def test_add_shortcut(
+    pixi: Path,
+    setup_data: SetupData,
+    shortcuts_channel_1: str,
+) -> None:
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--no-shortcuts",
+            "--channel",
+            shortcuts_channel_1,
+            "pixi-editor",
+        ],
+        ExitCode.SUCCESS,
+        env=setup_data.env,
+    )
+
+    # Verify manifest
+    manifest = setup_data.pixi_home.joinpath("manifests", "pixi-global.toml")
+    parsed_toml = tomllib.loads(manifest.read_text())
+    assert parsed_toml["envs"]["pixi-editor"].get("shortcuts") is None
+
+    # Verify shortcut exists
+    verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=False)
+
+    # Add shortcut
+    verify_cli_command(
+        [pixi, "global", "shortcut", "add", "pixi-editor", "--environment", "pixi-editor"],
+        ExitCode.SUCCESS,
+        env=setup_data.env,
+    )
+
+    # Verify addition to manifest
+    parsed_toml = tomllib.loads(manifest.read_text())
+    assert parsed_toml["envs"]["pixi-editor"]["shortcuts"] == ["pixi-editor"]
+
+    # Verify shortcut exists
+    verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=True)

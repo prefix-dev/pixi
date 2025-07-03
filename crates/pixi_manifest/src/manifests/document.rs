@@ -1,23 +1,24 @@
 use std::{fmt, str::FromStr, sync::Arc};
 
+use crate::{
+    FeatureName, LibCSystemRequirement, ManifestKind, ManifestProvenance, PypiDependencyLocation,
+    SpecType, SystemRequirements, Task, TomlError, manifests::table_name::TableName,
+    toml::TomlDocument, utils::WithSourceCode,
+};
 use miette::{Diagnostic, NamedSource};
 use pixi_consts::consts;
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{PackageName, Platform};
 use thiserror::Error;
-use toml_edit::{value, Array, DocumentMut, Item, Table, Value};
-
-use crate::{
-    manifests::table_name::TableName, pypi::PyPiPackageName, toml::TomlDocument,
-    utils::WithSourceCode, FeatureName, LibCSystemRequirement, ManifestKind, ManifestProvenance,
-    PyPiRequirement, PypiDependencyLocation, SpecType, SystemRequirements, Task, TomlError,
-};
+use toml_edit::{Array, DocumentMut, Item, Table, Value, value};
 
 /// Discriminates between a 'pixi.toml' and a 'pyproject.toml' manifest.
 #[derive(Debug, Clone)]
 pub enum ManifestDocument {
     PyProjectToml(TomlDocument),
     PixiToml(TomlDocument),
+    MojoProjectToml(TomlDocument),
 }
 
 impl fmt::Display for ManifestDocument {
@@ -25,6 +26,7 @@ impl fmt::Display for ManifestDocument {
         match self {
             ManifestDocument::PyProjectToml(document) => write!(f, "{}", document),
             ManifestDocument::PixiToml(document) => write!(f, "{}", document),
+            ManifestDocument::MojoProjectToml(document) => write!(f, "{}", document),
         }
     }
 }
@@ -99,6 +101,7 @@ impl ManifestDocument {
         let document = match self {
             ManifestDocument::PyProjectToml(document) => document,
             ManifestDocument::PixiToml(document) => document,
+            ManifestDocument::MojoProjectToml(document) => document,
         };
         document
             .to_string()
@@ -124,13 +127,14 @@ impl ManifestDocument {
                     ),
                     error: TomlError::from(err),
                 })
-                .into())
+                .into());
             }
         };
 
         match provenance.kind {
             ManifestKind::Pyproject => Ok(ManifestDocument::PyProjectToml(toml)),
             ManifestKind::Pixi => Ok(ManifestDocument::PixiToml(toml)),
+            ManifestKind::MojoProject => Ok(ManifestDocument::MojoProjectToml(toml)),
         }
     }
 
@@ -139,6 +143,7 @@ impl ManifestDocument {
         match self {
             ManifestDocument::PyProjectToml(_) => ManifestKind::Pyproject,
             ManifestDocument::PixiToml(_) => ManifestKind::Pixi,
+            ManifestDocument::MojoProjectToml(_) => ManifestKind::MojoProject,
         }
     }
 
@@ -152,6 +157,7 @@ impl ManifestDocument {
         match self {
             ManifestDocument::PyProjectToml(_) => Some(consts::PYPROJECT_PIXI_PREFIX),
             ManifestDocument::PixiToml(_) => None,
+            ManifestDocument::MojoProjectToml(_) => None,
         }
     }
 
@@ -159,6 +165,7 @@ impl ManifestDocument {
         match self {
             ManifestDocument::PyProjectToml(document) => document,
             ManifestDocument::PixiToml(document) => document,
+            ManifestDocument::MojoProjectToml(document) => document,
         }
     }
 
@@ -167,6 +174,7 @@ impl ManifestDocument {
         match self {
             ManifestDocument::PyProjectToml(document) => document,
             ManifestDocument::PixiToml(document) => document,
+            ManifestDocument::MojoProjectToml(document) => document,
         }
     }
 
@@ -206,10 +214,7 @@ impl ManifestDocument {
         // should be refactored to determine the priority of the table to use
         // The spec is described here:
         // https://github.com/prefix-dev/pixi/issues/2807#issuecomment-2577826553
-        let table = match feature_name {
-            FeatureName::Default => Some(self.detect_table_name()),
-            FeatureName::Named(_) => None,
-        };
+        let table = feature_name.is_default().then(|| self.detect_table_name());
 
         let table_name = TableName::new()
             .with_prefix(self.table_prefix())
@@ -224,6 +229,7 @@ impl ManifestDocument {
         match self {
             ManifestDocument::PyProjectToml(document) => document.as_table_mut(),
             ManifestDocument::PixiToml(document) => document.as_table_mut(),
+            ManifestDocument::MojoProjectToml(document) => document.as_table_mut(),
         }
     }
 
@@ -233,7 +239,7 @@ impl ManifestDocument {
     /// If will be a no-op if the dependency is not found.
     pub fn remove_pypi_dependency(
         &mut self,
-        dep: &PyPiPackageName,
+        dep: &PypiPackageName,
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> Result<(), TomlError> {
@@ -251,7 +257,7 @@ impl ManifestDocument {
                             .unwrap_or("")
                             .parse()
                             .expect("should be a valid pep508 dependency");
-                        let name = PyPiPackageName::from_normalized(req.name);
+                        let name = PypiPackageName::from_normalized(req.name);
                         name != *dep
                     });
                     if array.is_empty() {
@@ -344,17 +350,18 @@ impl ManifestDocument {
     pub fn add_pypi_dependency(
         &mut self,
         requirement: &pep508_rs::Requirement,
+        pixi_requirement: Option<&PixiPypiSpec>,
         platform: Option<Platform>,
         feature_name: &FeatureName,
         editable: Option<bool>,
-        location: &Option<PypiDependencyLocation>,
+        location: Option<&PypiDependencyLocation>,
     ) -> Result<(), TomlError> {
         // Pypi dependencies can be stored in different places in pyproject.toml
         // manifests so we remove any potential dependency of the same name
         // before adding it back
         if matches!(self, ManifestDocument::PyProjectToml(_)) {
             self.remove_pypi_dependency(
-                &PyPiPackageName::from_normalized(requirement.name.clone()),
+                &PypiPackageName::from_normalized(requirement.name.clone()),
                 platform,
                 feature_name,
             )?;
@@ -372,7 +379,8 @@ impl ManifestDocument {
             || editable.is_some_and(|e| e)
         {
             let mut pypi_requirement =
-                PyPiRequirement::try_from(requirement.clone()).map_err(Box::new)?;
+                PixiPypiSpec::try_from((requirement.clone(), pixi_requirement.cloned()))
+                    .map_err(Box::new)?;
             if let Some(editable) = editable {
                 pypi_requirement.set_editable(editable);
             }
@@ -442,7 +450,7 @@ impl ManifestDocument {
     /// found, or `None` if it is not found in any of the checked sections.
     pub fn pypi_dependency_location(
         &self,
-        package_name: &PyPiPackageName,
+        package_name: &PypiPackageName,
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> Option<PypiDependencyLocation> {
@@ -568,7 +576,7 @@ impl ManifestDocument {
 
         let env_table = TableName::new()
             .with_prefix(self.table_prefix())
-            .with_feature_name(Some(&FeatureName::Default))
+            .with_feature_name(Some(&FeatureName::DEFAULT))
             .with_table(Some("environments"));
 
         // Insert into the environment table
@@ -584,7 +592,7 @@ impl ManifestDocument {
     pub fn remove_environment(&mut self, name: &str) -> Result<bool, TomlError> {
         let env_table = TableName::new()
             .with_prefix(self.table_prefix())
-            .with_feature_name(Some(&FeatureName::Default))
+            .with_feature_name(Some(&FeatureName::DEFAULT))
             .with_table(Some("environments"));
 
         Ok(self
@@ -714,5 +722,30 @@ impl ManifestDocument {
         } else {
             table["workspace"]["version"] = value(version);
         }
+    }
+
+    /// Unsets/Sets the pixi version requirement of the project
+    pub fn set_requires_pixi(&mut self, version: Option<&str>) -> Result<(), TomlError> {
+        // For both 'pyproject.toml' and 'pixi.toml' manifest,
+        // try and remove the dependency from pixi native tables
+        let table_name = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_table(Some(self.detect_table_name()));
+
+        let table = self
+            .manifest_mut()
+            .get_or_insert_nested_table(table_name.to_string().as_str())?;
+
+        if let Some(version) = version {
+            if let Some(item) = table.get_mut("requires-pixi") {
+                *item = value(version);
+            } else {
+                table.insert("requires-pixi", value(version));
+            }
+        } else {
+            table.remove("requires-pixi");
+        }
+
+        Ok(())
     }
 }

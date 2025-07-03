@@ -1,18 +1,17 @@
+use crate::DependencyType;
+use crate::Workspace;
 use crate::cli::has_specs::HasSpecs;
 use crate::environment::LockFileUsage;
 use crate::lock_file::UpdateMode;
 use crate::workspace::DiscoveryStart;
-use crate::DependencyType;
-use crate::Workspace;
 use clap::Parser;
 use indexmap::IndexMap;
 use indexmap::IndexSet;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pep508_rs::Requirement;
-use pixi_config::{Config, ConfigCli};
+use pixi_config::Config;
 use pixi_consts::consts;
-use pixi_manifest::pypi::PyPiPackageName;
 use pixi_manifest::FeaturesExt;
 use pixi_manifest::{FeatureName, SpecType};
 use pixi_spec::GitReference;
@@ -23,12 +22,13 @@ use std::path::PathBuf;
 use url::Url;
 
 use pixi_git::GIT_URL_QUERY_REV_TYPE;
+use pixi_pypi_spec::PypiPackageName;
 
 /// Workspace configuration
 #[derive(Parser, Debug, Default, Clone)]
 pub struct WorkspaceConfig {
     /// The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
-    #[arg(long, global = true)]
+    #[arg(long, global = true, help_heading = consts::CLAP_GLOBAL_OPTIONS)]
     pub manifest_path: Option<PathBuf>,
 }
 
@@ -100,29 +100,18 @@ impl ChannelsConfig {
     }
 }
 
-/// Configuration for how to update the prefix
 #[derive(Parser, Debug, Default, Clone)]
-pub struct PrefixUpdateConfig {
+pub struct LockFileUpdateConfig {
     /// Don't update lockfile, implies the no-install as well.
-    #[clap(long, conflicts_with = "no_install")]
+    #[clap(long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub no_lockfile_update: bool,
 
     /// Lock file usage from the CLI
     #[clap(flatten)]
-    pub lock_file_usage: super::LockFileUsageArgs,
-
-    /// Don't modify the environment, only modify the lock-file.
-    #[arg(long)]
-    pub no_install: bool,
-
-    #[clap(flatten)]
-    pub config: ConfigCli,
-
-    /// Run the complete environment validation. This will reinstall a broken environment.
-    #[arg(long)]
-    pub revalidate: bool,
+    pub lock_file_usage: super::LockFileUsageConfig,
 }
-impl PrefixUpdateConfig {
+
+impl LockFileUpdateConfig {
     pub fn lock_file_usage(&self) -> LockFileUsage {
         if self.lock_file_usage.locked {
             LockFileUsage::Locked
@@ -132,12 +121,21 @@ impl PrefixUpdateConfig {
             LockFileUsage::Update
         }
     }
+}
 
-    /// Decide whether to install or not.
-    pub(crate) fn no_install(&self) -> bool {
-        self.no_install || self.no_lockfile_update
-    }
+/// Configuration for how to update the prefix
+#[derive(Parser, Debug, Default, Clone)]
+pub struct PrefixUpdateConfig {
+    /// Don't modify the environment, only modify the lock-file.
+    #[arg(long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
+    pub no_install: bool,
 
+    /// Run the complete environment validation. This will reinstall a broken environment.
+    #[arg(long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
+    pub revalidate: bool,
+}
+
+impl PrefixUpdateConfig {
     /// Which `[UpdateMode]` to use
     pub(crate) fn update_mode(&self) -> UpdateMode {
         if self.revalidate {
@@ -151,15 +149,15 @@ impl PrefixUpdateConfig {
 #[derive(Parser, Debug, Default, Clone)]
 pub struct GitRev {
     /// The git branch
-    #[clap(long, requires = "git", conflicts_with_all = ["tag", "rev"])]
+    #[clap(long, requires = "git", conflicts_with_all = ["tag", "rev"], help_heading = consts::CLAP_GIT_OPTIONS)]
     pub branch: Option<String>,
 
     /// The git tag
-    #[clap(long, requires = "git", conflicts_with_all = ["branch", "rev"])]
+    #[clap(long, requires = "git", conflicts_with_all = ["branch", "rev"], help_heading = consts::CLAP_GIT_OPTIONS)]
     pub tag: Option<String>,
 
     /// The git revision
-    #[clap(long, requires = "git", conflicts_with_all = ["branch", "tag"])]
+    #[clap(long, requires = "git", conflicts_with_all = ["branch", "tag"], help_heading = consts::CLAP_GIT_OPTIONS)]
     pub rev: Option<String>,
 }
 
@@ -230,18 +228,18 @@ impl From<GitRev> for GitReference {
 
 #[derive(Parser, Debug, Default)]
 pub struct DependencyConfig {
-    /// The dependencies as names, conda MatchSpecs or PyPi requirements
-    #[arg(required = true)]
+    /// The dependency as names, conda MatchSpecs or PyPi requirements
+    #[arg(required = true, value_name = "SPEC")]
     pub specs: Vec<String>,
 
     /// The specified dependencies are host dependencies. Conflicts with `build`
     /// and `pypi`
-    #[arg(long, conflicts_with_all = ["build", "pypi"])]
+    #[arg(long, conflicts_with_all = ["build", "pypi"], hide = true)]
     pub host: bool,
 
     /// The specified dependencies are build dependencies. Conflicts with `host`
     /// and `pypi`
-    #[arg(long, conflicts_with_all = ["host", "pypi"])]
+    #[arg(long, conflicts_with_all = ["host", "pypi"], hide = true)]
     pub build: bool,
 
     /// The specified dependencies are pypi dependencies. Conflicts with `host`
@@ -249,16 +247,16 @@ pub struct DependencyConfig {
     #[arg(long, conflicts_with_all = ["host", "build"])]
     pub pypi: bool,
 
-    /// The platform(s) for which the dependency should be modified
-    #[arg(long = "platform", short)]
+    /// The platform for which the dependency should be modified.
+    #[arg(long = "platform", short, value_name = "PLATFORM")]
     pub platforms: Vec<Platform>,
 
-    /// The feature for which the dependency should be modified
+    /// The feature for which the dependency should be modified.
     #[clap(long, short, default_value_t)]
     pub feature: FeatureName,
 
     /// The git url to use when adding a git dependency
-    #[clap(long, short)]
+    #[clap(long, short, help_heading = consts::CLAP_GIT_OPTIONS)]
     pub git: Option<Url>,
 
     #[clap(flatten)]
@@ -266,7 +264,7 @@ pub struct DependencyConfig {
     pub rev: Option<GitRev>,
 
     /// The subdirectory of the git repository to use
-    #[clap(long, short, requires = "git")]
+    #[clap(long, short, requires = "git", help_heading = consts::CLAP_GIT_OPTIONS)]
     pub subdir: Option<String>,
 }
 
@@ -321,7 +319,7 @@ impl DependencyConfig {
             )
         }
         // Print something if we've modified for features
-        if let FeatureName::Named(feature) = &self.feature {
+        if let Some(feature) = self.feature.non_default() {
             {
                 eprintln!(
                     "{operation} these only for feature: {}",
@@ -334,14 +332,14 @@ impl DependencyConfig {
     pub fn vcs_pep508_requirements(
         &self,
         project: &Workspace,
-    ) -> Option<miette::Result<IndexMap<PyPiPackageName, Requirement>>> {
+    ) -> Option<miette::Result<IndexMap<PypiPackageName, Requirement>>> {
         match &self.git {
             Some(git) => {
                 // pep 508 requirements with direct reference
                 // should be in this format
                 // name @ url@rev#subdirectory=subdir
                 // we need to construct it
-                let pep_reqs: miette::Result<IndexMap<PyPiPackageName, Requirement>> = self
+                let pep_reqs: miette::Result<IndexMap<PypiPackageName, Requirement>> = self
                     .specs
                     .iter()
                     .map(|package_name| {
@@ -353,7 +351,7 @@ impl DependencyConfig {
                         );
 
                         let dep = Requirement::parse(&vcs_req, project.root()).into_diagnostic()?;
-                        let name = PyPiPackageName::from_normalized(dep.clone().name);
+                        let name = PypiPackageName::from_normalized(dep.clone().name);
 
                         Ok((name, dep))
                     })
@@ -410,7 +408,7 @@ fn build_vcs_requirement(
 mod tests {
     use url::Url;
 
-    use crate::cli::cli_config::{build_vcs_requirement, GitRev};
+    use crate::cli::cli_config::{GitRev, build_vcs_requirement};
 
     #[test]
     fn test_build_vcs_requirement_with_all_fields() {
@@ -463,5 +461,16 @@ mod tests {
             None,
         );
         assert_eq!(result, "mypackage @ git+https://github.com/user/repo");
+    }
+
+    #[test]
+    fn test_build_vcs_requirement_with_local_dir() {
+        let result = build_vcs_requirement(
+            "mypackage",
+            &Url::parse("file:///home/user/GitHub/mypackage").unwrap(),
+            None,
+            None,
+        );
+        assert_eq!(result, "mypackage @ git+file:///home/user/GitHub/mypackage");
     }
 }

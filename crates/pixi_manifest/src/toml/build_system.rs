@@ -4,13 +4,13 @@ use itertools::Either;
 use pixi_spec::TomlSpec;
 use pixi_toml::{TomlFromStr, TomlWith};
 use rattler_conda_types::NamedChannelOrUrl;
-use toml_span::{de_helpers::TableHelper, value::ValueInner, DeserError, Spanned, Value};
+use toml_span::{DeserError, Spanned, Value, de_helpers::TableHelper, value::ValueInner};
 
 use crate::{
+    PackageBuild, TomlError,
     build_system::BuildBackend,
     error::GenericError,
-    utils::{package_map::UniquePackageMap, PixiSpanned},
-    PackageBuild, TomlError,
+    utils::{PixiSpanned, package_map::UniquePackageMap},
 };
 
 #[derive(Debug)]
@@ -155,10 +155,9 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
 
 #[cfg(test)]
 mod test {
-    use insta::assert_snapshot;
-
     use super::*;
-    use crate::utils::test_utils::format_parse_error;
+    use insta::assert_snapshot;
+    use pixi_test_utils::format_parse_error;
 
     fn expect_parse_failure(pixi_toml: &str) -> String {
         let parse_error = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(pixi_toml)

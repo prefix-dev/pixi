@@ -4,7 +4,7 @@
 ## About
 Cleanup the environments
 
---8<-- "docs/reference/cli/pixi/clean_extender.md:description"
+--8<-- "docs/reference/cli/pixi/clean_extender:description"
 
 ## Usage
 ```
@@ -18,10 +18,10 @@ pixi clean [OPTIONS] [COMMAND]
 
 
 ## Options
-- <a id="arg---activation-cache" href="#arg---activation-cache">`--activation-cache`</a>
-:  Only remove the activation cache
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
 :  The environment directory to remove
+- <a id="arg---activation-cache" href="#arg---activation-cache">`--activation-cache`</a>
+:  Only remove the activation cache
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
@@ -35,4 +35,4 @@ This command removes the information in the .pixi folder. You can specify the en
 Use the `cache` subcommand to clean the cache.
 
 
---8<-- "docs/reference/cli/pixi/clean_extender.md:example"
+--8<-- "docs/reference/cli/pixi/clean_extender:example"

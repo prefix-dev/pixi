@@ -1,7 +1,6 @@
-# Tutorial: Building a C++ package
-
 This example shows how to build a C++ package with CMake and use it together with `pixi-build`.
 To read more about how building packages work with Pixi see the [Getting Started](./getting_started.md) guide.
+You might also want to check out the [documentation](https://prefix-dev.github.io/pixi-build-backends/backends/pixi-build-cmake/) for the `pixi-build-cmake` backend.
 
 We'll start off by creating a workspace that use [nanobind](https://github.com/wjakob/nanobind) to build Python bindings.
 That we can also test using pixi.
@@ -11,24 +10,24 @@ We'll later combine this example together with a Python package.
     `pixi-build` is a preview feature, and will change until it is stabilized.
     Please keep that in mind when you use it for your workspaces.
 
-## Creating a new workspace
+## Creating a New Workspace
 
 To get started, create a new workspace with pixi:
 
 ```bash
-pixi init python_bindings
+pixi init cpp_math
 ```
 
 This should give you the basic `pixi.toml` to get started.
 
 We'll now create the following source directory structure:
 ```bash
-python_bindings/
+cpp_math/
 ├── CMakeLists.txt
 ├── pixi.toml
 ├── .gitignore
 └── src
-    └── bindings.cpp
+    └── math.cpp
 ```
 
 ## Creating the workspace files
@@ -36,7 +35,7 @@ Next up we'll create the:
 
 - `pixi.toml` file that will be used to configure pixi.
 - `CMakeLists.txt` file that will be used to build the bindings.
-- `src/bindings.cpp` file that will contain the bindings.
+- `src/math.cpp` file that will contain the bindings.
 
 ### The `pixi.toml` file
 Use the following `pixi.toml` file, you can hover over the annotations to see why each step was added.
@@ -70,12 +69,12 @@ Next lets add the `CMakeList.txt` file:
 5. Use our bindings file as the source file.
 6. Install the bindings into the designated prefix.
 
-### The `src/bindings.cpp` file
+### The `src/math.cpp` file
 
-Next lets add the `src/bindings.cpp` file, this one is quite simple:
+Next lets add the `src/math.cpp` file, this one is quite simple:
 
 ```cpp
---8<-- "docs/source_files/pixi_workspaces/pixi_build/cpp/src/bindings.cpp"
+--8<-- "docs/source_files/pixi_workspaces/pixi_build/cpp/src/math.cpp"
 ```
 
 1. We define a function that will be used to add two numbers together.

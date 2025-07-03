@@ -1,12 +1,13 @@
-use std::sync::Arc;
+use std::{fmt::Display, sync::Arc};
 
-use crate::BinarySpec;
 use rattler_conda_types::{
-    BuildNumberSpec, ChannelConfig, NamedChannelOrUrl, NamelessMatchSpec, ParseChannelError,
-    StringMatcher, VersionSpec,
+    BuildNumberSpec, ChannelConfig, NamedChannelOrUrl, NamelessMatchSpec, StringMatcher,
+    VersionSpec,
 };
 use rattler_digest::{Md5Hash, Sha256Hash};
 use serde_with::{serde_as, skip_serializing_none};
+
+use crate::{BinarySpec, SpecConversionError};
 
 /// A specification for a package in a conda channel.
 ///
@@ -39,6 +40,9 @@ pub struct DetailedSpec {
     /// The subdir of the channel
     pub subdir: Option<String>,
 
+    /// The license
+    pub license: Option<String>,
+
     /// The md5 hash of the package
     #[serde_as(as = "Option<rattler_digest::serde::SerializableHash::<rattler_digest::Md5>>")]
     pub md5: Option<Md5Hash>,
@@ -53,7 +57,7 @@ impl DetailedSpec {
     pub fn try_into_nameless_match_spec(
         self,
         channel_config: &ChannelConfig,
-    ) -> Result<NamelessMatchSpec, ParseChannelError> {
+    ) -> Result<NamelessMatchSpec, SpecConversionError> {
         Ok(NamelessMatchSpec {
             version: self.version,
             build: self.build,
@@ -61,13 +65,18 @@ impl DetailedSpec {
             file_name: self.file_name,
             channel: self
                 .channel
-                .map(|c| c.into_channel(channel_config))
+                .map(|c| {
+                    c.clone()
+                        .into_channel(channel_config)
+                        .map_err(|e| SpecConversionError::InvalidChannel(c.to_string(), e))
+                })
                 .transpose()?
                 .map(Arc::new),
             subdir: self.subdir,
             namespace: None,
             md5: self.md5,
             sha256: self.sha256,
+            license: self.license,
             url: None,
             extras: Default::default(),
         })
@@ -77,5 +86,53 @@ impl DetailedSpec {
 impl From<DetailedSpec> for BinarySpec {
     fn from(value: DetailedSpec) -> Self {
         Self::DetailedVersion(Box::new(value))
+    }
+}
+
+impl Display for DetailedSpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut parts = Vec::new();
+
+        if let Some(version) = &self.version {
+            parts.push(format!("version={}", version));
+        }
+
+        if let Some(build) = &self.build {
+            parts.push(format!("build={}", build));
+        }
+
+        if let Some(build_number) = &self.build_number {
+            parts.push(format!("build_number={}", build_number));
+        }
+
+        if let Some(file_name) = &self.file_name {
+            parts.push(format!("file_name={}", file_name));
+        }
+
+        if let Some(channel) = &self.channel {
+            parts.push(format!("channel={}", channel));
+        }
+
+        if let Some(subdir) = &self.subdir {
+            parts.push(format!("subdir={}", subdir));
+        }
+
+        if let Some(license) = &self.license {
+            parts.push(format!("license={}", license));
+        }
+
+        if let Some(md5) = &self.md5 {
+            parts.push(format!("md5={:x}", md5));
+        }
+
+        if let Some(sha256) = &self.sha256 {
+            parts.push(format!("sha256={:x}", sha256));
+        }
+
+        if parts.is_empty() {
+            write!(f, "*")
+        } else {
+            write!(f, "{}", parts.join(" "))
+        }
     }
 }

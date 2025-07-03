@@ -3,19 +3,21 @@ use std::collections::HashMap;
 use indexmap::{IndexMap, IndexSet};
 use pixi_toml::{TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
 use rattler_conda_types::Platform;
-use toml_span::{de_helpers::TableHelper, DeserError, Spanned, Value};
+use toml_span::{DeserError, Spanned, Value, de_helpers::TableHelper};
 
 use crate::{
-    pypi::{pypi_options::PypiOptions, PyPiPackageName},
+    Activation, Feature, FeatureName, SystemRequirements, TargetSelector, Targets, Task, TaskName,
+    TomlError, Warning, WithWarnings,
+    pypi::pypi_options::PypiOptions,
     toml::{
+        PlatformSpan, TomlPrioritizedChannel, TomlTarget, TomlWorkspace,
         create_unsupported_selector_warning, platform::TomlPlatform, preview::TomlPreview,
-        task::TomlTask, PlatformSpan, TomlPrioritizedChannel, TomlTarget, TomlWorkspace,
+        task::TomlTask,
     },
-    utils::{package_map::UniquePackageMap, PixiSpanned},
+    utils::{PixiSpanned, package_map::UniquePackageMap},
     workspace::ChannelPriority,
-    Activation, Feature, FeatureName, PyPiRequirement, SystemRequirements, TargetSelector, Targets,
-    Task, TaskName, TomlError, Warning, WithWarnings,
 };
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 
 #[derive(Debug)]
 pub struct TomlFeature {
@@ -27,7 +29,7 @@ pub struct TomlFeature {
     pub dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub pypi_dependencies: Option<IndexMap<PyPiPackageName, PyPiRequirement>>,
+    pub pypi_dependencies: Option<IndexMap<PypiPackageName, PixiPypiSpec>>,
 
     /// Additional information to activate an environment.
     pub activation: Option<Activation>,

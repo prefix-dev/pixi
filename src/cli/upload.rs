@@ -9,13 +9,14 @@ use indicatif::HumanBytes;
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use reqwest::StatusCode;
 
-use rattler_digest::{compute_file_digest, Sha256};
+use rattler_digest::{Sha256, compute_file_digest};
 use rattler_networking::AuthenticationMiddleware;
 use thiserror::Error;
 use tokio::fs::File;
 use tokio_util::io::ReaderStream;
 
 use pixi_progress;
+use pixi_utils::reqwest::reqwest_client_builder;
 
 #[allow(rustdoc::bare_urls)]
 /// Upload a conda package
@@ -53,11 +54,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         HumanBytes(filesize)
     );
 
-    let client = reqwest_middleware::ClientBuilder::new(reqwest::Client::new())
-        .with_arc(Arc::new(
-            AuthenticationMiddleware::from_env_and_defaults().into_diagnostic()?,
-        ))
-        .build();
+    let client = reqwest_middleware::ClientBuilder::new(
+        reqwest_client_builder(None)?.build().into_diagnostic()?,
+    )
+    .with_arc(Arc::new(
+        AuthenticationMiddleware::from_env_and_defaults().into_diagnostic()?,
+    ))
+    .build();
 
     let sha256sum = format!(
         "{:x}",

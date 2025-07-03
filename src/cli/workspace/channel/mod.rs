@@ -2,9 +2,10 @@ pub mod add;
 pub mod list;
 pub mod remove;
 
-use crate::cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig};
+use crate::cli::cli_config::{LockFileUpdateConfig, PrefixUpdateConfig, WorkspaceConfig};
 use clap::Parser;
 use miette::IntoDiagnostic;
+use pixi_config::ConfigCli;
 use pixi_manifest::{FeatureName, PrioritizedChannel};
 use rattler_conda_types::{ChannelConfig, NamedChannelOrUrl};
 
@@ -36,6 +37,12 @@ pub struct AddRemoveArgs {
     #[clap(flatten)]
     pub prefix_update_config: PrefixUpdateConfig,
 
+    #[clap(flatten)]
+    pub lock_file_update_config: LockFileUpdateConfig,
+
+    #[clap(flatten)]
+    pub config: ConfigCli,
+
     /// The name of the feature to modify.
     #[clap(long, short)]
     pub feature: Option<String>,
@@ -52,7 +59,7 @@ impl AddRemoveArgs {
     fn feature_name(&self) -> FeatureName {
         self.feature
             .clone()
-            .map_or(FeatureName::Default, FeatureName::Named)
+            .map_or_else(FeatureName::default, FeatureName::from)
     }
 
     fn report(self, operation: &str, channel_config: &ChannelConfig) -> miette::Result<()> {

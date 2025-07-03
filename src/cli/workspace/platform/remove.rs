@@ -4,15 +4,15 @@ use pixi_manifest::FeatureName;
 use rattler_conda_types::Platform;
 
 use crate::{
-    environment::{get_update_lock_file_and_prefix, LockFileUsage},
-    lock_file::UpdateMode,
     UpdateLockFileOptions, Workspace,
+    environment::{LockFileUsage, get_update_lock_file_and_prefix},
+    lock_file::{ReinstallPackages, UpdateMode},
 };
 
 #[derive(Parser, Debug, Default)]
 pub struct Args {
-    /// The platform name(s) to remove.
-    #[clap(required = true, num_args=1..)]
+    /// The platform name to remove.
+    #[clap(required = true, num_args=1.., value_name = "PLATFORM")]
     pub platforms: Vec<Platform>,
 
     /// Don't update the environment, only remove the platform(s) from the
@@ -28,7 +28,7 @@ pub struct Args {
 pub async fn execute(workspace: Workspace, args: Args) -> miette::Result<()> {
     let feature_name = args
         .feature
-        .map_or(FeatureName::Default, FeatureName::Named);
+        .map_or_else(FeatureName::default, FeatureName::from);
 
     let mut workspace = workspace.modify()?;
 
@@ -45,6 +45,7 @@ pub async fn execute(workspace: Workspace, args: Args) -> miette::Result<()> {
             no_install: args.no_install,
             max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
         },
+        ReinstallPackages::default(),
     )
     .await?;
     workspace.save().await.into_diagnostic()?;
@@ -54,10 +55,10 @@ pub async fn execute(workspace: Workspace, args: Args) -> miette::Result<()> {
         eprintln!(
             "{}Removed {}",
             console::style(console::Emoji("✔ ", "")).green(),
-            match &feature_name {
-                FeatureName::Default => platform.to_string(),
-                FeatureName::Named(name) => format!("{} from the feature {}", platform, name),
-            },
+            &feature_name.non_default().map_or_else(
+                || platform.to_string(),
+                |name| format!("{} from the feature {}", platform, name)
+            )
         );
     }
 

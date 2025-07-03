@@ -1,4 +1,4 @@
-[project]
+[workspace]
 channels = []
 name = "activation"
 platforms = ["linux-64", "win-64"]

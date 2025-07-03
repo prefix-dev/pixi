@@ -86,6 +86,7 @@ def main() -> None:
         "Set release version",
         "Create and switch to release branch",
         "Bump all versions",
+        "Update cargo lockfile",
         "Update changelog",
         "Lint changes",
         "Commit changes",
@@ -142,6 +143,11 @@ def main() -> None:
             status.append("Bumped all versions")
 
         if start_step <= 6:
+            colored_print("\nUpdate Cargo pixi lockfile...", Colors.YELLOW)
+            run_command([pixi, "run", "cargo update pixi"])
+            status.append("Updated all lockfile")
+
+        if start_step <= 7:
             while True:
                 response = (
                     colored_input("Should we bump the changelog? (yes/no): ", Colors.MAGENTA)
@@ -160,21 +166,21 @@ def main() -> None:
             )
             status.append("Updated the changelog")
 
-        if start_step <= 7:
+        if start_step <= 8:
             colored_print("\nLinting the changes...", Colors.YELLOW)
             run_command([pixi, "run", "lint"])
 
-        if start_step <= 8:
+        if start_step <= 9:
             colored_print("\nCommitting the changes...", Colors.YELLOW)
             run_command(["git", "commit", "-am", f"chore: version to {release_version}"])
             status.append("Committed the changes")
 
-        if start_step <= 9:
+        if start_step <= 10:
             colored_print("\nPushing the changes...", Colors.YELLOW)
             run_command(["git", "push", "origin"])
             status.append("Pushed the changes")
 
-        if start_step <= 10:
+        if start_step <= 11:
             colored_print("\nRelease prep PR", Colors.YELLOW)
             colored_input(
                 "Create a PR to check off the change with the peers. Press Enter to continue...",

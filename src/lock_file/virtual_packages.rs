@@ -2,7 +2,7 @@ use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_manifest::EnvironmentName;
-use pypi_modifiers::pypi_tags::{get_tags_from_machine, is_python_record, PyPITagError};
+use pypi_modifiers::pypi_tags::{PyPITagError, get_tags_from_machine, is_python_record};
 use rattler_conda_types::ParseStrictness::Lenient;
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Matches, PackageRecord};
 use rattler_conda_types::{ParseMatchSpecError, Platform};
@@ -66,7 +66,10 @@ impl VirtualPackageNotFoundError {
         let msg = format!(
             "Virtual package '{}' does not match any of the available virtual packages on your machine: [{}]",
             required_package,
-            system_virtual_packages.iter().map(|vpkg| vpkg.to_string()).join(", "),
+            system_virtual_packages
+                .iter()
+                .map(|vpkg| vpkg.to_string())
+                .join(", "),
         );
         VirtualPackageNotFoundError { msg, help }
     }
@@ -178,7 +181,7 @@ pub(crate) fn validate_system_meets_environment_requirements(
     let required_virtual_packages =
         get_required_virtual_packages_from_conda_records(&conda_records)?;
 
-    tracing::info!(
+    tracing::debug!(
         "Required virtual packages of environment '{}': {}",
         environment_name.fancy_display(),
         required_virtual_packages
@@ -289,20 +292,10 @@ pub(crate) fn validate_system_meets_environment_requirements(
 mod test {
     use super::*;
     use insta::assert_snapshot;
-    use miette::{GraphicalReportHandler, GraphicalTheme};
+    use pixi_test_utils::format_diagnostic;
     use rattler_conda_types::ParseStrictness;
     use rattler_virtual_packages::Override;
     use std::path::Path;
-
-    fn error_to_snapshot(diag: &impl Diagnostic) -> String {
-        let mut report_str = String::new();
-        GraphicalReportHandler::new_themed(GraphicalTheme::unicode_nocolor())
-            .without_syntax_highlighting()
-            .with_width(100)
-            .render_report(&mut report_str, diag)
-            .unwrap();
-        report_str
-    }
 
     #[test]
     fn test_get_minimal_virtual_packages() {
@@ -325,9 +318,11 @@ mod test {
         let virtual_matchspecs =
             get_required_virtual_packages_from_conda_records(&conda_records).unwrap();
 
-        assert!(virtual_matchspecs
-            .iter()
-            .contains(&MatchSpec::from_str("__cuda >=12", Lenient).unwrap()));
+        assert!(
+            virtual_matchspecs
+                .iter()
+                .contains(&MatchSpec::from_str("__cuda >=12", Lenient).unwrap())
+        );
     }
 
     #[test]
@@ -444,8 +439,8 @@ mod test {
 
         assert_snapshot!(format!(
             "With override:\n{}\nWithout override:\n{}",
-            error_to_snapshot(&error1),
-            error_to_snapshot(&error2)
+            format_diagnostic(&error1),
+            format_diagnostic(&error2)
         ));
     }
     #[test]

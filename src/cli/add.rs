@@ -1,16 +1,17 @@
 use clap::Parser;
 use indexmap::IndexMap;
 use miette::IntoDiagnostic;
+use pixi_config::ConfigCli;
 use pixi_manifest::{FeatureName, SpecType};
 use pixi_spec::{GitSpec, SourceSpec};
 use rattler_conda_types::{MatchSpec, PackageName};
 
-use super::has_specs::HasSpecs;
+use super::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs};
 use crate::{
-    cli::cli_config::{DependencyConfig, PrefixUpdateConfig, WorkspaceConfig},
-    environment::sanity_check_project,
-    workspace::DependencyType,
     WorkspaceLocator,
+    cli::cli_config::{DependencyConfig, PrefixUpdateConfig, WorkspaceConfig},
+    environment::sanity_check_workspace,
+    workspace::DependencyType,
 };
 
 /// Adds dependencies to the workspace
@@ -57,6 +58,8 @@ use crate::{
 ///   array
 /// - `pixi add --pypi boto3 --feature aws` will add `boto3` to the
 ///   `dependency-groups.aws` array
+/// - `pixi add --pypi --editable 'boto3 @ file://absolute/path/to/boto3'` will add
+///   the local editable `boto3` to the `pypi-dependencies` array
 ///
 /// Note that if `--platform` or `--editable` are specified, the pypi dependency
 /// will be added to the `tool.pixi.pypi-dependencies` table instead as native
@@ -82,31 +85,38 @@ pub struct Args {
     #[clap(flatten)]
     pub prefix_update_config: PrefixUpdateConfig,
 
+    #[clap(flatten)]
+    pub lock_file_update_config: LockFileUpdateConfig,
+
+    #[clap(flatten)]
+    pub config: ConfigCli,
+
     /// Whether the pypi requirement should be editable
     #[arg(long, requires = "pypi")]
     pub editable: bool,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let (dependency_config, prefix_update_config, workspace_config) = (
+    let (dependency_config, prefix_update_config, lock_file_update_config, workspace_config) = (
         args.dependency_config,
         args.prefix_update_config,
+        args.lock_file_update_config,
         args.workspace_config,
     );
 
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(workspace_config.workspace_locator_start())
         .locate()?
-        .with_cli_config(prefix_update_config.config.clone());
+        .with_cli_config(args.config.clone());
 
-    sanity_check_project(&workspace).await?;
+    sanity_check_workspace(&workspace).await?;
 
     let mut workspace = workspace.modify()?;
 
     // Add the platform if it is not already present
     workspace
         .manifest()
-        .add_platforms(dependency_config.platforms.iter(), &FeatureName::Default)?;
+        .add_platforms(dependency_config.platforms.iter(), &FeatureName::DEFAULT)?;
 
     let (match_specs, source_specs, pypi_deps) = match dependency_config.dependency_type() {
         DependencyType::CondaDependency(spec_type) => {
@@ -147,12 +157,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             {
                 Some(vcs_reqs) => vcs_reqs
                     .into_iter()
-                    .map(|(name, req)| (name, (req, None)))
+                    .map(|(name, req)| (name, (req, None, None)))
                     .collect(),
                 None => dependency_config
                     .pypi_deps(workspace.workspace())?
                     .into_iter()
-                    .map(|(name, req)| (name, (req, None)))
+                    .map(|(name, req)| (name, (req, None, None)))
                     .collect(),
             };
 
@@ -167,6 +177,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         pypi_deps,
         source_specs,
         &prefix_update_config,
+        &lock_file_update_config,
         &dependency_config.feature,
         &dependency_config.platforms,
         args.editable,

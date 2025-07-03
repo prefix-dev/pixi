@@ -15,19 +15,21 @@
 //!
 //! Only the whole ProjectModel is versioned explicitly in an enum.
 //! When making a change to one of the types, be sure to add another enum declaration if it is breaking.
-use std::collections::HashMap;
-use std::path::PathBuf;
-
-use indexmap::IndexMap;
+use ordermap::OrderMap;
 use rattler_conda_types::{BuildNumberSpec, StringMatcher, Version, VersionSpec};
-use rattler_digest::{serde::SerializableHash, Md5, Sha256};
+use rattler_digest::{Md5, Md5Hash, Sha256, Sha256Hash, serde::SerializableHash};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use serde_with::DisplayFromStr;
+use serde_with::{DeserializeFromStr, DisplayFromStr, SerializeDisplay};
+use std::convert::Infallible;
+use std::fmt::Display;
+use std::hash::Hash;
+use std::path::PathBuf;
+use std::str::FromStr;
 use url::Url;
 
 /// Enum containing all versions of the project model.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "version", content = "data")]
 #[serde(rename_all = "camelCase")]
 pub enum VersionedProjectModel {
@@ -66,7 +68,7 @@ impl VersionedProjectModel {
 /// The source package name of a package. Not normalized per se.
 pub type SourcePackageName = String;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectModelV1 {
     /// The name of the project
@@ -110,45 +112,69 @@ impl From<ProjectModelV1> for VersionedProjectModel {
     }
 }
 
-/// Represents a target selector. Currently we only support explicit platform
+/// Represents a target selector. Currently, we only support explicit platform
 /// selection.
-#[derive(Debug, Serialize, Deserialize, Hash, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, DeserializeFromStr, SerializeDisplay, Hash, Eq, PartialEq)]
 pub enum TargetSelectorV1 {
     // Platform specific configuration
-    Platform(String),
     Unix,
     Linux,
     Win,
     MacOs,
+    Platform(String),
     // TODO: Add minijinja coolness here.
 }
 
+impl Display for TargetSelectorV1 {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TargetSelectorV1::Unix => write!(f, "unix"),
+            TargetSelectorV1::Linux => write!(f, "linux"),
+            TargetSelectorV1::Win => write!(f, "win"),
+            TargetSelectorV1::MacOs => write!(f, "macos"),
+            TargetSelectorV1::Platform(p) => write!(f, "{}", p),
+        }
+    }
+}
+impl FromStr for TargetSelectorV1 {
+    type Err = Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "unix" => Ok(TargetSelectorV1::Unix),
+            "linux" => Ok(TargetSelectorV1::Linux),
+            "win" => Ok(TargetSelectorV1::Win),
+            "macos" => Ok(TargetSelectorV1::MacOs),
+            _ => Ok(TargetSelectorV1::Platform(s.to_string())),
+        }
+    }
+}
+
 /// A collect of targets including a default target.
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Hash, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TargetsV1 {
     pub default_target: Option<TargetV1>,
 
-    /// We use an [`IndexMap`] to preserve the order in which the items where
+    /// We use an [`OrderMap`] to preserve the order in which the items where
     /// defined in the manifest.
-    pub targets: Option<HashMap<TargetSelectorV1, TargetV1>>,
+    pub targets: Option<OrderMap<TargetSelectorV1, TargetV1>>,
 }
 
-#[derive(Debug, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Hash, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TargetV1 {
     /// Host dependencies of the project
-    pub host_dependencies: Option<IndexMap<SourcePackageName, PackageSpecV1>>,
+    pub host_dependencies: Option<OrderMap<SourcePackageName, PackageSpecV1>>,
 
     /// Build dependencies of the project
-    pub build_dependencies: Option<IndexMap<SourcePackageName, PackageSpecV1>>,
+    pub build_dependencies: Option<OrderMap<SourcePackageName, PackageSpecV1>>,
 
     /// Run dependencies of the project
-    pub run_dependencies: Option<IndexMap<SourcePackageName, PackageSpecV1>>,
+    pub run_dependencies: Option<OrderMap<SourcePackageName, PackageSpecV1>>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum PackageSpecV1 {
     /// This is a binary dependency
@@ -157,7 +183,7 @@ pub enum PackageSpecV1 {
     Source(SourcePackageSpecV1),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
 pub enum SourcePackageSpecV1 {
     /// The spec is represented as an archive that can be downloaded from the
     /// specified URL. The package should be retrieved from the URL and can
@@ -175,17 +201,20 @@ pub enum SourcePackageSpecV1 {
     Path(PathSpecV1),
 }
 
-#[derive(Serialize, Deserialize)]
+#[serde_as]
+#[derive(Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct UrlSpecV1 {
     /// The URL of the package
     pub url: Url,
 
     /// The md5 hash of the package
-    pub md5: Option<SerializableHash<Md5>>,
+    #[serde_as(as = "Option<rattler_digest::serde::SerializableHash::<rattler_digest::Md5>>")]
+    pub md5: Option<Md5Hash>,
 
     /// The sha256 hash of the package
-    pub sha256: Option<SerializableHash<Sha256>>,
+    #[serde_as(as = "Option<rattler_digest::serde::SerializableHash::<rattler_digest::Sha256>>")]
+    pub sha256: Option<Sha256Hash>,
 }
 
 impl std::fmt::Debug for UrlSpecV1 {
@@ -194,17 +223,17 @@ impl std::fmt::Debug for UrlSpecV1 {
 
         debug_struct.field("url", &self.url);
         if let Some(md5) = &self.md5 {
-            debug_struct.field("md5", &format!("{:x}", md5.0));
+            debug_struct.field("md5", &format!("{:x}", md5));
         }
         if let Some(sha256) = &self.sha256 {
-            debug_struct.field("sha256", &format!("{:x}", sha256.0));
+            debug_struct.field("sha256", &format!("{:x}", sha256));
         }
         debug_struct.finish()
     }
 }
 
 /// A specification of a package from a git repository.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct GitSpecV1 {
     /// The git url of the package which can contain git+ prefixes.
@@ -217,8 +246,8 @@ pub struct GitSpecV1 {
     pub subdirectory: Option<String>,
 }
 
-/// A specification of a package from a git repository.
-#[derive(Debug, Serialize, Deserialize)]
+/// A specification of a package from a path
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct PathSpecV1 {
     /// The path to the package
@@ -226,7 +255,7 @@ pub struct PathSpecV1 {
 }
 
 /// A reference to a specific commit in a git repository.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum GitReferenceV1 {
     /// The HEAD commit of a branch.
@@ -244,7 +273,7 @@ pub enum GitReferenceV1 {
 
 /// Similar to a [`rattler_conda_types::NamelessMatchSpec`]
 #[serde_as]
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Clone, Serialize, Deserialize, Default, Hash, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct BinaryPackageSpecV1 {
     /// The version spec of the package (e.g. `1.2.3`, `>=1.2.3`, `1.2.*`)
@@ -262,9 +291,11 @@ pub struct BinaryPackageSpecV1 {
     /// The subdir of the channel
     pub subdir: Option<String>,
     /// The md5 hash of the package
-    pub md5: Option<SerializableHash<Md5>>,
+    #[serde_as(as = "Option<SerializableHash<Md5>>")]
+    pub md5: Option<Md5Hash>,
     /// The sha256 hash of the package
-    pub sha256: Option<SerializableHash<Sha256>>,
+    #[serde_as(as = "Option<SerializableHash<Sha256>>")]
+    pub sha256: Option<Sha256Hash>,
 }
 
 impl From<VersionSpec> for BinaryPackageSpecV1 {
@@ -308,12 +339,130 @@ impl std::fmt::Debug for BinaryPackageSpecV1 {
             debug_struct.field("subdir", subdir);
         }
         if let Some(md5) = &self.md5 {
-            debug_struct.field("md5", &format!("{:x}", md5.0));
+            debug_struct.field("md5", &format!("{:x}", md5));
         }
         if let Some(sha256) = &self.sha256 {
-            debug_struct.field("sha256", &format!("{:x}", sha256.0));
+            debug_struct.field("sha256", &format!("{:x}", sha256));
         }
 
         debug_struct.finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_sample_target_v1() -> TargetV1 {
+        TargetV1 {
+            host_dependencies: Some(OrderMap::from([(
+                "host_dep1".to_string(),
+                PackageSpecV1::Binary(Box::default()),
+            )])),
+            build_dependencies: Some(OrderMap::from([(
+                "build_dep1".to_string(),
+                PackageSpecV1::Binary(Box::default()),
+            )])),
+            run_dependencies: Some(OrderMap::from([(
+                "run_dep1".to_string(),
+                PackageSpecV1::Binary(Box::default()),
+            )])),
+        }
+    }
+
+    #[test]
+    fn serialize_targets_v1_with_default_target() {
+        let targets = TargetsV1 {
+            default_target: Some(create_sample_target_v1()),
+            targets: None,
+        };
+
+        let serialized = serde_json::to_string(&targets).unwrap();
+        assert!(serialized.contains("defaultTarget"));
+        assert!(serialized.contains("hostDependencies"));
+    }
+
+    #[test]
+    fn serialize_targets_v1_with_multiple_targets() {
+        let platform_strs = [
+            "unix",
+            "win",
+            "macos",
+            "linux-64",
+            "linux-arm64",
+            "linux-ppc64le",
+            "osx-64",
+            "osx-arm64",
+            "win-64",
+            "win-arm64",
+        ];
+
+        let targets = TargetsV1 {
+            default_target: None,
+            targets: Some(
+                platform_strs
+                    .iter()
+                    .map(|s| {
+                        let selector = match *s {
+                            "unix" => TargetSelectorV1::Unix,
+                            "win" => TargetSelectorV1::Win,
+                            "macos" => TargetSelectorV1::MacOs,
+                            other => TargetSelectorV1::Platform(other.to_string()),
+                        };
+                        (selector, create_sample_target_v1())
+                    })
+                    .collect(),
+            ),
+        };
+
+        let serialized = serde_json::to_string(&targets).unwrap();
+
+        for platform in platform_strs {
+            assert!(serialized.contains(platform), "Missing: {}", platform);
+        }
+    }
+
+    #[test]
+    fn deserialize_targets_v1_with_empty_fields() {
+        let json = r#"{
+            "defaultTarget": null,
+            "targets": null
+        }"#;
+
+        let deserialized: TargetsV1 = serde_json::from_str(json).unwrap();
+        assert!(deserialized.default_target.is_none());
+        assert!(deserialized.targets.is_none());
+    }
+
+    #[test]
+    fn deserialize_targets_v1_with_valid_data() {
+        let json = r#"{
+            "defaultTarget": {
+                "hostDependencies": {
+                    "host_dep1": {
+                        "binary": {}
+                    }
+                },
+                "buildDependencies": null,
+                "runDependencies": null
+            },
+            "targets": {
+                "unix": {
+                    "hostDependencies": null,
+                    "buildDependencies": null,
+                    "runDependencies": null
+                }
+            }
+        }"#;
+
+        let deserialized: TargetsV1 = serde_json::from_str(json).unwrap();
+        assert!(deserialized.default_target.is_some());
+        assert!(deserialized.targets.is_some());
+        assert!(
+            deserialized
+                .targets
+                .unwrap()
+                .contains_key(&TargetSelectorV1::Unix)
+        );
     }
 }

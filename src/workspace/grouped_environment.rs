@@ -1,3 +1,4 @@
+use std::fmt::Display;
 use std::path::PathBuf;
 
 use fancy_display::FancyDisplay;
@@ -7,14 +8,14 @@ use pixi_manifest::{
     EnvironmentName, Feature, HasFeaturesIter, HasWorkspaceManifest, SystemRequirements,
     WorkspaceManifest,
 };
-use rattler_conda_types::{GenericVirtualPackage, Platform};
+use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, Platform};
 
 use crate::{
+    Workspace,
     prefix::Prefix,
     workspace::{
-        virtual_packages::get_minimal_virtual_packages, Environment, HasWorkspaceRef, SolveGroup,
+        Environment, HasWorkspaceRef, SolveGroup, virtual_packages::get_minimal_virtual_packages,
     },
-    Workspace,
 };
 
 /// Either a solve group or an individual environment without a solve group.
@@ -115,6 +116,11 @@ impl<'p> GroupedEnvironment<'p> {
             .map(GenericVirtualPackage::from)
             .collect()
     }
+
+    /// Returns the channel configuration for this grouped environment
+    pub fn channel_config(&self) -> ChannelConfig {
+        self.workspace().channel_config()
+    }
 }
 
 impl<'p> HasWorkspaceRef<'p> for GroupedEnvironment<'p> {
@@ -165,6 +171,15 @@ impl GroupedEnvironmentName {
         match self {
             GroupedEnvironmentName::Group(group) => group.as_str(),
             GroupedEnvironmentName::Environment(env) => env.as_str(),
+        }
+    }
+}
+
+impl Display for GroupedEnvironmentName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GroupedEnvironmentName::Group(name) => write!(f, "{}", name),
+            GroupedEnvironmentName::Environment(name) => write!(f, "{}", name),
         }
     }
 }

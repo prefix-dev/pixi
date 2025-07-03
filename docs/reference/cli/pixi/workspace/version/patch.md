@@ -4,11 +4,11 @@
 ## About
 Bump the workspace version to PATCH
 
---8<-- "docs/reference/cli/pixi/workspace/version/patch_extender.md:description"
+--8<-- "docs/reference/cli/pixi/workspace/version/patch_extender:description"
 
 ## Usage
 ```
 pixi workspace version patch
 ```
 
---8<-- "docs/reference/cli/pixi/workspace/version/patch_extender.md:example"
+--8<-- "docs/reference/cli/pixi/workspace/version/patch_extender:example"

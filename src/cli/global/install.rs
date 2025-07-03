@@ -10,11 +10,10 @@ use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 use crate::{
     cli::{global::revert_environment_after_error, has_specs::HasSpecs},
     global::{
-        self,
-        common::{contains_menuinst_document, NotChangedReason},
+        self, EnvChanges, EnvState, EnvironmentName, Mapping, Project, StateChange, StateChanges,
+        common::{NotChangedReason, contains_menuinst_document},
         list::list_all_global_environments,
         project::ExposedType,
-        EnvChanges, EnvState, EnvironmentName, Mapping, Project, StateChange, StateChanges,
     },
 };
 use pixi_config::{self, Config, ConfigCli};
@@ -30,8 +29,8 @@ use pixi_config::{self, Config, ConfigCli};
 #[derive(Parser, Debug, Clone)]
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
-    /// Specifies the packages that are to be installed.
-    #[arg(num_args = 1.., required = true)]
+    /// Specifies the package that should be installed.
+    #[arg(num_args = 1.., required = true, value_name = "PACKAGE")]
     packages: Vec<String>,
 
     /// The channels to consider as a name or a url.
@@ -44,6 +43,10 @@ pub struct Args {
     #[clap(long = "channel", short = 'c', value_name = "CHANNEL")]
     channels: Vec<NamedChannelOrUrl>,
 
+    /// The platform to install the packages for.
+    ///
+    /// This is useful when you want to install packages for a different platform than the one you are currently on.
+    /// This is very often used when you want to install `osx-64` packages on `osx-arm64`.
     #[clap(short, long)]
     platform: Option<Platform>,
 
@@ -70,8 +73,8 @@ pub struct Args {
     force_reinstall: bool,
 
     /// Specifies that no shortcuts should be created for the installed packages.
-    #[arg(action, long)]
-    no_shortcut: bool,
+    #[arg(action, long, alias = "no-shortcut")]
+    no_shortcuts: bool,
 }
 
 impl HasSpecs for Args {
@@ -154,6 +157,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         Some(env_names),
         Some(&env_changes),
         None,
+        false,
     )
     .await?;
 
@@ -222,11 +226,11 @@ async fn setup_environment(
     sync_exposed_names(env_name, project, args).await?;
 
     // Add shortcuts
-    if !args.no_shortcut {
+    if !args.no_shortcuts {
         let prefix = project.environment_prefix(env_name).await?;
         for (package_name, _) in specs.iter() {
             let prefix_record = prefix.find_designated_package(package_name).await?;
-            if contains_menuinst_document(&prefix_record) {
+            if contains_menuinst_document(&prefix_record, prefix.root()) {
                 project.manifest.add_shortcut(env_name, package_name)?;
             }
         }
@@ -240,6 +244,9 @@ async fn setup_environment(
     state_changes |= project
         .expose_executables_from_environment(env_name)
         .await?;
+
+    // Sync completions
+    state_changes |= project.sync_completions(env_name).await?;
 
     project.manifest.save().await?;
     Ok(state_changes)

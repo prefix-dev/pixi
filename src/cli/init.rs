@@ -9,11 +9,11 @@ use std::{
 
 use clap::{Parser, ValueEnum};
 use miette::{Context, IntoDiagnostic};
-use minijinja::{context, Environment};
-use pixi_config::{get_default_author, Config};
+use minijinja::{Environment, context};
+use pixi_config::{Config, get_default_author};
 use pixi_consts::consts;
 use pixi_manifest::{
-    pyproject::PyProjectManifest, DependencyOverwriteBehavior, FeatureName, SpecType,
+    DependencyOverwriteBehavior, FeatureName, SpecType, pyproject::PyProjectManifest,
 };
 use pixi_spec::PixiSpec;
 use pixi_utils::conda_environment_file::CondaEnvFile;
@@ -28,6 +28,7 @@ use crate::workspace::WorkspaceMut;
 pub enum ManifestFormat {
     Pixi,
     Pyproject,
+    Mojoproject,
 }
 
 /// Creates a new workspace
@@ -44,11 +45,11 @@ pub struct Args {
     #[arg(default_value = ".")]
     pub path: PathBuf,
 
-    /// Channels to use in the workspace.
+    /// Channel to use in the workspace.
     #[arg(
         short,
         long = "channel",
-        id = "CHANNEL",
+        value_name = "CHANNEL",
         conflicts_with = "ENVIRONMENT_FILE"
     )]
     pub channels: Option<Vec<NamedChannelOrUrl>>,
@@ -227,7 +228,6 @@ force-path-style = {{ s3[key]["force-path-style"] }}
 const GITIGNORE_TEMPLATE: &str = r#"
 # pixi environments
 .pixi
-*.egg-info
 "#;
 
 #[derive(Parser, Debug, Clone, PartialEq, ValueEnum)]
@@ -261,6 +261,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let dir = args.path.canonicalize().into_diagnostic()?;
     let pixi_manifest_path = dir.join(consts::WORKSPACE_MANIFEST);
     let pyproject_manifest_path = dir.join(consts::PYPROJECT_MANIFEST);
+    let mojoproject_manifest_path = dir.join(consts::MOJOPROJECT_MANIFEST);
     let gitignore_path = dir.join(".gitignore");
     let gitattributes_path = dir.join(".gitattributes");
     let config = Config::load_global();
@@ -339,13 +340,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         for requirement in pypi_deps {
             workspace.manifest().add_pep508_dependency(
-                &requirement,
+                (&requirement, None),
                 // No platforms required as you can't define them in the yaml
                 &[],
                 &FeatureName::default(),
                 None,
                 DependencyOverwriteBehavior::Overwrite,
-                &None,
+                None,
             )?;
         }
         let workspace = workspace.save().await.into_diagnostic()?;
@@ -374,8 +375,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             && !args.pyproject_toml
             && pyproject_manifest_path.is_file()
         {
+            eprintln!(
+                "\nA '{}' file already exists.\n",
+                console::style(consts::PYPROJECT_MANIFEST).bold()
+            );
+
             dialoguer::Confirm::new()
-                .with_prompt(format!("\nA '{}' file already exists.\nDo you want to extend it with the '{}' configuration?", console::style(consts::PYPROJECT_MANIFEST).bold(), console::style("[tool.pixi]").bold().green()))
+                .with_prompt(format!(
+                    "Do you want to extend it with the '{}' configuration?",
+                    console::style("[tool.pixi]").bold().green()
+                ))
                 .default(false)
                 .show_default(true)
                 .interact()
@@ -392,7 +401,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             // Early exit if 'pyproject.toml' already contains a '[tool.pixi.workspace]' table
             if pyproject.has_pixi_table() {
                 eprintln!(
-                    "{}Nothing to do here: 'pyproject.toml' already contains a '[tool.pixi.workspace3]' section.",
+                    "{}Nothing to do here: 'pyproject.toml' already contains a '[tool.pixi.workspace]' section.",
                     console::style(console::Emoji("🤔 ", "")).blue(),
                 );
                 return Ok(());
@@ -501,11 +510,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         // Create a 'pixi.toml' manifest
         } else {
-            // Check if the 'pixi.toml' file doesn't already exist. We don't want to
+            let path = if args.format == Some(ManifestFormat::Mojoproject) {
+                mojoproject_manifest_path
+            } else {
+                pixi_manifest_path
+            };
+
+            // Check if the manifest file doesn't already exist. We don't want to
             // overwrite it.
-            if pixi_manifest_path.is_file() {
+            if path.is_file() {
                 miette::bail!("{} already exists", consts::WORKSPACE_MANIFEST);
             }
+
             let rv = render_workspace(
                 &env,
                 default_name,
@@ -518,12 +534,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 config.s3_options,
                 None,
             );
-            save_manifest_file(&pixi_manifest_path, rv)?;
+            save_manifest_file(&path, rv)?;
         };
     }
 
     // create a .gitignore if one is missing
-    if let Err(e) = create_or_append_file(&gitignore_path, GITIGNORE_TEMPLATE) {
+    if let Err(e) = create_or_append_file(&gitignore_path, GITIGNORE_TEMPLATE.trim_start()) {
         tracing::warn!(
             "Warning, couldn't update '{}' because of: {}",
             gitignore_path.to_string_lossy(),

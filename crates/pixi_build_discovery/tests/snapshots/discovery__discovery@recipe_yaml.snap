@@ -1,0 +1,21 @@
+---
+source: crates/pixi_build_discovery/tests/discovery.rs
+expression: backend
+input_file: tests/data/discovery/recipe_yaml/TEST-CASE
+---
+backend-spec:
+  type: json-rpc
+  name: pixi-build-rattler-build
+  command:
+    type: environment-spec
+    requirement:
+      - pixi-build-rattler-build
+      - {}
+    channels:
+      - "https://conda.anaconda.org/conda-forge"
+      - "https://prefix.dev/pixi-build-backends"
+init-params:
+  source-dir: "[SOURCE_PATH]"
+  manifest-path: recipe.yaml
+  project-model: ~
+  configuration: ~

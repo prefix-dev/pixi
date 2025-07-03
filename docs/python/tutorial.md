@@ -1,5 +1,3 @@
-# Tutorial: Doing Python development with Pixi
-
 In this tutorial, we will show you how to create a simple Python project with pixi.
 We will show some of the features that Pixi provides, that are currently not a part of `pdm`, `poetry` etc.
 
@@ -104,20 +102,20 @@ Which will result in the following addition to the `pyproject.toml`:
 
 ```toml
 [tool.pixi.dependencies]
-black = ">=24.10.0,<25"  # (1)!
+black = ">=25.1.0,<26"  # (1)!
 ```
 
 1. Or the latest version that is available on the [conda-forge](https://prefix.dev/channels/conda-forge/packages/black) channel.
 
 But we can also be strict about the version that should be used.
 ```shell
-pixi add black=24
+pixi add black=25
 ```
 resulting in:
 
 ```toml
 [tool.pixi.dependencies]
-black = "24.*"
+black = "25.*"
 ```
 
 Sometimes there are packages that aren't available on conda channels but are published on PyPI.
@@ -216,11 +214,15 @@ This means that you can have multiple environments with the same packages but on
     This way, Pixi automatically manages/bootstraps the Python interpreter for you, so no more `brew`, `apt` or other system install steps.
 
 ??? question "How to use the Free-threaded interpreter?"
-    If you want to use a free-threaded Python interpreter, you can add the `python-freethreading` dependency to the `[tool.pixi.dependencies]`.
+    If you want to use a free-threaded Python interpreter, you can add the `python-freethreading` dependency with:
+    ```
+    pixi add python-freethreading
+    ```
     This ensures that a free-threaded version of Python is installed in the environment.
     This might not work with other packages that are not thread-safe yet.
     You can read more about free-threaded Python [here](https://docs.python.org/3/howto/free-threading-python.html).
 
+### Multiple environments
 Pixi can also create multiple environments, this works well together with the `dependency-groups` feature in the `pyproject.toml` file.
 
 Let's add a dependency-group, which Pixi calls a `feature`, named `test`.
@@ -343,7 +345,7 @@ Similar to `npm` scripts or something you would specify in a `Justfile`.
 !!! tip "Pixi tasks"
     Tasks are a cool Pixi feature that is powerful and runs in a cross-platform shell.
     You can do caching, dependencies and more.
-    Read more about tasks in the [tasks](../environments/advanced_tasks.md) section.
+    Read more about tasks in the [tasks](../workspace/advanced_tasks.md) section.
 
 ```shell
 pixi run test

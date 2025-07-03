@@ -15,7 +15,7 @@ outputs:
         - if: win
           then:
             - mkdir -p $PREFIX/etc/conda/activate.d
-            - echo "set PATH=%PATH%;/test/path" > $PREFIX/etc/conda/activate.d/activate-trampoline.bat
+            - echo "set PATH=/test/path;%PATH%" > $PREFIX/etc/conda/activate.d/activate-trampoline.bat
             - mv print_path.bat $PREFIX/bin/dummy-trampoline-path.bat
           else:
             - mkdir -p $PREFIX/etc/conda/activate.d

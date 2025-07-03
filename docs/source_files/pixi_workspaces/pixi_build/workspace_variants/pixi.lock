@@ -13,13 +13,13 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-64/ld_impl_linux-64-2.43-h712a8e2_2.conda
       - conda: https://prefix.dev/conda-forge/linux-64/libexpat-2.6.4-h5888daf_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/libffi-3.4.2-h7f98852_5.tar.bz2
-      - conda: https://prefix.dev/conda-forge/linux-64/libgcc-14.2.0-h77fa898_1.conda
-      - conda: https://prefix.dev/conda-forge/linux-64/libgcc-ng-14.2.0-h69a702a_1.conda
-      - conda: https://prefix.dev/conda-forge/linux-64/libgomp-14.2.0-h77fa898_1.conda
+      - conda: https://prefix.dev/conda-forge/linux-64/libgcc-15.1.0-h767d61c_3.conda
+      - conda: https://prefix.dev/conda-forge/linux-64/libgcc-ng-15.1.0-h69a702a_3.conda
+      - conda: https://prefix.dev/conda-forge/linux-64/libgomp-15.1.0-h767d61c_3.conda
       - conda: https://prefix.dev/conda-forge/linux-64/liblzma-5.6.3-hb9d3cd8_1.conda
       - conda: https://prefix.dev/conda-forge/linux-64/libnsl-2.0.1-hd590300_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/libsqlite-3.47.2-hee588c1_0.conda
-      - conda: https://prefix.dev/conda-forge/linux-64/libstdcxx-14.2.0-hc0a3c3a_1.conda
+      - conda: https://prefix.dev/conda-forge/linux-64/libstdcxx-15.1.0-h8f9b012_3.conda
       - conda: https://prefix.dev/conda-forge/linux-64/libuuid-2.38.1-h0b41bf4_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/libxcrypt-4.4.36-hd590300_1.conda
       - conda: https://prefix.dev/conda-forge/linux-64/libzlib-1.3.1-hb9d3cd8_2.conda
@@ -36,13 +36,13 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/typing_extensions-4.12.2-pyha770c72_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025a-h78e105d_0.conda
       - conda: .
-      - conda: packages/python_bindings
+      - conda: packages/cpp_math
         build: py312h2078e5b_0
         subdir: linux-64
       osx-64:
       - conda: https://prefix.dev/conda-forge/osx-64/bzip2-1.0.8-hfdf4475_7.conda
       - conda: https://prefix.dev/conda-forge/osx-64/ca-certificates-2024.12.14-h8857fd0_0.conda
-      - conda: https://prefix.dev/conda-forge/osx-64/libcxx-19.1.7-hf95d169_0.conda
+      - conda: https://prefix.dev/conda-forge/osx-64/libcxx-20.1.3-hf95d169_0.conda
       - conda: https://prefix.dev/conda-forge/osx-64/libexpat-2.6.4-h240833e_0.conda
       - conda: https://prefix.dev/conda-forge/osx-64/libffi-3.4.2-h0d85af4_5.tar.bz2
       - conda: https://prefix.dev/conda-forge/osx-64/liblzma-5.6.3-hd471939_1.conda
@@ -61,13 +61,13 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/typing_extensions-4.12.2-pyha770c72_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025a-h78e105d_0.conda
       - conda: .
-      - conda: packages/python_bindings
+      - conda: packages/cpp_math
         build: py312h2078e5b_0
         subdir: osx-64
       osx-arm64:
       - conda: https://prefix.dev/conda-forge/osx-arm64/bzip2-1.0.8-h99b78c6_7.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/ca-certificates-2024.12.14-hf0a4a13_0.conda
-      - conda: https://prefix.dev/conda-forge/osx-arm64/libcxx-19.1.7-ha82da77_0.conda
+      - conda: https://prefix.dev/conda-forge/osx-arm64/libcxx-20.1.3-ha82da77_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/libexpat-2.6.4-h286801f_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/libffi-3.4.2-h3422bc3_5.tar.bz2
       - conda: https://prefix.dev/conda-forge/osx-arm64/liblzma-5.6.3-h39f12f2_1.conda
@@ -86,7 +86,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/typing_extensions-4.12.2-pyha770c72_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025a-h78e105d_0.conda
       - conda: .
-      - conda: packages/python_bindings
+      - conda: packages/cpp_math
         build: py312h2078e5b_0
         subdir: osx-arm64
       win-64:
@@ -112,7 +112,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/win-64/vc14_runtime-14.42.34433-he29a5d6_23.conda
       - conda: https://prefix.dev/conda-forge/win-64/vs2015_runtime-14.42.34433-hdffcdeb_23.conda
       - conda: .
-      - conda: packages/python_bindings
+      - conda: packages/cpp_math
         build: py312h2078e5b_0
         subdir: win-64
   py311:
@@ -128,13 +128,13 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-64/ld_impl_linux-64-2.43-h712a8e2_2.conda
       - conda: https://prefix.dev/conda-forge/linux-64/libexpat-2.6.4-h5888daf_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/libffi-3.4.2-h7f98852_5.tar.bz2
-      - conda: https://prefix.dev/conda-forge/linux-64/libgcc-14.2.0-h77fa898_1.conda
-      - conda: https://prefix.dev/conda-forge/linux-64/libgcc-ng-14.2.0-h69a702a_1.conda
-      - conda: https://prefix.dev/conda-forge/linux-64/libgomp-14.2.0-h77fa898_1.conda
+      - conda: https://prefix.dev/conda-forge/linux-64/libgcc-15.1.0-h767d61c_3.conda
+      - conda: https://prefix.dev/conda-forge/linux-64/libgcc-ng-15.1.0-h69a702a_3.conda
+      - conda: https://prefix.dev/conda-forge/linux-64/libgomp-15.1.0-h767d61c_3.conda
       - conda: https://prefix.dev/conda-forge/linux-64/liblzma-5.6.3-hb9d3cd8_1.conda
       - conda: https://prefix.dev/conda-forge/linux-64/libnsl-2.0.1-hd590300_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/libsqlite-3.47.2-hee588c1_0.conda
-      - conda: https://prefix.dev/conda-forge/linux-64/libstdcxx-14.2.0-hc0a3c3a_1.conda
+      - conda: https://prefix.dev/conda-forge/linux-64/libstdcxx-15.1.0-h8f9b012_3.conda
       - conda: https://prefix.dev/conda-forge/linux-64/libuuid-2.38.1-h0b41bf4_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/libxcrypt-4.4.36-hd590300_1.conda
       - conda: https://prefix.dev/conda-forge/linux-64/libzlib-1.3.1-hb9d3cd8_2.conda
@@ -151,13 +151,13 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/typing_extensions-4.12.2-pyha770c72_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025a-h78e105d_0.conda
       - conda: .
-      - conda: packages/python_bindings
+      - conda: packages/cpp_math
         build: py311h43a39b2_0
         subdir: linux-64
       osx-64:
       - conda: https://prefix.dev/conda-forge/osx-64/bzip2-1.0.8-hfdf4475_7.conda
       - conda: https://prefix.dev/conda-forge/osx-64/ca-certificates-2024.12.14-h8857fd0_0.conda
-      - conda: https://prefix.dev/conda-forge/osx-64/libcxx-19.1.7-hf95d169_0.conda
+      - conda: https://prefix.dev/conda-forge/osx-64/libcxx-20.1.3-hf95d169_0.conda
       - conda: https://prefix.dev/conda-forge/osx-64/libexpat-2.6.4-h240833e_0.conda
       - conda: https://prefix.dev/conda-forge/osx-64/libffi-3.4.2-h0d85af4_5.tar.bz2
       - conda: https://prefix.dev/conda-forge/osx-64/liblzma-5.6.3-hd471939_1.conda
@@ -176,13 +176,13 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/typing_extensions-4.12.2-pyha770c72_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025a-h78e105d_0.conda
       - conda: .
-      - conda: packages/python_bindings
+      - conda: packages/cpp_math
         build: py311h43a39b2_0
         subdir: osx-64
       osx-arm64:
       - conda: https://prefix.dev/conda-forge/osx-arm64/bzip2-1.0.8-h99b78c6_7.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/ca-certificates-2024.12.14-hf0a4a13_0.conda
-      - conda: https://prefix.dev/conda-forge/osx-arm64/libcxx-19.1.7-ha82da77_0.conda
+      - conda: https://prefix.dev/conda-forge/osx-arm64/libcxx-20.1.3-ha82da77_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/libexpat-2.6.4-h286801f_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/libffi-3.4.2-h3422bc3_5.tar.bz2
       - conda: https://prefix.dev/conda-forge/osx-arm64/liblzma-5.6.3-h39f12f2_1.conda
@@ -201,7 +201,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/typing_extensions-4.12.2-pyha770c72_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025a-h78e105d_0.conda
       - conda: .
-      - conda: packages/python_bindings
+      - conda: packages/cpp_math
         build: py311h43a39b2_0
         subdir: osx-arm64
       win-64:
@@ -227,7 +227,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/win-64/vc14_runtime-14.42.34433-he29a5d6_23.conda
       - conda: https://prefix.dev/conda-forge/win-64/vs2015_runtime-14.42.34433-hdffcdeb_23.conda
       - conda: .
-      - conda: packages/python_bindings
+      - conda: packages/cpp_math
         build: py311h43a39b2_0
         subdir: win-64
   py312:
@@ -243,13 +243,13 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-64/ld_impl_linux-64-2.43-h712a8e2_2.conda
       - conda: https://prefix.dev/conda-forge/linux-64/libexpat-2.6.4-h5888daf_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/libffi-3.4.2-h7f98852_5.tar.bz2
-      - conda: https://prefix.dev/conda-forge/linux-64/libgcc-14.2.0-h77fa898_1.conda
-      - conda: https://prefix.dev/conda-forge/linux-64/libgcc-ng-14.2.0-h69a702a_1.conda
-      - conda: https://prefix.dev/conda-forge/linux-64/libgomp-14.2.0-h77fa898_1.conda
+      - conda: https://prefix.dev/conda-forge/linux-64/libgcc-15.1.0-h767d61c_3.conda
+      - conda: https://prefix.dev/conda-forge/linux-64/libgcc-ng-15.1.0-h69a702a_3.conda
+      - conda: https://prefix.dev/conda-forge/linux-64/libgomp-15.1.0-h767d61c_3.conda
       - conda: https://prefix.dev/conda-forge/linux-64/liblzma-5.6.3-hb9d3cd8_1.conda
       - conda: https://prefix.dev/conda-forge/linux-64/libnsl-2.0.1-hd590300_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/libsqlite-3.47.2-hee588c1_0.conda
-      - conda: https://prefix.dev/conda-forge/linux-64/libstdcxx-14.2.0-hc0a3c3a_1.conda
+      - conda: https://prefix.dev/conda-forge/linux-64/libstdcxx-15.1.0-h8f9b012_3.conda
       - conda: https://prefix.dev/conda-forge/linux-64/libuuid-2.38.1-h0b41bf4_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/libxcrypt-4.4.36-hd590300_1.conda
       - conda: https://prefix.dev/conda-forge/linux-64/libzlib-1.3.1-hb9d3cd8_2.conda
@@ -266,13 +266,13 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/typing_extensions-4.12.2-pyha770c72_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025a-h78e105d_0.conda
       - conda: .
-      - conda: packages/python_bindings
+      - conda: packages/cpp_math
         build: py312h2078e5b_0
         subdir: linux-64
       osx-64:
       - conda: https://prefix.dev/conda-forge/osx-64/bzip2-1.0.8-hfdf4475_7.conda
       - conda: https://prefix.dev/conda-forge/osx-64/ca-certificates-2024.12.14-h8857fd0_0.conda
-      - conda: https://prefix.dev/conda-forge/osx-64/libcxx-19.1.7-hf95d169_0.conda
+      - conda: https://prefix.dev/conda-forge/osx-64/libcxx-20.1.3-hf95d169_0.conda
       - conda: https://prefix.dev/conda-forge/osx-64/libexpat-2.6.4-h240833e_0.conda
       - conda: https://prefix.dev/conda-forge/osx-64/libffi-3.4.2-h0d85af4_5.tar.bz2
       - conda: https://prefix.dev/conda-forge/osx-64/liblzma-5.6.3-hd471939_1.conda
@@ -291,13 +291,13 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/typing_extensions-4.12.2-pyha770c72_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025a-h78e105d_0.conda
       - conda: .
-      - conda: packages/python_bindings
+      - conda: packages/cpp_math
         build: py312h2078e5b_0
         subdir: osx-64
       osx-arm64:
       - conda: https://prefix.dev/conda-forge/osx-arm64/bzip2-1.0.8-h99b78c6_7.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/ca-certificates-2024.12.14-hf0a4a13_0.conda
-      - conda: https://prefix.dev/conda-forge/osx-arm64/libcxx-19.1.7-ha82da77_0.conda
+      - conda: https://prefix.dev/conda-forge/osx-arm64/libcxx-20.1.3-ha82da77_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/libexpat-2.6.4-h286801f_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/libffi-3.4.2-h3422bc3_5.tar.bz2
       - conda: https://prefix.dev/conda-forge/osx-arm64/liblzma-5.6.3-h39f12f2_1.conda
@@ -316,7 +316,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/typing_extensions-4.12.2-pyha770c72_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/tzdata-2025a-h78e105d_0.conda
       - conda: .
-      - conda: packages/python_bindings
+      - conda: packages/cpp_math
         build: py312h2078e5b_0
         subdir: osx-arm64
       win-64:
@@ -342,7 +342,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/win-64/vc14_runtime-14.42.34433-he29a5d6_23.conda
       - conda: https://prefix.dev/conda-forge/win-64/vs2015_runtime-14.42.34433-hdffcdeb_23.conda
       - conda: .
-      - conda: packages/python_bindings
+      - conda: packages/cpp_math
         build: py312h2078e5b_0
         subdir: win-64
 packages:
@@ -428,6 +428,100 @@ packages:
   license: ISC
   size: 157422
   timestamp: 1734208404685
+- conda: packages/cpp_math
+  name: cpp_math
+  version: 0.1.0
+  build: py311h43a39b2_0
+  subdir: linux-64
+  depends:
+  - libstdcxx >=15
+  - libgcc >=15
+  - python_abi 3.11.* *_cp311
+  input:
+    hash: 283a576f267448ab3d781c9d45122b44301661863d83a29c64e9405d4b60f57e
+    globs: []
+- conda: packages/cpp_math
+  name: cpp_math
+  version: 0.1.0
+  build: py311h43a39b2_0
+  subdir: osx-64
+  depends:
+  - libcxx >=20
+  - python_abi 3.11.* *_cp311
+  input:
+    hash: 283a576f267448ab3d781c9d45122b44301661863d83a29c64e9405d4b60f57e
+    globs: []
+- conda: packages/cpp_math
+  name: cpp_math
+  version: 0.1.0
+  build: py311h43a39b2_0
+  subdir: osx-arm64
+  depends:
+  - libcxx >=20
+  - python_abi 3.11.* *_cp311
+  input:
+    hash: 283a576f267448ab3d781c9d45122b44301661863d83a29c64e9405d4b60f57e
+    globs: []
+- conda: packages/cpp_math
+  name: cpp_math
+  version: 0.1.0
+  build: py311h43a39b2_0
+  subdir: win-64
+  depends:
+  - vc >=14.2,<15
+  - vc14_runtime >=14.29.30139
+  - ucrt >=10.0.20348.0
+  - python_abi 3.11.* *_cp311
+  input:
+    hash: 283a576f267448ab3d781c9d45122b44301661863d83a29c64e9405d4b60f57e
+    globs: []
+- conda: packages/cpp_math
+  name: cpp_math
+  version: 0.1.0
+  build: py312h2078e5b_0
+  subdir: linux-64
+  depends:
+  - libstdcxx >=15
+  - libgcc >=15
+  - python_abi 3.12.* *_cp312
+  input:
+    hash: 283a576f267448ab3d781c9d45122b44301661863d83a29c64e9405d4b60f57e
+    globs: []
+- conda: packages/cpp_math
+  name: cpp_math
+  version: 0.1.0
+  build: py312h2078e5b_0
+  subdir: osx-64
+  depends:
+  - libcxx >=20
+  - python_abi 3.12.* *_cp312
+  input:
+    hash: 283a576f267448ab3d781c9d45122b44301661863d83a29c64e9405d4b60f57e
+    globs: []
+- conda: packages/cpp_math
+  name: cpp_math
+  version: 0.1.0
+  build: py312h2078e5b_0
+  subdir: osx-arm64
+  depends:
+  - libcxx >=20
+  - python_abi 3.12.* *_cp312
+  input:
+    hash: 283a576f267448ab3d781c9d45122b44301661863d83a29c64e9405d4b60f57e
+    globs: []
+- conda: packages/cpp_math
+  name: cpp_math
+  version: 0.1.0
+  build: py312h2078e5b_0
+  subdir: win-64
+  depends:
+  - vc >=14.2,<15
+  - vc14_runtime >=14.29.30139
+  - ucrt >=10.0.20348.0
+  - python_abi 3.12.* *_cp312
+  input:
+    hash: 283a576f267448ab3d781c9d45122b44301661863d83a29c64e9405d4b60f57e
+    globs: []
 - conda: https://prefix.dev/conda-forge/linux-64/ld_impl_linux-64-2.43-h712a8e2_2.conda
   sha256: 7c91cea91b13f4314d125d1bedb9d03a29ebbd5080ccdea70260363424646dbe
   md5: 048b02e3962f066da18efe3a21b77672
@@ -439,24 +533,24 @@ packages:
   license_family: GPL
   size: 669211
   timestamp: 1729655358674
-- conda: https://prefix.dev/conda-forge/osx-64/libcxx-19.1.7-hf95d169_0.conda
-  sha256: 6b2fa3fb1e8cd2000b0ed259e0c4e49cbef7b76890157fac3e494bc659a20330
-  md5: 4b8f8dc448d814169dbc58fc7286057d
+- conda: https://prefix.dev/conda-forge/osx-64/libcxx-20.1.3-hf95d169_0.conda
+  sha256: a4b493e0f76b20ff14e0f1f93c92882663c4f23c4488d8de3f6bbf1311b9c41e
+  md5: 022f109787a9624301ddbeb39519ff13
   depends:
   - __osx >=10.13
   license: Apache-2.0 WITH LLVM-exception
   license_family: Apache
-  size: 527924
-  timestamp: 1736877256721
-- conda: https://prefix.dev/conda-forge/osx-arm64/libcxx-19.1.7-ha82da77_0.conda
-  sha256: 776092346da87a2a23502e14d91eb0c32699c4a1522b7331537bd1c3751dcff5
-  md5: 5b3e1610ff8bd5443476b91d618f5b77
+  size: 560376
+  timestamp: 1744843903291
+- conda: https://prefix.dev/conda-forge/osx-arm64/libcxx-20.1.3-ha82da77_0.conda
+  sha256: aa45cf608430e713575ef4193e4c0bcdfd7972db51f1c3af2fece26c173f5e67
+  md5: 379db9caa727cab4d3a6c4327e4e7053
   depends:
   - __osx >=11.0
   license: Apache-2.0 WITH LLVM-exception
   license_family: Apache
-  size: 523505
-  timestamp: 1736877862502
+  size: 566462
+  timestamp: 1744844034347
 - conda: https://prefix.dev/conda-forge/linux-64/libexpat-2.6.4-h5888daf_0.conda
   sha256: 56541b98447b58e52d824bd59d6382d609e11de1f8adf20b23143e353d2b8d26
   md5: db833e03127376d461e1e13e76f09b6c
@@ -537,37 +631,34 @@ packages:
   license_family: MIT
   size: 42063
   timestamp: 1636489106777
-- conda: https://prefix.dev/conda-forge/linux-64/libgcc-14.2.0-h77fa898_1.conda
-  sha256: 53eb8a79365e58849e7b1a068d31f4f9e718dc938d6f2c03e960345739a03569
-  md5: 3cb76c3f10d3bc7f1105b2fc9db984df
+- conda: https://prefix.dev/conda-forge/linux-64/libgcc-15.1.0-h767d61c_3.conda
+  sha256: 59a87161212abe8acc57d318b0cc8636eb834cdfdfddcf1f588b5493644b39a3
+  md5: 9e60c55e725c20d23125a5f0dd69af5d
   depends:
-  - _libgcc_mutex 0.1 conda_forge
+  - __glibc >=2.17,<3.0.a0
   - _openmp_mutex >=4.5
   constrains:
-  - libgomp 14.2.0 h77fa898_1
-  - libgcc-ng ==14.2.0=*_1
+  - libgcc-ng ==15.1.0=*_3
+  - libgomp 15.1.0 h767d61c_3
   license: GPL-3.0-only WITH GCC-exception-3.1
-  license_family: GPL
-  size: 848745
-  timestamp: 1729027721139
-- conda: https://prefix.dev/conda-forge/linux-64/libgcc-ng-14.2.0-h69a702a_1.conda
-  sha256: 3a76969c80e9af8b6e7a55090088bc41da4cffcde9e2c71b17f44d37b7cb87f7
-  md5: e39480b9ca41323497b05492a63bc35b
+  size: 824921
+  timestamp: 1750808216066
+- conda: https://prefix.dev/conda-forge/linux-64/libgcc-ng-15.1.0-h69a702a_3.conda
+  sha256: b0b0a5ee6ce645a09578fc1cb70c180723346f8a45fdb6d23b3520591c6d6996
+  md5: e66f2b8ad787e7beb0f846e4bd7e8493
   depends:
-  - libgcc 14.2.0 h77fa898_1
+  - libgcc 15.1.0 h767d61c_3
   license: GPL-3.0-only WITH GCC-exception-3.1
-  license_family: GPL
-  size: 54142
-  timestamp: 1729027726517
-- conda: https://prefix.dev/conda-forge/linux-64/libgomp-14.2.0-h77fa898_1.conda
-  sha256: 1911c29975ec99b6b906904040c855772ccb265a1c79d5d75c8ceec4ed89cd63
-  md5: cc3573974587f12dda90d96e3e55a702
+  size: 29033
+  timestamp: 1750808224854
+- conda: https://prefix.dev/conda-forge/linux-64/libgomp-15.1.0-h767d61c_3.conda
+  sha256: 43710ab4de0cd7ff8467abff8d11e7bb0e36569df04ce1c099d48601818f11d1
+  md5: 3cd1a7238a0dd3d0860fdefc496cc854
   depends:
-  - _libgcc_mutex 0.1 conda_forge
+  - __glibc >=2.17,<3.0.a0
   license: GPL-3.0-only WITH GCC-exception-3.1
-  license_family: GPL
-  size: 460992
-  timestamp: 1729027639220
+  size: 447068
+  timestamp: 1750808138400
 - conda: https://prefix.dev/conda-forge/linux-64/liblzma-5.6.3-hb9d3cd8_1.conda
   sha256: e6e425252f3839e2756e4af1ea2074dffd3396c161bf460629f9dfd6a65f15c6
   md5: 2ecf2f1c7e4e21fcfe6423a51a992d84
@@ -650,15 +741,15 @@ packages:
   license: Unlicense
   size: 891292
   timestamp: 1733762116902
-- conda: https://prefix.dev/conda-forge/linux-64/libstdcxx-14.2.0-hc0a3c3a_1.conda
-  sha256: 4661af0eb9bdcbb5fb33e5d0023b001ad4be828fccdcc56500059d56f9869462
-  md5: 234a5554c53625688d51062645337328
+- conda: https://prefix.dev/conda-forge/linux-64/libstdcxx-15.1.0-h8f9b012_3.conda
+  sha256: 7650837344b7850b62fdba02155da0b159cf472b9ab59eb7b472f7bd01dff241
+  md5: 6d11a5edae89fe413c0569f16d308f5a
   depends:
-  - libgcc 14.2.0 h77fa898_1
+  - __glibc >=2.17,<3.0.a0
+  - libgcc 15.1.0 h767d61c_3
   license: GPL-3.0-only WITH GCC-exception-3.1
-  license_family: GPL
-  size: 3893695
-  timestamp: 1729027746910
+  size: 3896407
+  timestamp: 1750808251302
 - conda: https://prefix.dev/conda-forge/linux-64/libuuid-2.38.1-h0b41bf4_0.conda
   sha256: 787eb542f055a2b3de553614b25f09eefb0a0931b0c87dbcce6efdfd92f04f18
   md5: 40b61aab5c7ba9ff276c41cfffe6b80b
@@ -1085,106 +1176,21 @@ packages:
   license_family: BSD
   size: 6730
   timestamp: 1723823139725
-- conda: packages/python_bindings
-  name: python_bindings
+- conda: .
+  name: python_rich
   version: 0.1.0
-  build: py311h43a39b2_0
-  subdir: linux-64
+  build: pyhbf21a9e_0
+  subdir: noarch
   depends:
-  - libstdcxx >=14
-  - libgcc >=14
-  - python_abi 3.11.* *_cp311
+  - cpp_math
+  - rich >=13.9.4,<14
+  - python
   input:
-    hash: 126016c29b2cd106b232942f12ce38cb6b14280b484bca634529f33a22cb5ff8
-    globs:
-    - pixi.toml
-- conda: packages/python_bindings
-  name: python_bindings
-  version: 0.1.0
-  build: py311h43a39b2_0
-  subdir: osx-64
-  depends:
-  - libcxx >=19
-  - python_abi 3.11.* *_cp311
-  input:
-    hash: 126016c29b2cd106b232942f12ce38cb6b14280b484bca634529f33a22cb5ff8
-    globs:
-    - pixi.toml
-- conda: packages/python_bindings
-  name: python_bindings
-  version: 0.1.0
-  build: py311h43a39b2_0
-  subdir: osx-arm64
-  depends:
-  - libcxx >=19
-  - python_abi 3.11.* *_cp311
-  input:
-    hash: 126016c29b2cd106b232942f12ce38cb6b14280b484bca634529f33a22cb5ff8
-    globs:
-    - pixi.toml
-- conda: packages/python_bindings
-  name: python_bindings
-  version: 0.1.0
-  build: py311h43a39b2_0
-  subdir: win-64
-  depends:
-  - vc >=14.1,<15
-  - vc14_runtime >=14.16.27033
-  - python_abi 3.11.* *_cp311
-  input:
-    hash: 126016c29b2cd106b232942f12ce38cb6b14280b484bca634529f33a22cb5ff8
-    globs:
-    - pixi.toml
-- conda: packages/python_bindings
-  name: python_bindings
-  version: 0.1.0
-  build: py312h2078e5b_0
-  subdir: linux-64
-  depends:
-  - libstdcxx >=14
-  - libgcc >=14
-  - python_abi 3.12.* *_cp312
-  input:
-    hash: 126016c29b2cd106b232942f12ce38cb6b14280b484bca634529f33a22cb5ff8
-    globs:
-    - pixi.toml
-- conda: packages/python_bindings
-  name: python_bindings
-  version: 0.1.0
-  build: py312h2078e5b_0
-  subdir: osx-64
-  depends:
-  - libcxx >=19
-  - python_abi 3.12.* *_cp312
-  input:
-    hash: 126016c29b2cd106b232942f12ce38cb6b14280b484bca634529f33a22cb5ff8
-    globs:
-    - pixi.toml
-- conda: packages/python_bindings
-  name: python_bindings
-  version: 0.1.0
-  build: py312h2078e5b_0
-  subdir: osx-arm64
-  depends:
-  - libcxx >=19
-  - python_abi 3.12.* *_cp312
-  input:
-    hash: 126016c29b2cd106b232942f12ce38cb6b14280b484bca634529f33a22cb5ff8
-    globs:
-    - pixi.toml
-- conda: packages/python_bindings
-  name: python_bindings
-  version: 0.1.0
-  build: py312h2078e5b_0
-  subdir: win-64
-  depends:
-  - vc >=14.1,<15
-  - vc14_runtime >=14.16.27033
-  - python_abi 3.12.* *_cp312
-  input:
-    hash: 126016c29b2cd106b232942f12ce38cb6b14280b484bca634529f33a22cb5ff8
-    globs:
-    - pixi.toml
+    hash: 058f61b00b7542e65020a76387731ba95cfd5933406ee388044135a1bf7496ed
+    globs: []
+  sources:
+    cpp_math:
+      path: packages/cpp_math
 - conda: https://prefix.dev/conda-forge/linux-64/readline-8.2-h8228510_1.conda
   sha256: 5435cf39d039387fbdc977b0a762357ea909a7694d9528ab40f005e9208744d7
   md5: 47d31b792659ce70f470b5c82fdfb7a4
@@ -1225,18 +1231,6 @@ packages:
   license_family: MIT
   size: 185646
   timestamp: 1733342347277
-- conda: .
-  name: rich_example
-  version: 0.1.0
-  build: pyhbf21a9e_0
-  subdir: noarch
-  depends:
-  - rich >=13.9.4,<14
-  - python
-  input:
-    hash: f672a8426732e9086523d7518ec1f1ec73dfe7931307c0aab4170bc660eb5e54
-    globs:
-    - pixi.toml
 - conda: https://prefix.dev/conda-forge/linux-64/tk-8.6.13-noxft_h4845f30_101.conda
   sha256: e0569c9caa68bf476bead1bed3d79650bb080b532c64a4af7d8ca286c08dea4e
   md5: d453b98d9c83e71da0741bb0ff4d76bc

@@ -6,14 +6,14 @@ use pixi_spec::PixiSpec;
 use rattler_conda_types::{PackageName, PrefixRecord, Version};
 use serde::Serialize;
 
-use miette::{miette, IntoDiagnostic};
+use miette::{IntoDiagnostic, miette};
 
 use crate::{
-    environment::list::{print_package_table, PackageToOutput},
+    environment::list::{PackageToOutput, print_package_table},
     global::common::find_package_records,
 };
 
-use super::{project::ParsedEnvironment, EnvChanges, EnvState, EnvironmentName, Mapping, Project};
+use super::{EnvChanges, EnvState, EnvironmentName, Mapping, Project, project::ParsedEnvironment};
 
 /// Sorting strategy for the package table
 #[derive(clap::ValueEnum, Clone, Debug, Serialize, Default)]
@@ -30,13 +30,13 @@ pub fn format_asciiart_section(label: &str, content: String, last: bool, more: b
     format!("\n{}   {}─ {}: {}", prefix, symbol, label, content)
 }
 
-pub fn format_exposed(exposed: &IndexSet<Mapping>, last: bool) -> Option<String> {
+pub fn format_exposed(exposed: &IndexSet<Mapping>, last: bool, more: bool) -> Option<String> {
     if exposed.is_empty() {
         Some(format_asciiart_section(
             "exposes",
             console::style("Nothing").dim().red().to_string(),
             last,
-            false,
+            more,
         ))
     } else {
         let formatted_exposed = exposed.iter().map(format_mapping).join(", ");
@@ -44,7 +44,7 @@ pub fn format_exposed(exposed: &IndexSet<Mapping>, last: bool) -> Option<String>
             "exposes",
             formatted_exposed,
             last,
-            false,
+            more,
         ))
     }
 }
@@ -167,6 +167,7 @@ pub async fn list_all_global_environments(
     envs: Option<Vec<EnvironmentName>>,
     envs_changes: Option<&EnvChanges>,
     regex: Option<String>,
+    show_header: bool,
 ) -> miette::Result<()> {
     let mut project_envs = project.environments().clone();
     project_envs.sort_by(|a, _, b, _| a.to_string().cmp(&b.to_string()));
@@ -216,11 +217,11 @@ pub async fn list_all_global_environments(
                 EnvState::Installed => {
                     format!("({})", console::style("installed".to_string()).green())
                 }
-                EnvState::NotChanged(ref reason) => {
+                EnvState::NotChanged(reason) => {
                     format!("({})", reason.fancy_display())
                 }
             })
-            .unwrap_or("".to_string());
+            .unwrap_or_default();
 
         if !env
             .dependencies
@@ -257,9 +258,22 @@ pub async fn list_all_global_environments(
             message.push_str(&dep_message);
         }
 
+        // Check for shortcuts
+        let shortcuts = env.shortcuts.clone().unwrap_or_else(IndexSet::new);
+
         // Write exposed binaries
-        if let Some(exp_message) = format_exposed(&env.exposed, last) {
+        if let Some(exp_message) = format_exposed(&env.exposed, last, !shortcuts.is_empty()) {
             message.push_str(&exp_message);
+        }
+
+        // Write shortcuts
+        if !shortcuts.is_empty() {
+            message.push_str(&format_asciiart_section(
+                "shortcuts",
+                shortcuts.iter().map(PackageName::as_normalized).join(", "),
+                last,
+                false,
+            ));
         }
 
         if !last {
@@ -269,11 +283,14 @@ pub async fn list_all_global_environments(
     if message.is_empty() {
         println!("No global environments found.");
     } else {
-        println!(
-            "Global environments as specified in '{}'\n{}",
-            console::style(project.manifest.path.display()).bold(),
-            message
+        let header = format!(
+            "Global environments as specified in '{}'",
+            project.manifest.path.display()
         );
+        if show_header {
+            println!("{}", header);
+        }
+        println!("{}", message);
     }
 
     Ok(())

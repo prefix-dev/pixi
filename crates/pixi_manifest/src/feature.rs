@@ -1,3 +1,14 @@
+use crate::{
+    SpecType, SystemRequirements, WorkspaceTarget, channel::PrioritizedChannel, consts,
+    pypi::pypi_options::PypiOptions, target::Targets, workspace::ChannelPriority,
+};
+use indexmap::{IndexMap, IndexSet};
+use itertools::Either;
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
+use pixi_spec::PixiSpec;
+use rattler_conda_types::{PackageName, Platform};
+use serde::{Deserialize, Serialize};
+use std::ops::Not;
 use std::{
     borrow::{Borrow, Cow},
     convert::Infallible,
@@ -6,28 +17,15 @@ use std::{
     str::FromStr,
 };
 
-use indexmap::{IndexMap, IndexSet};
-use itertools::Either;
-use pixi_spec::PixiSpec;
-use rattler_conda_types::{PackageName, Platform};
-use serde::{de::Error, Deserialize, Serialize};
-
-use crate::{
-    channel::PrioritizedChannel,
-    consts,
-    pypi::{pypi_options::PypiOptions, PyPiPackageName},
-    target::Targets,
-    workspace::ChannelPriority,
-    PyPiRequirement, SpecType, SystemRequirements, WorkspaceTarget,
-};
-
 /// The name of a feature. This is either a string or default for the default
 /// feature.
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Default)]
-pub enum FeatureName {
-    #[default]
-    Default,
-    Named(String),
+#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+pub struct FeatureName(Cow<'static, str>);
+
+impl Default for FeatureName {
+    fn default() -> Self {
+        FeatureName::DEFAULT.clone()
+    }
 }
 
 impl Serialize for FeatureName {
@@ -47,40 +45,38 @@ impl<'de> Deserialize<'de> for FeatureName {
     where
         D: serde::Deserializer<'de>,
     {
-        match String::deserialize(deserializer)?.as_str() {
-            consts::DEFAULT_FEATURE_NAME => Err(D::Error::custom(
-                "The name 'default' is reserved for the default feature",
-            )),
-            name => Ok(FeatureName::Named(name.to_string())),
-        }
+        Ok(String::deserialize(deserializer)?.into())
     }
 }
 
 impl<'s> From<&'s str> for FeatureName {
     fn from(value: &'s str) -> Self {
-        match value {
-            consts::DEFAULT_FEATURE_NAME => FeatureName::Default,
-            name => FeatureName::Named(name.to_string()),
-        }
+        FeatureName(Cow::Owned(value.to_owned()))
     }
 }
-impl FeatureName {
-    /// Returns the name of the feature or `None` if this is the default
-    /// feature.
-    pub fn name(&self) -> Option<&str> {
-        match self {
-            FeatureName::Default => None,
-            FeatureName::Named(name) => Some(name),
-        }
-    }
 
+impl From<String> for FeatureName {
+    fn from(value: String) -> Self {
+        Self(Cow::Owned(value))
+    }
+}
+
+impl FeatureName {
+    pub const DEFAULT: Self = FeatureName(Cow::Borrowed(consts::DEFAULT_FEATURE_NAME));
+
+    /// Returns the string representation of the feature.
     pub fn as_str(&self) -> &str {
-        self.name().unwrap_or(consts::DEFAULT_FEATURE_NAME)
+        &self.0
     }
 
     /// Returns true if the feature is the default feature.
     pub fn is_default(&self) -> bool {
-        matches!(self, FeatureName::Default)
+        self == &Self::DEFAULT
+    }
+
+    /// Returns the name of the feature if it is not default.
+    pub fn non_default(&self) -> Option<&str> {
+        self.is_default().not().then(|| self.as_str())
     }
 }
 
@@ -100,26 +96,17 @@ impl FromStr for FeatureName {
 
 impl From<FeatureName> for String {
     fn from(name: FeatureName) -> Self {
-        match name {
-            FeatureName::Default => consts::DEFAULT_FEATURE_NAME.to_string(),
-            FeatureName::Named(name) => name,
-        }
+        name.0.into_owned()
     }
 }
 impl<'a> From<&'a FeatureName> for String {
     fn from(name: &'a FeatureName) -> Self {
-        match name {
-            FeatureName::Default => consts::DEFAULT_FEATURE_NAME.to_string(),
-            FeatureName::Named(name) => name.clone(),
-        }
+        name.as_str().to_owned()
     }
 }
 impl fmt::Display for FeatureName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            FeatureName::Default => write!(f, "{}", consts::DEFAULT_FEATURE_NAME),
-            FeatureName::Named(name) => write!(f, "{}", name),
-        }
+        write!(f, "{}", self.as_str())
     }
 }
 
@@ -176,7 +163,7 @@ impl Feature {
 
     /// Returns true if this feature is the default feature.
     pub fn is_default(&self) -> bool {
-        self.name == FeatureName::Default
+        self.name.is_default()
     }
 
     /// Returns a mutable reference to the platforms of the feature. Create them
@@ -318,7 +305,7 @@ impl Feature {
     pub fn pypi_dependencies(
         &self,
         platform: Option<Platform>,
-    ) -> Option<Cow<'_, IndexMap<PyPiPackageName, PyPiRequirement>>> {
+    ) -> Option<Cow<'_, IndexMap<PypiPackageName, PixiPypiSpec>>> {
         self.targets
             .resolve(platform)
             // Get the targets in reverse order, from least specific to most specific.
@@ -444,10 +431,7 @@ mod tests {
             "combined dependencies should be owned"
         );
 
-        let bla_feature = manifest
-            .features
-            .get(&FeatureName::Named(String::from("bla")))
-            .unwrap();
+        let bla_feature = manifest.features.get(&FeatureName::from("bla")).unwrap();
         assert_matches!(
             bla_feature.dependencies(SpecType::Run, None).unwrap(),
             Cow::Borrowed(_),

@@ -4,7 +4,7 @@
 ## About
 Adds a platform(s) to the workspace file and updates the lockfile
 
---8<-- "docs/reference/cli/pixi/workspace/platform/add_extender.md:description"
+--8<-- "docs/reference/cli/pixi/workspace/platform/add_extender:description"
 
 ## Usage
 ```
@@ -14,12 +14,13 @@ pixi workspace platform add [OPTIONS] <PLATFORM>...
 ## Arguments
 - <a id="arg-<PLATFORM>" href="#arg-<PLATFORM>">`<PLATFORM>`</a>
 :  The platform name(s) to add
+<br>May be provided more than once.
 <br>**required**: `true`
 
 ## Options
-- <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
-:  The name of the feature to add the platform to
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
 :  Don't update the environment, only add changed packages to the lock-file
+- <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
+:  The name of the feature to add the platform to
 
---8<-- "docs/reference/cli/pixi/workspace/platform/add_extender.md:example"
+--8<-- "docs/reference/cli/pixi/workspace/platform/add_extender:example"

@@ -1,8 +1,6 @@
-# Tutorial: Using multiple environments
-
 In this tutorial we will show you how to use multiple environments in one Pixi workspace.
 
-## Why is this useful?
+## Why Is This Useful?
 
 When developing a workspace you often need different tools, libraries or test environments.
 With Pixi you can define multiple environments in one workspace and switch between them easily.
@@ -11,6 +9,7 @@ Setting up different environments for these different use cases can be a hassle,
 
 ## Glossary
 This tutorial possibly uses some new terms, here is a quick overview:
+
 #### **Feature**
 A feature defines a part of an environment, but are not useful without being part of an environment.
 You can define multiple features in one workspace.
@@ -26,7 +25,7 @@ Defining environments is done by adding them to the `[environments]` table in th
 Instead of specifying `[feature.<name>.dependencies]`, one can populate `[dependencies]` directly.
 These top level table, are added to the "default" feature, which is added to every environment, unless you specifically opt-out.
 
-## Let's get started
+## Let's Get Started
 
 We'll simply start with a new workspace, you can skip this step if you already have a Pixi workspace.
 
@@ -67,7 +66,7 @@ We will add the `test` environment to our workspace to add some testing tools.
 We can do this through the command line, or by editing the `pixi.toml` file.
 Here we will use the command line:
 ```shell
-pixi project environment add test --feature test
+pixi workspace environment add test --feature test
 ```
 This will add the following to our `pixi.toml` file:
 ```toml
@@ -130,8 +129,8 @@ pixi add --feature py312 python=3.12
 
 We'll add the `test` and Python features to the corresponding environments.
 ```shell
-pixi project environment add test-py311 --feature py311 --feature test
-pixi project environment add test-py312 --feature py312 --feature test
+pixi workspace environment add test-py311 --feature py311 --feature test
+pixi workspace environment add test-py312 --feature py312 --feature test
 ```
 
 This should result in adding the following to the `pixi.toml`:
@@ -191,10 +190,10 @@ This will result in the `production` environment having the exact same versions 
 This way we can be sure that the project will run in the same way in all environments.
 
 ```shell
-pixi project environment add production --solve-group prod
-pixi project environment add test --feature test --solve-group prod
+pixi workspace environment add production --solve-group prod
+pixi workspace environment add test --feature test --solve-group prod
 # --force is used to overwrite the default environment
-pixi project environment add default --feature dev --feature test --solve-group prod --force
+pixi workspace environment add default --feature dev --feature test --solve-group prod --force
 ```
 
 If we run `pixi list -x` for the environments we can see that the different environments have the exact same dependency versions.
@@ -231,7 +230,7 @@ pixi add --feature docs mkdocs
 
 Now we can add the `docs` environment without the `default` feature.
 ```shell
-pixi project environment add docs --feature docs --no-default-feature
+pixi workspace environment add docs --feature docs --no-default-feature
 ```
 
 If we run `pixi list -x -e docs` we can see that it only has the `mkdocs` dependency.
@@ -243,5 +242,5 @@ mkdocs   1.6.1    pyhd8ed1ab_1  3.4 MiB  conda  mkdocs
 
 ## Conclusion
 The multiple environment feature is extremely powerful and can be used in many different ways.
-There is much more to explore in the [reference](../reference/pixi_manifest.md#the-feature-and-environments-tables) and [advanced](../environments/multi_environment.md) sections.
+There is much more to explore in the [reference](../reference/pixi_manifest.md#the-feature-and-environments-tables) and [advanced](../workspace/multi_environment.md) sections.
 If there are any questions, or you know how to improve this tutorial, feel free to reach out to us on [GitHub](https://github.com/prefix-dev/pixi).

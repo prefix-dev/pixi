@@ -36,7 +36,7 @@ pub use target::TomlTarget;
 use toml_span::{DeserError, Span};
 pub use workspace::TomlWorkspace;
 
-use crate::{error::GenericError, utils::PixiSpanned, TargetSelector, TomlError};
+use crate::{TargetSelector, TomlError, error::GenericError, utils::PixiSpanned};
 
 pub trait FromTomlStr {
     fn from_toml_str(source: &str) -> Result<Self, TomlError>

@@ -8,7 +8,7 @@ members = ["crates/*"]
 
 [workspace.package]
 authors = ["pixi contributors <hi@prefix.dev>"]
-edition = "2021"
+edition = "2024"
 homepage = "https://github.com/prefix-dev/pixi"
 license = "BSD-3-Clause"
 readme = "README.md"
@@ -24,7 +24,6 @@ base64 = "0.22.1"
 bytes = "1.10.0"
 chrono = "0.4.40"
 clap = { version = "4.5.31", default-features = false }
-clap-verbosity-flag = "3.0.2"
 clap_complete = "4.5.46"
 clap_complete_nushell = "4.5.5"
 concat-idents = "1.1.5"
@@ -33,7 +32,8 @@ crossbeam-channel = "0.5.14"
 csv = "1.3.1"
 ctrlc = "3.4.5"
 dashmap = "6.1.0"
-deno_task_shell = "0.20.3"
+deno_task_shell = "0.24.0"
+derive_more = "2.0.1"
 dialoguer = "0.11.0"
 digest = "0.10"
 dirs = "6.0.0"
@@ -44,35 +44,37 @@ fs-err = { version = "3.1.0" }
 fs_extra = "1.3.0"
 futures = "0.3.31"
 hex = "0.4.3"
-http = "1.2.0"
-http-cache-reqwest = "0.15.1"
+http = "1.3.1"
+http-cache-reqwest = "0.16.0"
 human_bytes = "0.4.3"
 humantime = "2.1.0"
-ignore = "0.4.23"
-indexmap = "2.7.1"
+indexmap = "2.10.0"
 indicatif = "0.17.11"
 insta = "1.42.1"
 is_executable = "1.0.4"
 itertools = "0.14.0"
+jiff = "0.2.8"
 jsonrpsee = "=0.24.2"
 libc = { version = "0.2.170", default-features = false }
 memchr = "2.7.4"
-miette = { version = "7.5.0" }
+miette = { version = "7.6.0" }
 minijinja = "2.7.0"
 nix = { version = "0.29.0", default-features = false }
 once_cell = "1.20.3"
-parking_lot = "0.12.3"
+ordermap = "0.5.7"
+parking_lot = "0.12.4"
 pathdiff = "0.2.3"
 pep440_rs = "0.7.3"
 pep508_rs = "0.9.2"
 percent-encoding = "2.3.1"
+pin-project-lite = "0.2.16"
 pyproject-toml = "0.13.4"
 regex = "1.11.1"
 reqwest = { version = "0.12.12", default-features = false }
 reqwest-middleware = "0.4"
 reqwest-retry = "0.7.0"
 rlimit = "0.10.2"
-rstest = "0.24.0"
+rstest = "0.25.0"
 self-replace = "1.5.0"
 serde = "1.0.218"
 serde-untagged = "0.1.6"
@@ -85,6 +87,7 @@ sha1 = "0.10.6"
 sha2 = "0.10.8"
 shlex = "1.3.0"
 signal-hook = "0.3.17"
+slotmap = "1.0.7"
 spdx = "0.10.8"
 strsim = "0.11.1"
 strum = "0.27.1"
@@ -92,72 +95,80 @@ tabwriter = "1.4.1"
 tar = "0.4.44"
 temp-env = { version = "0.3.6", features = ["async_closure"] }
 tempfile = "3.17.1"
-thiserror = "2.0.11"
+text_trees = "0.1.2"
+thiserror = "2.0.12"
 tokio = "1.43.0"
 tokio-stream = "0.1.17"
 tokio-util = "0.7.13"
-toml-span = "0.4.1"
+toml-span = "0.5.2"
 toml_edit = "0.22.24"
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
-typed-path = "0.10.0"
-uv-build-frontend = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-distribution-filename = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-install-wheel = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-pep440 = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-pep508 = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
+typed-path = "0.11.0"
+uv-build-frontend = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-distribution-filename = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-install-wheel = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-pep440 = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-pep508 = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
 
 wax = "0.6.0"
-which = "7.0.2"
+which = "8.0.0"
 
 # Rattler crates
-file_url = "0.2.3"
-rattler = { version = "0.32.4", default-features = false }
-rattler_cache = { version = "0.3.13", default-features = false }
-rattler_conda_types = { version = "0.31.3", default-features = false, features = [
+file_url = "0.2.5"
+rattler = { version = "0.34.3", default-features = false }
+rattler_cache = { version = "0.3.22", default-features = false }
+rattler_conda_types = { version = "0.35.2", default-features = false, features = [
   "rayon",
 ] }
-rattler_digest = { version = "1.0.7", default-features = false }
-rattler_lock = { version = "0.22.46", default-features = false }
-rattler_menuinst = { version = "0.2.2", default-features = false }
-rattler_networking = { version = "0.22.8", default-features = false, features = [
+rattler_digest = { version = "1.1.3", default-features = false }
+rattler_lock = { version = "0.23.7", default-features = false }
+rattler_menuinst = { version = "0.2.13", default-features = false }
+rattler_networking = { version = "0.25.2", default-features = false, features = [
   "google-cloud-auth",
+  "dirs",
 ] }
-rattler_repodata_gateway = { version = "0.22.0", default-features = false }
-rattler_shell = { version = "0.22.22", default-features = false }
-rattler_solve = { version = "1.4.0", default-features = false }
-rattler_virtual_packages = { version = "2.0.6", default-features = false }
+rattler_package_streaming = { version = "0.22.41", default-features = false }
+rattler_repodata_gateway = { version = "0.23.3", default-features = false }
+rattler_shell = { version = "0.24.0", default-features = false }
+rattler_solve = { version = "2.1.2", default-features = false }
+rattler_virtual_packages = { version = "2.0.15", default-features = false }
+simple_spawn_blocking = { version = "1.1.0", default-features = false }
 
 # Bumping this to a higher version breaks the Windows path handling.
 url = "2.5.4"
-uv-auth = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-configuration = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-git = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-git-types = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-python = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-requirements = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
-uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.6.1" }
+uv-auth = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-cache-info = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-configuration = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-git = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-git-types = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-python = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-requirements = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
+uv-workspace = { git = "https://github.com/astral-sh/uv", tag = "0.7.8" }
 winapi = { version = "0.3.9", default-features = false }
 xxhash-rust = "0.8.15"
-zip = { version = "2.2.3", default-features = false }
+zip = { version = "2.4.2", default-features = false }
 zstd = { version = "0.13.3", default-features = false }
 
 fancy_display = { path = "crates/fancy_display" }
 pixi_allocator = { path = "crates/pixi_allocator" }
+pixi_build_discovery = { path = "crates/pixi_build_discovery" }
 pixi_build_frontend = { path = "crates/pixi_build_frontend" }
 pixi_build_type_conversions = { path = "crates/pixi_build_type_conversions" }
 pixi_build_types = { path = "crates/pixi_build_types" }
+pixi_command_dispatcher = { path = "crates/pixi_command_dispatcher" }
 pixi_config = { path = "crates/pixi_config" }
 pixi_consts = { path = "crates/pixi_consts" }
 pixi_default_versions = { path = "crates/pixi_default_versions" }
@@ -165,8 +176,11 @@ pixi_git = { path = "crates/pixi_git" }
 pixi_glob = { path = "crates/pixi_glob" }
 pixi_manifest = { path = "crates/pixi_manifest" }
 pixi_progress = { path = "crates/pixi_progress" }
+pixi_pypi_spec = { path = "crates/pixi_pypi_spec" }
 pixi_record = { path = "crates/pixi_record" }
 pixi_spec = { path = "crates/pixi_spec" }
+pixi_spec_containers = { path = "crates/pixi_spec_containers" }
+pixi_test_utils = { path = "crates/pixi_test_utils" }
 pixi_toml = { path = "crates/pixi_toml" }
 pixi_utils = { path = "crates/pixi_utils", default-features = false }
 pixi_uv_conversions = { path = "crates/pixi_uv_conversions" }
@@ -182,7 +196,7 @@ license.workspace = true
 name = "pixi"
 readme.workspace = true
 repository.workspace = true
-version = "0.42.1"
+version = "0.49.0"
 
 [features]
 default = ["online_tests", "rustls-tls"]
@@ -212,10 +226,8 @@ performance = ["pixi_allocator"]
 [dependencies]
 ahash = { workspace = true }
 assert_matches = { workspace = true }
-async-fd-lock = { workspace = true }
 async-once-cell = { workspace = true }
 barrier_cell = { path = "crates/barrier_cell" }
-base64 = { workspace = true }
 chrono = { workspace = true }
 clap = { workspace = true, features = [
   "derive",
@@ -226,12 +238,12 @@ clap = { workspace = true, features = [
   "error-context",
   "env",
 ] }
-clap-verbosity-flag = { workspace = true }
 clap_complete = { workspace = true }
 clap_complete_nushell = { workspace = true }
 console = { workspace = true, features = ["windows-console-colors"] }
 crossbeam-channel = { workspace = true }
 csv = { workspace = true }
+dashmap = { workspace = true }
 deno_task_shell = { workspace = true }
 dialoguer = { workspace = true }
 dirs = { workspace = true }
@@ -242,7 +254,6 @@ fs_extra = { workspace = true }
 futures = { workspace = true }
 human_bytes = { workspace = true }
 humantime = { workspace = true }
-ignore = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
 indicatif = { workspace = true }
 is_executable = { workspace = true }
@@ -251,6 +262,7 @@ miette = { workspace = true, features = ["fancy-no-backtrace"] }
 minijinja = { workspace = true, features = ["builtins"] }
 once_cell = { workspace = true }
 parking_lot = { workspace = true }
+pathdiff = { workspace = true }
 rstest = { workspace = true }
 uv-build-frontend = { workspace = true }
 uv-distribution-filename = { workspace = true }
@@ -277,21 +289,23 @@ uv-pep440 = { workspace = true }
 uv-pep508 = { workspace = true }
 uv-pypi-types = { workspace = true }
 
+anyhow = "1.0.97"
 ctrlc = { workspace = true }
 fs-err = { workspace = true, features = ["tokio"] }
 pixi_allocator = { workspace = true, optional = true }
+pixi_build_discovery = { workspace = true }
 pixi_build_frontend = { workspace = true }
+pixi_build_type_conversions = { workspace = true }
 pixi_build_types = { workspace = true }
+pixi_command_dispatcher = { workspace = true }
 pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_default_versions = { workspace = true }
 pixi_git = { workspace = true }
 pixi_glob = { workspace = true }
-pixi_manifest = { workspace = true, features = [
-  "rattler_lock",
-  "rattler_solve",
-] }
+pixi_manifest = { workspace = true, features = ["rattler_lock"] }
 pixi_progress = { workspace = true }
+pixi_pypi_spec = { workspace = true }
 pixi_record = { workspace = true }
 pixi_spec = { workspace = true }
 pixi_toml = { workspace = true }
@@ -300,6 +314,7 @@ pixi_uv_conversions = { workspace = true }
 pypi_mapping = { workspace = true }
 pypi_modifiers = { workspace = true }
 rattler_virtual_packages = { workspace = true }
+rayon = "1.10.0"
 regex = { workspace = true }
 reqwest = { workspace = true, features = [
   "http2",
@@ -328,6 +343,7 @@ typed-path = { workspace = true }
 url = { workspace = true }
 uv-auth = { workspace = true }
 uv-cache = { workspace = true }
+uv-cache-info = { workspace = true }
 uv-client = { workspace = true }
 uv-configuration = { workspace = true }
 uv-dispatch = { workspace = true }
@@ -340,6 +356,7 @@ uv-requirements = { workspace = true }
 uv-requirements-txt = { workspace = true }
 uv-resolver = { workspace = true }
 uv-types = { workspace = true }
+uv-workspace = { workspace = true }
 xxhash-rust = { workspace = true }
 zip = { workspace = true, features = ["deflate", "time"] }
 zstd = { workspace = true }
@@ -371,6 +388,7 @@ async-trait = { workspace = true }
 fake = "4.0.0"
 http = { workspace = true }
 insta = { workspace = true, features = ["yaml", "glob", "filters"] }
+pixi_test_utils = { workspace = true }
 rstest = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["rt"] }
@@ -378,7 +396,7 @@ tokio = { workspace = true, features = ["rt"] }
 
 [patch.crates-io]
 # This is a temporary patch to get `cargo vendor` to work with the `uv` and pep508_rs` crates.
-version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "b70cf707aa43f21b32f3a61b8a0889b15032d5c4" }
+version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "06ec5a5f59ffaeb6cf5079c6cb184467da06c9db" }
 
 # Config for 'dist'
 [workspace.metadata.dist]
@@ -415,6 +433,19 @@ pr-run-mode = "skip"
 allow-dirty = ["msi", "ci"]
 # Whether to sign macOS executables
 macos-sign = true
+
+[workspace.metadata.dist.github-custom-runners]
+# macOS targets
+aarch64-apple-darwin = "macos-latest"
+x86_64-apple-darwin = "macos-latest"
+
+# Windows targets
+aarch64-pc-windows-msvc = "windows_x64_2025_large"
+x86_64-pc-windows-msvc = "windows_x64_2025_large"
+
+# Linux targets
+aarch64-unknown-linux-musl = "8core_ubuntu_latest_runner"
+x86_64-unknown-linux-musl = "8core_ubuntu_latest_runner"
 
 [workspace.metadata.dist.dependencies.apt]
 gcc-aarch64-linux-gnu = { version = '*', targets = [

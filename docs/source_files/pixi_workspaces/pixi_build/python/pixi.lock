@@ -702,6 +702,17 @@ packages:
   license_family: BSD
   size: 6716
   timestamp: 1723823166911
+- conda: .
+  name: python_rich
+  version: 0.1.0
+  build: pyhbf21a9e_0
+  subdir: noarch
+  depends:
+  - rich 13.9.*
+  - python
+  input:
+    hash: 3fec4ae3d3b251a9f707071d9d25ff86bf388d75f9ee044798f324e501dcc0db
+    globs: []
 - conda: https://prefix.dev/conda-forge/linux-64/readline-8.2-h8228510_1.conda
   sha256: 5435cf39d039387fbdc977b0a762357ea909a7694d9528ab40f005e9208744d7
   md5: 47d31b792659ce70f470b5c82fdfb7a4
@@ -742,18 +753,6 @@ packages:
   license_family: MIT
   size: 185646
   timestamp: 1733342347277
-- conda: .
-  name: rich_example
-  version: 0.1.0
-  build: pyhbf21a9e_0
-  subdir: noarch
-  depends:
-  - rich 13.9.*
-  - python
-  input:
-    hash: 8d4c975cabc0c8c9ab19d3f844c15acee393be978ecb53bec877e63c0c73a55b
-    globs:
-    - pixi.toml
 - conda: https://prefix.dev/conda-forge/linux-64/tk-8.6.13-noxft_h4845f30_101.conda
   sha256: e0569c9caa68bf476bead1bed3d79650bb080b532c64a4af7d8ca286c08dea4e
   md5: d453b98d9c83e71da0741bb0ff4d76bc

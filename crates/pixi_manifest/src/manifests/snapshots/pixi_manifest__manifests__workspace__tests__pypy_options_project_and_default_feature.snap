@@ -6,6 +6,7 @@ index-url: ~
 extra-index-urls:
   - "https://pypi.org/simple2"
 find-links: ~
-no-build-isolation: ~
+no-build-isolation: []
 index-strategy: ~
 no-build: ~
+no-binary: ~

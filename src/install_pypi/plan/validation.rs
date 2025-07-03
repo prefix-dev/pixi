@@ -10,7 +10,7 @@ use uv_pypi_types::{ParsedGitUrl, ParsedUrlError};
 
 use crate::install_pypi::utils::{check_url_freshness, strip_direct_scheme};
 
-use super::{models::ValidateCurrentInstall, NeedReinstall};
+use super::{NeedReinstall, models::ValidateCurrentInstall};
 use pixi_uv_conversions::ConversionError;
 
 #[derive(thiserror::Error, Debug)]
@@ -18,13 +18,13 @@ pub enum NeedsReinstallError {
     #[error(transparent)]
     UvConversion(#[from] ConversionError),
     #[error(transparent)]
-    Io(#[from] std::io::Error),
-    #[error(transparent)]
     Conversion(#[from] url::ParseError),
     #[error(transparent)]
     ParsedUrl(#[from] ParsedUrlError),
-    #[error("Error converting to parsed git url {0}")]
+    #[error("error converting to parsed git url {0}")]
     PixiGitUrl(String),
+    #[error("while checking freshness {0}")]
+    FreshnessError(std::io::Error),
 }
 
 /// Check if a package needs to be reinstalled
@@ -74,7 +74,11 @@ pub(crate) fn need_reinstall(
             };
 
             match direct_url_json {
-                uv_pypi_types::DirectUrl::LocalDirectory { url, dir_info } => {
+                uv_pypi_types::DirectUrl::LocalDirectory {
+                    url,
+                    dir_info,
+                    subdirectory: _,
+                } => {
                     // Recreate file url
                     let result = Url::parse(&url);
                     match result {
@@ -111,7 +115,9 @@ pub(crate) fn need_reinstall(
                             if url == locked_url {
                                 // Okay so these are the same, but we need to check if the cache is newer
                                 // than the source directory
-                                if !check_url_freshness(&url, installed)? {
+                                if !check_url_freshness(&url, installed)
+                                    .map_err(NeedsReinstallError::FreshnessError)?
+                                {
                                     return Ok(ValidateCurrentInstall::Reinstall(
                                         NeedReinstall::SourceDirectoryNewerThanCache,
                                     ));
@@ -148,14 +154,31 @@ pub(crate) fn need_reinstall(
                     // Subdirectory is either in the url or not supported
                     subdirectory: _,
                 } => {
+                    let lock_file_dir = typed_path::Utf8TypedPathBuf::from(
+                        lock_file_dir.to_string_lossy().as_ref(),
+                    );
                     let locked_url = match &locked.location {
                         // Remove `direct+` scheme if it is there so we can compare the required to
                         // the installed url
-                        UrlOrPath::Url(url) => strip_direct_scheme(url),
-                        UrlOrPath::Path(_path) => {
-                            return Ok(ValidateCurrentInstall::Reinstall(
-                                NeedReinstall::GitArchiveIsPath,
-                            ))
+                        UrlOrPath::Url(url) => strip_direct_scheme(url).into_owned(),
+                        UrlOrPath::Path(path) => {
+                            let path = if path.is_absolute() {
+                                path.clone()
+                            } else {
+                                // Relative paths will be relative to the lock file directory
+                                lock_file_dir.join(path).normalize()
+                            };
+                            let url = Url::from_file_path(PathBuf::from(path.as_str()));
+                            match url {
+                                Ok(url) => url,
+                                Err(_) => {
+                                    return Ok(ValidateCurrentInstall::Reinstall(
+                                        NeedReinstall::UnableToParseFileUrl {
+                                            url: path.to_string(),
+                                        },
+                                    ));
+                                }
+                            }
                         }
                     };
 
@@ -171,9 +194,11 @@ pub(crate) fn need_reinstall(
                         ));
                     };
 
-                    if locked_url.as_ref() == &installed_url {
+                    if locked_url == installed_url {
                         // Check cache freshness
-                        if !check_url_freshness(&locked_url, installed)? {
+                        if !check_url_freshness(&locked_url, installed)
+                            .map_err(NeedsReinstallError::FreshnessError)?
+                        {
                             return Ok(ValidateCurrentInstall::Reinstall(
                                 NeedReinstall::ArchiveDistNewerThanCache,
                             ));
@@ -250,6 +275,19 @@ pub(crate) fn need_reinstall(
                                         locked_rev: locked_git_url.url.reference().to_string(),
                                     },
                                 ));
+                            }
+
+                            if let (Some(installed_commit), Some(locked_commit)) =
+                                (vcs_info.commit_id, locked_git_url.url.precise())
+                            {
+                                if installed_commit != locked_commit.as_str() {
+                                    return Ok(ValidateCurrentInstall::Reinstall(
+                                        NeedReinstall::GitRevMismatch {
+                                            installed_rev: installed_commit,
+                                            locked_rev: locked_commit.to_string(),
+                                        },
+                                    ));
+                                }
                             }
                         }
                         Err(_) => {

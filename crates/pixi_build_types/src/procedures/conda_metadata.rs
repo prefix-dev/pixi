@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::{BTreeSet, HashMap},
+    path::PathBuf,
+};
 use url::Url;
 
 use crate::{ChannelConfiguration, CondaPackageMetadata, PlatformAndVirtualPackages};
@@ -51,5 +54,5 @@ pub struct CondaMetadataResult {
     ///
     /// If this field is not present, the input manifest will be used.
     #[serde(default)]
-    pub input_globs: Option<Vec<String>>,
+    pub input_globs: Option<BTreeSet<String>>,
 }

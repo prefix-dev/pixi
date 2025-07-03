@@ -71,7 +71,9 @@ impl FromStr for EnvironmentName {
 ///
 /// This error is returned when a string fails to be parsed as an environment name.
 #[derive(Debug, Clone, Error, Diagnostic, PartialEq)]
-#[error("Failed to parse environment name '{attempted_parse}', please use only lowercase letters, numbers, dashes and underscores")]
+#[error(
+    "Failed to parse environment name '{attempted_parse}', please use only lowercase letters, numbers, dashes and underscores"
+)]
 pub struct ParseEnvironmentNameError {
     /// The string that was attempted to be parsed.
     pub attempted_parse: String,
@@ -110,7 +112,7 @@ mod tests {
     #[tokio::test]
     async fn test_environment_specs_in_sync() {
         let home = tempfile::tempdir().unwrap();
-        let env_root = EnvRoot::new(home.into_path()).unwrap();
+        let env_root = EnvRoot::new(home.keep()).unwrap();
         let env_name = EnvironmentName::from_str("test").unwrap();
         let env_dir = EnvDir::from_env_root(env_root, &env_name).await.unwrap();
 

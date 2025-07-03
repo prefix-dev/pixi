@@ -1,13 +1,13 @@
 use std::{cmp::Ordering, collections::HashSet};
 
 use crate::{
-    cli::cli_config::WorkspaceConfig,
-    diff::{LockFileDiff, LockFileJsonDiff},
-    WorkspaceLocator,
+    Workspace,
+    lock_file::{UpdateContext, filter_lock_file},
 };
 use crate::{
-    lock_file::{filter_lock_file, UpdateContext},
-    Workspace,
+    WorkspaceLocator,
+    cli::cli_config::WorkspaceConfig,
+    diff::{LockFileDiff, LockFileJsonDiff},
 };
 use clap::Parser;
 use fancy_display::FancyDisplay;
@@ -173,12 +173,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         updated_lock_file.write_to_disk()?;
     }
 
+    let lock_file = updated_lock_file.into_lock_file();
+
     // Determine the diff between the old and new lock-file.
-    let diff = LockFileDiff::from_lock_files(loaded_lock_file, &updated_lock_file.lock_file);
+    let diff = LockFileDiff::from_lock_files(loaded_lock_file, &lock_file);
 
     // Format as json?
     if args.json {
-        let diff = LockFileDiff::from_lock_files(loaded_lock_file, &updated_lock_file.lock_file);
+        let diff = LockFileDiff::from_lock_files(loaded_lock_file, &lock_file);
         let json_diff = LockFileJsonDiff::new(Some(&workspace), diff);
         let json = serde_json::to_string_pretty(&json_diff).expect("failed to convert to json");
         println!("{}", json);

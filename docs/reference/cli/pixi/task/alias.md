@@ -4,7 +4,7 @@
 ## About
 Alias another specific command
 
---8<-- "docs/reference/cli/pixi/task/alias_extender.md:description"
+--8<-- "docs/reference/cli/pixi/task/alias_extender:description"
 
 ## Usage
 ```
@@ -17,12 +17,13 @@ pixi task alias [OPTIONS] <ALIAS> <DEPENDS_ON>...
 <br>**required**: `true`
 - <a id="arg-<DEPENDS_ON>" href="#arg-<DEPENDS_ON>">`<DEPENDS_ON>`</a>
 :  Depends on these tasks to execute
+<br>May be provided more than once.
 <br>**required**: `true`
 
 ## Options
-- <a id="arg---description" href="#arg---description">`--description <DESCRIPTION>`</a>
-:  The description of the alias task
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
 :  The platform for which the alias should be added
+- <a id="arg---description" href="#arg---description">`--description <DESCRIPTION>`</a>
+:  The description of the alias task
 
---8<-- "docs/reference/cli/pixi/task/alias_extender.md:example"
+--8<-- "docs/reference/cli/pixi/task/alias_extender:example"

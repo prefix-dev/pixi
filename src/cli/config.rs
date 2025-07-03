@@ -1,6 +1,6 @@
+use crate::WorkspaceLocator;
 use crate::cli::cli_config::WorkspaceConfig;
 use crate::workspace::WorkspaceLocatorError;
-use crate::WorkspaceLocator;
 use clap::Parser;
 use miette::{IntoDiagnostic, WrapErr};
 use pixi_config;
@@ -45,15 +45,15 @@ enum Subcommand {
 #[derive(Parser, Debug, Clone)]
 struct CommonArgs {
     /// Operation on project-local configuration
-    #[arg(long, short, conflicts_with_all = &["global", "system"])]
+    #[arg(long, short, conflicts_with_all = &["global", "system"], help_heading = consts::CLAP_CONFIG_OPTIONS)]
     local: bool,
 
     /// Operation on global configuration
-    #[arg(long, short, conflicts_with_all = &["local", "system"])]
+    #[arg(long, short, conflicts_with_all = &["local", "system"], help_heading = consts::CLAP_CONFIG_OPTIONS)]
     global: bool,
 
     /// Operation on system configuration
-    #[arg(long, short, conflicts_with_all = &["local", "global"])]
+    #[arg(long, short, conflicts_with_all = &["local", "global"], help_heading = consts::CLAP_CONFIG_OPTIONS)]
     system: bool,
 
     #[clap(flatten)]
@@ -198,6 +198,7 @@ fn determine_project_root(common_args: &CommonArgs) -> miette::Result<Option<Pat
         .with_emit_warnings(false) // No reason to emit warnings
         .with_consider_environment(true)
         .with_search_start(common_args.workspace_config.workspace_locator_start())
+        .with_ignore_pixi_version_check(true)
         .locate();
     match workspace {
         Err(WorkspaceLocatorError::WorkspaceNotFound(_)) => {
@@ -331,6 +332,7 @@ fn partial_config(config: &mut Config, key: &str) -> miette::Result<()> {
         "mirrors" => new.mirrors = config.mirrors.clone(),
         "repodata-config" => new.repodata_config = config.repodata_config.clone(),
         "pypi-config" => new.pypi_config = config.pypi_config.clone(),
+        "proxy-config" => new.proxy_config = config.proxy_config.clone(),
         _ => {
             let keys = [
                 "default-channels",
@@ -339,6 +341,7 @@ fn partial_config(config: &mut Config, key: &str) -> miette::Result<()> {
                 "mirrors",
                 "repodata-config",
                 "pypi-config",
+                "proxy-config",
             ];
             return Err(miette::miette!("key must be one of: {}", keys.join(", ")));
         }

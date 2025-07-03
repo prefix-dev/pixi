@@ -1,4 +1,3 @@
-
 `pixi info` prints out useful information to debug a situation or to get an overview of your machine/workspace.
 This information can also be retrieved in `json` format using the `--json` flag, which can be useful for programmatically reading it.
 
@@ -52,7 +51,7 @@ In that case, if Pixi cannot find the `__cuda` virtual package on your machine t
 ### Cache dir
 
 The directory where Pixi stores its cache.
-Checkout the [cache documentation](../environments/environment.md#caching-packages) for more information.
+Checkout the [cache documentation](../workspace/environment.md#caching-packages) for more information.
 
 ### Auth storage
 

@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{io::ErrorKind, path::Path};
 
 use thiserror::Error;
 
@@ -14,24 +14,17 @@ pub enum MoveError {
     MoveFailed(std::io::Error),
 }
 
-#[cfg(unix)]
-const EXDEV: i32 = 18;
-
-#[cfg(windows)]
-const EXDEV: i32 = 17;
-
 /// A utility function to move a file from one location to another by renaming
 /// the file if possible and otherwise copying the file and removing the
 /// original.
 pub(crate) fn move_file(from: &Path, to: &Path) -> Result<(), MoveError> {
-    if let Err(e) = fs_err::rename(from, to) {
-        if e.raw_os_error() == Some(EXDEV) {
+    match fs_err::rename(from, to) {
+        Ok(_) => Ok(()),
+        Err(e) if e.kind() == ErrorKind::CrossesDevices => {
             fs_err::copy(from, to).map_err(MoveError::CopyFailed)?;
-            fs_err::remove_file(from).map_err(MoveError::FailedToRemove)?
-        } else {
-            return Err(MoveError::MoveFailed(e));
+            fs_err::remove_file(from).map_err(MoveError::FailedToRemove)?;
+            Ok(())
         }
+        Err(e) => Err(MoveError::MoveFailed(e)),
     }
-
-    Ok(())
 }
