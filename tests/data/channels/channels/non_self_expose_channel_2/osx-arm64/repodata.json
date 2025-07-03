@@ -8,9 +8,7 @@
       "arch": "arm64",
       "build": "h60d57d3_0",
       "build_number": 0,
-      "depends": [
-        "jupyter-core"
-      ],
+      "depends": ["jupyter-core"],
       "md5": "dcdba2684e9b362a8b146d42e9d5c1ac",
       "name": "jupyter",
       "platform": "osx",

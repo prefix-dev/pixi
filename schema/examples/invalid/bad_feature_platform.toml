@@ -1,6 +1,5 @@
 "$schema" = "./../../schema.json"
 
-
 [project]
 name = "badplatform"
 platforms = ["linux-64"]

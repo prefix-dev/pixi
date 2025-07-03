@@ -1,4 +1,4 @@
-#:schema ./../../schema.json
+# :schema ./../../schema.json
 
 [project]
 authors = ["Author <author@bla.com>"]
@@ -54,8 +54,8 @@ git = { git = "https://github.com/prefix-dev/pixi", branch = "main" }
 git2 = { git = "https://github.com/prefix-dev/rattler-build", tag = "v0.1.0" }
 git3 = { git = "https://github.com/prefix-dev/rattler", rev = "v0.1.0" }
 git4 = { git = "https://github.com/prefix-dev/rattler", rev = "v0.1.0", subdirectory = "python" }
-#path = { path = "~/path/to/package" }
-#path2 = { path = "path/to/package" }
+# path = { path = "~/path/to/package" }
+# path2 = { path = "path/to/package" }
 
 [pypi-options]
 no-binary = ["testpypi"]
@@ -63,14 +63,10 @@ no-build = ["foobar"]
 no-build-isolation = ["requests"]
 
 [pypi-dependencies]
-requests = { version = ">= 2.8.1, ==2.8.*", extras = [
-  "security",
-  "tests",
-] } # Using the map allows the user to add `extras`
+requests = { version = ">= 2.8.1, ==2.8.*", extras = ["security", "tests"] } # Using the map allows the user to add `extras`
 test-pinning-index = { version = "*", index = "https://example.com/test" }
 testpypi = "*"
 testpypi1 = "*"
-
 
 [package.host-dependencies]
 package1 = { version = ">=1.2.3", build = "py34_0" }
@@ -95,20 +91,14 @@ test1 = "*"
 
 [tasks]
 build = "conda build ."
-test = { cmd = "pytest", cwd = "tests", depends-on = [
-  "build",
-], description = "Run tests using pytests after building." }
+test = { cmd = "pytest", cwd = "tests", depends-on = ["build"], description = "Run tests using pytests after building." }
 test2 = { cmd = "pytest", cwd = "tests" }
 test3 = { cmd = "pytest", depends-on = ["test2"] }
 test4 = { cmd = "pytest", cwd = "tests", depends-on = ["test2"] }
 test5 = { cmd = "pytest" }
 test6 = { depends-on = ["test5"] }
-test7 = { cmd = "pytest", cwd = "tests", depends-on = [
-  "test5",
-], env = { PYTHONPATH = "bla", "WEIRD_STRING" = "blu" } }
-test8 = { cmd = "pytest", cwd = "tests", depends-on = [
-  "test5",
-], env = { PYTHONPATH = "bla", "WEIRD_STRING" = "blu" }, clean-env = true }
+test7 = { cmd = "pytest", cwd = "tests", depends-on = ["test5"], env = { PYTHONPATH = "bla", "WEIRD_STRING" = "blu" } }
+test8 = { cmd = "pytest", cwd = "tests", depends-on = ["test5"], env = { PYTHONPATH = "bla", "WEIRD_STRING" = "blu" }, clean-env = true }
 test9 = { cmd = "pytest", clean-env = false }
 [system-requirements]
 cuda = "10.1"
@@ -153,10 +143,7 @@ test = "*"
 test1 = "*"
 
 [target.osx-arm64.pypi-dependencies]
-requests = { version = ">= 2.8.1, ==2.8.*", extras = [
-  "security",
-  "tests",
-] } # Using the map allows the user to add `extras`
+requests = { version = ">= 2.8.1, ==2.8.*", extras = ["security", "tests"] } # Using the map allows the user to add `extras`
 testpypi = "*"
 testpypi1 = "*"
 

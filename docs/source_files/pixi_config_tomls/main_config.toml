@@ -1,8 +1,6 @@
-
 # --8<-- [start:default-channels]
 default-channels = ["conda-forge"]
 # --8<-- [end:default-channels]
-
 
 # --8<-- [start:tls-no-verify]
 tls-no-verify = false
@@ -29,10 +27,10 @@ run-post-link-scripts = "false" # set to "insecure" to allow running post-link s
 # disable fetching of jlap, bz2 or zstd repodata files.
 # This should only be used for specific old versions of artifactory and other non-compliant
 # servers.
-disable-bzip2 = true   # don't try to download repodata.json.bz2
-disable-jlap = true    # don't try to download repodata.jlap
+disable-bzip2 = true # don't try to download repodata.json.bz2
+disable-jlap = true # don't try to download repodata.jlap
 disable-sharded = true # don't try to download sharded repodata
-disable-zstd = true    # don't try to download repodata.json.zst
+disable-zstd = true # don't try to download repodata.json.zst
 # --8<-- [end:repodata-config]
 # --8<-- [start:prefix-repodata-config]
 [repodata-config."https://prefix.dev"]

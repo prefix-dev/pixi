@@ -1,4 +1,4 @@
-#:schema ./../../schema.json
+# :schema ./../../schema.json
 [workspace]
 channels = ["conda-forge"]
 name = "project"

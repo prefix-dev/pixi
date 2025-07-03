@@ -13,7 +13,6 @@ index-url = "https://pypi.org/simple"
 start = { depends-on = ["test"] }
 test = "python -c 'import requests; print(requests.__version__)'"
 
-
 # We need python to resolve pypi dependencies
 [dependencies]
 python = "3.12"

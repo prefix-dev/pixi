@@ -8,9 +8,7 @@
       "arch": "x86_64",
       "build": "hb0f4dca_0",
       "build_number": 0,
-      "depends": [
-        "__cuda >=12"
-      ],
+      "depends": ["__cuda >=12"],
       "md5": "4fad35763932e7763679c29a1128bd78",
       "name": "cuda",
       "platform": "linux",

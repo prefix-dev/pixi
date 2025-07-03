@@ -1,13 +1,13 @@
 [package]
+name = "pixi_glob"
+version = "0.1.0"
 authors.workspace = true
-description = "A crate to deal with globs in pixi"
 edition.workspace = true
 homepage.workspace = true
 license.workspace = true
-name = "pixi_glob"
 readme.workspace = true
 repository.workspace = true
-version = "0.1.0"
+description = "A crate to deal with globs in pixi"
 
 [dependencies]
 dashmap = { workspace = true }

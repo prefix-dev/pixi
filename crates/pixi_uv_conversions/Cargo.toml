@@ -1,14 +1,13 @@
 [package]
+name = "pixi_uv_conversions"
+version = "0.1.0"
 authors.workspace = true
-description = "Conversion between pixi and uv types"
 edition.workspace = true
 homepage.workspace = true
 license.workspace = true
-name = "pixi_uv_conversions"
 readme.workspace = true
 repository.workspace = true
-version = "0.1.0"
-
+description = "Conversion between pixi and uv types"
 
 [dependencies]
 chrono = { workspace = true }

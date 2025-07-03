@@ -122,16 +122,11 @@ which = "8.0.0"
 file_url = "0.2.5"
 rattler = { version = "0.34.3", default-features = false }
 rattler_cache = { version = "0.3.22", default-features = false }
-rattler_conda_types = { version = "0.35.2", default-features = false, features = [
-  "rayon",
-] }
+rattler_conda_types = { version = "0.35.2", default-features = false, features = ["rayon"] }
 rattler_digest = { version = "1.1.3", default-features = false }
 rattler_lock = { version = "0.23.7", default-features = false }
 rattler_menuinst = { version = "0.2.13", default-features = false }
-rattler_networking = { version = "0.25.2", default-features = false, features = [
-  "google-cloud-auth",
-  "dirs",
-] }
+rattler_networking = { version = "0.25.2", default-features = false, features = ["google-cloud-auth", "dirs"] }
 rattler_package_streaming = { version = "0.22.41", default-features = false }
 rattler_repodata_gateway = { version = "0.23.3", default-features = false }
 rattler_shell = { version = "0.24.0", default-features = false }
@@ -188,15 +183,15 @@ pypi_mapping = { path = "crates/pypi_mapping" }
 pypi_modifiers = { path = "crates/pypi_modifiers" }
 
 [package]
+name = "pixi"
+version = "0.49.0"
 authors.workspace = true
-description = "A package management and workflow tool"
 edition.workspace = true
 homepage.workspace = true
 license.workspace = true
-name = "pixi"
 readme.workspace = true
 repository.workspace = true
-version = "0.49.0"
+description = "A package management and workflow tool"
 
 [features]
 default = ["online_tests", "rustls-tls"]
@@ -229,15 +224,7 @@ assert_matches = { workspace = true }
 async-once-cell = { workspace = true }
 barrier_cell = { path = "crates/barrier_cell" }
 chrono = { workspace = true }
-clap = { workspace = true, features = [
-  "derive",
-  "usage",
-  "wrap_help",
-  "std",
-  "color",
-  "error-context",
-  "env",
-] }
+clap = { workspace = true, features = ["derive", "usage", "wrap_help", "std", "color", "error-context", "env"] }
 clap_complete = { workspace = true }
 clap_complete_nushell = { workspace = true }
 console = { workspace = true, features = ["windows-console-colors"] }
@@ -278,10 +265,7 @@ rattler_digest = { workspace = true }
 rattler_lock = { workspace = true }
 rattler_menuinst = { workspace = true }
 rattler_networking = { workspace = true }
-rattler_repodata_gateway = { workspace = true, features = [
-  "sparse",
-  "gateway",
-] }
+rattler_repodata_gateway = { workspace = true, features = ["sparse", "gateway"] }
 rattler_shell = { workspace = true, features = ["sysinfo"] }
 rattler_solve = { workspace = true, features = ["resolvo", "serde"] }
 uv-git = { workspace = true }
@@ -316,10 +300,7 @@ pypi_modifiers = { workspace = true }
 rattler_virtual_packages = { workspace = true }
 rayon = "1.10.0"
 regex = { workspace = true }
-reqwest = { workspace = true, features = [
-  "http2",
-  "macos-system-configuration",
-] }
+reqwest = { workspace = true, features = ["http2", "macos-system-configuration"] }
 reqwest-middleware = { workspace = true }
 rlimit = { workspace = true }
 self-replace = { workspace = true }
@@ -382,7 +363,6 @@ lto = false
 opt-level = 3
 strip = false
 
-
 [dev-dependencies]
 async-trait = { workspace = true }
 fake = "4.0.0"
@@ -392,7 +372,6 @@ pixi_test_utils = { workspace = true }
 rstest = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["rt"] }
-
 
 [patch.crates-io]
 # This is a temporary patch to get `cargo vendor` to work with the `uv` and pep508_rs` crates.
@@ -448,10 +427,7 @@ aarch64-unknown-linux-musl = "8core_ubuntu_latest_runner"
 x86_64-unknown-linux-musl = "8core_ubuntu_latest_runner"
 
 [workspace.metadata.dist.dependencies.apt]
-gcc-aarch64-linux-gnu = { version = '*', targets = [
-  "aarch64-unknown-linux-gnu",
-  "aarch64-unknown-linux-musl",
-] }
+gcc-aarch64-linux-gnu = { version = '*', targets = ["aarch64-unknown-linux-gnu", "aarch64-unknown-linux-musl"] }
 
 # Package config for `dist`
 [package.metadata.dist]

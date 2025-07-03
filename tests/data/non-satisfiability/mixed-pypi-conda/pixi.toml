@@ -9,5 +9,5 @@ python = "3.13.*"
 
 [pypi-dependencies]
 sdist = "*"
-#boltons = ">=25.0"
+# boltons = ">=25.0"
 boltons = "<25.0"

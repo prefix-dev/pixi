@@ -23,13 +23,6 @@ cmd = "python -c \"from calculator import {{ operation }}; print({{ operation }}
 [tasks.run-pipeline]
 cmd = "echo Pipeline completed"
 depends-on = [
-  { task = "greeting", args = [
-    "Developer",
-    "Task Arguments Example",
-  ] },
-  { task = "calculate", args = [
-    "sum",
-    "5",
-    "10",
-  ] },
+  { task = "greeting", args = ["Developer", "Task Arguments Example"] },
+  { task = "calculate", args = ["sum", "5", "10"] },
 ]

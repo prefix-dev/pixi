@@ -23,6 +23,6 @@ backend = { name = "pixi-build-cmake", version = "0.1.*" } # (5)!
 extra-args = ["-DCMAKE_BUILD_TYPE=Release"] # (9)!
 
 [package.host-dependencies]
-cmake = "3.20.*"   # (8)!
+cmake = "3.20.*" # (8)!
 nanobind = "2.4.*" # (6)!
-python = "3.12.*"  # (7)!
+python = "3.12.*" # (7)!

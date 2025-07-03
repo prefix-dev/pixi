@@ -13,7 +13,6 @@ PIXI_R_LIBS = "$CONDA_PREFIX/lib/R/library"
 R_LIBS = "$PIXI_R_LIBS"
 R_LIBS_USER = "$PIXI_R_LIBS"
 
-
 [target.unix.activation]
 # Use sh scripts on unix
 scripts = [

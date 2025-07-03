@@ -1,13 +1,13 @@
 [package]
+name = "pixi_build_frontend"
+version = "0.1.0"
 authors.workspace = true
-description = "Sets up environments to use for building of pixi.toml files"
 edition.workspace = true
 homepage.workspace = true
 license.workspace = true
-name = "pixi_build_frontend"
 readme.workspace = true
 repository.workspace = true
-version = "0.1.0"
+description = "Sets up environments to use for building of pixi.toml files"
 
 [dependencies]
 fs-err = { workspace = true, features = ["tokio"] }
@@ -23,11 +23,6 @@ tokio = { workspace = true, features = ["process", "io-std"] }
 tokio-util = { workspace = true, features = ["codec"] }
 tracing = { workspace = true }
 
-
 [dev-dependencies]
-tokio = { workspace = true, features = [
-  "process",
-  "io-std",
-  "rt-multi-thread",
-] }
+tokio = { workspace = true, features = ["process", "io-std", "rt-multi-thread"] }
 tokio-util = { workspace = true, features = ["io"] }

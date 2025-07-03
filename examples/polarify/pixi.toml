@@ -55,13 +55,13 @@ py312 = ["py312", "test"]
 py39 = ["py39", "test"]
 
 ## test this with:
-#pixi run test
-#pixi run -e pl017 test
-#pixi run -e pl018 test
-#pixi run -e pl019 test
-#pixi run -e pl020 test
-#pixi run start
-#pixi run -e py39 start
-#pixi run -e py310 start
-#pixi run -e py311 start
-#pixi run -e py312 start
+# pixi run test
+# pixi run -e pl017 test
+# pixi run -e pl018 test
+# pixi run -e pl019 test
+# pixi run -e pl020 test
+# pixi run start
+# pixi run -e py39 start
+# pixi run -e py310 start
+# pixi run -e py311 start
+# pixi run -e py312 start

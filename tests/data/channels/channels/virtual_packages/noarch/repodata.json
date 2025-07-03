@@ -20,9 +20,7 @@
     "noarch_package-0.1.0-h566b0d8_0.conda": {
       "build": "h566b0d8_0",
       "build_number": 0,
-      "depends": [
-        "cuda"
-      ],
+      "depends": ["cuda"],
       "md5": "08496d10a448f9e20b0aa1ade1a0de53",
       "name": "noarch_package",
       "noarch": "generic",
