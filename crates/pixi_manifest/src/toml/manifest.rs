@@ -22,8 +22,8 @@ use crate::{
     pypi::{pypi_options::PypiOptions, PyPiPackageName},
     toml::{
         create_unsupported_selector_warning, environment::TomlEnvironmentList, task::TomlTask,
-        WorkspacePackageProperties, PackageDefaults, PlatformSpan, TomlFeature, TomlPackage, TomlTarget,
-        TomlWorkspace,
+        PackageDefaults, PlatformSpan, TomlFeature, TomlPackage, TomlTarget, TomlWorkspace,
+        WorkspacePackageProperties,
     },
     utils::{package_map::UniquePackageMap, PixiSpanned},
     Activation, Environment, EnvironmentName, Environments, Feature, FeatureName,
@@ -111,7 +111,12 @@ impl TomlManifest {
         let WithWarnings {
             value: package,
             warnings,
-        } = package.into_manifest(external, package_defaults, workspace.preview(), root_directory)?;
+        } = package.into_manifest(
+            external,
+            package_defaults,
+            workspace.preview(),
+            root_directory,
+        )?;
         Ok((package, warnings))
     }
 
@@ -433,12 +438,14 @@ impl TomlManifest {
                     description: workspace.description.clone(),
                     authors: workspace.authors.clone(),
                     license: workspace.license.clone(),
-                    license_file: workspace.license_file.as_ref().and_then(|path| {
-                        root_directory.map(|root| root.join(path))
-                    }),
-                    readme: workspace.readme.as_ref().and_then(|path| {
-                        root_directory.map(|root| root.join(path))
-                    }),
+                    license_file: workspace
+                        .license_file
+                        .as_ref()
+                        .and_then(|path| root_directory.map(|root| root.join(path))),
+                    readme: workspace
+                        .readme
+                        .as_ref()
+                        .and_then(|path| root_directory.map(|root| root.join(path))),
                     homepage: workspace.homepage.clone(),
                     repository: workspace.repository.clone(),
                     documentation: workspace.documentation.clone(),

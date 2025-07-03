@@ -5,9 +5,7 @@ pub use pixi_toml::TomlFromStr;
 use pixi_toml::{DeserializeAs, Same, TomlIndexMap, TomlWith};
 use rattler_conda_types::Version;
 use thiserror::Error;
-use toml_span::{
-    de_helpers::TableHelper, DeserError, Error, ErrorKind, Span, Spanned, Value,
-};
+use toml_span::{de_helpers::TableHelper, DeserError, Error, ErrorKind, Span, Spanned, Value};
 use url::Url;
 
 use crate::toml::manifest::ExternalWorkspaceProperties;
@@ -46,7 +44,9 @@ impl<T> WorkspaceInheritableField<T> {
     pub fn map<U>(self, f: impl FnOnce(T) -> U) -> WorkspaceInheritableField<U> {
         match self {
             WorkspaceInheritableField::Value(v) => WorkspaceInheritableField::Value(f(v)),
-            WorkspaceInheritableField::Workspace(span) => WorkspaceInheritableField::Workspace(span),
+            WorkspaceInheritableField::Workspace(span) => {
+                WorkspaceInheritableField::Workspace(span)
+            }
         }
     }
 
@@ -271,7 +271,6 @@ pub enum PackageError {
 }
 
 impl TomlPackage {
-
     /// Helper function to resolve a required field with 3-tier hierarchy:
     /// 1. Direct value (from package)
     /// 2. Workspace inheritance (from workspace)
@@ -288,19 +287,21 @@ impl TomlPackage {
             Some(WorkspaceInheritableField::Value(v)) => Ok(v),
             Some(WorkspaceInheritableField::Workspace(span)) => {
                 workspace_value.ok_or_else(|| Error {
-                    kind: ErrorKind::Custom(format!("the workspace does not define a '{}'", field_name).into()),
+                    kind: ErrorKind::Custom(
+                        format!("the workspace does not define a '{}'", field_name).into(),
+                    ),
                     span,
                     line_info: None,
                 })
-            },
+            }
             None => {
                 // Fall back to package defaults
-                default_value.ok_or_else(|| Error {
+                default_value.ok_or(Error {
                     kind: ErrorKind::MissingField(field_name),
                     span: package_span,
                     line_info: None,
                 })
-            },
+            }
         }
     }
 
@@ -322,12 +323,14 @@ impl TomlPackage {
                 match workspace_value {
                     Some(value) => Ok(Some(value)),
                     None => Err(Error {
-                        kind: ErrorKind::Custom(format!("the workspace does not define a '{}'", field_name).into()),
+                        kind: ErrorKind::Custom(
+                            format!("the workspace does not define a '{}'", field_name).into(),
+                        ),
                         span,
                         line_info: None,
                     }),
                 }
-            },
+            }
             None => Ok(default_value),
         }
     }
@@ -344,8 +347,20 @@ impl TomlPackage {
         let warnings = Vec::new();
 
         // Resolve fields with 3-tier hierarchy: direct → workspace → package defaults → error
-        let name = Self::resolve_required_field_with_defaults(self.name, workspace.name, package_defaults.name, "name", self.span)?;
-        let version = Self::resolve_required_field_with_defaults(self.version, workspace.version, package_defaults.version, "version", self.span)?;
+        let name = Self::resolve_required_field_with_defaults(
+            self.name,
+            workspace.name,
+            package_defaults.name,
+            "name",
+            self.span,
+        )?;
+        let version = Self::resolve_required_field_with_defaults(
+            self.version,
+            workspace.version,
+            package_defaults.version,
+            "version",
+            self.span,
+        )?;
 
         let default_package_target = TomlPackageTarget {
             run_dependencies: self.run_dependencies,
@@ -391,9 +406,8 @@ impl TomlPackage {
             match field {
                 None => {
                     // Fall back to package defaults
-                    Ok(default_value
-                        .and_then(|value| pathdiff::diff_paths(value, root_directory)))
-                },
+                    Ok(default_value.and_then(|value| pathdiff::diff_paths(value, root_directory)))
+                }
                 Some(WorkspaceInheritableField::Workspace(_)) => {
                     Ok(workspace_value
                         .and_then(|value| pathdiff::diff_paths(value, root_directory)))
@@ -406,7 +420,7 @@ impl TomlPackage {
                                 "'{}' does not exist",
                                 dunce::simplified(&full_path).display()
                             ))
-                                .with_span(span.into()),
+                            .with_span(span.into()),
                         ))
                     } else {
                         Ok(pathdiff::diff_paths(full_path, root_directory))
@@ -415,9 +429,18 @@ impl TomlPackage {
             }
         }
 
-        let license_file =
-            check_resolved_file(root_directory, self.license_file, workspace.license_file, package_defaults.license_file)?;
-        let readme = check_resolved_file(root_directory, self.readme, workspace.readme, package_defaults.readme)?;
+        let license_file = check_resolved_file(
+            root_directory,
+            self.license_file,
+            workspace.license_file,
+            package_defaults.license_file,
+        )?;
+        let readme = check_resolved_file(
+            root_directory,
+            self.readme,
+            workspace.readme,
+            package_defaults.readme,
+        )?;
 
         Ok(WithWarnings::from(PackageManifest {
             package: Package {
@@ -581,7 +604,7 @@ mod test {
         [build]
         backend = { name = "bla", version = "1.0" }
         "#;
-        
+
         let package = TomlPackage::from_toml_str(input).unwrap();
         let workspace = WorkspacePackageProperties {
             name: Some("workspace-name".to_string()),
@@ -589,11 +612,21 @@ mod test {
             description: Some("Workspace description".to_string()),
             ..Default::default()
         };
-        
-        let manifest = package.into_manifest(workspace, PackageDefaults::default(), &Preview::default(), None).unwrap();
+
+        let manifest = package
+            .into_manifest(
+                workspace,
+                PackageDefaults::default(),
+                &Preview::default(),
+                None,
+            )
+            .unwrap();
         assert_eq!(manifest.value.package.name, "workspace-name");
         assert_eq!(manifest.value.package.version.to_string(), "1.0.0");
-        assert_eq!(manifest.value.package.description, Some("Package description".to_string()));
+        assert_eq!(
+            manifest.value.package.description,
+            Some("Package description".to_string())
+        );
     }
 
     #[test]
@@ -605,7 +638,7 @@ mod test {
         [build]
         backend = { name = "bla", version = "1.0" }
         "#;
-        
+
         let parse_error = TomlPackage::from_toml_str(input).unwrap_err();
         assert_snapshot!(format_parse_error(input, parse_error));
     }
@@ -618,15 +651,22 @@ mod test {
         [build]
         backend = { name = "bla", version = "1.0" }
         "#;
-        
+
         let package = TomlPackage::from_toml_str(input).unwrap();
         let workspace = WorkspacePackageProperties::default();
-        
-        let parse_error = package.into_manifest(workspace, PackageDefaults::default(), &Preview::default(), None).unwrap_err();
+
+        let parse_error = package
+            .into_manifest(
+                workspace,
+                PackageDefaults::default(),
+                &Preview::default(),
+                None,
+            )
+            .unwrap_err();
         assert_snapshot!(format_parse_error(input, parse_error));
     }
 
-    #[test] 
+    #[test]
     fn test_mixed_inheritance_and_direct_values() {
         let input = r#"
         name = { workspace = true }
@@ -637,7 +677,7 @@ mod test {
         [build]
         backend = { name = "bla", version = "1.0" }
         "#;
-        
+
         let package = TomlPackage::from_toml_str(input).unwrap();
         let workspace = WorkspacePackageProperties {
             name: Some("workspace-name".to_string()),
@@ -646,12 +686,25 @@ mod test {
             authors: Some(vec!["Workspace Author".to_string()]),
             ..Default::default()
         };
-        
-        let manifest = package.into_manifest(workspace, PackageDefaults::default(), &Preview::default(), None).unwrap();
+
+        let manifest = package
+            .into_manifest(
+                workspace,
+                PackageDefaults::default(),
+                &Preview::default(),
+                None,
+            )
+            .unwrap();
         assert_eq!(manifest.value.package.name, "workspace-name");
         assert_eq!(manifest.value.package.version.to_string(), "2.0.0");
-        assert_eq!(manifest.value.package.description, Some("Workspace description".to_string()));
-        assert_eq!(manifest.value.package.authors, Some(vec!["Direct Author".to_string()]));
+        assert_eq!(
+            manifest.value.package.description,
+            Some("Workspace description".to_string())
+        );
+        assert_eq!(
+            manifest.value.package.authors,
+            Some(vec!["Direct Author".to_string()])
+        );
     }
 
     #[test]
@@ -663,15 +716,22 @@ mod test {
         [build]
         backend = { name = "bla", version = "1.0" }
         "#;
-        
+
         let package = TomlPackage::from_toml_str(input).unwrap();
         let workspace = WorkspacePackageProperties {
             // name is missing from workspace
             version: Some("1.0.0".parse().unwrap()),
             ..Default::default()
         };
-        
-        let parse_error = package.into_manifest(workspace, PackageDefaults::default(), &Preview::default(), None).unwrap_err();
+
+        let parse_error = package
+            .into_manifest(
+                workspace,
+                PackageDefaults::default(),
+                &Preview::default(),
+                None,
+            )
+            .unwrap_err();
         assert_snapshot!(format_parse_error(input, parse_error));
     }
 
@@ -684,15 +744,22 @@ mod test {
         [build]
         backend = { name = "bla", version = "1.0" }
         "#;
-        
+
         let package = TomlPackage::from_toml_str(input).unwrap();
         let workspace = WorkspacePackageProperties {
             name: Some("workspace-name".to_string()),
             // version is missing from workspace
             ..Default::default()
         };
-        
-        let parse_error = package.into_manifest(workspace, PackageDefaults::default(), &Preview::default(), None).unwrap_err();
+
+        let parse_error = package
+            .into_manifest(
+                workspace,
+                PackageDefaults::default(),
+                &Preview::default(),
+                None,
+            )
+            .unwrap_err();
         assert_snapshot!(format_parse_error(input, parse_error));
     }
 
@@ -704,7 +771,7 @@ mod test {
         [build]
         backend = { name = "bla", version = "1.0" }
         "#;
-        
+
         let package = TomlPackage::from_toml_str(input).unwrap();
         let workspace = WorkspacePackageProperties::default(); // Empty workspace
         let package_defaults = PackageDefaults {
@@ -714,15 +781,23 @@ mod test {
             authors: Some(vec!["Default Author".to_string()]),
             ..Default::default()
         };
-        
-        let manifest = package.into_manifest(workspace, package_defaults, &Preview::default(), None).unwrap();
+
+        let manifest = package
+            .into_manifest(workspace, package_defaults, &Preview::default(), None)
+            .unwrap();
         // Should use package defaults for name and version
         assert_eq!(manifest.value.package.name, "default-name");
         assert_eq!(manifest.value.package.version.to_string(), "2.0.0");
         // Should use direct value for description
-        assert_eq!(manifest.value.package.description, Some("Package description".to_string()));
+        assert_eq!(
+            manifest.value.package.description,
+            Some("Package description".to_string())
+        );
         // Should use package defaults for authors
-        assert_eq!(manifest.value.package.authors, Some(vec!["Default Author".to_string()]));
+        assert_eq!(
+            manifest.value.package.authors,
+            Some(vec!["Default Author".to_string()])
+        );
     }
 
     #[test]
@@ -734,7 +809,7 @@ mod test {
         [build]
         backend = { name = "bla", version = "1.0" }
         "#;
-        
+
         let package = TomlPackage::from_toml_str(input).unwrap();
         let workspace = WorkspacePackageProperties {
             name: Some("workspace-name".to_string()),
@@ -747,13 +822,18 @@ mod test {
             description: Some("Default description".to_string()),
             ..Default::default()
         };
-        
-        let manifest = package.into_manifest(workspace, package_defaults, &Preview::default(), None).unwrap();
+
+        let manifest = package
+            .into_manifest(workspace, package_defaults, &Preview::default(), None)
+            .unwrap();
         // Should use workspace values for name and version (overrides defaults)
         assert_eq!(manifest.value.package.name, "workspace-name");
         assert_eq!(manifest.value.package.version.to_string(), "3.0.0");
         // Should use package defaults for description (not specified anywhere else)
-        assert_eq!(manifest.value.package.description, Some("Default description".to_string()));
+        assert_eq!(
+            manifest.value.package.description,
+            Some("Default description".to_string())
+        );
     }
 
     #[test]
@@ -764,12 +844,14 @@ mod test {
         [build]
         backend = { name = "bla", version = "1.0" }
         "#;
-        
+
         let package = TomlPackage::from_toml_str(input).unwrap();
         let workspace = WorkspacePackageProperties::default(); // Empty workspace
         let package_defaults = PackageDefaults::default(); // Empty defaults
-        
-        let parse_error = package.into_manifest(workspace, package_defaults, &Preview::default(), None).unwrap_err();
+
+        let parse_error = package
+            .into_manifest(workspace, package_defaults, &Preview::default(), None)
+            .unwrap_err();
         assert_snapshot!(format_parse_error(input, parse_error));
     }
 
@@ -783,7 +865,7 @@ mod test {
         [build]
         backend = { name = "bla", version = "1.0" }
         "#;
-        
+
         let package = TomlPackage::from_toml_str(input).unwrap();
         let workspace = WorkspacePackageProperties {
             name: Some("workspace-name".to_string()),
@@ -795,8 +877,10 @@ mod test {
             description: Some("Default description".to_string()),
             ..Default::default()
         };
-        
-        let parse_error = package.into_manifest(workspace, package_defaults, &Preview::default(), None).unwrap_err();
+
+        let parse_error = package
+            .into_manifest(workspace, package_defaults, &Preview::default(), None)
+            .unwrap_err();
         assert_snapshot!(format_parse_error(input, parse_error));
     }
 }

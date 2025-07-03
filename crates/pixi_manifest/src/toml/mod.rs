@@ -27,7 +27,7 @@ use itertools::Itertools;
 pub use manifest::ExternalWorkspaceProperties;
 pub use manifest::TomlManifest;
 use miette::LabeledSpan;
-pub use package::{WorkspacePackageProperties, PackageDefaults, PackageError, TomlPackage};
+pub use package::{PackageDefaults, PackageError, TomlPackage, WorkspacePackageProperties};
 pub use platform::TomlPlatform;
 pub use preview::TomlPreview;
 pub use pyproject::PyProjectToml;

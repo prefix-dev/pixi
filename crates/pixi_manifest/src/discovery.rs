@@ -14,7 +14,7 @@ use toml_span::Deserialize;
 use crate::toml::ExternalWorkspaceProperties;
 use crate::{
     pyproject::PyProjectManifest,
-    toml::{WorkspacePackageProperties, PackageDefaults, TomlManifest},
+    toml::{PackageDefaults, TomlManifest, WorkspacePackageProperties},
     utils::WithSourceCode,
     warning::WarningWithSource,
     AssociateProvenance, ManifestKind, ManifestProvenance, ManifestSource, PackageManifest,

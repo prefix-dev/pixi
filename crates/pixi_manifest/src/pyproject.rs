@@ -23,8 +23,8 @@ use crate::{
     manifests::PackageManifest,
     toml::{
         pyproject::{TomlContact, TomlDependencyGroups, TomlProject},
-        WorkspacePackageProperties, PackageDefaults, ExternalWorkspaceProperties, FromTomlStr, PyProjectToml,
-        TomlManifest,
+        ExternalWorkspaceProperties, FromTomlStr, PackageDefaults, PyProjectToml, TomlManifest,
+        WorkspacePackageProperties,
     },
     FeatureName, Warning,
 };
