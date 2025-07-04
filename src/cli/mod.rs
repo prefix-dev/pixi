@@ -22,6 +22,7 @@ pub mod config;
 pub mod exec;
 pub mod global;
 pub mod has_specs;
+pub mod import;
 pub mod info;
 pub mod init;
 pub mod install;
@@ -147,6 +148,7 @@ pub enum Command {
     Global(global::Args),
     Info(info::Args),
     Init(init::Args),
+    Import(import::Args),
     #[clap(visible_alias = "i")]
     Install(install::Args),
     #[clap(visible_alias = "ls")]
@@ -379,6 +381,7 @@ pub async fn execute_command(
         Command::ShellHook(cmd) => shell_hook::execute(cmd).await,
         Command::Task(cmd) => task::execute(cmd).await,
         Command::Info(cmd) => info::execute(cmd).await,
+        Command::Import(cmd) => import::execute(cmd).await,
         Command::Upload(cmd) => upload::execute(cmd).await,
         Command::Search(cmd) => search::execute(cmd).await,
         Command::Workspace(cmd) => workspace::execute(cmd).await,
