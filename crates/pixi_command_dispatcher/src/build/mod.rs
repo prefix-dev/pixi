@@ -3,6 +3,7 @@
 mod build_cache;
 mod build_environment;
 mod move_file;
+pub(crate) mod source_metadata_cache;
 mod work_dir_key;
 
 use std::hash::{Hash, Hasher};

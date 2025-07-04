@@ -83,6 +83,7 @@ pub async fn simple_test() {
                     .into(),
             ],
             build_environment: build_env.clone(),
+            channel_config: default_channel_config(),
             ..PixiEnvironmentSpec::default()
         })
         .await

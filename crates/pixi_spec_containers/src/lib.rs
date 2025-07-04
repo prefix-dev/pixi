@@ -1,5 +1,7 @@
 use indexmap::{Equivalent, IndexMap, IndexSet};
 use itertools::Either;
+use pixi_spec::{BinarySpec, SpecConversionError};
+use rattler_conda_types::{ChannelConfig, MatchSpec};
 use serde::ser::{SerializeMap, SerializeSeq};
 use serde::{Serialize, Serializer};
 use std::{borrow::Cow, hash::Hash, iter::FromIterator};
@@ -178,6 +180,21 @@ impl DependencyMap<rattler_conda_types::PackageName, rattler_conda_types::Namele
                 rattler_conda_types::MatchSpec::from_nameless(spec.clone(), Some(name.clone()))
             })
         })
+    }
+}
+
+impl DependencyMap<rattler_conda_types::PackageName, BinarySpec> {
+    /// Converts this instance into a collection of [`rattler_conda_types::MatchSpec`]s.
+    pub fn into_match_specs(
+        self,
+        channel_config: &ChannelConfig,
+    ) -> Result<Vec<MatchSpec>, SpecConversionError> {
+        self.into_specs()
+            .map(|(name, spec)| {
+                let spec = spec.try_into_nameless_match_spec(channel_config)?;
+                Ok(MatchSpec::from_nameless(spec, Some(name)))
+            })
+            .collect()
     }
 }
 

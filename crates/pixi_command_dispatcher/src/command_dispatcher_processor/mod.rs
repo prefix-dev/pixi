@@ -12,26 +12,27 @@ use std::{
 use futures::{StreamExt, future::LocalBoxFuture};
 use pixi_git::{GitError, resolver::RepositoryReference, source::Fetch};
 use pixi_record::PixiRecord;
-use rattler_conda_types::prefix::Prefix;
 use tokio::sync::{mpsc, oneshot};
 
+use crate::solve_conda::SolveCondaEnvironmentError;
 use crate::{
-    BuiltSource, CommandDispatcherErrorResultExt, InstallPixiEnvironmentResult, Reporter,
+    BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec, BuiltSource,
+    CommandDispatcherErrorResultExt, InstallPixiEnvironmentResult, Reporter,
     SolveCondaEnvironmentSpec, SolvePixiEnvironmentError, SourceBuildError, SourceBuildSpec,
-    SourceMetadataSpec,
+    SourceMetadata, SourceMetadataError, SourceMetadataSpec,
     command_dispatcher::{
-        CommandDispatcher, CommandDispatcherChannel, CommandDispatcherContext,
-        CommandDispatcherData, CommandDispatcherError, ForegroundMessage, InstallPixiEnvironmentId,
-        InstantiatedToolEnvId, SolveCondaEnvironmentId, SolvePixiEnvironmentId, SourceBuildId,
-        SourceMetadataId, TaskSpec,
+        BuildBackendMetadataId, CommandDispatcher, CommandDispatcherChannel,
+        CommandDispatcherContext, CommandDispatcherData, CommandDispatcherError, ForegroundMessage,
+        InstallPixiEnvironmentId, InstantiatedToolEnvId, SolveCondaEnvironmentId,
+        SolvePixiEnvironmentId, SourceBuildId, SourceMetadataId,
     },
     executor::ExecutorFutures,
     install_pixi::InstallPixiEnvironmentError,
-    instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec},
+    instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentResult},
     reporter,
-    source_metadata::{SourceMetadata, SourceMetadataError},
 };
 
+mod build_backend_metadata;
 mod git;
 mod install_pixi;
 mod instantiate_tool_env;
@@ -69,14 +70,28 @@ pub(crate) struct CommandDispatcherProcessor {
     install_pixi_environment:
         slotmap::SlotMap<InstallPixiEnvironmentId, PendingInstallPixiEnvironment>,
 
+    /// A mapping of build backend metadata to the metadata id that
+    build_backend_metadata: HashMap<
+        BuildBackendMetadataId,
+        PendingDeduplicatingTask<Arc<BuildBackendMetadata>, BuildBackendMetadataError>,
+    >,
+    build_backend_metadata_reporters:
+        HashMap<BuildBackendMetadataId, reporter::BuildBackendMetadataId>,
+    build_backend_metadata_ids: HashMap<BuildBackendMetadataSpec, BuildBackendMetadataId>,
+
     /// A mapping of source metadata to the metadata id that
-    source_metadata: HashMap<SourceMetadataId, PendingSourceMetadata>,
+    source_metadata: HashMap<
+        SourceMetadataId,
+        PendingDeduplicatingTask<Arc<SourceMetadata>, SourceMetadataError>,
+    >,
     source_metadata_reporters: HashMap<SourceMetadataId, reporter::SourceMetadataId>,
     source_metadata_ids: HashMap<SourceMetadataSpec, SourceMetadataId>,
 
     /// A mapping of instantiated tool environments
-    instantiated_tool_envs:
-        HashMap<InstantiatedToolEnvId, PendingDeduplicatingTask<InstantiateToolEnvironmentSpec>>,
+    instantiated_tool_envs: HashMap<
+        InstantiatedToolEnvId,
+        PendingDeduplicatingTask<InstantiateToolEnvironmentResult, InstantiateToolEnvironmentError>,
+    >,
     instantiated_tool_envs_reporters:
         HashMap<InstantiatedToolEnvId, reporter::InstantiateToolEnvId>,
     instantiated_tool_cache_keys: HashMap<String, InstantiatedToolEnvId>,
@@ -106,11 +121,15 @@ pub(crate) struct CommandDispatcherProcessor {
 enum TaskResult {
     SolveCondaEnvironment(
         SolveCondaEnvironmentId,
-        Result<Vec<PixiRecord>, CommandDispatcherError<rattler_solve::SolveError>>,
+        Result<Vec<PixiRecord>, CommandDispatcherError<SolveCondaEnvironmentError>>,
     ),
     SolvePixiEnvironment(
         SolvePixiEnvironmentId,
         Result<Vec<PixiRecord>, CommandDispatcherError<SolvePixiEnvironmentError>>,
+    ),
+    BuildBackendMetadata(
+        BuildBackendMetadataId,
+        Result<Arc<BuildBackendMetadata>, CommandDispatcherError<BuildBackendMetadataError>>,
     ),
     SourceMetadata(
         SourceMetadataId,
@@ -123,7 +142,10 @@ enum TaskResult {
     ),
     InstantiateToolEnv(
         InstantiatedToolEnvId,
-        Result<Prefix, CommandDispatcherError<InstantiateToolEnvironmentError>>,
+        Result<
+            InstantiateToolEnvironmentResult,
+            CommandDispatcherError<InstantiateToolEnvironmentError>,
+        >,
     ),
     SourceBuild(
         SourceBuildId,
@@ -150,7 +172,7 @@ enum PendingGitCheckout {
 /// background task to keep track of which command_dispatcher is awaiting the
 /// result.
 struct PendingSolveCondaEnvironment {
-    tx: oneshot::Sender<Result<Vec<PixiRecord>, rattler_solve::SolveError>>,
+    tx: oneshot::Sender<Result<Vec<PixiRecord>, SolveCondaEnvironmentError>>,
     reporter_id: Option<reporter::CondaSolveId>,
 }
 
@@ -181,29 +203,23 @@ struct PendingInstallPixiEnvironment {
 /// Describes information a pending task that is being deduplicated. Multiple
 /// tasks can come in which are deduplicated, every task is returned the result
 /// when available.
-enum PendingDeduplicatingTask<T: TaskSpec> {
+enum PendingDeduplicatingTask<T, E> {
     /// Task is currently executing, contains channels to notify when complete
     Pending(
-        Vec<oneshot::Sender<Result<T::Output, T::Error>>>,
+        Vec<oneshot::Sender<Result<T, E>>>,
         Option<CommandDispatcherContext>,
     ),
 
     /// Task has completed successfully, result is cached
-    Result(T::Output, Option<CommandDispatcherContext>),
+    Result(T, Option<CommandDispatcherContext>),
 
     /// Task has failed, future requests will also fail
     Errored,
 }
 
-impl<T: TaskSpec> PendingDeduplicatingTask<T>
-where
-    T::Output: Clone,
-{
+impl<T: Clone, E> PendingDeduplicatingTask<T, E> {
     /// The result was received and all pending tasks can be notified.
-    pub fn on_pending_result(
-        &mut self,
-        result: Result<T::Output, CommandDispatcherError<T::Error>>,
-    ) {
+    pub fn on_pending_result(&mut self, result: Result<T, CommandDispatcherError<E>>) {
         let Self::Pending(pending, context) = self else {
             unreachable!("cannot get a result for a task that is not pending");
         };
@@ -237,16 +253,6 @@ where
     }
 }
 
-/// Information about a request for metadata of a particular source spec.
-enum PendingSourceMetadata {
-    Pending(
-        Vec<oneshot::Sender<Result<Arc<SourceMetadata>, SourceMetadataError>>>,
-        Option<CommandDispatcherContext>,
-    ),
-    Result(Arc<SourceMetadata>, Option<CommandDispatcherContext>),
-    Errored,
-}
-
 impl CommandDispatcherProcessor {
     /// Spawns a new background task that will handle the orchestration of all
     /// the dispatchers.
@@ -274,6 +280,9 @@ impl CommandDispatcherProcessor {
                 pending_conda_solves: VecDeque::new(),
                 solve_pixi_environments: slotmap::SlotMap::default(),
                 install_pixi_environment: slotmap::SlotMap::default(),
+                build_backend_metadata: HashMap::default(),
+                build_backend_metadata_reporters: HashMap::default(),
+                build_backend_metadata_ids: HashMap::default(),
                 source_metadata: HashMap::default(),
                 source_metadata_reporters: HashMap::default(),
                 source_metadata_ids: HashMap::default(),
@@ -335,10 +344,11 @@ impl CommandDispatcherProcessor {
             ForegroundMessage::InstantiateToolEnvironment(task) => {
                 self.on_instantiate_tool_environment(task)
             }
-            ForegroundMessage::SourceMetadata(task) => self.on_source_metadata(task),
+            ForegroundMessage::BuildBackendMetadata(task) => self.on_build_backend_metadata(task),
             ForegroundMessage::GitCheckout(task) => self.on_checkout_git(task),
             ForegroundMessage::SourceBuild(task) => self.on_source_build(task),
             ForegroundMessage::ClearReporter(sender) => self.clear_reporter(sender),
+            ForegroundMessage::SourceMetadata(task) => self.on_source_metadata(task),
         }
     }
 
@@ -354,12 +364,15 @@ impl CommandDispatcherProcessor {
             TaskResult::InstallPixiEnvironment(id, result) => {
                 self.on_install_pixi_environment_result(id, result)
             }
-            TaskResult::SourceMetadata(id, result) => self.on_source_metadata_result(id, result),
+            TaskResult::BuildBackendMetadata(id, result) => {
+                self.on_build_backend_metadata_result(id, result)
+            }
             TaskResult::GitCheckedOut(url, result) => self.on_git_checked_out(url, result),
             TaskResult::InstantiateToolEnv(id, result) => {
                 self.on_instantiate_tool_environment_result(id, result)
             }
             TaskResult::SourceBuild(id, result) => self.on_source_build_result(id, result),
+            TaskResult::SourceMetadata(id, result) => self.on_source_metadata_result(id, result),
         }
     }
 
@@ -394,6 +407,24 @@ impl CommandDispatcherProcessor {
                         .reporter_id
                         .map(reporter::ReporterContext::SolvePixi);
                 }
+                CommandDispatcherContext::BuildBackendMetadata(id) => {
+                    if let Some(context) = self
+                        .build_backend_metadata_reporters
+                        .get(&id)
+                        .copied()
+                        .map(reporter::ReporterContext::BuildBackendMetadata)
+                    {
+                        return Some(context);
+                    }
+
+                    self.build_backend_metadata
+                        .get(&id)
+                        .and_then(|pending| match pending {
+                            PendingDeduplicatingTask::Pending(_, context) => Some(*context),
+                            PendingDeduplicatingTask::Result(_, context) => Some(*context),
+                            PendingDeduplicatingTask::Errored => None,
+                        })?
+                }
                 CommandDispatcherContext::SourceMetadata(id) => {
                     if let Some(context) = self
                         .source_metadata_reporters
@@ -407,9 +438,9 @@ impl CommandDispatcherProcessor {
                     self.source_metadata
                         .get(&id)
                         .and_then(|pending| match pending {
-                            PendingSourceMetadata::Pending(_, context) => Some(*context),
-                            PendingSourceMetadata::Result(_, context) => Some(*context),
-                            PendingSourceMetadata::Errored => None,
+                            PendingDeduplicatingTask::Pending(_, context) => Some(*context),
+                            PendingDeduplicatingTask::Result(_, context) => Some(*context),
+                            PendingDeduplicatingTask::Errored => None,
                         })?
                 }
                 CommandDispatcherContext::InstallPixiEnvironment(id) => {

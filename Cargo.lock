@@ -4343,6 +4343,7 @@ dependencies = [
  "pixi_spec_containers",
  "pixi_test_utils",
  "pixi_utils",
+ "rand 0.9.1",
  "rattler",
  "rattler_conda_types",
  "rattler_digest",
@@ -4592,6 +4593,7 @@ version = "0.1.0"
 dependencies = [
  "indexmap 2.10.0",
  "itertools 0.14.0",
+ "pixi_spec",
  "rattler_conda_types",
  "serde",
 ]

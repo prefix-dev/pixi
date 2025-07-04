@@ -33,6 +33,7 @@
 //! maintaining a simple API surface.
 
 pub mod build;
+mod build_backend_metadata;
 mod cache_dirs;
 mod command_dispatcher;
 mod command_dispatcher_processor;
@@ -48,6 +49,9 @@ mod source_checkout;
 mod source_metadata;
 
 pub use build::BuildEnvironment;
+pub use build_backend_metadata::{
+    BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec,
+};
 pub use cache_dirs::CacheDirs;
 pub use command_dispatcher::{
     CommandDispatcher, CommandDispatcherBuilder, CommandDispatcherError,

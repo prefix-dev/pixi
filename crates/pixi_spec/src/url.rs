@@ -136,7 +136,7 @@ impl From<UrlSourceSpec> for UrlSpec {
 }
 
 /// A specification of a source archive from a URL.
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, ::serde::Serialize)]
 pub struct UrlBinarySpec {
     /// The URL of the package
     pub url: Url,
