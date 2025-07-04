@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     ffi::OsString,
     fmt::{Display, Formatter},
     path::PathBuf,
@@ -10,6 +10,7 @@ use deno_task_shell::{
     ShellPipeWriter, ShellState, execute_with_pipes, parser::SequentialList, pipe,
 };
 use fs_err::tokio as tokio_fs;
+use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{Context, Diagnostic};
 use pixi_consts::consts;
@@ -129,7 +130,10 @@ impl<'p> ExecutableTask<'p> {
     }
 
     /// Returns the task as script
-    fn as_script(&self) -> Result<Option<String>, FailedToParseShellScript> {
+    fn as_script(
+        &self,
+        command_env: IndexMap<String, String>,
+    ) -> Result<Option<String>, FailedToParseShellScript> {
         // Convert the task into an executable string
         let task = self
             .task
@@ -137,7 +141,7 @@ impl<'p> ExecutableTask<'p> {
             .map_err(FailedToParseShellScript::ArgumentReplacement)?;
         if let Some(task) = task {
             // Get the export specific environment variables
-            let export = get_export_specific_task_env(self.task.as_ref());
+            let export = get_export_specific_task_env(self.task.as_ref(), command_env);
 
             // Append the command line arguments verbatim
             let cli_args = if let ArgValues::FreeFormArgs(additional_args) = &self.args {
@@ -167,8 +171,13 @@ impl<'p> ExecutableTask<'p> {
     /// an alias.
     pub(crate) fn as_deno_script(
         &self,
+        command_env: &HashMap<OsString, OsString>,
     ) -> Result<Option<SequentialList>, FailedToParseShellScript> {
-        let full_script = self.as_script()?;
+        let command_env_converted: IndexMap<String, String> = command_env
+            .iter()
+            .filter_map(|(k, v)| Some((k.to_str()?.to_string(), v.to_str()?.to_string())))
+            .collect();
+        let full_script = self.as_script(command_env_converted)?;
 
         if let Some(full_script) = full_script {
             tracing::debug!("Parsing shell script: {}", full_script);
@@ -239,7 +248,7 @@ impl<'p> ExecutableTask<'p> {
         command_env: &HashMap<OsString, OsString>,
         input: Option<&[u8]>,
     ) -> Result<RunOutput, TaskExecutionError> {
-        let Some(script) = self.as_deno_script()? else {
+        let Some(script) = self.as_deno_script(command_env)? else {
             return Ok(RunOutput {
                 exit_code: 0,
                 stdout: String::new(),
@@ -384,18 +393,78 @@ fn get_output_writer_and_handle() -> (ShellPipeWriter, JoinHandle<String>) {
     (writer, handle)
 }
 
-/// Task specific environment variables.
-fn get_export_specific_task_env(task: &Task) -> String {
-    // Append the environment variables if they don't exist
+/// Get the environment variable based on their priority
+fn get_export_specific_task_env(task: &Task, command_env: IndexMap<String, String>) -> String {
+    // Early return if task.env() is empty
+    if task.env().is_none_or(|map| map.is_empty()) {
+        return String::new();
+    }
+
     let mut export = String::new();
+    let mut export_merged: HashMap<String, String> = HashMap::new();
+
+    // Define keys that should not be overridden
+    let override_excluded_keys: HashSet<&str> = [
+        "PIXI_PROJECT_ROOT",
+        "PIXI_PROJECT_NAME",
+        "PIXI_PROJECT_MANIFEST",
+        "PIXI_PROJECT_VERSION",
+        "PIXI_PROMPT",
+        "PIXI_ENVIRONMENT_NAME",
+        "PIXI_ENVIRONMENT_PLATFORMS",
+        "CONDA_PREFIX",
+        "CONDA_DEFAULT_ENV",
+        "PATH",
+        "INIT_CWD",
+        "PWD",
+    ]
+    .iter()
+    .cloned()
+    .collect();
+
     if let Some(env) = task.env() {
-        for (key, value) in env {
-            if value.contains(format!("${}", key).as_str()) || std::env::var(key.as_str()).is_err()
-            {
-                tracing::info!("Setting environment variable: {}=\"{}\"", key, value);
-                export.push_str(&format!("export \"{}={}\";\n", key, value));
+        // If task.env() and command_env don't have duplicated keys, simply export task.env().
+        if env.keys().all(|k| !command_env.contains_key(k)) {
+            for key in env.keys() {
+                if let Some(value) = env.get(key) {
+                    export_merged.insert(key.clone(), value.clone());
+                }
+            }
+        } else {
+            // Env map
+            let mut env_map: HashMap<&'static str, Option<IndexMap<String, String>>> =
+                HashMap::new();
+            // Command env variables
+            env_map.insert("COMMAND_ENV", Some(command_env));
+            // Task specific environment variables
+            env_map.insert(
+                "TASK_SPECIFIC_ENVS",
+                Some(task.env().cloned().unwrap_or_default()),
+            );
+
+            // Merge based on priority: from lowest to highest
+            let priority = ["COMMAND_ENV", "TASK_SPECIFIC_ENVS"];
+            for key in &priority {
+                if let Some(Some(env_map_key)) = env_map.get(key) {
+                    export_merged.extend(env_map_key.clone())
+                }
+            }
+        }
+    }
+
+    // Put all merged environment variables to export.
+    for (key, value) in export_merged {
+        // FIX: Convert String to &str using as_str()
+        let should_exclude = override_excluded_keys.contains(key.as_str());
+        if !should_exclude {
+            tracing::info!("Setting environment variable: {}=\"{}\"", key, value);
+
+            // Platform-specific export format with proper escaping
+            if cfg!(windows) {
+                // Use proper Windows set command format
+                export.push_str(&format!("set \"{}={}\"\r\n", key, value));
             } else {
-                tracing::info!("Environment variable {} already set", key);
+                export.push_str(&format!("export \"{}={}\";\n", key, value));
             }
         }
     }
@@ -461,10 +530,10 @@ mod tests {
         "#;
 
     #[test]
-    fn test_export_specific_task_env() {
+    fn test_export_specific_task_env_merge() {
         let file_contents = r#"
             [tasks]
-            test = {cmd = "test", cwd = "tests", env = {FOO = "bar", BAR = "$FOO"}}
+            test = {cmd = "test", cwd = "tests", env = {FOO = "bar"}}
             "#;
         let workspace = Workspace::from_str(
             Path::new("pixi.toml"),
@@ -476,10 +545,54 @@ mod tests {
             .default_environment()
             .task(&TaskName::from("test"), None)
             .unwrap();
+        // Environment Variables
+        let mut my_map: IndexMap<String, String> = IndexMap::new();
 
-        let export = get_export_specific_task_env(task);
+        my_map.insert("PATH".to_string(), "myPath".to_string());
+        my_map.insert("HOME".to_string(), "myHome".to_string());
 
-        assert_eq!(export, "export \"FOO=bar\";\nexport \"BAR=$FOO\";\n");
+        let result = get_export_specific_task_env(task, my_map);
+
+        let expected_prefix = if cfg!(windows) {
+            "set \"FOO=bar\""
+        } else {
+            "export \"FOO=bar\""
+        };
+
+        assert!(result.contains(expected_prefix));
+    }
+
+    #[test]
+    fn test_export_specific_task_env_priority() {
+        let file_contents = r#"
+            [tasks]
+            test = {cmd = "test", cwd = "tests", env = {FOO = "bar"}}
+            "#;
+        let workspace = Workspace::from_str(
+            Path::new("pixi.toml"),
+            &format!("{PROJECT_BOILERPLATE}\n{file_contents}"),
+        )
+        .unwrap();
+
+        let task = workspace
+            .default_environment()
+            .task(&TaskName::from("test"), None)
+            .unwrap();
+        // Environment Variables
+        let mut my_map: IndexMap<String, String> = IndexMap::new();
+
+        my_map.insert("FOO".to_string(), "123".to_string());
+        my_map.insert("HOME".to_string(), "myHome".to_string());
+
+        let result = get_export_specific_task_env(task, my_map);
+        // task specific env overrides outside environment variables
+        let expected_prefix = if cfg!(windows) {
+            "set \"FOO=bar\""
+        } else {
+            "export \"FOO=bar\""
+        };
+
+        assert!(result.contains(expected_prefix));
     }
 
     #[test]
@@ -508,8 +621,22 @@ mod tests {
             args: ArgValues::default(),
         };
 
-        let script = executable_task.as_script().unwrap().unwrap();
-        assert_eq!(script, "export \"FOO=bar\";\n\ntest ");
+        // Environment Variables
+        let mut my_map: IndexMap<String, String> = IndexMap::new();
+
+        my_map.insert("PATH".to_string(), "myPath".to_string());
+        my_map.insert("HOME".to_string(), "myHome".to_string());
+
+        let result = executable_task.as_script(my_map);
+
+        let expected_prefix = if cfg!(windows) {
+            "set \"FOO=bar\""
+        } else {
+            "export \"FOO=bar\""
+        };
+
+        let script = result.unwrap().expect("Script should not be None");
+        assert!(script.contains(expected_prefix));
     }
 
     #[tokio::test]

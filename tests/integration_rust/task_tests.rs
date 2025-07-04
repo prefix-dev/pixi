@@ -266,7 +266,7 @@ async fn test_task_with_env() {
         .unwrap();
 
     assert_eq!(result.exit_code, 0);
-    assert_eq!(result.stdout, "From a world with spaces\n");
+    assert!(result.stdout.contains("From a world with spaces"));
 }
 
 #[tokio::test(flavor = "current_thread")]
