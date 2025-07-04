@@ -100,5 +100,5 @@ Output formatting works for both, the `list` and the `check` command.
 
 !!!tip Creating License Bundles
     By running `conda-deny bundle`, `conda-deny` will create a directory containing all your dependencies' original license files.
-      
+
     This can come in handy when creating SBOMs or sharing compliance information with other people.

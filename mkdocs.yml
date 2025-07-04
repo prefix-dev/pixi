@@ -160,13 +160,13 @@ nav:
           - Pixi Diff-to-markdown: integration/ci/updates_github_actions.md
       - Extensions:
           - Introduction: integration/extensions/introduction.md
-          - Conda Deny: integration/extensions/conda_deny.md
           - Pixi Diff: integration/extensions/pixi_diff.md
           - Pixi Diff-to-markdown: integration/ci/updates_github_actions.md
           - Pixi Inject: integration/extensions/pixi_inject.md
           - Pixi Install-to-prefix: integration/extensions/pixi_install_to_prefix.md
           - Pixi Pack: deployment/pixi_pack.md
       - Third Party:
+          - Conda Deny: integration/third_party/conda_deny.md
           - Direnv: integration/third_party/direnv.md
           - Starship: integration/third_party/starship.md
   - Advanced:
