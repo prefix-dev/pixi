@@ -78,7 +78,14 @@ pub struct Args {
 #[derive(Debug, Parser)]
 pub struct GlobalOptions {
     /// Display help information
-    #[clap(long = "help", short = 'h', id = "help_flag", global = true, help_heading = consts::CLAP_GLOBAL_OPTIONS)]
+    #[clap(
+        long = "help-flag",          // unique internal long name
+        alias = "help",              // users can still write --help
+        short = 'h',
+        id = "help_flag",
+        global = true,
+        help_heading = consts::CLAP_GLOBAL_OPTIONS
+    )]
     help_flag: bool,
 
     /// Increase logging verbosity (-v for warnings, -vv for info, -vvv for debug, -vvvv for trace)
