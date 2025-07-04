@@ -166,6 +166,7 @@ nav:
           - Pixi Install-to-prefix: integration/extensions/pixi_install_to_prefix.md
           - Pixi Pack: deployment/pixi_pack.md
       - Third Party:
+          - Conda Deny: integration/third_party/conda_deny.md
           - Direnv: integration/third_party/direnv.md
           - Starship: integration/third_party/starship.md
   - Advanced:
