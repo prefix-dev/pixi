@@ -510,6 +510,7 @@ fn workspace_cannot_be_false() -> GenericError {
 
 #[cfg(test)]
 mod test {
+    use assert_matches::assert_matches;
     use insta::assert_snapshot;
     use pixi_test_utils::format_parse_error;
 
@@ -656,8 +657,11 @@ mod test {
         backend = { name = "bla", version = "1.0" }
         "#;
 
-        let parse_error = TomlPackage::from_toml_str(input).unwrap_err();
-        assert_snapshot!(format_parse_error(input, parse_error));
+        let package = TomlPackage::from_toml_str(input).unwrap();
+        assert_matches!(
+            package.name,
+            Some(WorkspaceInheritableField::NotWorkspace(_))
+        );
     }
 
     #[test]
