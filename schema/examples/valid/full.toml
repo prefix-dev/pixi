@@ -21,6 +21,9 @@ version = "0.1.0"
 no-build = false
 
 [package]
+# Inherit the name and version the workspace
+name = { workspace = true }
+version = { workspace = true }
 
 [package.build]
 additional-dependencies = { git = "*" }

@@ -16,7 +16,7 @@ use crate::{
     AssociateProvenance, ManifestKind, ManifestProvenance, ManifestSource, PackageManifest,
     ProvenanceError, TomlError, WithProvenance, WithWarnings, WorkspaceManifest,
     pyproject::PyProjectManifest,
-    toml::{ExternalWorkspaceProperties, TomlManifest},
+    toml::{ExternalWorkspaceProperties, PackageDefaults, TomlManifest},
     utils::WithSourceCode,
     warning::WarningWithSource,
 };
@@ -112,6 +112,7 @@ impl Manifests {
                 .and_then(|manifest| {
                     manifest.into_workspace_manifest(
                         ExternalWorkspaceProperties::default(),
+                        PackageDefaults::default(),
                         Some(manifest_dir),
                     )
                 }),
@@ -412,6 +413,7 @@ impl WorkspaceDiscoverer {
                         // Parse the manifest as a workspace manifest if it contains a workspace
                         manifest.into_workspace_manifest(
                             ExternalWorkspaceProperties::default(),
+                            PackageDefaults::default(),
                             Some(manifest_dir),
                         )
                     } else {
@@ -495,7 +497,8 @@ impl WorkspaceDiscoverer {
                     let manifest_dir = provenance.path.parent().expect("a file must have a parent");
                     let package_manifest = match package_manifest {
                         EitherManifest::Pixi(manifest) => manifest.into_package_manifest(
-                            workspace_manifest.derived_external_package_properties(),
+                            workspace_manifest.workspace_package_properties(),
+                            PackageDefaults::default(),
                             &workspace_manifest,
                             Some(manifest_dir),
                         ),
@@ -583,6 +586,14 @@ mod test {
     )]
     #[case::non_pixi_build("non-pixi-build")]
     #[case::non_pixi_build_project("non-pixi-build/project")]
+    #[case::tier_resolution_mixed("3tier-resolution-mixed")]
+    #[case::tier_resolution_mixed_package("3tier-resolution-mixed/package-with-pyproject")]
+    #[case::tier_resolution_pyproject("3tier-resolution-pyproject")]
+    #[case::tier_resolution_separate("3tier-resolution-separate")]
+    #[case::tier_resolution_separate_package("3tier-resolution-separate/package-dir")]
+    #[case::tier_resolution_error("3tier-resolution-error")]
+    #[case::invalid_inherit("invalid_inherit")]
+    #[case::inherit_readme("inherit_readme/nested")]
     fn test_workspace_discoverer(#[case] subdir: &str) {
         let test_data_root = dunce::canonicalize(
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/workspace-discovery"),
