@@ -45,7 +45,7 @@ theme:
     - content.action.edit
     - content.code.annotate
     - content.tooltips
-    # - content.code.select Sponsor only
+    - content.code.select Sponsor only
     - navigation.instant
     - navigation.instant.progress
     - navigation.tracking
