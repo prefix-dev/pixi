@@ -592,6 +592,8 @@ mod test {
     #[case::tier_resolution_separate("3tier-resolution-separate")]
     #[case::tier_resolution_separate_package("3tier-resolution-separate/package-dir")]
     #[case::tier_resolution_error("3tier-resolution-error")]
+    #[case::invalid_inherit("invalid_inherit")]
+    #[case::inherit_readme("inherit_readme/nested")]
     fn test_workspace_discoverer(#[case] subdir: &str) {
         let test_data_root = dunce::canonicalize(
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/workspace-discovery"),

@@ -8,22 +8,28 @@ use thiserror::Error;
 use toml_span::{DeserError, Error, ErrorKind, Span, Spanned, Value, de_helpers::TableHelper};
 use url::Url;
 
-use crate::toml::manifest::ExternalWorkspaceProperties;
 use crate::{
     PackageManifest, Preview, TargetSelector, Targets, TomlError, WithWarnings,
     error::GenericError,
     package::Package,
-    toml::{TomlPackageBuild, package_target::TomlPackageTarget},
+    toml::{
+        TomlPackageBuild, manifest::ExternalWorkspaceProperties, package_target::TomlPackageTarget,
+    },
     utils::{PixiSpanned, package_map::UniquePackageMap},
 };
 
-/// Represents a field that can either have a direct value or inherit from workspace
+/// Represents a field that can either have a direct value or inherit from
+/// workspace
 #[derive(Debug, Clone)]
 pub enum WorkspaceInheritableField<T> {
     /// Direct value specified in the package
     Value(T),
     /// Inherit the value from the workspace
     Workspace(Span),
+    /// Do NOT inherit from workspace.
+    /// This is an invalid case but to provide a nice error upstream we provide
+    /// this here.
+    NotWorkspace(Span),
 }
 
 impl<T> WorkspaceInheritableField<T> {
@@ -32,6 +38,7 @@ impl<T> WorkspaceInheritableField<T> {
         match self {
             WorkspaceInheritableField::Value(v) => Some(v),
             WorkspaceInheritableField::Workspace(_) => None,
+            WorkspaceInheritableField::NotWorkspace(_) => None,
         }
     }
 
@@ -47,14 +54,9 @@ impl<T> WorkspaceInheritableField<T> {
             WorkspaceInheritableField::Workspace(span) => {
                 WorkspaceInheritableField::Workspace(span)
             }
-        }
-    }
-
-    /// Resolve the field value, either using the direct value or inheriting from workspace
-    pub fn resolve(self, workspace_value: Option<T>) -> Option<T> {
-        match self {
-            WorkspaceInheritableField::Value(v) => Some(v),
-            WorkspaceInheritableField::Workspace(_) => workspace_value,
+            WorkspaceInheritableField::NotWorkspace(span) => {
+                WorkspaceInheritableField::NotWorkspace(span)
+            }
         }
     }
 }
@@ -64,24 +66,22 @@ where
     T: toml_span::Deserialize<'de>,
 {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
-        // First check if it's a table without consuming the value, then take it if it is
+        // First check if it's a table without consuming the value, then take it if it
+        // is
         if value.as_table().is_some() {
             let mut th = TableHelper::new(value)?;
-            let workspace = th.optional::<bool>("workspace");
+            let workspace = th.optional::<Spanned<bool>>("workspace");
             th.finalize(None)?;
 
-            if let Some(true) = workspace {
+            if let Some(Spanned { value: true, .. }) = workspace {
                 return Ok(WorkspaceInheritableField::Workspace(value.span));
-            } else if let Some(false) = workspace {
-                return Err(DeserError::from(Error {
-                    kind: ErrorKind::Custom("workspace inheritance must be `true`".into()),
-                    span: value.span,
-                    line_info: None,
-                }));
+            } else if let Some(Spanned { value: false, span }) = workspace {
+                return Ok(WorkspaceInheritableField::NotWorkspace(span));
             }
         }
 
-        // If not a table or not { workspace = true }, try to deserialize as direct value
+        // If not a table or not { workspace = true }, try to deserialize as direct
+        // value
         T::deserialize(value).map(WorkspaceInheritableField::Value)
     }
 }
@@ -91,24 +91,22 @@ where
     U: DeserializeAs<'de, T>,
 {
     fn deserialize_as(value: &mut Value<'de>) -> Result<WorkspaceInheritableField<T>, DeserError> {
-        // First check if it's a table without consuming the value, then take it if it is
+        // First check if it's a table without consuming the value, then take it if it
+        // is
         if value.as_table().is_some() {
             let mut th = TableHelper::new(value)?;
-            let workspace = th.optional::<bool>("workspace");
+            let workspace = th.optional::<Spanned<bool>>("workspace");
             th.finalize(None)?;
 
-            if let Some(true) = workspace {
+            if let Some(Spanned { value: true, .. }) = workspace {
                 return Ok(WorkspaceInheritableField::Workspace(value.span));
-            } else if let Some(false) = workspace {
-                return Err(DeserError::from(Error {
-                    kind: ErrorKind::Custom("workspace inheritance must be `true`".into()),
-                    span: value.span,
-                    line_info: None,
-                }));
+            } else if let Some(Spanned { value: false, span }) = workspace {
+                return Ok(WorkspaceInheritableField::NotWorkspace(span));
             }
         }
 
-        // If not a table or not { workspace = true }, try to deserialize as direct value
+        // If not a table or not { workspace = true }, try to deserialize as direct
+        // value
         U::deserialize_as(value).map(WorkspaceInheritableField::Value)
     }
 }
@@ -241,7 +239,8 @@ impl From<ExternalWorkspaceProperties> for WorkspacePackageProperties {
 
 /// Defines package defaults that can be used as fallback values.
 ///
-/// This contains the package-level defaults (e.g., from `[project]` section in pyproject.toml).
+/// This contains the package-level defaults (e.g., from `[project]` section in
+/// pyproject.toml).
 #[derive(Debug, Clone, Default)]
 pub struct PackageDefaults {
     pub name: Option<String>,
@@ -274,7 +273,8 @@ impl TomlPackage {
     /// Helper function to resolve a required field with 3-tier hierarchy:
     /// 1. Direct value (from package)
     /// 2. Workspace inheritance (from workspace)
-    /// 3. Package defaults (from [project] section if the manifest is a `pyproject.toml`)
+    /// 3. Package defaults (from [project] section if the manifest is a
+    ///    `pyproject.toml`)
     /// 4. Error if missing at all levels
     fn resolve_required_field_with_defaults<T>(
         field: Option<WorkspaceInheritableField<T>>,
@@ -282,54 +282,61 @@ impl TomlPackage {
         default_value: Option<T>,
         field_name: &'static str,
         package_span: Span,
-    ) -> Result<T, Error> {
+    ) -> Result<T, TomlError> {
         match field {
             Some(WorkspaceInheritableField::Value(v)) => Ok(v),
-            Some(WorkspaceInheritableField::Workspace(span)) => {
-                workspace_value.ok_or_else(|| Error {
-                    kind: ErrorKind::Custom(
-                        format!("the workspace does not define a '{}'", field_name).into(),
-                    ),
-                    span,
-                    line_info: None,
-                })
+            Some(WorkspaceInheritableField::Workspace(span)) => workspace_value.ok_or_else(|| {
+                GenericError::new(format!("the workspace does not define a '{}'", field_name))
+                    .with_span(span.into())
+                    .into()
+            }),
+            Some(WorkspaceInheritableField::NotWorkspace(span)) => {
+                Err(workspace_cannot_be_false().with_span(span.into()).into())
             }
             None => {
                 // Fall back to package defaults
-                default_value.ok_or(Error {
-                    kind: ErrorKind::MissingField(field_name),
-                    span: package_span,
-                    line_info: None,
-                })
+                default_value.ok_or(
+                    Error {
+                        kind: ErrorKind::MissingField(field_name),
+                        span: package_span,
+                        line_info: None,
+                    }
+                    .into(),
+                )
             }
         }
     }
 
     /// Helper function to resolve an optional field with 3-tier hierarchy:
     /// 1. Direct value (from package)
-    /// 2. Workspace inheritance (from workspace) - ERROR if explicitly requested but missing
-    /// 3. Package defaults (from [project] section if the manifest is a `pyproject.toml`)
+    /// 2. Workspace inheritance (from workspace) - ERROR if explicitly
+    ///    requested but missing
+    /// 3. Package defaults (from [project] section if the manifest is a
+    ///    `pyproject.toml`)
     /// 4. None if missing at all levels
     fn resolve_optional_field_with_defaults<T>(
         field: Option<WorkspaceInheritableField<T>>,
         workspace_value: Option<T>,
         default_value: Option<T>,
         field_name: &'static str,
-    ) -> Result<Option<T>, Error> {
+    ) -> Result<Option<T>, TomlError> {
         match field {
             Some(WorkspaceInheritableField::Value(v)) => Ok(Some(v)),
             Some(WorkspaceInheritableField::Workspace(span)) => {
-                // If workspace inheritance is explicitly requested, the workspace must provide the value
+                // If workspace inheritance is explicitly requested, the workspace must provide
+                // the value
                 match workspace_value {
                     Some(value) => Ok(Some(value)),
-                    None => Err(Error {
-                        kind: ErrorKind::Custom(
-                            format!("the workspace does not define a '{}'", field_name).into(),
-                        ),
-                        span,
-                        line_info: None,
-                    }),
+                    None => Err(GenericError::new(format!(
+                        "the workspace does not define a '{}'",
+                        field_name
+                    ))
+                    .with_span(span.into())
+                    .into()),
                 }
+            }
+            Some(WorkspaceInheritableField::NotWorkspace(span)) => {
+                Err(workspace_cannot_be_false().with_span(span.into()).into())
             }
             None => Ok(default_value),
         }
@@ -346,7 +353,8 @@ impl TomlPackage {
     ) -> Result<WithWarnings<PackageManifest>, TomlError> {
         let warnings = Vec::new();
 
-        // Resolve fields with 3-tier hierarchy: direct → workspace → package defaults → error
+        // Resolve fields with 3-tier hierarchy: direct → workspace → package defaults →
+        // error
         let name = Self::resolve_required_field_with_defaults(
             self.name,
             workspace.name,
@@ -411,6 +419,9 @@ impl TomlPackage {
                 Some(WorkspaceInheritableField::Workspace(_)) => {
                     Ok(workspace_value
                         .and_then(|value| pathdiff::diff_paths(value, root_directory)))
+                }
+                Some(WorkspaceInheritableField::NotWorkspace(span)) => {
+                    Err(workspace_cannot_be_false().with_span(span.into()).into())
                 }
                 Some(WorkspaceInheritableField::Value(Spanned { value, span })) => {
                     let full_path = root_directory.join(&value);
@@ -492,12 +503,18 @@ impl TomlPackage {
     }
 }
 
+fn workspace_cannot_be_false() -> GenericError {
+    GenericError::new("`workspace` cannot be false")
+        .with_help("By default no fields are inherited from the workspace")
+}
+
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::toml::FromTomlStr;
     use insta::assert_snapshot;
     use pixi_test_utils::format_parse_error;
+
+    use super::*;
+    use crate::toml::FromTomlStr;
 
     #[must_use]
     fn expect_parse_failure(pixi_toml: &str) -> String {
