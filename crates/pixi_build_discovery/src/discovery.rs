@@ -13,7 +13,7 @@ use pixi_manifest::{
 };
 use pixi_spec::SpecConversionError;
 use pixi_spec_containers::DependencyMap;
-use rattler_conda_types::ChannelConfig;
+use rattler_conda_types::{ChannelConfig, Platform};
 use thiserror::Error;
 
 use crate::{
@@ -174,12 +174,13 @@ impl DiscoveredBackend {
     }
 
     /// Convert a package manifest and corresponding workspace manifest into a
-    /// discovered backend.
+    /// discovered backend, with optional platform-specific configuration.
     pub fn from_package_and_workspace(
         source_path: PathBuf,
         package_manifest: &WithProvenance<PackageManifest>,
         workspace: &WorkspaceManifest,
         channel_config: &ChannelConfig,
+        platform: Option<rattler_conda_types::Platform>,
     ) -> Result<Self, SpecConversionError> {
         let WithProvenance {
             value: package_manifest,
@@ -253,7 +254,7 @@ impl DiscoveredBackend {
                 ),
                 source_dir,
                 project_model: Some(project_model),
-                configuration: build_system.configuration.map(|config| {
+                configuration: build_system.configuration(platform).map(|config| {
                     config
                         .deserialize_into()
                         .expect("Configuration dictionary should be serializable to JSON")
@@ -292,6 +293,7 @@ impl DiscoveredBackend {
             &package_manifest,
             &manifests.workspace.value,
             channel_config,
+            Some(Platform::current()),
         )
         .map_err(DiscoveryError::SpecConversionError)
         .map(Some)
