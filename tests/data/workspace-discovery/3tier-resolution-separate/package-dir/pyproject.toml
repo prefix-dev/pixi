@@ -1,8 +1,8 @@
 [project]
+authors = [{ name = "Package Default Author" }]
+description = "Package default description"
 name = "package-default-name"
 version = "3.0.0"
-description = "Package default description"
-authors = [{name = "Package Default Author"}]
 
 [tool.pixi.package]
 # name should use project default (tier 3)

@@ -1,8 +1,8 @@
 [project]
+authors = [{ name = "Project Author" }]
+description = "Project default description"
 name = "project-default-name"
 version = "1.0.0"
-description = "Project default description"
-authors = [{name = "Project Author"}]
 
 [tool.pixi.package]
 # name should inherit from workspace (tier 2)

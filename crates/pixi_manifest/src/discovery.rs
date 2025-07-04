@@ -16,9 +16,7 @@ use crate::{
     AssociateProvenance, ManifestKind, ManifestProvenance, ManifestSource, PackageManifest,
     ProvenanceError, TomlError, WithProvenance, WithWarnings, WorkspaceManifest,
     pyproject::PyProjectManifest,
-    toml::{
-        ExternalWorkspaceProperties, PackageDefaults, TomlManifest,
-    },
+    toml::{ExternalWorkspaceProperties, PackageDefaults, TomlManifest},
     utils::WithSourceCode,
     warning::WarningWithSource,
 };

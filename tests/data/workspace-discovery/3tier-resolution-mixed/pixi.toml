@@ -1,8 +1,8 @@
 [workspace]
+authors = ["Workspace Author"]
 channels = []
+description = "Workspace description"
+license = "MIT"
 name = "3tier-resolution-workspace"
 platforms = []
 preview = ["pixi-build"]
-description = "Workspace description"
-authors = ["Workspace Author"]
-license = "MIT"

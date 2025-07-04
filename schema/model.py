@@ -15,7 +15,6 @@ from pydantic import (
     Field,
     PositiveFloat,
     StringConstraints,
-    field_validator,
 )
 
 #: latest version currently supported by the `taplo` TOML linter and language server
