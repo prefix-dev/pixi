@@ -987,3 +987,83 @@ preview = ['pixi-build']
         insta::assert_snapshot!(workspace.workspace.provenance.read().unwrap().into_inner());
     });
 }
+
+/// Test adding a dependency to the default and the dev feature and check that the pinning
+/// strategy is applied to both. See https://github.com/prefix-dev/pixi/issues/3245
+#[tokio::test]
+async fn add_dependency_use_pinning_strategy_in_features() {
+    // Create a channel with two packages
+    let mut package_database = PackageDatabase::default();
+    package_database.add_package(Package::build("foo", "1.0.0").finish());
+    package_database.add_package(Package::build("bar", "2.5.0").finish());
+
+    let local_channel = package_database.into_channel().await.unwrap();
+
+    // Initialize a new pixi project with pinning strategy and environment configuration
+    let pixi = PixiControl::from_manifest_and_config(
+        &format!(
+            r#"[project]
+name = "test-pinning"
+channels = ["{channel}"]
+platforms = ["{platform}"]
+
+[dependencies]
+
+[feature.dev.dependencies]
+
+[environments]
+default = ["dev"]
+"#,
+            channel = local_channel.url(),
+            platform = Platform::current()
+        ),
+        r#"pinning-strategy = "major"
+"#,
+    )
+    .unwrap();
+
+    // Add dependency to the default feature
+    pixi.add("foo").await.unwrap();
+
+    // Add dependency to a named feature
+    pixi.add("bar").with_feature("dev").await.unwrap();
+
+    let project = pixi.workspace().unwrap();
+
+    // Get the specs for the default feature
+    let foo_spec = project
+        .workspace
+        .value
+        .default_feature()
+        .dependencies(SpecType::Run, None)
+        .unwrap_or_default()
+        .get("foo")
+        .cloned()
+        .unwrap()
+        .to_toml_value()
+        .to_string();
+
+    // Get the specs for the dev feature
+    let bar_spec = project
+        .workspace
+        .value
+        .feature("dev")
+        .expect("dev feature should exist")
+        .dependencies(SpecType::Run, None)
+        .unwrap_or_default()
+        .get("bar")
+        .cloned()
+        .unwrap()
+        .to_toml_value()
+        .to_string();
+
+    // Both dependencies should have major version pinning applied
+    assert_eq!(
+        foo_spec, r#"">=1.0.0,<2""#,
+        "foo should have major version pinning"
+    );
+    assert_eq!(
+        bar_spec, r#"">=2.5.0,<3""#,
+        "bar should have major version pinning"
+    );
+}
