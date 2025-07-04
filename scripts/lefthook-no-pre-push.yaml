@@ -1,0 +1,2 @@
+pre-push:
+  skip: true

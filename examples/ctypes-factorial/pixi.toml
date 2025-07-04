@@ -23,17 +23,7 @@ clang-16 = "*"
 [tasks]
 compile = { cmd = "gcc -shared -o src/factorial.so src/factorial.c" }
 factorial = { cmd = "python src/factorial.py -e python" }
-start = { cmd = [
-  "python",
-  "src/factorial.py",
-  "12345678",
-  ";",
-  "python",
-  "src/factorial.py",
-  "12345678",
-  "-e",
-  "python",
-], depends-on = "compile" }
+start = { cmd = ["python", "src/factorial.py", "12345678", ";", "python", "src/factorial.py", "12345678", "-e", "python"], depends-on = "compile" }
 
 [target.osx-64.tasks]
 compile = { cmd = "clang -shared -o src/factorial.so src/factorial.c" }

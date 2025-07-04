@@ -31,7 +31,6 @@ cmd = """
 depends-on = ["docs"]
 inputs = ["build/docs/"]
 
-
 [feature.rtd]
 dependencies = { requests = "*", jinja2 = ">=2.9", packaging = "*" }
 platforms = ["linux-64"]

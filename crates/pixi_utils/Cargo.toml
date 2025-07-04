@@ -1,13 +1,13 @@
 [package]
+name = "pixi_utils"
+version = "0.1.0"
 authors.workspace = true
-description = "Utilities for use between pixi crates, contains misc features that could not be placed in other crates"
 edition.workspace = true
 homepage.workspace = true
 license.workspace = true
-name = "pixi_utils"
 readme.workspace = true
 repository.workspace = true
-version = "0.1.0"
+description = "Utilities for use between pixi crates, contains misc features that could not be placed in other crates"
 
 [features]
 default = ["rustls-tls"]
@@ -21,7 +21,6 @@ rustls-tls = [
   "reqwest/rustls-tls-native-roots",
   "rattler_networking/rustls-tls",
 ]
-
 
 [dependencies]
 async-fd-lock = { workspace = true }

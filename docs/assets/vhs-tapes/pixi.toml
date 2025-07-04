@@ -7,12 +7,7 @@ _global-dark = "vhs demo_global_dark.tape"
 _global-light = "vhs demo_global_light.tape"
 _project-dark = "vhs demo_project_dark.tape"
 _project-light = "vhs demo_project_light.tape"
-record-all = { depends-on = [
-  "_global-light",
-  "_global-dark",
-  "_project-light",
-  "_project-dark",
-] }
+record-all = { depends-on = ["_global-light", "_global-dark", "_project-light", "_project-dark"] }
 
 [dependencies]
 ffmpeg = ">=7.1.1,<8"

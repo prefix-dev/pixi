@@ -1,13 +1,13 @@
 [package]
+name = "pixi_build_types"
+version = "0.1.0"
 authors.workspace = true
-description = "The types for communicating between the pixi build frontend and backend"
 edition.workspace = true
 homepage.workspace = true
 license.workspace = true
-name = "pixi_build_types"
 readme.workspace = true
 repository.workspace = true
-version = "0.1.0"
+description = "The types for communicating between the pixi build frontend and backend"
 
 [dependencies]
 ordermap = { workspace = true, features = ["serde"] }

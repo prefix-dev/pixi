@@ -8,9 +8,7 @@
       "arch": "x86_64",
       "build": "h9490d1a_0",
       "build_number": 0,
-      "depends": [
-        "__cuda >=12"
-      ],
+      "depends": ["__cuda >=12"],
       "md5": "0f5fdff6b873dc21be973c0118bf4532",
       "name": "cuda",
       "platform": "win",

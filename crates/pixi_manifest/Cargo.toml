@@ -1,12 +1,12 @@
 [package]
+name = "pixi_manifest"
+version = "0.1.0"
 authors.workspace = true
 edition.workspace = true
 homepage.workspace = true
 license.workspace = true
-name = "pixi_manifest"
 readme.workspace = true
 repository.workspace = true
-version = "0.1.0"
 
 [dependencies]
 chrono = { workspace = true }
@@ -45,7 +45,6 @@ rattler_virtual_packages = { workspace = true }
 
 # These rattler crates are optionally used in the build system
 rattler_lock = { workspace = true, optional = true }
-
 
 console = { workspace = true }
 miette = { workspace = true, features = ["fancy-no-backtrace"] }

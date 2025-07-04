@@ -8,9 +8,7 @@
       "arch": "x86_64",
       "build": "h9490d1a_0",
       "build_number": 0,
-      "depends": [
-        "jupyter-core"
-      ],
+      "depends": ["jupyter-core"],
       "md5": "79449188cf7890c58129c1382006cb4d",
       "name": "jupyter",
       "platform": "win",

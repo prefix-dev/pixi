@@ -23,7 +23,6 @@ Homepage = "https://github.com/ORGNAME/foo"
 [tool.setuptools_scm]
 write_to = "src/foo/_version.py"
 
-
 [tool.pytest.ini_options]
 addopts = ["-ra", "--showlocals", "--strict-markers", "--strict-config"]
 filterwarnings = ["error"]
@@ -31,7 +30,6 @@ log_cli_level = "INFO"
 minversion = "6.0"
 testpaths = ["tests"]
 xfail_strict = true
-
 
 [tool.coverage]
 report.exclude_also = ['\.\.\.', 'if typing.TYPE_CHECKING:']

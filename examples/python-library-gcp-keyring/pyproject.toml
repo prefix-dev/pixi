@@ -41,7 +41,6 @@ requires = ["hatchling"]
 channels = ["conda-forge"]
 platforms = ["osx-arm64", "linux-64", "win-64", "osx-64"]
 
-
 [tool.pixi.feature.publish.dependencies]
 # For building wheel using hatch
 hatch = "*"
@@ -81,9 +80,7 @@ test-local = { features = ["test", "local"] }
 # Build into a wheel using hatch
 build = { cmd = "hatch build", inputs = ["say_hi/*"], outputs = ["dist/*"] }
 # Upload to custom GCP registry using twine
-publish = { cmd = "twine upload --skip-existing --repository-url https://europe-west4-python.pkg.dev/test-artifact-registry-423208/test/ dist/*", depends-on = [
-  "build",
-] }
+publish = { cmd = "twine upload --skip-existing --repository-url https://europe-west4-python.pkg.dev/test-artifact-registry-423208/test/ dist/*", depends-on = ["build"] }
 
 # Test the library
 [tool.pixi.feature.test.tasks]

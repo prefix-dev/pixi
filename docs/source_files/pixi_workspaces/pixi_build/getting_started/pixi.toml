@@ -26,7 +26,6 @@ channels = [
 ]
 # --8<-- [end:build-system]
 
-
 # The Python package `python_rich` uses `hatchling` as Python build backend
 # --8<-- [start:host-dependencies]
 [package.host-dependencies]

@@ -1,13 +1,13 @@
 [package]
+name = "pixi_spec"
+version = "0.1.0"
 authors.workspace = true
-description = "Provides a Rust representation of a Pixi spec"
 edition.workspace = true
 homepage.workspace = true
 license.workspace = true
-name = "pixi_spec"
 readme.workspace = true
 repository.workspace = true
-version = "0.1.0"
+description = "Provides a Rust representation of a Pixi spec"
 
 [dependencies]
 dirs = { workspace = true }

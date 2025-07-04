@@ -7,7 +7,7 @@ name = "task-arguments-dependent"
 [tasks.install]
 args = [
   { "arg" = "path", "default" = "/default/path" }, # Path to manifest
-  { "arg" = "flag", "default" = "--normal" },      # Installation flag
+  { "arg" = "flag", "default" = "--normal" }, # Installation flag
 ]
 cmd = "echo Installing with manifest {{ path }} and flag {{ flag }}"
 

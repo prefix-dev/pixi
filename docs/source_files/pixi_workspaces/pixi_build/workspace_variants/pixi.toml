@@ -23,12 +23,10 @@ py311 = ["py311"]
 py312 = ["py312"]
 # --8<-- [end:environments]
 
-
 # --8<-- [start:variants]
 [workspace.build-variants]
 python = ["3.11.*", "3.12.*"]
 # --8<-- [end:variants]
-
 
 [tasks]
 start = "rich-example-main"

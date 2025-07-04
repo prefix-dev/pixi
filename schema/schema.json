@@ -22,15 +22,12 @@
       "description": "The build `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
       "type": "object",
       "additionalProperties": {
-        "anyOf": [
-          {
-            "type": "string",
-            "minLength": 1
-          },
-          {
-            "$ref": "#/$defs/MatchspecTable"
-          }
-        ]
+        "anyOf": [{
+          "type": "string",
+          "minLength": 1
+        }, {
+          "$ref": "#/$defs/MatchspecTable"
+        }]
       },
       "propertyNames": {
         "minLength": 1
@@ -41,15 +38,12 @@
       "description": "The `conda` dependencies, consisting of a package name and a requirement in [MatchSpec](https://github.com/conda/conda/blob/078e7ee79381060217e1ec7f9b0e9cf80ecc8f3f/conda/models/match_spec.py) format",
       "type": "object",
       "additionalProperties": {
-        "anyOf": [
-          {
-            "type": "string",
-            "minLength": 1
-          },
-          {
-            "$ref": "#/$defs/MatchspecTable"
-          }
-        ]
+        "anyOf": [{
+          "type": "string",
+          "minLength": 1
+        }, {
+          "$ref": "#/$defs/MatchspecTable"
+        }]
       },
       "propertyNames": {
         "minLength": 1
@@ -61,18 +55,15 @@
       "type": "object",
       "patternProperties": {
         "^[a-z\\d\\-]+$": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Environment"
-            },
-            {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "minLength": 1
-              }
+          "anyOf": [{
+            "$ref": "#/$defs/Environment"
+          }, {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
             }
-          ]
+          }]
         }
       }
     },
@@ -92,24 +83,19 @@
       "description": "The host `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
       "type": "object",
       "additionalProperties": {
-        "anyOf": [
-          {
-            "type": "string",
-            "minLength": 1
-          },
-          {
-            "$ref": "#/$defs/MatchspecTable"
-          }
-        ]
+        "anyOf": [{
+          "type": "string",
+          "minLength": 1
+        }, {
+          "$ref": "#/$defs/MatchspecTable"
+        }]
       },
       "propertyNames": {
         "minLength": 1
       },
-      "examples": [
-        {
-          "python": ">=3.8"
-        }
-      ]
+      "examples": [{
+        "python": ">=3.8"
+      }]
     },
     "package": {
       "$ref": "#/$defs/Package",
@@ -124,30 +110,22 @@
       "description": "The PyPI dependencies",
       "type": "object",
       "additionalProperties": {
-        "anyOf": [
-          {
-            "type": "string",
-            "minLength": 1
-          },
-          {
-            "$ref": "#/$defs/PyPIVersion"
-          },
-          {
-            "$ref": "#/$defs/PyPIGitBranchRequirement"
-          },
-          {
-            "$ref": "#/$defs/PyPIGitTagRequirement"
-          },
-          {
-            "$ref": "#/$defs/PyPIGitRevRequirement"
-          },
-          {
-            "$ref": "#/$defs/PyPIPathRequirement"
-          },
-          {
-            "$ref": "#/$defs/PyPIUrlRequirement"
-          }
-        ]
+        "anyOf": [{
+          "type": "string",
+          "minLength": 1
+        }, {
+          "$ref": "#/$defs/PyPIVersion"
+        }, {
+          "$ref": "#/$defs/PyPIGitBranchRequirement"
+        }, {
+          "$ref": "#/$defs/PyPIGitTagRequirement"
+        }, {
+          "$ref": "#/$defs/PyPIGitRevRequirement"
+        }, {
+          "$ref": "#/$defs/PyPIPathRequirement"
+        }, {
+          "$ref": "#/$defs/PyPIUrlRequirement"
+        }]
       },
       "propertyNames": {
         "minLength": 1
@@ -171,15 +149,13 @@
       "propertyNames": {
         "minLength": 1
       },
-      "examples": [
-        {
-          "linux": {
-            "dependencies": {
-              "python": "3.8"
-            }
+      "examples": [{
+        "linux": {
+          "dependencies": {
+            "python": "3.8"
           }
         }
-      ]
+      }]
     },
     "tasks": {
       "title": "Tasks",
@@ -187,21 +163,17 @@
       "type": "object",
       "patternProperties": {
         "^[^\\s\\$]+$": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/TaskInlineTable"
-            },
-            {
-              "type": "array",
-              "items": {
-                "$ref": "#/$defs/DependsOn"
-              }
-            },
-            {
-              "type": "string",
-              "minLength": 1
+          "anyOf": [{
+            "$ref": "#/$defs/TaskInlineTable"
+          }, {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/DependsOn"
             }
-          ]
+          }, {
+            "type": "string",
+            "minLength": 1
+          }]
         }
       },
       "propertyNames": {
@@ -219,23 +191,13 @@
       "description": "The workspace's metadata information"
     }
   },
-  "anyOf": [
-    {
-      "required": [
-        "project"
-      ]
-    },
-    {
-      "required": [
-        "workspace"
-      ]
-    },
-    {
-      "required": [
-        "package"
-      ]
-    }
-  ],
+  "anyOf": [{
+    "required": ["project"]
+  }, {
+    "required": ["workspace"]
+  }, {
+    "required": ["package"]
+  }],
   "$defs": {
     "Activation": {
       "title": "Activation",
@@ -254,14 +216,11 @@
           "propertyNames": {
             "minLength": 1
           },
-          "examples": [
-            {
-              "key": "value"
-            },
-            {
-              "ARGUMENT": "value"
-            }
-          ]
+          "examples": [{
+            "key": "value"
+          }, {
+            "ARGUMENT": "value"
+          }]
         },
         "scripts": {
           "title": "Scripts",
@@ -271,19 +230,14 @@
             "type": "string",
             "minLength": 1
           },
-          "examples": [
-            "activate.sh",
-            "activate.bat"
-          ]
+          "examples": ["activate.sh", "activate.bat"]
         }
       }
     },
     "Build": {
       "title": "Build",
       "type": "object",
-      "required": [
-        "backend"
-      ],
+      "required": ["backend"],
       "additionalProperties": false,
       "properties": {
         "additional-dependencies": {
@@ -291,15 +245,12 @@
           "description": "Additional dependencies to install alongside the build backend",
           "type": "object",
           "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "$ref": "#/$defs/MatchspecTable"
-              }
-            ]
+            "anyOf": [{
+              "type": "string",
+              "minLength": 1
+            }, {
+              "$ref": "#/$defs/MatchspecTable"
+            }]
           },
           "propertyNames": {
             "minLength": 1
@@ -314,20 +265,16 @@
           "description": "The `conda` channels that are used to fetch the build backend from",
           "type": "array",
           "items": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "type": "string",
-                "format": "uri",
-                "minLength": 1
-              },
-              {
-                "$ref": "#/$defs/ChannelInlineTable"
-              }
-            ]
+            "anyOf": [{
+              "type": "string",
+              "minLength": 1
+            }, {
+              "type": "string",
+              "format": "uri",
+              "minLength": 1
+            }, {
+              "$ref": "#/$defs/ChannelInlineTable"
+            }]
           }
         },
         "configuration": {
@@ -366,11 +313,7 @@
           "description": "The channel the packages needs to be fetched from",
           "type": "string",
           "minLength": 1,
-          "examples": [
-            "conda-forge",
-            "pytorch",
-            "https://repo.prefix.dev/conda-forge"
-          ]
+          "examples": ["conda-forge", "pytorch", "https://repo.prefix.dev/conda-forge"]
         },
         "file-name": {
           "title": "File-Name",
@@ -456,25 +399,20 @@
       "title": "ChannelInlineTable",
       "description": "A precise description of a `conda` channel, with an optional priority.",
       "type": "object",
-      "required": [
-        "channel"
-      ],
+      "required": ["channel"],
       "additionalProperties": false,
       "properties": {
         "channel": {
           "title": "Channel",
           "description": "The channel the packages needs to be fetched from",
-          "anyOf": [
-            {
-              "type": "string",
-              "minLength": 1
-            },
-            {
-              "type": "string",
-              "format": "uri",
-              "minLength": 1
-            }
-          ]
+          "anyOf": [{
+            "type": "string",
+            "minLength": 1
+          }, {
+            "type": "string",
+            "format": "uri",
+            "minLength": 1
+          }]
         },
         "priority": {
           "title": "Priority",
@@ -487,18 +425,13 @@
       "title": "ChannelPriority",
       "description": "The priority of the channel.",
       "type": "string",
-      "enum": [
-        "disabled",
-        "strict"
-      ]
+      "enum": ["disabled", "strict"]
     },
     "DependsOn": {
       "title": "DependsOn",
       "description": "The dependencies of a task.",
       "type": "object",
-      "required": [
-        "task"
-      ],
+      "required": ["task"],
       "additionalProperties": false,
       "properties": {
         "args": {
@@ -568,15 +501,12 @@
           "description": "The build `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
           "type": "object",
           "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "$ref": "#/$defs/MatchspecTable"
-              }
-            ]
+            "anyOf": [{
+              "type": "string",
+              "minLength": 1
+            }, {
+              "$ref": "#/$defs/MatchspecTable"
+            }]
           },
           "propertyNames": {
             "minLength": 1
@@ -585,30 +515,23 @@
         "channel-priority": {
           "$ref": "#/$defs/ChannelPriority",
           "description": "The type of channel priority that is used in the solve.- 'strict': only take the package from the channel it exist in first.- 'disabled': group all dependencies together as if there is no channel difference.",
-          "examples": [
-            "strict",
-            "disabled"
-          ]
+          "examples": ["strict", "disabled"]
         },
         "channels": {
           "title": "Channels",
           "description": "The `conda` channels that can be considered when solving environments containing this feature",
           "type": "array",
           "items": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "type": "string",
-                "format": "uri",
-                "minLength": 1
-              },
-              {
-                "$ref": "#/$defs/ChannelInlineTable"
-              }
-            ]
+            "anyOf": [{
+              "type": "string",
+              "minLength": 1
+            }, {
+              "type": "string",
+              "format": "uri",
+              "minLength": 1
+            }, {
+              "$ref": "#/$defs/ChannelInlineTable"
+            }]
           }
         },
         "dependencies": {
@@ -616,15 +539,12 @@
           "description": "The `conda` dependencies, consisting of a package name and a requirement in [MatchSpec](https://github.com/conda/conda/blob/078e7ee79381060217e1ec7f9b0e9cf80ecc8f3f/conda/models/match_spec.py) format",
           "type": "object",
           "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "$ref": "#/$defs/MatchspecTable"
-              }
-            ]
+            "anyOf": [{
+              "type": "string",
+              "minLength": 1
+            }, {
+              "$ref": "#/$defs/MatchspecTable"
+            }]
           },
           "propertyNames": {
             "minLength": 1
@@ -635,24 +555,19 @@
           "description": "The host `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
           "type": "object",
           "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "$ref": "#/$defs/MatchspecTable"
-              }
-            ]
+            "anyOf": [{
+              "type": "string",
+              "minLength": 1
+            }, {
+              "$ref": "#/$defs/MatchspecTable"
+            }]
           },
           "propertyNames": {
             "minLength": 1
           },
-          "examples": [
-            {
-              "python": ">=3.8"
-            }
-          ]
+          "examples": [{
+            "python": ">=3.8"
+          }]
         },
         "platforms": {
           "title": "Platforms",
@@ -667,30 +582,22 @@
           "description": "The PyPI dependencies of this feature",
           "type": "object",
           "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "$ref": "#/$defs/PyPIVersion"
-              },
-              {
-                "$ref": "#/$defs/PyPIGitBranchRequirement"
-              },
-              {
-                "$ref": "#/$defs/PyPIGitTagRequirement"
-              },
-              {
-                "$ref": "#/$defs/PyPIGitRevRequirement"
-              },
-              {
-                "$ref": "#/$defs/PyPIPathRequirement"
-              },
-              {
-                "$ref": "#/$defs/PyPIUrlRequirement"
-              }
-            ]
+            "anyOf": [{
+              "type": "string",
+              "minLength": 1
+            }, {
+              "$ref": "#/$defs/PyPIVersion"
+            }, {
+              "$ref": "#/$defs/PyPIGitBranchRequirement"
+            }, {
+              "$ref": "#/$defs/PyPIGitTagRequirement"
+            }, {
+              "$ref": "#/$defs/PyPIGitRevRequirement"
+            }, {
+              "$ref": "#/$defs/PyPIPathRequirement"
+            }, {
+              "$ref": "#/$defs/PyPIUrlRequirement"
+            }]
           },
           "propertyNames": {
             "minLength": 1
@@ -714,15 +621,13 @@
           "propertyNames": {
             "minLength": 1
           },
-          "examples": [
-            {
-              "linux": {
-                "dependencies": {
-                  "python": "3.8"
-                }
+          "examples": [{
+            "linux": {
+              "dependencies": {
+                "python": "3.8"
               }
             }
-          ]
+          }]
         },
         "tasks": {
           "title": "Tasks",
@@ -730,21 +635,17 @@
           "type": "object",
           "patternProperties": {
             "^[^\\s\\$]+$": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/TaskInlineTable"
-                },
-                {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/$defs/DependsOn"
-                  }
-                },
-                {
-                  "type": "string",
-                  "minLength": 1
+              "anyOf": [{
+                "$ref": "#/$defs/TaskInlineTable"
+              }, {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/DependsOn"
                 }
-              ]
+              }, {
+                "type": "string",
+                "minLength": 1
+              }]
             }
           },
           "propertyNames": {
@@ -764,9 +665,7 @@
           "description": "Path to the directory of packages",
           "type": "string",
           "minLength": 1,
-          "examples": [
-            "./links"
-          ]
+          "examples": ["./links"]
         }
       }
     },
@@ -781,9 +680,7 @@
           "description": "URL to html file with href-links to packages",
           "type": "string",
           "minLength": 1,
-          "examples": [
-            "https://simple-index-is-here.com"
-          ]
+          "examples": ["https://simple-index-is-here.com"]
         }
       }
     },
@@ -797,23 +694,17 @@
           "description": "The family of the `libc`",
           "type": "string",
           "minLength": 1,
-          "examples": [
-            "glibc",
-            "musl"
-          ]
+          "examples": ["glibc", "musl"]
         },
         "version": {
           "title": "Version",
           "description": "The version of `libc`",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "string",
-              "minLength": 1
-            }
-          ]
+          "anyOf": [{
+            "type": "number"
+          }, {
+            "type": "string",
+            "minLength": 1
+          }]
         }
       }
     },
@@ -846,11 +737,7 @@
           "description": "The channel the packages needs to be fetched from",
           "type": "string",
           "minLength": 1,
-          "examples": [
-            "conda-forge",
-            "pytorch",
-            "https://repo.prefix.dev/conda-forge"
-          ]
+          "examples": ["conda-forge", "pytorch", "https://repo.prefix.dev/conda-forge"]
         },
         "file-name": {
           "title": "File-Name",
@@ -930,9 +817,7 @@
       "title": "Package",
       "description": "The package's metadata information.",
       "type": "object",
-      "required": [
-        "build"
-      ],
+      "required": ["build"],
       "additionalProperties": false,
       "properties": {
         "authors": {
@@ -943,9 +828,7 @@
             "type": "string",
             "minLength": 1
           },
-          "examples": [
-            "John Doe <j.doe@prefix.dev>"
-          ]
+          "examples": ["John Doe <j.doe@prefix.dev>"]
         },
         "build": {
           "$ref": "#/$defs/Build",
@@ -956,15 +839,12 @@
           "description": "The build `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
           "type": "object",
           "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "$ref": "#/$defs/MatchspecTable"
-              }
-            ]
+            "anyOf": [{
+              "type": "string",
+              "minLength": 1
+            }, {
+              "$ref": "#/$defs/MatchspecTable"
+            }]
           },
           "propertyNames": {
             "minLength": 1
@@ -995,24 +875,19 @@
           "description": "The host `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
           "type": "object",
           "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "$ref": "#/$defs/MatchspecTable"
-              }
-            ]
+            "anyOf": [{
+              "type": "string",
+              "minLength": 1
+            }, {
+              "$ref": "#/$defs/MatchspecTable"
+            }]
           },
           "propertyNames": {
             "minLength": 1
           },
-          "examples": [
-            {
-              "python": ">=3.8"
-            }
-          ]
+          "examples": [{
+            "python": ">=3.8"
+          }]
         },
         "license": {
           "title": "License",
@@ -1050,15 +925,12 @@
           "description": "The `conda` dependencies required at runtime. See https://pixi.sh/latest/build/dependency_types/ for more information.",
           "type": "object",
           "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "$ref": "#/$defs/MatchspecTable"
-              }
-            ]
+            "anyOf": [{
+              "type": "string",
+              "minLength": 1
+            }, {
+              "$ref": "#/$defs/MatchspecTable"
+            }]
           },
           "propertyNames": {
             "minLength": 1
@@ -1074,24 +946,20 @@
           "propertyNames": {
             "minLength": 1
           },
-          "examples": [
-            {
-              "linux": {
-                "host-dependencies": {
-                  "python": "3.8"
-                }
+          "examples": [{
+            "linux": {
+              "host-dependencies": {
+                "python": "3.8"
               }
             }
-          ]
+          }]
         },
         "version": {
           "title": "Version",
           "description": "The version of the project; we advise use of [SemVer](https://semver.org)",
           "type": "string",
           "minLength": 1,
-          "examples": [
-            "1.2.3"
-          ]
+          "examples": ["1.2.3"]
         }
       }
     },
@@ -1238,125 +1106,84 @@
             "type": "string",
             "minLength": 1
           },
-          "examples": [
-            [
-              "https://pypi.org/simple"
-            ]
-          ]
+          "examples": [["https://pypi.org/simple"]]
         },
         "find-links": {
           "title": "Find-Links",
           "description": "Paths to directory containing",
           "type": "array",
           "items": {
-            "anyOf": [
-              {
-                "$ref": "#/$defs/FindLinksPath"
-              },
-              {
-                "$ref": "#/$defs/FindLinksURL"
-              }
-            ]
+            "anyOf": [{
+              "$ref": "#/$defs/FindLinksPath"
+            }, {
+              "$ref": "#/$defs/FindLinksURL"
+            }]
           },
-          "examples": [
-            [
-              "https://pypi.org/simple"
-            ]
-          ]
+          "examples": [["https://pypi.org/simple"]]
         },
         "index-strategy": {
           "title": "Index-Strategy",
           "description": "The strategy to use when resolving packages from multiple indexes",
-          "anyOf": [
-            {
-              "type": "string",
-              "const": "first-index"
-            },
-            {
-              "type": "string",
-              "const": "unsafe-first-match"
-            },
-            {
-              "type": "string",
-              "const": "unsafe-best-match"
-            }
-          ],
-          "examples": [
-            "first-index",
-            "unsafe-first-match",
-            "unsafe-best-match"
-          ]
+          "anyOf": [{
+            "type": "string",
+            "const": "first-index"
+          }, {
+            "type": "string",
+            "const": "unsafe-first-match"
+          }, {
+            "type": "string",
+            "const": "unsafe-best-match"
+          }],
+          "examples": ["first-index", "unsafe-first-match", "unsafe-best-match"]
         },
         "index-url": {
           "title": "Index-Url",
           "description": "PyPI registry that should be used as the primary index",
           "type": "string",
           "minLength": 1,
-          "examples": [
-            "https://pypi.org/simple"
-          ]
+          "examples": ["https://pypi.org/simple"]
         },
         "no-binary": {
           "title": "No-Binary",
           "description": "Don't use pre-built wheels for these packages",
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "minLength": 1
-              }
+          "anyOf": [{
+            "type": "boolean"
+          }, {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
             }
-          ],
-          "examples": [
-            "true",
-            "false"
-          ]
+          }],
+          "examples": ["true", "false"]
         },
         "no-build": {
           "title": "No-Build",
           "description": "Packages that should NOT be built",
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "minLength": 1
-              }
+          "anyOf": [{
+            "type": "boolean"
+          }, {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
             }
-          ],
-          "examples": [
-            "true",
-            "false"
-          ]
+          }],
+          "examples": ["true", "false"]
         },
         "no-build-isolation": {
           "title": "No-Build-Isolation",
           "description": "Packages that should NOT be isolated during the build process",
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "minLength": 1
-              }
+          "anyOf": [{
+            "type": "boolean"
+          }, {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
             }
-          ],
-          "examples": [
-            [
-              "numpy"
-            ],
-            true
-          ]
+          }],
+          "examples": [["numpy"], true]
         }
       }
     },
@@ -1447,11 +1274,7 @@
       "title": "S3Options",
       "description": "Options related to S3 for this project",
       "type": "object",
-      "required": [
-        "endpoint-url",
-        "region",
-        "force-path-style"
-      ],
+      "required": ["endpoint-url", "region", "force-path-style"],
       "additionalProperties": false,
       "properties": {
         "endpoint-url": {
@@ -1459,9 +1282,7 @@
           "description": "The endpoint URL to use for the S3 client",
           "type": "string",
           "minLength": 1,
-          "examples": [
-            "https://s3.eu-central-1.amazonaws.com"
-          ]
+          "examples": ["https://s3.eu-central-1.amazonaws.com"]
         },
         "force-path-style": {
           "title": "Force-Path-Style",
@@ -1473,9 +1294,7 @@
           "description": "The region to use for the S3 client",
           "type": "string",
           "minLength": 1,
-          "examples": [
-            "eu-central-1"
-          ]
+          "examples": ["eu-central-1"]
         }
       }
     },
@@ -1494,75 +1313,57 @@
         "cuda": {
           "title": "Cuda",
           "description": "The minimum version of CUDA",
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "string",
-              "minLength": 1
-            }
-          ]
+          "anyOf": [{
+            "type": "number"
+          }, {
+            "type": "string",
+            "minLength": 1
+          }]
         },
         "libc": {
           "title": "Libc",
           "description": "The minimum version of `libc`",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/LibcFamily"
-            },
-            {
-              "type": "number"
-            },
-            {
-              "type": "string",
-              "minLength": 1
-            }
-          ]
+          "anyOf": [{
+            "$ref": "#/$defs/LibcFamily"
+          }, {
+            "type": "number"
+          }, {
+            "type": "string",
+            "minLength": 1
+          }]
         },
         "linux": {
           "title": "Linux",
           "description": "The minimum version of the Linux kernel",
-          "anyOf": [
-            {
-              "type": "number",
-              "exclusiveMinimum": 0
-            },
-            {
-              "type": "string",
-              "minLength": 1
-            }
-          ]
+          "anyOf": [{
+            "type": "number",
+            "exclusiveMinimum": 0
+          }, {
+            "type": "string",
+            "minLength": 1
+          }]
         },
         "macos": {
           "title": "Macos",
           "description": "The minimum version of MacOS",
-          "anyOf": [
-            {
-              "type": "number",
-              "exclusiveMinimum": 0
-            },
-            {
-              "type": "string",
-              "minLength": 1
-            }
-          ]
+          "anyOf": [{
+            "type": "number",
+            "exclusiveMinimum": 0
+          }, {
+            "type": "string",
+            "minLength": 1
+          }]
         },
         "unix": {
           "title": "Unix",
           "description": "Whether the project supports UNIX",
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "string",
-              "minLength": 1
-            }
-          ],
-          "examples": [
-            "true"
-          ]
+          "anyOf": [{
+            "type": "boolean"
+          }, {
+            "type": "string",
+            "minLength": 1
+          }],
+          "examples": ["true"]
         }
       }
     },
@@ -1581,15 +1382,12 @@
           "description": "The build `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
           "type": "object",
           "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "$ref": "#/$defs/MatchspecTable"
-              }
-            ]
+            "anyOf": [{
+              "type": "string",
+              "minLength": 1
+            }, {
+              "$ref": "#/$defs/MatchspecTable"
+            }]
           },
           "propertyNames": {
             "minLength": 1
@@ -1600,15 +1398,12 @@
           "description": "The `conda` dependencies, consisting of a package name and a requirement in [MatchSpec](https://github.com/conda/conda/blob/078e7ee79381060217e1ec7f9b0e9cf80ecc8f3f/conda/models/match_spec.py) format",
           "type": "object",
           "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "$ref": "#/$defs/MatchspecTable"
-              }
-            ]
+            "anyOf": [{
+              "type": "string",
+              "minLength": 1
+            }, {
+              "$ref": "#/$defs/MatchspecTable"
+            }]
           },
           "propertyNames": {
             "minLength": 1
@@ -1619,54 +1414,41 @@
           "description": "The host `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
           "type": "object",
           "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "$ref": "#/$defs/MatchspecTable"
-              }
-            ]
+            "anyOf": [{
+              "type": "string",
+              "minLength": 1
+            }, {
+              "$ref": "#/$defs/MatchspecTable"
+            }]
           },
           "propertyNames": {
             "minLength": 1
           },
-          "examples": [
-            {
-              "python": ">=3.8"
-            }
-          ]
+          "examples": [{
+            "python": ">=3.8"
+          }]
         },
         "pypi-dependencies": {
           "title": "Pypi-Dependencies",
           "description": "The PyPI dependencies for this target",
           "type": "object",
           "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "$ref": "#/$defs/PyPIVersion"
-              },
-              {
-                "$ref": "#/$defs/PyPIGitBranchRequirement"
-              },
-              {
-                "$ref": "#/$defs/PyPIGitTagRequirement"
-              },
-              {
-                "$ref": "#/$defs/PyPIGitRevRequirement"
-              },
-              {
-                "$ref": "#/$defs/PyPIPathRequirement"
-              },
-              {
-                "$ref": "#/$defs/PyPIUrlRequirement"
-              }
-            ]
+            "anyOf": [{
+              "type": "string",
+              "minLength": 1
+            }, {
+              "$ref": "#/$defs/PyPIVersion"
+            }, {
+              "$ref": "#/$defs/PyPIGitBranchRequirement"
+            }, {
+              "$ref": "#/$defs/PyPIGitTagRequirement"
+            }, {
+              "$ref": "#/$defs/PyPIGitRevRequirement"
+            }, {
+              "$ref": "#/$defs/PyPIPathRequirement"
+            }, {
+              "$ref": "#/$defs/PyPIUrlRequirement"
+            }]
           },
           "propertyNames": {
             "minLength": 1
@@ -1678,21 +1460,17 @@
           "type": "object",
           "patternProperties": {
             "^[^\\s\\$]+$": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/TaskInlineTable"
-                },
-                {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/$defs/DependsOn"
-                  }
-                },
-                {
-                  "type": "string",
-                  "minLength": 1
+              "anyOf": [{
+                "$ref": "#/$defs/TaskInlineTable"
+              }, {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/DependsOn"
                 }
-              ]
+              }, {
+                "type": "string",
+                "minLength": 1
+              }]
             }
           },
           "propertyNames": {
@@ -1705,9 +1483,7 @@
       "title": "TaskArgs",
       "description": "The arguments of a task.",
       "type": "object",
-      "required": [
-        "arg"
-      ],
+      "required": ["arg"],
       "additionalProperties": false,
       "properties": {
         "arg": {
@@ -1733,20 +1509,14 @@
           "description": "The arguments to pass to the task",
           "type": "array",
           "items": {
-            "anyOf": [
-              {
-                "$ref": "#/$defs/TaskArgs"
-              },
-              {
-                "type": "string",
-                "minLength": 1
-              }
-            ]
+            "anyOf": [{
+              "$ref": "#/$defs/TaskArgs"
+            }, {
+              "type": "string",
+              "minLength": 1
+            }]
           },
-          "examples": [
-            "arg1",
-            "arg2"
-          ]
+          "examples": ["arg1", "arg2"]
         },
         "clean-env": {
           "title": "Clean-Env",
@@ -1756,19 +1526,16 @@
         "cmd": {
           "title": "Cmd",
           "description": "A shell command to run the task in the limited, but cross-platform `bash`-like `deno_task_shell`. See the documentation for [supported syntax](https://pixi.sh/latest/environments/advanced_tasks/#syntax)",
-          "anyOf": [
-            {
-              "type": "array",
-              "items": {
-                "type": "string",
-                "minLength": 1
-              }
-            },
-            {
+          "anyOf": [{
+            "type": "array",
+            "items": {
               "type": "string",
               "minLength": 1
             }
-          ]
+          }, {
+            "type": "string",
+            "minLength": 1
+          }]
         },
         "cwd": {
           "title": "Cwd",
@@ -1779,59 +1546,47 @@
         "depends-on": {
           "title": "Depends-On",
           "description": "The tasks that this task depends on. Environment variables will **not** be expanded.",
-          "anyOf": [
-            {
-              "type": "array",
-              "items": {
-                "anyOf": [
-                  {
-                    "$ref": "#/$defs/DependsOn"
-                  },
-                  {
-                    "description": "A valid task name.",
-                    "type": "string",
-                    "pattern": "^[^\\s\\$]+$"
-                  }
-                ]
-              }
-            },
-            {
-              "$ref": "#/$defs/DependsOn"
-            },
-            {
-              "description": "A valid task name.",
-              "type": "string",
-              "pattern": "^[^\\s\\$]+$"
+          "anyOf": [{
+            "type": "array",
+            "items": {
+              "anyOf": [{
+                "$ref": "#/$defs/DependsOn"
+              }, {
+                "description": "A valid task name.",
+                "type": "string",
+                "pattern": "^[^\\s\\$]+$"
+              }]
             }
-          ]
+          }, {
+            "$ref": "#/$defs/DependsOn"
+          }, {
+            "description": "A valid task name.",
+            "type": "string",
+            "pattern": "^[^\\s\\$]+$"
+          }]
         },
         "depends_on": {
           "title": "Depends On",
           "description": "The tasks that this task depends on. Environment variables will **not** be expanded. Deprecated in favor of `depends-on` from v0.21.0 onward.",
-          "anyOf": [
-            {
-              "type": "array",
-              "items": {
-                "description": "A valid task name.",
-                "type": "string",
-                "pattern": "^[^\\s\\$]+$"
-              }
-            },
-            {
+          "anyOf": [{
+            "type": "array",
+            "items": {
               "description": "A valid task name.",
               "type": "string",
               "pattern": "^[^\\s\\$]+$"
             }
-          ]
+          }, {
+            "description": "A valid task name.",
+            "type": "string",
+            "pattern": "^[^\\s\\$]+$"
+          }]
         },
         "description": {
           "title": "Description",
           "description": "A short description of the task",
           "type": "string",
           "minLength": 1,
-          "examples": [
-            "Build the project"
-          ]
+          "examples": ["Build the project"]
         },
         "env": {
           "title": "Env",
@@ -1844,14 +1599,11 @@
           "propertyNames": {
             "minLength": 1
           },
-          "examples": [
-            {
-              "key": "value"
-            },
-            {
-              "ARGUMENT": "value"
-            }
-          ]
+          "examples": [{
+            "key": "value"
+          }, {
+            "ARGUMENT": "value"
+          }]
         },
         "inputs": {
           "title": "Inputs",
@@ -1877,9 +1629,7 @@
       "title": "Workspace",
       "description": "The project's metadata information.",
       "type": "object",
-      "required": [
-        "channels"
-      ],
+      "required": ["channels"],
       "additionalProperties": false,
       "properties": {
         "authors": {
@@ -1890,9 +1640,7 @@
             "type": "string",
             "minLength": 1
           },
-          "examples": [
-            "John Doe <j.doe@prefix.dev>"
-          ]
+          "examples": ["John Doe <j.doe@prefix.dev>"]
         },
         "build-variants": {
           "title": "Build-Variants",
@@ -1911,30 +1659,23 @@
         "channel-priority": {
           "$ref": "#/$defs/ChannelPriority",
           "description": "The type of channel priority that is used in the solve.- 'strict': only take the package from the channel it exist in first.- 'disabled': group all dependencies together as if there is no channel difference.",
-          "examples": [
-            "strict",
-            "disabled"
-          ]
+          "examples": ["strict", "disabled"]
         },
         "channels": {
           "title": "Channels",
           "description": "The `conda` channels that can be used in the project. Unless overridden by `priority`, the first channel listed will be preferred.",
           "type": "array",
           "items": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "type": "string",
-                "format": "uri",
-                "minLength": 1
-              },
-              {
-                "$ref": "#/$defs/ChannelInlineTable"
-              }
-            ]
+            "anyOf": [{
+              "type": "string",
+              "minLength": 1
+            }, {
+              "type": "string",
+              "format": "uri",
+              "minLength": 1
+            }, {
+              "$ref": "#/$defs/ChannelInlineTable"
+            }]
           }
         },
         "conda-pypi-map": {
@@ -1942,17 +1683,14 @@
           "description": "The `conda` to PyPI mapping configuration",
           "type": "object",
           "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uri",
-                "minLength": 1
-              },
-              {
-                "type": "string",
-                "minLength": 1
-              }
-            ]
+            "anyOf": [{
+              "type": "string",
+              "format": "uri",
+              "minLength": 1
+            }, {
+              "type": "string",
+              "minLength": 1
+            }]
           }
         },
         "description": {
@@ -1973,10 +1711,7 @@
           "description": "Exclude any package newer than this date",
           "type": "string",
           "pattern": "^\\d{4}-\\d{2}-\\d{2}([T ]\\d{2}:\\d{2}:\\d{2}(Z|[+-]\\d{2}:\\d{2}))?$",
-          "examples": [
-            "2023-11-03",
-            "2023-11-03T03:33:12Z"
-          ]
+          "examples": ["2023-11-03", "2023-11-03T03:33:12Z"]
         },
         "homepage": {
           "title": "Homepage",
@@ -2014,26 +1749,20 @@
         "preview": {
           "title": "Preview",
           "description": "Defines the enabling of preview features of the project",
-          "anyOf": [
-            {
-              "type": "array",
-              "items": {
-                "anyOf": [
-                  {
-                    "description": "Enables building of source records",
-                    "type": "string",
-                    "const": "pixi-build"
-                  },
-                  {
-                    "type": "string"
-                  }
-                ]
-              }
-            },
-            {
-              "type": "boolean"
+          "anyOf": [{
+            "type": "array",
+            "items": {
+              "anyOf": [{
+                "description": "Enables building of source records",
+                "type": "string",
+                "const": "pixi-build"
+              }, {
+                "type": "string"
+              }]
             }
-          ]
+          }, {
+            "type": "boolean"
+          }]
         },
         "pypi-options": {
           "$ref": "#/$defs/PyPIOptions",
@@ -2057,9 +1786,7 @@
           "description": "The required version spec for pixi itself to resolve and build the project.",
           "type": "string",
           "minLength": 1,
-          "examples": [
-            ">=0.40"
-          ]
+          "examples": [">=0.40"]
         },
         "s3-options": {
           "title": "S3-Options",
@@ -2074,9 +1801,7 @@
           "description": "The version of the project; we advise use of [SemVer](https://semver.org)",
           "type": "string",
           "minLength": 1,
-          "examples": [
-            "1.2.3"
-          ]
+          "examples": ["1.2.3"]
         }
       }
     }

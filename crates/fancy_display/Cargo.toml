@@ -1,14 +1,13 @@
 [package]
+name = "fancy_display"
+version = "0.1.0"
 authors.workspace = true
-description = "Easy conversion into a styled-object"
 edition.workspace = true
 homepage.workspace = true
 license.workspace = true
-name = "fancy_display"
 readme.workspace = true
 repository.workspace = true
-version = "0.1.0"
-
+description = "Easy conversion into a styled-object"
 
 [dependencies]
 console = { workspace = true }
