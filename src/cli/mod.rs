@@ -78,8 +78,8 @@ pub struct Args {
 #[derive(Debug, Parser)]
 pub struct GlobalOptions {
     /// Display help information
-    #[clap(long, short, global = true, help_heading = consts::CLAP_GLOBAL_OPTIONS)]
-    help: bool,
+    #[clap(long = "help", short = 'h', id = "help_flag", global = true, help_heading = consts::CLAP_GLOBAL_OPTIONS)]
+    help_flag: bool,
 
     /// Increase logging verbosity (-v for warnings, -vv for info, -vvv for debug, -vvvv for trace)
     #[clap(short = 'v', long, action = clap::ArgAction::Count, global = true, help_heading = consts::CLAP_GLOBAL_OPTIONS)]
@@ -138,7 +138,6 @@ pub enum Command {
     Exec(exec::Args),
     #[clap(visible_alias = "g")]
     Global(global::Args),
-    Help,
     Info(info::Args),
     Init(init::Args),
     Import(import::Args),
@@ -298,7 +297,7 @@ pub async fn execute() -> miette::Result<()> {
     let args = Args::parse();
 
     // Handle help flag
-    if args.global_options.help {
+    if args.global_options.help_flag {
         show_help_with_extensions();
         return Ok(());
     }
@@ -432,10 +431,12 @@ pub async fn execute_command(
         Command::Lock(cmd) => lock::execute(cmd).await,
         Command::Exec(args) => exec::execute(args).await,
         Command::Build(args) => build::execute(args).await,
-        Command::External(args) => command_info::execute_external_command(args),
-        Command::Help => {
-            show_help_with_extensions();
-            Ok(())
+        Command::External(args) => {
+            if matches!(args.first().map(String::as_str), Some("help")) {
+                show_help_with_extensions();
+                return Ok(());
+            }
+            command_info::execute_external_command(args)
         }
     }
 }
