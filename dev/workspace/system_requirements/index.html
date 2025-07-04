@@ -104,7 +104,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#default-system-requirements" class="md-skip">
+        <a href="#maximum-or-minimum-system-requirements" class="md-skip">
           Skip to content
         </a>
       
@@ -996,6 +996,15 @@
       Table of contents
     </label>
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#maximum-or-minimum-system-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      Maximum or Minimum System Requirements
+    </span>
+  </a>
+  
+</li>
       
         <li class="md-nav__item">
   <a href="#default-system-requirements" class="md-nav__link">
@@ -2684,6 +2693,15 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#maximum-or-minimum-system-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      Maximum or Minimum System Requirements
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#default-system-requirements" class="md-nav__link">
     <span class="md-ellipsis">
       Default System Requirements
@@ -2778,28 +2796,63 @@
 
   <h1>System Requirements</h1>
 
-<p><strong>System requirements</strong> tell Pixi the minimum system specifications needed to install and run your workspace’s environment.
+<p><strong>System requirements</strong> tell Pixi the system specifications needed to install and run your workspace’s environment.
 They ensure that the dependencies match the operating system and hardware of your machine.</p>
-<p>Think of it like this:
-You’re defining what “kind of computer” your workspace can run on.
-For example, you might require a specific Linux kernel version or a minimum glibc version.
-If your machine doesn’t meet these requirements, <code>pixi run</code> will fail because the environment can’t work reliably on your system.</p>
+<div class="admonition note">
+<p class="admonition-title">Think of it like this:</p>
+<p>You’re defining what “kind of machines” your workspace can run on.
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">[system-requirements]</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">linux</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;4.18&quot;</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">libc</span><span class="w">   </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">family</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;glibc&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;2.28&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">cuda</span><span class="w">   </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;12&quot;</span>
+</span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="n">macos</span><span class="w">  </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;13.0&quot;</span>
+</span></code></pre></div>
+This results in a workspace that can run on:</p>
+<ul>
+<li>Linux with kernel version <code>4.18</code></li>
+<li>GNU C Library (glibc) version <code>2.28</code></li>
+<li>CUDA version <code>12</code></li>
+<li>macOS version <code>13.0</code></li>
+</ul>
+</div>
 <p>When resolving dependencies, Pixi combines:</p>
 <ul>
-<li>The default requirements for the operating system.</li>
+<li>The default requirements for the <code>platforms</code>.</li>
 <li>Any custom requirements you’ve added for your workspace through the <code>[system-requirements]</code>.</li>
 </ul>
 <p>This way, Pixi guarantees your environment is consistent and compatible with your machine.</p>
 <p>System specifications are closely related to <a href="https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html">virtual packages</a>, allowing for flexible and accurate dependency management.</p>
+<div class="admonition note">
+<p class="admonition-title">Need to support multiple types of systems that don't share the same specifications?</p>
+<p>You can define <code>system-requirements</code> for different <code>features</code> in your workspace.
+For example, if you have a feature that requires CUDA and another that does not, you can specify the system requirements for each feature separately.
+Check the example <a href="#setting-system-requirements-environment-specific">below</a> for more details.</p>
+</div>
+<h2 id="maximum-or-minimum-system-requirements">Maximum or Minimum System Requirements<a class="headerlink" href="#maximum-or-minimum-system-requirements" title="Permanent link">#</a></h2>
+<p>The system requirements don't specify a maximum or minimum version.
+They specify the version that can be expected on the host system.
+It's up to the dependency resolver to determine if the system meets the requirements based on the versions available.
+e.g.:</p>
+<ul>
+<li>a package can require <code>__cuda &gt;= 12</code> and the system can have <code>12.1</code>, <code>12.6</code>, or any higher version.</li>
+<li>a package can require <code>__cuda &lt;= 12</code> and the system can have <code>12.0.0</code>, <code>11</code>, or any lower version.</li>
+</ul>
+<p>Most of the time, packages will specify the minimum version (<code>&gt;=</code>) it requires.
+So we often say that the <code>system-requirements</code> define the minimum version of the system specifications.</p>
+<p>For example <a href="https://conda-metadata-app.streamlit.app/?q=conda-forge%2Fnoarch%2Fcuda-version-12.9-h4f385c5_3.conda"><code>cuda-version-12.9-h4f385c5_3.conda</code></a>
+contains the following package constraints:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>cudatoolkit 12.9|12.9.*
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>__cuda &gt;=12
+</span></code></pre></div>
 <h2 id="default-system-requirements">Default System Requirements<a class="headerlink" href="#default-system-requirements" title="Permanent link">#</a></h2>
-<p>The following configurations outline the default minimal system requirements for different operating systems:</p>
+<p>The following configurations outline the default system requirements for different operating systems:</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:4"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><input id="__tabbed_1_4" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Linux</label><label for="__tabbed_1_2">Windows</label><label for="__tabbed_1_3">osx-64</label><label for="__tabbed_1_4">osx-arm64</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Default system requirements for Linux</span>
-</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">[system-requirements]</span>
-</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">linux</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;4.18&quot;</span>
-</span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">libc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">family</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;glibc&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;2.28&quot;</span><span class="w"> </span><span class="p">}</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Default system requirements for Linux</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">[system-requirements]</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">linux</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;4.18&quot;</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">libc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">family</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;glibc&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;2.28&quot;</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
@@ -2807,15 +2860,15 @@ If your machine doesn’t meet these requirements, <code>pixi run</code> will fa
 you should define them accordingly.</p>
 </div>
 <div class="tabbed-block">
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Default system requirements for macOS</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="k">[system-requirements]</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">macos</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;13.0&quot;</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Default system requirements for macOS</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="k">[system-requirements]</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">macos</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;13.0&quot;</span>
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Default system requirements for macOS ARM64</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">[system-requirements]</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">macos</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;13.0&quot;</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Default system requirements for macOS ARM64</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="k">[system-requirements]</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">macos</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;13.0&quot;</span>
 </span></code></pre></div>
 </div>
 </div>
@@ -2825,33 +2878,33 @@ you should define them accordingly.</p>
 This is common when installing environments on older or newer versions of operating systems.</p>
 <h3 id="adjusting-for-older-systems">Adjusting for Older Systems<a class="headerlink" href="#adjusting-for-older-systems" title="Permanent link">#</a></h3>
 <p>If you're encountering an error like:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>×<span class="w"> </span>The<span class="w"> </span>current<span class="w"> </span>system<span class="w"> </span>has<span class="w"> </span>a<span class="w"> </span>mismatching<span class="w"> </span>virtual<span class="w"> </span>package.<span class="w"> </span>The<span class="w"> </span>workspace<span class="w"> </span>requires<span class="w"> </span><span class="s1">&#39;__linux&#39;</span><span class="w"> </span>to<span class="w"> </span>be<span class="w"> </span>at<span class="w"> </span>least<span class="w"> </span>version<span class="w"> </span><span class="s1">&#39;4.18&#39;</span><span class="w"> </span>but<span class="w"> </span>the<span class="w"> </span>system<span class="w"> </span>has<span class="w"> </span>version<span class="w"> </span><span class="s1">&#39;4.12.14&#39;</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>×<span class="w"> </span>The<span class="w"> </span>current<span class="w"> </span>system<span class="w"> </span>has<span class="w"> </span>a<span class="w"> </span>mismatching<span class="w"> </span>virtual<span class="w"> </span>package.<span class="w"> </span>The<span class="w"> </span>workspace<span class="w"> </span>requires<span class="w"> </span><span class="s1">&#39;__linux&#39;</span><span class="w"> </span>to<span class="w"> </span>be<span class="w"> </span>at<span class="w"> </span>least<span class="w"> </span>version<span class="w"> </span><span class="s1">&#39;4.18&#39;</span><span class="w"> </span>but<span class="w"> </span>the<span class="w"> </span>system<span class="w"> </span>has<span class="w"> </span>version<span class="w"> </span><span class="s1">&#39;4.12.14&#39;</span>
 </span></code></pre></div>
 <p>This indicates that the workspace's system requirements are higher than your current system's specifications.
 To resolve this, you can lower the system requirements in your workspace's configuration:</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[system-requirements]</span>
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">linux</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;4.12.14&quot;</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">[system-requirements]</span>
+</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">linux</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;4.12.14&quot;</span>
 </span></code></pre></div>
 <p>This adjustment informs the dependency resolver to accommodate the older system version.</p>
 <h3 id="using-cuda-in-pixi">Using CUDA in pixi<a class="headerlink" href="#using-cuda-in-pixi" title="Permanent link">#</a></h3>
 <p>To utilize CUDA in your workspace, you must specify the desired CUDA version in the system-requirements table.
 This ensures that CUDA is recognized and appropriately locked into the lock file if necessary.</p>
 <p>Example Configuration</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">[system-requirements]</span>
-</span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">cuda</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;12&quot;</span><span class="w">  </span><span class="c1"># Replace &quot;12&quot; with the specific CUDA version you intend to use</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">[system-requirements]</span>
+</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">cuda</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;12&quot;</span><span class="w">  </span><span class="c1"># Replace &quot;12&quot; with the specific CUDA version you intend to use</span>
 </span></code></pre></div>
 <ol>
 <li>Can <code>system-requirements</code> enforce a specific CUDA runtime version?
-    - No. The <code>system-requirements</code> field is used to specify the maximum supported CUDA version based on the host’s NVIDIA driver API.
+    - No. The <code>system-requirements</code> field is used to specify the supported CUDA version based on the host’s NVIDIA driver API.
 Adding this field ensures that packages depending on <code>__cuda &gt;= {version}</code> are resolved correctly.</li>
 </ol>
 <h3 id="setting-system-requirements-environment-specific">Setting System Requirements environment specific<a class="headerlink" href="#setting-system-requirements-environment-specific" title="Permanent link">#</a></h3>
 <p>This can be set per <code>feature</code> in the <code>the manifest</code> file.</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">[feature.cuda.system-requirements]</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">cuda</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;12&quot;</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="k">[environments]</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="n">cuda</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;cuda&quot;</span><span class="p">]</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="k">[feature.cuda.system-requirements]</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">cuda</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;12&quot;</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="k">[environments]</span>
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="n">cuda</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;cuda&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 <h3 id="available-override-options">Available Override Options<a class="headerlink" href="#available-override-options" title="Permanent link">#</a></h3>
 <p>In certain scenarios, you might need to override the system requirements detected on your machine.
