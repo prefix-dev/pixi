@@ -1,5 +1,6 @@
 site_name: "Pixi by prefix.dev"
 site_url: https://prefix-dev.github.io/pixi
+site_description: Pixi Documentation — Next-gen package manager for reproducible development setups
 
 theme:
   name: material
