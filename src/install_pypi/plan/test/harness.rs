@@ -13,6 +13,7 @@ use uv_distribution_filename::WheelFilename;
 use uv_distribution_types::{InstalledDirectUrlDist, InstalledDist, InstalledRegistryDist};
 use uv_pypi_types::DirectUrl::VcsUrl;
 use uv_pypi_types::{ArchiveInfo, DirectUrl, ParsedGitUrl, VcsInfo, VcsKind};
+use uv_redacted::DisplaySafeUrl;
 
 #[derive(Default)]
 /// Builder to create installed dists
@@ -59,7 +60,7 @@ impl InstalledDistBuilder {
             name,
             version,
             direct_url: Box::new(direct_url.clone()),
-            url: directory_url,
+            url: directory_url.into(),
             editable,
             path: install_path.into(),
             cache_info: None,
@@ -91,7 +92,7 @@ impl InstalledDistBuilder {
             name,
             version,
             direct_url: Box::new(direct_url.clone()),
-            url,
+            url: url.into(),
             editable: false,
             path: install_path.into(),
             cache_info: None,
@@ -110,8 +111,18 @@ impl InstalledDistBuilder {
         let version =
             uv_pep440::Version::from_str(version.as_ref()).expect("cannot parse pep440 version");
 
+        // Strip git+ from the url if it is present
+        let url = url
+            .to_string()
+            .strip_prefix("git+")
+            .map(ToString::to_string)
+            .unwrap_or_else(|| url.to_string())
+            .parse::<Url>()
+            .unwrap();
+
         // Parse git url and extract git commit, use this as the commit_id
-        let parsed_git_url = ParsedGitUrl::try_from(url.clone()).expect("should parse git url");
+        let parsed_git_url = ParsedGitUrl::try_from(DisplaySafeUrl::from(url.clone()))
+            .expect("should parse git url");
 
         let direct_url = VcsUrl {
             url: url.to_string(),
@@ -131,7 +142,7 @@ impl InstalledDistBuilder {
             name,
             version,
             direct_url: Box::new(direct_url.clone()),
-            url,
+            url: url.into(),
             path: install_path.into(),
             editable: false,
             cache_info: None,
