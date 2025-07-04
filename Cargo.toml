@@ -393,8 +393,6 @@ rstest = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["rt"] }
 
-
-# Local uv development patches
 [patch.crates-io]
 # This is a temporary patch to get `cargo vendor` to work with the `uv` and pep508_rs` crates.
 version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "06ec5a5f59ffaeb6cf5079c6cb184467da06c9db" }

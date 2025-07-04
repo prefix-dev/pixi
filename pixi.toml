@@ -95,10 +95,35 @@ cffconvert = ">=2.0.0,<2.1"
 tbump = ">=6.9.0,<6.10"
 
 [feature.dev.tasks]
-switch-to-local-uv = { cmd = "python scripts/uv_local_patch.py local ../uv", description = "Switch to local uv development dependencies" }
-switch-to-remote-uv = { cmd = "python scripts/uv_local_patch.py remote", description = "Switch back to remote uv dependencies" }
 update-rattler = "cargo upgrade -p rattler -p file_url -p rattler_cache -p rattler_conda_types -p rattler_digest -p rattler_lock -p rattler_networking -p rattler_repodata_gateway -p rattler_shell -p rattler_solve -p rattler_virtual_packages"
-update-uv-local = { cmd = "python scripts/uv_local_patch.py local ../uv", description = "Update local uv patches" }
+
+# UV dependency management
+switch-to-remote-uv = { cmd = "python scripts/local_patch.py uv remote", description = "Switch back to remote uv dependencies" }
+
+[feature.dev.tasks.switch-to-local-uv]
+args = [{ arg = "uv_path", default = "../uv" }]
+cmd = "python scripts/local_patch.py uv local {{ uv_path }}"
+description = "Switch to local uv development dependencies"
+
+[feature.dev.tasks.update-uv-local]
+args = [{ arg = "uv_path", default = "../uv" }]
+cmd = "python scripts/local_patch.py uv local {{ uv_path }}"
+description = "Update local uv patches"
+
+# Rattler dependency management
+[feature.dev.tasks.switch-to-local-rattler]
+args = [{ arg = "rattler_path", default = "../rattler" }]
+cmd = "python scripts/local_patch.py rattler local {{ rattler_path }}"
+description = "Switch to local rattler development dependencies"
+
+[feature.dev.tasks.switch-to-remote-rattler]
+cmd = "python scripts/local_patch.py rattler remote"
+description = "Switch back to remote rattler dependencies"
+
+[feature.dev.tasks.update-rattler-local]
+args = [{ arg = "rattler_path", default = "../rattler" }]
+cmd = "python scripts/local_patch.py rattler local {{ rattler_path }}"
+description = "Update local rattler patches"
 
 
 [feature.lint.dependencies]
