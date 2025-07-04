@@ -36,9 +36,9 @@ use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_distribution_filename::{DistExtension, ExtensionError, SourceDistExtension};
 use uv_distribution_types::RequirementSource;
+use uv_distribution_types::RequiresPython;
 use uv_git_types::GitReference;
 use uv_pypi_types::ParsedUrlError;
-use uv_resolver::RequiresPython;
 
 use super::{
     PixiRecordsByName, PypiRecord, PypiRecordsByName, package_identifier::ConversionError,
@@ -857,7 +857,7 @@ pub(crate) fn pypi_satifisfies_requirement(
                     .and_then(|str| Url::parse(str).ok())
                     .unwrap_or(locked_url.clone());
 
-                if *spec_url.raw() == locked_url {
+                if *spec_url.raw() == locked_url.clone().into() {
                     return Ok(());
                 } else {
                     return Err(PlatformUnsat::LockedPyPIDirectUrlMismatch {
