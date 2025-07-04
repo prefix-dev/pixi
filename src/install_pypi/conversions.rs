@@ -18,6 +18,8 @@ use uv_distribution_types::{
 use uv_pypi_types::{HashAlgorithm, HashDigest, ParsedUrl, ParsedUrlError, VerbatimParsedUrl};
 
 use super::utils::{is_direct_url, strip_direct_scheme};
+use pixi_utils::hash::parse_hash_from_url_fragment;
+use pixi_utils::hash::update_fragment_with_hash;
 
 /// Converts our locked data to a file
 pub fn locked_data_to_file(
@@ -82,6 +84,8 @@ pub enum ConvertToUvDistError {
     Extension(#[source] ExtensionError, String),
     #[error("error parsing locked git url {0} {1}")]
     LockedUrl(String, String),
+    #[error("Hash verification failed: {0}")]
+    InvalidHash(String),
 
     #[error(transparent)]
     UvPepTypes(#[from] ConversionError),
@@ -98,8 +102,35 @@ pub fn convert_to_dist(
             let url_without_direct = strip_direct_scheme(url);
             let pkg_name = to_uv_normalize(&pkg.name)?;
 
-            if LockedGitUrl::is_locked_git_url(&url_without_direct) {
-                let locked_git_url = LockedGitUrl::new(url_without_direct.clone().into_owned());
+            // Convert to owned URL so we can modify it if needed
+            let mut final_url = url_without_direct.into_owned();
+
+            // Extract and validate hash from URL fragment if present
+            let url_hash = match final_url.fragment() {
+                Some(fragment) => {
+                    parse_hash_from_url_fragment(fragment, &pkg.name).map_err(|e| {
+                        // strip the shared prefix if present to avoid duplication
+                        let msg = e
+                            .strip_prefix("Hash verification failed: ")
+                            .unwrap_or(&e)
+                            .to_string();
+                        ConvertToUvDistError::InvalidHash(msg)
+                    })?
+                }
+                None => None,
+            };
+
+            // Use the hash from the lock file, or the one from the URL if not in lock
+            let final_hash = pkg.hash.as_ref().or(url_hash.as_ref());
+
+            // If we have a hash, update the URL fragment while preserving other parameters
+            if let Some(hash) = final_hash {
+                let updated_fragment = update_fragment_with_hash(final_url.fragment(), hash);
+                final_url.set_fragment(Some(&updated_fragment));
+            }
+
+            if LockedGitUrl::is_locked_git_url(&final_url) {
+                let locked_git_url = LockedGitUrl::new(final_url.clone());
                 let parsed_git_url = to_parsed_git_url(&locked_git_url).map_err(|err| {
                     ConvertToUvDistError::LockedUrl(
                         err.to_string(),
@@ -111,16 +142,19 @@ pub fn convert_to_dist(
                     pkg_name,
                     VerbatimParsedUrl {
                         parsed_url: ParsedUrl::Git(parsed_git_url),
-                        verbatim: uv_pep508::VerbatimUrl::from(url_without_direct.into_owned()),
+                        verbatim: uv_pep508::VerbatimUrl::from(final_url),
                     },
                 )?
             } else {
+                // For non-git direct URLs, create DirectUrl distribution
+                let parsed_url = ParsedUrl::try_from(final_url.clone())
+                    .map_err(|e| ConvertToUvDistError::ParseUrl(Box::new(e)))?;
+
                 Dist::from_url(
                     pkg_name,
                     VerbatimParsedUrl {
-                        parsed_url: ParsedUrl::try_from(url_without_direct.clone().into_owned())
-                            .map_err(Box::new)?,
-                        verbatim: uv_pep508::VerbatimUrl::from(url_without_direct.into_owned()),
+                        parsed_url,
+                        verbatim: uv_pep508::VerbatimUrl::from(final_url),
                     },
                 )?
             }
@@ -220,8 +254,9 @@ mod tests {
     use std::{path::PathBuf, str::FromStr};
 
     use pep440_rs::Version;
-    use rattler_lock::{PypiPackageData, UrlOrPath};
-    use uv_distribution_types::RemoteSource;
+    use rattler_digest::{Sha256, parse_digest_from_hex};
+    use rattler_lock::{PackageHashes, PypiPackageData, UrlOrPath};
+    use uv_distribution_types::{Dist, RemoteSource, SourceDist};
 
     use super::convert_to_dist;
 
@@ -249,5 +284,58 @@ mod tests {
 
         // Check if the dist is a built dist
         assert!(!dist.filename().unwrap().contains("%2B"));
+    }
+
+    #[test]
+    fn test_convert_to_dist_preserves_fragment_params() {
+        // Test that convert_to_dist preserves egg and subdirectory parameters when adding hash
+        let url_with_fragment =
+            "direct+https://github.com/org/repo/archive.zip#egg=mypackage&subdirectory=src"
+                .parse()
+                .unwrap();
+
+        let sha256_hash = parse_digest_from_hex::<Sha256>(
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        )
+        .unwrap();
+
+        let locked = PypiPackageData {
+            name: "mypackage".parse().unwrap(),
+            version: Version::from_str("1.0.0").unwrap(),
+            location: UrlOrPath::Url(url_with_fragment),
+            hash: Some(PackageHashes::Sha256(sha256_hash)),
+            requires_dist: vec![],
+            requires_python: None,
+            editable: false,
+        };
+
+        let dist = convert_to_dist(&locked, &PathBuf::new()).expect("could not convert to dist");
+
+        // Get the URL from the dist
+        match &dist {
+            Dist::Source(SourceDist::DirectUrl(direct)) => {
+                let url = direct.url.to_url();
+                let fragment = url.fragment().expect("URL should have fragment");
+                // Verify all parameters are preserved
+                assert!(
+                    fragment.contains("egg=mypackage"),
+                    "Fragment should contain egg parameter"
+                );
+                assert!(
+                    fragment.contains("subdirectory=src"),
+                    "Fragment should contain subdirectory parameter"
+                );
+                assert!(
+                    fragment.contains(
+                        "sha256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                    ),
+                    "Fragment should contain SHA256 hash"
+                );
+            }
+            _ => panic!(
+                "Expected dist to be a DirectUrl source distribution, got {:?}",
+                dist
+            ),
+        }
     }
 }

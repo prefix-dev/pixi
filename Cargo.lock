@@ -4633,6 +4633,8 @@ dependencies = [
  "pixi_config",
  "pixi_consts",
  "rattler_conda_types",
+ "rattler_digest",
+ "rattler_lock",
  "rattler_networking",
  "reqwest",
  "reqwest-middleware",
