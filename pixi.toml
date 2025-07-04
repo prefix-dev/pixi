@@ -105,11 +105,6 @@ args = [{ arg = "uv_path", default = "../uv" }]
 cmd = "python scripts/local_patch.py uv local {{ uv_path }}"
 description = "Switch to local uv development dependencies"
 
-[feature.dev.tasks.update-uv-local]
-args = [{ arg = "uv_path", default = "../uv" }]
-cmd = "python scripts/local_patch.py uv local {{ uv_path }}"
-description = "Update local uv patches"
-
 # Rattler dependency management
 [feature.dev.tasks.switch-to-local-rattler]
 args = [{ arg = "rattler_path", default = "../rattler" }]
@@ -119,11 +114,6 @@ description = "Switch to local rattler development dependencies"
 [feature.dev.tasks.switch-to-remote-rattler]
 cmd = "python scripts/local_patch.py rattler remote"
 description = "Switch back to remote rattler dependencies"
-
-[feature.dev.tasks.update-rattler-local]
-args = [{ arg = "rattler_path", default = "../rattler" }]
-cmd = "python scripts/local_patch.py rattler local {{ rattler_path }}"
-description = "Update local rattler patches"
 
 
 [feature.lint.dependencies]
