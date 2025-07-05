@@ -171,6 +171,7 @@ nav:
   - Advanced:
       - Channel Logic: advanced/channel_logic.md
       - Info Command: advanced/explain_info_command.md
+      - Dependency Overrides: overrides/override.md
       - Shebang: advanced/shebang.md
       - Shell: advanced/pixi_shell.md
   - Reference:
