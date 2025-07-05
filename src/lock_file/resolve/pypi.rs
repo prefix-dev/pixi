@@ -347,7 +347,10 @@ pub async fn resolve_pypi(
     let registry_client = Arc::new(uv_client_builder.build());
 
     let build_options =
-        no_build_to_build_options(&pypi_options.no_build.clone().unwrap_or_default())
+        pypi_options_to_build_options(
+        &pypi_options.no_build.clone().unwrap_or_default(),
+        &pypi_options.no_binary.clone().unwrap_or_default(),
+    )
             .into_diagnostic()?;
     let dependency_overrides =
         pypi_options.dependency_overrides.as_ref().map(|overrides| {
@@ -369,11 +372,6 @@ pub async fn resolve_pypi(
         }).unwrap_or_default();
 
     let overrides = Overrides::from_requirements(dependency_overrides);
-    let build_options = pypi_options_to_build_options(
-        &pypi_options.no_build.clone().unwrap_or_default(),
-        &pypi_options.no_binary.clone().unwrap_or_default(),
-    )
-    .into_diagnostic()?;
 
     // Resolve the flat indexes from `--find-links`.
     // In UV 0.7.8, we need to fetch flat index entries from the index locations
