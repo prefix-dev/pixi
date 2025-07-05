@@ -30,7 +30,7 @@ use once_cell::sync::OnceCell;
 use pep508_rs::Requirement;
 use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{CacheDirs, CommandDispatcher, CommandDispatcherBuilder, Limits};
-use pixi_config::Config;
+use pixi_config::{Config, RunPostLinkScripts};
 use pixi_consts::consts;
 use pixi_manifest::{
     AssociateProvenance, EnvironmentName, Environments, ExplicitManifestError,
@@ -52,11 +52,11 @@ use url::Url;
 pub use workspace_mut::WorkspaceMut;
 use xxhash_rust::xxh3::xxh3_64;
 
-use crate::repodata::Repodata;
 use crate::{
     activation::{CurrentEnvVarBehavior, initialize_env_variables},
     diff::LockFileDiff,
     lock_file::filter_lock_file,
+    repodata::Repodata,
 };
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
@@ -349,7 +349,7 @@ impl Workspace {
             let detached_environments_path =
                 detached_environments_path.join(consts::ENVIRONMENTS_DIR);
             let _ = CUSTOM_TARGET_DIR_WARN.get_or_init(|| {
-                if default_envs_dir.exists() && !default_envs_dir.is_symlink() {
+                if !default_envs_dir.is_symlink() && self.environments().iter().any(|env| default_envs_dir.join(env.name().as_str()).exists()) {
                     tracing::warn!(
                         "Environments found in '{}', this will be ignored and the environment will be installed in the 'detached-environments' directory: '{}'. It's advised to remove the {} folder from the default directory to avoid confusion{}.",
                         default_envs_dir.display(),
@@ -499,8 +499,13 @@ impl Workspace {
             .with_max_download_concurrency(self.concurrent_downloads_semaphore())
             .with_limits(Limits {
                 max_concurrent_solves: self.config().max_concurrent_solves().into(),
+                ..Limits::default()
             })
-            .with_backend_overrides(BackendOverride::from_env()?.unwrap_or_default()))
+            .with_backend_overrides(BackendOverride::from_env()?.unwrap_or_default())
+            .execute_link_scripts(match self.config.run_post_link_scripts() {
+                RunPostLinkScripts::Insecure => true,
+                RunPostLinkScripts::False => false,
+            }))
     }
 
     fn client_and_authenticated_client(

@@ -8,7 +8,7 @@ from typing import Generator
 
 from rattler import Platform
 
-PIXI_VERSION = "0.48.2"
+PIXI_VERSION = "0.49.0"
 
 
 ALL_PLATFORMS = '["linux-64", "osx-64", "osx-arm64", "win-64", "linux-ppc64le", "linux-aarch64"]'
@@ -59,8 +59,8 @@ def verify_cli_command(
 ) -> Output:
     base_env = {} if reset_env else dict(os.environ)
     complete_env = base_env if env is None else base_env | env
-    # Set `NO_GRAPHICS` to avoid to have miette splitting up lines
-    complete_env |= {"NO_GRAPHICS": "1"}
+    # Set `PIXI_NO_WRAP` to avoid to have miette wrapping lines
+    complete_env |= {"PIXI_NO_WRAP": "1"}
 
     process = subprocess.run(
         command,

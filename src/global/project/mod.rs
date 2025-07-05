@@ -563,12 +563,6 @@ impl Project {
                 },
             )
             .into_diagnostic()
-            .wrap_err_with(|| {
-                miette::miette!(
-                    "Failed to determine virtual packages for environment {}",
-                    cloned_env_name.fancy_display()
-                )
-            })
         })
         .await
         .into_diagnostic()??;
@@ -618,6 +612,11 @@ impl Project {
         &mut self,
         env_name: &EnvironmentName,
     ) -> miette::Result<StateChanges> {
+        // Check if the environment exists in the manifest first, before creating any directories
+        if !self.manifest.parsed.envs.contains_key(env_name) {
+            miette::bail!("Environment {} doesn't exist.", env_name.fancy_display());
+        }
+
         let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
         let mut state_changes = StateChanges::new_with_env(env_name.clone());
 

@@ -40,6 +40,14 @@
   --md-accent-bg-color--light: #0000008a
 }
 
+/* px value guess that worked well for the header */
+/* Unfortunately there is no variable that we can use to see if the toc is open or not */
+@media (min-width: 900px) {
+  .md-nav__item--section > .md-nav__link {
+    font-size: 0.90rem;
+  }
+}
+
 .md-typeset a {
   color: var(--md-accent-fg-color);
 }
@@ -110,13 +118,15 @@ table code {
 .md-typeset .admonition {
   font-size: 0.75rem;
 }
+.md-typeset .admonition, .md-typeset details {
+  font-size: 0.8rem;
+}
 
 
 [data-md-color-accent=prefix-light] .md-typeset .md-button:hover{
   background-color: #F9C405FF;
   color: var(--md-primary-fg-color);
 }
-
 .feature-grid {
   display: flex;
   flex-wrap: wrap;
@@ -124,20 +134,30 @@ table code {
   justify-content: center;
 }
 
-.feature-card {
+.feature-grid > a {
   flex: 1 1 calc(33% - 1rem);
   min-width: 280px;
+  text-decoration: none;
+  color: inherit;
+}
+
+.feature-card {
   border: 1px solid #ccc;
   border-radius: 8px;
   padding: 1rem;
+  height: 100%;
+  transition: background 0.2s ease;
+}
+
+.feature-card *:not(a) {
+  pointer-events: none;
 }
 
 @media (max-width: 900px) {
-  .feature-card {
+  .feature-grid > a {
     flex: 1 1 calc(50% - 1rem);
   }
 }
-
 .quote-scroll-wrapper {
   max-width: 100%;
   overflow-x: auto;

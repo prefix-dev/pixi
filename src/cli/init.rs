@@ -88,7 +88,7 @@ name = "{{ name }}"
 platforms = {{ platforms }}
 version = "{{ version }}"
 
-{%- if index_url or extra_indexes %}
+{%- if index_url or extra_index_urls %}
 
 [pypi-options]
 {% if index_url %}index-url = "{{ index_url }}"{% endif %}
@@ -192,7 +192,7 @@ channels = {{ channels }}
 platforms = {{ platforms }}
 
 
-{%- if index_url or extra_indexes %}
+{%- if index_url or extra_index_urls %}
 
 [tool.pixi.pypi-options]
 {% if index_url %}index-url = "{{ index_url }}"{% endif %}
@@ -375,8 +375,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             && !args.pyproject_toml
             && pyproject_manifest_path.is_file()
         {
+            eprintln!(
+                "\nA '{}' file already exists.\n",
+                console::style(consts::PYPROJECT_MANIFEST).bold()
+            );
+
             dialoguer::Confirm::new()
-                .with_prompt(format!("\nA '{}' file already exists.\nDo you want to extend it with the '{}' configuration?", console::style(consts::PYPROJECT_MANIFEST).bold(), console::style("[tool.pixi]").bold().green()))
+                .with_prompt(format!(
+                    "Do you want to extend it with the '{}' configuration?",
+                    console::style("[tool.pixi]").bold().green()
+                ))
                 .default(false)
                 .show_default(true)
                 .interact()

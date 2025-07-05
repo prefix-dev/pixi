@@ -4,9 +4,6 @@ channels = ["https://prefix.dev/conda-forge"]
 name = "ros2-nav2"
 platforms = ["linux-64", "osx-arm64", "osx-64"]
 
-[activation.env]
-GAZEBO_MODEL_PATH = "$GAZEBO_MODEL_PATH:$CONDA_PREFIX/share/turtlebot3_gazebo/models"
-TURTLEBOT3_MODEL = "waffle"
 
 [tasks]
 start = "ros2 launch nav2_bringup tb3_simulation_launch.py headless:=False"
@@ -20,17 +17,23 @@ ros-humble-nav2-bringup = "*"
 ros-humble-turtlebot3-gazebo = "*"
 ros2-distro-mutex = "==0.5.0"
 
+[feature.humble.activation.env]
+GAZEBO_MODEL_PATH = "$GAZEBO_MODEL_PATH:$CONDA_PREFIX/share/turtlebot3_gazebo/models"
+TURTLEBOT3_MODEL = "waffle"
+
 [feature.jazzy]
 channels = ["https://prefix.dev/robostack-jazzy"]
 
 [feature.jazzy.dependencies]
 ros-jazzy-desktop = "*"
 ros-jazzy-nav2-bringup = "*"
-ros-jazzy-turtlebot3-gazebo = "*"
 
 [feature.jazzy.activation.env]
 # Required for the RVIZ2 to properly startup on osx
 RMW_IMPLEMENTATION = "rmw_cyclonedds_cpp"
+
+[feature.jazzy.tasks]
+start-tb4 = "ros2 launch nav2_bringup tb4_simulation_launch.py headless:=False"
 
 [environments]
 default = { features = ["humble"] }

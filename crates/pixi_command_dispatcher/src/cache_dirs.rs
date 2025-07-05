@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use pixi_consts::consts;
 
-use crate::source_metadata::SourceMetadataCache;
+use crate::{build::BuildCache, source_metadata::SourceMetadataCache};
 
 pub struct CacheDirs {
     /// The root cache directory, all other cache directories are derived from
@@ -116,8 +116,11 @@ impl CacheDirs {
     /// Returns the directory where source builds are cached.
     pub fn source_builds(&self) -> PathBuf {
         self.source_builds.clone().unwrap_or_else(|| {
-            self.build()
-                .join(format!("{}-v0", consts::CACHED_SOURCE_BUILDS,))
+            self.build().join(format!(
+                "{}-{}",
+                consts::CACHED_SOURCE_BUILDS,
+                BuildCache::CACHE_SUFFIX
+            ))
         })
     }
 }

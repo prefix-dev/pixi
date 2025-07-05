@@ -1,6 +1,5 @@
 use std::{path::PathBuf, str::FromStr};
 
-use crate::{SystemToolSpec, ToolSpec};
 use pixi_build_discovery::{CommandSpec, SystemCommandSpec};
 
 /// A backend override that can be used to override the backend tools.
@@ -20,21 +19,6 @@ impl Default for BackendOverride {
 }
 
 impl BackendOverride {
-    /// Retrieve potential overridden tool for the given name.
-    pub(crate) fn overridden_tool(&self, name: &str) -> Option<OverriddenTool> {
-        match self {
-            Self::System(overridden) => match overridden {
-                OverriddenBackends::Specified(overridden) => {
-                    overridden.iter().find(|tool| tool.name == name).cloned()
-                }
-                OverriddenBackends::All => Some(OverriddenTool {
-                    name: name.to_string(),
-                    path: None,
-                }),
-            },
-        }
-    }
-
     /// Returns a new backend spec for a backend with the given name.
     pub fn named_backend_override(&self, name: &str) -> Option<CommandSpec> {
         let tool = match self {
@@ -70,20 +54,6 @@ pub struct OverriddenTool {
     /// Optional path to the executable that should be used. if this is not set
     /// it is assumed that the tool is available in the root.
     path: Option<PathBuf>,
-}
-
-impl OverriddenTool {
-    /// Convert the overridden tool into a `ToolSpec`.
-    pub(crate) fn as_spec(&self) -> ToolSpec {
-        // Take the path if it is set otherwise use the name as the command.
-        let command = self
-            .path
-            .clone()
-            .unwrap_or_else(|| PathBuf::from(&self.name));
-        ToolSpec::System(SystemToolSpec {
-            command: command.as_os_str().to_string_lossy().into_owned(),
-        })
-    }
 }
 
 /// List of overridden backends

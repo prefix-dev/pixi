@@ -606,6 +606,11 @@ class PyPIOptions(StrictBaseModel):
             {"numpy": ">=1.21.0"},
         ],
     )
+    no_binary: bool | list[PyPIPackageName] | None = Field(
+        None,
+        description="Don't use pre-built wheels for these packages",
+        examples=["true", "false"],
+    )
 
 
 #######################
