@@ -155,6 +155,7 @@ fn clone_and_deduplicate<'a, I: Iterator<Item = &'a T>, T: Clone + Eq + Hash + '
 }
 
 impl PypiOptions {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         index: Option<Url>,
         extra_indexes: Option<Vec<Url>>,

@@ -346,12 +346,11 @@ pub async fn resolve_pypi(
 
     let registry_client = Arc::new(uv_client_builder.build());
 
-    let build_options =
-        pypi_options_to_build_options(
+    let build_options = pypi_options_to_build_options(
         &pypi_options.no_build.clone().unwrap_or_default(),
         &pypi_options.no_binary.clone().unwrap_or_default(),
     )
-            .into_diagnostic()?;
+    .into_diagnostic()?;
     let dependency_overrides =
         pypi_options.dependency_overrides.as_ref().map(|overrides| {
             overrides

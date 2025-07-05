@@ -9,7 +9,7 @@ version = "0.1.0"
 python = "3.11.*"
 
 [pypi-options]
-dependency-overrides = { numpy = ">=2.1.0"}
+dependency-overrides = { numpy = ">=2.1.0" }
 
 [pypi-dependencies]
 numpy = ">=1.25.0"
