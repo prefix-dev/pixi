@@ -28,7 +28,7 @@ def test_pypi_overrides(pixi: Path, tmp_pixi_workspace: Path, tmp_path: Path) ->
     Tests the behavior of pixi install command with dependency overrides specified in pixi.toml.
     This test verifies that the installation succeeds when the overrides are correctly defined.
     """
-    test_data = Path(__file__).parent.parent / "data/pixi_tomls/depencency_overrides.toml"
+    test_data = Path(__file__).parent.parent / "data/pixi_tomls/dependency_overrides.toml"
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     toml = test_data.read_text()
     manifest.write_text(toml)
