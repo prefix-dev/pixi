@@ -11,3 +11,4 @@ site/
 pytest-temp
 /vendor
 *.conda
+*.local.*
