@@ -242,9 +242,11 @@ async fn test_cwd() {
 async fn test_task_with_env() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().without_channels().await.unwrap();
-
+    // Unix shells expand $VAR in the same shell process.
+    // Windows equires that %VAR% is defined in its environment
+    // that is: if the parent sets it but the child shell does not inherit it, %VAR% is empty.
     let echo_cmd = if cfg!(windows) {
-        vec!["cmd", "/C", "echo From a %HELLO_WORLD%"]
+        vec!["cmd", "/C", "set HELLO_WORLD && echo From a %HELLO_WORLD%"]
     } else {
         vec!["sh", "-c", "echo 'From a $HELLO_WORLD'"]
     };
@@ -252,7 +254,7 @@ async fn test_task_with_env() {
     pixi.tasks()
         .add("env-test".into(), None, FeatureName::default())
         .with_commands(echo_cmd)
-        .with_env(vec![(String::from("HELLO_WORLD"), String::from("world"))])
+        .with_env(vec![(String::from("HELLO_WORLD"), String::from("world with spaces"))])
         .execute()
         .await
         .unwrap();
@@ -269,7 +271,7 @@ async fn test_task_with_env() {
         .unwrap();
 
     assert_eq!(result.exit_code, 0);
-    assert!(result.stdout.contains("From a world"));
+    assert!(result.stdout.contains("From a world with spaces"));
 }
 
 #[tokio::test(flavor = "current_thread")]
