@@ -30,6 +30,7 @@ use pixi_manifest::EnvironmentName;
 use pixi_manifest::pypi::pypi_options::NoBuildIsolation;
 use pixi_record::PixiRecord;
 use pixi_uv_conversions::BuildIsolation;
+use tokio::runtime::Handle;
 use uv_build_frontend::SourceBuild;
 use uv_cache::Cache;
 use uv_client::RegistryClient;
@@ -364,7 +365,7 @@ impl LazyBuildDispatch<'_> {
             // This will usually be called from the multi-threaded runtime, but there might
             // be tests that calls this in the current thread runtime.
             // In the current thread runtime we cannot use `block_in_place` as it will panic
-            let handle = tokio::runtime::Handle::current();
+            let handle = Handle::current();
             match handle.runtime_flavor() {
                 tokio::runtime::RuntimeFlavor::CurrentThread => {
                     let runtime = tokio::runtime::Builder::new_current_thread()

@@ -12,9 +12,11 @@ pub struct GitUrlWithPrefix {
     has_git_plus: bool,
 }
 
-impl GitUrlWithPrefix {
+impl std::str::FromStr for GitUrlWithPrefix {
+    type Err = url::ParseError;
+
     /// Parse a URL that may have git+ prefix
-    pub fn parse(url_str: &str) -> Result<Self, url::ParseError> {
+    fn from_str(url_str: &str) -> Result<Self, Self::Err> {
         let (base_url_str, has_git_plus) = if let Some(stripped) = url_str.strip_prefix("git+") {
             (stripped, true)
         } else {
@@ -27,21 +29,34 @@ impl GitUrlWithPrefix {
             has_git_plus,
         })
     }
+}
 
-    /// Create from a URL, detecting git+ prefix automatically
-    pub fn from_url(url: &Url) -> Self {
-        let url_str = url.to_string();
+impl From<Url> for GitUrlWithPrefix {
+    /// Create from a base URL
+    fn from(base_url: Url) -> Self {
+        let url_str = base_url.as_str();
         // This should not fail since we're parsing a valid URL
-        Self::parse(&url_str).expect("Valid URL should parse successfully")
+        Self::from_str(url_str).expect("Valid URL should parse successfully")
     }
+}
 
+impl From<&Url> for GitUrlWithPrefix {
+    /// Create from a base URL
+    fn from(base_url: &Url) -> Self {
+        let url_str = base_url.as_str();
+        // This should not fail since we're parsing a valid URL
+        Self::from_str(url_str).expect("Valid URL should parse successfully")
+    }
+}
+
+impl GitUrlWithPrefix {
     /// Get the URL without git+ prefix (for GitUrl creation)
-    pub fn without_git_plus(&self) -> &Url {
+    pub fn without_git_prefix(&self) -> &Url {
         &self.base_url
     }
 
     /// Get the URL with git+ prefix if it originally had one (for VerbatimUrl creation)
-    pub fn with_git_plus(&self) -> String {
+    pub fn with_git_prefix(&self) -> String {
         if self.has_git_plus {
             format!("git+{}", self.base_url)
         } else {
@@ -56,13 +71,8 @@ impl GitUrlWithPrefix {
 
     /// Convert to VerbatimUrl (preserving git+ prefix)
     pub fn to_verbatim_url(&self) -> Result<VerbatimUrl, url::ParseError> {
-        let display_safe_url = DisplaySafeUrl::parse(&self.with_git_plus())?;
+        let display_safe_url = DisplaySafeUrl::parse(&self.with_git_prefix())?;
         Ok(VerbatimUrl::from_url(display_safe_url))
-    }
-
-    /// Get the base URL as a DisplaySafeUrl (without git+ prefix)
-    pub fn as_display_safe_url(&self) -> DisplaySafeUrl {
-        self.base_url.clone().into()
     }
 
     /// Check if this URL has a git+ prefix
@@ -71,17 +81,9 @@ impl GitUrlWithPrefix {
     }
 }
 
-impl FromStr for GitUrlWithPrefix {
-    type Err = url::ParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Self::parse(s)
-    }
-}
-
 impl std::fmt::Display for GitUrlWithPrefix {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.with_git_plus())
+        write!(f, "{}", self.with_git_prefix())
     }
 }
 
@@ -91,58 +93,61 @@ mod tests {
 
     #[test]
     fn test_parse_with_git_plus() {
-        let url = GitUrlWithPrefix::parse("git+https://github.com/user/repo.git").unwrap();
+        let url = GitUrlWithPrefix::from_str("git+https://github.com/user/repo.git").unwrap();
         assert!(url.has_git_plus_prefix());
         assert_eq!(
-            url.without_git_plus().to_string(),
+            url.without_git_prefix().to_string(),
             "https://github.com/user/repo.git"
         );
-        assert_eq!(url.with_git_plus(), "git+https://github.com/user/repo.git");
+        assert_eq!(
+            url.with_git_prefix(),
+            "git+https://github.com/user/repo.git"
+        );
     }
 
     #[test]
     fn test_parse_without_git_plus() {
-        let url = GitUrlWithPrefix::parse("https://github.com/user/repo.git").unwrap();
+        let url = GitUrlWithPrefix::from_str("https://github.com/user/repo.git").unwrap();
         assert!(!url.has_git_plus_prefix());
         assert_eq!(
-            url.without_git_plus().to_string(),
+            url.without_git_prefix().to_string(),
             "https://github.com/user/repo.git"
         );
-        assert_eq!(url.with_git_plus(), "https://github.com/user/repo.git");
+        assert_eq!(url.with_git_prefix(), "https://github.com/user/repo.git");
     }
 
     #[test]
     fn test_ssh_url_with_git_plus() {
-        let url = GitUrlWithPrefix::parse("git+ssh://git@github.com/user/repo.git").unwrap();
+        let url = GitUrlWithPrefix::from_str("git+ssh://git@github.com/user/repo.git").unwrap();
         assert!(url.has_git_plus_prefix());
         assert_eq!(
-            url.without_git_plus().to_string(),
+            url.without_git_prefix().to_string(),
             "ssh://git@github.com/user/repo.git"
         );
         assert_eq!(
-            url.with_git_plus(),
+            url.with_git_prefix(),
             "git+ssh://git@github.com/user/repo.git"
         );
     }
 
     #[test]
     fn test_from_url() {
-        let base_url = Url::parse("https://github.com/user/repo.git").unwrap();
-        let git_url = GitUrlWithPrefix::from_url(&base_url);
+        let base_url = Url::from_str("https://github.com/user/repo.git").unwrap();
+        let git_url = GitUrlWithPrefix::from(&base_url);
         assert!(!git_url.has_git_plus_prefix());
-        assert_eq!(git_url.without_git_plus(), &base_url);
+        assert_eq!(git_url.without_git_prefix(), &base_url);
     }
 
     #[test]
     fn test_to_verbatim_url() {
-        let url = GitUrlWithPrefix::parse("git+https://github.com/user/repo.git").unwrap();
+        let url = GitUrlWithPrefix::from_str("git+https://github.com/user/repo.git").unwrap();
         let verbatim = url.to_verbatim_url().unwrap();
         assert_eq!(verbatim.to_string(), "git+https://github.com/user/repo.git");
     }
 
     #[test]
     fn test_display_safe_url() {
-        let url = GitUrlWithPrefix::parse("git+https://github.com/user/repo.git").unwrap();
+        let url = GitUrlWithPrefix::from_str("git+https://github.com/user/repo.git").unwrap();
         let display_safe = url.to_display_safe_url();
         assert_eq!(display_safe.to_string(), "https://github.com/user/repo.git");
     }

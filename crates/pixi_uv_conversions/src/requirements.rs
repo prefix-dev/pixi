@@ -118,7 +118,7 @@ pub fn as_uv_req(
                 },
             ..
         } => {
-            let git_url = GitUrlWithPrefix::from_url(git);
+            let git_url = GitUrlWithPrefix::from(git);
 
             RequirementSource::Git {
                 // Url is already a git url, should look like:
@@ -145,7 +145,7 @@ pub fn as_uv_req(
                 // - 'git+ssh://github.com/user/repo@d099af3b1028b00c232d8eda28a997984ae5848b'
                 url: {
                     let created_url = create_uv_url(
-                        git_url.without_git_plus(),
+                        git_url.without_git_prefix(),
                         rev.as_ref(),
                         subdirectory.as_deref(),
                     )

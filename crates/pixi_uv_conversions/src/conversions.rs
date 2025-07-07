@@ -315,7 +315,7 @@ pub fn to_parsed_git_url(
         uv_git_types::GitUrl::from_fields(
             {
                 let url = locked_git_url.to_url();
-                let git_url = GitUrlWithPrefix::from_url(&url);
+                let git_url = GitUrlWithPrefix::from(&url);
                 git_url.to_display_safe_url()
             },
             into_uv_git_reference(git_source.reference.into()),
