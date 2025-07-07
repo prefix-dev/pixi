@@ -1,6 +1,7 @@
 use crate::install_pypi::plan::InstallPlanner;
 use crate::install_pypi::plan::providers::{CachedDistProvider, InstalledDistProvider};
 use pixi_consts::consts;
+use pixi_uv_conversions::GitUrlWithPrefix;
 use rattler_lock::{PypiPackageData, UrlOrPath};
 use std::collections::HashMap;
 use std::io::Write;
@@ -111,14 +112,9 @@ impl InstalledDistBuilder {
         let version =
             uv_pep440::Version::from_str(version.as_ref()).expect("cannot parse pep440 version");
 
-        // Strip git+ from the url if it is present
-        let url = url
-            .to_string()
-            .strip_prefix("git+")
-            .map(ToString::to_string)
-            .unwrap_or_else(|| url.to_string())
-            .parse::<Url>()
-            .unwrap();
+        // Handle git+ prefix using GitUrlWithPrefix
+        let git_url = GitUrlWithPrefix::from_url(&url);
+        let url = git_url.without_git_plus().clone();
 
         // Parse git url and extract git commit, use this as the commit_id
         let parsed_git_url = ParsedGitUrl::try_from(DisplaySafeUrl::from(url.clone()))

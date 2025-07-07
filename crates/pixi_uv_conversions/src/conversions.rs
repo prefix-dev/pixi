@@ -3,6 +3,7 @@ use std::{
     str::FromStr,
 };
 
+use crate::GitUrlWithPrefix;
 use miette::IntoDiagnostic;
 use pep440_rs::VersionSpecifiers;
 use pixi_git::{git::GitReference as PixiGitReference, sha::GitSha as PixiGitSha};
@@ -11,7 +12,6 @@ use pixi_manifest::pypi::pypi_options::{
 };
 use pixi_record::{LockedGitUrl, PinnedGitCheckout, PinnedGitSpec};
 use pixi_spec::GitReference as PixiReference;
-use url::Url;
 use uv_configuration::BuildOptions;
 use uv_distribution_types::{GitSourceDist, Index, IndexLocations, IndexUrl};
 use uv_pep508::{InvalidNameError, PackageName, VerbatimUrl, VerbatimUrlError};
@@ -315,13 +315,8 @@ pub fn to_parsed_git_url(
         uv_git_types::GitUrl::from_fields(
             {
                 let url = locked_git_url.to_url();
-                let url_str = url.to_string();
-                // Strip git+ prefix if present for uv GitUrl compatibility
-                if let Some(stripped) = url_str.strip_prefix("git+") {
-                    Url::parse(stripped).into_diagnostic()?.into()
-                } else {
-                    url.into()
-                }
+                let git_url = GitUrlWithPrefix::from_url(&url);
+                git_url.to_display_safe_url()
             },
             into_uv_git_reference(git_source.reference.into()),
             Some(into_uv_git_sha(git_source.commit)),

@@ -15,7 +15,10 @@ use uv_pep508::VerbatimUrl;
 use uv_pypi_types::{ParsedPathUrl, ParsedUrl, VerbatimParsedUrl};
 use uv_redacted::DisplaySafeUrl;
 
-use crate::{ConversionError, into_uv_git_reference, to_uv_marker_tree, to_uv_version_specifiers};
+use crate::{
+    ConversionError, GitUrlWithPrefix, into_uv_git_reference, to_uv_marker_tree,
+    to_uv_version_specifiers,
+};
 
 /// Create a url that uv can use to install a version
 fn create_uv_url(
@@ -114,52 +117,47 @@ pub fn as_uv_req(
                     subdirectory,
                 },
             ..
-        } => RequirementSource::Git {
-            // Url is already a git url, should look like:
-            // - 'ssh://git@github.com/user/repo'
-            // - 'https://github.com/user/repo'
-            git: uv_git_types::GitUrl::from_fields(
-                if git.scheme().strip_prefix("git+").is_some() {
-                    // Setting the scheme might fail, so using string manipulation instead
-                    let url_str = git.to_string();
-                    let stripped = url_str.strip_prefix("git+").unwrap_or(&url_str);
-                    // Reparse the url with the new scheme.
-                    Url::parse(stripped)
-                        .map_err(|e| AsPep508Error::UrlParseError {
-                            source: e,
-                            url: stripped.to_string(),
-                        })?
-                        .into()
-                } else {
-                    git.clone().into()
-                },
-                // The reference to the commit to use, which could be a branch, tag or revision.
-                rev.as_ref()
-                    .map(|rev| into_uv_git_reference(rev.clone().into()))
-                    .unwrap_or(uv_git_types::GitReference::DefaultBranch),
-                // Unique identifier for the commit, as Git object identifier
-                rev.as_ref()
-                    .map(|s| s.as_full_commit())
-                    .and_then(|s| s.map(uv_git_types::GitOid::from_str))
-                    .transpose()
-                    .expect("could not parse sha"),
-            )?,
-            subdirectory: subdirectory
-                .as_ref()
-                .map(|s| PathBuf::from(s).into_boxed_path()),
-            // The full url used to clone, comparable to the git+ url in pip. e.g:
-            // - 'git+SCHEMA://HOST/PATH@REF#subdirectory=SUBDIRECTORY'
-            // - 'git+ssh://github.com/user/repo@d099af3b1028b00c232d8eda28a997984ae5848b'
-            url: {
-                let created_url = create_uv_url(git, rev.as_ref(), subdirectory.as_deref())
+        } => {
+            let git_url = GitUrlWithPrefix::from_url(git);
+
+            RequirementSource::Git {
+                // Url is already a git url, should look like:
+                // - 'ssh://git@github.com/user/repo'
+                // - 'https://github.com/user/repo'
+                git: uv_git_types::GitUrl::from_fields(
+                    git_url.to_display_safe_url(),
+                    // The reference to the commit to use, which could be a branch, tag or revision.
+                    rev.as_ref()
+                        .map(|rev| into_uv_git_reference(rev.clone().into()))
+                        .unwrap_or(uv_git_types::GitReference::DefaultBranch),
+                    // Unique identifier for the commit, as Git object identifier
+                    rev.as_ref()
+                        .map(|s| s.as_full_commit())
+                        .and_then(|s| s.map(uv_git_types::GitOid::from_str))
+                        .transpose()
+                        .expect("could not parse sha"),
+                )?,
+                subdirectory: subdirectory
+                    .as_ref()
+                    .map(|s| PathBuf::from(s).into_boxed_path()),
+                // The full url used to clone, comparable to the git+ url in pip. e.g:
+                // - 'git+SCHEMA://HOST/PATH@REF#subdirectory=SUBDIRECTORY'
+                // - 'git+ssh://github.com/user/repo@d099af3b1028b00c232d8eda28a997984ae5848b'
+                url: {
+                    let created_url = create_uv_url(
+                        git_url.without_git_plus(),
+                        rev.as_ref(),
+                        subdirectory.as_deref(),
+                    )
                     .map_err(|e| AsPep508Error::UrlParseError {
                         source: e,
                         url: git.to_string(),
                     })?;
 
-                VerbatimUrl::from_url(created_url.into())
-            },
-        },
+                    VerbatimUrl::from_url(created_url.into())
+                },
+            }
+        }
         PixiPypiSpec::Path {
             path,
             editable,
