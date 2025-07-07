@@ -1403,11 +1403,11 @@ def test_run_with_environment_variable_priority(
     [target.win-64.activation]
     scripts = ["env_setup.bat"]
     [tasks.task]
-    cmd = "echo %MY_ENV%"
+    cmd = "cmd /c echo %MY_ENV%"
     [tasks.foo]
-    cmd = "echo %MY_ENV%"
+    cmd = "cmd /c echo %MY_ENV%"
     [tasks.foobar]
-    cmd = "echo %FOO_PATH%"
+    cmd = "cmd /c echo %FOO_PATH%"
     [tasks.task.env]
     MY_ENV = "test456"
     [dependencies]
