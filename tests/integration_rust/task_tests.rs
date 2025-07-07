@@ -244,7 +244,7 @@ async fn test_task_with_env() {
     pixi.init().without_channels().await.unwrap();
 
     #[cfg(windows)]
-    let echo_cmd = vec!["cmd", "/C", "echo \"From a %HELLO_WORLD%\""];
+    let echo_cmd = vec!["powershell", "-Command", "echo \"Hello $env:HELLO_WORLD\""];
 
     #[cfg(not(windows))]
     let echo_cmd = vec!["sh", "-c", "echo From a $HELLO_WORLD"];

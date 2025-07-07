@@ -1414,6 +1414,7 @@ def test_run_with_environment_variable_priority(
     pixi-foobar = "*"
     """
     if platform.system() == "Windows":
+        manifest.write_text(windows_toml)
         script_manifest.write_text("""
         @echo off
         set "MY_ENV=activation_script"
