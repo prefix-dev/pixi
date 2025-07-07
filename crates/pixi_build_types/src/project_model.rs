@@ -352,35 +352,49 @@ impl std::fmt::Debug for BinaryPackageSpecV1 {
 // Custom Hash implementations that skip default values for stability
 impl Hash for ProjectModelV1 {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
-        if let Some(ref version) = self.version {
+        let ProjectModelV1 {
+            name,
+            version,
+            description,
+            authors,
+            license,
+            license_file,
+            readme,
+            homepage,
+            repository,
+            documentation,
+            targets,
+        } = self;
+        
+        name.hash(state);
+        if let Some(version) = version {
             version.hash(state);
         }
-        if let Some(ref description) = self.description {
+        if let Some(description) = description {
             description.hash(state);
         }
-        if let Some(ref authors) = self.authors {
+        if let Some(authors) = authors {
             authors.hash(state);
         }
-        if let Some(ref license) = self.license {
+        if let Some(license) = license {
             license.hash(state);
         }
-        if let Some(ref license_file) = self.license_file {
+        if let Some(license_file) = license_file {
             license_file.hash(state);
         }
-        if let Some(ref readme) = self.readme {
+        if let Some(readme) = readme {
             readme.hash(state);
         }
-        if let Some(ref homepage) = self.homepage {
+        if let Some(homepage) = homepage {
             homepage.hash(state);
         }
-        if let Some(ref repository) = self.repository {
+        if let Some(repository) = repository {
             repository.hash(state);
         }
-        if let Some(ref documentation) = self.documentation {
+        if let Some(documentation) = documentation {
             documentation.hash(state);
         }
-        if let Some(ref targets) = self.targets {
+        if let Some(targets) = targets {
             targets.hash(state);
         }
     }
@@ -403,10 +417,15 @@ impl Hash for TargetSelectorV1 {
 
 impl Hash for TargetsV1 {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        if let Some(ref default_target) = self.default_target {
+        let TargetsV1 {
+            default_target,
+            targets,
+        } = self;
+        
+        if let Some(default_target) = default_target {
             default_target.hash(state);
         }
-        if let Some(ref targets) = self.targets {
+        if let Some(targets) = targets {
             if !targets.is_empty() {
                 targets.hash(state);
             }
@@ -416,17 +435,23 @@ impl Hash for TargetsV1 {
 
 impl Hash for TargetV1 {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        if let Some(ref host_dependencies) = self.host_dependencies {
+        let TargetV1 {
+            host_dependencies,
+            build_dependencies,
+            run_dependencies,
+        } = self;
+        
+        if let Some(host_dependencies) = host_dependencies {
             if !host_dependencies.is_empty() {
                 host_dependencies.hash(state);
             }
         }
-        if let Some(ref build_dependencies) = self.build_dependencies {
+        if let Some(build_dependencies) = build_dependencies {
             if !build_dependencies.is_empty() {
                 build_dependencies.hash(state);
             }
         }
-        if let Some(ref run_dependencies) = self.run_dependencies {
+        if let Some(run_dependencies) = run_dependencies {
             if !run_dependencies.is_empty() {
                 run_dependencies.hash(state);
             }
@@ -470,11 +495,13 @@ impl Hash for SourcePackageSpecV1 {
 
 impl Hash for UrlSpecV1 {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.url.hash(state);
-        if let Some(ref md5) = self.md5 {
+        let UrlSpecV1 { url, md5, sha256 } = self;
+        
+        url.hash(state);
+        if let Some(md5) = md5 {
             md5.hash(state);
         }
-        if let Some(ref sha256) = self.sha256 {
+        if let Some(sha256) = sha256 {
             sha256.hash(state);
         }
     }
@@ -482,11 +509,17 @@ impl Hash for UrlSpecV1 {
 
 impl Hash for GitSpecV1 {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.git.hash(state);
-        if let Some(ref rev) = self.rev {
+        let GitSpecV1 {
+            git,
+            rev,
+            subdirectory,
+        } = self;
+        
+        git.hash(state);
+        if let Some(rev) = rev {
             rev.hash(state);
         }
-        if let Some(ref subdirectory) = self.subdirectory {
+        if let Some(subdirectory) = subdirectory {
             subdirectory.hash(state);
         }
     }
@@ -494,7 +527,9 @@ impl Hash for GitSpecV1 {
 
 impl Hash for PathSpecV1 {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.path.hash(state);
+        let PathSpecV1 { path } = self;
+        
+        path.hash(state);
     }
 }
 
@@ -522,28 +557,39 @@ impl Hash for GitReferenceV1 {
 
 impl Hash for BinaryPackageSpecV1 {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        if let Some(ref version) = self.version {
+        let BinaryPackageSpecV1 {
+            version,
+            build,
+            build_number,
+            file_name,
+            channel,
+            subdir,
+            md5,
+            sha256,
+        } = self;
+        
+        if let Some(version) = version {
             version.hash(state);
         }
-        if let Some(ref build) = self.build {
+        if let Some(build) = build {
             build.hash(state);
         }
-        if let Some(ref build_number) = self.build_number {
+        if let Some(build_number) = build_number {
             build_number.hash(state);
         }
-        if let Some(ref file_name) = self.file_name {
+        if let Some(file_name) = file_name {
             file_name.hash(state);
         }
-        if let Some(ref channel) = self.channel {
+        if let Some(channel) = channel {
             channel.hash(state);
         }
-        if let Some(ref subdir) = self.subdir {
+        if let Some(subdir) = subdir {
             subdir.hash(state);
         }
-        if let Some(ref md5) = self.md5 {
+        if let Some(md5) = md5 {
             md5.hash(state);
         }
-        if let Some(ref sha256) = self.sha256 {
+        if let Some(sha256) = sha256 {
             sha256.hash(state);
         }
     }
