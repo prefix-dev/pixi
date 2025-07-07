@@ -431,7 +431,8 @@ fn get_export_specific_task_env(task: &Task, command_env: IndexMap<String, Strin
                 }
             }
         } else {
-            // Env map
+            // Create environment map for priority-based merging. 
+            // Considering future extensions, there may be other types of environment variables.
             let mut env_map: HashMap<&'static str, Option<IndexMap<String, String>>> =
                 HashMap::new();
             // Command env variables
@@ -442,9 +443,13 @@ fn get_export_specific_task_env(task: &Task, command_env: IndexMap<String, Strin
                 Some(task.env().cloned().unwrap_or_default()),
             );
 
-            // Merge based on priority: from lowest to highest
+            // Apply priority order: from lowest to highest
             let priority = ["COMMAND_ENV", "TASK_SPECIFIC_ENVS"];
             for key in &priority {
+                // Skip command env to avoid exporting system variables
+                if *key == "COMMAND_ENV" {
+                    continue;
+                }
                 if let Some(Some(env_map_key)) = env_map.get(key) {
                     export_merged.extend(env_map_key.clone())
                 }
