@@ -1,5 +1,6 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
+    fmt::Display,
     path::PathBuf,
     str::FromStr,
 };
@@ -107,7 +108,7 @@ impl SourceBuildSpec {
             .map_err_with(SourceBuildError::Initialize)?;
 
         // Use the backend to build the source package.
-        let build_result = backend
+        let mut build_result = backend
             .conda_build(
                 CondaBuildParams {
                     build_platform_virtual_packages: Some(
@@ -165,20 +166,30 @@ impl SourceBuildSpec {
         }
 
         // Locate the package that matches the source record we requested to be build.
-        let Some(built_package) = build_result.packages.into_iter().find(|pkg| {
+        let built_package = if let Some(idx) = build_result.packages.iter().position(|pkg| {
             pkg.name == self.source.package_record.name.as_normalized()
                 && Version::from_str(&pkg.version).ok().as_ref()
                     == Some(&self.source.package_record.version)
                 && pkg.build == self.source.package_record.build
                 && pkg.subdir == self.source.package_record.subdir
-        }) else {
+        }) {
+            build_result.packages.swap_remove(idx)
+        } else {
             return Err(CommandDispatcherError::Failed(
-                SourceBuildError::UnexpectedPackage {
+                UnexpectedPackageError {
                     subdir: self.source.package_record.subdir.clone(),
                     name: self.source.package_record.name.as_normalized().to_string(),
                     version: self.source.package_record.version.to_string(),
                     build: self.source.package_record.build.clone(),
-                },
+                    packages: build_result
+                        .packages
+                        .iter()
+                        .map(|pkg| {
+                            format!("{}/{}={}={}", pkg.subdir, pkg.name, pkg.version, pkg.build)
+                        })
+                        .collect(),
+                }
+                .into(),
             ));
         };
 
@@ -208,13 +219,43 @@ pub enum SourceBuildError {
     #[diagnostic(transparent)]
     BuildError(#[from] CommunicationError),
 
-    #[error(
-        "The build backend did not return the expected package: {subdir}/{name}={version}={build}."
-    )]
-    UnexpectedPackage {
-        subdir: String,
-        name: String,
-        version: String,
-        build: String,
-    },
+    #[error(transparent)]
+    UnexpectedPackage(#[from] UnexpectedPackageError),
+}
+
+/// An error that can occur when the build backend did not return the expected
+/// package.
+#[derive(Debug, Error)]
+pub struct UnexpectedPackageError {
+    pub subdir: String,
+    pub name: String,
+    pub version: String,
+    pub build: String,
+    pub packages: Vec<String>,
+}
+
+impl Display for UnexpectedPackageError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.packages.len() {
+            0 => write!(
+                f,
+                "The build backend did not return any packages for {}/{}={}={}.",
+                self.subdir, self.name, self.version, self.build
+            ),
+            1 => write!(
+                f,
+                "The build backend did not return the expected package: {}/{}={}={}. Instead the build backend returned {}.",
+                self.subdir, self.name, self.version, self.build, self.packages[0]
+            ),
+            _ => write!(
+                f,
+                "The build backend did not return the expected package: {}/{}={}={}. Instead the following packages were returned:\n- {}",
+                self.subdir,
+                self.name,
+                self.version,
+                self.build,
+                self.packages.iter().format("\n- ")
+            ),
+        }
+    }
 }
