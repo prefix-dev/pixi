@@ -396,7 +396,7 @@ impl BuildContext for LazyBuildDispatch<'_> {
         // trait methods will have been called
         // But in case it is not, we will initialize it here
         //
-        // Even though initialize does not initialize twice, we skip the codepath
+        // Even though initialize does not initialize twice, we check it beforehand
         // because the initialization takes time
         if self.lazy_deps.interpreter.get().is_none() {
             self.ensure_build_dispatch_initialized();
