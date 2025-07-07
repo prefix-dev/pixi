@@ -701,10 +701,7 @@ mod tests {
 
         // Add a real dependency (should change hash)
         let mut deps = OrderMap::new();
-        deps.insert(
-            "python".to_string(),
-            PackageSpecV1::Binary(Box::default()),
-        );
+        deps.insert("python".to_string(), PackageSpecV1::Binary(Box::default()));
 
         let target_with_deps = TargetV1 {
             host_dependencies: Some(deps),
