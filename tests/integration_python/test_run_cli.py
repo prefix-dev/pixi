@@ -1369,7 +1369,7 @@ def test_run_with_environment_variable_priority(
         script_manifest = tmp_pixi_workspace.joinpath("env_setup.bat")
     else:
         script_manifest = tmp_pixi_workspace.joinpath("env_setup.sh")
-    toml = f"""
+    unix_toml = f"""
     [workspace]
     name = "test"
     channels = ["{dummy_channel_1}"]
@@ -1391,7 +1391,28 @@ def test_run_with_environment_variable_priority(
     [dependencies]
     pixi-foobar = "*"
     """
-    manifest.write_text(toml)
+    windows_toml = f"""
+    [workspace]
+    name = "test"
+    channels = ["{dummy_channel_1}"]
+    platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
+    [activation.env]
+    MY_ENV = "test123"
+    [target.unix.activation]
+    scripts = ["env_setup.sh"]
+    [target.win-64.activation]
+    scripts = ["env_setup.bat"]
+    [tasks.task]
+    cmd = "echo %MY_ENV%"
+    [tasks.foo]
+    cmd = "echo %MY_ENV%"
+    [tasks.foobar]
+    cmd = "echo %FOO_PATH%"
+    [tasks.task.env]
+    MY_ENV = "test456"
+    [dependencies]
+    pixi-foobar = "*"
+    """
     if platform.system() == "Windows":
         script_manifest.write_text("""
         @echo off
@@ -1399,6 +1420,7 @@ def test_run_with_environment_variable_priority(
         set "FOO_PATH=activation_script"
         """)
     else:
+        manifest.write_text(unix_toml)
         script_manifest.write_text("""
         #!/bin/bash
         export MY_ENV="activation_script"
