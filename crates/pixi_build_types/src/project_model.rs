@@ -367,7 +367,7 @@ impl Hash for ProjectModelV1 {
             documentation,
             targets,
         } = self;
-        
+
         name.hash(state);
         if let Some(version) = version {
             version.hash(state);
@@ -427,7 +427,7 @@ impl Hash for TargetsV1 {
             default_target,
             targets,
         } = self;
-        
+
         if let Some(default_target) = default_target {
             default_target.hash(state);
         }
@@ -448,7 +448,7 @@ impl Hash for TargetV1 {
             build_dependencies,
             run_dependencies,
         } = self;
-        
+
         if let Some(host_dependencies) = host_dependencies {
             if !host_dependencies.is_empty() {
                 host_dependencies.hash(state);
@@ -510,7 +510,7 @@ impl Hash for UrlSpecV1 {
     /// as stable as possible when adding new optional fields to the struct.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let UrlSpecV1 { url, md5, sha256 } = self;
-        
+
         url.hash(state);
         if let Some(md5) = md5 {
             md5.hash(state);
@@ -530,7 +530,7 @@ impl Hash for GitSpecV1 {
             rev,
             subdirectory,
         } = self;
-        
+
         git.hash(state);
         if let Some(rev) = rev {
             rev.hash(state);
@@ -545,7 +545,7 @@ impl Hash for PathSpecV1 {
     /// Custom hash implementation to keep the hash as stable as possible.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let PathSpecV1 { path } = self;
-        
+
         path.hash(state);
     }
 }
@@ -588,7 +588,7 @@ impl Hash for BinaryPackageSpecV1 {
             md5,
             sha256,
         } = self;
-        
+
         if let Some(version) = version {
             version.hash(state);
         }
