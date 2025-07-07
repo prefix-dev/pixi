@@ -6,7 +6,10 @@ use std::{
 use crate::GitUrlWithPrefix;
 use miette::IntoDiagnostic;
 use pep440_rs::VersionSpecifiers;
-use pixi_git::{git::GitReference as PixiGitReference, sha::GitSha as PixiGitSha};
+use pixi_git::{
+    git::GitReference as PixiGitReference, sha::GitSha as PixiGitSha,
+    url::RepositoryUrl as PixiRepositoryUrl,
+};
 use pixi_manifest::pypi::pypi_options::{
     FindLinksUrlOrPath, IndexStrategy, NoBinary, NoBuild, NoBuildIsolation, PypiOptions,
 };
@@ -314,7 +317,12 @@ pub fn to_parsed_git_url(
     let parsed_git_url = uv_pypi_types::ParsedGitUrl::from_source(
         uv_git_types::GitUrl::from_fields(
             {
-                let url = locked_git_url.to_url();
+                let mut url = locked_git_url.to_url();
+                // Locked git url contains query parameters and fragments
+                // so we need to clean it to a base repository URL
+                url.set_fragment(None);
+                url.set_query(None);
+
                 let git_url = GitUrlWithPrefix::from_url(&url);
                 git_url.to_display_safe_url()
             },
