@@ -243,11 +243,11 @@ async fn test_task_with_env() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().without_channels().await.unwrap();
 
-    #[cfg(windows)]
-    let echo_cmd = vec!["powershell", "-Command", "echo From a $env:HELLO_WORLD"];
-
-    #[cfg(not(windows))]
-    let echo_cmd = vec!["sh", "-c", "echo From a $HELLO_WORLD"];
+    let echo_cmd = if cfg!(windows) {
+        vec!["powershell", "-Command", "echo 'From a $env:HELLO_WORLD'"]
+    } else {
+        vec!["sh", "-c", "echo 'From a $HELLO_WORLD'"]
+    };
 
     pixi.tasks()
         .add("env-test".into(), None, FeatureName::default())
