@@ -1,0 +1,11 @@
+---
+source: crates/pixi_manifest/src/toml/package.rs
+expression: "format_parse_error(input, parse_error)"
+---
+  × workspace inheritance must be `true`
+   ╭─[pixi.toml:2:16]
+ 1 │
+ 2 │         name = { workspace = false }
+   ·                ─────────────────────
+ 3 │         version = "1.0.0"
+   ╰────

@@ -88,7 +88,7 @@ name = "{{ name }}"
 platforms = {{ platforms }}
 version = "{{ version }}"
 
-{%- if index_url or extra_indexes %}
+{%- if index_url or extra_index_urls %}
 
 [pypi-options]
 {% if index_url %}index-url = "{{ index_url }}"{% endif %}
@@ -192,7 +192,7 @@ channels = {{ channels }}
 platforms = {{ platforms }}
 
 
-{%- if index_url or extra_indexes %}
+{%- if index_url or extra_index_urls %}
 
 [tool.pixi.pypi-options]
 {% if index_url %}index-url = "{{ index_url }}"{% endif %}
