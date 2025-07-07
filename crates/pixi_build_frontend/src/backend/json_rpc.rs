@@ -409,7 +409,7 @@ impl JsonRpcBackend {
             CommunicationError::from_client_error(
                 self.backend_identifier.clone(),
                 err,
-                procedures::conda_build::METHOD_NAME,
+                procedures::conda_build_v2::METHOD_NAME,
                 self.manifest_path.parent().unwrap_or(&self.manifest_path),
                 backend_output,
             )
