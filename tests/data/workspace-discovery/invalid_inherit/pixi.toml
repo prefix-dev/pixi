@@ -1,0 +1,12 @@
+[workspace]
+channels = ["https://prefix.dev/pixi-build-backends"]
+name = "simple"
+preview = ["pixi-build"]
+version = "0.1.0"
+
+[package]
+# This should error because `workspace = false` is illegal.
+name = { workspace = false }
+
+[package.build]
+backend = { name = "pixi_build_backend", version = "*" }

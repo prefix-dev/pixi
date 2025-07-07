@@ -113,8 +113,8 @@ impl InstalledDistBuilder {
             uv_pep440::Version::from_str(version.as_ref()).expect("cannot parse pep440 version");
 
         // Handle git+ prefix using GitUrlWithPrefix
-        let git_url = GitUrlWithPrefix::from_url(&url);
-        let url = git_url.without_git_plus().clone();
+        let git_url = GitUrlWithPrefix::from(&url);
+        let url = git_url.without_git_prefix().clone();
 
         // Parse git url and extract git commit, use this as the commit_id
         let parsed_git_url = ParsedGitUrl::try_from(DisplaySafeUrl::from(url.clone()))
