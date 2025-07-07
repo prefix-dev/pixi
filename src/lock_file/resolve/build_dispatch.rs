@@ -399,9 +399,7 @@ impl BuildContext for LazyBuildDispatch<'_> {
         //
         // Even though initialize does not initialize twice, we check it beforehand
         // because the initialization takes time
-        if self.lazy_deps.interpreter.get().is_none() {
-            self.ensure_build_dispatch_initialized();
-        }
+        self.ensure_build_dispatch_initialized();
         self.lazy_deps
             .interpreter
             .get()
