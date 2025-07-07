@@ -320,7 +320,7 @@ pub fn to_parsed_git_url(
                 url.set_fragment(None);
                 url.set_query(None);
 
-                let git_url = GitUrlWithPrefix::from_url(&url);
+                let git_url = GitUrlWithPrefix::from(&url);
                 git_url.to_display_safe_url()
             },
             into_uv_git_reference(git_source.reference.into()),
