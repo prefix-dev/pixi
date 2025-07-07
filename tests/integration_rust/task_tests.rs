@@ -273,6 +273,12 @@ async fn test_task_with_env() {
         .await
         .unwrap();
 
+    if result.exit_code != 0 {
+        println!(
+            "Task failed with exit code: {}, stderr: {}, stdout: {}",
+            result.exit_code, result.stderr, result.stdout
+        );
+    }
     assert_eq!(result.exit_code, 0);
     assert!(result.stdout.contains("From a world with spaces"));
 }
