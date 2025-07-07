@@ -619,8 +619,7 @@ impl Hash for BinaryPackageSpecV1 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
+    use std::hash::{DefaultHasher, Hash, Hasher};
 
     fn calculate_hash<T: Hash>(obj: &T) -> u64 {
         let mut hasher = DefaultHasher::new();
@@ -704,7 +703,7 @@ mod tests {
         let mut deps = OrderMap::new();
         deps.insert(
             "python".to_string(),
-            PackageSpecV1::Binary(Box::new(BinaryPackageSpecV1::default())),
+            PackageSpecV1::Binary(Box::default()),
         );
 
         let target_with_deps = TargetV1 {
@@ -770,7 +769,7 @@ mod tests {
     #[test]
     fn test_enum_variant_hash_stability() {
         // Test PackageSpecV1 enum variants
-        let binary_spec = PackageSpecV1::Binary(Box::new(BinaryPackageSpecV1::default()));
+        let binary_spec = PackageSpecV1::Binary(Box::default());
         let source_spec = PackageSpecV1::Source(SourcePackageSpecV1::Path(PathSpecV1 {
             path: "test".to_string(),
         }));
@@ -785,7 +784,7 @@ mod tests {
         );
 
         // Same variant with same content should have same hash
-        let binary_spec2 = PackageSpecV1::Binary(Box::new(BinaryPackageSpecV1::default()));
+        let binary_spec2 = PackageSpecV1::Binary(Box::default());
         let hash3 = calculate_hash(&binary_spec2);
 
         assert_eq!(
