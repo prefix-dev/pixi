@@ -577,16 +577,16 @@ mod tests {
             documentation: None,
             targets: None,
         };
-        
+
         let hash1 = calculate_hash(&project_model);
-        
+
         // Add empty targets field (should NOT change hash due to our custom implementation)
         project_model.targets = Some(TargetsV1 {
             default_target: None,
             targets: Some(OrderMap::new()),
         });
         let hash2 = calculate_hash(&project_model);
-        
+
         // Add a target with empty dependencies (should NOT change hash)
         let empty_target = TargetV1 {
             host_dependencies: Some(OrderMap::new()),
@@ -598,10 +598,16 @@ mod tests {
             targets: Some(OrderMap::new()),
         });
         let hash3 = calculate_hash(&project_model);
-        
+
         // Hash should remain the same when adding empty/default values
-        assert_eq!(hash1, hash2, "Hash should not change when adding empty targets");
-        assert_eq!(hash1, hash3, "Hash should not change when adding empty target with empty dependencies");
+        assert_eq!(
+            hash1, hash2,
+            "Hash should not change when adding empty targets"
+        );
+        assert_eq!(
+            hash1, hash3,
+            "Hash should not change when adding empty target with empty dependencies"
+        );
     }
 
     #[test]
@@ -620,17 +626,20 @@ mod tests {
             documentation: None,
             targets: None,
         };
-        
+
         let hash1 = calculate_hash(&project_model);
-        
+
         // Add a meaningful field (should change hash)
         project_model.description = Some("A test project".to_string());
         let hash2 = calculate_hash(&project_model);
-        
+
         // Add a real dependency (should change hash)
         let mut deps = OrderMap::new();
-        deps.insert("python".to_string(), PackageSpecV1::Binary(Box::new(BinaryPackageSpecV1::default())));
-        
+        deps.insert(
+            "python".to_string(),
+            PackageSpecV1::Binary(Box::new(BinaryPackageSpecV1::default())),
+        );
+
         let target_with_deps = TargetV1 {
             host_dependencies: Some(deps),
             build_dependencies: Some(OrderMap::new()),
@@ -641,18 +650,24 @@ mod tests {
             targets: Some(OrderMap::new()),
         });
         let hash3 = calculate_hash(&project_model);
-        
+
         // Hash should change when adding meaningful values
         assert_ne!(hash1, hash2, "Hash should change when adding description");
-        assert_ne!(hash1, hash3, "Hash should change when adding real dependency");
-        assert_ne!(hash2, hash3, "Hash should change when adding dependency to project with description");
+        assert_ne!(
+            hash1, hash3,
+            "Hash should change when adding real dependency"
+        );
+        assert_ne!(
+            hash2, hash3,
+            "Hash should change when adding dependency to project with description"
+        );
     }
 
     #[test]
     fn test_binary_package_spec_hash_stability() {
         let spec1 = BinaryPackageSpecV1::default();
         let hash1 = calculate_hash(&spec1);
-        
+
         // Create another default spec with explicit None values
         let spec2 = BinaryPackageSpecV1 {
             version: None,
@@ -665,18 +680,24 @@ mod tests {
             sha256: None,
         };
         let hash2 = calculate_hash(&spec2);
-        
+
         // Both should have the same hash since they're effectively the same
-        assert_eq!(hash1, hash2, "Default spec and explicit None spec should have same hash");
-        
+        assert_eq!(
+            hash1, hash2,
+            "Default spec and explicit None spec should have same hash"
+        );
+
         // Add a meaningful value
         let spec3 = BinaryPackageSpecV1 {
             file_name: Some("test.tar.bz2".to_string()),
             ..Default::default()
         };
         let hash3 = calculate_hash(&spec3);
-        
-        assert_ne!(hash1, hash3, "Hash should change when adding meaningful value");
+
+        assert_ne!(
+            hash1, hash3,
+            "Hash should change when adding meaningful value"
+        );
     }
 
     #[test]
@@ -686,18 +707,24 @@ mod tests {
         let source_spec = PackageSpecV1::Source(SourcePackageSpecV1::Path(PathSpecV1 {
             path: "test".to_string(),
         }));
-        
+
         let hash1 = calculate_hash(&binary_spec);
         let hash2 = calculate_hash(&source_spec);
-        
+
         // Different enum variants should have different hashes
-        assert_ne!(hash1, hash2, "Different enum variants should have different hashes");
-        
+        assert_ne!(
+            hash1, hash2,
+            "Different enum variants should have different hashes"
+        );
+
         // Same variant with same content should have same hash
         let binary_spec2 = PackageSpecV1::Binary(Box::new(BinaryPackageSpecV1::default()));
         let hash3 = calculate_hash(&binary_spec2);
-        
-        assert_eq!(hash1, hash3, "Same enum variant with same content should have same hash");
+
+        assert_eq!(
+            hash1, hash3,
+            "Same enum variant with same content should have same hash"
+        );
     }
 
     fn create_sample_target_v1() -> TargetV1 {
