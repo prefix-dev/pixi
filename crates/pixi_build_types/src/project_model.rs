@@ -351,6 +351,8 @@ impl std::fmt::Debug for BinaryPackageSpecV1 {
 
 // Custom Hash implementations that skip default values for stability
 impl Hash for ProjectModelV1 {
+    /// Custom hash implementation that skips default/empty values to keep the hash
+    /// as stable as possible when adding new optional fields to the struct.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let ProjectModelV1 {
             name,
@@ -401,6 +403,8 @@ impl Hash for ProjectModelV1 {
 }
 
 impl Hash for TargetSelectorV1 {
+    /// Custom hash implementation that uses discriminant values to keep the hash
+    /// as stable as possible when adding new enum variants.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
             TargetSelectorV1::Unix => 0u8.hash(state),
@@ -416,6 +420,8 @@ impl Hash for TargetSelectorV1 {
 }
 
 impl Hash for TargetsV1 {
+    /// Custom hash implementation that skips empty collections to keep the hash
+    /// as stable as possible when adding new optional fields to the struct.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let TargetsV1 {
             default_target,
@@ -434,6 +440,8 @@ impl Hash for TargetsV1 {
 }
 
 impl Hash for TargetV1 {
+    /// Custom hash implementation that skips empty collections to keep the hash
+    /// as stable as possible when adding new optional fields to the struct.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let TargetV1 {
             host_dependencies,
@@ -460,6 +468,8 @@ impl Hash for TargetV1 {
 }
 
 impl Hash for PackageSpecV1 {
+    /// Custom hash implementation that uses discriminant values to keep the hash
+    /// as stable as possible when adding new enum variants.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
             PackageSpecV1::Binary(spec) => {
@@ -475,6 +485,8 @@ impl Hash for PackageSpecV1 {
 }
 
 impl Hash for SourcePackageSpecV1 {
+    /// Custom hash implementation that uses discriminant values to keep the hash
+    /// as stable as possible when adding new enum variants.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
             SourcePackageSpecV1::Url(spec) => {
@@ -494,6 +506,8 @@ impl Hash for SourcePackageSpecV1 {
 }
 
 impl Hash for UrlSpecV1 {
+    /// Custom hash implementation that skips None values to keep the hash
+    /// as stable as possible when adding new optional fields to the struct.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let UrlSpecV1 { url, md5, sha256 } = self;
         
@@ -508,6 +522,8 @@ impl Hash for UrlSpecV1 {
 }
 
 impl Hash for GitSpecV1 {
+    /// Custom hash implementation that skips None values to keep the hash
+    /// as stable as possible when adding new optional fields to the struct.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let GitSpecV1 {
             git,
@@ -526,6 +542,7 @@ impl Hash for GitSpecV1 {
 }
 
 impl Hash for PathSpecV1 {
+    /// Custom hash implementation to keep the hash as stable as possible.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let PathSpecV1 { path } = self;
         
@@ -534,6 +551,8 @@ impl Hash for PathSpecV1 {
 }
 
 impl Hash for GitReferenceV1 {
+    /// Custom hash implementation that uses discriminant values to keep the hash
+    /// as stable as possible when adding new enum variants.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
             GitReferenceV1::Branch(b) => {
@@ -556,6 +575,8 @@ impl Hash for GitReferenceV1 {
 }
 
 impl Hash for BinaryPackageSpecV1 {
+    /// Custom hash implementation that skips None values to keep the hash
+    /// as stable as possible when adding new optional fields to the struct.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let BinaryPackageSpecV1 {
             version,
