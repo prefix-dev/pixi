@@ -85,7 +85,8 @@ pub fn pypi_options_to_index_locations(
         .into_iter()
         .flat_map(|urls| {
             urls.into_iter()
-                .map(|url| VerbatimUrl::from_url(url.into()))
+                .map(DisplaySafeUrl::from)
+                .map(VerbatimUrl::from_url)
                 .map(IndexUrl::from)
                 .map(Index::from_extra_index_url)
         });
