@@ -6,10 +6,7 @@ use std::{
 use crate::GitUrlWithPrefix;
 use miette::IntoDiagnostic;
 use pep440_rs::VersionSpecifiers;
-use pixi_git::{
-    git::GitReference as PixiGitReference, sha::GitSha as PixiGitSha,
-    url::RepositoryUrl as PixiRepositoryUrl,
-};
+use pixi_git::{git::GitReference as PixiGitReference, sha::GitSha as PixiGitSha};
 use pixi_manifest::pypi::pypi_options::{
     FindLinksUrlOrPath, IndexStrategy, NoBinary, NoBuild, NoBuildIsolation, PypiOptions,
 };
