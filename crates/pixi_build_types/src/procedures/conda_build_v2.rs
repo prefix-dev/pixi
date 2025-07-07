@@ -20,10 +20,10 @@ pub const METHOD_NAME: &str = "conda/build_v2";
 #[serde(rename_all = "camelCase")]
 pub struct CondaBuildV2Params {
     /// The path to the build prefix, or `None` if no build prefix is created.
-    pub build_prefix: Option<PathBuf>,
+    pub build_prefix: Option<CondaBuildV2Prefix>,
 
     /// The path to the host prefix, or `None` if no host prefix is created.
-    pub host_prefix: Option<PathBuf>,
+    pub host_prefix: Option<CondaBuildV2Prefix>,
 
     /// The output to build.
     pub output: CondaBuildV2Output,
@@ -42,6 +42,18 @@ pub struct CondaBuildV2Params {
     /// Whether we want to install the package as editable
     // TODO: remove this parameter as soon as we have profiles
     pub editable: Option<bool>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct CondaBuildV2Prefix {
+    /// The path to the prefix.
+    pub prefix: PathBuf,
+
+    /// The platform for which the packages were installed.
+    pub platform: Platform,
+    // TODO: Add information about matchspecs that were used to install the package.
+    // TODO: Add information about the packages that were installed.
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

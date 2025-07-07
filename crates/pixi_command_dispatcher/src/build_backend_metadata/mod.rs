@@ -1,13 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::{
-    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    InstantiateBackendError, InstantiateBackendSpec, SourceCheckout, SourceCheckoutError,
-    build::{
-        WorkDirKey,
-        source_metadata_cache::{self, CachedCondaMetadata, MetadataKind, SourceMetadataKey},
-    },
-};
 use miette::Diagnostic;
 use pixi_build_discovery::{DiscoveredBackend, EnabledProtocols};
 use pixi_build_frontend::{
@@ -24,6 +16,15 @@ use pixi_record::{InputHash, PinnedSourceSpec};
 use rand::random;
 use rattler_conda_types::{ChannelConfig, ChannelUrl};
 use thiserror::Error;
+
+use crate::{
+    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
+    InstantiateBackendError, InstantiateBackendSpec, SourceCheckout, SourceCheckoutError,
+    build::{
+        WorkDirKey,
+        source_metadata_cache::{self, CachedCondaMetadata, MetadataKind, SourceMetadataKey},
+    },
+};
 
 /// Represents a request for metadata from a build backend for a particular
 /// source location. The result of this request is the metadata for that
@@ -230,6 +231,7 @@ impl BuildBackendMetadataSpec {
     ) -> Result<CachedCondaMetadata, CommandDispatcherError<BuildBackendMetadataError>> {
         let params = CondaOutputsParams {
             host_platform: self.build_environment.host_platform,
+            build_platform: self.build_environment.build_platform,
             variant_configuration: self.variants.map(|variants| variants.into_iter().collect()),
             work_directory: command_dispatcher.cache_dirs().working_dirs().join(
                 WorkDirKey {

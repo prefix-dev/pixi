@@ -33,6 +33,12 @@ pub struct CondaOutputsParams {
     /// is running but when cross-compiling this could be different.
     pub host_platform: Platform,
 
+    /// The platform for which any build tools will be installed.
+    ///
+    /// This is usually the same platform as the platform on which the backend
+    /// is running but when cross-compiling this could be different.
+    pub build_platform: Platform,
+
     /// The possible variants by the pixi workspace.
     pub variant_configuration: Option<BTreeMap<String, Vec<String>>>,
 

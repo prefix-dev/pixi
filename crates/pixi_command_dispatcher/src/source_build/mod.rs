@@ -13,7 +13,9 @@ use pixi_build_types::{
     ChannelConfiguration, PlatformAndVirtualPackages,
     procedures::{
         conda_build::{CondaBuildParams, CondaBuiltPackage, CondaOutputIdentifier},
-        conda_build_v2::{CondaBuildV2Output, CondaBuildV2Params, CondaBuildV2Result},
+        conda_build_v2::{
+            CondaBuildV2Output, CondaBuildV2Params, CondaBuildV2Prefix, CondaBuildV2Result,
+        },
         conda_outputs::CondaOutputsParams,
     },
 };
@@ -238,6 +240,7 @@ impl SourceBuildSpec {
     ) -> Result<CondaBuildV2Result, CommandDispatcherError<SourceBuildError>> {
         let source_anchor = SourceAnchor::from(SourceSpec::from(self.source.source.clone()));
         let host_platform = self.build_environment.host_platform;
+        let build_platform = self.build_environment.build_platform;
 
         // Determine the working directory for the build.
         let work_directory = command_dispatcher.cache_dirs().working_dirs().join(
@@ -254,6 +257,7 @@ impl SourceBuildSpec {
         let outputs = backend
             .conda_outputs(CondaOutputsParams {
                 host_platform,
+                build_platform,
                 variant_configuration: self.variants.clone(),
                 work_directory: work_directory.clone(),
             })
@@ -372,8 +376,14 @@ impl SourceBuildSpec {
         let built_package = backend
             .conda_build_v2(
                 CondaBuildV2Params {
-                    build_prefix: Some(directories.build_prefix),
-                    host_prefix: Some(directories.host_prefix),
+                    build_prefix: Some(CondaBuildV2Prefix {
+                        prefix: directories.build_prefix,
+                        platform: self.build_environment.build_platform,
+                    }),
+                    host_prefix: Some(CondaBuildV2Prefix {
+                        prefix: directories.host_prefix,
+                        platform: self.build_environment.host_platform,
+                    }),
                     output: CondaBuildV2Output {
                         name: output.metadata.name,
                         version: Some(output.metadata.version),
