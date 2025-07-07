@@ -243,9 +243,15 @@ async fn test_task_with_env() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().without_channels().await.unwrap();
 
+    #[cfg(windows)]
+    let echo_cmd = vec!["cmd", "/C", "echo From a %HELLO_WORLD%"];
+
+    #[cfg(not(windows))]
+    let echo_cmd = vec!["sh", "-c", "echo From a $HELLO_WORLD"];
+
     pixi.tasks()
         .add("env-test".into(), None, FeatureName::default())
-        .with_commands(["echo From a $HELLO_WORLD"])
+        .with_commands(echo_cmd)
         .with_env(vec![(
             String::from("HELLO_WORLD"),
             String::from("world with spaces"),

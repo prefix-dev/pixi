@@ -431,7 +431,7 @@ fn get_export_specific_task_env(task: &Task, command_env: IndexMap<String, Strin
                 }
             }
         } else {
-            // Create environment map for priority-based merging. 
+            // Create environment map for priority-based merging.
             // Considering future extensions, there may be other types of environment variables.
             let mut env_map: HashMap<&'static str, Option<IndexMap<String, String>>> =
                 HashMap::new();
