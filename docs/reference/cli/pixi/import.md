@@ -17,8 +17,8 @@ pixi import [OPTIONS] <FILE>
 <br>**required**: `true`
 
 ## Options
-- <a id="arg---conda" href="#arg---conda">`--conda`</a>
-:  File is to be interpreted as specifying a conda environment
+- <a id="arg---format" href="#arg---format">`--format <FORMAT>`</a>
+:  Which format to interpret the file as
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
 :  The platforms for the imported environment
 <br>May be provided more than once.

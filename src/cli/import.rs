@@ -26,9 +26,9 @@ pub struct Args {
     #[arg(required = true, id = "FILE")]
     pub file: PathBuf,
 
-    /// File is to be interpreted as specifying a conda environment.
-    #[arg(long)] // conflicts_with = "pypi"
-    pub conda: bool,
+    /// Which format to interpret the file as.
+    #[arg(long)]
+    pub format: Option<String>,
 
     /// The platforms for the imported environment
     #[arg(long = "platform", short, value_name = "PLATFORM")]
@@ -53,13 +53,20 @@ pub struct Args {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    if !args.conda {
-        // TODO: implement args.pypi
-        miette::bail!(
-            "You must pass `--conda` — currently only conda environments are supported by `pixi import`, but support for PyPI environments is planned."
-        )
+    if let Some(format) = args.format.clone() {
+        if format != *"conda-env" {
+            // TODO: implement conda-lock, conda-txt, pypi-txt
+            miette::bail!(
+                "Only the conda environment.yml format is supported currently. Please pass `conda-env` to `format`."
+            );
+        }
+        import_conda_env(args).await
+    } else {
+        import_conda_env(args).await // .or_else(...)
     }
+}
 
+async fn import_conda_env(args: Args) -> miette::Result<()> {
     let (file, platforms, config, workspace_config) = (
         args.file,
         args.platforms,
