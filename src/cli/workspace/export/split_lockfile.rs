@@ -47,7 +47,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into_lock_file();
 
     if lockfile.is_empty() {
-        tracing::info!("lockfile is empty.");
+        eprintln!("lockfile is empty.");
         return Ok(());
     }
 
@@ -73,7 +73,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
             let s = builder.finish();
             if s.is_empty() {
-                tracing::info!("Ignore empty environment {env_name} on platform {plat}");
+                tracing::warn!("Ignore empty environment {env_name} on platform {plat}");
             } else {
                 split_lockfiles.push((env_name.to_string(), plat, s));
             }
@@ -81,7 +81,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     if split_lockfiles.is_empty() {
-        tracing::info!("No environments.");
+        eprintln!("No environments.");
     } else {
         fs_err::create_dir_all(&args.output_dir).into_diagnostic()?;
         for (env_name, plat, l) in split_lockfiles {
