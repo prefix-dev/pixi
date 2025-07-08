@@ -1,7 +1,6 @@
-# These are not defined because they are derived from the workspace itself.
-# [package]
-# name = "test_build_conda_package"
-# version = "1.0.0"
+[package]
+name = { workspace = true }
+version = { workspace = true }
 
 [package.build.backend]
 name = "pixi-build-rattler-build"
