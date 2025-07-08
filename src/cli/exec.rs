@@ -1,4 +1,4 @@
-use std::{path::Path, str::FromStr, sync::LazyLock};
+use std::{collections::BTreeSet, path::Path, str::FromStr, sync::LazyLock};
 
 use clap::{Parser, ValueHint};
 use itertools::Itertools;
@@ -59,6 +59,10 @@ pub struct Args {
     #[clap(long = "list", num_args = 0..=1, default_missing_value = "", require_equals = true)]
     pub list: Option<String>,
 
+    /// Disable modification of the PS1 prompt to indicate the temporary environment
+    #[clap(long, action = clap::ArgAction::SetFalse)]
+    pub no_modify_ps1: bool,
+
     #[clap(flatten)]
     pub config: ConfigCli,
 }
@@ -76,7 +80,38 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let prefix = create_exec_prefix(&args, &cache_dir, &config, &client).await?;
 
     // Get environment variables from the activation
-    let activation_env = run_activation(&prefix).await?;
+    let mut activation_env = run_activation(&prefix).await?;
+
+    // Collect unique package names and set environment variables if any are specified
+    let package_names: BTreeSet<String> = args
+        .specs
+        .iter()
+        .chain(args.with.iter())
+        .filter_map(|spec| spec.name.as_ref().map(|n| n.as_normalized().to_string()))
+        .collect();
+
+    if !package_names.is_empty() {
+        let env_name = format!(
+            "temp:{}",
+            package_names.into_iter().collect::<Vec<_>>().join(",")
+        );
+
+        activation_env.insert("PIXI_ENVIRONMENT_NAME".into(), env_name.clone());
+
+        if args.no_modify_ps1 && std::env::current_dir().is_ok() {
+            let (prompt_var, prompt_value) = if cfg!(windows) {
+                ("_PIXI_PROMPT", format!("(pixi:{}) $P$G", env_name))
+            } else {
+                ("PS1", format!(r"(pixi:{}) [\w] \$ ", env_name))
+            };
+
+            activation_env.insert(prompt_var.into(), prompt_value);
+
+            if cfg!(windows) {
+                activation_env.insert("PROMPT".into(), String::from("$P$G"));
+            }
+        }
+    }
 
     // Ignore CTRL+C so that the child is responsible for its own signal handling.
     let _ctrl_c = tokio::spawn(async { while tokio::signal::ctrl_c().await.is_ok() {} });
@@ -149,7 +184,9 @@ pub async fn create_exec_prefix(
     let gateway = config.gateway().with_client(client.clone()).finish();
 
     // Determine the specs to use for the environment
-    let specs = if args.specs.is_empty() {
+    let mut specs = args.specs.clone();
+    specs.extend(args.with.clone());
+    let specs = if specs.is_empty() {
         let command = args.command.first().expect("missing required command");
         let guessed_spec = guess_package_spec(command);
 
@@ -157,12 +194,9 @@ pub async fn create_exec_prefix(
             "no specs provided, guessed {} from command {command}",
             guessed_spec
         );
-
-        let mut with_specs = args.with.clone();
-        with_specs.push(guessed_spec);
-        with_specs
+        vec![guessed_spec]
     } else {
-        args.specs.clone()
+        specs
     };
 
     let channels = args.channels.resolve_from_config(config)?;
