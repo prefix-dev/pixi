@@ -1,4 +1,5 @@
-!!!tip `conda-deny` in one command:
+
+!!!tip "`conda-deny` in one command:"
     In your favorite `pixi` project, run:
     ```bash
     pixi exec conda-deny --osi
