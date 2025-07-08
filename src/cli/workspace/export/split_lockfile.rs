@@ -39,7 +39,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let lockfile = workspace
         .update_lock_file(UpdateLockFileOptions {
-            lock_file_usage: args.lock_file_update_config.lock_file_usage(),
+            lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
             no_install: args.lock_file_update_config.no_lockfile_update,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         })
@@ -83,10 +83,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     if split_lockfiles.is_empty() {
         tracing::info!("No environments.");
     } else {
-        fs_err::create_dir_all(&args.output_dir).into_diagnostic();
+        fs_err::create_dir_all(&args.output_dir).into_diagnostic()?;
         for (env_name, plat, l) in split_lockfiles {
             let subdir = &args.output_dir.join(plat.to_string());
-            fs_err::create_dir_all(subdir).into_diagnostic();
+            fs_err::create_dir_all(subdir).into_diagnostic()?;
             l.to_path(subdir.join(format!("{}.lock", env_name)).as_path())
                 .into_diagnostic()?;
         }
