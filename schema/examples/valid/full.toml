@@ -23,6 +23,9 @@ no-build = false
 numpy = { version = ">=1.21.0" }
 
 [package]
+# Inherit the name and version the workspace
+name = { workspace = true }
+version = { workspace = true }
 
 [package.build]
 additional-dependencies = { git = "*" }
