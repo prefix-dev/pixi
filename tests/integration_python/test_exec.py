@@ -17,12 +17,12 @@ def test_concurrent_exec(pixi: Path, dummy_channel_1: str) -> None:
         futures = [
             executor.submit(
                 verify_cli_command,
-                [pixi, "exec", "-c", dummy_channel_1, "dummy-f"],
+                [pixi, "exec", "-c", dummy_channel_1, "--", "dummy-f"],
                 stdout_contains=["dummy-f on"],
             ),
             executor.submit(
                 verify_cli_command,
-                [pixi, "exec", "-c", dummy_channel_1, "dummy-f"],
+                [pixi, "exec", "-c", dummy_channel_1, "--", "dummy-f"],
                 stdout_contains=["dummy-f on"],
             ),
         ]
@@ -39,26 +39,26 @@ def test_concurrent_exec(pixi: Path, dummy_channel_1: str) -> None:
 def test_exec_list(pixi: Path, dummy_channel_1: str) -> None:
     # Without `--list`, nothing is listed
     verify_cli_command(
-        [pixi, "exec", "--channel", dummy_channel_1, "dummy-g"],
+        [pixi, "exec", "--channel", dummy_channel_1, "--", "dummy-g"],
         stdout_excludes=["dummy-g"],
     )
 
     # List all packages in environment
     verify_cli_command(
-        [pixi, "exec", "--channel", dummy_channel_1, "--list", "dummy-g"],
+        [pixi, "exec", "--channel", dummy_channel_1, "--list", "--", "dummy-g"],
         stdout_contains=["dummy-g", "dummy-b"],
     )
 
     # List only packages that match regex "g"
     verify_cli_command(
-        [pixi, "exec", "--channel", dummy_channel_1, "--list=g", "dummy-g"],
+        [pixi, "exec", "--channel", dummy_channel_1, "--list=g", "--", "dummy-g"],
         stdout_contains="dummy-g",
         stdout_excludes="dummy-b",
     )
 
     # List specific package
     verify_cli_command(
-        [pixi, "exec", "--channel", dummy_channel_1, "--list=dummy-g", "dummy-g"],
+        [pixi, "exec", "--channel", dummy_channel_1, "--list=dummy-g", "--", "dummy-g"],
         stdout_contains=["dummy-g"],
         stdout_excludes=["dummy-b"],
     )
@@ -110,7 +110,7 @@ def test_pixi_environment_name_and_ps1(pixi: Path, dummy_channel_1: str) -> None
         expected_prompt = "(pixi:temp:dummy-a) $P$G"
     else:
         prompt_var = "PS1"
-        expected_prompt = r"(pixi:temp:dummy-a) [\w] \$ "
+        expected_prompt = r"(pixi:temp:dummy-a) [\w] \$"
 
     # Test with default behavior (prompt should be modified)
     prompt, _ = run_and_get_env(
@@ -141,12 +141,12 @@ def test_pixi_environment_name_and_ps1(pixi: Path, dummy_channel_1: str) -> None
 def test_exec_with(pixi: Path, dummy_channel_1: str) -> None:
     # A package is guessed from the command when `--with` is provided
     verify_cli_command(
-        [pixi, "exec", "--channel", dummy_channel_1, "--list", "--spec=dummy-a", "dummy-b"],
+        [pixi, "exec", "--channel", dummy_channel_1, "--list", "--spec=dummy-a", "--", "dummy-b"],
         stdout_excludes="dummy-b",
         expected_exit_code=ExitCode.FAILURE,
     )
     verify_cli_command(
-        [pixi, "exec", "--channel", dummy_channel_1, "--list", "--with=dummy-a", "dummy-b"],
+        [pixi, "exec", "--channel", dummy_channel_1, "--list", "--with=dummy-a", "--", "dummy-b"],
         stdout_contains="dummy-b",
     )
 
@@ -160,6 +160,7 @@ def test_exec_with(pixi: Path, dummy_channel_1: str) -> None:
             "--list",
             "--with=dummy-a",
             "--with=dummy-b",
+            "--",
             "dummy-f",
         ],
         stdout_contains=["dummy-a", "dummy-b", "dummy-f"],
@@ -175,6 +176,7 @@ def test_exec_with(pixi: Path, dummy_channel_1: str) -> None:
             "--list",
             "--with=dummy-a",
             "--spec=dummy-b",
+            "--",
             "dummy-f",
         ],
         expected_exit_code=ExitCode.INCORRECT_USAGE,
