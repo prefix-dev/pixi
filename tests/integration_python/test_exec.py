@@ -141,13 +141,13 @@ def test_pixi_environment_name_and_ps1(pixi: Path, dummy_channel_1: str) -> None
 def test_exec_with(pixi: Path, dummy_channel_1: str) -> None:
     # A package is guessed from the command when `--with` is provided
     verify_cli_command(
-        [pixi, "exec", "--channel", dummy_channel_1, "--list", "--spec=dummy-a", "--", "dummy-b"],
-        stdout_excludes="dummy-b",
+        [pixi, "exec", "--channel", dummy_channel_1, "--list", "--spec=dummy-a", "--", "dummy-f"],
+        stdout_excludes="dummy-f",
         expected_exit_code=ExitCode.FAILURE,
     )
     verify_cli_command(
-        [pixi, "exec", "--channel", dummy_channel_1, "--list", "--with=dummy-a", "--", "dummy-b"],
-        stdout_contains="dummy-b",
+        [pixi, "exec", "--channel", dummy_channel_1, "--list", "--with=dummy-a", "--", "dummy-f"],
+        stdout_contains="dummy-f",
     )
 
     # Correct behaviour with multiple 'with' options
