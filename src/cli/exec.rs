@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, path::Path, str::FromStr, sync::LazyLock};
+use std::{collections::BTreeSet, collections::HashMap, path::Path, str::FromStr, sync::LazyLock};
 
 use clap::{Parser, ValueHint};
 use itertools::Itertools;
@@ -26,10 +26,10 @@ use crate::{
 ///
 /// Remove the temporary environments with `pixi clean cache --exec`.
 #[derive(Parser, Debug)]
-#[clap(trailing_var_arg = true, arg_required_else_help = true)]
+#[clap(arg_required_else_help = true)]
 pub struct Args {
     /// The executable to run, followed by any arguments.
-    #[clap(num_args = 1.., value_hint = ValueHint::CommandWithArguments)]
+    #[clap(value_hint = ValueHint::CommandWithArguments, last = true)]
     pub command: Vec<String>,
 
     /// Matchspecs of package to install.
@@ -72,21 +72,33 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
     let cache_dir = pixi_config::get_cache_dir().context("failed to determine cache directory")?;
 
-    let mut command_args = args.command.iter();
-    let command = command_args.next().ok_or_else(|| miette::miette!(help ="i.e when specifying specs explicitly use a command at the end: `pixi exec -s python==3.12 python`", "missing required command to execute",))?;
+    let mut command_iter = args.command.iter();
+    let command = command_iter.next().ok_or_else(|| miette::miette!(help ="i.e when specifying specs explicitly use a command at the end: `pixi exec -s python==3.12 python`", "missing required command to execute",))?;
     let (_, client) = build_reqwest_clients(Some(&config), None)?;
 
+    // Determine the specs to use for the environment
+    let mut specs = args.specs.clone();
+    specs.extend(args.with.clone());
+    let specs = if specs.is_empty() {
+        let guessed_spec = guess_package_spec(command);
+        tracing::debug!(
+            "no specs provided, guessed {} from command {command}",
+            guessed_spec
+        );
+        vec![guessed_spec]
+    } else {
+        specs
+    };
+
     // Create the environment to run the command in.
-    let prefix = create_exec_prefix(&args, &cache_dir, &config, &client).await?;
+    let prefix = create_exec_prefix(&args, &specs, &cache_dir, &config, &client).await?;
 
     // Get environment variables from the activation
     let mut activation_env = run_activation(&prefix).await?;
 
     // Collect unique package names and set environment variables if any are specified
-    let package_names: BTreeSet<String> = args
-        .specs
+    let package_names: BTreeSet<String> = specs
         .iter()
-        .chain(args.with.iter())
         .filter_map(|spec| spec.name.as_ref().map(|n| n.as_normalized().to_string()))
         .collect();
 
@@ -117,9 +129,21 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let _ctrl_c = tokio::spawn(async { while tokio::signal::ctrl_c().await.is_ok() {} });
 
     // Spawn the command
-    let status = std::process::Command::new(command)
-        .args(command_args)
-        .envs(activation_env.iter().map(|(k, v)| (k.as_str(), v.as_str())))
+    let mut cmd = std::process::Command::new(command);
+    let command_args_vec: Vec<_> = command_iter.collect();
+    cmd.args(&command_args_vec);
+
+    // On Windows, when using cmd.exe or cmd, we need to set environment variables in a special way
+    // because cmd.exe has its own environment variable expansion rules
+    if cfg!(windows) && (command.to_lowercase().ends_with("cmd.exe") || command == "cmd") {
+        let mut env = std::env::vars().collect::<HashMap<String, String>>();
+        env.extend(activation_env);
+        cmd.envs(env);
+    } else {
+        cmd.envs(activation_env.iter().map(|(k, v)| (k.as_str(), v.as_str())));
+    }
+
+    let status = cmd
         .status()
         .into_diagnostic()
         .with_context(|| format!("failed to execute '{}'", &command))?;
@@ -131,12 +155,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 /// Creates a prefix for the `pixi exec` command.
 pub async fn create_exec_prefix(
     args: &Args,
+    specs: &[MatchSpec],
     cache_dir: &Path,
     config: &Config,
     client: &ClientWithMiddleware,
 ) -> miette::Result<Prefix> {
     let command = args.command.first().expect("missing required command");
-    let specs = args.specs.clone();
+    let specs = specs.to_vec();
+
     let channels = args
         .channels
         .resolve_from_config(config)?
@@ -144,7 +170,8 @@ pub async fn create_exec_prefix(
         .map(|c| c.base_url.to_string())
         .collect();
 
-    let environment_hash = EnvironmentHash::new(command.clone(), specs, channels, args.platform);
+    let environment_hash =
+        EnvironmentHash::new(command.clone(), specs.clone(), channels, args.platform);
 
     let prefix = Prefix::new(
         cache_dir
@@ -182,22 +209,6 @@ pub async fn create_exec_prefix(
 
     // Construct a gateway to get repodata.
     let gateway = config.gateway().with_client(client.clone()).finish();
-
-    // Determine the specs to use for the environment
-    let mut specs = args.specs.clone();
-    specs.extend(args.with.clone());
-    let specs = if specs.is_empty() {
-        let command = args.command.first().expect("missing required command");
-        let guessed_spec = guess_package_spec(command);
-
-        tracing::debug!(
-            "no specs provided, guessed {} from command {command}",
-            guessed_spec
-        );
-        vec![guessed_spec]
-    } else {
-        specs
-    };
 
     let channels = args.channels.resolve_from_config(config)?;
 
