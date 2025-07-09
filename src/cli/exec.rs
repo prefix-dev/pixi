@@ -79,16 +79,23 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Determine the specs to use for the environment
     let mut specs = args.specs.clone();
     specs.extend(args.with.clone());
-    let specs = if specs.is_empty() {
+    
+    // If --with is used or no specs are provided, guess the package from the command
+    if !args.with.is_empty() || specs.is_empty() {
         let guessed_spec = guess_package_spec(command);
-        tracing::debug!(
-            "no specs provided, guessed {} from command {command}",
-            guessed_spec
-        );
-        vec![guessed_spec]
-    } else {
-        specs
-    };
+        if !args.with.is_empty() {
+            tracing::debug!(
+                "using --with, adding guessed spec {} from command {command}",
+                guessed_spec
+            );
+        } else {
+            tracing::debug!(
+                "no specs provided, guessed {} from command {command}",
+                guessed_spec
+            );
+        }
+        specs.push(guessed_spec);
+    }
 
     // Create the environment to run the command in.
     let prefix = create_exec_prefix(&args, &specs, &cache_dir, &config, &client).await?;
