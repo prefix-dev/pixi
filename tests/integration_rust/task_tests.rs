@@ -11,6 +11,7 @@ use pixi_manifest::{
 use rattler_conda_types::Platform;
 
 use crate::common::PixiControl;
+use std::process::Command;
 
 #[tokio::test]
 pub async fn add_remove_task() {
@@ -242,11 +243,13 @@ async fn test_cwd() {
 async fn test_task_with_env() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().without_channels().await.unwrap();
-    // Unix shells expand $VAR in the same shell process.
-    // Windows equires that %VAR% is defined in its environment
-    // that is: if the parent sets it but the child shell does not inherit it, %VAR% is empty.
     let echo_cmd: Vec<&'static str> = if cfg!(windows) {
-        vec!["powershell", "-Command", "echo \"From a $Env:HELLO_WORLD\""]
+        // Try PowerShell first, fall back to cmd
+        if Command::new("powershell").arg("--version").output().is_ok() {
+            vec!["powershell", "-Command", "echo \"From a $Env:HELLO_WORLD\""]
+        } else {
+            vec!["cmd", "/C", "echo From a %HELLO_WORLD%"]
+        }
     } else {
         vec!["sh", "-c", "echo 'From a $HELLO_WORLD'"]
     };
@@ -262,7 +265,7 @@ async fn test_task_with_env() {
         .await
         .unwrap();
 
-    let result = pixi
+    let result = match pixi
         .run(Args {
             task: vec!["env-test".to_string()],
             workspace_config: WorkspaceConfig {
@@ -271,7 +274,14 @@ async fn test_task_with_env() {
             ..Default::default()
         })
         .await
-        .unwrap();
+    {
+        Ok(result) => result,
+        Err(e) => {
+            eprintln!("test_task_with_env() Pixi run failed with error: {}", e);
+            eprintln!("test_task_with_env()Error type: {:?}", e);
+            panic!("test_task_with_env()Test failed: {}", e);
+        }
+    };
 
     if result.exit_code != 0 {
         println!(
