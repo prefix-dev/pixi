@@ -80,6 +80,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut specs = args.specs.clone();
     specs.extend(args.with.clone());
     
+    // Track explicit specs for environment naming (excluding guessed packages)
+    let explicit_specs = specs.clone();
+    
     // If --with is used or no specs are provided, guess the package from the command
     if !args.with.is_empty() || specs.is_empty() {
         let guessed_spec = guess_package_spec(command);
@@ -103,8 +106,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Get environment variables from the activation
     let mut activation_env = run_activation(&prefix).await?;
 
-    // Collect unique package names and set environment variables if any are specified
-    let package_names: BTreeSet<String> = specs
+    // Collect unique package names from explicit specs only for environment naming
+    let package_names: BTreeSet<String> = explicit_specs
         .iter()
         .filter_map(|spec| spec.name.as_ref().map(|n| n.as_normalized().to_string()))
         .collect();
