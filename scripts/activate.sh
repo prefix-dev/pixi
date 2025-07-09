@@ -2,8 +2,9 @@
 # shellcheck disable=SC2148
 
 # Setup the mold linker when targeting x86_64-unknown-linux-gnu
+# The additional ling flags are there to make perf work correctly when profiling: https://github.com/flamegraph-rs/flamegraph#linux
 export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_LINKER="clang"
-export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS="-C link-arg=-fuse-ld=$CONDA_PREFIX/bin/mold"
+export CARGO_TARGET_X86_64_UNKNOWN_LINUX_GNU_RUSTFLAGS="-Clink-arg=-fuse-ld=$CONDA_PREFIX/bin/mold -Clink-arg=-Wl,--no-rosegment"
 
 # On macOS we need to set these rust flags to avoid the following error:
 # dyld[98511]: Library not loaded: @rpath/liblzma.5.dylib
