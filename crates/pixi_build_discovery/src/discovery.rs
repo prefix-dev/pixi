@@ -5,8 +5,9 @@ use std::{
 
 use itertools::Itertools;
 use miette::Diagnostic;
-use pixi_build_type_conversions::to_project_model_v1;
-use pixi_build_types::ProjectModelV1;
+use ordermap::OrderMap;
+use pixi_build_type_conversions::{to_project_model_v1, to_target_selector_v1};
+use pixi_build_types::{ProjectModelV1, TargetSelectorV1};
 use pixi_manifest::{
     DiscoveryStart, ExplicitManifestError, PackageManifest, PrioritizedChannel, WithProvenance,
     WorkspaceDiscoverer, WorkspaceDiscoveryError, WorkspaceManifest,
@@ -53,6 +54,9 @@ pub struct BackendInitializationParams {
 
     /// Additional configuration that applies to the backend.
     pub configuration: Option<serde_json::Value>,
+
+    /// Targets that applies to the backend.
+    pub target_configuration: Option<OrderMap<TargetSelectorV1, serde_json::Value>>,
 }
 
 /// Configuration to enable or disable certain protocols discovery.
@@ -169,12 +173,13 @@ impl DiscoveredBackend {
                 manifest_path: recipe_relative_path,
                 project_model: None,
                 configuration: None,
+                target_configuration: None,
             },
         })
     }
 
     /// Convert a package manifest and corresponding workspace manifest into a
-    /// discovered backend.
+    /// discovered backend, with optional platform-specific configuration.
     pub fn from_package_and_workspace(
         source_path: PathBuf,
         package_manifest: &WithProvenance<PackageManifest>,
@@ -256,7 +261,19 @@ impl DiscoveredBackend {
                 configuration: build_system.configuration.map(|config| {
                     config
                         .deserialize_into()
-                        .expect("Configuration dictionary should be serializable to JSON")
+                        .expect("Configuration dictionary needs to be serializable to JSON")
+                }),
+                target_configuration: build_system.target_configuration.map(|c| {
+                    c.into_iter()
+                        .map(|(selector, config)| {
+                            (
+                                to_target_selector_v1(&selector),
+                                config.deserialize_into().expect(
+                                    "Configuration dictionary needs to be serializable to JSON",
+                                ),
+                            )
+                        })
+                        .collect()
                 }),
             },
         })
