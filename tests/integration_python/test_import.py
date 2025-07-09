@@ -12,7 +12,7 @@ def test_import_invalid_format(pixi: Path, tmp_pixi_workspace: Path) -> None:
     # Create a new project
     verify_cli_command([pixi, "init", tmp_pixi_workspace])
 
-    # Add package
+    # try to import as an invalid format
     verify_cli_command(
         [
             pixi,
