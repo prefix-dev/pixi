@@ -406,6 +406,7 @@ fn get_export_specific_task_env(task: &Task, command_env: IndexMap<String, Strin
     // Define keys that should not be overridden
     let override_excluded_keys: HashSet<&str> = [
         "PIXI_PROJECT_ROOT",
+        "PIXI_PROJECT_MANIFEST",
         "PIXI_PROJECT_NAME",
         "PIXI_PROJECT_VERSION",
         "PIXI_PROMPT",
@@ -445,10 +446,6 @@ fn get_export_specific_task_env(task: &Task, command_env: IndexMap<String, Strin
             // Apply priority order: from lowest to highest
             let priority = ["COMMAND_ENV", "TASK_SPECIFIC_ENVS"];
             for key in &priority {
-                // Skip command env to avoid exporting system variables
-                if *key == "COMMAND_ENV" {
-                    continue;
-                }
                 if let Some(Some(env_map_key)) = env_map.get(key) {
                     export_merged.extend(env_map_key.clone())
                 }
