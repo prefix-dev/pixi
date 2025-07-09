@@ -80,20 +80,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut specs = args.specs.clone();
     specs.extend(args.with.clone());
     
-    // If --with is used or no specs are provided, guess the package from the command
-    if !args.with.is_empty() || specs.is_empty() {
+    // Only add the guessed package if both args.specs and args.with are empty
+    if args.specs.is_empty() && args.with.is_empty() {
         let guessed_spec = guess_package_spec(command);
-        if !args.with.is_empty() {
-            tracing::debug!(
-                "using --with, adding guessed spec {} from command {command}",
-                guessed_spec
-            );
-        } else {
-            tracing::debug!(
-                "no specs provided, guessed {} from command {command}",
-                guessed_spec
-            );
-        }
+        tracing::debug!(
+            "no specs provided, guessed {} from command {command}",
+            guessed_spec
+        );
         specs.push(guessed_spec);
     }
 
@@ -104,12 +97,21 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut activation_env = run_activation(&prefix).await?;
 
     // Collect unique package names for environment naming
-    // Exclude the guessed package (which is always the last one if --with is used or no specs provided)
-    let specs_for_env_name = if !args.with.is_empty() || (args.specs.is_empty() && specs.len() > 0) {
-        // If we added a guessed package, exclude the last spec from environment naming
+    // Only exclude the guessed package if it was actually added due to no specs being provided
+    let guessed_spec = guess_package_spec(command);
+    let guessed_package_added = specs.last().map(|s| s.name.as_ref()) == Some(guessed_spec.name.as_ref());
+
+    let specs_for_env_name = if !args.with.is_empty() {
+        // If --with is used, use all --with specs for the environment name
+        &args.with[..]
+    } else if !args.specs.is_empty() {
+        // If -s is used, use all -s specs for the environment name
+        &args.specs[..]
+    } else if guessed_package_added && specs.len() > 1 {
+        // If a guessed package was added (and there are other specs), exclude the last spec
         &specs[..specs.len().saturating_sub(1)]
     } else {
-        // No guessed package was added, use all specs
+        // Use all specs (should only be the guessed one)
         &specs[..]
     };
     
