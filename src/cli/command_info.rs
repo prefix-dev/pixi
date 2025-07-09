@@ -63,9 +63,12 @@ fn find_external_commands() -> HashMap<String, PathBuf> {
                         // Check if it's a pixi extension
                         if let Some(cmd_name) = name.strip_prefix("pixi-") {
                             // Remove .exe suffix on Windows
-                            let cmd_name = cmd_name
-                                .strip_suffix(env::consts::EXE_SUFFIX)
-                                .unwrap_or(cmd_name);
+                            #[cfg(target_family = "windows")]
+                            {
+                                let cmd_name = cmd_name
+                                    .strip_suffix(env::consts::EXE_SUFFIX)
+                                    .unwrap_or(cmd_name);
+                            }
 
                             let path = entry.path();
                             if path.is_executable() {
@@ -120,18 +123,19 @@ pub fn execute_external_command(args: Vec<String>) -> miette::Result<()> {
         // Generate suggestions for similar commands
         let mut suggestions = find_similar_commands(cmd);
 
-        let mut error_msg = format!("unexpected argument '{}' found", cmd);
+        let styles = get_styles();
+
+        // get the styles for invalid and valid commands
+        let invalid = styles.get_invalid();
+        let tip = styles.get_valid();
+
+        let mut error_msg = format!("unrecognized subcommand '{invalid}{cmd}{invalid:#}'");
 
         if let Some(most_similar) = suggestions.pop() {
             error_msg.push_str(&format!(
-                "\n\n  tip: a similar subcommand exists: '{}'",
-                most_similar
+                "\n\n  {tip}tip{tip:#}: a similar subcommand exists: '{tip}{most_similar}{tip:#}'",
             ));
         }
-
-        error_msg.push_str("\n\nhelp: view all installed commands with 'pixi --help'");
-
-        let styles = get_styles();
 
         Command::command()
             .styles(styles)
