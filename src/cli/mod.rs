@@ -79,14 +79,15 @@ pub struct Args {
 pub struct GlobalOptions {
     /// Display help information
     #[clap(
-        long = "help-flag",          // unique internal long name
+        // long = "help-flag",          // unique internal long name
         alias = "help",              // users can still write --help
         short = 'h',
-        id = "help_flag",
+        // id = "help_flag",
+        // action = clap::ArgAction::Help,
         global = true,
         help_heading = consts::CLAP_GLOBAL_OPTIONS
     )]
-    help_flag: bool,
+    help: bool,
 
     /// Increase logging verbosity (-v for warnings, -vv for info, -vvv for debug, -vvvv for trace)
     #[clap(short = 'v', long, action = clap::ArgAction::Count, global = true, help_heading = consts::CLAP_GLOBAL_OPTIONS)]
@@ -153,6 +154,7 @@ pub enum Command {
     #[clap(visible_alias = "ls")]
     List(list::Args),
     Lock(lock::Args),
+    Help,
     Reinstall(reinstall::Args),
     #[clap(visible_alias = "rm")]
     Remove(remove::Args),
@@ -303,23 +305,23 @@ impl LockFileUsageConfig {
 pub async fn execute() -> miette::Result<()> {
     let args = Args::parse();
 
-    // Handle help flag
-    if args.global_options.help_flag {
-        show_help_with_extensions();
-        return Ok(());
-    }
-
-    // If no command provided, show help with extensions
-    if args.command.is_none() {
-        show_help_with_extensions();
-        return Ok(());
-    }
-
     // Extract values we need before moving args
     let no_progress = args.no_progress();
     let log_level_filter = args.log_level_filter();
 
     set_console_colors(&args);
+
+    // Handle help flag or missing command as both will show help
+    if args.global_options.help {
+        show_help_with_extensions();
+        return Ok(());
+    }
+
+    let (Some(command), global_options) = (args.command, args.global_options) else {
+        show_help_with_extensions();
+        return Ok(());
+    };
+
     let use_colors = console::colors_enabled_stderr();
     let in_ci = matches!(env::var("CI").as_deref(), Ok("1" | "true"));
     let no_wrap = matches!(env::var("PIXI_NO_WRAP").as_deref(), Ok("1" | "true"));
@@ -438,11 +440,15 @@ pub async fn execute_command(
         Command::Lock(cmd) => lock::execute(cmd).await,
         Command::Exec(args) => exec::execute(args).await,
         Command::Build(args) => build::execute(args).await,
+        Command::Help => {
+            show_help_with_extensions();
+            Ok(())
+        }
         Command::External(args) => {
-            if matches!(args.first().map(String::as_str), Some("help")) {
-                show_help_with_extensions();
-                return Ok(());
-            }
+            // if matches!(args.first().map(String::as_str), Some("help")) {
+            //     show_help_with_extensions();
+            //     return Ok(());
+            // }
             command_info::execute_external_command(args)
         }
     }
