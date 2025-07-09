@@ -1,4 +1,4 @@
-use std::{fmt, str::FromStr, sync::Arc};
+use std::{collections::HashMap, fmt, str::FromStr, sync::Arc};
 
 use crate::{
     FeatureName, LibCSystemRequirement, ManifestKind, ManifestProvenance, PypiDependencyLocation,
@@ -339,6 +339,34 @@ impl ManifestDocument {
         self.manifest_mut()
             .get_or_insert_nested_table(dependency_table.to_string().as_str())
             .map(|t| t.insert(name.as_normalized(), Item::Value(spec.to_toml_value())))?;
+
+        Ok(())
+    }
+
+    /// Adds an activation env to the TOML manifest
+    ///
+    /// Extends an existing activation.
+    pub fn add_activation_env(
+        &mut self,
+        env: HashMap<String, String>,
+        platform: Option<Platform>,
+        feature_name: &FeatureName,
+    ) -> Result<(), TomlError> {
+        let activation_table = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_platform(platform.as_ref())
+            .with_feature_name(Some(feature_name))
+            .with_table(Some("activation.env"));
+
+        // get existing table
+        // ...
+
+        // extend table with env
+        // ...
+
+        // self.manifest_mut()
+        //     .get_or_insert_nested_table(dependency_table.to_string().as_str())
+        //     .map(|t| t.insert(name.as_normalized(), Item::Value(spec.to_toml_value())))?;
 
         Ok(())
     }
