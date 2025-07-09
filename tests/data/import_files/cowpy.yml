@@ -1,0 +1,5 @@
+name: cowpy
+channels:
+  - conda-forge
+dependencies:
+  - cowpy
