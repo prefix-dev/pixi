@@ -77,7 +77,10 @@ def test_external_command_not_found(
         [pixi, "nonexistent"],
         env=env,
         cwd=tmp_pixi_workspace,
-        stderr_contains="No such command: `pixi nonexistent`",
+        stderr_contains=[
+            "unexpected argument 'nonexistent' found",
+            "tip: a similar subcommand exists:",
+        ],
         expected_exit_code=ExitCode.INCORRECT_USAGE,
     )
 
