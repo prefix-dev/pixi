@@ -406,7 +406,6 @@ fn get_export_specific_task_env(task: &Task, command_env: IndexMap<String, Strin
     // Define keys that should not be overridden
     let override_excluded_keys: HashSet<&str> = [
         "PIXI_PROJECT_ROOT",
-        "PIXI_PROJECT_MANIFEST",
         "PIXI_PROJECT_NAME",
         "PIXI_PROJECT_VERSION",
         "PIXI_PROMPT",
