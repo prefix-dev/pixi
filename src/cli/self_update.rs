@@ -214,7 +214,11 @@ pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Resu
     // Get the current version of the pixi binary
     let current_version = Version::from_str(consts::PIXI_VERSION).into_diagnostic()?;
 
-    let fetch_release_warning = if args.no_release_note || is_quiet {
+    let up_to_date = target_version
+        .as_ref()
+        .is_some_and(|t| *t == current_version);
+
+    let fetch_release_warning = if args.no_release_note || up_to_date || is_quiet {
         None
     } else {
         match fetch_release_notes(&target_version).await {
@@ -256,10 +260,7 @@ pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Resu
     }
 
     // Stop here if the target version is the same as the current version
-    if target_version
-        .as_ref()
-        .is_some_and(|t| *t == current_version)
-    {
+    if up_to_date {
         if !is_quiet {
             eprintln!(
                 "{}pixi is already up-to-date (version {})",

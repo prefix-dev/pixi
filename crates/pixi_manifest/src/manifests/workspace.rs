@@ -1,6 +1,13 @@
 use std::{collections::HashMap, fmt::Display, hash::Hash, str::FromStr};
 
-use crate::toml::ExternalPackageProperties;
+use indexmap::{Equivalent, IndexMap, IndexSet};
+use itertools::Itertools;
+use miette::{Context, IntoDiagnostic, SourceCode, miette};
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
+use pixi_spec::PixiSpec;
+use rattler_conda_types::{ParseStrictness::Strict, Platform, Version, VersionSpec};
+use toml_edit::Value;
+
 use crate::{
     DependencyOverwriteBehavior, GetFeatureError, Preview, PrioritizedChannel,
     PypiDependencyLocation, SpecType, SystemRequirements, TargetSelector, Task, TaskName,
@@ -12,17 +19,13 @@ use crate::{
     manifests::document::ManifestDocument,
     solve_group::SolveGroups,
     to_options,
-    toml::{ExternalWorkspaceProperties, FromTomlStr, TomlManifest},
+    toml::{
+        ExternalWorkspaceProperties, FromTomlStr, PackageDefaults, TomlManifest,
+        WorkspacePackageProperties,
+    },
     utils::WithSourceCode,
     workspace::Workspace,
 };
-use indexmap::{Equivalent, IndexMap, IndexSet};
-use itertools::Itertools;
-use miette::{Context, IntoDiagnostic, SourceCode, miette};
-use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
-use pixi_spec::PixiSpec;
-use rattler_conda_types::{ParseStrictness::Strict, Platform, Version, VersionSpec};
-use toml_edit::Value;
 
 /// Holds the parsed content of the workspace part of a pixi manifest. This
 /// describes the part related to the workspace only.
@@ -48,7 +51,11 @@ impl WorkspaceManifest {
     ) -> Result<Self, WithSourceCode<TomlError, S>> {
         TomlManifest::from_toml_str(source.as_ref())
             .and_then(|manifest| {
-                manifest.into_workspace_manifest(ExternalWorkspaceProperties::default(), None)
+                manifest.into_workspace_manifest(
+                    ExternalWorkspaceProperties::default(),
+                    PackageDefaults::default(),
+                    None,
+                )
             })
             .map(|manifests| manifests.0)
             .map_err(|e| WithSourceCode { source, error: e })
@@ -190,8 +197,8 @@ impl WorkspaceManifest {
     }
 
     /// Returns default values for the external package properties.
-    pub(crate) fn derived_external_package_properties(&self) -> ExternalPackageProperties {
-        ExternalPackageProperties {
+    pub(crate) fn workspace_package_properties(&self) -> WorkspacePackageProperties {
+        WorkspacePackageProperties {
             name: self.workspace.name.clone(),
             version: self.workspace.version.clone(),
             description: self.workspace.description.clone(),
@@ -792,16 +799,6 @@ fn handle_missing_target(
 mod tests {
     use std::str::FromStr;
 
-    use super::*;
-    use crate::{
-        ChannelPriority, DependencyOverwriteBehavior, EnvironmentName, FeatureName,
-        PrioritizedChannel, SpecType, TargetSelector, Task, TomlError, WorkspaceManifest,
-        manifests::document::ManifestDocument,
-        pyproject::PyProjectManifest,
-        to_options,
-        toml::{FromTomlStr, TomlDocument},
-        utils::{WithSourceCode, test_utils::expect_parse_failure},
-    };
     use indexmap::{IndexMap, IndexSet};
     use insta::{assert_debug_snapshot, assert_snapshot, assert_yaml_snapshot};
     use itertools::Itertools;
@@ -815,6 +812,17 @@ mod tests {
     };
     use rstest::rstest;
     use toml_edit::DocumentMut;
+
+    use super::*;
+    use crate::{
+        ChannelPriority, DependencyOverwriteBehavior, EnvironmentName, FeatureName,
+        PrioritizedChannel, SpecType, TargetSelector, Task, TomlError, WorkspaceManifest,
+        manifests::document::ManifestDocument,
+        pyproject::PyProjectManifest,
+        to_options,
+        toml::{FromTomlStr, TomlDocument},
+        utils::{WithSourceCode, test_utils::expect_parse_failure},
+    };
 
     const PROJECT_BOILERPLATE: &str = r#"
 [project]

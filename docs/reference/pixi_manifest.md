@@ -319,6 +319,7 @@ The options that can be defined are:
 - `find-links`: similar to `--find-links` option in `pip`.
 - `no-build-isolation`: disables build isolation, can only be set per package.
 - `no-build`: don't build source distributions.
+- `no-binary`: don't use pre-build wheels.
 - `index-strategy`: allows for specifying the index strategy to use.
 
 These options are explained in the sections below. Most of these options are taken directly or with slight modifications from the [uv settings](https://docs.astral.sh/uv/reference/settings/). If any are missing that you need feel free to create an issue [requesting](https://github.com/prefix-dev/pixi/issues) them.
@@ -398,6 +399,29 @@ no-build = ["package1", "package2"]
 When features are merged, the following priority is adhered:
 `no-build = true` > `no-build = ["package1", "package2"]` > `no-build = false`
 So, to expand: if `no-build = true` is set for *any* feature in the environment, this will be used as the setting for the environment.
+
+
+### No Binary
+Don't install pre-built wheels.
+
+The given packages will be built and installed from source. The resolver will still use pre-built wheels to extract package metadata, if available.
+
+Can be either set per package or globally.
+
+```toml
+[pypi-options]
+# Never use pre-build wheels
+no-binary = true # default is false
+```
+or:
+```toml
+[pypi-options]
+no-binary = ["package1", "package2"]
+```
+
+When features are merged, the following priority is adhered:
+`no-binary = true` > `no-binary = ["package1", "package2"]` > `no-binary = false`
+So, to expand: if `no-binary = true` is set for *any* feature in the environment, this will be used as the setting for the environment.
 
 
 ### Index Strategy
