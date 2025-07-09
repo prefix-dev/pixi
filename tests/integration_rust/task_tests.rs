@@ -246,7 +246,7 @@ async fn test_task_with_env() {
     // Windows equires that %VAR% is defined in its environment
     // that is: if the parent sets it but the child shell does not inherit it, %VAR% is empty.
     let echo_cmd = if cfg!(windows) {
-        vec!["cmd", "/C", "echo From a %HELLO_WORLD%"]
+        vec!["cmd", "/V:ON", "/C", "echo !HELLO_WORLD!"]
     } else {
         vec!["sh", "-c", "echo 'From a $HELLO_WORLD'"]
     };
