@@ -245,8 +245,8 @@ async fn test_task_with_env() {
     // Unix shells expand $VAR in the same shell process.
     // Windows equires that %VAR% is defined in its environment
     // that is: if the parent sets it but the child shell does not inherit it, %VAR% is empty.
-    let echo_cmd = if cfg!(windows) {
-        vec!["cmd", "/V:ON", "/C", "echo !HELLO_WORLD!"]
+   let echo_cmd: Vec<&'static str> = if cfg!(windows) {
+        vec!["powershell", "-Command", "echo From a $Env:HELLO_WORLD"]
     } else {
         vec!["sh", "-c", "echo 'From a $HELLO_WORLD'"]
     };
