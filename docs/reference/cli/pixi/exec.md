@@ -8,7 +8,7 @@ Run a command and install it in a temporary environment
 
 ## Usage
 ```
-pixi exec [OPTIONS] [COMMAND]...
+pixi exec [OPTIONS] [-- <COMMAND>...]
 ```
 
 ## Arguments
@@ -33,6 +33,8 @@ pixi exec [OPTIONS] [COMMAND]...
 :  If specified a new environment is always created even if one already exists
 - <a id="arg---list" href="#arg---list">`--list <LIST>`</a>
 :  Before executing the command, list packages in the environment Specify `--list=some_regex` to filter the shown packages
+- <a id="arg---no-modify-ps1" href="#arg---no-modify-ps1">`--no-modify-ps1`</a>
+:  Disable modification of the PS1 prompt to indicate the temporary environment
 
 ## Config Options
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
