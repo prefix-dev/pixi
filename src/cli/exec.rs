@@ -104,24 +104,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut activation_env = run_activation(&prefix).await?;
 
     // Collect unique package names for environment naming
-    // Only include explicitly specified packages (--spec and --with), not guessed ones
-    let mut explicit_package_names: BTreeSet<String> = BTreeSet::new();
+    // Exclude the guessed package (which is always the last one if --with is used or no specs provided)
+    let specs_for_env_name = if !args.with.is_empty() || (args.specs.is_empty() && specs.len() > 0) {
+        // If we added a guessed package, exclude the last spec from environment naming
+        &specs[..specs.len().saturating_sub(1)]
+    } else {
+        // No guessed package was added, use all specs
+        &specs[..]
+    };
     
-    // Add packages from --spec flags
-    for spec in &args.specs {
-        if let Some(name) = &spec.name {
-            explicit_package_names.insert(name.as_normalized().to_string());
-        }
-    }
-    
-    // Add packages from --with flags  
-    for spec in &args.with {
-        if let Some(name) = &spec.name {
-            explicit_package_names.insert(name.as_normalized().to_string());
-        }
-    }
-    
-    let package_names = explicit_package_names;
+    let package_names: BTreeSet<String> = specs_for_env_name
+        .iter()
+        .filter_map(|spec| spec.name.as_ref().map(|n| n.as_normalized().to_string()))
+        .collect();
 
     if !package_names.is_empty() {
         let env_name = format!(
