@@ -43,9 +43,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             no_install: args.lock_file_update_config.no_lockfile_update,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         })
-        .await?
-        .into_lock_file();
+        .await?;
 
+    split(lockfile.as_lock_file(), args)
+}
+
+fn split(lockfile: &LockFile, args: Args) -> miette::Result<()> {
     if lockfile.is_empty() {
         eprintln!("lockfile is empty.");
         return Ok(());
@@ -93,4 +96,43 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_split_lockfile() {
+        let lockfile = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/data/mock-projects/test-project-export/pixi.lock");
+
+        let lockfile = LockFile::from_path(&lockfile).unwrap();
+
+        let output_dir = tempdir().unwrap();
+
+        let args = Args {
+            workspace_config: WorkspaceConfig::default(),
+            output_dir: output_dir.path().to_path_buf(),
+            keep_env_name: false,
+            lock_file_update_config: LockFileUpdateConfig::default(),
+            config: ConfigCli::default(),
+        };
+
+        split(&lockfile, args).unwrap();
+
+        for (env_name, env) in lockfile.environments() {
+            for plat in env.platforms() {
+                let output = output_dir
+                    .path()
+                    .join(plat.to_string())
+                    .join(format!("{}.lock", env_name));
+                let output_lockfile = LockFile::from_path(output.as_path()).unwrap();
+                let snapshot = format!("test_split_lockfile_{}_{}", env_name, plat);
+                insta::assert_snapshot!(snapshot, output_lockfile.render_to_string().unwrap());
+            }
+        }
+    }
 }
