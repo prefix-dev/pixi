@@ -1,17 +1,7 @@
-# # import json
-# # import os
-# # import platform
-# # import shutil
-# # import tomllib
 from pathlib import Path
 
-
 from .common import (
-    #     CURRENT_PLATFORM,
-    #     EMPTY_BOILERPLATE_PROJECT,
-    #     PIXI_VERSION,
     ExitCode,
-    #     cwd,
     verify_cli_command,
     repo_root,
 )
