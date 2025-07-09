@@ -80,9 +80,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut specs = args.specs.clone();
     specs.extend(args.with.clone());
     
-    // Track explicit specs for environment naming (excluding guessed packages)
-    let explicit_specs = specs.clone();
-    
     // If --with is used or no specs are provided, guess the package from the command
     if !args.with.is_empty() || specs.is_empty() {
         let guessed_spec = guess_package_spec(command);
@@ -106,11 +103,25 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Get environment variables from the activation
     let mut activation_env = run_activation(&prefix).await?;
 
-    // Collect unique package names from explicit specs only for environment naming
-    let package_names: BTreeSet<String> = explicit_specs
-        .iter()
-        .filter_map(|spec| spec.name.as_ref().map(|n| n.as_normalized().to_string()))
-        .collect();
+    // Collect unique package names for environment naming
+    // Only include explicitly specified packages (--spec and --with), not guessed ones
+    let mut explicit_package_names: BTreeSet<String> = BTreeSet::new();
+    
+    // Add packages from --spec flags
+    for spec in &args.specs {
+        if let Some(name) = &spec.name {
+            explicit_package_names.insert(name.as_normalized().to_string());
+        }
+    }
+    
+    // Add packages from --with flags  
+    for spec in &args.with {
+        if let Some(name) = &spec.name {
+            explicit_package_names.insert(name.as_normalized().to_string());
+        }
+    }
+    
+    let package_names = explicit_package_names;
 
     if !package_names.is_empty() {
         let env_name = format!(
