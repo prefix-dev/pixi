@@ -223,3 +223,33 @@ def test_import_feature_environment(pixi: Path, tmp_pixi_workspace: Path) -> Non
         [pixi, "info", "--manifest-path", manifest_path],
         stdout_contains=["Environment: data", "Features: data"],
     )
+
+
+def test_import_channels_and_versions(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+    # Create a new project
+    verify_cli_command([pixi, "init", tmp_pixi_workspace])
+
+    # Import an environment which uses bioconda, pins versions, and specifies a variant
+    verify_cli_command(
+        [
+            pixi,
+            "import",
+            "--manifest-path",
+            manifest_path,
+            repo_root() / "tests/data/import_files/complex_environment.yml",
+        ],
+        ExitCode.SUCCESS,
+        stderr_contains="Imported",
+    )
+    verify_cli_command(
+        [pixi, "list", "--manifest-path", manifest_path, "--environment=complex-env", "--explicit"],
+        stdout_contains=[
+            "cowpy",
+            "1.1.4",
+            "libblas",
+            "_openblas",
+            "snakemake-minimal",
+            "bioconda",
+        ],
+    )
