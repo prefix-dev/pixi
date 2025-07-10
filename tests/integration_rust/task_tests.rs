@@ -243,7 +243,7 @@ async fn test_task_with_env() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().without_channels().await.unwrap();
     let echo_cmd: Vec<&'static str> = if cfg!(windows) {
-        vec!["pwsh", "-Command", "echo \"From a $Env:HELLO_WORLD\""]
+        vec!["pwsh", "-Command", "echo \"From a $env:HELLO_WORLD\""]
     } else {
         vec!["sh", "-c", "echo 'From a $HELLO_WORLD'"]
     };
