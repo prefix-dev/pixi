@@ -134,7 +134,6 @@ async fn import_conda_env(args: Args) -> miette::Result<()> {
     for requirement in pypi_deps {
         workspace.manifest().add_pep508_dependency(
             (&requirement, None),
-            // No platforms required as you can't define them in the yaml
             &platforms,
             &feature_name,
             None,
@@ -143,50 +142,48 @@ async fn import_conda_env(args: Args) -> miette::Result<()> {
         )?;
     }
 
-    // add environment if it does not already exist
-    if workspace
-        .workspace()
-        .environment_from_name_or_env_var(Some(environment_string.clone()))
-        .is_err()
+    
+    match workspace
+    .workspace()
+    .environment_from_name_or_env_var(Some(environment_string.clone()))
     {
-        workspace.manifest().add_environment(
-            environment_string.clone(),
-            Some(vec![feature_string.clone()]),
-            None,
-            true,
-        )?;
-    }
-
-    // add feature to environment if it is not already there
-    let env = workspace
-        .workspace()
-        .environment_from_name_or_env_var(Some(environment_string.clone()))?;
-    if !env.features().any(|f| f.name == feature_name) {
-        let (env_name, features, solve_group, no_default_feature) = (
-            env.name().as_str().to_string(),
-            {
-                let mut features: Vec<String> = env
-                    .features()
-                    .map(|f| f.name.as_str().to_string())
-                    .collect();
-                if features.is_empty() {
-                    Some(vec![feature_string])
-                } else {
-                    Some({
-                        features.push(feature_string);
-                        features
-                    })
-                }
-            },
-            env.solve_group().map(|g| g.name().to_string()),
-            env.no_default_feature(),
-        );
-        workspace.manifest().add_environment(
-            env_name,
-            features,
-            solve_group,
-            no_default_feature,
-        )?;
+        Err(_) => { // add environment if it does not already exist
+            workspace.manifest().add_environment(
+                environment_string.clone(),
+                Some(vec![feature_string.clone()]),
+                None,
+                true,
+            )?;
+        }
+        Ok(env) => { // otherwise, add feature to environment if it is not already there
+            if !env.features().any(|f| f.name == feature_name) {
+                let (env_name, features, solve_group, no_default_feature) = (
+                    env.name().as_str().to_string(),
+                    {
+                        let mut features: Vec<String> = env
+                            .features()
+                            .map(|f| f.name.as_str().to_string())
+                            .collect();
+                        if features.is_empty() {
+                            Some(vec![feature_string])
+                        } else {
+                            Some({
+                                features.push(feature_string);
+                                features
+                            })
+                        }
+                    },
+                    env.solve_group().map(|g| g.name().to_string()),
+                    env.no_default_feature(),
+                );
+                workspace.manifest().add_environment(
+                    env_name,
+                    features,
+                    solve_group,
+                    no_default_feature,
+                )?;
+            }
+        }
     }
 
     let workspace = workspace.save().await.into_diagnostic()?;
