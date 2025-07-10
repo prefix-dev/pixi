@@ -454,15 +454,14 @@ fn get_export_specific_task_env(task: &Task, command_env: IndexMap<String, Strin
 
     // Put all merged environment variables to export.
     for (key, value) in export_merged {
-        // FIX: Convert String to &str using as_str()
         let should_exclude = override_excluded_keys.contains(key.as_str());
         if !should_exclude {
             tracing::info!("Setting environment variable: {}=\"{}\"", key, value);
 
             // Platform-specific export format with proper escaping
             if cfg!(windows) {
-                // Use proper Windows set command format
-                export.push_str(&format!("set \"{}={}\"\r\n", key, value));
+                // Use PowerShell environment variable syntax
+                export.push_str(&format!("$env:{} = \"{}\"\r\n", key, value));
             } else {
                 export.push_str(&format!("export \"{}={}\";\n", key, value));
             }
@@ -554,7 +553,7 @@ mod tests {
         let result = get_export_specific_task_env(task, my_map);
 
         let expected_prefix = if cfg!(windows) {
-            "set \"FOO=bar\""
+            "env:\"FOO = bar\""
         } else {
             "export \"FOO=bar\""
         };
@@ -587,7 +586,7 @@ mod tests {
         let result = get_export_specific_task_env(task, my_map);
         // task specific env overrides outside environment variables
         let expected_prefix = if cfg!(windows) {
-            "set \"FOO=bar\""
+            "env:\"FOO = bar\""
         } else {
             "export \"FOO=bar\""
         };
@@ -630,7 +629,7 @@ mod tests {
         let result = executable_task.as_script(my_map);
 
         let expected_prefix = if cfg!(windows) {
-            "set \"FOO=bar\""
+            "env:\"FOO = bar\""
         } else {
             "export \"FOO=bar\""
         };
