@@ -76,46 +76,25 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let command = command_iter.next().ok_or_else(|| miette::miette!(help ="i.e when specifying specs explicitly use a command at the end: `pixi exec -s python==3.12 python`", "missing required command to execute",))?;
     let (_, client) = build_reqwest_clients(Some(&config), None)?;
 
-    // Determine the specs to use for the environment
-    let mut specs = args.specs.clone();
-    specs.extend(args.with.clone());
-    
-    // Only add the guessed package if both args.specs and args.with are empty
-    if args.specs.is_empty() && args.with.is_empty() {
-        let guessed_spec = guess_package_spec(command);
-        tracing::debug!(
-            "no specs provided, guessed {} from command {command}",
-            guessed_spec
-        );
-        specs.push(guessed_spec);
+    // Determine the specs for installation and for the environment name.
+    let mut name_specs = args.specs.clone();
+    name_specs.extend(args.with.clone());
+
+    let mut install_specs = name_specs.clone();
+
+    // Only guess a package from the command if no specs were provided at all
+    if name_specs.is_empty() {
+        install_specs.push(guess_package_spec(command));
     }
 
     // Create the environment to run the command in.
-    let prefix = create_exec_prefix(&args, &specs, &cache_dir, &config, &client).await?;
+    let prefix = create_exec_prefix(&args, &install_specs, &cache_dir, &config, &client).await?;
 
     // Get environment variables from the activation
     let mut activation_env = run_activation(&prefix).await?;
 
     // Collect unique package names for environment naming
-    // Only exclude the guessed package if it was actually added due to no specs being provided
-    let guessed_spec = guess_package_spec(command);
-    let guessed_package_added = specs.last().map(|s| s.name.as_ref()) == Some(guessed_spec.name.as_ref());
-
-    let specs_for_env_name = if !args.with.is_empty() {
-        // If --with is used, use all --with specs for the environment name
-        &args.with[..]
-    } else if !args.specs.is_empty() {
-        // If -s is used, use all -s specs for the environment name
-        &args.specs[..]
-    } else if guessed_package_added && specs.len() > 1 {
-        // If a guessed package was added (and there are other specs), exclude the last spec
-        &specs[..specs.len().saturating_sub(1)]
-    } else {
-        // Use all specs (should only be the guessed one)
-        &specs[..]
-    };
-    
-    let package_names: BTreeSet<String> = specs_for_env_name
+    let package_names: BTreeSet<String> = name_specs
         .iter()
         .filter_map(|spec| spec.name.as_ref().map(|n| n.as_normalized().to_string()))
         .collect();
