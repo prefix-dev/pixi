@@ -27,11 +27,11 @@ use reqwest_middleware::ClientWithMiddleware;
 use tokio::sync::{mpsc, oneshot};
 use typed_path::Utf8TypedPath;
 
-use crate::solve_conda::SolveCondaEnvironmentError;
 use crate::{
     BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec, Executor,
     InvalidPathError, PixiEnvironmentSpec, SolveCondaEnvironmentSpec, SolvePixiEnvironmentError,
     SourceCheckout, SourceCheckoutError, SourceMetadata, SourceMetadataError, SourceMetadataSpec,
+    backend_source_build::{BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildSpec},
     build::{BuildCache, source_metadata_cache::SourceMetadataCache},
     cache_dirs::CacheDirs,
     install_pixi::{
@@ -42,6 +42,7 @@ use crate::{
         InstantiateToolEnvironmentSpec,
     },
     limits::ResolvedLimits,
+    solve_conda::SolveCondaEnvironmentError,
     source_build::{BuiltSource, SourceBuildError, SourceBuildSpec},
 };
 
@@ -169,6 +170,7 @@ pub(crate) enum CommandDispatcherContext {
     SolveCondaEnvironment(SolveCondaEnvironmentId),
     SolvePixiEnvironment(SolvePixiEnvironmentId),
     BuildBackendMetadata(BuildBackendMetadataId),
+    BackendSourceBuild(BackendSourceBuildId),
     SourceMetadata(SourceMetadataId),
     SourceBuild(SourceBuildId),
     InstallPixiEnvironment(InstallPixiEnvironmentId),
@@ -181,6 +183,9 @@ slotmap::new_key_type! {
 
     /// An id that uniquely identifies a conda environment that is being solved.
     pub(crate) struct SourceBuildId;
+
+    /// An id that uniquely identifies a build backend source build request.
+    pub(crate) struct BackendSourceBuildId;
 
     /// An id that uniquely identifies a conda environment that is being solved.
     pub(crate) struct SolvePixiEnvironmentId;
@@ -210,6 +215,7 @@ pub(crate) enum ForegroundMessage {
     SolveCondaEnvironment(SolveCondaEnvironmentTask),
     SolvePixiEnvironment(SolvePixiEnvironmentTask),
     BuildBackendMetadata(BuildBackendMetadataTask),
+    BackendSourceBuild(BackendSourceBuildTask),
     SourceMetadata(SourceMetadataTask),
     SourceBuild(SourceBuildTask),
     GitCheckout(GitCheckoutTask),
@@ -262,6 +268,13 @@ pub(crate) type SourceBuildTask = Task<SourceBuildSpec>;
 impl TaskSpec for SourceBuildSpec {
     type Output = BuiltSource;
     type Error = SourceBuildError;
+}
+
+pub(crate) type BackendSourceBuildTask = Task<BackendSourceBuildSpec>;
+
+impl TaskSpec for BackendSourceBuildSpec {
+    type Output = BackendBuiltSource;
+    type Error = BackendSourceBuildError;
 }
 
 /// Instantiates a tool environment.
@@ -415,6 +428,14 @@ impl CommandDispatcher {
         self.execute_task(spec).await
     }
 
+    /// Calls into a pixi build backend to perform a source build.
+    pub(crate) async fn backend_source_build(
+        &self,
+        spec: BackendSourceBuildSpec,
+    ) -> Result<BackendBuiltSource, CommandDispatcherError<BackendSourceBuildError>> {
+        self.execute_task(spec).await
+    }
+
     /// Solves a particular pixi environment specified by `PixiEnvironmentSpec`.
     ///
     /// This function processes all package requirements defined in the spec,
@@ -501,7 +522,9 @@ impl CommandDispatcher {
         source_spec: SourceSpec,
     ) -> Result<SourceCheckout, CommandDispatcherError<SourceCheckoutError>> {
         match source_spec {
-            SourceSpec::Url(_) => unimplemented!("fetching URL sources is not yet implemented"),
+            SourceSpec::Url(url) => {
+                unimplemented!("fetching URL sources ({}) is not yet implemented", url.url)
+            }
             SourceSpec::Path(path) => {
                 let source_path = self
                     .data

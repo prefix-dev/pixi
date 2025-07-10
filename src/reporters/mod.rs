@@ -11,7 +11,9 @@ use git::GitCheckoutProgress;
 use indicatif::{MultiProgress, ProgressBar};
 use pixi_command_dispatcher::{
     InstallPixiEnvironmentSpec, PixiEnvironmentSpec, ReporterContext, SolveCondaEnvironmentSpec,
-    reporter::{CondaSolveId, PixiInstallId, PixiSolveId, SourceBuildReporter},
+    reporter::{
+        BackendSourceBuildReporter, CondaSolveId, PixiInstallId, PixiSolveId, SourceBuildReporter,
+    },
 };
 use pixi_spec::PixiSpec;
 use rattler_repodata_gateway::Reporter;
@@ -81,6 +83,10 @@ impl pixi_command_dispatcher::Reporter for TopLevelProgress {
     }
 
     fn as_source_build_reporter(&mut self) -> Option<&mut dyn SourceBuildReporter> {
+        Some(&mut self.sync_reporter)
+    }
+
+    fn as_backend_source_build_reporter(&mut self) -> Option<&mut dyn BackendSourceBuildReporter> {
         Some(&mut self.sync_reporter)
     }
 

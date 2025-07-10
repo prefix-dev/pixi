@@ -28,6 +28,7 @@ clap_complete = "4.5.46"
 clap_complete_nushell = "4.5.5"
 concat-idents = "1.1.5"
 console = "0.15.10"
+console-subscriber = "0.4.1"
 crossbeam-channel = "0.5.14"
 csv = "1.3.1"
 ctrlc = "3.4.5"
@@ -219,6 +220,7 @@ rustls-tls = [
 ]
 self_update = []
 slow_integration_tests = []
+tokio-console = ["console-subscriber", "tokio/tracing"]
 
 # This feature enables performance optimizations but at the cost of increased
 # compile times. By default, it is only used when building the release binary.
@@ -242,6 +244,7 @@ clap = { workspace = true, features = [
 clap_complete = { workspace = true }
 clap_complete_nushell = { workspace = true }
 console = { workspace = true, features = ["windows-console-colors"] }
+console-subscriber = { workspace = true, optional = true }
 crossbeam-channel = { workspace = true }
 csv = { workspace = true }
 dashmap = { workspace = true }

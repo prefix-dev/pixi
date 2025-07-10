@@ -1,42 +1,38 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
-    str::FromStr,
 };
 
-use futures::{SinkExt, channel::mpsc::UnboundedSender};
-use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_build_discovery::{DiscoveredBackend, EnabledProtocols};
-use pixi_build_frontend::{Backend, json_rpc::CommunicationError};
-use pixi_build_types::{
-    ChannelConfiguration, PlatformAndVirtualPackages,
-    procedures::{
-        conda_build::{CondaBuildParams, CondaBuiltPackage, CondaOutputIdentifier},
-        conda_build_v2::{
-            CondaBuildV2Output, CondaBuildV2Params, CondaBuildV2Prefix, CondaBuildV2Result,
-        },
-        conda_outputs::CondaOutputsParams,
-    },
-};
+use pixi_build_frontend::Backend;
+use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
 use pixi_record::{PixiRecord, SourceRecord};
 use pixi_spec::{SourceAnchor, SourceSpec};
 use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, InvalidPackageNameError, Platform, Version, prefix::Prefix,
+    ChannelConfig, ChannelUrl, InvalidPackageNameError, Platform, prefix::Prefix,
 };
 use thiserror::Error;
 use tracing::instrument;
 
 use crate::{
-    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    InstallPixiEnvironmentError, InstallPixiEnvironmentSpec, InstantiateBackendError,
-    InstantiateBackendSpec, PixiEnvironmentSpec, SolvePixiEnvironmentError, SourceCheckout,
-    SourceCheckoutError,
+    BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildMethod,
+    BackendSourceBuildPrefix, BackendSourceBuildSpec, BackendSourceBuildV1Method,
+    BackendSourceBuildV2Method, BuildEnvironment, CommandDispatcher, CommandDispatcherError,
+    CommandDispatcherErrorResultExt, InstallPixiEnvironmentError, InstallPixiEnvironmentSpec,
+    InstantiateBackendError, InstantiateBackendSpec, PixiEnvironmentSpec,
+    SolvePixiEnvironmentError, SourceCheckout, SourceCheckoutError,
     build::{Dependencies, DependenciesError, WorkDirKey},
 };
 
 /// Describes all parameters required to build a conda package from a pixi
 /// source package.
+///
+/// This task prepares the build environment for a source build and then
+/// delegates the actual build to the backend through the
+/// [`BackendSourceBuildSpec`]. This allows preparation (installing host, build,
+/// envs) to progress concurrently while the actual building of the package can
+/// be done serially.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct SourceBuildSpec {
     /// The source specification
@@ -91,7 +87,6 @@ impl SourceBuildSpec {
     pub(crate) async fn build(
         self,
         command_dispatcher: CommandDispatcher,
-        log_sink: UnboundedSender<String>,
     ) -> Result<BuiltSource, CommandDispatcherError<SourceBuildError>> {
         tracing::debug!("Building package for source spec: {}", self.source.source);
 
@@ -121,12 +116,8 @@ impl SourceBuildSpec {
             .await
             .map_err_with(SourceBuildError::Initialize)?;
 
-        if backend
-            .capabilities()
-            .provides_conda_build_v2
-            .unwrap_or(false)
-        {
-            let built_package = self.build_v2(command_dispatcher, log_sink, backend).await?;
+        if backend.capabilities().provides_conda_build_v2() {
+            let built_package = self.build_v2(command_dispatcher, backend).await?;
 
             Ok(BuiltSource {
                 source: source_checkout,
@@ -134,7 +125,7 @@ impl SourceBuildSpec {
                 output_file: built_package.output_file,
             })
         } else {
-            let built_package = self.build_v1(command_dispatcher, log_sink, backend).await?;
+            let built_package = self.build_v1(command_dispatcher, backend).await?;
 
             Ok(BuiltSource {
                 source: source_checkout,
@@ -147,97 +138,29 @@ impl SourceBuildSpec {
     async fn build_v1(
         self,
         command_dispatcher: CommandDispatcher,
-        mut log_sink: UnboundedSender<String>,
         backend: Backend,
-    ) -> Result<CondaBuiltPackage, CommandDispatcherError<SourceBuildError>> {
-        let host_platform = self.build_environment.host_platform;
-
-        // Use the backend to build the source package.
-        let build_result = backend
-            .conda_build(
-                CondaBuildParams {
-                    build_platform_virtual_packages: Some(
-                        command_dispatcher.tool_platform().1.to_vec(),
-                    ),
-                    channel_base_urls: Some(self.channels.into_iter().map(Into::into).collect()),
-                    channel_configuration: ChannelConfiguration {
-                        base_url: self.channel_config.channel_alias.clone(),
-                    },
-                    outputs: Some(BTreeSet::from_iter([CondaOutputIdentifier {
-                        name: Some(self.source.package_record.name.as_normalized().to_string()),
-                        version: Some(self.source.package_record.version.to_string()),
-                        build: Some(self.source.package_record.build.clone()),
-                        subdir: Some(self.source.package_record.subdir.clone()),
-                    }])),
-                    variant_configuration: self
-                        .variants
-                        .map(|variants| variants.into_iter().collect()),
-                    work_directory: command_dispatcher.cache_dirs().working_dirs().join(
-                        WorkDirKey {
-                            source: Box::new(self.source.clone()).into(),
-                            host_platform,
-                            build_backend: backend.identifier().to_string(),
-                        }
-                        .key(),
-                    ),
-                    host_platform: Some(PlatformAndVirtualPackages {
-                        platform: host_platform,
-                        virtual_packages: Some(
-                            self.build_environment.host_virtual_packages.clone(),
-                        ),
-                    }),
-                    editable: !self.source.source.is_immutable(),
-                },
-                move |line| {
-                    let _err = futures::executor::block_on(log_sink.send(line));
-                },
-            )
+    ) -> Result<BackendBuiltSource, CommandDispatcherError<SourceBuildError>> {
+        command_dispatcher
+            .backend_source_build(BackendSourceBuildSpec {
+                backend,
+                record: self.source,
+                method: BackendSourceBuildMethod::BuildV1(BackendSourceBuildV1Method {
+                    channel_config: self.channel_config,
+                    channels: self.channels,
+                    build_environment: self.build_environment,
+                    variants: self.variants,
+                    output_directory: self.output_directory,
+                }),
+            })
             .await
-            .map_err(SourceBuildError::BuildError)
-            .map_err(CommandDispatcherError::Failed)?;
-
-        // If the backend returned more packages than expected output a warning.
-        if build_result.packages.len() > 1 {
-            let pkgs = build_result.packages.iter().format_with(", ", |pkg, f| {
-                f(&format_args!(
-                    "{}/{}={}={}",
-                    pkg.subdir, pkg.name, pkg.version, pkg.build,
-                ))
-            });
-            tracing::warn!(
-                "While building {} for {}, the build backend returned more packages than expected: {pkgs}. Only the package matching the source record will be used.",
-                self.source.source,
-                self.source.package_record.subdir,
-            );
-        }
-
-        // Locate the package that matches the source record we requested to be build.
-        let Some(built_package) = build_result.packages.into_iter().find(|pkg| {
-            pkg.name == self.source.package_record.name.as_normalized()
-                && Version::from_str(&pkg.version).ok().as_ref()
-                    == Some(&self.source.package_record.version)
-                && pkg.build == self.source.package_record.build
-                && pkg.subdir == self.source.package_record.subdir
-        }) else {
-            return Err(CommandDispatcherError::Failed(
-                SourceBuildError::UnexpectedPackage {
-                    subdir: self.source.package_record.subdir.clone(),
-                    name: self.source.package_record.name.as_normalized().to_string(),
-                    version: self.source.package_record.version.to_string(),
-                    build: self.source.package_record.build.clone(),
-                },
-            ));
-        };
-
-        Ok(built_package)
+            .map_err_with(SourceBuildError::from)
     }
 
     async fn build_v2(
         self,
         command_dispatcher: CommandDispatcher,
-        mut log_sink: UnboundedSender<String>,
         backend: Backend,
-    ) -> Result<CondaBuildV2Result, CommandDispatcherError<SourceBuildError>> {
+    ) -> Result<BackendBuiltSource, CommandDispatcherError<SourceBuildError>> {
         let source_anchor = SourceAnchor::from(SourceSpec::from(self.source.source.clone()));
         let host_platform = self.build_environment.host_platform;
         let build_platform = self.build_environment.build_platform;
@@ -262,7 +185,8 @@ impl SourceBuildSpec {
                 work_directory: work_directory.clone(),
             })
             .await
-            .map_err(SourceBuildError::BuildError)
+            .map_err(BackendSourceBuildError::BuildError)
+            .map_err(SourceBuildError::from)
             .map_err(CommandDispatcherError::Failed)?;
 
         // Find the output that we want to build.
@@ -373,53 +297,25 @@ impl SourceBuildSpec {
             .map_err_with(Box::new)
             .map_err_with(SourceBuildError::InstallBuildEnvironment)?;
 
-        let built_package = backend
-            .conda_build_v2(
-                CondaBuildV2Params {
-                    build_prefix: Some(CondaBuildV2Prefix {
-                        prefix: directories.build_prefix,
+        command_dispatcher
+            .backend_source_build(BackendSourceBuildSpec {
+                backend,
+                record: self.source,
+                method: BackendSourceBuildMethod::BuildV2(BackendSourceBuildV2Method {
+                    build_prefix: BackendSourceBuildPrefix {
                         platform: self.build_environment.build_platform,
-                    }),
-                    host_prefix: Some(CondaBuildV2Prefix {
-                        prefix: directories.host_prefix,
-                        platform: self.build_environment.host_platform,
-                    }),
-                    output: CondaBuildV2Output {
-                        name: output.metadata.name,
-                        version: Some(output.metadata.version),
-                        build: Some(output.metadata.build),
-                        subdir: output.metadata.subdir,
-                        variant: output.metadata.variant,
+                        prefix: directories.build_prefix,
                     },
-                    work_directory,
+                    host_prefix: BackendSourceBuildPrefix {
+                        platform: self.build_environment.host_platform,
+                        prefix: directories.host_prefix,
+                    },
+                    variant: output.metadata.variant,
                     output_directory: self.output_directory,
-                    editable: Some(!self.source.source.is_immutable()),
-                },
-                move |line| {
-                    let _err = futures::executor::block_on(log_sink.send(line));
-                },
-            )
+                }),
+            })
             .await
-            .map_err(SourceBuildError::BuildError)
-            .map_err(CommandDispatcherError::Failed)?;
-
-        // Make sure that the built package matches the expected output.
-        if built_package.name != self.source.package_record.name.as_normalized()
-            || built_package.version != self.source.package_record.version
-            || built_package.build != self.source.package_record.build
-            || built_package.subdir.as_str() != self.source.package_record.subdir
-        {
-            return Err(CommandDispatcherError::Failed(
-                SourceBuildError::UnexpectedPackage {
-                    subdir: self.source.package_record.subdir.clone(),
-                    name: self.source.package_record.name.as_normalized().to_string(),
-                    version: self.source.package_record.version.to_string(),
-                    build: self.source.package_record.build.clone(),
-                },
-            ));
-        };
-
-        Ok(built_package)
+            .map_err_with(SourceBuildError::from)
     }
 
     async fn solve_dependencies(
@@ -497,10 +393,6 @@ pub enum SourceBuildError {
     #[diagnostic(transparent)]
     Initialize(#[from] InstantiateBackendError),
 
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    BuildError(#[from] CommunicationError),
-
     #[error("failed to solve the build environment")]
     SolveBuildEnvironment(
         #[diagnostic_source]
@@ -528,16 +420,6 @@ pub enum SourceBuildError {
     InstallHostEnvironment(#[source] Box<InstallPixiEnvironmentError>),
 
     #[error(
-        "The build backend did not return the expected package: {subdir}/{name}={version}={build}."
-    )]
-    UnexpectedPackage {
-        subdir: String,
-        name: String,
-        version: String,
-        build: String,
-    },
-
-    #[error(
         "The build backend does not provide the requested output: {subdir}/{name}={version}={build}."
     )]
     MissingOutput {
@@ -549,6 +431,10 @@ pub enum SourceBuildError {
 
     #[error("backend returned a dependency on an invalid package name: {0}")]
     InvalidPackageName(String, #[source] InvalidPackageNameError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    BackendBuildError(#[from] BackendSourceBuildError),
 }
 
 impl From<DependenciesError> for SourceBuildError {

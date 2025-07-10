@@ -14,14 +14,14 @@ use pixi_git::{GitError, resolver::RepositoryReference, source::Fetch};
 use pixi_record::PixiRecord;
 use tokio::sync::{mpsc, oneshot};
 
-use crate::solve_conda::SolveCondaEnvironmentError;
 use crate::{
     BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec, BuiltSource,
     CommandDispatcherErrorResultExt, InstallPixiEnvironmentResult, Reporter,
-    SolveCondaEnvironmentSpec, SolvePixiEnvironmentError, SourceBuildError, SourceBuildSpec,
-    SourceMetadata, SourceMetadataError, SourceMetadataSpec,
+    SolveCondaEnvironmentSpec, SolvePixiEnvironmentError, SourceBuildError, SourceMetadata,
+    SourceMetadataError, SourceMetadataSpec,
+    backend_source_build::{BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildSpec},
     command_dispatcher::{
-        BuildBackendMetadataId, CommandDispatcher, CommandDispatcherChannel,
+        BackendSourceBuildId, BuildBackendMetadataId, CommandDispatcher, CommandDispatcherChannel,
         CommandDispatcherContext, CommandDispatcherData, CommandDispatcherError, ForegroundMessage,
         InstallPixiEnvironmentId, InstantiatedToolEnvId, SolveCondaEnvironmentId,
         SolvePixiEnvironmentId, SourceBuildId, SourceMetadataId,
@@ -30,8 +30,10 @@ use crate::{
     install_pixi::InstallPixiEnvironmentError,
     instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentResult},
     reporter,
+    solve_conda::SolveCondaEnvironmentError,
 };
 
+mod backend_build_source;
 mod build_backend_metadata;
 mod git;
 mod install_pixi;
@@ -100,12 +102,12 @@ pub(crate) struct CommandDispatcherProcessor {
     /// out.
     git_checkouts: HashMap<RepositoryReference, PendingGitCheckout>,
 
-    /// Conda environments that are currently being solved.
+    /// Source builds that are currently being processed.
     source_builds: slotmap::SlotMap<SourceBuildId, PendingSourceBuild>,
 
-    /// A list of source builds that are pending. These have not yet been queued
-    /// for processing.
-    pending_source_builds: VecDeque<(SourceBuildId, SourceBuildSpec)>,
+    /// Backend source builds that are currently being processed.
+    backend_source_builds: slotmap::SlotMap<BackendSourceBuildId, PendingBackendSourceBuild>,
+    pending_backend_source_builds: VecDeque<(BackendSourceBuildId, BackendSourceBuildSpec)>,
 
     /// Keeps track of all pending futures. We poll them manually instead of
     /// spawning them so they can be `!Send` and because they are dropped when
@@ -151,6 +153,10 @@ enum TaskResult {
         SourceBuildId,
         Result<BuiltSource, CommandDispatcherError<SourceBuildError>>,
     ),
+    BackendSourceBuild(
+        BackendSourceBuildId,
+        Result<BackendBuiltSource, CommandDispatcherError<BackendSourceBuildError>>,
+    ),
 }
 
 /// An either pending or already checked out git repository.
@@ -182,6 +188,11 @@ struct PendingSolveCondaEnvironment {
 struct PendingSourceBuild {
     tx: oneshot::Sender<Result<BuiltSource, SourceBuildError>>,
     reporter_id: Option<reporter::SourceBuildId>,
+}
+
+struct PendingBackendSourceBuild {
+    tx: oneshot::Sender<Result<BackendBuiltSource, BackendSourceBuildError>>,
+    reporter_id: Option<reporter::BackendSourceBuildId>,
 }
 
 /// Information about a pending pixi environment solve. This is used by the
@@ -291,7 +302,8 @@ impl CommandDispatcherProcessor {
                 instantiated_tool_cache_keys: HashMap::default(),
                 git_checkouts: HashMap::default(),
                 source_builds: Default::default(),
-                pending_source_builds: Default::default(),
+                backend_source_builds: Default::default(),
+                pending_backend_source_builds: Default::default(),
                 pending_futures: ExecutorFutures::new(inner.executor),
                 inner,
                 reporter,
@@ -349,6 +361,7 @@ impl CommandDispatcherProcessor {
             ForegroundMessage::SourceBuild(task) => self.on_source_build(task),
             ForegroundMessage::ClearReporter(sender) => self.clear_reporter(sender),
             ForegroundMessage::SourceMetadata(task) => self.on_source_metadata(task),
+            ForegroundMessage::BackendSourceBuild(task) => self.on_backend_source_build(task),
         }
     }
 
@@ -373,6 +386,9 @@ impl CommandDispatcherProcessor {
             }
             TaskResult::SourceBuild(id, result) => self.on_source_build_result(id, result),
             TaskResult::SourceMetadata(id, result) => self.on_source_metadata_result(id, result),
+            TaskResult::BackendSourceBuild(id, result) => {
+                self.on_backend_source_build_result(id, result)
+            }
         }
     }
 
@@ -470,6 +486,11 @@ impl CommandDispatcherProcessor {
                     return self.source_builds[id]
                         .reporter_id
                         .map(reporter::ReporterContext::SourceBuild);
+                }
+                CommandDispatcherContext::BackendSourceBuild(id) => {
+                    return self.backend_source_builds[id]
+                        .reporter_id
+                        .map(reporter::ReporterContext::BackendSourceBuild);
                 }
             };
         }

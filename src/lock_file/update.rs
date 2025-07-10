@@ -17,7 +17,7 @@ use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Diagnostic, IntoDiagnostic, MietteDiagnostic, Report, WrapErr};
-use pixi_command_dispatcher::{BuildEnvironment, PixiEnvironmentSpec};
+use pixi_command_dispatcher::{BuildEnvironment, CommandDispatcher, PixiEnvironmentSpec};
 use pixi_consts::consts;
 use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
@@ -152,6 +152,7 @@ impl Workspace {
             .with_outdated_environments(outdated)
             .with_lock_file(lock_file)
             .with_glob_hash_cache(glob_hash_cache)
+            .with_command_dispatcher(command_dispatcher)
             .finish()
             .await?
             .update()
@@ -879,6 +880,9 @@ pub struct UpdateContextBuilder<'p> {
 
     /// A cache for computing input hashes
     glob_hash_cache: Option<GlobHashCache>,
+
+    /// Set the command dispatcher to use for the update process.
+    command_dispatcher: Option<CommandDispatcher>,
 }
 
 impl<'p> UpdateContextBuilder<'p> {
@@ -909,6 +913,14 @@ impl<'p> UpdateContextBuilder<'p> {
     /// previously locked packages.
     pub(crate) fn with_lock_file(self, lock_file: LockFile) -> Self {
         Self { lock_file, ..self }
+    }
+
+    /// Sets the command dispatcher to use for the update process.
+    pub(crate) fn with_command_dispatcher(self, command_dispatcher: CommandDispatcher) -> Self {
+        Self {
+            command_dispatcher: Some(command_dispatcher),
+            ..self
+        }
     }
 
     /// Explicitly set the environments that are considered out-of-date. Only
@@ -1111,14 +1123,17 @@ impl<'p> UpdateContextBuilder<'p> {
         // Construct a command dispatcher that will be used to run the tasks.
         let multi_progress = global_multi_progress();
         let anchor_pb = multi_progress.add(ProgressBar::hidden());
-        let command_dispatcher = self
-            .project
-            .command_dispatcher_builder()?
-            .with_reporter(crate::reporters::TopLevelProgress::new(
-                global_multi_progress(),
-                anchor_pb.clone(),
-            ))
-            .finish();
+        let command_dispatcher = match self.command_dispatcher {
+            Some(dispatcher) => dispatcher,
+            None => self
+                .project
+                .command_dispatcher_builder()?
+                .with_reporter(crate::reporters::TopLevelProgress::new(
+                    global_multi_progress(),
+                    anchor_pb.clone(),
+                ))
+                .finish(),
+        };
 
         // tool context
         let build_context = BuildContext::from_workspace(project, command_dispatcher)?;
@@ -1169,6 +1184,7 @@ impl<'p> UpdateContext<'p> {
             io_concurrency_limit: None,
             glob_hash_cache: None,
             mapping_client: None,
+            command_dispatcher: None,
         }
     }
 
@@ -1762,79 +1778,65 @@ async fn spawn_solve_conda_environment_task(
     // Get the channel configuration
     let channel_config = group.workspace().channel_config();
 
-    tokio::spawn(
-        async move {
-            // Resolve the channel URLs for the channels we need.
-            let channels = channels
-                .iter()
-                .map(|c| c.clone().into_base_url(&channel_config))
-                .collect::<Result<Vec<_>, _>>()
-                .into_diagnostic()?;
+    // Resolve the channel URLs for the channels we need.
+    let channels = channels
+        .iter()
+        .map(|c| c.clone().into_base_url(&channel_config))
+        .collect::<Result<Vec<_>, _>>()
+        .into_diagnostic()?;
 
-            // Determine the build variants
-            // TODO: Refactor this by moving it out of the build context
-            let variants = build_context
-                .resolve_variant(platform)
-                .into_iter()
-                .collect();
+    // Determine the build variants
+    // TODO: Refactor this by moving it out of the build context
+    let variants = build_context
+        .resolve_variant(platform)
+        .into_iter()
+        .collect();
 
-            let start = Instant::now();
+    let start = Instant::now();
 
-            // Solve the environment using the command dispatcher.
-            let mut records = build_context
-                .command_dispatcher()
-                .solve_pixi_environment(PixiEnvironmentSpec {
-                    name: Some(group_name.to_string()),
-                    dependencies,
-                    constraints: Default::default(),
-                    installed: existing_repodata_records.records.clone(),
-                    build_environment: BuildEnvironment::simple(platform, virtual_packages),
-                    channels,
-                    strategy,
-                    channel_priority: channel_priority.into(),
-                    exclude_newer,
-                    channel_config,
-                    variants: Some(variants),
-                    enabled_protocols: Default::default(),
-                })
-                .await?;
+    // Solve the environment using the command dispatcher.
+    let mut records = build_context
+        .command_dispatcher()
+        .solve_pixi_environment(PixiEnvironmentSpec {
+            name: Some(group_name.to_string()),
+            dependencies,
+            constraints: Default::default(),
+            installed: existing_repodata_records.records.clone(),
+            build_environment: BuildEnvironment::simple(platform, virtual_packages),
+            channels,
+            strategy,
+            channel_priority: channel_priority.into(),
+            exclude_newer,
+            channel_config,
+            variants: Some(variants),
+            enabled_protocols: Default::default(),
+        })
+        .await?;
 
-            // Add purl's for the conda packages that are also available as pypi packages if
-            // we need them.
-            if has_pypi_dependencies {
-                // TODO: Bring back the pypi mapping reporter
-                mapping_client
-                    .amend_purls(
-                        &pypi_name_mapping_location,
-                        records.iter_mut().filter_map(PixiRecord::as_binary_mut),
-                        None,
-                    )
-                    .await?;
-            }
+    // Add purl's for the conda packages that are also available as pypi packages if
+    // we need them.
+    if has_pypi_dependencies {
+        // TODO: Bring back the pypi mapping reporter
+        mapping_client
+            .amend_purls(
+                &pypi_name_mapping_location,
+                records.iter_mut().filter_map(PixiRecord::as_binary_mut),
+                None,
+            )
+            .await?;
+    }
 
-            // Turn the records into a map by name
-            let records_by_name = PixiRecordsByName::from(records);
+    // Turn the records into a map by name
+    let records_by_name = PixiRecordsByName::from(records);
 
-            let end = Instant::now();
+    let end = Instant::now();
 
-            Ok(TaskResult::CondaGroupSolved(
-                group_name,
-                platform,
-                records_by_name,
-                end - start,
-            ))
-        }
-        .instrument(tracing::info_span!(
-            "resolve_conda",
-            group = %group.name().as_str(),
-            platform = %platform
-        )),
-    )
-    .await
-    .unwrap_or_else(|e| match e.try_into_panic() {
-        Ok(panic) => std::panic::resume_unwind(panic),
-        Err(_err) => Err(miette::miette!("the operation was cancelled")),
-    })
+    Ok(TaskResult::CondaGroupSolved(
+        group_name,
+        platform,
+        records_by_name,
+        end - start,
+    ))
 }
 
 /// Distill the repodata that is applicable for the given `environment` from the

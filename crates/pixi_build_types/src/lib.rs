@@ -67,6 +67,24 @@ impl PixiBuildApiVersion {
     pub fn current() -> Self {
         PixiBuildApiVersion(PIXI_BUILD_API_VERSION_UPPER - 1)
     }
+
+    /// Returns the backend capabilities that are expected for this version.
+    pub fn expected_backend_capabilities(&self) -> BackendCapabilities {
+        match self.0 {
+            0 => BackendCapabilities {
+                provides_conda_metadata: Some(true),
+                provides_conda_build: Some(true),
+                highest_supported_project_model: Some(1),
+                ..BackendCapabilities::default()
+            },
+            1 => BackendCapabilities {
+                provides_conda_outputs: Some(true),
+                provides_conda_build_v2: Some(true),
+                ..Self(0).expected_backend_capabilities()
+            },
+            _ => BackendCapabilities::default(),
+        }
+    }
 }
 
 /// A platform and associated virtual packages
