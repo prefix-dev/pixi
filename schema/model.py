@@ -391,8 +391,8 @@ class TaskInlineTable(StrictBaseModel):
     )
     interpreter: NonEmptyStr | None = Field(
         None,
-        description="The interpreter to use for executing the command (e.g., 'bash', 'sh', 'nu').",
-        examples=["bash", "sh", "nu"],
+        description="The interpreter to use for executing the command (e.g., 'bash', 'sh', 'nu'). Use {0} placeholder to specify where the script file should be placed in the command.",
+        examples=["bash", "sh", "nu", "bash -euo pipefail {0}", "python {0}"],
     )
 
 
