@@ -3,11 +3,10 @@ use std::{
     str::FromStr,
 };
 
+use crate::GitUrlWithPrefix;
 use miette::IntoDiagnostic;
 use pep440_rs::VersionSpecifiers;
-use pixi_git::{
-    git::GitReference as PixiGitReference, sha::GitSha as PixiGitSha, url::RepositoryUrl,
-};
+use pixi_git::{git::GitReference as PixiGitReference, sha::GitSha as PixiGitSha};
 use pixi_manifest::pypi::pypi_options::{
     FindLinksUrlOrPath, IndexStrategy, NoBinary, NoBuild, NoBuildIsolation, PypiOptions,
 };
@@ -17,6 +16,7 @@ use uv_configuration::BuildOptions;
 use uv_distribution_types::{GitSourceDist, Index, IndexLocations, IndexUrl};
 use uv_pep508::{InvalidNameError, PackageName, VerbatimUrl, VerbatimUrlError};
 use uv_python::PythonEnvironment;
+use uv_redacted::DisplaySafeUrl;
 
 use crate::{ConversionError, VersionError};
 
@@ -72,6 +72,7 @@ pub fn pypi_options_to_index_locations(
     let index = options
         .index_url
         .clone()
+        .map(DisplaySafeUrl::from)
         .map(VerbatimUrl::from_url)
         .map(IndexUrl::from)
         .map(Index::from_index_url)
@@ -84,6 +85,7 @@ pub fn pypi_options_to_index_locations(
         .into_iter()
         .flat_map(|urls| {
             urls.into_iter()
+                .map(DisplaySafeUrl::from)
                 .map(VerbatimUrl::from_url)
                 .map(IndexUrl::from)
                 .map(Index::from_extra_index_url)
@@ -96,7 +98,7 @@ pub fn pypi_options_to_index_locations(
             .map(|url| match url {
                 FindLinksUrlOrPath::Path(relative) => VerbatimUrl::from_path(&relative, base_path)
                     .map_err(|e| ConvertFlatIndexLocationError::VerbatimUrlError(e, relative)),
-                FindLinksUrlOrPath::Url(url) => Ok(VerbatimUrl::from_url(url.clone())),
+                FindLinksUrlOrPath::Url(url) => Ok(VerbatimUrl::from_url(url.clone().into())),
             })
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()
@@ -132,6 +134,7 @@ pub fn locked_indexes_to_index_locations(
         .indexes
         .first()
         .cloned()
+        .map(DisplaySafeUrl::from)
         .map(VerbatimUrl::from_url)
         .map(IndexUrl::from)
         .map(Index::from_index_url)
@@ -141,6 +144,7 @@ pub fn locked_indexes_to_index_locations(
         .iter()
         .skip(1)
         .cloned()
+        .map(DisplaySafeUrl::from)
         .map(VerbatimUrl::from_url)
         .map(IndexUrl::from)
         .map(Index::from_extra_index_url);
@@ -153,7 +157,9 @@ pub fn locked_indexes_to_index_locations(
                     ConvertFlatIndexLocationError::VerbatimUrlError(e, relative.clone())
                 })
             }
-            rattler_lock::FindLinksUrlOrPath::Url(url) => Ok(VerbatimUrl::from_url(url.clone())),
+            rattler_lock::FindLinksUrlOrPath::Url(url) => {
+                Ok(VerbatimUrl::from_url(url.clone().into()))
+            }
         })
         .collect::<Result<Vec<_>, _>>()?
         .into_iter()
@@ -288,7 +294,7 @@ pub fn into_pinned_git_spec(dist: GitSourceDist) -> PinnedGitSpec {
         reference,
     );
 
-    PinnedGitSpec::new(dist.git.repository().clone(), pinned_checkout)
+    PinnedGitSpec::new(dist.git.repository().clone().into(), pinned_checkout)
 }
 
 /// Convert a locked git url into a parsed git url
@@ -307,7 +313,16 @@ pub fn to_parsed_git_url(
     // Construct manually [`ParsedGitUrl`] from locked url.
     let parsed_git_url = uv_pypi_types::ParsedGitUrl::from_source(
         uv_git_types::GitUrl::from_fields(
-            RepositoryUrl::new(&locked_git_url.to_url()).into(),
+            {
+                let mut url = locked_git_url.to_url();
+                // Locked git url contains query parameters and fragments
+                // so we need to clean it to a base repository URL
+                url.set_fragment(None);
+                url.set_query(None);
+
+                let git_url = GitUrlWithPrefix::from(&url);
+                git_url.to_display_safe_url()
+            },
             into_uv_git_reference(git_source.reference.into()),
             Some(into_uv_git_sha(git_source.commit)),
         )

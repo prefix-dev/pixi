@@ -2,6 +2,7 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
+    fmt::Display,
     path::PathBuf,
     str::FromStr,
 };
@@ -19,6 +20,7 @@ use pixi_build_types::{
 };
 use pixi_record::SourceRecord;
 use rattler_conda_types::{ChannelConfig, ChannelUrl, Platform, Version};
+use thiserror::Error;
 
 use crate::{BuildEnvironment, CommandDispatcher, CommandDispatcherError, build::WorkDirKey};
 
@@ -134,7 +136,7 @@ impl BackendSourceBuildSpec {
         command_dispatcher: CommandDispatcher,
     ) -> Result<BackendBuiltSource, CommandDispatcherError<BackendSourceBuildError>> {
         // Use the backend to build the source package.
-        let build_result = backend
+        let mut build_result = backend
             .conda_build(
                 CondaBuildParams {
                     build_platform_virtual_packages: Some(
@@ -193,20 +195,29 @@ impl BackendSourceBuildSpec {
         }
 
         // Locate the package that matches the source record we requested to be build.
-        let Some(built_package) = build_result.packages.into_iter().find(|pkg| {
+        let built_package = if let Some(idx) = build_result.packages.iter().position(|pkg| {
             pkg.name == record.package_record.name.as_normalized()
                 && Version::from_str(&pkg.version).ok().as_ref()
                     == Some(&record.package_record.version)
                 && pkg.build == record.package_record.build
                 && pkg.subdir == record.package_record.subdir
-        }) else {
+        }) {
+            build_result.packages.swap_remove(idx)
+        } else {
             return Err(CommandDispatcherError::Failed(
-                BackendSourceBuildError::UnexpectedPackage {
+                BackendSourceBuildError::UnexpectedPackage(UnexpectedPackageError {
                     subdir: record.package_record.subdir.clone(),
                     name: record.package_record.name.as_normalized().to_string(),
                     version: record.package_record.version.to_string(),
                     build: record.package_record.build.clone(),
-                },
+                    packages: build_result
+                        .packages
+                        .iter()
+                        .map(|pkg| {
+                            format!("{}/{}={}={}", pkg.subdir, pkg.name, pkg.version, pkg.build)
+                        })
+                        .collect(),
+                }),
             ));
         };
 
@@ -273,12 +284,19 @@ impl BackendSourceBuildSpec {
             || built_package.subdir.as_str() != record.package_record.subdir
         {
             return Err(CommandDispatcherError::Failed(
-                BackendSourceBuildError::UnexpectedPackage {
+                BackendSourceBuildError::UnexpectedPackage(UnexpectedPackageError {
                     subdir: record.package_record.subdir.clone(),
                     name: record.package_record.name.as_normalized().to_string(),
                     version: record.package_record.version.to_string(),
                     build: record.package_record.build.clone(),
-                },
+                    packages: vec![format!(
+                        "{}/{}={}={}",
+                        built_package.subdir,
+                        built_package.name,
+                        built_package.version,
+                        built_package.build
+                    )],
+                }),
             ));
         };
 
@@ -295,13 +313,43 @@ pub enum BackendSourceBuildError {
     #[diagnostic(transparent)]
     BuildError(#[from] CommunicationError),
 
-    #[error(
-        "The build backend did not return the expected package: {subdir}/{name}={version}={build}."
-    )]
-    UnexpectedPackage {
-        subdir: String,
-        name: String,
-        version: String,
-        build: String,
-    },
+    #[error(transparent)]
+    UnexpectedPackage(UnexpectedPackageError),
+}
+
+/// An error that can occur when the build backend did not return the expected
+/// package.
+#[derive(Debug, Error)]
+pub struct UnexpectedPackageError {
+    pub subdir: String,
+    pub name: String,
+    pub version: String,
+    pub build: String,
+    pub packages: Vec<String>,
+}
+
+impl Display for UnexpectedPackageError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.packages.len() {
+            0 => write!(
+                f,
+                "The build backend did not return any packages for {}/{}={}={}.",
+                self.subdir, self.name, self.version, self.build
+            ),
+            1 => write!(
+                f,
+                "The build backend did not return the expected package: {}/{}={}={}. Instead the build backend returned {}.",
+                self.subdir, self.name, self.version, self.build, self.packages[0]
+            ),
+            _ => write!(
+                f,
+                "The build backend did not return the expected package: {}/{}={}={}. Instead the following packages were returned:\n- {}",
+                self.subdir,
+                self.name,
+                self.version,
+                self.build,
+                self.packages.iter().format("\n- ")
+            ),
+        }
+    }
 }
