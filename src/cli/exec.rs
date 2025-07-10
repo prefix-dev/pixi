@@ -249,14 +249,11 @@ pub async fn create_exec_prefix(
             .unwrap_or(prefix.root())
             .display()
     );
-    let specs_clone = specs.clone();
-    let virtual_packages_clone = virtual_packages.clone();
-    let repodata_clone = repodata.clone();
-    let solve_result = wrap_in_progress("solving environment", move || {
+    let solve_result = wrap_in_progress("solving environment", || {
         Solver.solve(SolverTask {
-            specs: specs_clone,
-            virtual_packages: virtual_packages_clone,
-            ..SolverTask::from_iter(&repodata_clone)
+            specs: specs.clone(),
+            virtual_packages: virtual_packages.clone(),
+            ..SolverTask::from_iter(&repodata.clone())
         })
     });
 
@@ -269,18 +266,16 @@ pub async fn create_exec_prefix(
                 "Solver failed with guessed package, retrying without it: {}",
                 err
             );
-            let specs_without_guess = &specs[..specs.len() - 1];
-            let specs_clone = specs_without_guess.to_vec();
-            let records = wrap_in_progress("retrying solve without guessed package", move || {
+            let records = wrap_in_progress("retrying solve without guessed package", || {
                 Solver.solve(SolverTask {
-                    specs: specs_clone,
-                    virtual_packages,
-                    ..SolverTask::from_iter(&repodata)
+                    specs: specs[..specs.len() - 1].to_vec(),
+                    virtual_packages: virtual_packages.clone(),
+                    ..SolverTask::from_iter(&repodata.clone())
                 })
             })
             .into_diagnostic()
             .context("failed to solve environment even without guessed package")?;
-            (records, specs_without_guess.to_vec())
+            (records, specs[..specs.len() - 1].to_vec())
         }
         Err(err) => {
             return Err(err)
