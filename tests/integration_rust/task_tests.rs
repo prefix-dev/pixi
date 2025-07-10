@@ -11,7 +11,6 @@ use pixi_manifest::{
 use rattler_conda_types::Platform;
 
 use crate::common::PixiControl;
-use std::process::Command;
 
 #[tokio::test]
 pub async fn add_remove_task() {
@@ -244,12 +243,7 @@ async fn test_task_with_env() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().without_channels().await.unwrap();
     let echo_cmd: Vec<&'static str> = if cfg!(windows) {
-        // Try PowerShell first, fall back to cmd
-        if Command::new("powershell").arg("--version").output().is_ok() {
-            vec!["powershell", "-Command", "echo \"From a $Env:HELLO_WORLD\""]
-        } else {
-            vec!["cmd", "/C", "echo From a %HELLO_WORLD%"]
-        }
+        vec!["pwsh", "-Command", "echo \"From a $Env:HELLO_WORLD\""]
     } else {
         vec!["sh", "-c", "echo 'From a $HELLO_WORLD'"]
     };
