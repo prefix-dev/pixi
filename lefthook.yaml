@@ -61,8 +61,8 @@ pre-commit:
 
 pre-push:
   jobs:
-    - name: check-openssl
-      run: pixi {run} check-openssl
     - name: cargo-clippy
       glob: "*.rs"
       run: pixi {run} cargo-clippy
+    - name: check-openssl
+      run: pixi {run} check-openssl
