@@ -1366,7 +1366,7 @@ def test_run_with_environment_variable_priority(
 ) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     if platform.system() == "Windows":
-        script_manifest = tmp_pixi_workspace.joinpath("env_setup.bat")
+        script_manifest = tmp_pixi_workspace.joinpath("env_setup.ps1")
     else:
         script_manifest = tmp_pixi_workspace.joinpath("env_setup.sh")
     unix_toml = f"""
@@ -1379,7 +1379,7 @@ def test_run_with_environment_variable_priority(
     [target.unix.activation]
     scripts = ["env_setup.sh"]
     [target.win-64.activation]
-    scripts = ["env_setup.bat"]
+    scripts = ["env_setup.ps1"]
     [tasks.task]
     cmd = "echo $MY_ENV"
     [tasks.foo]
@@ -1416,7 +1416,6 @@ def test_run_with_environment_variable_priority(
     if platform.system() == "Windows":
         manifest.write_text(windows_toml)
         script_manifest.write_text("""
-        @echo off
         $env:MY_ENV = "activation_script"
         $env:FOO_PATH = "activation_script"
         """)
