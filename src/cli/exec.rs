@@ -26,10 +26,10 @@ use crate::{
 ///
 /// Remove the temporary environments with `pixi clean cache --exec`.
 #[derive(Parser, Debug)]
-#[clap(arg_required_else_help = true)]
+#[clap(trailing_var_arg = true, arg_required_else_help = true)]
 pub struct Args {
     /// The executable to run, followed by any arguments.
-    #[clap(value_hint = ValueHint::CommandWithArguments, last = true)]
+    #[clap(num_args = 1.., value_hint = ValueHint::CommandWithArguments)]
     pub command: Vec<String>,
 
     /// Matchspecs of package to install.
