@@ -523,10 +523,12 @@ mod tests {
     fn test_configure_insecure_hosts_for_tls_bypass_enabled() {
         // Create test index locations
         let index_url = IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
-            Url::parse("https://pypi.org/simple/").unwrap(),
+            Url::parse("https://pypi.org/simple/").unwrap().into(),
         ));
         let extra_index_url = IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
-            Url::parse("https://test-index.example.com/simple/").unwrap(),
+            Url::parse("https://test-index.example.com/simple/")
+                .unwrap()
+                .into(),
         ));
 
         let indexes = vec![
@@ -554,7 +556,7 @@ mod tests {
     fn test_configure_insecure_hosts_for_tls_bypass_disabled() {
         // Create test index locations
         let index_url = IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
-            Url::parse("https://pypi.org/simple/").unwrap(),
+            Url::parse("https://pypi.org/simple/").unwrap().into(),
         ));
         let indexes = vec![Index::from_index_url(index_url)];
         let index_locations = IndexLocations::new(indexes, vec![], false);
@@ -575,7 +577,7 @@ mod tests {
     fn test_configure_insecure_hosts_for_tls_bypass_preserves_existing() {
         // Create test index locations
         let index_url = IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
-            Url::parse("https://pypi.org/simple/").unwrap(),
+            Url::parse("https://pypi.org/simple/").unwrap().into(),
         ));
         let indexes = vec![Index::from_index_url(index_url)];
         let index_locations = IndexLocations::new(indexes, vec![], false);
