@@ -6,8 +6,9 @@ from .common import (
     repo_root,
 )
 
+
 class TestCondaEnv:
-    def test_import_invalid_format(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    def test_import_invalid_format(self, pixi: Path, tmp_pixi_workspace: Path) -> None:
         manifest_path = tmp_pixi_workspace / "pixi.toml"
         # Create a new project
         verify_cli_command([pixi, "init", tmp_pixi_workspace])
@@ -26,8 +27,7 @@ class TestCondaEnv:
             stderr_contains="format",
         )
 
-
-    def test_import_conda_env(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    def test_import_conda_env(self, pixi: Path, tmp_pixi_workspace: Path) -> None:
         manifest_path = tmp_pixi_workspace / "pixi.toml"
         # Create a new project
         verify_cli_command([pixi, "init", tmp_pixi_workspace])
@@ -49,8 +49,7 @@ class TestCondaEnv:
             stdout_contains="scipy",
         )
 
-
-    def test_import_no_format(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    def test_import_no_format(self, pixi: Path, tmp_pixi_workspace: Path) -> None:
         manifest_path = tmp_pixi_workspace / "pixi.toml"
         # Create a new project
         verify_cli_command([pixi, "init", tmp_pixi_workspace])
@@ -71,8 +70,7 @@ class TestCondaEnv:
             stdout_contains="scipy",
         )
 
-
-    def test_import_platforms(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    def test_import_platforms(self, pixi: Path, tmp_pixi_workspace: Path) -> None:
         manifest_path = tmp_pixi_workspace / "pixi.toml"
         # Create a new project
         verify_cli_command([pixi, "init", tmp_pixi_workspace])
@@ -113,8 +111,7 @@ class TestCondaEnv:
             stderr_contains="platform",
         )
 
-
-    def test_import_feature_environment(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    def test_import_feature_environment(self, pixi: Path, tmp_pixi_workspace: Path) -> None:
         manifest_path = tmp_pixi_workspace / "pixi.toml"
         # Create a new project
         verify_cli_command([pixi, "init", tmp_pixi_workspace])
@@ -216,8 +213,7 @@ class TestCondaEnv:
             stdout_contains=["Environment: data", "Features: data"],
         )
 
-
-    def test_import_channels_and_versions(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    def test_import_channels_and_versions(self, pixi: Path, tmp_pixi_workspace: Path) -> None:
         manifest_path = tmp_pixi_workspace / "pixi.toml"
         # Create a new project
         verify_cli_command([pixi, "init", tmp_pixi_workspace])
@@ -234,7 +230,14 @@ class TestCondaEnv:
             stderr_contains="Imported",
         )
         verify_cli_command(
-            [pixi, "list", "--manifest-path", manifest_path, "--environment=complex-env", "--explicit"],
+            [
+                pixi,
+                "list",
+                "--manifest-path",
+                manifest_path,
+                "--environment=complex-env",
+                "--explicit",
+            ],
             stdout_contains=[
                 "cowpy",
                 "1.1.4",
