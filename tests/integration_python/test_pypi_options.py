@@ -29,7 +29,10 @@ def test_pypi_overrides(pixi: Path, tmp_pixi_workspace: Path, tmp_path: Path) ->
     This test verifies that the installation succeeds when the overrides are correctly defined.
     """
     test_data = Path(__file__).parent.parent / "data/pixi_tomls/dependency_overrides.toml"
+    # prepare if we would like to assert exactly same lock file
+    # test_lock_data = Path(__file__).parent.parent / "data/lockfiles/dependency_overrides.lock"
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    lock_file_path = tmp_pixi_workspace.joinpath("pixi.lock")
     toml = test_data.read_text()
     manifest.write_text(toml)
 
@@ -39,3 +42,9 @@ def test_pypi_overrides(pixi: Path, tmp_pixi_workspace: Path, tmp_path: Path) ->
         ExitCode.SUCCESS,
         env={"PIXI_CACHE_DIR": str(tmp_path)},
     )
+    lock_file_content = lock_file_path.read_text()
+
+    # numpy 2.0.0 is overriding the dev env
+    assert "numpy-2.0.0" in lock_file_content
+    # numpy 1.21.0 is overriding the outdated env
+    assert "numpy-1.21.0" in lock_file_content
