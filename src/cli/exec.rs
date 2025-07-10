@@ -60,7 +60,7 @@ pub struct Args {
     pub list: Option<String>,
 
     /// Disable modification of the PS1 prompt to indicate the temporary environment
-    #[clap(long, action = clap::ArgAction::SetFalse)]
+    #[clap(long, action = clap::ArgAction::SetTrue, default_value = "false")]
     pub no_modify_ps1: bool,
 
     #[clap(flatten)]
@@ -82,13 +82,22 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let mut install_specs = name_specs.clone();
 
-    // Only guess a package from the command if no specs were provided at all
-    if name_specs.is_empty() {
+    // Guess a package from the command if no specs were provided at all OR if --with is used
+    let should_guess_package = name_specs.is_empty() || !args.with.is_empty();
+    if should_guess_package {
         install_specs.push(guess_package_spec(command));
     }
 
     // Create the environment to run the command in.
-    let prefix = create_exec_prefix(&args, &install_specs, &cache_dir, &config, &client).await?;
+    let prefix = create_exec_prefix(
+        &args,
+        &install_specs,
+        &cache_dir,
+        &config,
+        &client,
+        should_guess_package,
+    )
+    .await?;
 
     // Get environment variables from the activation
     let mut activation_env = run_activation(&prefix).await?;
@@ -107,11 +116,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         activation_env.insert("PIXI_ENVIRONMENT_NAME".into(), env_name.clone());
 
-        if args.no_modify_ps1 && std::env::current_dir().is_ok() {
+        if !args.no_modify_ps1 && std::env::current_dir().is_ok() {
             let (prompt_var, prompt_value) = if cfg!(windows) {
                 ("_PIXI_PROMPT", format!("(pixi:{}) $P$G", env_name))
             } else {
-                ("PS1", format!(r"(pixi:{}) [\w] \$ ", env_name))
+                ("PS1", format!(r"(pixi:{}) [\w] \$", env_name))
             };
 
             activation_env.insert(prompt_var.into(), prompt_value);
@@ -156,6 +165,7 @@ pub async fn create_exec_prefix(
     cache_dir: &Path,
     config: &Config,
     client: &ClientWithMiddleware,
+    has_guessed_package: bool,
 ) -> miette::Result<Prefix> {
     let command = args.command.first().expect("missing required command");
     let specs = specs.to_vec();
@@ -222,13 +232,14 @@ pub async fn create_exec_prefix(
     .context("failed to get repodata")?;
 
     // Determine virtual packages of the current platform
-    let virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::from_env())
-        .into_diagnostic()
-        .context("failed to determine virtual packages")?
-        .iter()
-        .cloned()
-        .map(GenericVirtualPackage::from)
-        .collect();
+    let virtual_packages: Vec<GenericVirtualPackage> =
+        VirtualPackage::detect(&VirtualPackageOverrides::from_env())
+            .into_diagnostic()
+            .context("failed to determine virtual packages")?
+            .iter()
+            .cloned()
+            .map(GenericVirtualPackage::from)
+            .collect();
 
     // Solve the environment
     tracing::info!(
@@ -239,15 +250,44 @@ pub async fn create_exec_prefix(
             .display()
     );
     let specs_clone = specs.clone();
-    let solved_records = wrap_in_progress("solving environment", move || {
+    let virtual_packages_clone = virtual_packages.clone();
+    let repodata_clone = repodata.clone();
+    let solve_result = wrap_in_progress("solving environment", move || {
         Solver.solve(SolverTask {
             specs: specs_clone,
-            virtual_packages,
-            ..SolverTask::from_iter(&repodata)
+            virtual_packages: virtual_packages_clone,
+            ..SolverTask::from_iter(&repodata_clone)
         })
-    })
-    .into_diagnostic()
-    .context("failed to solve environment")?;
+    });
+
+    let (solved_records, final_specs) = match solve_result {
+        Ok(records) => (records, specs.to_vec()),
+        Err(err) if has_guessed_package && !args.with.is_empty() => {
+            // If solving failed and we guessed a package while using --with,
+            // try again without the guessed package (last spec)
+            tracing::debug!(
+                "Solver failed with guessed package, retrying without it: {}",
+                err
+            );
+            let specs_without_guess = &specs[..specs.len() - 1];
+            let specs_clone = specs_without_guess.to_vec();
+            let records = wrap_in_progress("retrying solve without guessed package", move || {
+                Solver.solve(SolverTask {
+                    specs: specs_clone,
+                    virtual_packages,
+                    ..SolverTask::from_iter(&repodata)
+                })
+            })
+            .into_diagnostic()
+            .context("failed to solve environment even without guessed package")?;
+            (records, specs_without_guess.to_vec())
+        }
+        Err(err) => {
+            return Err(err)
+                .into_diagnostic()
+                .context("failed to solve environment");
+        }
+    };
 
     // Force the initialization of the rayon thread pool to avoid implicit creation
     // by the Installer.
@@ -274,7 +314,7 @@ pub async fn create_exec_prefix(
     write_guard.finish().await.into_diagnostic()?;
 
     if let Some(ref regex) = args.list {
-        list_exec_environment(specs, solved_records, regex.clone())?;
+        list_exec_environment(final_specs, solved_records, regex.clone())?;
     }
 
     Ok(prefix)
