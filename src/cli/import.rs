@@ -142,12 +142,12 @@ async fn import_conda_env(args: Args) -> miette::Result<()> {
         )?;
     }
 
-    
     match workspace
-    .workspace()
-    .environment_from_name_or_env_var(Some(environment_string.clone()))
+        .workspace()
+        .environment_from_name_or_env_var(Some(environment_string.clone()))
     {
-        Err(_) => { // add environment if it does not already exist
+        Err(_) => {
+            // add environment if it does not already exist
             workspace.manifest().add_environment(
                 environment_string.clone(),
                 Some(vec![feature_string.clone()]),
@@ -155,7 +155,8 @@ async fn import_conda_env(args: Args) -> miette::Result<()> {
                 true,
             )?;
         }
-        Ok(env) => { // otherwise, add feature to environment if it is not already there
+        Ok(env) => {
+            // otherwise, add feature to environment if it is not already there
             if !env.features().any(|f| f.name == feature_name) {
                 let (env_name, features, solve_group, no_default_feature) = (
                     env.name().as_str().to_string(),
