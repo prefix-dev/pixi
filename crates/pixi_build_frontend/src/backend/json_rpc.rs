@@ -119,6 +119,7 @@ impl CommunicationError {
     }
 }
 
+#[derive(Debug)]
 pub struct JsonRpcBackend {
     /// The identifier of the backend.
     backend_identifier: String,

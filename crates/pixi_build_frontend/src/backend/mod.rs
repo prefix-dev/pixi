@@ -14,6 +14,7 @@ use crate::json_rpc::CommunicationError;
 
 pub mod json_rpc;
 
+#[derive(Debug)]
 pub struct Backend {
     /// The backend that is used to communicate with the build server.
     inner: BackendImplementation,
@@ -26,6 +27,7 @@ pub struct Backend {
     capabilities: BackendCapabilities,
 }
 
+#[derive(Debug)]
 pub enum BackendImplementation {
     /// The backend is a JSON-RPC backend.
     JsonRpc(json_rpc::JsonRpcBackend),

@@ -20,6 +20,7 @@ use pixi_build_types::{
 };
 use pixi_record::SourceRecord;
 use rattler_conda_types::{ChannelConfig, ChannelUrl, Platform, Version};
+use serde::Serialize;
 use thiserror::Error;
 
 use crate::{BuildEnvironment, CommandDispatcher, CommandDispatcherError, build::WorkDirKey};
@@ -30,8 +31,10 @@ use crate::{BuildEnvironment, CommandDispatcher, CommandDispatcherError, build::
 ///
 /// We want to severely limit the number of packages that we build at the same
 /// time; therefore, this is a separate task.
+#[derive(Debug, Serialize)]
 pub struct BackendSourceBuildSpec {
     /// The backend to use for the build.
+    #[serde(skip)]
     pub backend: Backend,
 
     /// The package that we are building.
@@ -41,11 +44,13 @@ pub struct BackendSourceBuildSpec {
     pub method: BackendSourceBuildMethod,
 }
 
+#[derive(Debug, Serialize)]
 pub enum BackendSourceBuildMethod {
     BuildV1(BackendSourceBuildV1Method),
     BuildV2(BackendSourceBuildV2Method),
 }
 
+#[derive(Debug, Serialize)]
 pub struct BackendSourceBuildV1Method {
     /// The channel configuration to use when resolving metadata
     pub channel_config: ChannelConfig,
@@ -65,6 +70,7 @@ pub struct BackendSourceBuildV1Method {
     pub output_directory: Option<PathBuf>,
 }
 
+#[derive(Debug, Serialize)]
 pub struct BackendSourceBuildV2Method {
     /// The build prefix that was prepared for the backend.
     pub build_prefix: BackendSourceBuildPrefix,
@@ -81,16 +87,20 @@ pub struct BackendSourceBuildV2Method {
     pub output_directory: Option<PathBuf>,
 }
 
+#[derive(Debug, Serialize)]
 pub struct BackendSourceBuildPrefix {
     /// The platform for which the packages were installed.
     pub platform: Platform,
 
     /// The location of the prefix on disk.
+    #[serde(skip)]
     pub prefix: PathBuf,
 }
 
+#[derive(Debug, Serialize)]
 pub struct BackendBuiltSource {
     /// The location on disk where the built package is located.
+    #[serde(skip)]
     pub output_file: PathBuf,
 
     /// The globs that were used as input to the build. Use these for

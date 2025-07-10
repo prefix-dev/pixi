@@ -762,6 +762,8 @@ mod tests {
             subdir: None,
             md5: None,
             sha256: None,
+            url: None,
+            license: None,
         };
         let hash2 = calculate_hash(&spec2);
 

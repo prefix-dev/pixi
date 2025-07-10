@@ -14,4 +14,6 @@ Pixi solve (foobar-desktop)
 └── Conda solve #1
 Pixi install (test-env)
 ├── Source build (foobar @ https://github.com/wolfv/pixi-build-examples@8d230eda9b4cdaaefd24aad87fd923d4b7c3c78a)
+│   └── Backend source build
 └── Source build (foobar-desktop @ https://github.com/wolfv/pixi-build-examples@8d230eda9b4cdaaefd24aad87fd923d4b7c3c78a)
+    └── Backend source build

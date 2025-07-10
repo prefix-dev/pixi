@@ -22,8 +22,8 @@ use itertools::Itertools;
 use pixi_command_dispatcher::{
     ReporterContext,
     reporter::{
-        BuildBackendMetadataId, CondaSolveId, GitCheckoutId, InstantiateToolEnvId, PixiInstallId,
-        PixiSolveId, SourceBuildId, SourceMetadataId,
+        BackendSourceBuildId, BuildBackendMetadataId, CondaSolveId, GitCheckoutId,
+        InstantiateToolEnvId, PixiInstallId, PixiSolveId, SourceBuildId, SourceMetadataId,
     },
 };
 use rattler_conda_types::PackageName;
@@ -169,6 +169,13 @@ impl EventTree {
                     );
                 }
                 Event::SourceBuildFinished { .. } => {}
+                Event::BackendSourceBuildQueued { id, context } => {
+                    builder.set_event_parent((*id).into(), *context);
+                }
+                Event::BackendSourceBuildStarted { id } => {
+                    builder.alloc_node((*id).into(), String::from("Backend source build"));
+                }
+                Event::BackendSourceBuildFinished { .. } => {}
                 Event::InstantiateToolEnvQueued { id, context, spec } => {
                     instantiate_tool_env_label
                         .insert(*id, spec.requirement.0.as_source().to_string());
@@ -236,6 +243,7 @@ pub enum EventId {
     BuildBackendMetadata(BuildBackendMetadataId),
     InstantiateToolEnv(InstantiateToolEnvId),
     SourceBuild(SourceBuildId),
+    BackendSourceBuild(BackendSourceBuildId),
 }
 
 impl From<ReporterContext> for EventId {
@@ -248,6 +256,7 @@ impl From<ReporterContext> for EventId {
             ReporterContext::InstantiateToolEnv(id) => Self::InstantiateToolEnv(id),
             ReporterContext::SourceBuild(id) => Self::SourceBuild(id),
             ReporterContext::SourceMetadata(id) => Self::SourceMetadata(id),
+            ReporterContext::BackendSourceBuild(id) => Self::BackendSourceBuild(id),
         }
     }
 }
