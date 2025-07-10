@@ -8,7 +8,7 @@ Run a command and install it in a temporary environment
 
 ## Usage
 ```
-pixi exec [OPTIONS] [-- <COMMAND>...]
+pixi exec [OPTIONS] [COMMAND]...
 ```
 
 ## Arguments
