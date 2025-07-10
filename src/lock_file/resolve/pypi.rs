@@ -352,7 +352,7 @@ pub async fn resolve_pypi(
     )
     .into_diagnostic()?;
     let dependency_overrides =
-        pypi_options.dependency_overrides.as_ref().map(|overrides| {
+        pypi_options.dependency_overrides.as_ref().map(|overrides|->Result<Vec<_>, _> {
             overrides
                 .iter()
                 .map(|(name, spec)| {
@@ -367,8 +367,7 @@ pub async fn resolve_pypi(
                     })
                 })
                 .collect::<Result<Vec<_>, _>>()
-                .expect("dependency overrides should be valid uv requirements")
-        }).unwrap_or_default();
+        }).transpose()?.unwrap_or_default();
 
     let overrides = Overrides::from_requirements(dependency_overrides);
 
