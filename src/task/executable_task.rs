@@ -590,7 +590,7 @@ mod tests {
         } else {
             "export \"FOO=bar\""
         };
-
+        println!("expected_prefix {}", expected_prefix);
         assert!(result.contains(expected_prefix));
     }
 
