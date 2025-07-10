@@ -26,7 +26,9 @@ pub fn locked_data_to_file(
     filename: &str,
     requires_python: Option<pep440_rs::VersionSpecifiers>,
 ) -> Result<uv_distribution_types::File, ConversionError> {
-    let url = uv_distribution_types::FileLocation::AbsoluteUrl(UrlString::from(url.clone()));
+    let url = uv_distribution_types::FileLocation::AbsoluteUrl(UrlString::from(
+        uv_redacted::DisplaySafeUrl::from(url.clone()),
+    ));
 
     // Convert PackageHashes to uv hashes
     let hashes = if let Some(hash) = hash {
@@ -118,8 +120,10 @@ pub fn convert_to_dist(
                 Dist::from_url(
                     pkg_name,
                     VerbatimParsedUrl {
-                        parsed_url: ParsedUrl::try_from(url_without_direct.clone().into_owned())
-                            .map_err(Box::new)?,
+                        parsed_url: ParsedUrl::try_from(uv_redacted::DisplaySafeUrl::from(
+                            url_without_direct.clone().into_owned(),
+                        ))
+                        .map_err(Box::new)?,
                         verbatim: uv_pep508::VerbatimUrl::from(url_without_direct.into_owned()),
                     },
                 )?
@@ -161,7 +165,9 @@ pub fn convert_to_dist(
                         // out but it would require adding the indexes to
                         // the lock file
                         index: IndexUrl::Pypi(Arc::new(uv_pep508::VerbatimUrl::from_url(
-                            consts::DEFAULT_PYPI_INDEX_URL.clone(),
+                            uv_redacted::DisplaySafeUrl::from(
+                                consts::DEFAULT_PYPI_INDEX_URL.clone(),
+                            ),
                         ))),
                     }],
                     best_wheel_index: 0,
@@ -176,7 +182,7 @@ pub fn convert_to_dist(
                     file: Box::new(file),
                     // This should be fine because currently it is only used for caching
                     index: IndexUrl::Pypi(Arc::new(uv_pep508::VerbatimUrl::from_url(
-                        consts::DEFAULT_PYPI_INDEX_URL.clone(),
+                        uv_redacted::DisplaySafeUrl::from(consts::DEFAULT_PYPI_INDEX_URL.clone()),
                     ))),
                     // I don't think this really matters for the install
                     wheels: vec![],

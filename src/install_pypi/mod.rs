@@ -538,7 +538,7 @@ impl PyPIPrefixUpdater {
 
         // Before hitting the network let's make sure the credentials are available to uv
         for url in self.index_locations.indexes().map(|index| index.url()) {
-            let success = store_credentials_from_url(url);
+            let success = store_credentials_from_url(url.url());
             tracing::debug!("Stored credentials for {}: {}", url, success);
         }
 

@@ -219,7 +219,9 @@ pub(crate) fn need_reinstall(
                 } => {
                     // Check if the installed git url is the same as the locked git url
                     // if this fails, it should be an error, because then installed url is not a git url
-                    let installed_git_url = ParsedGitUrl::try_from(Url::parse(url.as_str())?)?;
+                    let installed_git_url = ParsedGitUrl::try_from(
+                        uv_redacted::DisplaySafeUrl::from(Url::parse(url.as_str())?),
+                    )?;
 
                     // Try to parse the locked git url, this can be any url, so this may fail
                     // in practice it always seems to succeed, even with a non-git url
@@ -233,7 +235,10 @@ pub(crate) fn need_reinstall(
                                     .map_err(|e| NeedsReinstallError::PixiGitUrl(e.to_string()))
                             } else {
                                 // it is not a git url, so we fallback to use the url as is
-                                ParsedGitUrl::try_from(url.clone()).map_err(|e| e.into())
+                                ParsedGitUrl::try_from(uv_redacted::DisplaySafeUrl::from(
+                                    url.clone(),
+                                ))
+                                .map_err(|e: uv_pypi_types::ParsedUrlError| e.into())
                             }
                         }
                         UrlOrPath::Path(_path) => {
@@ -248,9 +253,9 @@ pub(crate) fn need_reinstall(
                             // Check the repository base url with the locked url
                             let installed_repository_url =
                                 RepositoryUrl::new(installed_git_url.url.repository());
-                            if locked_git_url.url.repository()
-                                != &installed_repository_url.into_url()
-                            {
+                            let locked_repository_url =
+                                RepositoryUrl::new(locked_git_url.url.repository());
+                            if locked_repository_url != installed_repository_url {
                                 // This happens when this is not a git url
                                 return Ok(ValidateCurrentInstall::Reinstall(
                                     NeedReinstall::UrlMismatch {

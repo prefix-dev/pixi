@@ -307,7 +307,7 @@ impl WorkspaceMut {
             self.save_inner().await.into_diagnostic()?;
         }
 
-        if lock_file_update_config.lock_file_usage() != LockFileUsage::Update {
+        if lock_file_update_config.lock_file_usage()? != LockFileUsage::Update {
             return Ok(None);
         }
 

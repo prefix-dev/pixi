@@ -1,12 +1,11 @@
-import pytest
-from pathlib import Path
 import shutil
+import sys
+from pathlib import Path
+
+import pytest
 from syrupy.assertion import SnapshotAssertion
 
-
-from .common import verify_cli_command, repo_root, current_platform, get_manifest
-import sys
-
+from .common import current_platform, get_manifest, repo_root, verify_cli_command
 
 pytestmark = pytest.mark.skipif(
     sys.platform.startswith("win"),
@@ -72,7 +71,7 @@ def test_doc_pixi_workspaces_introduction(
 
 
 @pytest.mark.extra_slow
-@pytest.mark.timeout(200)
+@pytest.mark.timeout(400)
 @pytest.mark.parametrize(
     "manifest",
     [

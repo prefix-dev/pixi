@@ -1303,12 +1303,12 @@ impl<'p> UpdateContext<'p> {
             // Construct a future that will resolve when we have the repodata available
             let repodata_solve_platform_future = self
                 .get_latest_group_repodata_records(&group, platform)
-                .ok_or_else(|| make_unsupported_pypi_platform_error(environment))?;
+                .ok_or_else(|| make_unsupported_pypi_platform_error(environment, true))?;
             // Construct an optional future that will resolve for building the pypi sources,
             // the error is delayed to raise at the time when building the sources.
             let repodata_building_env = self
                 .get_latest_group_repodata_records(&group, environment.best_platform())
-                .ok_or_else(|| make_unsupported_pypi_platform_error(environment));
+                .ok_or_else(|| make_unsupported_pypi_platform_error(environment, false));
 
             // Creates an object to initiate an update at a later point
             let conda_prefix_updater = CondaPrefixUpdaterBuilder::new(
@@ -1655,20 +1655,30 @@ impl<'p> UpdateContext<'p> {
 /// Constructs an error that indicates that the current platform cannot solve
 /// pypi dependencies because there is no python interpreter available for the
 /// current platform.
-fn make_unsupported_pypi_platform_error(environment: &Environment<'_>) -> Report {
+fn make_unsupported_pypi_platform_error(
+    environment: &Environment<'_>,
+    top_level_error: bool,
+) -> Report {
     let grouped_environment = GroupedEnvironment::from(environment.clone());
     let current_platform = environment.best_platform();
     let platforms = environment.platforms();
 
-    let mut diag = MietteDiagnostic::new(format!(
-        "Unable to solve pypi dependencies for the {} {} — no compatible Python interpreter for '{}'",
-        grouped_environment.name().fancy_display(),
-        match &grouped_environment {
-            GroupedEnvironment::Group(_) => "solve group",
-            GroupedEnvironment::Environment(_) => "environment",
-        },
-        consts::PLATFORM_STYLE.apply_to(current_platform),
-    ));
+    let mut diag = if top_level_error {
+        MietteDiagnostic::new(format!(
+            "Unable to solve pypi dependencies for the {} {} — there is no compatible Python interpreter for '{}'",
+            grouped_environment.name().fancy_display(),
+            match &grouped_environment {
+                GroupedEnvironment::Group(_) => "solve group",
+                GroupedEnvironment::Environment(_) => "environment",
+            },
+            consts::PLATFORM_STYLE.apply_to(current_platform),
+        ))
+    } else {
+        MietteDiagnostic::new(format!(
+            "there is no compatible Python interpreter for '{}'",
+            consts::PLATFORM_STYLE.apply_to(current_platform),
+        ))
+    };
 
     let help_message = if !platforms.contains(&current_platform) {
         // State 1: The current platform is not in the `platforms` list
