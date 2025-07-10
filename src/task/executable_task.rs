@@ -586,11 +586,10 @@ mod tests {
         let result = get_export_specific_task_env(task, my_map);
         // task specific env overrides outside environment variables
         let expected_prefix = if cfg!(windows) {
-            "env:\"FOO = bar\""
+            "env:FOO = \"bar\""
         } else {
             "export \"FOO=bar\""
         };
-        println!("expected_prefix {}", expected_prefix);
         assert!(result.contains(expected_prefix));
     }
 
@@ -629,7 +628,7 @@ mod tests {
         let result = executable_task.as_script(my_map);
 
         let expected_prefix = if cfg!(windows) {
-            "env:\"FOO = bar\""
+            "env:FOO = \"bar\""
         } else {
             "export \"FOO=bar\""
         };
