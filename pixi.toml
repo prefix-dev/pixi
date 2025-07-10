@@ -41,7 +41,6 @@ test-fast = "cargo nextest run --workspace --all-targets"
 test-slow = """cargo nextest run --workspace --all-targets --features slow_integration_tests
               --status-level skip --failure-output immediate-final --no-fail-fast --final-status-level slow"""
 
-
 [feature.pytest.dependencies]
 filelock = ">=3.16.0,<4"
 mypy = ">=1.16,<1.17"
@@ -86,7 +85,6 @@ update-test-channel = { cmd = "python update-channels.py {{ channel }}", args = 
   "channel",
 ], cwd = "tests/data/channels" }
 
-
 [feature.dev.dependencies]
 # Needed for the citation
 cargo-edit = ">=0.13.4,<0.14"
@@ -117,16 +115,14 @@ description = "Switch to local rattler development dependencies"
 cmd = "python scripts/local_patch.py rattler remote"
 description = "Switch back to remote rattler dependencies"
 
-
 [feature.lint.dependencies]
 actionlint = ">=1.7.7,<2"
+dprint = ">=0.49.1,<0.51"
 go-shfmt = ">=3.11.0,<4"
-pre-commit = ">=4.1.0,<5"
-pre-commit-hooks = ">=5.0.0,<6"
-prettier = ">=3.5.2,<4"
+lefthook = ">=1.11.14,<2"
 ruff = ">=0.12,<0.13"
 shellcheck = ">=0.10.0,<0.11"
-taplo = ">=0.10,<0.11"
+taplo = ">=0.10.0,<0.11"
 typos = ">=1.29.10,<2"
 
 [feature.lint.tasks]
@@ -134,11 +130,17 @@ actionlint = { cmd = "actionlint", env = { SHELLCHECK_OPTS = "-e SC2086" } }
 cargo-clippy = "cargo clippy --all-targets --workspace -- -D warnings"
 cargo-fmt = "cargo fmt --all"
 check-openssl = "python tests/scripts/check-openssl.py"
-lint = { cmd = "pre-commit run --all-files --hook-stage=manual", description = "Run all linters and formatters on all code" }
-pre-commit-install = "pre-commit install --install-hooks -t=pre-commit -t=pre-push"
-pre-commit-install-minimal = "pre-commit install -t=pre-commit"
-pre-commit-run = "pre-commit run --all-files --hook-stage manual"
-prettier-fmt = { cmd = "prettier --write" }
+dprint-check = { cmd = "dprint check --log-level=silent", description = "Check formatting with dprint" }
+dprint-fmt = { cmd = "dprint fmt --incremental=false", description = "Format with dprint" }
+lefthook = { cmd = "lefthook", description = "Run lefthook" }
+lint = { depends-on = [
+  "lint-fast",
+  "lint-slow",
+], description = "Run all linters and formatters on all code" }
+lint-fast = { cmd = "lefthook run pre-commit --all-files --force", description = "Run all fast linters and formatters on all code (no clippy)" }
+lint-slow = { cmd = "lefthook run pre-push --all-files --force", description = "Run all slow linters and formatters on all code" }
+pre-commit-install = "lefthook install"
+pre-commit-install-minimal = "lefthook install pre-commit"
 ruff-format = "ruff format --force-exclude"
 ruff-lint = "ruff check --fix --exit-non-zero-on-fix --force-exclude"
 shell-format = "shfmt --write --indent=4 --simplify --binary-next-line"

@@ -4,5 +4,6 @@ ignore-hidden = false
 
 [default.extend-identifiers]
 intoto = "intoto"
+plt-setp = "plt.setp"
 pn = "pn"
 solvePnPRansac = "solvePnPRansac"
