@@ -47,7 +47,7 @@ use uv_distribution_types::{
 use uv_install_wheel::LinkMode;
 use uv_python::{Interpreter, InterpreterError, PythonEnvironment};
 use uv_resolver::{ExcludeNewer, FlatIndex};
-use uv_types::{BuildContext, BuildStack, HashStrategy};
+use uv_types::{BuildArena, BuildContext, BuildStack, HashStrategy};
 use uv_workspace::WorkspaceCache;
 
 /// This structure holds all the parameters needed to create a `BuildContext` uv implementation.
@@ -356,27 +356,22 @@ impl<'a> LazyBuildDispatch<'a> {
     }
 }
 
-impl BuildContext for LazyBuildDispatch<'_> {
-    type SourceDistBuilder = SourceBuild;
-
-    fn interpreter(&self) -> &uv_python::Interpreter {
-        // In most cases the interpreter should be initialized, because one of the other
-        // trait methods will have been called
-        // But in case it is not, we will initialize it here
-        //
-        // Even though intitalize does not initialize twice, we skip the codepath
-        // because the initialization takes time
-        if self.lazy_deps.interpreter.get().is_none() {
+impl LazyBuildDispatch<'_> {
+    /// Helper method to ensure the build dispatch is initialized from a sync context.
+    /// This handles the async-to-sync conversion needed when the build dispatch is not yet initialized.
+    fn ensure_build_dispatch_initialized(&self) {
+        // Only initialize if not already done to avoid unnecessary work
+        if self.build_dispatch.get().is_none() {
             // This will usually be called from the multi-threaded runtime, but there might
             // be tests that calls this in the current thread runtime.
-            // In the current thread runtime we cannot use `block_in_place` as it will pani
+            // In the current thread runtime we cannot use `block_in_place` as it will panic
             let handle = Handle::current();
             match handle.runtime_flavor() {
                 tokio::runtime::RuntimeFlavor::CurrentThread => {
                     let runtime = tokio::runtime::Builder::new_current_thread()
                         .enable_all()
                         .build()
-                        .expect("failed to initialize the runtime ");
+                        .expect("failed to initialize the runtime");
                     runtime
                         .block_on(self.get_or_try_init())
                         .expect("failed to initialize the build dispatch");
@@ -391,6 +386,20 @@ impl BuildContext for LazyBuildDispatch<'_> {
                 }
             }
         }
+    }
+}
+
+impl BuildContext for LazyBuildDispatch<'_> {
+    type SourceDistBuilder = SourceBuild;
+
+    fn interpreter(&self) -> &uv_python::Interpreter {
+        // In most cases the interpreter should be initialized, because one of the other
+        // trait methods will have been called
+        // But in case it is not, we will initialize it here
+        //
+        // Even though initialize does not initialize twice, we check it beforehand
+        // because the initialization takes time
+        self.ensure_build_dispatch_initialized();
         self.lazy_deps
             .interpreter
             .get()
@@ -501,5 +510,16 @@ impl BuildContext for LazyBuildDispatch<'_> {
     /// Workspace discovery caching.
     fn workspace_cache(&self) -> &WorkspaceCache {
         &self.workspace_cache
+    }
+
+    fn build_arena(&self) -> &BuildArena<Self::SourceDistBuilder> {
+        // Ensure the build dispatch is initialized
+        self.ensure_build_dispatch_initialized();
+
+        // Get the inner build dispatch and delegate to its build_arena method
+        self.build_dispatch
+            .get()
+            .expect("build dispatch not initialized, this is a programming error")
+            .build_arena()
     }
 }
