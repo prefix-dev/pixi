@@ -250,7 +250,7 @@ async fn test_task_with_env() {
 
     pixi.tasks()
         .add("env-test".into(), None, FeatureName::default())
-        .with_commands(echo_cmd)
+        .with_commands(echo_cmd.clone())
         .with_env(vec![(
             String::from("HELLO_WORLD"),
             String::from("world with spaces"),
@@ -273,6 +273,7 @@ async fn test_task_with_env() {
         Err(e) => {
             eprintln!("test_task_with_env() Pixi run failed with error: {}", e);
             eprintln!("test_task_with_env()Error type: {:?}", e);
+            eprintln!("test_task_with_env() echo_cmd {:?}", echo_cmd);
             panic!("test_task_with_env()Test failed: {}", e);
         }
     };
