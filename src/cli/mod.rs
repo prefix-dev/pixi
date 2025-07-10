@@ -1,5 +1,5 @@
-use clap::Parser;
 use clap::builder::styling::{AnsiColor, Color, Style};
+use clap::{CommandFactory, Parser};
 use indicatif::ProgressDrawTarget;
 use miette::{Diagnostic, IntoDiagnostic};
 use pixi_consts::consts;
@@ -294,6 +294,18 @@ impl LockFileUsageConfig {
 }
 
 pub async fn execute() -> miette::Result<()> {
+    // Check for help case before parsing to intercept and show custom help with extensions
+    let raw_args: Vec<String> = std::env::args().collect();
+
+    // If just "pixi" or "pixi --help" or "pixi -h" or "pixi help", show custom help
+    if raw_args.len() == 1
+        || (raw_args.len() == 2
+            && (raw_args[1] == "--help" || raw_args[1] == "-h" || raw_args[1] == "help"))
+    {
+        show_help_with_extensions();
+        return Ok(());
+    }
+
     let args = Args::parse();
     set_console_colors(&args);
     let use_colors = console::colors_enabled_stderr();
@@ -630,5 +642,20 @@ mod tests {
                 "Expected CLI argument --frozen to override PIXI_FROZEN=false"
             );
         });
+    }
+}
+/// Display help with extensions section appended
+fn show_help_with_extensions() {
+    let mut cmd = Args::command();
+
+    println!("{}", cmd.render_help());
+
+    // Add extensions section
+    let external_commands = command_info::find_external_commands();
+    if !external_commands.is_empty() {
+        println!("\nAvailable Extensions:");
+        for (name, _path) in external_commands {
+            println!("    {:<15} (via pixi-{})", name, name);
+        }
     }
 }
