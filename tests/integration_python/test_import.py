@@ -42,7 +42,6 @@ def test_import_conda_env(pixi: Path, tmp_pixi_workspace: Path) -> None:
             repo_root() / "tests/data/import_files/simple_environment.yml",
             "--format=conda-env",
         ],
-        ExitCode.SUCCESS,
         stderr_contains="Imported",
     )
     verify_cli_command(
@@ -65,7 +64,6 @@ def test_import_no_format(pixi: Path, tmp_pixi_workspace: Path) -> None:
             manifest_path,
             repo_root() / "tests/data/import_files/simple_environment.yml",
         ],
-        ExitCode.SUCCESS,
         stderr_contains="Imported",
     )
     verify_cli_command(
@@ -89,7 +87,6 @@ def test_import_platforms(pixi: Path, tmp_pixi_workspace: Path) -> None:
             repo_root() / "tests/data/import_files/simple_environment.yml",
             "--platform=linux-64",
         ],
-        ExitCode.SUCCESS,
         stderr_contains="Imported",
     )
     verify_cli_command(
@@ -131,7 +128,6 @@ def test_import_feature_environment(pixi: Path, tmp_pixi_workspace: Path) -> Non
             manifest_path,
             repo_root() / "tests/data/import_files/simple_environment.yml",
         ],
-        ExitCode.SUCCESS,
         stderr_contains="Imported",
     )
     verify_cli_command(
@@ -149,7 +145,6 @@ def test_import_feature_environment(pixi: Path, tmp_pixi_workspace: Path) -> Non
             repo_root() / "tests/data/import_files/cowpy.yml",
             "--feature=simple-env",
         ],
-        ExitCode.SUCCESS,
         stderr_contains="Imported",
     )
     verify_cli_command(
@@ -174,7 +169,6 @@ def test_import_feature_environment(pixi: Path, tmp_pixi_workspace: Path) -> Non
             "--environment=simple-env",
             "--feature=array-api-extra",
         ],
-        ExitCode.SUCCESS,
         stderr_contains="Imported",
     )
     verify_cli_command(
@@ -198,7 +192,6 @@ def test_import_feature_environment(pixi: Path, tmp_pixi_workspace: Path) -> Non
             repo_root() / "tests/data/import_files/cowpy.yml",
             "--feature=farm",
         ],
-        ExitCode.SUCCESS,
         stderr_contains="Imported",
     )
     verify_cli_command(
@@ -216,7 +209,6 @@ def test_import_feature_environment(pixi: Path, tmp_pixi_workspace: Path) -> Non
             repo_root() / "tests/data/import_files/array-api-extra.yml",
             "--feature=data",
         ],
-        ExitCode.SUCCESS,
         stderr_contains="Imported",
     )
     verify_cli_command(
@@ -239,7 +231,6 @@ def test_import_channels_and_versions(pixi: Path, tmp_pixi_workspace: Path) -> N
             manifest_path,
             repo_root() / "tests/data/import_files/complex_environment.yml",
         ],
-        ExitCode.SUCCESS,
         stderr_contains="Imported",
     )
     verify_cli_command(
