@@ -63,12 +63,18 @@ fn find_external_commands() -> HashMap<String, PathBuf> {
                         // Check if it's a pixi extension
                         if let Some(cmd_name) = name.strip_prefix("pixi-") {
                             // Remove .exe suffix on Windows
-                            #[cfg(target_family = "windows")]
-                            {
-                                let cmd_name = cmd_name
-                                    .strip_suffix(env::consts::EXE_SUFFIX)
-                                    .unwrap_or(cmd_name);
-                            }
+                            let cmd_name = {
+                                #[cfg(target_family = "windows")]
+                                {
+                                    cmd_name
+                                        .strip_suffix(env::consts::EXE_SUFFIX)
+                                        .unwrap_or(cmd_name)
+                                }
+                                #[cfg(not(target_family = "windows"))]
+                                {
+                                    cmd_name
+                                }
+                            };
 
                             let path = entry.path();
                             if path.is_executable() {
@@ -189,5 +195,16 @@ mod imp {
 
         // Exit with the same status code as the child process
         std::process::exit(status.code().unwrap_or(1));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tee_suggests_tree() {
+        let suggestions = find_similar_commands("tee");
+        assert!(suggestions.contains(&"tree".to_string()));
     }
 }
