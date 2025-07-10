@@ -96,6 +96,7 @@ tbump = ">=6.9.0,<6.10"
 
 [feature.dev.tasks]
 update-rattler = "cargo upgrade -p rattler -p file_url -p rattler_cache -p rattler_conda_types -p rattler_digest -p rattler_lock -p rattler_networking -p rattler_repodata_gateway -p rattler_shell -p rattler_solve -p rattler_virtual_packages"
+snapshot-review = "cargo insta review --workspace"
 
 # UV dependency management
 switch-to-remote-uv = { cmd = "python scripts/local_patch.py uv remote", description = "Switch back to remote uv dependencies" }
