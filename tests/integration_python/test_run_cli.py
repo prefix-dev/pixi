@@ -1403,11 +1403,11 @@ def test_run_with_environment_variable_priority(
     [target.win-64.activation]
     scripts = ["env_setup.bat"]
     [tasks.task]
-    cmd = "cmd /V:ON /C 'echo !MY_ENV!'"
+    cmd = "echo $env:MY_ENV"
     [tasks.foo]
-    cmd = "cmd /V:ON /C 'echo !MY_ENV!'"
+    cmd = "echo $env:MY_ENV"
     [tasks.foobar]
-    cmd = "cmd /V:ON /C 'echo !FOO_PATH!'"
+    cmd = "echo $env:FOO_PATH"
     [tasks.task.env]
     MY_ENV = "test456"
     [dependencies]
@@ -1417,8 +1417,8 @@ def test_run_with_environment_variable_priority(
         manifest.write_text(windows_toml)
         script_manifest.write_text("""
         @echo off
-        set "MY_ENV=activation_script"
-        set "FOO_PATH=activation_script"
+        $env:MY_ENV = "activation_script"
+        $env:FOO_PATH = "activation_script"
         """)
     else:
         manifest.write_text(unix_toml)
