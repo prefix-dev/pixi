@@ -1,0 +1,68 @@
+lefthook: pixi run --no-progress lefthook
+
+templates:
+  run: run --quiet --no-progress --environment=lint
+
+colors: true
+
+output:
+  - meta # Print lefthook version
+  - summary # Print summary block (successful and failed steps)
+  - empty_summary # Print summary heading when there are no steps to run
+  # - success # Print successful steps
+  # - failure # Print failed steps printing
+  # - execution # Print any execution logs
+  # - execution_out # Print execution output
+  # - execution_info # Print `EXECUTE > ...` logging
+  - skips # Print "skip" (i.e. no files matched)
+
+pre-commit:
+  parallel: true
+  jobs:
+    - name: actionlint
+      run: pixi {run} actionlint
+    - name: cargo-fmt
+      glob: "*.rs"
+      run: pixi {run} cargo-fmt
+    - name: ruff
+      glob: "*.{py,pyi}"
+      stage_fixed: true
+      group:
+        piped: true
+        jobs:
+          - name: ruff lint
+            run: pixi {run} ruff-lint {staged_files}
+          - name: ruff format
+            run: pixi {run} ruff-format {staged_files}
+    - name: shell-format
+      glob: "*.{sh, bash}"
+      run: pixi {run} shell-format {staged_files}
+    - name: taplo
+      stage_fixed: true
+      glob: "*.toml"
+      exclude:
+        - schema/examples/invalid/*.toml
+      run: pixi {run} toml-format {staged_files}
+    - name: dprint
+      glob: "*.{yaml,yml}"
+      group:
+        jobs:
+          - name: dprint check
+            run: pixi {run} dprint-check {staged_files}
+          - name: dprint fmt
+            run: pixi {run} dprint-fmt {staged_files}
+            stage_fixed: true
+    - name: typecheck-python
+      glob: "*.{py,pyi}"
+      run: pixi {run} typecheck-python
+    - name: typos
+      stage_fixed: true
+      run: pixi {run} typos
+
+pre-push:
+  jobs:
+    - name: cargo-clippy
+      glob: "*.rs"
+      run: pixi {run} cargo-clippy
+    - name: check-openssl
+      run: pixi {run} check-openssl
