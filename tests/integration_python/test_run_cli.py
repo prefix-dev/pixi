@@ -1433,14 +1433,16 @@ def test_task_interpreter_advanced(pixi: Path, tmp_pixi_workspace: Path) -> None
     # Test complex interpreter that removes spaces from input
     manifest_content["tasks"] = {
         "remove-spaces-blackbox": {
-            "cmd": '''python -c "import sys; data=sys.stdin.read(); sys.stdout.write(data.replace(' ',''))"''',
+            "cmd": """import sys; data=sys.stdin.read(); sys.stdout.write(data.replace(' ',''))""",
+            "interpreter": "python",
+        },
+        "interpreter-as-pipe": {
+            "cmd": "hello world",
+            "interpreter": "pixi run remove-spaces-blackbox < {0}",
         },
         "remove-spaces": {
             "cmd": "hello world",
-            "interpreter": "pixi run remove-spaces-blackbox",
-        },
-        "interpreter-as-pipe": {
-            "cmd": "echo 'hello world' | pixi run remove-spaces-blackbox",
+            "interpreter": "cat {0} | tr -d ' '",
         },
     }
 

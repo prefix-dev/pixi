@@ -378,7 +378,7 @@ async fn execute_task(
     task: &ExecutableTask<'_>,
     command_env: &HashMap<OsString, OsString>,
 ) -> Result<(), TaskExecutionError> {
-    let Some((script, stdin_pipe)) = task.prepare_execution(None)? else {
+    let Some(prepared) = task.prepare_execution()? else {
         // No script to execute, task is complete
         return Ok(());
     };
@@ -392,9 +392,9 @@ async fn execute_task(
     );
 
     let status_code = deno_task_shell::execute_with_pipes(
-        script,
+        prepared.script,
         state,
-        stdin_pipe,
+        prepared.stdin,
         deno_task_shell::ShellPipeWriter::stdout(),
         deno_task_shell::ShellPipeWriter::stderr(),
     )
