@@ -1255,6 +1255,7 @@ impl Config {
             "pypi-config.index-url",
             "pypi-config.extra-index-urls",
             "pypi-config.keyring-provider",
+            "pypi-config.allow-insecure-host",
             "shell",
             "shell.force-activate",
             "shell.source-completion-scripts",
@@ -1551,6 +1552,13 @@ impl Config {
                                 _ => Err(miette::miette!("invalid keyring provider")),
                             })
                             .transpose()?;
+                    }
+                    "allow-insecure-host" => {
+                        self.pypi_config.allow_insecure_host = value
+                            .map(|v| serde_json::de::from_str(&v))
+                            .transpose()
+                            .into_diagnostic()?
+                            .unwrap_or_default();
                     }
                     _ => return Err(err),
                 }
