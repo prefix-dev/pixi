@@ -17,6 +17,7 @@ use crate::{
     },
     prefix::{Executable, Prefix},
     repodata::Repodata,
+    reporters::TopLevelProgress,
     rlimit::try_increase_rlimit_to_sensible,
 };
 
@@ -35,6 +36,7 @@ use fs::tokio as tokio_fs;
 use fs_err as fs;
 use futures::stream::StreamExt;
 use indexmap::{IndexMap, IndexSet};
+use indicatif::ProgressBar;
 use is_executable::IsExecutable;
 use itertools::Itertools;
 pub(crate) use manifest::{ExposedType, Manifest, Mapping};
@@ -42,10 +44,13 @@ use miette::{Context, IntoDiagnostic, miette};
 use once_cell::sync::OnceCell;
 use parsed_manifest::ParsedManifest;
 pub(crate) use parsed_manifest::{ExposedName, ParsedEnvironment};
+use pixi_command_dispatcher::{CommandDispatcher, SolveCondaEnvironmentSpec};
 use pixi_config::{Config, default_channel_config, pixi_home};
 use pixi_consts::consts::{self, CACHED_PACKAGES};
 use pixi_manifest::PrioritizedChannel;
-use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
+use pixi_progress::{await_in_progress, global_multi_progress};
+use pixi_record::PixiRecord;
+use pixi_spec_containers::DependencyMap;
 use pixi_utils::{executable_from_path, reqwest::build_reqwest_clients};
 use rattler::{
     install::{DefaultProgressFormatter, IndicatifReporter, Installer},
@@ -57,7 +62,7 @@ use rattler_conda_types::{
 };
 use rattler_lock::Matches;
 use rattler_repodata_gateway::Gateway;
-use rattler_solve::{SolverImpl, SolverTask, resolvo::Solver};
+// Removed unused rattler_solve imports
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use reqwest_middleware::ClientWithMiddleware;
 use tokio::sync::Semaphore;
@@ -96,6 +101,9 @@ pub struct Project {
     repodata_gateway: OnceCell<Gateway>,
     /// The concurrent request semaphore
     concurrent_downloads_semaphore: OnceCell<Arc<Semaphore>>,
+    /// The command dispatcher for solving environments
+    /// This is wrapped in a `OnceCell` to allow for lazy initialization.
+    command_dispatcher: OnceCell<CommandDispatcher>,
 }
 
 impl Debug for Project {
@@ -274,6 +282,7 @@ impl Project {
             client,
             repodata_gateway,
             concurrent_downloads_semaphore: OnceCell::new(),
+            command_dispatcher: OnceCell::new(),
         }
     }
 
@@ -500,40 +509,24 @@ impl Project {
 
         let platform = environment.platform.unwrap_or_else(Platform::current);
 
-        let (match_specs, dependencies_names) = environment
-            .dependencies
-            .specs
-            .iter()
-            .map(|(name, spec)| {
-                if let Some(nameless_spec) = spec
-                    .clone()
-                    .try_into_nameless_match_spec(self.config().global_channel_config())
-                    .into_diagnostic()?
-                {
-                    Ok((
-                        MatchSpec::from_nameless(nameless_spec, Some(name.clone())),
-                        name.clone(),
-                    ))
-                } else {
-                    Err(miette!("Couldn't convert {spec:?} to nameless match spec."))
-                }
-            })
-            .collect::<miette::Result<(Vec<MatchSpec>, Vec<PackageName>)>>()?;
+        // Convert dependency specs to binary specs for CommandDispatcher
+        let mut binary_specs = DependencyMap::default();
+        let mut dependencies_names = Vec::new();
 
-        let repodata = await_in_progress(
-            format!(
-                "Querying repodata for environment: {} ",
-                env_name.fancy_display()
-            ),
-            |_| async {
-                self.repodata_gateway()?
-                    .query(channels, [platform, Platform::NoArch], match_specs.clone())
-                    .recursive(true)
-                    .await
-                    .into_diagnostic()
-            },
-        )
-        .await?;
+        for (name, spec) in &environment.dependencies.specs {
+            if let Some(nameless_spec) = spec
+                .clone()
+                .try_into_nameless_match_spec(self.config().global_channel_config())
+                .into_diagnostic()?
+            {
+                binary_specs.insert(name.clone(), nameless_spec);
+                dependencies_names.push(name.clone());
+            } else {
+                return Err(miette!("Couldn't convert {spec:?} to nameless match spec."));
+            }
+        }
+
+        let command_dispatcher = self.command_dispatcher()?;
 
         // Determine virtual packages of the current platform
         let virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::default())
@@ -549,23 +542,31 @@ impl Project {
             .map(GenericVirtualPackage::from)
             .collect();
 
-        // Solve the environment
-        let cloned_env_name = env_name.clone();
-        let solved_records = tokio::task::spawn_blocking(move || {
-            wrap_in_progress(
-                format!("Solving environment: {}", cloned_env_name.fancy_display()),
-                move || {
-                    Solver.solve(SolverTask {
-                        specs: match_specs,
-                        virtual_packages,
-                        ..SolverTask::from_iter(&repodata)
-                    })
-                },
-            )
-            .into_diagnostic()
-        })
-        .await
-        .into_diagnostic()??;
+        // Create solve spec
+        let solve_spec = SolveCondaEnvironmentSpec {
+            name: Some(env_name.to_string()),
+            binary_specs,
+            platform,
+            channels: channels.iter().map(|c| c.base_url.clone()).collect(),
+            virtual_packages,
+            channel_config: self.config.global_channel_config().clone(),
+            ..Default::default()
+        };
+
+        // Solve using CommandDispatcher
+        let pixi_records = command_dispatcher
+            .solve_conda_environment(solve_spec)
+            .await
+            .map_err(|e| miette::miette!("Failed to solve environment: {}", e))?;
+
+        // Convert PixiRecord back to RepoDataRecord for installation
+        let solved_records = pixi_records
+            .into_iter()
+            .filter_map(|record| match record {
+                PixiRecord::Binary(repodata_record) => Some(repodata_record),
+                _ => None, // Skip source records for global installs
+            })
+            .collect::<Vec<_>>();
 
         try_increase_rlimit_to_sensible();
 
@@ -596,7 +597,7 @@ impl Project {
                             .clear_when_done(true)
                             .finish(),
                     )
-                    .install(prefix.root(), solved_records.records)
+                    .install(prefix.root(), solved_records)
             },
         )
         .await
@@ -1269,6 +1270,25 @@ impl Project {
                 Arc::new(Semaphore::new(max_concurrent_downloads))
             })
             .clone()
+    }
+
+    /// Returns the command dispatcher for this project.
+    fn command_dispatcher(&self) -> miette::Result<&CommandDispatcher> {
+        self.command_dispatcher.get_or_try_init(|| {
+            let multi_progress = global_multi_progress();
+            let anchor_pb = multi_progress.add(ProgressBar::hidden());
+            let cache_dirs = pixi_command_dispatcher::CacheDirs::new(
+                pixi_config::get_cache_dir()
+                    .map_err(|e| miette::miette!("Failed to get cache directory: {}", e))?,
+            );
+
+            Ok(pixi_command_dispatcher::CommandDispatcher::builder()
+                .with_gateway(self.repodata_gateway()?.clone())
+                .with_cache_dirs(cache_dirs)
+                .with_reporter(TopLevelProgress::new(multi_progress, anchor_pb))
+                .with_root_dir(self.root.clone())
+                .finish())
+        })
     }
 }
 
