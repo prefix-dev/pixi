@@ -243,7 +243,7 @@ impl Dependencies {
     }
 }
 
-/// A variant of [`rattler_conda_types::RunExportsJson`] but with pixi data types.
+/// A variant of [`rattler_conda_types::package::RunExportsJson`] but with pixi data types.
 #[derive(Debug, Default, Clone)]
 pub struct PixiRunExports {
     pub noarch: DependencyMap<PackageName, PixiSpec>,

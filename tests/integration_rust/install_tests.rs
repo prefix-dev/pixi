@@ -24,6 +24,7 @@ use pixi_consts::consts;
 use pixi_manifest::{FeatureName, FeaturesExt};
 use pixi_record::PixiRecord;
 use rattler_conda_types::{ChannelConfig, Platform, RepoDataRecord};
+use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use tempfile::{TempDir, tempdir};
 use tokio::{fs, task::JoinSet};
 use url::Url;
@@ -888,6 +889,10 @@ async fn conda_pypi_override_correct_per_platform() {
 
 async fn test_multiple_prefix_update() {
     let current_platform = Platform::current();
+    let virtual_packages = VirtualPackages::detect(&VirtualPackageOverrides::default())
+        .unwrap()
+        .into_generic_virtual_packages()
+        .collect();
 
     let pixi = PixiControl::from_manifest(
         format!(
@@ -974,6 +979,7 @@ async fn test_multiple_prefix_update() {
         name,
         prefix,
         current_platform,
+        virtual_packages,
         BuildContext::new(
             ChannelConfig::default_with_root_dir(tmp_dir.path().to_path_buf()),
             Default::default(),

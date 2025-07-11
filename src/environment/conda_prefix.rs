@@ -68,17 +68,14 @@ impl CondaPrefixUpdaterBuilder<'_> {
         let name = self.group.name();
         let prefix = self.group.prefix();
 
-        Ok(CondaPrefixUpdater {
-            inner: Arc::new(CondaPrefixUpdaterInner {
-                channels,
-                name,
-                prefix,
-                platform: self.platform,
-                virtual_packages: self.virtual_packages,
-                build_context: self.build_context,
-                created: AsyncOnceCell::new(),
-            }),
-        })
+        Ok(CondaPrefixUpdater::new(
+            channels,
+            name,
+            prefix,
+            self.platform,
+            self.virtual_packages,
+            self.build_context,
+        ))
     }
 }
 
@@ -101,6 +98,27 @@ impl CondaPrefixUpdater {
             platform,
             virtual_packages,
             build_context,
+        }
+    }
+
+    pub fn new(
+        channels: Vec<ChannelUrl>,
+        name: GroupedEnvironmentName,
+        prefix: Prefix,
+        platform: Platform,
+        virtual_packages: Vec<GenericVirtualPackage>,
+        build_context: BuildContext,
+    ) -> Self {
+        Self {
+            inner: Arc::new(CondaPrefixUpdaterInner {
+                channels,
+                name,
+                prefix,
+                platform,
+                build_context,
+                virtual_packages,
+                created: Default::default(),
+            }),
         }
     }
 
