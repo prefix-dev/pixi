@@ -280,7 +280,7 @@ impl PypiOptions {
         };
         // Set the dependency overrides
         // notice that default feature comes last in the feature_ext
-        // so we want self overiting by other
+        // so we want self overwriting the other
         // i.e. if same key exists in both, we want the value from `self` to be used
         // so we extend b with a (a overrides b)
         let dependency_overrides = match (&self.dependency_overrides, &other.dependency_overrides) {
