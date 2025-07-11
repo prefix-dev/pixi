@@ -2,7 +2,7 @@
 !!!tip "`conda-deny` in one command:"
     In your favorite `pixi` project, run:
     ```bash
-    pixi exec conda-deny --osi
+    pixi exec conda-deny check --osi
     ```
 
     This will check your project for license compliance against the list of [OSI approved licenses](https://opensource.org/licenses).
