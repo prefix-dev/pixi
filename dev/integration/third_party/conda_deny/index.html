@@ -2740,7 +2740,7 @@
 <div class="admonition tip">
 <p class="admonition-title"><code>conda-deny</code> in one command:</p>
 <p>In your favorite <code>pixi</code> project, run:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>conda-deny<span class="w"> </span>--osi
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>conda-deny<span class="w"> </span>check<span class="w"> </span>--osi
 </span></code></pre></div></p>
 <p>This will check your project for license compliance against the list of <a href="https://opensource.org/licenses">OSI approved licenses</a>.</p>
 </div>
@@ -2780,9 +2780,9 @@ This checks the dependencies defined by your <code>pixi.lock</code> against your
 <h3 id="authorized-access-to-allowlist">🔒 Authorized access to allowlist<a class="headerlink" href="#authorized-access-to-allowlist" title="Permanent link">#</a></h3>
 <p>If a Bearer Token is needed to access your allowlist, you can provide it using <code>CONDA_DENY_BEARER_TOKEN</code>.
 An example use case would be a private repository containing your allowlist.</p>
+<h3 id="output-formats">Output Formats<a class="headerlink" href="#output-formats" title="Permanent link">#</a></h3>
 <p><code>conda-deny</code> supports different output formats via the <code>--output</code> (or <code>-o</code>) flag.
 Output formatting works for both, the <code>list</code> and the <code>check</code> command.</p>
-<h3 id="output-formats">Output Formats<a class="headerlink" href="#output-formats" title="Permanent link">#</a></h3>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">CSV</label><label for="__tabbed_1_2">JSON</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
