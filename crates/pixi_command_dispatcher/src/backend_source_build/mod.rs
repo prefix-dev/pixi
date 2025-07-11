@@ -179,7 +179,7 @@ impl BackendSourceBuildSpec {
                             params.build_environment.host_virtual_packages.clone(),
                         ),
                     }),
-                    editable: record.source.is_immutable(),
+                    editable: !record.source.is_immutable(),
                 },
                 move |line| {
                     let _err = futures::executor::block_on(log_sink.send(line));
