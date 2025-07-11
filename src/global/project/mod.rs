@@ -573,7 +573,7 @@ impl Project {
                 prefix: rattler_conda_types::prefix::Prefix::create(prefix.root())
                     .into_diagnostic()?,
                 target_platform: platform,
-                channels: channels,
+                channels,
                 channel_config: self.config.global_channel_config().clone(),
                 enabled_protocols: EnabledProtocols::default(),
                 installed: None,
