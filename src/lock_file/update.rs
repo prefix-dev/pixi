@@ -29,7 +29,7 @@ use pixi_uv_conversions::{
 use pypi_mapping::{self, MappingClient};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{Arch, PackageName, Platform};
+use rattler_conda_types::{Arch, GenericVirtualPackage, PackageName, Platform};
 use rattler_lock::{
     LockFile, ParseCondaLockError, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData,
 };
@@ -47,9 +47,9 @@ use crate::{
     activation::CurrentEnvVarBehavior,
     build::{BuildContext, GlobHashCache},
     environment::{
-        self, CondaPrefixUpdated, CondaPrefixUpdaterBuilder, EnvironmentFile, LockFileUsage,
-        LockedEnvironmentHash, PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform,
-        PythonStatus, read_environment_file, write_environment_file,
+        self, CondaPrefixUpdated, EnvironmentFile, LockFileUsage, LockedEnvironmentHash,
+        PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PythonStatus,
+        read_environment_file, write_environment_file,
     },
     lock_file::{
         self, PypiRecord, records_by_name::HasNameVersion, reporter::SolveProgressBar,
@@ -609,10 +609,18 @@ impl<'p> LockFileDerivedData<'p> {
                 // Create object to update the prefix
                 let group = GroupedEnvironment::Environment(environment.clone());
                 let platform = environment.best_platform();
+                let virtual_packages = environment.virtual_packages(platform);
 
-                let conda_prefix_updater =
-                    CondaPrefixUpdaterBuilder::new(group, platform, self.build_context.clone())
-                        .build()?;
+                let conda_prefix_updater = CondaPrefixUpdater::builder(
+                    group,
+                    platform,
+                    virtual_packages
+                        .into_iter()
+                        .map(GenericVirtualPackage::from)
+                        .collect(),
+                    self.build_context.clone(),
+                )
+                .finish()?;
 
                 // Get the locked environment from the lock-file.
                 let records = self
@@ -1327,12 +1335,18 @@ impl<'p> UpdateContext<'p> {
                 .ok_or_else(|| make_unsupported_pypi_platform_error(environment, false));
 
             // Creates an object to initiate an update at a later point
-            let conda_prefix_updater = CondaPrefixUpdaterBuilder::new(
+            let platform = environment.best_platform();
+            let conda_prefix_updater = CondaPrefixUpdater::builder(
                 group.clone(),
-                environment.best_platform(),
+                platform,
+                environment
+                    .virtual_packages(platform)
+                    .into_iter()
+                    .map(GenericVirtualPackage::from)
+                    .collect(),
                 self.build_context.clone(),
             )
-            .build()?;
+            .finish()?;
 
             let uv_context = uv_context
                 .get_or_try_init(|| UvResolutionContext::from_workspace(project))?
