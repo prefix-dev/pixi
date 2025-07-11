@@ -1464,22 +1464,19 @@ def test_feature_name_with_dots_escaping(pixi: Path, tmp_pixi_workspace: Path) -
     # Expected TOML section headers for properly escaped feature names
     pyproject_format = f'[tool.pixi.feature."{feature_name}".dependencies]'
     pixi_format = f'[feature."{feature_name}".dependencies]'
-    double_escaped_format = f'[feature.\'"test"."test"\'.dependencies]'
+    double_escaped_format = '[feature.\'"test"."test"\'.dependencies]'
     unescaped_format = f"[feature.{feature_name}.dependencies]"
 
     # The feature name should be escaped with quotes in the TOML
-    assert (
-        pyproject_format in manifest_content
-        or pixi_format in manifest_content
-    ), f"Feature name not properly escaped in manifest:\n{manifest_content}"
+    assert pyproject_format in manifest_content or pixi_format in manifest_content, (
+        f"Feature name not properly escaped in manifest:\n{manifest_content}"
+    )
 
     # Verify it's not double-escaped or incorrectly escaped
     assert double_escaped_format not in manifest_content, (
         "Feature name appears to be double-escaped"
     )
-    assert unescaped_format not in manifest_content, (
-        "Feature name not escaped when it should be"
-    )
+    assert unescaped_format not in manifest_content, "Feature name not escaped when it should be"
 
     # Test the critical part: verify the manifest can be parsed correctly
     # Using `pixi lock` which parses the TOML but doesn't install packages (much faster)

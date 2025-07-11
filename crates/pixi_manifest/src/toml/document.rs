@@ -87,20 +87,20 @@ impl TomlDocument {
         &'a mut self,
         table_name: &str,
     ) -> Result<&'a mut dyn TableLike, TomlError> {
-        let parts: Vec<&str> = table_name.split('.').collect();
-        self.get_or_insert_nested_table_from_parts(parts.iter().map(|s| s.to_string()).collect())
+        let parts: Vec<String> = table_name.split('.').map(|s| s.to_string()).collect();
+        self.get_or_insert_nested_table_from_parts(&parts)
     }
 
     /// Retrieve a mutable reference to a target table using pre-split parts.
     /// This allows for proper handling of escaped TOML keys.
     pub fn get_or_insert_nested_table_from_parts(
         &mut self,
-        parts: Vec<String>,
+        parts: &[String],
     ) -> Result<&mut dyn TableLike, TomlError> {
         let table_name = parts.join(".");
         let mut current_table = self.0.as_table_mut() as &mut dyn TableLike;
 
-        for part in &parts {
+        for part in parts {
             let entry = current_table.entry(part);
             let item = entry.or_insert(Item::Table(Table::new()));
             if let Some(table) = item.as_table_mut() {
@@ -179,7 +179,7 @@ impl TomlDocument {
     /// If the array is not found, it is inserted into the document.
     pub fn get_or_insert_toml_array_mut_from_parts<'a>(
         &'a mut self,
-        table_parts: Vec<String>,
+        table_parts: &[String],
         array_name: &str,
     ) -> Result<&'a mut Array, TomlError> {
         let table_name = table_parts.join(".");
