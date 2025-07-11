@@ -1335,12 +1335,12 @@ impl<'p> UpdateContext<'p> {
                 .ok_or_else(|| make_unsupported_pypi_platform_error(environment, false));
 
             // Creates an object to initiate an update at a later point
-            let platform = environment.best_platform();
+            let prefix_platform = environment.best_platform();
             let conda_prefix_updater = CondaPrefixUpdater::builder(
                 group.clone(),
-                platform,
+                prefix_platform,
                 environment
-                    .virtual_packages(platform)
+                    .virtual_packages(prefix_platform)
                     .into_iter()
                     .map(GenericVirtualPackage::from)
                     .collect(),
