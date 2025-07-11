@@ -522,7 +522,7 @@ impl Project {
                 binary_specs.insert(name.clone(), nameless_spec);
                 dependencies_names.push(name.clone());
             } else {
-                return Err(miette!("Couldn't convert {spec:?} to nameless match spec."));
+                return Err(miette!("Couldn't convert {spec} to nameless match spec."));
             }
         }
 
