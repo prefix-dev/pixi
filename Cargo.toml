@@ -107,15 +107,15 @@ toml_edit = "0.22.24"
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
 typed-path = "0.11.0"
-uv-build-frontend = { git = "https://github.com/astral-sh/uv", tag = "0.7.19" }
-uv-distribution-filename = { git = "https://github.com/astral-sh/uv", tag = "0.7.19" }
-uv-distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.7.19" }
-uv-install-wheel = { git = "https://github.com/astral-sh/uv", tag = "0.7.19" }
-uv-pep440 = { git = "https://github.com/astral-sh/uv", tag = "0.7.19" }
-uv-pep508 = { git = "https://github.com/astral-sh/uv", tag = "0.7.19" }
-uv-platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.7.19" }
-uv-pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.7.19" }
-uv-requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.7.19" }
+uv-build-frontend = { git = "https://github.com/astral-sh/uv", tag = "0.7.20" }
+uv-distribution-filename = { git = "https://github.com/astral-sh/uv", tag = "0.7.20" }
+uv-distribution-types = { git = "https://github.com/astral-sh/uv", tag = "0.7.20" }
+uv-install-wheel = { git = "https://github.com/astral-sh/uv", tag = "0.7.20" }
+uv-pep440 = { git = "https://github.com/astral-sh/uv", tag = "0.7.20" }
+uv-pep508 = { git = "https://github.com/astral-sh/uv", tag = "0.7.20" }
+uv-platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.7.20" }
+uv-pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.7.20" }
+uv-requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.7.20" }
 
 wax = "0.6.0"
 which = "8.0.0"
@@ -143,23 +143,23 @@ simple_spawn_blocking = { version = "1.1.0", default-features = false }
 
 # Bumping this to a higher version breaks the Windows path handling.
 url = "2.5.4"
-uv-auth = { git = "https://github.com/astral-sh/uv", tag = "0.7.19" }
-uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.7.19" }
-uv-cache-info = { git = "https://github.com/astral-sh/uv", tag = "0.7.19" }
-uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.7.19" }
-uv-configuration = { git = "https://github.com/astral-sh/uv", tag = "0.7.19" }
-uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.7.19" }
-uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.7.19" }
-uv-git = { git = "https://github.com/astral-sh/uv", tag = "0.7.19" }
-uv-git-types = { git = "https://github.com/astral-sh/uv", tag = "0.7.19" }
-uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.7.19" }
-uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.7.19" }
-uv-python = { git = "https://github.com/astral-sh/uv", tag = "0.7.19" }
-uv-redacted = { git = "https://github.com/astral-sh/uv", tag = "0.7.19" }
-uv-requirements = { git = "https://github.com/astral-sh/uv", tag = "0.7.19" }
-uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.7.19" }
-uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.7.19" }
-uv-workspace = { git = "https://github.com/astral-sh/uv", tag = "0.7.19" }
+uv-auth = { git = "https://github.com/astral-sh/uv", tag = "0.7.20" }
+uv-cache = { git = "https://github.com/astral-sh/uv", tag = "0.7.20" }
+uv-cache-info = { git = "https://github.com/astral-sh/uv", tag = "0.7.20" }
+uv-client = { git = "https://github.com/astral-sh/uv", tag = "0.7.20" }
+uv-configuration = { git = "https://github.com/astral-sh/uv", tag = "0.7.20" }
+uv-dispatch = { git = "https://github.com/astral-sh/uv", tag = "0.7.20" }
+uv-distribution = { git = "https://github.com/astral-sh/uv", tag = "0.7.20" }
+uv-git = { git = "https://github.com/astral-sh/uv", tag = "0.7.20" }
+uv-git-types = { git = "https://github.com/astral-sh/uv", tag = "0.7.20" }
+uv-installer = { git = "https://github.com/astral-sh/uv", tag = "0.7.20" }
+uv-normalize = { git = "https://github.com/astral-sh/uv", tag = "0.7.20" }
+uv-python = { git = "https://github.com/astral-sh/uv", tag = "0.7.20" }
+uv-redacted = { git = "https://github.com/astral-sh/uv", tag = "0.7.20" }
+uv-requirements = { git = "https://github.com/astral-sh/uv", tag = "0.7.20" }
+uv-resolver = { git = "https://github.com/astral-sh/uv", tag = "0.7.20" }
+uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.7.20" }
+uv-workspace = { git = "https://github.com/astral-sh/uv", tag = "0.7.20" }
 winapi = { version = "0.3.9", default-features = false }
 xxhash-rust = "0.8.15"
 zip = { version = "2.4.2", default-features = false }
