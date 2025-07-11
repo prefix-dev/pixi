@@ -26,7 +26,7 @@ use std::{
     fmt::{Debug, Formatter},
     path::{Path, PathBuf},
     str::FromStr,
-    sync::{Arc, LazyLock},
+    sync::Arc,
 };
 
 use ahash::HashSet;
@@ -49,16 +49,11 @@ use pixi_command_dispatcher::{
     BuildEnvironment, CommandDispatcher, InstallPixiEnvironmentSpec, PixiEnvironmentSpec,
 };
 use pixi_config::{Config, default_channel_config, pixi_home};
-use pixi_consts::consts::{self, CACHED_PACKAGES};
+use pixi_consts::consts::{self};
 use pixi_manifest::PrioritizedChannel;
-use pixi_progress::{await_in_progress, global_multi_progress};
-use pixi_record::PixiRecord;
+use pixi_progress::global_multi_progress;
 use pixi_spec_containers::DependencyMap;
 use pixi_utils::{executable_from_path, reqwest::build_reqwest_clients};
-use rattler::{
-    install::{DefaultProgressFormatter, IndicatifReporter, Installer},
-    package_cache::PackageCache,
-};
 use rattler_conda_types::{
     ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, PrefixRecord,
     menuinst::MenuMode,
@@ -70,7 +65,6 @@ use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use reqwest_middleware::ClientWithMiddleware;
 use tokio::sync::Semaphore;
 use toml_edit::DocumentMut;
-use uv_configuration::RAYON_INITIALIZE;
 
 mod environment;
 mod manifest;
@@ -565,10 +559,9 @@ impl Project {
         // Solve using CommandDispatcher
         let pixi_records = command_dispatcher
             .solve_pixi_environment(solve_spec)
-            .await
-            .map_err(|e| miette::miette!("Failed to solve environment: {}", e))?;
+            .await?;
 
-        // Move
+        // Move this to a separate function to avoid code duplication
         try_increase_rlimit_to_sensible();
 
         let prefix = self.environment_prefix(env_name).await?;
