@@ -30,14 +30,37 @@ numpy = ">=2.0.0"
 This will override the version of `numpy` used by all dependencies in the `dev` feature to be at least `2.0.0`, regardless of what the dependencies specify when the `dev` feature is enabled.
 
 ### Interact with other overrides
-If there's another override for the same dependency, the override in the most specific **feature** will be used.
-For example, if you have the following overrides:
+For a specific environment, all the `dependency-overrides` defined in different features will be combined in the order they were when defining the environment.
+
+If the same dependency is overridden multiple times, we'll use the override from the **prior** feature in that environment.
+
+Also, the default feature will always come, and come last in the list of all overrides.
+
 ```toml
 # pixi.toml
-[pypi-options.dependency-overrides]
-numpy = ">=2.1.0"
-[features.dev.pypi-options.dependency-overrides]
-numpy = ">=2.0.0"
+[pypi-options]
+dependency-overrides = { numpy = ">=2.1.0" }
+
+[pypi-dependencies]
+numpy = ">=1.25.0"
+
+[feature.dev.pypi-options.dependency-overrides]
+numpy = "==2.0.0"
+
+[feature.outdated.pypi-options.dependency-overrides]
+numpy = "==1.21.0"
+
+[environments]
+dev = ["dev"]
+outdated = ["outdated"]
+conflict_a=["outdated", "dev"]
+conflict_b=["dev","outdated"]
 ```
-When the `dev` feature is enabled, the version of `numpy` used will be `>=2.0.0`, otherwise it will be `>=2.1.0`.
-This may contrast with the intuition that all overrides are applied, but it is done this way to avoid conflicts and confusion. Since users are granted fully control over the overrides, it is up to them to ensure that the overrides do not conflict with each other.
+the following constrains are merged out:
+default: `numpy >= 2.1.0`
+dev: `numpy == 2.0.0`
+outdated: `numpy == 1.21.0`
+conflict_a: `numpy == 1.21.0` (from `outdated`)
+conflict_b: `numpy == 2.0.0` (from `dev`)
+
+This may contrast with the intuition that all overrides are applied and combined to a result, but it is done this way to avoid conflicts and confusion. Since users are granted fully control over the overrides, it is up to ourselves to choose the right overrides for the environment.
