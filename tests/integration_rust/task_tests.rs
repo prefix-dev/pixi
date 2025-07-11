@@ -242,15 +242,10 @@ async fn test_cwd() {
 async fn test_task_with_env() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().without_channels().await.unwrap();
-    let echo_cmd: Vec<&'static str> = if cfg!(windows) {
-        vec!["pwsh", "-Command", "echo \"From a $env:HELLO_WORLD\""]
-    } else {
-        vec!["sh", "-c", "echo 'From a $HELLO_WORLD'"]
-    };
 
     pixi.tasks()
         .add("env-test".into(), None, FeatureName::default())
-        .with_commands(echo_cmd.clone())
+        .with_commands(["echo From a $HELLO_WORLD"])
         .with_env(vec![(
             String::from("HELLO_WORLD"),
             String::from("world with spaces"),
@@ -259,7 +254,7 @@ async fn test_task_with_env() {
         .await
         .unwrap();
 
-    let result = match pixi
+    let result = pixi
         .run(Args {
             task: vec!["env-test".to_string()],
             workspace_config: WorkspaceConfig {
@@ -268,24 +263,10 @@ async fn test_task_with_env() {
             ..Default::default()
         })
         .await
-    {
-        Ok(result) => result,
-        Err(e) => {
-            eprintln!("test_task_with_env() Pixi run failed with error: {}", e);
-            eprintln!("test_task_with_env()Error type: {:?}", e);
-            eprintln!("test_task_with_env() echo_cmd {:?}", echo_cmd);
-            panic!("test_task_with_env()Test failed: {}", e);
-        }
-    };
+        .unwrap();
 
-    if result.exit_code != 0 {
-        println!(
-            "Task failed with exit code: {}, stderr: {}, stdout: {}",
-            result.exit_code, result.stderr, result.stdout
-        );
-    }
     assert_eq!(result.exit_code, 0);
-    assert!(result.stdout.contains("From a world with spaces"));
+    assert_eq!(result.stdout, "From a world with spaces\n");
 }
 
 #[tokio::test(flavor = "current_thread")]

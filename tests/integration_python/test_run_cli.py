@@ -241,7 +241,7 @@ def test_run_with_activation(pixi: Path, tmp_pixi_workspace: Path) -> None:
         stdout_contains="test123",
     )
 
-    # Validate that without experimental it does not use the cache
+    # Validate that without experimental caching it does not use the cache
     assert not tmp_pixi_workspace.joinpath(".pixi/activation-env-v0").exists()
 
     # Enable the experimental cache config
@@ -1365,67 +1365,33 @@ def test_run_with_environment_variable_priority(
     pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
 ) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
-    if platform.system() == "Windows":
-        script_manifest = tmp_pixi_workspace.joinpath("env_setup.ps1")
-    else:
-        script_manifest = tmp_pixi_workspace.joinpath("env_setup.sh")
-    unix_toml = f"""
+    script_manifest = tmp_pixi_workspace.joinpath("env_setup.sh")
+    toml = f"""
     [workspace]
     name = "test"
     channels = ["{dummy_channel_1}"]
     platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
     [activation.env]
     MY_ENV = "test123"
-    [target.unix.activation]
+    [activation]
     scripts = ["env_setup.sh"]
-    [target.win-64.activation]
-    scripts = ["env_setup.ps1"]
     [tasks.task]
     cmd = "echo $MY_ENV"
+    env = {{ MY_ENV = "test456" }}
     [tasks.foo]
     cmd = "echo $MY_ENV"
     [tasks.foobar]
     cmd = "echo $FOO_PATH"
-    [tasks.task.env]
-    MY_ENV = "test456"
     [dependencies]
     pixi-foobar = "*"
     """
-    windows_toml = f"""
-    [workspace]
-    name = "test"
-    channels = ["{dummy_channel_1}"]
-    platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
-    [activation.env]
-    MY_ENV = "test123"
-    [target.unix.activation]
-    scripts = ["env_setup.sh"]
-    [target.win-64.activation]
-    scripts = ["env_setup.bat"]
-    [tasks.task]
-    cmd = "echo $env:MY_ENV"
-    [tasks.foo]
-    cmd = "echo $env:MY_ENV"
-    [tasks.foobar]
-    cmd = "echo $env:FOO_PATH"
-    [tasks.task.env]
-    MY_ENV = "test456"
-    [dependencies]
-    pixi-foobar = "*"
-    """
-    if platform.system() == "Windows":
-        manifest.write_text(windows_toml)
-        script_manifest.write_text("""
-        $env:MY_ENV = "activation_script"
-        $env:FOO_PATH = "activation_script"
-        """)
-    else:
-        manifest.write_text(unix_toml)
-        script_manifest.write_text("""
-        #!/bin/bash
-        export MY_ENV="activation_script"
-        export FOO_PATH="activation_script"
-        """)
+    
+    manifest.write_text(toml)
+    script_manifest.write_text("""
+    #!/bin/bash
+    export MY_ENV="activation_script"
+    export FOO_PATH="activation_script"
+    """)
 
     # Run the default task
     verify_cli_command(
@@ -1433,28 +1399,12 @@ def test_run_with_environment_variable_priority(
         stdout_contains="test456",
     )
 
-    # Validate that without experimental it does not use the cache
-    assert not tmp_pixi_workspace.joinpath(".pixi/activation-env-v0").exists()
-
-    # Enable the experimental cache config
-    verify_cli_command(
-        [
-            pixi,
-            "config",
-            "set",
-            "--manifest-path",
-            manifest,
-            "--local",
-            "experimental.use-environment-activation-cache",
-            "true",
-        ],
-    )
-
     # Test 1: task.env > outside environment variable - should use environment variable defined in specific tasks
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "task"],
         stdout_contains="test456",
-        env={"MY_ENV": "outside_ev"},
+        stdout_excludes="outside_env",
+        env={"MY_ENV": "outside_env"},
     )
 
     # Test 2: task.env > activation.env - should use environment variable defined in specific tasks
@@ -1467,7 +1417,8 @@ def test_run_with_environment_variable_priority(
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "foo"],
         stdout_contains="test123",
-        env={"MY_ENV": "outside_ev"},
+        stdout_excludes="outside_env",
+        env={"MY_ENV": "outside_env"},
     )
 
     # Test 4: activation.env > activation.script - should use activation.env
@@ -1477,10 +1428,6 @@ def test_run_with_environment_variable_priority(
     )
 
     # Test 5: activation.script > activation scripts from dependencies - should use activation.script
-    # Run an actual install
-    verify_cli_command(
-        [pixi, "install", "--manifest-path", manifest],
-    )
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "foobar"],
         stdout_contains="activation_script",
