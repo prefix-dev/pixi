@@ -457,14 +457,7 @@ fn get_export_specific_task_env(task: &Task, command_env: IndexMap<String, Strin
         let should_exclude = override_excluded_keys.contains(key.as_str());
         if !should_exclude {
             tracing::info!("Setting environment variable: {}=\"{}\"", key, value);
-
-            // Platform-specific export format with proper escaping
-            if cfg!(windows) {
-                // Use PowerShell environment variable syntax
-                export.push_str(&format!("$env:{} = \"{}\"\r\n", key, value));
-            } else {
-                export.push_str(&format!("export \"{}={}\";\n", key, value));
-            }
+            export.push_str(&format!("export \"{}={}\";\n", key, value));
         }
     }
     export
@@ -552,11 +545,7 @@ mod tests {
 
         let result = get_export_specific_task_env(task, my_map);
 
-        let expected_prefix = if cfg!(windows) {
-            "env:\"FOO = bar\""
-        } else {
-            "export \"FOO=bar\""
-        };
+        let expected_prefix = "export \"FOO=bar\"";
 
         assert!(result.contains(expected_prefix));
     }
@@ -585,11 +574,7 @@ mod tests {
 
         let result = get_export_specific_task_env(task, my_map);
         // task specific env overrides outside environment variables
-        let expected_prefix = if cfg!(windows) {
-            "env:FOO = \"bar\""
-        } else {
-            "export \"FOO=bar\""
-        };
+        let expected_prefix = "export \"FOO=bar\"";
         assert!(result.contains(expected_prefix));
     }
 
@@ -627,11 +612,7 @@ mod tests {
 
         let result = executable_task.as_script(my_map);
 
-        let expected_prefix = if cfg!(windows) {
-            "env:FOO = \"bar\""
-        } else {
-            "export \"FOO=bar\""
-        };
+        let expected_prefix = "export \"FOO=bar\"";
 
         let script = result.unwrap().expect("Script should not be None");
         assert!(script.contains(expected_prefix));
