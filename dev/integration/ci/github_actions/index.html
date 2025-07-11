@@ -1925,6 +1925,15 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#download-pixi-from-a-custom-url" class="md-nav__link">
+    <span class="md-ellipsis">
+      Download pixi from a custom URL
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2871,6 +2880,15 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#download-pixi-from-a-custom-url" class="md-nav__link">
+    <span class="md-ellipsis">
+      Download pixi from a custom URL
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3224,6 +3242,14 @@ This can be overwritten by setting the <code>manifest-path</code> input argument
 <div class="language-text highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>- uses: prefix-dev/setup-pixi@v0.8.3
 </span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>  with:
 </span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>    run-install: false
+</span></code></pre></div>
+<h3 id="download-pixi-from-a-custom-url">Download pixi from a custom URL<a class="headerlink" href="#download-pixi-from-a-custom-url" title="Permanent link">#</a></h3>
+<p>You can also download pixi from a custom URL by setting the <code>pixi-url</code> input argument.
+Optionally, you can combine this with the <code>pixi-url-bearer-token</code> input argument to authenticate the download request.</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>- uses: prefix-dev/setup-pixi@v0.8.10
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>  with:
+</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a>    pixi-url: https://pixi-mirror.example.com/releases/download/v0.48.0/pixi-x86_64-unknown-linux-musl
+</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a>    pixi-url-bearer-token: ${{ secrets.PIXI_MIRROR_BEARER_TOKEN }}
 </span></code></pre></div>
 <h2 id="more-examples">More examples<a class="headerlink" href="#more-examples" title="Permanent link">#</a></h2>
 <p>If you want to see more examples, you can take a look at the <a href="https://github.com/prefix-dev/setup-pixi/blob/main/.github/workflows/test.yml">GitHub Workflows of the <code>setup-pixi</code> repository</a>.</p>
