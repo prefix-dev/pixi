@@ -12,7 +12,6 @@ from .common import (
 import tempfile
 import os
 import tomli
-import platform
 
 
 def test_run_in_shell_environment(pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -1385,7 +1384,7 @@ def test_run_with_environment_variable_priority(
     [dependencies]
     pixi-foobar = "*"
     """
-    
+
     manifest.write_text(toml)
     script_manifest.write_text("""
     #!/bin/bash
