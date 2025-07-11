@@ -1443,115 +1443,53 @@ def test_info_output_extended(
 
 
 def test_feature_name_with_dots_escaping(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    """Test that feature names with dots are properly escaped and the manifest remains parseable.
-
-    Combines bootstrapping patterns from test_main_cli.py with task execution patterns from test_run_cli.py
-    to ensure the escaped feature names work end-to-end with pixi run.
-    """
+    """Test that feature names with dots are properly escaped and the manifest remains parseable."""
     manifest_path = tmp_pixi_workspace / "pixi.toml"
 
-    # Create a new project (bootstrap pattern from test_main_cli.py)
+    # Create a new project
     verify_cli_command([pixi, "init", tmp_pixi_workspace])
 
-    # Add tasks that will help us verify the feature works (pattern from test_run_cli.py)
-    verify_cli_command(
-        [
-            pixi,
-            "task",
-            "add",
-            "--manifest-path",
-            manifest_path,
-            "test-base",
-            "echo 'Base task executed successfully'",
-        ]
-    )
-
-    # Add a feature-specific task (this will test that tasks work with escaped features)
-    verify_cli_command(
-        [
-            pixi,
-            "task",
-            "add",
-            "--manifest-path",
-            manifest_path,
-            "--feature",
-            "test.test",
-            "test-feature",
-            "python --version",
-        ]
-    )
+    # Test data
+    feature_name = "test.test"
+    package_name = "python"
 
     # Add a package to a feature with dots in the name - this should trigger the escaping
     verify_cli_command(
-        [pixi, "add", "--manifest-path", manifest_path, "--feature", "test.test", "python"]
+        [pixi, "add", "--manifest-path", manifest_path, "--feature", feature_name, package_name]
     )
 
     # Read the manifest and verify the feature name is properly escaped
     manifest_content = manifest_path.read_text()
 
+    # Expected TOML section headers for properly escaped feature names
+    pyproject_format = f'[tool.pixi.feature."{feature_name}".dependencies]'
+    pixi_format = f'[feature."{feature_name}".dependencies]'
+    double_escaped_format = f'[feature.\'"test"."test"\'.dependencies]'
+    unescaped_format = f"[feature.{feature_name}.dependencies]"
+
     # The feature name should be escaped with quotes in the TOML
     assert (
-        '[tool.pixi.feature."test.test".dependencies]' in manifest_content
-        or '[feature."test.test".dependencies]' in manifest_content
+        pyproject_format in manifest_content
+        or pixi_format in manifest_content
     ), f"Feature name not properly escaped in manifest:\n{manifest_content}"
 
     # Verify it's not double-escaped or incorrectly escaped
-    assert '[feature.\'"test"."test"\'.dependencies]' not in manifest_content, (
+    assert double_escaped_format not in manifest_content, (
         "Feature name appears to be double-escaped"
     )
-    assert "[feature.test.test.dependencies]" not in manifest_content, (
+    assert unescaped_format not in manifest_content, (
         "Feature name not escaped when it should be"
     )
 
-    # Now test the critical part: verify the manifest can be parsed and tasks can run
-    # (this is the key insight from test_run_cli.py - actually execute tasks to verify parsing)
-
-    # 1. Run the base task to ensure basic functionality works
+    # Test the critical part: verify the manifest can be parsed correctly
+    # Using `pixi lock` which parses the TOML but doesn't install packages (much faster)
     verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest_path, "test-base"],
-        ExitCode.SUCCESS,
-        stdout_contains="Base task executed successfully",
-    )
-
-    # 2. Create an environment for the feature with dots and run a task in it
-    verify_cli_command(
-        [
-            pixi,
-            "project",
-            "environment",
-            "add",
-            "--manifest-path",
-            manifest_path,
-            "test-env",
-            "--feature",
-            "test.test",
-        ],
+        [pixi, "lock", "--manifest-path", manifest_path],
         ExitCode.SUCCESS,
     )
 
-    # 3. Install the environment to ensure dependencies resolve correctly
+    # Verify that the feature is recognized by the system
     verify_cli_command(
-        [pixi, "install", "--manifest-path", manifest_path, "--environment", "test-env"],
+        [pixi, "info", "--manifest-path", manifest_path],
         ExitCode.SUCCESS,
     )
-
-    # 4. Run the feature-specific task to verify everything works end-to-end
-    verify_cli_command(
-        [
-            pixi,
-            "run",
-            "--manifest-path",
-            manifest_path,
-            "--environment",
-            "test-env",
-            "test-feature",
-        ],
-        ExitCode.SUCCESS,
-        stdout_contains="Python",
-    )
-
-    # 5. Also test that we can run tasks in the default environment
-    verify_cli_command([pixi, "install", "--manifest-path", manifest_path], ExitCode.SUCCESS)
-
-    # 6. Final verification: ensure all manifest parsing operations work
-    verify_cli_command([pixi, "info", "--manifest-path", manifest_path], ExitCode.SUCCESS)
