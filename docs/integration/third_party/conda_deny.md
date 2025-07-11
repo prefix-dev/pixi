@@ -57,12 +57,11 @@ If a Bearer Token is needed to access your allowlist, you can provide it using `
 An example use case would be a private repository containing your allowlist.
 
 
+### Output Formats
 
 `conda-deny` supports different output formats via the `--output` (or `-o`) flag.
 Output formatting works for both, the `list` and the `check` command.
 
-
-### Output Formats
 === "CSV"
     ```bash
     $ conda-deny list --output csv
