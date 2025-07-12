@@ -1308,6 +1308,45 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "dependency-overrides": {
+          "title": "Dependency-Overrides",
+          "description": "A list of PyPI dependencies that override the resolved dependencies",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/PyPIVersion"
+              },
+              {
+                "$ref": "#/$defs/PyPIGitBranchRequirement"
+              },
+              {
+                "$ref": "#/$defs/PyPIGitTagRequirement"
+              },
+              {
+                "$ref": "#/$defs/PyPIGitRevRequirement"
+              },
+              {
+                "$ref": "#/$defs/PyPIPathRequirement"
+              },
+              {
+                "$ref": "#/$defs/PyPIUrlRequirement"
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          },
+          "examples": [
+            {
+              "numpy": ">=1.21.0"
+            }
+          ]
+        },
         "extra-index-urls": {
           "title": "Extra-Index-Urls",
           "description": "Additional PyPI registries that should be used as extra indexes",
