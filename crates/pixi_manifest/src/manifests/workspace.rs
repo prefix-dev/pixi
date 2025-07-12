@@ -429,6 +429,30 @@ impl WorkspaceManifestMut<'_> {
         Ok(())
     }
 
+    pub fn add_activation_env(
+        &mut self,
+        env: HashMap<String, String>,
+        platforms: &[Platform],
+        feature_name: &FeatureName,
+    ) -> miette::Result<()> {
+        for platform in to_options(platforms) {
+            // Add the activation to the manifest
+            match self
+                .workspace
+                .get_or_insert_target_mut(platform, Some(feature_name))
+                .add_activation_env(env)
+            {
+                Ok(true) => {
+                    self.document
+                        .add_activation_env(env, platform, feature_name)?;
+                }
+                Ok(false) => {}
+                Err(e) => return Err(e.into()),
+            };
+        }
+        Ok(())
+    }
+
     /// Add a pixi spec to the manifest
     ///
     /// This function modifies both the workspace and the TOML document. Use
