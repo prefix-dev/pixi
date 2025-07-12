@@ -1,21 +1,53 @@
 mod placement;
 pub mod style;
 
+use std::{
+    borrow::Cow,
+    fmt::Write,
+    future::Future,
+    sync::{Arc, LazyLock},
+    time::Duration,
+};
+
 use indicatif::{HumanBytes, MultiProgress, ProgressBar, ProgressDrawTarget, ProgressState};
 use parking_lot::Mutex;
-use std::borrow::Cow;
-use std::fmt::Write;
-use std::future::Future;
-use std::sync::{Arc, LazyLock};
-use std::time::Duration;
-
 pub use placement::ProgressBarPlacement;
+
+/// A helper macro to print a message to the console. If a multi-progress bar
+/// is currently active, this macro will suspend the progress bar, print the
+/// message and continue the progress bar. This ensures the output does not
+/// interfere with the progress bar.
+///
+/// If the progress bar is hidden, the message will be printed to `stderr`
+/// instead.
+#[macro_export]
+macro_rules! println {
+    () => {
+        let mp = $crate::global_multi_progress();
+        if mp.is_hidden() {
+            eprintln!();
+        } else {
+            // Ignore any error
+            let _err = mp.println("");
+        }
+    };
+    ($fmt_str:literal, $( $arg:expr ),*) => {
+        let mp = $crate::global_multi_progress();
+        if mp.is_hidden() {
+            eprintln!($fmt_str, $( $arg ),*);
+        } else {
+            // Ignore any error
+            let _err = mp.println(format!($fmt_str, $( $arg ),*));
+        }
+    }
+}
 
 /// Returns a global instance of [`indicatif::MultiProgress`].
 ///
-/// Although you can always create an instance yourself any logging will interrupt pending
-/// progressbars. To fix this issue, logging has been configured in such a way to it will not
-/// interfere if you use the [`indicatif::MultiProgress`] returning by this function.
+/// Although you can always create an instance yourself any logging will
+/// interrupt pending progressbars. To fix this issue, logging has been
+/// configured in such a way to it will not interfere if you use the
+/// [`indicatif::MultiProgress`] returning by this function.
 pub fn global_multi_progress() -> MultiProgress {
     static GLOBAL_MP: LazyLock<MultiProgress> = LazyLock::new(|| {
         let mp = MultiProgress::new();
@@ -48,12 +80,14 @@ pub fn default_progress_style() -> indicatif::ProgressStyle {
         .progress_chars("━━╾─")
 }
 
-/// Returns the style to use for a progressbar that is indeterminate and simply shows a spinner.
+/// Returns the style to use for a progressbar that is indeterminate and simply
+/// shows a spinner.
 pub fn long_running_progress_style() -> indicatif::ProgressStyle {
     indicatif::ProgressStyle::with_template("{prefix}{spinner:.green} {msg}").unwrap()
 }
 
-/// Displays a spinner with the given message while running the specified function to completion.
+/// Displays a spinner with the given message while running the specified
+/// function to completion.
 pub fn wrap_in_progress<T, F: FnOnce() -> T>(msg: impl Into<Cow<'static, str>>, func: F) -> T {
     let pb = global_multi_progress().add(ProgressBar::new_spinner());
     pb.enable_steady_tick(Duration::from_millis(100));
@@ -64,7 +98,8 @@ pub fn wrap_in_progress<T, F: FnOnce() -> T>(msg: impl Into<Cow<'static, str>>, 
     result
 }
 
-/// Displays a spinner with the given message while running the specified function to completion.
+/// Displays a spinner with the given message while running the specified
+/// function to completion.
 pub async fn await_in_progress<T, F: FnOnce(ProgressBar) -> Fut, Fut: Future<Output = T>>(
     msg: impl Into<Cow<'static, str>>,
     future: F,
@@ -99,17 +134,20 @@ pub fn style_warning_pb(pb: ProgressBar, warning_msg: String) -> ProgressBar {
 
 /// A struct that can be used to format the message part of a progress bar.
 ///
-/// It's primary usecase is when you have a single progress bar but multiple tasks that are running
-/// and which you want to communicate to the user. This struct will set the message part of the
-/// passed progress bar to the oldest unfinished task and include a the number of pending tasks.
+/// It's primary usecase is when you have a single progress bar but multiple
+/// tasks that are running and which you want to communicate to the user. This
+/// struct will set the message part of the passed progress bar to the oldest
+/// unfinished task and include a the number of pending tasks.
 #[derive(Debug)]
 pub struct ProgressBarMessageFormatter {
     state: Arc<Mutex<State>>,
 }
 
-/// Internal state kept by the [`ProgressBarMessageFormatter`] and derived state.
+/// Internal state kept by the [`ProgressBarMessageFormatter`] and derived
+/// state.
 ///
-/// This contains the state of the formatter and allows updating the progress bar.
+/// This contains the state of the formatter and allows updating the progress
+/// bar.
 #[derive(Debug)]
 struct State {
     pb: ProgressBar,
@@ -190,15 +228,16 @@ impl ProgressBarMessageFormatter {
         }
     }
 
-    /// Adds the start of another task to the progress bar and returns an object that is used to
-    /// mark the lifetime of the task. If the object is dropped the task is considered finished.
+    /// Adds the start of another task to the progress bar and returns an object
+    /// that is used to mark the lifetime of the task. If the object is
+    /// dropped the task is considered finished.
     #[must_use]
     pub fn start(&self, op: String) -> ScopedTask {
         ScopedTask::start(op, self.state.clone())
     }
 
-    /// Wraps an future into a task which starts when the task starts and ends when the future
-    /// returns.
+    /// Wraps an future into a task which starts when the task starts and ends
+    /// when the future returns.
     pub async fn wrap<T, F: Future<Output = T>>(&self, name: impl Into<String>, fut: F) -> T {
         let task = self.start(name.into());
         let result = fut.await;

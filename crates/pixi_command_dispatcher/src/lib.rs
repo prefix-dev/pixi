@@ -32,7 +32,9 @@
 //! created and awaited concurrently. This enables parallel execution while
 //! maintaining a simple API surface.
 
+mod backend_source_build;
 pub mod build;
+mod build_backend_metadata;
 mod cache_dirs;
 mod command_dispatcher;
 mod command_dispatcher_processor;
@@ -47,7 +49,15 @@ mod source_build;
 mod source_checkout;
 mod source_metadata;
 
+pub use backend_source_build::{
+    BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildMethod,
+    BackendSourceBuildPrefix, BackendSourceBuildSpec, BackendSourceBuildV1Method,
+    BackendSourceBuildV2Method,
+};
 pub use build::BuildEnvironment;
+pub use build_backend_metadata::{
+    BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec,
+};
 pub use cache_dirs::CacheDirs;
 pub use command_dispatcher::{
     CommandDispatcher, CommandDispatcherBuilder, CommandDispatcherError,

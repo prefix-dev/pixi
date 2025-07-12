@@ -10,7 +10,7 @@ backend-spec:
     type: environment-spec
     requirement:
       - pixi-build-rattler-build
-      - {}
+      - "*"
     channels:
       - "https://conda.anaconda.org/conda-forge"
       - "https://prefix.dev/pixi-build-backends"

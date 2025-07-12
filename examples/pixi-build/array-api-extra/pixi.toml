@@ -1,5 +1,5 @@
 [workspace]
-channels = ["conda-forge"]
+channels = ["https://prefix.dev/conda-forge"]
 name = "array-api-extra-build"
 platforms = ["osx-arm64", "linux-64", "osx-64", "win-64"]
 preview = ["pixi-build"]

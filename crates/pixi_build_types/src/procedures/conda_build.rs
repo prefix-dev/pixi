@@ -1,5 +1,7 @@
+//! This API was introduced in Pixi Build API version 0.
+
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet},
     path::PathBuf,
 };
 
@@ -38,7 +40,7 @@ pub struct CondaBuildParams {
     pub outputs: Option<BTreeSet<CondaOutputIdentifier>>,
 
     /// The variants that we want to build
-    pub variant_configuration: Option<HashMap<String, Vec<String>>>,
+    pub variant_configuration: Option<BTreeMap<String, Vec<String>>>,
 
     /// A directory that can be used by the backend to store files for
     /// subsequent requests. This directory is unique for each separate source

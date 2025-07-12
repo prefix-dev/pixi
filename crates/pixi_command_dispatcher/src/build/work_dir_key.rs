@@ -32,6 +32,8 @@ impl SourceRecordOrCheckout {
 
 /// A key to uniquely identify a work directory. If there is a source build with
 /// the same key, they will share the same working directory.
+///
+/// TODO: Should we use references instead of owned types here?
 pub struct WorkDirKey {
     /// The location of the source
     pub source: SourceRecordOrCheckout,

@@ -12,8 +12,8 @@ use rattler_conda_types::{ChannelConfig, ChannelUrl, MatchSpec, ParseStrictness}
 use thiserror::Error;
 
 use crate::{
-    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    SourceCheckoutError, SourceMetadataSpec,
+    BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, CommandDispatcherError,
+    CommandDispatcherErrorResultExt, SourceCheckoutError, SourceMetadataSpec,
     executor::ExecutorFutures,
     source_metadata::{SourceMetadata, SourceMetadataError},
 };
@@ -157,12 +157,15 @@ impl SourceMetadataCollector {
         let source_metadata = self
             .command_queue
             .source_metadata(SourceMetadataSpec {
-                source,
-                channel_config: self.channel_config.clone(),
-                channels: self.channels.clone(),
-                build_environment: self.build_environment.clone(),
-                variants: self.variants.clone(),
-                enabled_protocols: self.enabled_protocols.clone(),
+                package: name.clone(),
+                backend_metadata: BuildBackendMetadataSpec {
+                    source: source.pinned,
+                    channel_config: self.channel_config.clone(),
+                    channels: self.channels.clone(),
+                    build_environment: self.build_environment.clone(),
+                    variants: self.variants.clone(),
+                    enabled_protocols: self.enabled_protocols.clone(),
+                },
             })
             .await
             .map_err_with(|err| CollectSourceMetadataError::SourceMetadataError {
@@ -172,15 +175,11 @@ impl SourceMetadataCollector {
 
         // Make sure that a package with the name defined in spec is available from the
         // backend.
-        if !source_metadata
-            .records
-            .iter()
-            .any(|record| record.package_record.name == name)
-        {
+        if source_metadata.records.is_empty() {
             return Err(CommandDispatcherError::Failed(
                 CollectSourceMetadataError::PackageMetadataNotFound {
                     name: name.as_source().to_string(),
-                    pinned_source: Box::new(source_metadata.source.pinned.clone()),
+                    pinned_source: Box::new(source_metadata.source.clone()),
                     help: Self::create_metadata_not_found_help(
                         name,
                         source_metadata.records.clone(),
