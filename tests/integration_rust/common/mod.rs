@@ -546,7 +546,7 @@ impl PixiControl {
                 .map(|(k, v)| (OsString::from(k), OsString::from(v)))
                 .collect();
 
-            let output = task.execute_with_pipes(&task_env).await?;
+            let output = task.execute_with_pipes(&task_env, None).await?;
             result.stdout.push_str(&output.stdout);
             result.stderr.push_str(&output.stderr);
             result.exit_code = output.exit_code;
