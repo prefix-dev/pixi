@@ -120,7 +120,7 @@ fn to_target_v1(
     })
 }
 
-fn to_target_selector_v1(selector: &TargetSelector) -> pbt::TargetSelectorV1 {
+pub fn to_target_selector_v1(selector: &TargetSelector) -> pbt::TargetSelectorV1 {
     match selector {
         TargetSelector::Platform(platform) => pbt::TargetSelectorV1::Platform(platform.to_string()),
         TargetSelector::Unix => pbt::TargetSelectorV1::Unix,

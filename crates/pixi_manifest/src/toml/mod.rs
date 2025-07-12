@@ -1,4 +1,5 @@
 mod build_system;
+mod build_target;
 mod channel;
 mod document;
 mod environment;
