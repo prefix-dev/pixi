@@ -96,6 +96,64 @@ impl From<&str> for Dependency {
     }
 }
 
+impl FromStr for Dependency {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let parts: Vec<&str> = s.split(':').collect();
+
+        match parts.len() {
+            1 => {
+                // Simple task name: "task_name"
+                Ok(Dependency::new(parts[0], None, None))
+            }
+            2 => {
+                // Two parts: could be "task_name:env_name" or "task_name::args"
+                if parts[1].is_empty() {
+                    // "task_name::" - no environment, but might have args in a third part (malformed)
+                    Err("Invalid dependency format. Use 'task_name' or 'task_name:env_name' or 'task_name::arg1,arg2'".to_string())
+                } else {
+                    // "task_name:env_name"
+                    let env_name = EnvironmentName::from_str(parts[1]).map_err(|e| e.to_string())?;
+                    Ok(Dependency::new(parts[0], None, Some(env_name)))
+                }
+            }
+            3 => {
+                // Three parts: "task_name:env_name:args" or "task_name::args"
+                if parts[1].is_empty() {
+                    // "task_name::args" format
+                    let args = if parts[2].is_empty() {
+                        None
+                    } else {
+                        let arg_strings: Vec<TemplateString> = parts[2]
+                            .split(',')
+                            .map(|arg| arg.trim().into())
+                            .collect();
+                        Some(arg_strings)
+                    };
+                    Ok(Dependency::new(parts[0], args, None))
+                } else {
+                    // "task_name:env_name:args" format
+                    let env_name = EnvironmentName::from_str(parts[1]).map_err(|e| e.to_string())?;
+                    let args = if parts[2].is_empty() {
+                        None
+                    } else {
+                        let arg_strings: Vec<TemplateString> = parts[2]
+                            .split(',')
+                            .map(|arg| arg.trim().into())
+                            .collect();
+                        Some(arg_strings)
+                    };
+                    Ok(Dependency::new(parts[0], args, Some(env_name)))
+                }
+            }
+            _ => {
+                Err("Invalid dependency format. Too many colons. Use 'task_name', 'task_name:env_name', or 'task_name:env_name:arg1,arg2'".to_string())
+            }
+        }
+    }
+}
+
 impl std::fmt::Display for Dependency {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.args {

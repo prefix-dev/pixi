@@ -1,34 +1,4 @@
 # serializer version: 1
-# name: test_pixi_add_alias
-  '''
-  
-  [workspace]
-  name = "test"
-  channels = []
-  platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
-  
-  [tasks]
-  dummy-a = [{ task = "dummy-b" }, { task = "dummy-c" }]
-  
-  [target.linux-64.tasks]
-  linux-alias = [{ task = "dummy-b" }, { task = "dummy-c" }]
-  
-  '''
-# ---
-# name: test_pixi_add_task
-  '''
-  
-  [workspace]
-  name = "test"
-  channels = []
-  platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
-  
-  [tasks]
-  test = { cmd = "echo 'Hello {{name | title}}'", args = ["name"] }
-  test-alias = [{ task = "test" }]
-  
-  '''
-# ---
 # name: test_info_output_extended
   dict({
     'auth_dir': str,
@@ -107,6 +77,43 @@
     'version': str,
     'virtual_packages': list,
   })
+# ---
+# name: test_pixi_add_alias
+  '''
+  
+  [workspace]
+  name = "test"
+  channels = []
+  platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+  
+  [tasks]
+  dummy-a = [{ task = "dummy-b" }, { task = "dummy-c" }]
+  
+  [target.linux-64.tasks]
+  linux-alias = [{ task = "dummy-b" }, { task = "dummy-c" }]
+  
+  '''
+# ---
+# name: test_pixi_add_task
+  '''
+  
+  [workspace]
+  name = "test"
+  channels = []
+  platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+  
+  [tasks]
+  test = { cmd = "echo 'Hello {{name | title}}'", args = [{ arg = "name", default = "default" }] }
+  test-alias = [{ task = "test" }]
+  test-depends-on = [{ task = "test", args = ["arg"], environment = "env" }]
+  test-depends-on-two-args = [{ task = "test", args = ["arg", "arg2"], environment = "env" }]
+  test-depends-on-env-only = [{ task = "test", environment = "env" }]
+  test-depends-on-args-only = [{ task = "test", args = ["arg", "arg2"] }]
+  
+  [feature.py312.target.linux-64.tasks]
+  test-full-spec = { cmd = "echo 'Hello {{name | title}}'", args = ["name"], depends-on = ["test", { task = "test-alias", args = ["arg"] }], env = { VAR = "val", VAR2 = "val2" } }
+  
+  '''
 # ---
 # name: test_pixi_task_list_json
   list([
