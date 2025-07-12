@@ -149,14 +149,49 @@ impl<'p> ExecutableTask<'p> {
                 String::new()
             };
 
-            // Skip the export if it's empty, to avoid newlines
-            let full_script = if export.is_empty() {
-                format!("{} {}", task, cli_args)
-            } else {
-                format!("{}\n{} {}", export, task, cli_args)
-            };
+            // Handle interpreter mode
+            if let Some(interpreter) = self.task().interpreter() {
+                use std::io::Write;
 
-            Ok(Some(full_script))
+                // Create a temporary file to store the script
+                let mut temp_file =
+                    tempfile::NamedTempFile::new().expect("Failed to create temporary file");
+                temp_file
+                    .write_all(task.as_bytes())
+                    .expect("Failed to write script to temporary file");
+                temp_file.flush().expect("Failed to flush temporary file");
+
+                // Get the temporary file path
+                let temp_path = temp_file.path().to_string_lossy().to_string();
+
+                // Handle {0} placeholder for interpreter command
+                let interpreter_with_file = if interpreter.contains("{0}") {
+                    interpreter.replace("{0}", &temp_path)
+                } else {
+                    format!("{interpreter} {temp_path}")
+                };
+
+                // Keep temp file alive
+                let _ = temp_file.keep().expect("Failed to persist temporary file");
+
+                // Build final command with freeargs
+                let full_script = if export.is_empty() {
+                    format!("{interpreter_with_file} {cli_args}")
+                } else {
+                    format!("{export}\n{interpreter_with_file} {cli_args}")
+                };
+
+                Ok(Some(full_script))
+            } else {
+                // Skip the export if it's empty, to avoid newlines
+                let full_script = if export.is_empty() {
+                    format!("{} {}", task, cli_args)
+                } else {
+                    format!("{}\n{} {}", export, task, cli_args)
+                };
+
+                Ok(Some(full_script))
+            }
         } else {
             Ok(None)
         }
@@ -248,9 +283,9 @@ impl<'p> ExecutableTask<'p> {
         };
         let cwd = self.working_directory()?;
         let (stdin, mut stdin_writer) = pipe();
-        if let Some(stdin) = input {
+        if let Some(stdin_data) = input {
             stdin_writer
-                .write_all(stdin)
+                .write_all(stdin_data)
                 .expect("should be able to write to stdin");
         }
         drop(stdin_writer); // prevent a deadlock by dropping the writer
