@@ -135,6 +135,10 @@ outputs:
       name: pixi-foobar
       version: 0.1.0
 
+    activation:
+      env:
+        FOO_PATH: "foo/path"
+
     build:
       script:
         - mkdir -p $PREFIX/bin
