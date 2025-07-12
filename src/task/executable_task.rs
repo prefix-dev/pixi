@@ -3,7 +3,6 @@ use std::{
     collections::HashMap,
     ffi::OsString,
     fmt::{Display, Formatter},
-    io::Write,
     path::PathBuf,
 };
 
@@ -11,12 +10,6 @@ use deno_task_shell::{
     ShellPipeWriter, ShellState, execute_with_pipes, parser::SequentialList, pipe,
 };
 use fs_err::tokio as tokio_fs;
-
-/// Contains the prepared execution data for a task with interpreter
-pub(crate) struct PreparedExecution {
-    pub script: SequentialList,
-    pub stdin: deno_task_shell::ShellPipeReader,
-}
 use itertools::Itertools;
 use miette::{Context, Diagnostic};
 use pixi_consts::consts;
@@ -137,109 +130,94 @@ impl<'p> ExecutableTask<'p> {
 
     /// Returns the task as script
     fn as_script(&self) -> Result<Option<String>, FailedToParseShellScript> {
-        // Convert the task into an executable string (with args but without freeargs)
+        // Convert the task into an executable string
         let task = self
             .task
             .as_single_command(Some(&self.args))
             .map_err(FailedToParseShellScript::ArgumentReplacement)?;
+        if let Some(task) = task {
+            // Get the export specific environment variables
+            let export = get_export_specific_task_env(self.task.as_ref());
 
-        let Some(task) = task else {
-            return Ok(None);
-        };
-
-        // Get export environment variables
-        let export = get_export_specific_task_env(self.task.as_ref());
-
-        // Get freeargs for both modes
-        let freeargs = if let ArgValues::FreeFormArgs(additional_args) = &self.args {
-            if additional_args.is_empty() {
-                String::new()
-            } else {
-                format!(" {}", additional_args
+            // Append the command line arguments verbatim
+            let cli_args = if let ArgValues::FreeFormArgs(additional_args) = &self.args {
+                additional_args
                     .iter()
-                    .format_with(" ", |arg, f| f(&format_args!("'{}'", arg))))
+                    .format_with(" ", |arg, f| f(&format_args!("'{}'", arg)))
+                    .to_string()
+            } else {
+                String::new()
+            };
+
+            // Handle interpreter mode
+            if let Some(interpreter) = self.task().interpreter() {
+                use std::io::Write;
+
+                // Create a temporary file to store the script
+                let mut temp_file =
+                    tempfile::NamedTempFile::new().expect("Failed to create temporary file");
+                temp_file
+                    .write_all(task.as_bytes())
+                    .expect("Failed to write script to temporary file");
+                temp_file.flush().expect("Failed to flush temporary file");
+
+                // Get the temporary file path
+                let temp_path = temp_file.path().to_string_lossy().to_string();
+
+                // Handle {0} placeholder for interpreter command
+                let interpreter_with_file = if interpreter.contains("{0}") {
+                    interpreter.replace("{0}", &temp_path)
+                } else {
+                    format!("{interpreter} {temp_path}")
+                };
+
+                // Keep temp file alive
+                let _ = temp_file.keep().expect("Failed to persist temporary file");
+
+                // Build final command with freeargs
+                let full_script = if export.is_empty() {
+                    format!("{interpreter_with_file} {cli_args}")
+                } else {
+                    format!("{export}\n{interpreter_with_file} {cli_args}")
+                };
+
+                Ok(Some(full_script))
+            } else {
+                // Skip the export if it's empty, to avoid newlines
+                let full_script = if export.is_empty() {
+                    format!("{} {}", task, cli_args)
+                } else {
+                    format!("{}\n{} {}", export, task, cli_args)
+                };
+
+                Ok(Some(full_script))
             }
         } else {
-            String::new()
-        };
-
-        if let Some(interpreter) = self.task().interpreter() {
-            // Interpreter mode: create temp file and build interpreter command
-            let script_content = task.into_owned();
-
-            // Create a temporary file to store the script
-            let mut temp_file =
-                tempfile::NamedTempFile::new().expect("Failed to create temporary file");
-            temp_file
-                .write_all(script_content.as_bytes())
-                .expect("Failed to write script to temporary file");
-            temp_file.flush().expect("Failed to flush temporary file");
-
-            // Get the temporary file path
-            let temp_path = temp_file.path().to_string_lossy().to_string();
-
-            // Handle {0} placeholder for interpreter command
-            let interpreter_with_file = if interpreter.contains("{0}") {
-                // Replace {0} placeholder with the temporary file path
-                interpreter.replace("{0}", &temp_path)
-            } else {
-                // Default behavior: append the temporary file path at the end
-                format!("{interpreter} {temp_path}")
-            };
-
-            // Build final command: {export} {interpreter_with_file} {freeargs}
-            let final_command = if export.is_empty() {
-                format!("{interpreter_with_file}{freeargs}")
-            } else {
-                format!("{export}\n{interpreter_with_file}{freeargs}")
-            };
-
-            // Keep temp file alive by storing it in a static location
-            // The file will be cleaned up when the process exits
-            let _ = temp_file.keep().expect("Failed to persist temporary file");
-
-            Ok(Some(final_command))
-        } else {
-            // Cmd mode: build command with freeargs
-            let cmd_with_args = task.into_owned();
-
-            // Build final command: {export} {cmd_with_args} {freeargs}
-            let final_command = if export.is_empty() {
-                format!("{cmd_with_args}{freeargs}")
-            } else {
-                format!("{export}\n{cmd_with_args}{freeargs}")
-            };
-
-            Ok(Some(final_command))
+            Ok(None)
         }
     }
 
     /// Returns a [`SequentialList`] which can be executed by deno task shell.
     /// Returns `None` if the command is not executable like in the case of
     /// an alias.
-    ///
-    /// This is used for cmd mode execution only (when no interpreter is specified).
     pub(crate) fn as_deno_script(
         &self,
     ) -> Result<Option<SequentialList>, FailedToParseShellScript> {
-        // Only for cmd mode (no interpreter)
-        if self.task().interpreter().is_some() {
-            return Ok(None);
+        let full_script = self.as_script()?;
+
+        if let Some(full_script) = full_script {
+            tracing::debug!("Parsing shell script: {}", full_script);
+
+            // Parse the shell command
+            deno_task_shell::parser::parse(full_script.trim())
+                .map_err(|e| FailedToParseShellScript::ParseError {
+                    source: e,
+                    task: full_script.to_string(),
+                })
+                .map(Some)
+        } else {
+            Ok(None)
         }
-
-        let Some(full_script) = self.as_script()? else {
-            return Ok(None);
-        };
-
-        tracing::debug!("Parsing shell script: {}", full_script);
-
-        // Parse the shell command (export and freeargs are already included in as_script)
-        deno_task_shell::parser::parse(full_script.trim())
-            .map_err(|e| FailedToParseShellScript::ParseError {
-                source: e,
-                task: full_script.to_string(),
-            })
-            .map(Some)
     }
 
     /// Returns the working directory for this task.
@@ -290,63 +268,27 @@ impl<'p> ExecutableTask<'p> {
         ExecutableTaskConsoleDisplay { task: self }
     }
 
-    /// Prepares the script and stdin pipe for execution.
-    ///
-    /// This method handles the common logic for both `execute_with_pipes` and the CLI's `execute_task`.
-    /// Returns None if there is no script to execute (e.g., for alias tasks).
-    pub(crate) fn prepare_execution(
-        &self,
-    ) -> Result<Option<PreparedExecution>, FailedToParseShellScript> {
-        if self.task().interpreter().is_some() {
-            // Interpreter mode: use as_script to get the full command
-            let Some(final_command) = self.as_script()? else {
-                return Ok(None);
-            };
-
-            tracing::debug!("Parsing interpreter command: {}", final_command);
-
-            // Parse the interpreter command directly
-            let parsed_script = deno_task_shell::parser::parse(final_command.trim())
-                .map_err(|e| FailedToParseShellScript::ParseError {
-                    source: e,
-                    task: final_command.to_string(),
-                })?;
-
-            let stdin = deno_task_shell::ShellPipeReader::stdin();
-
-            Ok(Some(PreparedExecution {
-                script: parsed_script,
-                stdin,
-            }))
-        } else {
-            // Cmd mode: use as_deno_script for proper deno shell parsing
-            let Some(deno_script) = self.as_deno_script()? else {
-                return Ok(None);
-            };
-
-            let stdin = deno_task_shell::ShellPipeReader::stdin();
-            Ok(Some(PreparedExecution {
-                script: deno_script,
-                stdin,
-            }))
-        }
-    }
-
     /// Executes the task and capture its output.
     pub async fn execute_with_pipes(
         &self,
         command_env: &HashMap<OsString, OsString>,
+        input: Option<&[u8]>,
     ) -> Result<RunOutput, TaskExecutionError> {
-        let Some(prepared) = self.prepare_execution()? else {
-            // No script to execute, return empty output
+        let Some(script) = self.as_deno_script()? else {
             return Ok(RunOutput {
                 exit_code: 0,
                 stdout: String::new(),
                 stderr: String::new(),
             });
         };
-
         let cwd = self.working_directory()?;
+        let (stdin, mut stdin_writer) = pipe();
+        if let Some(stdin_data) = input {
+            stdin_writer
+                .write_all(stdin_data)
+                .expect("should be able to write to stdin");
+        }
+        drop(stdin_writer); // prevent a deadlock by dropping the writer
         let (stdout, stdout_handle) = get_output_writer_and_handle();
         let (stderr, stderr_handle) = get_output_writer_and_handle();
         let state = ShellState::new(
@@ -355,7 +297,7 @@ impl<'p> ExecutableTask<'p> {
             Default::default(),
             Default::default(),
         );
-        let code = execute_with_pipes(prepared.script, state, prepared.stdin, stdout, stderr).await;
+        let code = execute_with_pipes(script, state, stdin, stdout, stderr).await;
         Ok(RunOutput {
             exit_code: code,
             stdout: stdout_handle.await.expect("should be able to get stdout"),
