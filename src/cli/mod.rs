@@ -524,6 +524,24 @@ pub fn get_styles() -> clap::builder::Styles {
         .placeholder(Style::new().fg_color(Some(Color::Ansi(AnsiColor::BrightCyan))))
 }
 
+/// Display help with extensions section appended
+fn show_help_with_extensions() {
+    let styles = get_styles();
+    let mut cmd = Args::command().styles(styles);
+
+    let _ = cmd.write_help(&mut std::io::stdout());
+    println!();
+
+    // Add extensions section
+    let external_commands = command_info::find_external_commands();
+    if !external_commands.is_empty() {
+        println!("\nAvailable Extensions:");
+        for (name, _path) in external_commands {
+            println!("    {:<15} (via pixi-{})", name, name);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -666,22 +684,5 @@ mod tests {
                 "Expected CLI argument --frozen to override PIXI_FROZEN=false"
             );
         });
-    }
-}
-/// Display help with extensions section appended
-fn show_help_with_extensions() {
-    let styles = get_styles();
-    let mut cmd = Args::command().styles(styles);
-
-    let _ = cmd.write_help(&mut std::io::stdout());
-    println!();
-
-    // Add extensions section
-    let external_commands = command_info::find_external_commands();
-    if !external_commands.is_empty() {
-        println!("\nAvailable Extensions:");
-        for (name, _path) in external_commands {
-            println!("    {:<15} (via pixi-{})", name, name);
-        }
     }
 }
