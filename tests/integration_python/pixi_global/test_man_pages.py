@@ -8,16 +8,14 @@ def man_page_path(pixi_home: Path, executable: str, section: str = "1") -> Path:
     return pixi_home.joinpath("share", "man", f"man{section}", f"{executable}.{section}")
 
 
-def test_sync_exposes_man_pages(
-    pixi: Path, tmp_pixi_workspace: Path, default_channel_1: str
-) -> None:
+def test_sync_exposes_man_pages(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
     env = {"PIXI_HOME": str(tmp_pixi_workspace)}
     manifests = tmp_pixi_workspace.joinpath("manifests")
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
     toml = f"""
     [envs.test]
-    channels = ["{default_channel_1}"]
+    channels = ["{dummy_channel_1}"]
     dependencies = {{ ripgrep = "*" }}
     exposed = {{ rg = "rg" }}
     """
@@ -44,7 +42,7 @@ def test_sync_exposes_man_pages(
 
 
 def test_only_self_expose_have_man_pages(
-    pixi: Path, tmp_pixi_workspace: Path, default_channel_1: str
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
 ) -> None:
     env = {"PIXI_HOME": str(tmp_pixi_workspace)}
 
@@ -56,7 +54,7 @@ def test_only_self_expose_have_man_pages(
             "global",
             "install",
             "--channel",
-            default_channel_1,
+            dummy_channel_1,
             "--expose",
             "ripgrep=rg",
             "ripgrep",
@@ -88,7 +86,7 @@ def test_only_self_expose_have_man_pages(
 
 
 def test_installing_same_package_again_without_expose_shouldnt_remove_man_page(
-    pixi: Path, tmp_pixi_workspace: Path, default_channel_1: str
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
 ) -> None:
     env = {"PIXI_HOME": str(tmp_pixi_workspace)}
 
@@ -103,7 +101,7 @@ def test_installing_same_package_again_without_expose_shouldnt_remove_man_page(
             "global",
             "install",
             "--channel",
-            default_channel_1,
+            dummy_channel_1,
             "--expose",
             "rg=rg",
             "--environment",
@@ -129,7 +127,7 @@ def test_installing_same_package_again_without_expose_shouldnt_remove_man_page(
             "global",
             "install",
             "--channel",
-            default_channel_1,
+            dummy_channel_1,
             "--expose",
             "ripgrep=rg",
             "--environment",
@@ -148,7 +146,7 @@ def test_installing_same_package_again_without_expose_shouldnt_remove_man_page(
 
 
 def test_man_page_priority_order(
-    pixi: Path, tmp_pixi_workspace: Path, default_channel_1: str
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
 ) -> None:
     """Test that man page priority order (man1 > man8 > man3 > man5) is respected"""
     env = {"PIXI_HOME": str(tmp_pixi_workspace)}
@@ -160,7 +158,7 @@ def test_man_page_priority_order(
             "global",
             "install",
             "--channel",
-            default_channel_1,
+            dummy_channel_1,
             "bash",
         ],
         env=env,
@@ -180,7 +178,7 @@ def test_man_page_priority_order(
 
 
 def test_man_page_without_man_page_doesnt_error(
-    pixi: Path, tmp_pixi_workspace: Path, default_channel_1: str
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
 ) -> None:
     """Test that commands without man pages don't cause errors"""
     env = {"PIXI_HOME": str(tmp_pixi_workspace)}
@@ -193,7 +191,7 @@ def test_man_page_without_man_page_doesnt_error(
             "global",
             "install",
             "--channel",
-            default_channel_1,
+            dummy_channel_1,
             "python",  # Python might not have man pages in all packages
         ],
         env=env,

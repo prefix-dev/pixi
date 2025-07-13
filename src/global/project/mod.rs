@@ -1030,7 +1030,10 @@ impl Project {
         state_changes |= self.sync_completions(env_name).await?;
 
         // Sync man pages
-        state_changes |= self.sync_man_pages(env_name).await?;
+        #[cfg(unix)]
+        {
+            state_changes |= self.sync_man_pages(env_name).await?;
+        }
 
         Ok(state_changes)
     }

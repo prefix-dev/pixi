@@ -249,7 +249,10 @@ async fn setup_environment(
     state_changes |= project.sync_completions(env_name).await?;
 
     // Sync man pages
-    state_changes |= project.sync_man_pages(env_name).await?;
+    #[cfg(unix)]
+    {
+        state_changes |= project.sync_man_pages(env_name).await?;
+    }
 
     project.manifest.save().await?;
     Ok(state_changes)
