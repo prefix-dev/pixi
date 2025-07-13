@@ -227,7 +227,8 @@ force-path-style = {{ s3[key]["force-path-style"] }}
 
 const GITIGNORE_TEMPLATE: &str = r#"
 # pixi environments
-.pixi
+.pixi/*
+!.pixi/config.toml
 "#;
 
 #[derive(Parser, Debug, Clone, PartialEq, ValueEnum)]
