@@ -3,6 +3,8 @@ pub(crate) mod common;
 pub(crate) mod completions;
 pub(crate) mod install;
 pub(crate) mod list;
+#[cfg(unix)] // Man pages are only supported on unix-like systems
+pub(crate) mod man_pages;
 pub(crate) mod project;
 pub(crate) mod trampoline;
 

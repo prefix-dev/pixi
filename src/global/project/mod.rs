@@ -651,6 +651,10 @@ impl Project {
             // Prune old completions
             let completions_dir = super::completions::CompletionsDir::from_env().await?;
             completions_dir.prune_old_completions()?;
+
+            // Prune old man pages
+            let man_dir = super::man_pages::ManDir::from_env().await?;
+            man_dir.prune_old_man_pages()?;
         }
 
         state_changes.insert_change(env_name, StateChange::RemovedEnvironment);
@@ -1025,6 +1029,9 @@ impl Project {
         // Sync completions
         state_changes |= self.sync_completions(env_name).await?;
 
+        // Sync man pages
+        state_changes |= self.sync_man_pages(env_name).await?;
+
         Ok(state_changes)
     }
 
@@ -1253,6 +1260,57 @@ impl Project {
 
     #[cfg(not(unix))]
     pub async fn sync_completions(
+        &self,
+        _env_name: &EnvironmentName,
+    ) -> miette::Result<StateChanges> {
+        let state_changes = StateChanges::default();
+        Ok(state_changes)
+    }
+
+    #[cfg(unix)] // Man pages are only supported on unix like systems
+    pub async fn sync_man_pages(&self, env_name: &EnvironmentName) -> miette::Result<StateChanges> {
+        let mut state_changes = StateChanges::default();
+
+        let environment = self.environment(env_name).ok_or(miette::miette!(
+            "Environment {} not found in manifest.",
+            env_name.fancy_display()
+        ))?;
+        let prefix = self.environment_prefix(env_name).await?;
+
+        let execs_all = self
+            .executables_of_all_dependencies(env_name)
+            .await?
+            .into_iter()
+            .map(|exec| exec.name)
+            .collect();
+
+        let man_dir = crate::global::man_pages::ManDir::from_env().await?;
+        let (man_pages_to_remove, man_pages_to_add) = super::man_pages::man_pages_sync_status(
+            environment.exposed.clone(),
+            execs_all,
+            prefix.root(),
+            &man_dir,
+        )
+        .await?;
+
+        for man_page_to_remove in man_pages_to_remove {
+            let state_change = man_page_to_remove.remove().await?;
+            state_changes.insert_change(env_name, state_change);
+        }
+
+        for man_page_to_add in man_pages_to_add {
+            let Some(state_change) = man_page_to_add.install().await? else {
+                continue;
+            };
+
+            state_changes.insert_change(env_name, state_change);
+        }
+
+        Ok(state_changes)
+    }
+
+    #[cfg(not(unix))]
+    pub async fn sync_man_pages(
         &self,
         _env_name: &EnvironmentName,
     ) -> miette::Result<StateChanges> {

@@ -76,6 +76,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // Sync completions
         state_changes |= project.sync_completions(env_name).await?;
 
+        // Sync man pages
+        state_changes |= project.sync_man_pages(env_name).await?;
+
         Ok(state_changes)
     }
 
@@ -90,6 +93,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             {
                 let completions_dir = global::completions::CompletionsDir::from_env().await?;
                 completions_dir.prune_old_completions()?;
+
+                let man_dir = global::man_pages::ManDir::from_env().await?;
+                man_dir.prune_old_man_pages()?;
             }
             project_original.environments().keys().cloned().collect()
         }
