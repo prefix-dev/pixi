@@ -365,14 +365,14 @@ async fn ensure_pixi_directory_and_gitignore(pixi_dir: &Path) -> miette::Result<
 
     best_effort_write_file_if_missing(
         &gitignore_path,
-        "*\n",
+        "*\n!config.toml\n",
         "Failed to create .gitignore file at",
     )
     .await?;
 
     best_effort_write_file_if_missing(
         &condapackageignore_path,
-        ".pixi\n",
+        ".pixi\n!.pixi/config.toml\n",
         "Failed to create .condapackageignore file at",
     )
     .await?;
