@@ -5,6 +5,7 @@ use crate::global::{EnvironmentName, Mapping, Project, StateChanges};
 use clap::Parser;
 use itertools::Itertools;
 use pixi_config::{Config, ConfigCli};
+use pixi_spec::PixiSpec;
 use rattler_conda_types::MatchSpec;
 
 /// Adds dependencies to an environment
@@ -57,11 +58,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         // Add specs to the manifest
         for spec in &specs {
-            project.manifest.add_dependency(
-                env_name,
-                spec,
-                project.clone().config().global_channel_config(),
-            )?;
+            let package_name = spec.name.as_ref().unwrap();
+            let pixi_spec = PixiSpec::from_nameless_matchspec(
+                spec.clone().into_nameless().1,
+                &project.config().global_channel_config(),
+            );
+            project
+                .manifest
+                .add_dependency(env_name, package_name, &pixi_spec)?;
         }
 
         // Add expose mappings to the manifest

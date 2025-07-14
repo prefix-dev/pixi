@@ -5,6 +5,7 @@ use fancy_display::FancyDisplay;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
+use pixi_spec::PixiSpec;
 use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 
 use crate::{
@@ -198,11 +199,14 @@ async fn setup_environment(
         .chain(args.with.clone())
         .collect_vec();
     for spec in &packages_to_add {
-        project.manifest.add_dependency(
-            env_name,
-            spec,
-            project.clone().config().global_channel_config(),
-        )?;
+        let package_name = spec.name.as_ref().unwrap();
+        let pixi_spec = PixiSpec::from_nameless_matchspec(
+            spec.clone().into_nameless().1,
+            &project.config().global_channel_config(),
+        );
+        project
+            .manifest
+            .add_dependency(env_name, package_name, &pixi_spec)?;
     }
 
     if !args.expose.is_empty() {

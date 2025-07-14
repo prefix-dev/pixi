@@ -138,14 +138,10 @@ impl Manifest {
     pub fn add_dependency(
         &mut self,
         env_name: &EnvironmentName,
-        spec: &MatchSpec,
-        channel_config: &ChannelConfig,
+        name: &PackageName,
+        spec: &PixiSpec,
     ) -> miette::Result<()> {
-        // Determine the name of the package to add
-        let (Some(name), spec) = spec.clone().into_nameless() else {
-            miette::bail!("pixi doesn't support wildcard dependencies")
-        };
-        let spec = PixiSpec::from_nameless_matchspec(spec, channel_config);
+        let spec = spec.clone();
 
         // Update self.parsed
         self.parsed
@@ -161,8 +157,8 @@ impl Manifest {
         // Update self.document
         self.document.insert_into_inline_table(
             &format!("envs.{env_name}.dependencies"),
-            name.clone().as_normalized(),
-            spec.clone().to_toml_value(),
+            name.as_normalized(),
+            spec.to_toml_value(),
         )?;
 
         tracing::debug!(
@@ -178,13 +174,8 @@ impl Manifest {
     pub fn remove_dependency(
         &mut self,
         env_name: &EnvironmentName,
-        spec: &MatchSpec,
+        name: &PackageName,
     ) -> miette::Result<PackageName> {
-        // Determine the name of the package to add
-        let (Some(name), _spec) = spec.clone().into_nameless() else {
-            miette::bail!("pixi does not support wildcard dependencies")
-        };
-
         // Update self.parsed
         self.parsed
             .envs
@@ -194,7 +185,7 @@ impl Manifest {
             })?
             .dependencies
             .specs
-            .swap_remove(&name)
+            .swap_remove(name)
             .ok_or(miette::miette!(
                 "Dependency {} not found in {}",
                 console::style(name.as_normalized()).green(),
@@ -211,7 +202,7 @@ impl Manifest {
             console::style(name.as_normalized()).green(),
             env_name.fancy_display()
         );
-        Ok(name)
+        Ok(name.clone())
     }
 
     /// Sets the platform of a specific environment in the manifest
