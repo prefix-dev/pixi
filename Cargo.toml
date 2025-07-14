@@ -313,6 +313,7 @@ pixi_progress = { workspace = true }
 pixi_pypi_spec = { workspace = true }
 pixi_record = { workspace = true }
 pixi_spec = { workspace = true }
+pixi_spec_containers = { workspace = true }
 pixi_toml = { workspace = true }
 pixi_utils = { workspace = true, default-features = false }
 pixi_uv_conversions = { workspace = true }

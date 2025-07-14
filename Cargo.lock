@@ -4287,6 +4287,7 @@ dependencies = [
  "pixi_pypi_spec",
  "pixi_record",
  "pixi_spec",
+ "pixi_spec_containers",
  "pixi_test_utils",
  "pixi_toml",
  "pixi_utils",

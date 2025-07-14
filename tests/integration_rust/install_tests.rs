@@ -758,7 +758,7 @@ async fn test_ensure_gitignore_file_creation() {
     );
     let contents = tokio_fs::read_to_string(&gitignore_path).await.unwrap();
     assert_eq!(
-        contents, "*\n",
+        contents, "*\n!config.toml\n",
         ".pixi/.gitignore file does not contain the expected content"
     );
 
@@ -786,7 +786,7 @@ async fn test_ensure_gitignore_file_creation() {
     );
     let contents = tokio_fs::read_to_string(&gitignore_path).await.unwrap();
     assert_eq!(
-        contents, "*\n",
+        contents, "*\n!config.toml\n",
         ".pixi/.gitignore file does not contain the expected content"
     );
 }
