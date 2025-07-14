@@ -431,7 +431,7 @@ async fn test_cross_platform_resolve_with_no_build() {
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_pinned_help_message() {
-    let pixi = PixiControl::from_manifest(&format!(
+    let pixi = PixiControl::from_manifest(
         r#"
         [workspace]
         channels = ["https://prefix.dev/conda-forge"]
@@ -446,7 +446,7 @@ async fn test_pinned_help_message() {
         [pypi-dependencies]
         databricks-sql-connector = ">=4.0.0"
         "#,
-    ));
+    );
     // First, it should fail
     let result = pixi.unwrap().update_lock_file().await;
     let err = result.err().unwrap();
