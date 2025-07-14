@@ -149,16 +149,14 @@ pub fn convert_to_dist(
                 )?
             } else {
                 // For non-git direct URLs, create DirectUrl distribution
-                let parsed_url = ParsedUrl::try_from(final_url.clone()).unwrap();
+                let parsed_url = ParsedUrl::try_from(uv_redacted::DisplaySafeUrl::from(final_url.clone()))
+                    .map_err(Box::new)?;
 
                 Dist::from_url(
                     pkg_name,
                     VerbatimParsedUrl {
-                        parsed_url: ParsedUrl::try_from(uv_redacted::DisplaySafeUrl::from(
-                            url_without_direct.clone().into_owned(),
-                        ))
-                        .map_err(Box::new)?,
-                        verbatim: uv_pep508::VerbatimUrl::from(url_without_direct.into_owned()),
+                        parsed_url,
+                        verbatim: uv_pep508::VerbatimUrl::from(final_url),
                     },
                 )?
             }
