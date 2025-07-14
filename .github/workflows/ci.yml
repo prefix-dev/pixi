@@ -84,7 +84,7 @@ jobs:
             code:
               - "install/install.ps1"
 
-  pre-commit:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
@@ -92,8 +92,8 @@ jobs:
         uses: prefix-dev/setup-pixi@main
         with:
           environments: lint
-      - name: pre-commit
-        run: pixi run pre-commit-run --color=always --show-diff-on-failure
+      - name: lint (if this step fails, please 'pixi run lint' locally and push the changes)
+        run: pixi run lint
 
   # Check that all the code references are correct.
   check-rustdoc-links:
