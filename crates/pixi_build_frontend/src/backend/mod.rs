@@ -2,7 +2,7 @@ use pixi_build_types::{
     BackendCapabilities, PixiBuildApiVersion,
     procedures::{
         conda_build::{CondaBuildParams, CondaBuildResult},
-        conda_build_v2::{CondaBuildV2Params, CondaBuildV2Result},
+        conda_build_v1::{CondaBuildV2Params, CondaBuildV2Result},
         conda_metadata::{CondaMetadataParams, CondaMetadataResult},
         conda_outputs::{CondaOutputsParams, CondaOutputsResult},
     },

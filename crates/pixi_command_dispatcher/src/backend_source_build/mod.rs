@@ -15,7 +15,7 @@ use pixi_build_types::{
     ChannelConfiguration, PlatformAndVirtualPackages,
     procedures::{
         conda_build::{CondaBuildParams, CondaOutputIdentifier},
-        conda_build_v2::{CondaBuildV2Output, CondaBuildV2Params, CondaBuildV2Prefix},
+        conda_build_v1::{CondaBuildV2Output, CondaBuildV2Params, CondaBuildV2Prefix},
     },
 };
 use pixi_record::SourceRecord;
