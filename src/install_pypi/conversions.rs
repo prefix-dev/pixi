@@ -149,8 +149,9 @@ pub fn convert_to_dist(
                 )?
             } else {
                 // For non-git direct URLs, create DirectUrl distribution
-                let parsed_url = ParsedUrl::try_from(uv_redacted::DisplaySafeUrl::from(final_url.clone()))
-                    .map_err(Box::new)?;
+                let parsed_url =
+                    ParsedUrl::try_from(uv_redacted::DisplaySafeUrl::from(final_url.clone()))
+                        .map_err(Box::new)?;
 
                 Dist::from_url(
                     pkg_name,
