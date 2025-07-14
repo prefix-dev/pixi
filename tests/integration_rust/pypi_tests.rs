@@ -423,3 +423,36 @@ async fn test_cross_platform_resolve_with_no_build() {
             .join("foo-1.0.0-py2.py3-none-any.whl")
     );
 }
+
+/// This test checks that the help message is correctly generated when a PyPI package is pinned
+/// by the conda solve, which may cause a conflict with the PyPI dependencies.
+///
+/// We expect there to be a help message that informs the user about the pinned package
+#[tokio::test]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn test_pinned_help_message() {
+    let pixi = PixiControl::from_manifest(
+        r#"
+        [workspace]
+        channels = ["https://prefix.dev/conda-forge"]
+        name = "deleteme"
+        platforms = ["linux-64"]
+        version = "0.1.0"
+
+        [dependencies]
+        python = "3.12.*"
+        pandas = "*"
+
+        [pypi-dependencies]
+        databricks-sql-connector = ">=4.0.0"
+        "#,
+    );
+    // First, it should fail
+    let result = pixi.unwrap().update_lock_file().await;
+    let err = result.err().unwrap();
+    // Second, it should contain a help message
+    assert_eq!(
+        format!("{}", err.help().unwrap()),
+        "The following PyPI packages have been pinned by the conda solve, and this version may be causing a conflict:\npandas==2.3.1"
+    );
+}
