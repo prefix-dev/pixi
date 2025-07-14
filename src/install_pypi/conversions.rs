@@ -109,10 +109,10 @@ pub fn convert_to_dist(
             let url_hash = match final_url.fragment() {
                 Some(fragment) => {
                     parse_hash_from_url_fragment(fragment, &pkg.name).map_err(|e| {
-                        // strip the shared prefix if present to avoid duplication
-                        let msg = e
+                        let error_str = e.to_string();
+                        let msg = error_str
                             .strip_prefix("Hash verification failed: ")
-                            .unwrap_or(&e)
+                            .unwrap_or(&error_str)
                             .to_string();
                         ConvertToUvDistError::InvalidHash(msg)
                     })?
