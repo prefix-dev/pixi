@@ -12,6 +12,7 @@ from .common import (
 import tempfile
 import os
 import tomli
+import platform
 
 
 def test_run_in_shell_environment(pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -1364,7 +1365,9 @@ def test_run_with_environment_variable_priority(
     pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
 ) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
-    script_manifest = tmp_pixi_workspace.joinpath("env_setup.sh")
+    is_windows = platform.system() == "Windows"
+    script_extension = ".bat" if is_windows else ".sh"
+    script_manifest = tmp_pixi_workspace.joinpath(f"env_setup{script_extension}")
     toml = f"""
     [workspace]
     name = "test"
@@ -1386,11 +1389,20 @@ def test_run_with_environment_variable_priority(
     """
 
     manifest.write_text(toml)
-    script_manifest.write_text("""
-    #!/bin/bash
-    export MY_ENV="activation_script"
+    # Generate platform-specific script content
+    if is_windows:
+        script_content = """@echo off
+    REM Activation script for Windows
+    set MY_ENV=activation script
+    set FOO_PATH=activation_script
+    """
+    else:
+        script_content = """#!/bin/bash
+    # Activation script for Unix-like systems
+    export MY_ENV="activation script"
     export FOO_PATH="activation_script"
-    """)
+    """
+    script_manifest.write_text(script_content)
 
     # Run the default task
     verify_cli_command(
