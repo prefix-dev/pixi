@@ -1,14 +1,3 @@
-use std::{
-    cmp::PartialEq,
-    collections::{HashMap, HashSet},
-    future::{Future, ready},
-    iter,
-    path::PathBuf,
-    str::FromStr,
-    sync::Arc,
-    time::{Duration, Instant},
-};
-
 use barrier_cell::BarrierCell;
 use dashmap::DashMap;
 use fancy_display::FancyDisplay;
@@ -32,6 +21,16 @@ use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Arch, GenericVirtualPackage, PackageName, Platform};
 use rattler_lock::{
     LockFile, ParseCondaLockError, PypiIndexes, PypiPackageData, PypiPackageEnvironmentData,
+};
+use std::{
+    cmp::PartialEq,
+    collections::{HashMap, HashSet},
+    future::{Future, ready},
+    iter,
+    path::PathBuf,
+    str::FromStr,
+    sync::Arc,
+    time::{Duration, Instant},
 };
 use thiserror::Error;
 use tokio::sync::Semaphore;
@@ -1835,7 +1834,14 @@ async fn spawn_solve_conda_environment_task(
             variants: Some(variants),
             enabled_protocols: Default::default(),
         })
-        .await?;
+        .await
+        .with_context(|| {
+            format!(
+                "failed to solve '{}' for {}",
+                group.name().fancy_display(),
+                platform
+            )
+        })?;
 
     // Add purl's for the conda packages that are also available as pypi packages if
     // we need them.

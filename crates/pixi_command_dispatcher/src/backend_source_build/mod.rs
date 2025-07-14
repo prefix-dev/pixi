@@ -14,7 +14,7 @@ use pixi_build_frontend::{Backend, json_rpc::CommunicationError};
 use pixi_build_types::{
     ChannelConfiguration, PlatformAndVirtualPackages,
     procedures::{
-        conda_build::{CondaBuildParams, CondaOutputIdentifier},
+        conda_build_v0::{CondaBuildParams, CondaOutputIdentifier},
         conda_build_v1::{CondaBuildV2Output, CondaBuildV2Params, CondaBuildV2Prefix},
     },
 };

@@ -18,10 +18,10 @@ use serde::Serialize;
 use thiserror::Error;
 use tracing::instrument;
 
-use crate::solve_conda::SolveCondaEnvironmentError;
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    SolveCondaEnvironmentSpec,
+    Cycle, SolveCondaEnvironmentSpec, SourceMetadataError,
+    solve_conda::SolveCondaEnvironmentError,
     solve_pixi::source_metadata_collector::{
         CollectSourceMetadataError, CollectedSourceMetadata, SourceMetadataCollector,
     },
@@ -236,10 +236,13 @@ pub enum SolvePixiEnvironmentError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    CollectSourceMetadataError(#[from] CollectSourceMetadataError),
+    CollectSourceMetadataError(CollectSourceMetadataError),
 
     #[error(transparent)]
     SpecConversionError(#[from] SpecConversionError),
+
+    #[error("detected a cyclic dependency:\n\n{0}")]
+    Cycle(Cycle),
 }
 
 impl Borrow<dyn Diagnostic> for Box<SolvePixiEnvironmentError> {
@@ -257,6 +260,18 @@ impl From<SolveCondaEnvironmentError> for SolvePixiEnvironmentError {
             SolveCondaEnvironmentError::SpecConversionError(err) => {
                 SolvePixiEnvironmentError::SpecConversionError(err)
             }
+        }
+    }
+}
+
+impl From<CollectSourceMetadataError> for SolvePixiEnvironmentError {
+    fn from(err: CollectSourceMetadataError) -> Self {
+        match err {
+            CollectSourceMetadataError::SourceMetadataError {
+                error: SourceMetadataError::Cycle(cycle),
+                ..
+            } => SolvePixiEnvironmentError::Cycle(cycle),
+            _ => SolvePixiEnvironmentError::CollectSourceMetadataError(err),
         }
     }
 }

@@ -77,7 +77,7 @@ pub use solve_conda::SolveCondaEnvironmentSpec;
 pub use solve_pixi::{PixiEnvironmentSpec, SolvePixiEnvironmentError};
 pub use source_build::{BuiltSource, SourceBuildError, SourceBuildSpec};
 pub use source_checkout::{InvalidPathError, SourceCheckout, SourceCheckoutError};
-pub use source_metadata::{SourceMetadata, SourceMetadataError, SourceMetadataSpec};
+pub use source_metadata::{Cycle, SourceMetadata, SourceMetadataError, SourceMetadataSpec};
 
 /// A helper function to check if a value is the default value for its type.
 fn is_default<T: Default + PartialEq>(value: &T) -> bool {

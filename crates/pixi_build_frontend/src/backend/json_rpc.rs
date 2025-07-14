@@ -15,7 +15,7 @@ use miette::Diagnostic;
 use pixi_build_types::{
     BackendCapabilities, FrontendCapabilities, ProjectModelV1, VersionedProjectModel, procedures,
     procedures::{
-        conda_build::{CondaBuildParams, CondaBuildResult},
+        conda_build_v0::{CondaBuildParams, CondaBuildResult},
         conda_build_v1::{CondaBuildV2Params, CondaBuildV2Result},
         conda_metadata::{CondaMetadataParams, CondaMetadataResult},
         conda_outputs::{CondaOutputsParams, CondaOutputsResult},
@@ -332,7 +332,7 @@ impl JsonRpcBackend {
         let result = self
             .client
             .request(
-                procedures::conda_build::METHOD_NAME,
+                procedures::conda_build_v0::METHOD_NAME,
                 RpcParams::from(request),
             )
             .await;
@@ -359,7 +359,7 @@ impl JsonRpcBackend {
             CommunicationError::from_client_error(
                 self.backend_identifier.clone(),
                 err,
-                procedures::conda_build::METHOD_NAME,
+                procedures::conda_build_v0::METHOD_NAME,
                 self.manifest_path.parent().unwrap_or(&self.manifest_path),
                 backend_output,
             )

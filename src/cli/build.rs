@@ -5,7 +5,7 @@ use indicatif::ProgressBar;
 use miette::{Context, IntoDiagnostic};
 use pixi_build_discovery::EnabledProtocols;
 use pixi_build_types::{
-    ChannelConfiguration, PlatformAndVirtualPackages, procedures::conda_build::CondaBuildParams,
+    ChannelConfiguration, PlatformAndVirtualPackages, procedures::conda_build_v0::CondaBuildParams,
 };
 use pixi_command_dispatcher::{InstantiateBackendSpec, SourceCheckout, build::WorkDirKey};
 use pixi_config::ConfigCli;

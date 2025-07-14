@@ -7,6 +7,7 @@ use super::{CommandDispatcherProcessor, PendingDeduplicatingTask, TaskResult};
 use crate::{
     CommandDispatcherError, Reporter, SourceMetadata, SourceMetadataError,
     command_dispatcher::{CommandDispatcherContext, SourceMetadataId, SourceMetadataTask},
+    source_metadata::Cycle,
 };
 
 impl CommandDispatcherProcessor {
@@ -28,7 +29,9 @@ impl CommandDispatcherProcessor {
                     })
                     .contains(id)
                     {
-                        let _ = task.tx.send(Err(SourceMetadataError::CycleDetected));
+                        let _ = task
+                            .tx
+                            .send(Err(SourceMetadataError::Cycle(Cycle::default())));
                         return;
                     }
 

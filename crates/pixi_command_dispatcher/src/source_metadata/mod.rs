@@ -1,5 +1,8 @@
+mod cycle;
+
 use std::collections::HashMap;
 
+pub use cycle::{Cycle, CycleEnvironment};
 use futures::TryStreamExt;
 use itertools::Either;
 use miette::Diagnostic;
@@ -12,6 +15,7 @@ use rattler_conda_types::{
     package::RunExportsJson,
 };
 use thiserror::Error;
+use tracing::instrument;
 
 use crate::{
     BuildBackendMetadataError, BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher,
@@ -45,10 +49,16 @@ pub struct SourceMetadata {
 }
 
 impl SourceMetadataSpec {
+    #[instrument(skip_all, fields(name = %self.package.as_source(), platform = %self.backend_metadata.build_environment.host_platform))]
     pub(crate) async fn request(
         self,
         command_dispatcher: CommandDispatcher,
     ) -> Result<SourceMetadata, CommandDispatcherError<SourceMetadataError>> {
+        tracing::debug!(
+            "Requesting source metadata from '{}'",
+            &self.backend_metadata.source
+        );
+
         // Get the metadata from the build backend.
         let build_backend_metadata = command_dispatcher
             .build_backend_metadata(self.backend_metadata.clone())
@@ -112,16 +122,14 @@ impl SourceMetadataSpec {
             .unwrap_or_default();
         let build_records = self
             .solve_dependencies(
-                format!("{} (build)", self.package.as_source()),
+                CycleEnvironment::Build(self.package.clone()),
                 command_dispatcher,
                 build_dependencies.clone(),
                 self.backend_metadata
                     .build_environment
                     .to_build_from_build(),
             )
-            .await
-            .map_err_with(Box::new)
-            .map_err_with(SourceMetadataError::SolveBuildEnvironment)?;
+            .await?;
         let build_run_exports =
             build_dependencies.extract_run_exports(&build_records, &output.ignore_run_exports);
 
@@ -138,14 +146,12 @@ impl SourceMetadataSpec {
             .extend_with_run_exports_from_build(&build_run_exports);
         let host_records = self
             .solve_dependencies(
-                format!("{} (host)", self.package.as_source()),
+                CycleEnvironment::Host(self.package.clone()),
                 command_dispatcher,
                 host_dependencies.clone(),
                 self.backend_metadata.build_environment.clone(),
             )
-            .await
-            .map_err_with(Box::new)
-            .map_err_with(SourceMetadataError::SolveBuildEnvironment)?;
+            .await?;
         let host_run_exports =
             host_dependencies.extract_run_exports(&host_records, &output.ignore_run_exports);
 
@@ -307,17 +313,17 @@ impl SourceMetadataSpec {
 
     async fn solve_dependencies(
         &self,
-        name: String,
+        pkg: CycleEnvironment,
         command_dispatcher: &CommandDispatcher,
         dependencies: Dependencies,
         build_environment: BuildEnvironment,
-    ) -> Result<Vec<PixiRecord>, CommandDispatcherError<SolvePixiEnvironmentError>> {
+    ) -> Result<Vec<PixiRecord>, CommandDispatcherError<SourceMetadataError>> {
         if dependencies.dependencies.is_empty() {
             return Ok(vec![]);
         }
-        command_dispatcher
+        match command_dispatcher
             .solve_pixi_environment(PixiEnvironmentSpec {
-                name: Some(name),
+                name: Some(pkg.package_name().as_source().to_string()),
                 dependencies: dependencies.dependencies,
                 constraints: dependencies.constraints,
                 installed: vec![], // TODO: To lock build environments, fill this.
@@ -331,6 +337,24 @@ impl SourceMetadataSpec {
                 enabled_protocols: self.backend_metadata.enabled_protocols.clone(),
             })
             .await
+        {
+            Err(CommandDispatcherError::Failed(SolvePixiEnvironmentError::Cycle(mut cycle))) => {
+                cycle.stack.push(pkg);
+                Err(CommandDispatcherError::Failed(SourceMetadataError::Cycle(
+                    cycle,
+                )))
+            }
+            Err(CommandDispatcherError::Failed(e)) => match pkg {
+                CycleEnvironment::Build(_) => Err(CommandDispatcherError::Failed(
+                    SourceMetadataError::SolveBuildEnvironment(Box::new(e)),
+                )),
+                _ => Err(CommandDispatcherError::Failed(
+                    SourceMetadataError::SolveHostEnvironment(Box::new(e)),
+                )),
+            },
+            Err(CommandDispatcherError::Cancelled) => Err(CommandDispatcherError::Cancelled),
+            Ok(records) => Ok(records),
+        }
     }
 }
 
@@ -386,14 +410,14 @@ pub enum SourceMetadataError {
     #[diagnostic(transparent)]
     BuildBackendMetadata(#[from] BuildBackendMetadataError),
 
-    #[error("failed to solve the build environment")]
+    #[error("while trying to solve the build environment for the package")]
     SolveBuildEnvironment(
         #[diagnostic_source]
         #[source]
         Box<SolvePixiEnvironmentError>,
     ),
 
-    #[error("failed to solve the host environment")]
+    #[error("while trying to solve the host environment for the package")]
     SolveHostEnvironment(
         #[diagnostic_source]
         #[source]
@@ -414,8 +438,8 @@ pub enum SourceMetadataError {
         source2: Box<SourceSpec>,
     },
 
-    #[error("the package introduces a (transitive) dependency on itself")]
-    CycleDetected,
+    #[error("the dependencies of some packages in the environment form a cycle")]
+    Cycle(Cycle),
 }
 
 impl From<DependenciesError> for SourceMetadataError {

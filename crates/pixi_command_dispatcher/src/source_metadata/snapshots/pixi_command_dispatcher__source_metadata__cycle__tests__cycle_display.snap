@@ -1,0 +1,17 @@
+---
+source: crates/pixi_command_dispatcher/src/source_metadata/cycle.rs
+expression: cycle.to_string()
+---
+┌─────┐
+|  package_a
+|    requires package_b (host)
+↑     ↓
+|  package_b
+|    requires package_c (build)
+↑     ↓
+|  package_c
+|    requires package_d (run)
+↑     ↓
+|  package_d
+|    requires package_a (host)
+└─────┘
