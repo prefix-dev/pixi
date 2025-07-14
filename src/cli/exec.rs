@@ -12,7 +12,7 @@ use rattler::{
 };
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, PackageName, Platform};
 use rattler_solve::{SolverImpl, SolverTask, resolvo::Solver};
-use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
+use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use reqwest_middleware::ClientWithMiddleware;
 use uv_configuration::RAYON_INITIALIZE;
 
@@ -111,7 +111,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     if !package_names.is_empty() {
         let env_name = format!(
             "temp:{}",
-            package_names.into_iter().collect::<Vec<_>>().join(",")
+            package_names.into_iter().format(",")
         );
 
         activation_env.insert("PIXI_ENVIRONMENT_NAME".into(), env_name.clone());
@@ -233,12 +233,10 @@ pub async fn create_exec_prefix(
 
     // Determine virtual packages of the current platform
     let virtual_packages: Vec<GenericVirtualPackage> =
-        VirtualPackage::detect(&VirtualPackageOverrides::from_env())
+        VirtualPackages::detect(&VirtualPackageOverrides::from_env())
             .into_diagnostic()
             .context("failed to determine virtual packages")?
-            .iter()
-            .cloned()
-            .map(GenericVirtualPackage::from)
+            .into_generic_virtual_packages()
             .collect();
 
     // Solve the environment
@@ -262,8 +260,14 @@ pub async fn create_exec_prefix(
         Err(err) if has_guessed_package && !args.with.is_empty() => {
             // If solving failed and we guessed a package while using --with,
             // try again without the guessed package (last spec)
+            let guessed_package_name = specs[specs.len() - 1]
+                .name
+                .as_ref()
+                .map(|name| name.as_source())
+                .unwrap_or("<unknown>");
             tracing::debug!(
-                "Solver failed with guessed package, retrying without it: {}",
+                "Solver failed with guessed package '{}', retrying without it: {}",
+                guessed_package_name,
                 err
             );
             let records = wrap_in_progress("retrying solve without guessed package", || {
