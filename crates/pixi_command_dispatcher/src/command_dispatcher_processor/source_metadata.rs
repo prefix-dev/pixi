@@ -1,6 +1,7 @@
 use std::{collections::hash_map::Entry, sync::Arc};
 
 use futures::FutureExt;
+use itertools::Itertools;
 
 use super::{CommandDispatcherProcessor, PendingDeduplicatingTask, TaskResult};
 use crate::{
@@ -15,12 +16,32 @@ impl CommandDispatcherProcessor {
         // Lookup the id of the source metadata to avoid deduplication.
         let source_metadata_id = {
             match self.source_metadata_ids.get(&task.spec) {
-                Some(id) => *id,
+                Some(id) => {
+                    // We already have a pending task for this source metadata. Let's make sure that
+                    // we are not trying to resolve the same source metadata in a cycle.
+                    if std::iter::successors(task.parent, |ctx| {
+                        self.parent_contexts.get(ctx).cloned()
+                    })
+                    .filter_map(|context| match context {
+                        CommandDispatcherContext::SourceMetadata(id) => Some(id),
+                        _ => None,
+                    })
+                    .contains(id)
+                    {
+                        let _ = task.tx.send(Err(SourceMetadataError::CycleDetected));
+                        return;
+                    }
+
+                    *id
+                }
                 None => {
                     // If the source metadata is not in the map, we need to
                     // create a new id for it.
                     let id = SourceMetadataId(self.source_metadata_ids.len());
                     self.source_metadata_ids.insert(task.spec.clone(), id);
+                    if let Some(parent) = task.parent {
+                        self.parent_contexts.insert(id.into(), parent);
+                    }
                     id
                 }
             }

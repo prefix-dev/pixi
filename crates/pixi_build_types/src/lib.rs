@@ -79,7 +79,7 @@ impl PixiBuildApiVersion {
             },
             1 => BackendCapabilities {
                 provides_conda_outputs: Some(true),
-                provides_conda_build_v2: Some(true),
+                provides_conda_build_v1: Some(true),
                 ..Self(0).expected_backend_capabilities()
             },
             _ => BackendCapabilities::default(),

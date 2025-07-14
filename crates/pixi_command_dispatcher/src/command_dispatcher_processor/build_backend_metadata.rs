@@ -24,6 +24,9 @@ impl CommandDispatcherProcessor {
                     let id = BuildBackendMetadataId(self.build_backend_metadata_ids.len());
                     self.build_backend_metadata_ids
                         .insert(task.spec.clone(), id);
+                    if let Some(parent) = task.parent {
+                        self.parent_contexts.insert(id.into(), parent);
+                    }
                     id
                 }
             }
@@ -99,6 +102,7 @@ impl CommandDispatcherProcessor {
             CommandDispatcherError<BuildBackendMetadataError>,
         >,
     ) {
+        self.parent_contexts.remove(&id.into());
         if let Some((reporter, reporter_id)) = self
             .reporter
             .as_deref_mut()

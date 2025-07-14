@@ -165,7 +165,7 @@ impl CommandDispatcherChannel {
 ///
 /// This enum is used to track dependencies and associate tasks with specific
 /// contexts.
-#[derive(Debug, Copy, Clone, derive_more::From)]
+#[derive(Debug, Copy, Clone, derive_more::From, Hash, Eq, PartialEq)]
 pub(crate) enum CommandDispatcherContext {
     SolveCondaEnvironment(SolveCondaEnvironmentId),
     SolvePixiEnvironment(SolvePixiEnvironmentId),

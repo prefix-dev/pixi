@@ -48,6 +48,9 @@ pub(crate) struct CommandDispatcherProcessor {
     /// The receiver for messages from a [`CommandDispatcher]`.
     receiver: mpsc::UnboundedReceiver<ForegroundMessage>,
 
+    /// Keeps track of the parent context for each task that is being processed.
+    parent_contexts: HashMap<CommandDispatcherContext, CommandDispatcherContext>,
+
     /// A weak reference to the sender. This is used to allow constructing new
     /// [`Dispatchers`] without keeping the channel alive if there are no
     /// dispatchers alive. This is important because the command_dispatcher
@@ -286,6 +289,7 @@ impl CommandDispatcherProcessor {
         let join_handle = std::thread::spawn(move || {
             let task = Self {
                 receiver: rx,
+                parent_contexts: HashMap::new(),
                 sender: weak_tx,
                 conda_solves: slotmap::SlotMap::default(),
                 pending_conda_solves: VecDeque::new(),

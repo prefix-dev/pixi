@@ -27,6 +27,11 @@ impl CommandDispatcherProcessor {
             reporter_id,
         });
 
+        if let Some(parent_context) = task.parent {
+            self.parent_contexts
+                .insert(pending_env_id.into(), parent_context);
+        }
+
         // Notify the reporter that the build has started.
         if let Some((reporter, id)) = self
             .reporter
@@ -59,6 +64,7 @@ impl CommandDispatcherProcessor {
         id: SourceBuildId,
         result: Result<BuiltSource, CommandDispatcherError<SourceBuildError>>,
     ) {
+        self.parent_contexts.remove(&id.into());
         let env = self
             .source_builds
             .remove(id)

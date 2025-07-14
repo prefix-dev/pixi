@@ -13,9 +13,9 @@ use std::{
 use rattler_conda_types::{PackageName, Platform, VersionWithSource};
 use serde::{Deserialize, Serialize};
 
-pub const METHOD_NAME: &str = "conda/build_v2";
+pub const METHOD_NAME: &str = "conda/build_v1";
 
-/// Parameters for the `conda/build_v2` request.
+/// Parameters for the `conda/build_v1` request.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CondaBuildV2Params {
@@ -83,7 +83,7 @@ pub struct CondaBuildV2Output {
     pub variant: BTreeMap<String, String>,
 }
 
-/// Contains the result of the `conda/build_v2` request.
+/// Contains the result of the `conda/build_v1` request.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CondaBuildV2Result {
     /// The location on disk where the built package is located.

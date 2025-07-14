@@ -28,6 +28,12 @@ impl CommandDispatcherProcessor {
                 reporter_id,
             });
 
+        // Store the parent context for the task.
+        if let Some(parent_context) = task.parent {
+            self.parent_contexts
+                .insert(pending_id.into(), parent_context);
+        }
+
         // Add to the list of pending tasks
         self.pending_backend_source_builds
             .push_back((pending_id, task.spec));
@@ -87,6 +93,7 @@ impl CommandDispatcherProcessor {
         id: BackendSourceBuildId,
         result: Result<BackendBuiltSource, CommandDispatcherError<BackendSourceBuildError>>,
     ) {
+        self.parent_contexts.remove(&id.into());
         let env = self
             .backend_source_builds
             .remove(id)

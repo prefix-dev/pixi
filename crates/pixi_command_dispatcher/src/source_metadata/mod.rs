@@ -413,6 +413,9 @@ pub enum SourceMetadataError {
         source1: Box<SourceSpec>,
         source2: Box<SourceSpec>,
     },
+
+    #[error("the package introduces a (transitive) dependency on itself")]
+    CycleDetected,
 }
 
 impl From<DependenciesError> for SourceMetadataError {

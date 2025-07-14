@@ -19,8 +19,8 @@ pub struct BackendCapabilities {
     /// Whether the backend provides the `conda/outputs` API.
     pub provides_conda_outputs: Option<bool>,
 
-    /// Whether the backend provides the `conda/build_v2` API.
-    pub provides_conda_build_v2: Option<bool>,
+    /// Whether the backend provides the `conda/build_v1` API.
+    pub provides_conda_build_v1: Option<bool>,
 }
 
 impl BackendCapabilities {
@@ -32,7 +32,7 @@ impl BackendCapabilities {
                 self.provides_conda_metadata() && expected.provides_conda_metadata(),
             ),
             provides_conda_build: Some(
-                self.provides_conda_build() && expected.provides_conda_build(),
+                self.provides_conda_build_v0() && expected.provides_conda_build_v0(),
             ),
             highest_supported_project_model: Some(
                 self.highest_supported_project_model()
@@ -41,8 +41,8 @@ impl BackendCapabilities {
             provides_conda_outputs: Some(
                 self.provides_conda_outputs() && expected.provides_conda_outputs(),
             ),
-            provides_conda_build_v2: Some(
-                self.provides_conda_build_v2() && expected.provides_conda_build_v2(),
+            provides_conda_build_v1: Some(
+                self.provides_conda_build_v1() && expected.provides_conda_build_v1(),
             ),
         }
     }
@@ -53,7 +53,7 @@ impl BackendCapabilities {
     }
 
     /// Whether the backend provides the ability to build conda packages.
-    pub fn provides_conda_build(&self) -> bool {
+    pub fn provides_conda_build_v0(&self) -> bool {
         self.provides_conda_build.unwrap_or(false)
     }
 
@@ -67,9 +67,9 @@ impl BackendCapabilities {
         self.provides_conda_outputs.unwrap_or(false)
     }
 
-    /// Whether the backend provides the `conda/build_v2` API.
-    pub fn provides_conda_build_v2(&self) -> bool {
-        self.provides_conda_build_v2.unwrap_or(false)
+    /// Whether the backend provides the `conda/build_v1` API.
+    pub fn provides_conda_build_v1(&self) -> bool {
+        self.provides_conda_build_v1.unwrap_or(false)
     }
 }
 

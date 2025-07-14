@@ -104,7 +104,7 @@ impl Backend {
         output_stream: W,
     ) -> Result<CondaBuildResult, CommunicationError> {
         assert!(
-            self.inner.capabilities().provides_conda_build(),
+            self.inner.capabilities().provides_conda_build_v0(),
             "This backend does not support the conda build procedure"
         );
         match &self.inner {
@@ -120,7 +120,7 @@ impl Backend {
         output_stream: W,
     ) -> Result<CondaBuildV2Result, CommunicationError> {
         assert!(
-            self.inner.capabilities().provides_conda_build_v2(),
+            self.inner.capabilities().provides_conda_build_v1(),
             "This backend does not support the conda build v2 procedure"
         );
         match &self.inner {

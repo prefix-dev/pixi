@@ -116,7 +116,7 @@ impl SourceBuildSpec {
             .await
             .map_err_with(SourceBuildError::Initialize)?;
 
-        if backend.capabilities().provides_conda_build_v2() {
+        if backend.capabilities().provides_conda_build_v1() {
             let built_package = self.build_v2(command_dispatcher, backend).await?;
 
             Ok(BuiltSource {

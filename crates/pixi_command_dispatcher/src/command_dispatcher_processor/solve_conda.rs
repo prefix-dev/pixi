@@ -28,6 +28,11 @@ impl CommandDispatcherProcessor {
             reporter_id,
         });
 
+        if let Some(parent) = task.parent {
+            // Store the parent context for the task.
+            self.parent_contexts.insert(environment_id.into(), parent);
+        }
+
         // Add the environment to the list of pending environments.
         self.pending_conda_solves
             .push_back((environment_id, task.spec));
@@ -79,6 +84,7 @@ impl CommandDispatcherProcessor {
         id: SolveCondaEnvironmentId,
         result: Result<Vec<PixiRecord>, CommandDispatcherError<SolveCondaEnvironmentError>>,
     ) {
+        self.parent_contexts.remove(&id.into());
         let env = self
             .conda_solves
             .remove(id)
