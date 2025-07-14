@@ -421,6 +421,17 @@ fn get_export_specific_task_env(task: &Task, command_env: IndexMap<String, Strin
     .cloned()
     .collect();
 
+    // Create environment map for priority-based merging.
+    // Considering future extensions, there may be other types of environment variables.
+    let mut env_map: HashMap<&'static str, Option<IndexMap<String, String>>> = HashMap::new();
+    // Command env variables
+    env_map.insert("COMMAND_ENV", Some(command_env.clone()));
+    // Task specific environment variables
+    env_map.insert(
+        "TASK_SPECIFIC_ENVS",
+        Some(task.env().cloned().unwrap_or_default()),
+    );
+
     if let Some(env) = task.env() {
         // If task.env() and command_env don't have duplicated keys, simply export task.env().
         if env.keys().all(|k| !command_env.contains_key(k)) {
@@ -430,18 +441,6 @@ fn get_export_specific_task_env(task: &Task, command_env: IndexMap<String, Strin
                 }
             }
         } else {
-            // Create environment map for priority-based merging.
-            // Considering future extensions, there may be other types of environment variables.
-            let mut env_map: HashMap<&'static str, Option<IndexMap<String, String>>> =
-                HashMap::new();
-            // Command env variables
-            env_map.insert("COMMAND_ENV", Some(command_env));
-            // Task specific environment variables
-            env_map.insert(
-                "TASK_SPECIFIC_ENVS",
-                Some(task.env().cloned().unwrap_or_default()),
-            );
-
             // Apply priority order: from lowest to highest
             let priority = ["COMMAND_ENV", "TASK_SPECIFIC_ENVS"];
             for key in &priority {
@@ -453,11 +452,14 @@ fn get_export_specific_task_env(task: &Task, command_env: IndexMap<String, Strin
     }
 
     // Put all merged environment variables to export.
+    // Only the keys that are in "TASK_SPECIFIC_ENVS" map would be exported.
     for (key, value) in export_merged {
         let should_exclude = override_excluded_keys.contains(key.as_str());
-        if !should_exclude {
-            tracing::info!("Setting environment variable: {}=\"{}\"", key, value);
-            export.push_str(&format!("export \"{}={}\";\n", key, value));
+        if let Some(task_env_map) = &env_map["TASK_SPECIFIC_ENVS"] {
+            if task_env_map.contains_key(&key) && !should_exclude {
+                tracing::info!("Setting environment variable: {}=\"{}\"", key, value);
+                export.push_str(&format!("export \"{}={}\";\n", key, value));
+            }
         }
     }
     export
