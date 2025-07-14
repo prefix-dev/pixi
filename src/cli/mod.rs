@@ -526,18 +526,41 @@ pub fn get_styles() -> clap::builder::Styles {
 
 /// Display help with extensions section appended
 fn show_help_with_extensions() {
-    let styles = get_styles();
-    let mut cmd = Args::command().styles(styles);
+    let mut cmd = Args::command();
+    cmd = cmd.styles(get_styles());
 
-    let _ = cmd.write_help(&mut std::io::stdout());
-    println!();
+    if console::colors_enabled_stderr() {
+        cmd = cmd.color(clap::ColorChoice::Always);
+    } else {
+        cmd = cmd.color(clap::ColorChoice::Never);
+    }
+
+    let _ = cmd.print_help();
 
     // Add extensions section
     let external_commands = command_info::find_external_commands();
     if !external_commands.is_empty() {
-        println!("\nAvailable Extensions:");
-        for (name, _path) in external_commands {
-            println!("    {:<15} (via pixi-{})", name, name);
+        if console::colors_enabled_stderr() {
+            println!(
+                "\n\n{}",
+                console::style("Available Extensions:")
+                    .bold()
+                    .underlined()
+                    .bright()
+                    .green()
+            );
+            for (name, _path) in external_commands {
+                println!(
+                    "    {} (via pixi-{})",
+                    console::style(format!("{:<15}", name)).bright().cyan(),
+                    name
+                );
+            }
+        } else {
+            println!("\n\nAvailable Extensions:");
+            for (name, _path) in external_commands {
+                println!("    {:<15} (via pixi-{})", name, name);
+            }
         }
     }
 }
