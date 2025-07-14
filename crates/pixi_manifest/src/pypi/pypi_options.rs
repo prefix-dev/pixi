@@ -488,7 +488,6 @@ mod tests {
             no_build_isolation: NoBuildIsolation::from_iter(["foo".parse().unwrap()]),
             index_strategy: None,
             no_build: Some(NoBuild::All),
-            // todo: add dependency overrides
             dependency_overrides: Some(IndexMap::from_iter([
                 (
                     "pkg1".parse().unwrap(),
