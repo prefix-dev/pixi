@@ -32,6 +32,7 @@ use rattler_digest::{Md5, Sha256, parse_digest_from_hex};
 use rattler_lock::{
     PackageHashes, PypiPackageData, PypiPackageEnvironmentData, PypiSourceTreeHashable, UrlOrPath,
 };
+
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
@@ -670,6 +671,38 @@ enum GetUrlOrPathError {
     InvalidUrl(#[from] ToUrlError),
 }
 
+/// Convert an absolute path to a path relative to the project root if it's inside it,
+/// prefixing the result with `./`. If the path lies outside the project root,
+/// return the original absolute path unchanged.
+fn make_relative_or_absolute(
+    absolute: PathBuf,
+    abs_project_root: &Path,
+) -> Result<PathBuf, GetUrlOrPathError> {
+    const RELATIVE_BASE: &str = "./";
+    let relative = absolute.strip_prefix(abs_project_root);
+    let path = match relative {
+        Ok(relative) => PathBuf::from_str(RELATIVE_BASE)
+            .map_err(|_| GetUrlOrPathError::ExpectedPath(RELATIVE_BASE.to_string()))?
+            .join(relative),
+        Err(_) => absolute,
+    };
+    Ok(path)
+}
+
+/// Compute the hash of a PyPI source tree if it's a directory
+fn compute_source_tree_hash(install_path: &Path) -> miette::Result<Option<PackageHashes>> {
+    if install_path.is_dir() {
+        Ok(Some(
+            PypiSourceTreeHashable::from_directory(install_path)
+                .into_diagnostic()
+                .context("failed to compute hash of pypi source tree")?
+                .hash(),
+        ))
+    } else {
+        Ok(None)
+    }
+}
+
 /// Get the UrlOrPath from the index url and file location
 /// This will be used to handle the case of a source or built distribution
 /// coming from a registry index or a `--find-links` path
@@ -678,7 +711,6 @@ fn get_url_or_path(
     file_location: &FileLocation,
     abs_project_root: &Path,
 ) -> Result<UrlOrPath, GetUrlOrPathError> {
-    const RELATIVE_BASE: &str = "./";
     match index_url {
         // This is the case where the registry index is a PyPI index
         // or an URL
@@ -722,18 +754,7 @@ fn get_url_or_path(
                     // relative to the project root, **not** the path relative
                     // to the --find-links path. This is because during
                     // installation we do something like: `project_root.join(relative_path)`
-                    let relative = absolute.strip_prefix(abs_project_root);
-                    let path = match relative {
-                        // Apparently, we can make it relative to the project root
-                        Ok(relative) => PathBuf::from_str(RELATIVE_BASE)
-                            .map_err(|_| {
-                                GetUrlOrPathError::ExpectedPath(RELATIVE_BASE.to_string())
-                            })?
-                            .join(relative),
-                        // We can't make it relative to the project root
-                        // so we just return the absolute path
-                        Err(_) => absolute,
-                    };
+                    let path = make_relative_or_absolute(absolute, abs_project_root)?;
                     UrlOrPath::Path(Utf8TypedPathBuf::from(path.to_string_lossy().to_string()))
                 }
                 // This happens when it is relative to the non-standard index
@@ -751,16 +772,7 @@ fn get_url_or_path(
                     let relative = PathBuf::from_str(relative)
                         .map_err(|_| GetUrlOrPathError::ExpectedPath(relative.to_string()))?;
                     let absolute = base.join(relative);
-
-                    let relative = absolute.strip_prefix(abs_project_root);
-                    let path = match relative {
-                        Ok(relative) => PathBuf::from_str(RELATIVE_BASE)
-                            .map_err(|_| {
-                                GetUrlOrPathError::ExpectedPath(RELATIVE_BASE.to_string())
-                            })?
-                            .join(relative),
-                        Err(_) => absolute,
-                    };
+                    let path = make_relative_or_absolute(absolute, abs_project_root)?;
                     UrlOrPath::Path(Utf8TypedPathBuf::from(path.to_string_lossy().to_string()))
                 }
             };
@@ -813,11 +825,25 @@ async fn lock_pypi_packages(
                         }
                         BuiltDist::DirectUrl(dist) => {
                             let url = dist.url.to_url();
+
+                            // Extract hash from URL fragment
+                            let hash = if let Some(fragment) = url.fragment() {
+                                match pixi_utils::hash::parse_hash_from_url_fragment(
+                                    fragment,
+                                    dist.name(),
+                                ) {
+                                    Ok(hash) => hash,
+                                    Err(e) => return Err(miette::miette!(e)),
+                                }
+                            } else {
+                                None
+                            };
+
                             let direct_url = Url::parse(&format!("direct+{url}"))
                                 .into_diagnostic()
                                 .context("cannot create direct url")?;
 
-                            (UrlOrPath::Url(direct_url), None)
+                            (UrlOrPath::Url(direct_url), hash)
                         }
                         BuiltDist::Path(dist) => (
                             UrlOrPath::Path(
@@ -907,16 +933,7 @@ async fn lock_pypi_packages(
                         }
                         SourceDist::Path(path) => {
                             // Compute the hash of the package based on the source tree.
-                            let hash = if path.install_path.is_dir() {
-                                Some(
-                                    PypiSourceTreeHashable::from_directory(&path.install_path)
-                                        .into_diagnostic()
-                                        .context("failed to compute hash of pypi source tree")?
-                                        .hash(),
-                                )
-                            } else {
-                                None
-                            };
+                            let hash = compute_source_tree_hash(&path.install_path)?;
 
                             // process the path or url that we get back from uv
                             let install_path = process_uv_path_url(
@@ -934,16 +951,7 @@ async fn lock_pypi_packages(
                         }
                         SourceDist::Directory(dir) => {
                             // Compute the hash of the package based on the source tree.
-                            let hash = if dir.install_path.is_dir() {
-                                Some(
-                                    PypiSourceTreeHashable::from_directory(&dir.install_path)
-                                        .into_diagnostic()
-                                        .context("failed to compute hash of pypi source tree")?
-                                        .hash(),
-                                )
-                            } else {
-                                None
-                            };
+                            let hash = compute_source_tree_hash(&dir.install_path)?;
 
                             // process the path or url that we get back from uv
                             let install_path =

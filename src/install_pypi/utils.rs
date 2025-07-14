@@ -95,7 +95,7 @@ fn uv_old_up_to_date_with(source: &Path, target: &InstalledDist) -> Result<bool,
 pub fn check_url_freshness(
     locked_url: &Url,
     installed_dist: &InstalledDist,
-) -> Result<bool, std::io::Error> {
+) -> Result<bool, io::Error> {
     if let Ok(archive) = locked_url.to_file_path() {
         // This checks the entrypoints like `pyproject.toml`, `setup.cfg`, and
         // `setup.py` against the METADATA of the installed distribution
