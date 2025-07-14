@@ -464,7 +464,16 @@ mod tests {
             ]),
             index_strategy: None,
             no_build: None,
-            dependency_overrides: None,
+            dependency_overrides:Some(IndexMap::from_iter([
+                (
+                    "pkg1".parse().unwrap(),
+                    PixiPypiSpec::RawVersion("==1.0.0".parse().unwrap()),
+                ),
+                (
+                    "pkg2".parse().unwrap(),
+                    PixiPypiSpec::RawVersion("==2.0.0".parse().unwrap()),
+                ),
+            ])),
             no_binary: Default::default(),
         };
 
@@ -480,7 +489,17 @@ mod tests {
             index_strategy: None,
             no_build: Some(NoBuild::All),
             // todo: add dependency overrides
-            dependency_overrides: None,
+            dependency_overrides: Some(IndexMap::from_iter([
+                (
+                    "pkg1".parse().unwrap(),
+                    PixiPypiSpec::RawVersion("==1.2.0".parse().unwrap()),
+                ),
+                (
+                    "pkg3".parse().unwrap(),
+                    PixiPypiSpec::RawVersion("==3.2.0".parse().unwrap()),
+                ),
+            ])),
+
             no_binary: Default::default(),
         };
 

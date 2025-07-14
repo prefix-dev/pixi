@@ -16,5 +16,8 @@ no-build-isolation:
   - bar
 index-strategy: ~
 no-build: all
-dependency-overrides: ~
+dependency-overrides:
+  pkg1: "==1.0.0"
+  pkg3: "==3.2.0"
+  pkg2: "==2.0.0"
 no-binary: ~
