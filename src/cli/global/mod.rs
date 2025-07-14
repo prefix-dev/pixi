@@ -9,6 +9,7 @@ mod install;
 mod list;
 mod remove;
 mod shortcut;
+mod spec;
 mod sync;
 mod uninstall;
 mod update;

@@ -8,7 +8,10 @@ use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 
 use crate::{
-    cli::{global::revert_environment_after_error, has_specs::HasSpecs},
+    cli::{
+        global::{revert_environment_after_error, spec::GlobalSpecs},
+        has_specs::HasSpecs,
+    },
     global::{
         self, EnvChanges, EnvState, EnvironmentName, Mapping, Project, StateChange, StateChanges,
         common::{NotChangedReason, contains_menuinst_document},
@@ -30,8 +33,8 @@ use pixi_config::{self, Config, ConfigCli};
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
     /// Specifies the package that should be installed.
-    #[arg(num_args = 1.., required = true, value_name = "PACKAGE")]
-    packages: Vec<String>,
+    #[clap(flatten)]
+    packages: GlobalSpecs,
 
     /// The channels to consider as a name or a url.
     /// Multiple channels can be specified by using this field multiple times.
@@ -77,12 +80,6 @@ pub struct Args {
     no_shortcuts: bool,
 }
 
-impl HasSpecs for Args {
-    fn packages(&self) -> Vec<&str> {
-        self.packages.iter().map(AsRef::as_ref).collect()
-    }
-}
-
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
     let project_original = global::Project::discover_or_create()
@@ -92,6 +89,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let env_names = match &args.environment {
         Some(env_name) => Vec::from([env_name.clone()]),
         None => args
+            .packages
             .specs()?
             .iter()
             .map(|(package_name, _)| package_name.as_normalized().parse().into_diagnostic())
@@ -110,7 +108,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let mut env_changes = EnvChanges::default();
     let mut last_updated_project = project_original;
-    let specs = args.specs()?;
+    let specs = args.packages.specs()?;
     for env_name in &env_names {
         let specs = specs.clone();
         let specs = if multiple_envs {

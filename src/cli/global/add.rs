@@ -1,4 +1,5 @@
 use crate::cli::global::revert_environment_after_error;
+use crate::cli::global::spec::GlobalSpecs;
 use crate::cli::has_specs::HasSpecs;
 use crate::global::{EnvironmentName, Mapping, Project, StateChanges};
 use clap::Parser;
@@ -16,8 +17,8 @@ use rattler_conda_types::MatchSpec;
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
     /// Specifies the package that should be added to the environment.
-    #[arg(num_args = 1.., required = true, value_name = "PACKAGE")]
-    packages: Vec<String>,
+    #[clap(flatten)]
+    packages: GlobalSpecs,
 
     /// Specifies the environment that the dependencies need to be added to.
     #[clap(short, long, required = true)]
@@ -31,12 +32,6 @@ pub struct Args {
 
     #[clap(flatten)]
     config: ConfigCli,
-}
-
-impl HasSpecs for Args {
-    fn packages(&self) -> Vec<&str> {
-        self.packages.iter().map(AsRef::as_ref).collect()
-    }
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -90,6 +85,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut project_modified = project_original.clone();
 
     let specs = args
+        .packages
         .specs()?
         .into_iter()
         .map(|(_, specs)| specs)
