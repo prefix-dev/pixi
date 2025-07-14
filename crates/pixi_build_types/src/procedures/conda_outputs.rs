@@ -204,17 +204,16 @@ pub struct CondaOutputRunExports {
 //     /// An optional name
 //     pub name: Option<String>,
 //
-//     /// The build dependencies of the package. These refer to the packages
-// that     /// should be installed in the "build" environment. The build
-// environment     /// contains packages for the current architecture that can
-// be used to run     /// tools on the current machine like compilers, code
-// generators, etc.     pub build_dependencies: Option<CondaOutputDependencies>,
+//     /// The build dependencies of the package. These refer to the packages that
+//     /// should be installed in the "build" environment. The build environment
+//     /// contains packages for the current architecture that can be used to run
+//     /// tools on the current machine like compilers, code generators, etc.
+//     pub build_dependencies: Option<CondaOutputDependencies>,
 //
-//     /// The "host" dependencies of the package. These refer to the package
-// that     /// should be installed to be able to refer to them from the build
-// process     /// but not run them. They are installed for the "target"
-// architecture (see     /// subdir) or for the current architecture if the
-// target is `noarch`.     ///
+//     /// The "host" dependencies of the package. These refer to the package that
+//     /// should be installed to be able to refer to them from the build process
+//     /// but not run them. They are installed for the "target" architecture (see
+//     /// subdir) or for the current architecture if the target is `noarch`.
 //     /// For C++ packages these would be libraries to link against.
 //     pub host_dependencies: Option<CondaOutputDependencies>,
 //

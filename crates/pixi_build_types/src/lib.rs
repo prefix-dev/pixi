@@ -27,7 +27,8 @@ use serde::{Deserialize, Serialize};
 pub static PIXI_BUILD_API_VERSION_NAME: LazyLock<PackageName> =
     LazyLock::new(|| PackageName::new_unchecked("pixi-build-api-version"));
 pub const PIXI_BUILD_API_VERSION_LOWER: u64 = 0;
-pub const PIXI_BUILD_API_VERSION_UPPER: u64 = 2;
+pub const PIXI_BUILD_API_VERSION_CURRENT: u64 = 1;
+pub const PIXI_BUILD_API_VERSION_UPPER: u64 = PIXI_BUILD_API_VERSION_CURRENT + 1;
 pub static PIXI_BUILD_API_VERSION_SPEC: LazyLock<VersionSpec> = LazyLock::new(|| {
     VersionSpec::Group(
         LogicalOperator::And,
@@ -65,7 +66,7 @@ impl PixiBuildApiVersion {
 
     /// Returns the "current" version of the Pixi Build API.
     pub fn current() -> Self {
-        PixiBuildApiVersion(PIXI_BUILD_API_VERSION_UPPER - 1)
+        PixiBuildApiVersion(PIXI_BUILD_API_VERSION_CURRENT)
     }
 
     /// Returns the backend capabilities that are expected for this version.

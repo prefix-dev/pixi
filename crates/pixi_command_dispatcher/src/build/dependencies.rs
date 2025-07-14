@@ -88,33 +88,31 @@ impl Dependencies {
         self
     }
 
+    /// Adds a set of dependencies to the current dependencies.
+    fn add_dependencies(&mut self, specs: DependencyMap<PackageName, PixiSpec>) {
+        self.dependencies.extend(specs.into_specs());
+    }
+
+    /// Adds a set of constraints to the current constraints.
+    fn add_constraints(&mut self, specs: DependencyMap<PackageName, BinarySpec>) {
+        self.constraints.extend(specs.into_specs())
+    }
+
     pub fn extend_with_run_exports_from_build_and_host(
         mut self,
         host_run_exports: PixiRunExports,
         build_run_exports: PixiRunExports,
         target_platform: Platform,
     ) -> Self {
-        let add_dependencies = |this: &mut Self, specs: DependencyMap<PackageName, PixiSpec>| {
-            for (name, spec) in specs.into_specs() {
-                this.dependencies.insert(name, spec);
-            }
-        };
-
-        let add_constraints = |this: &mut Self, specs: DependencyMap<PackageName, BinarySpec>| {
-            for (name, spec) in specs.into_specs() {
-                this.constraints.insert(name, spec);
-            }
-        };
-
         if target_platform == Platform::NoArch {
-            add_dependencies(&mut self, host_run_exports.noarch);
+            self.add_dependencies(host_run_exports.noarch);
         } else {
-            add_dependencies(&mut self, build_run_exports.strong);
-            add_dependencies(&mut self, host_run_exports.strong);
-            add_dependencies(&mut self, host_run_exports.weak);
-            add_constraints(&mut self, build_run_exports.strong_constrains);
-            add_constraints(&mut self, host_run_exports.strong_constrains);
-            add_constraints(&mut self, host_run_exports.weak_constrains);
+            self.add_dependencies(build_run_exports.strong);
+            self.add_dependencies(host_run_exports.strong);
+            self.add_dependencies(host_run_exports.weak);
+            self.add_constraints(build_run_exports.strong_constrains);
+            self.add_constraints(host_run_exports.strong_constrains);
+            self.add_constraints(host_run_exports.weak_constrains);
         }
 
         self
@@ -243,7 +241,8 @@ impl Dependencies {
     }
 }
 
-/// A variant of [`rattler_conda_types::package::RunExportsJson`] but with pixi data types.
+/// A variant of [`rattler_conda_types::package::RunExportsJson`] but with pixi
+/// data types.
 #[derive(Debug, Default, Clone)]
 pub struct PixiRunExports {
     pub noarch: DependencyMap<PackageName, PixiSpec>,

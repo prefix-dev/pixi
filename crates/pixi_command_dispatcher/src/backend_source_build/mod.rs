@@ -79,7 +79,9 @@ pub struct BackendSourceBuildV2Method {
     pub host_prefix: BackendSourceBuildPrefix,
 
     /// The variant to build
-    /// TODO: This should move to the `SourceRecord` in the future.
+    /// TODO: This should move to the `SourceRecord` in the future. The variant
+    /// is an essential part to identity a particular output of a source
+    /// package.
     pub variant: BTreeMap<String, String>,
 
     /// The directory where to place the built package. This is used as a hint
@@ -194,7 +196,10 @@ impl BackendSourceBuildSpec {
             let pkgs = build_result.packages.iter().format_with(", ", |pkg, f| {
                 f(&format_args!(
                     "{}/{}={}={}",
-                    pkg.subdir, pkg.name, pkg.version, pkg.build,
+                    pkg.subdir,
+                    pkg.name.as_normalized(),
+                    pkg.version,
+                    pkg.build,
                 ))
             });
             tracing::warn!(
@@ -206,7 +211,7 @@ impl BackendSourceBuildSpec {
 
         // Locate the package that matches the source record we requested to be build.
         let built_package = if let Some(idx) = build_result.packages.iter().position(|pkg| {
-            pkg.name == record.package_record.name.as_normalized()
+            pkg.name == record.package_record.name
                 && Version::from_str(&pkg.version).ok().as_ref()
                     == Some(&record.package_record.version)
                 && pkg.build == record.package_record.build
@@ -224,7 +229,13 @@ impl BackendSourceBuildSpec {
                         .packages
                         .iter()
                         .map(|pkg| {
-                            format!("{}/{}={}={}", pkg.subdir, pkg.name, pkg.version, pkg.build)
+                            format!(
+                                "{}/{}={}={}",
+                                pkg.subdir,
+                                pkg.name.as_normalized(),
+                                pkg.version,
+                                pkg.build
+                            )
                         })
                         .collect(),
                 }),

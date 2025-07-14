@@ -5,7 +5,7 @@ use std::{
     path::PathBuf,
 };
 
-use rattler_conda_types::GenericVirtualPackage;
+use rattler_conda_types::{GenericVirtualPackage, PackageName};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -82,7 +82,7 @@ pub struct CondaBuiltPackage {
     pub input_globs: BTreeSet<String>,
 
     /// The name of the package.
-    pub name: String,
+    pub name: PackageName,
 
     /// The version of the package.
     pub version: String,
