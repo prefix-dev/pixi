@@ -1394,21 +1394,9 @@ def test_run_with_environment_variable_priority(
     # Generate platform-specific script content
     if is_windows:
         script_content = """@echo off
-setlocal enabledelayedexpansion
-
-REM Set environment variables
-set "MY_ENV=activation script"
-set "FOO_PATH=activation_script"
-
-REM Export to parent environment (this requires being called with 'call')
-endlocal & (
-    set "MY_ENV=%MY_ENV%"
-    set "FOO_PATH=%FOO_PATH%"
-)
-
-echo MY_ENV is set to: %MY_ENV%
-echo FOO_PATH is set to: %FOO_PATH%
-"""
+    set "MY_ENV=activation script"
+    set "FOO_PATH=activation_script"
+    """
     else:
         script_content = """#!/bin/bash
     # Activation script for Unix-like systems
