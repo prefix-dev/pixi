@@ -1375,8 +1375,10 @@ def test_run_with_environment_variable_priority(
     platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
     [activation.env]
     MY_ENV = "test123"
-    [activation]
+    [target.unix.activation]
     scripts = ["env_setup.sh"]
+    [target.win-64.activation]
+    scripts = ["env_setup.bat"]
     [tasks.task]
     cmd = "echo $MY_ENV"
     env = {{ MY_ENV = "test456" }}
