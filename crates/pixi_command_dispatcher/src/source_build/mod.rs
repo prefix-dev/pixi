@@ -117,7 +117,7 @@ impl SourceBuildSpec {
             .map_err_with(SourceBuildError::Initialize)?;
 
         if backend.capabilities().provides_conda_build_v1() {
-            let built_package = self.build_v2(command_dispatcher, backend).await?;
+            let built_package = self.build_v1(command_dispatcher, backend).await?;
 
             Ok(BuiltSource {
                 source: source_checkout,
@@ -125,7 +125,7 @@ impl SourceBuildSpec {
                 output_file: built_package.output_file,
             })
         } else {
-            let built_package = self.build_v1(command_dispatcher, backend).await?;
+            let built_package = self.build_v0(command_dispatcher, backend).await?;
 
             Ok(BuiltSource {
                 source: source_checkout,
@@ -135,7 +135,7 @@ impl SourceBuildSpec {
         }
     }
 
-    async fn build_v1(
+    async fn build_v0(
         self,
         command_dispatcher: CommandDispatcher,
         backend: Backend,
@@ -156,7 +156,7 @@ impl SourceBuildSpec {
             .map_err_with(SourceBuildError::from)
     }
 
-    async fn build_v2(
+    async fn build_v1(
         self,
         command_dispatcher: CommandDispatcher,
         backend: Backend,

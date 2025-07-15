@@ -16,7 +16,7 @@ use pixi_build_types::{
     BackendCapabilities, FrontendCapabilities, ProjectModelV1, VersionedProjectModel, procedures,
     procedures::{
         conda_build_v0::{CondaBuildParams, CondaBuildResult},
-        conda_build_v1::{CondaBuildV2Params, CondaBuildV2Result},
+        conda_build_v1::{CondaBuildV1Params, CondaBuildV1Result},
         conda_metadata::{CondaMetadataParams, CondaMetadataResult},
         conda_outputs::{CondaOutputsParams, CondaOutputsResult},
         initialize::{InitializeParams, InitializeResult},
@@ -315,7 +315,7 @@ impl JsonRpcBackend {
         })
     }
 
-    pub async fn conda_build<W: BackendOutputStream + Send + 'static>(
+    pub async fn conda_build_v0<W: BackendOutputStream + Send + 'static>(
         &self,
         request: CondaBuildParams,
         output_stream: W,
@@ -366,11 +366,11 @@ impl JsonRpcBackend {
         })
     }
 
-    pub async fn conda_build_v2<W: BackendOutputStream + Send + 'static>(
+    pub async fn conda_build_v1<W: BackendOutputStream + Send + 'static>(
         &self,
-        request: CondaBuildV2Params,
+        request: CondaBuildV1Params,
         output_stream: W,
-    ) -> Result<CondaBuildV2Result, CommunicationError> {
+    ) -> Result<CondaBuildV1Result, CommunicationError> {
         // Capture all of stderr and discard it
         let stderr = self.stderr.as_ref().map(|stderr| {
             // Cancellation signal

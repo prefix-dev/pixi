@@ -16,7 +16,7 @@ use pixi_build_types::{
     procedures::{
         conda_build_v0::{CondaBuildParams, CondaBuiltPackage, CondaOutputIdentifier},
         conda_build_v1::{
-            CondaBuildV2Output, CondaBuildV2Params, CondaBuildV2Prefix, CondaBuildV2Result,
+            CondaBuildV1Output, CondaBuildV1Params, CondaBuildV1Prefix, CondaBuildV1Result,
         },
     },
 };
@@ -151,7 +151,7 @@ impl BackendSourceBuildSpec {
     ) -> Result<BackendBuiltSource, CommandDispatcherError<BackendSourceBuildError>> {
         // Use the backend to build the source package.
         let mut build_result = backend
-            .conda_build(
+            .conda_build_v0(
                 CondaBuildParams {
                     build_platform_virtual_packages: Some(
                         params.build_environment.build_virtual_packages,
@@ -265,17 +265,17 @@ impl BackendSourceBuildSpec {
         );
 
         let built_package = backend
-            .conda_build_v2(
-                CondaBuildV2Params {
-                    build_prefix: Some(CondaBuildV2Prefix {
+            .conda_build_v1(
+                CondaBuildV1Params {
+                    build_prefix: Some(CondaBuildV1Prefix {
                         prefix: params.build_prefix.prefix,
                         platform: params.build_prefix.platform,
                     }),
-                    host_prefix: Some(CondaBuildV2Prefix {
+                    host_prefix: Some(CondaBuildV1Prefix {
                         prefix: params.host_prefix.prefix,
                         platform: params.host_prefix.platform,
                     }),
-                    output: CondaBuildV2Output {
+                    output: CondaBuildV1Output {
                         name: record.package_record.name.clone(),
                         version: Some(record.package_record.version.clone()),
                         build: Some(record.package_record.build.clone()),
@@ -336,7 +336,7 @@ fn v0_built_package_matches_request(record: &SourceRecord, pkg: &&CondaBuiltPack
 /// Returns true if the requested package matches the one that was built by a
 /// backend.
 fn v1_built_package_matches_requested(
-    built_package: &CondaBuildV2Result,
+    built_package: &CondaBuildV1Result,
     record: &SourceRecord,
 ) -> bool {
     built_package.name != record.package_record.name.as_normalized()

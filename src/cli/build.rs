@@ -149,7 +149,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Build the individual packages.
     let result = backend
-        .conda_build(
+        .conda_build_v0(
             CondaBuildParams {
                 build_platform_virtual_packages: Some(build_platform_virtual_packages),
                 host_platform: Some(PlatformAndVirtualPackages {

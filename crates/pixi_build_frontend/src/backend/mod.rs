@@ -2,7 +2,7 @@ use pixi_build_types::{
     BackendCapabilities, PixiBuildApiVersion,
     procedures::{
         conda_build_v0::{CondaBuildParams, CondaBuildResult},
-        conda_build_v1::{CondaBuildV2Params, CondaBuildV2Result},
+        conda_build_v1::{CondaBuildV1Params, CondaBuildV1Result},
         conda_metadata::{CondaMetadataParams, CondaMetadataResult},
         conda_outputs::{CondaOutputsParams, CondaOutputsResult},
     },
@@ -98,34 +98,34 @@ impl Backend {
         }
     }
 
-    pub async fn conda_build<W: BackendOutputStream + Send + 'static>(
+    pub async fn conda_build_v0<W: BackendOutputStream + Send + 'static>(
         &self,
         params: CondaBuildParams,
         output_stream: W,
     ) -> Result<CondaBuildResult, CommunicationError> {
         assert!(
             self.inner.capabilities().provides_conda_build_v0(),
-            "This backend does not support the conda build procedure"
+            "This backend does not support the conda build v0 procedure"
         );
         match &self.inner {
             BackendImplementation::JsonRpc(json_rpc) => {
-                json_rpc.conda_build(params, output_stream).await
+                json_rpc.conda_build_v0(params, output_stream).await
             }
         }
     }
 
-    pub async fn conda_build_v2<W: BackendOutputStream + Send + 'static>(
+    pub async fn conda_build_v1<W: BackendOutputStream + Send + 'static>(
         &self,
-        params: CondaBuildV2Params,
+        params: CondaBuildV1Params,
         output_stream: W,
-    ) -> Result<CondaBuildV2Result, CommunicationError> {
+    ) -> Result<CondaBuildV1Result, CommunicationError> {
         assert!(
             self.inner.capabilities().provides_conda_build_v1(),
-            "This backend does not support the conda build v2 procedure"
+            "This backend does not support the conda build v1 procedure"
         );
         match &self.inner {
             BackendImplementation::JsonRpc(json_rpc) => {
-                json_rpc.conda_build_v2(params, output_stream).await
+                json_rpc.conda_build_v1(params, output_stream).await
             }
         }
     }

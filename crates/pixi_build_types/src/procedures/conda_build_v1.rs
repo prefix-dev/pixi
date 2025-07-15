@@ -18,15 +18,15 @@ pub const METHOD_NAME: &str = "conda/build_v1";
 /// Parameters for the `conda/build_v1` request.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct CondaBuildV2Params {
+pub struct CondaBuildV1Params {
     /// The path to the build prefix, or `None` if no build prefix is created.
-    pub build_prefix: Option<CondaBuildV2Prefix>,
+    pub build_prefix: Option<CondaBuildV1Prefix>,
 
     /// The path to the host prefix, or `None` if no host prefix is created.
-    pub host_prefix: Option<CondaBuildV2Prefix>,
+    pub host_prefix: Option<CondaBuildV1Prefix>,
 
     /// The output to build.
-    pub output: CondaBuildV2Output,
+    pub output: CondaBuildV1Output,
 
     /// A directory that can be used by the backend to store files for
     /// subsequent requests. This directory is unique for each source
@@ -46,7 +46,7 @@ pub struct CondaBuildV2Params {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct CondaBuildV2Prefix {
+pub struct CondaBuildV1Prefix {
     /// The path to the prefix.
     pub prefix: PathBuf,
 
@@ -58,7 +58,7 @@ pub struct CondaBuildV2Prefix {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct CondaBuildV2Output {
+pub struct CondaBuildV1Output {
     /// The name of the package
     pub name: PackageName,
 
@@ -85,7 +85,7 @@ pub struct CondaBuildV2Output {
 
 /// Contains the result of the `conda/build_v1` request.
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct CondaBuildV2Result {
+pub struct CondaBuildV1Result {
     /// The location on disk where the built package is located.
     ///
     /// If the `output_directory` parameter was provided in the input, the
