@@ -1,5 +1,5 @@
 ---
-source: crates/pixi_manifest/src/toml/build_system.rs
+source: crates/pixi_manifest/src/toml/build_backend.rs
 expression: "expect_parse_failure(r#\"\n            backend = { name = \"foobar\", version = \"*\" }\n            additional = \"key\"\n        \"#)"
 ---
   × Unexpected keys, expected only 'backend', 'channels', 'additional-dependencies', 'configuration'
