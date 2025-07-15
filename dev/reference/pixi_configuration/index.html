@@ -2508,6 +2508,15 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#tool-platform" class="md-nav__link">
+    <span class="md-ellipsis">
+      tool-platform
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2941,6 +2950,15 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#tool-platform" class="md-nav__link">
+    <span class="md-ellipsis">
+      tool-platform
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3028,7 +3046,8 @@
 
 
 <h1 id="the-configuration-of-pixi-itself">The Configuration of Pixi Itself<a class="headerlink" href="#the-configuration-of-pixi-itself" title="Permanent link">#</a></h1>
-<p>Apart from the <a href="../pixi_manifest/">project specific configuration</a> Pixi supports configuration options which are not required for the project to work but are local to the machine.
+<p>Apart from the <a href="../pixi_manifest/">project specific configuration</a> Pixi supports configuration options which
+are not required for the project to work but are local to the machine.
 The configuration is loaded in the following order:</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:3"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><input id="__tabbed_1_3" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Linux</label><label for="__tabbed_1_2">macOS</label><label for="__tabbed_1_3">Windows</label></div>
 <div class="tabbed-content">
@@ -3175,47 +3194,49 @@ The configuration is loaded in the following order:</p>
 </div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>The highest priority wins. If a configuration file is found in a higher priority location, the values from the configuration read from lower priority locations are overwritten.</p>
 </div>
+<p>The highest priority wins. If a configuration file is found in a higher priority location, the values from the
+configuration read from lower priority locations are overwritten.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
+</div>
 <p>To find the locations where <code>pixi</code> looks for configuration files, run
 <code>pixi info -vvv</code>.</p>
-</div>
 <h2 id="configuration-options">Configuration options<a class="headerlink" href="#configuration-options" title="Permanent link">#</a></h2>
 <details class="info">
 <summary>Naming convention in configuration</summary>
+</details>
 <p>In Pixi <code>0.20.1</code> and older the global configuration options used <code>snake_case</code> which
 we've changed to <code>kebab-case</code> for consistency with the rest of the configuration.
 For backwards compatibility, the following configuration options can still be written
 in <code>snake_case</code>:</p>
-<ul>
-<li><code>default_channels</code></li>
-<li><code>change_ps1</code></li>
-<li><code>tls_no_verify</code></li>
-<li><code>authentication_override_file</code></li>
-<li><code>mirrors</code> and its sub-options</li>
-<li><code>repodata_config</code> and its sub-options</li>
-</ul>
-</details>
+<div class="language-text highlight"><pre><span></span><code>- `default_channels`
+- `change_ps1`
+- `tls_no_verify`
+- `authentication_override_file`
+- `mirrors` and its sub-options
+- `repodata_config` and its sub-options
+</code></pre></div>
 <p>The following reference describes all available configuration options.</p>
 <h3 id="default-channels"><code>default-channels</code><a class="headerlink" href="#default-channels" title="Permanent link">#</a></h3>
 <p>The default channels to select when running <code>pixi init</code> or <code>pixi global install</code>.
-This defaults to only conda-forge.
+This defaults to only conda-forge.</p>
 <div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">default-channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="p">]</span>
-</span></code></pre></div></p>
+</span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>The <code>default-channels</code> are only used when initializing a new project. Once initialized the <code>channels</code> are used from the project manifest.</p>
 </div>
+<p>The <code>default-channels</code> are only used when initializing a new project. Once initialized the <code>channels</code> are used from the
+project manifest.</p>
 <h3 id="shell"><code>shell</code><a class="headerlink" href="#shell" title="Permanent link">#</a></h3>
 <ul>
 <li><code>change-ps1</code>:  When set to <code>false</code>, the <code>(pixi)</code> prefix in the shell prompt is removed.
-    This applies to the <code>pixi shell</code> subcommand.
-    You can override this from the CLI with <code>--change-ps1</code>.</li>
+  This applies to the <code>pixi shell</code> subcommand.
+  You can override this from the CLI with <code>--change-ps1</code>.</li>
 <li><code>force-activate</code>: When set to <code>true</code> the re-activation of the environment will always happen.
-This is used in combination with the <a href="#experimental"><code>experimental</code></a> feature <code>use-environment-activation-cache</code>.</li>
-<li><code>source-completion-scripts</code>: When set to <code>false</code>, Pixi will not source the autocompletion scripts of the environment when going into the shell.</li>
+  This is used in combination with the <a href="#experimental"><code>experimental</code></a> feature <code>use-environment-activation-cache</code>.</li>
+<li><code>source-completion-scripts</code>: When set to <code>false</code>, Pixi will not source the autocompletion scripts of the environment
+  when going into the shell.</li>
 </ul>
 <div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[shell]</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">change-ps1</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
@@ -3235,50 +3256,57 @@ This is used in combination with the <a href="#experimental"><code>experimental<
 <p>Override from where the authentication information is loaded.
 Usually, we try to use the keyring to load authentication data from, and only use a JSON
 file as a fallback. This option allows you to force the use of a JSON file.
-Read more in the authentication section.
+Read more in the authentication section.</p>
 <div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">authentication-override-file</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/path/to/your/override.json&quot;</span>
-</span></code></pre></div></p>
+</span></code></pre></div>
 <h3 id="detached-environments"><code>detached-environments</code><a class="headerlink" href="#detached-environments" title="Permanent link">#</a></h3>
-<p>The directory where Pixi stores the project environments, what would normally be placed in the <code>.pixi/envs</code> folder in a project's root.
+<p>The directory where Pixi stores the project environments, what would normally be placed in the <code>.pixi/envs</code> folder in a
+project's root.
 It doesn't affect the environments built for <code>pixi global</code>.
-The location of environments created for a <code>pixi global</code> installation can be controlled using the <code>PIXI_HOME</code> environment variable.</p>
+The location of environments created for a <code>pixi global</code> installation can be controlled using the <code>PIXI_HOME</code>
+environment variable.</p>
 <div class="admonition warning">
 <p class="admonition-title">Warning</p>
-<p>We recommend against using this because any environment created for a project is no longer placed in the same folder as the project.
-This creates a disconnect between the project and its environments and manual cleanup of the environments is required when deleting the project.</p>
-<p>However, in some cases, this option can still be very useful, for instance to:</p>
-<ul>
-<li>force the installation on a specific filesystem/drive.</li>
-<li>install environments locally but keep the project on a network drive.</li>
-<li>let a system-administrator have more control over all environments on a system.</li>
-</ul>
 </div>
+<p>We recommend against using this because any environment created for a project is no longer placed in the same folder as
+the project.
+This creates a disconnect between the project and its environments and manual cleanup of the environments is required
+when deleting the project.</p>
+<div class="language-text highlight"><pre><span></span><code>However, in some cases, this option can still be very useful, for instance to:
+
+- force the installation on a specific filesystem/drive.
+- install environments locally but keep the project on a network drive.
+- let a system-administrator have more control over all environments on a system.
+</code></pre></div>
 <p>This field can consist of two types of input.</p>
 <ul>
-<li>A boolean value, <code>true</code> or <code>false</code>, which will enable or disable the feature respectively. (not <code>"true"</code> or <code>"false"</code>, this is read as <code>false</code>)</li>
+<li>A boolean value, <code>true</code> or <code>false</code>, which will enable or disable the feature respectively. (not <code>"true"</code> or <code>"false"</code>,
+  this is read as <code>false</code>)</li>
 <li>A string value, which will be the absolute path to the directory where the environments will be stored.</li>
 </ul>
-<p><div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">detached-environments</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">detached-environments</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
 </span></code></pre></div>
-or:
+<p>or:</p>
 <div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">detached-environments</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/opt/pixi/envs&quot;</span>
-</span></code></pre></div></p>
-<p>The environments will be stored in the <a href="../../workspace/environment/#caching-packages">cache directory</a> when this option is <code>true</code>.
+</span></code></pre></div>
+<p>The environments will be stored in the <a href="../../workspace/environment/#caching-packages">cache directory</a> when this option
+is <code>true</code>.
 When you specify a custom path the environments will be stored in that directory.</p>
-<p>The resulting directory structure will look like this:
+<p>The resulting directory structure will look like this:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>/opt/pixi/envs
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>├──<span class="w"> </span>pixi-6837172896226367631
 </span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>│<span class="w">   </span>└──<span class="w"> </span>envs
 </span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>└──<span class="w"> </span>NAME_OF_PROJECT-HASH_OF_ORIGINAL_PATH
 </span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span>├──<span class="w"> </span>envs<span class="w"> </span><span class="c1"># the runnable environments</span>
 </span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="w">    </span>└──<span class="w"> </span>solve-group-envs<span class="w"> </span><span class="c1"># If there are solve groups</span>
-</span></code></pre></div></p>
+</span></code></pre></div>
 <h3 id="pinning-strategy"><code>pinning-strategy</code><a class="headerlink" href="#pinning-strategy" title="Permanent link">#</a></h3>
 <p>The strategy to use for pinning dependencies when running <code>pixi add</code>.
 The default is <code>semver</code> but you can set the following:</p>
 <ul>
 <li><code>no-pin</code>: No pinning, resulting in an unconstraint dependency. <code>*</code></li>
-<li><code>semver</code>: Pinning to the latest version that satisfies the semver constraint. Resulting in a pin to major for most versions and to minor for <code>v0</code> versions.</li>
+<li><code>semver</code>: Pinning to the latest version that satisfies the semver constraint. Resulting in a pin to major for most
+  versions and to minor for <code>v0</code> versions.</li>
 <li><code>exact-version</code>: Pinning to the exact version, <code>1.2.3</code> -&gt; <code>==1.2.3</code>.</li>
 <li><code>major</code>: Pinning to the major version, <code>1.2.3</code> -&gt; <code>&gt;=1.2.3, &lt;2</code>.</li>
 <li><code>minor</code>: Pinning to the minor version, <code>1.2.3</code> -&gt; <code>&gt;=1.2.3, &lt;1.3</code>.</li>
@@ -3304,7 +3332,7 @@ The default is <code>semver</code> but you can set the following:</p>
 </span><span id="__span-8-14"><a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="p">]</span>
 </span></code></pre></div>
 <h3 id="repodata-config"><code>repodata-config</code><a class="headerlink" href="#repodata-config" title="Permanent link">#</a></h3>
-<p>Configuration for repodata fetching.
+<p>Configuration for repodata fetching.</p>
 <div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="k">[repodata-config]</span>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="c1"># disable fetching of jlap, bz2 or zstd repodata files.</span>
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="c1"># This should only be used for specific old versions of artifactory and other non-compliant</span>
@@ -3313,17 +3341,19 @@ The default is <code>semver</code> but you can set the following:</p>
 </span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="n">disable-jlap</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">    </span><span class="c1"># don&#39;t try to download repodata.jlap</span>
 </span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="n">disable-sharded</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="c1"># don&#39;t try to download sharded repodata</span>
 </span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="n">disable-zstd</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span><span class="w">    </span><span class="c1"># don&#39;t try to download repodata.json.zst</span>
-</span></code></pre></div></p>
-<p>The above settings can be overridden on a per-channel basis by specifying a channel prefix in the configuration.
+</span></code></pre></div>
+<p>The above settings can be overridden on a per-channel basis by specifying a channel prefix in the configuration.</p>
 <div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">[repodata-config.</span><span class="s2">&quot;https://prefix.dev&quot;</span><span class="k">]</span>
 </span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">disable-sharded</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
-</span></code></pre></div></p>
+</span></code></pre></div>
 <h3 id="pypi-config"><code>pypi-config</code><a class="headerlink" href="#pypi-config" title="Permanent link">#</a></h3>
 <p>To setup a certain number of defaults for the usage of PyPI registries. You can use the following configuration options:</p>
 <ul>
 <li><code>index-url</code>: The default index URL to use for PyPI packages. This will be added to a manifest file on a <code>pixi init</code>.</li>
-<li><code>extra-index-urls</code>: A list of additional URLs to use for PyPI packages. This will be added to a manifest file on a <code>pixi init</code>.</li>
-<li><code>keyring-provider</code>: Allows the use of the <a href="https://pypi.org/project/keyring/">keyring</a> python package to store and retrieve credentials.</li>
+<li><code>extra-index-urls</code>: A list of additional URLs to use for PyPI packages. This will be added to a manifest file on a
+  <code>pixi init</code>.</li>
+<li><code>keyring-provider</code>: Allows the use of the <a href="https://pypi.org/project/keyring/">keyring</a> python package to store and
+  retrieve credentials.</li>
 <li><code>allow-insecure-host</code>: Allow insecure connections to host.</li>
 </ul>
 <div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[pypi-config]</span>
@@ -3338,18 +3368,20 @@ The default is <code>semver</code> but you can set the following:</p>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title"><code>index-url</code> and <code>extra-index-urls</code> are <em>not</em> globals</p>
-<p>Unlike pip, these settings, with the exception of <code>keyring-provider</code> will only modify the <code>pixi.toml</code>/<code>pyproject.toml</code> file and are not globally interpreted when not present in the manifest.
-This is because we want to keep the manifest file as complete and reproducible as possible.</p>
 </div>
+<p>Unlike pip, these settings, with the exception of <code>keyring-provider</code> will only modify the <code>pixi.toml</code>/<code>pyproject.toml</code>
+file and are not globally interpreted when not present in the manifest.
+This is because we want to keep the manifest file as complete and reproducible as possible.</p>
 <h3 id="s3-options"><code>s3-options</code><a class="headerlink" href="#s3-options" title="Permanent link">#</a></h3>
-<p>Configuration for S3 authentication. This will lead to Pixi not using AWS's default credentials but instead use the credentials from the Pixi authentication storage, see the <a href="../../deployment/s3/">S3 section</a> for more information.</p>
+<p>Configuration for S3 authentication. This will lead to Pixi not using AWS's default credentials but instead use the
+credentials from the Pixi authentication storage, see the <a href="../../deployment/s3/">S3 section</a> for more information.</p>
 <div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">[s3-options.my-bucket]</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="n">endpoint-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://my-s3-compatible-host.com&quot;</span>
 </span><span id="__span-12-3"><a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="n">force-path-style</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
 </span><span id="__span-12-4"><a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="n">region</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;us-east-1&quot;</span>
 </span></code></pre></div>
 <h3 id="concurrency"><code>concurrency</code><a class="headerlink" href="#concurrency" title="Permanent link">#</a></h3>
-<p>Configure multiple settings to limit or extend the concurrency of pixi.
+<p>Configure multiple settings to limit or extend the concurrency of pixi.</p>
 <div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">[concurrency]</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="c1"># The maximum number of concurrent downloads</span>
 </span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="c1"># Defaults to 50 as that was found to be a good balance between speed and stability</span>
@@ -3359,56 +3391,74 @@ This is because we want to keep the manifest file as complete and reproducible a
 </span><span id="__span-13-7"><a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="c1"># Defaults to a heuristic based on the number of cores on the system</span>
 </span><span id="__span-13-8"><a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="n">solves</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span>
 </span></code></pre></div>
-Set them through the CLI with:
+<p>Set them through the CLI with:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>concurrency.solves<span class="w"> </span><span class="m">1</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>concurrency.downloads<span class="w"> </span><span class="m">12</span>
-</span></code></pre></div></p>
+</span></code></pre></div>
 <h3 id="run-post-link-scripts"><code>run-post-link-scripts</code><a class="headerlink" href="#run-post-link-scripts" title="Permanent link">#</a></h3>
 <p>Configure whether pixi should execute <code>post-link</code> and <code>pre-unlink</code> scripts or not.</p>
-<p>Some packages contain post-link scripts (<code>bat</code> or <code>sh</code> files) that are executed after a package is installed. We deem these scripts as insecure because they can contain arbitrary code that is executed on the user's machine without the user's consent. By default, the value of <code>run-post-link-scripts</code> is set to <code>false</code> which prevents the execution of these scripts.</p>
-<p>However, you can opt-in on a global (or project) basis by setting the value to <code>insecure</code> (e.g. by running <code>pixi config set --local run-post-link-scripts insecure</code>).</p>
+<p>Some packages contain post-link scripts (<code>bat</code> or <code>sh</code> files) that are executed after a package is installed. We deem
+these scripts as insecure because they can contain arbitrary code that is executed on the user's machine without the
+user's consent. By default, the value of <code>run-post-link-scripts</code> is set to <code>false</code> which prevents the execution of these
+scripts.</p>
+<p>However, you can opt-in on a global (or project) basis by setting the value to <code>insecure</code> (e.g. by running
+<code>pixi config set --local run-post-link-scripts insecure</code>).</p>
 <p>In the future we are planning to add a <code>sandbox</code> mode to execute these scripts in a controlled environment.</p>
 <div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="n">run-post-link-scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;false&quot;</span><span class="w"> </span><span class="c1"># set to &quot;insecure&quot; to allow running post-link scripts</span>
 </span></code></pre></div>
+<h3 id="tool-platform"><code>tool-platform</code><a class="headerlink" href="#tool-platform" title="Permanent link">#</a></h3>
+<p>Defines the platform used when installing "tools" like build backends. By default pixi uses the platform of the current
+system, but you can override it to use a different platform. This can be useful if you are running pixi on an
+architecture for which there is fewer support for certain build backends.</p>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="n">tool-platform</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;win-64&quot;</span><span class="w"> </span><span class="c1"># force tools like build backends to be installed for a specific platform</span>
+</span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Virtual packages</p>
+</div>
+<p>The virtual packages for the tool platform are detected from the current system. If the tool platform is for a different
+operating system than the current system, no virtual packages will be used.</p>
 <h2 id="experimental">Experimental<a class="headerlink" href="#experimental" title="Permanent link">#</a></h2>
 <p>This allows the user to set specific experimental features that are not yet stable.</p>
-<p>Please write a GitHub issue and add the flag <code>experimental</code> to the issue if you find issues with the feature you activated.</p>
+<p>Please write a GitHub issue and add the flag <code>experimental</code> to the issue if you find issues with the feature you
+activated.</p>
 <h3 id="caching-environment-activations">Caching environment activations<a class="headerlink" href="#caching-environment-activations" title="Permanent link">#</a></h3>
-<p>Turn this feature on from configuration with the following command:
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># For all your projects</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>experimental.use-environment-activation-cache<span class="w"> </span><span class="nb">true</span><span class="w"> </span>--global
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1"># For a specific project</span>
-</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>experimental.use-environment-activation-cache<span class="w"> </span><span class="nb">true</span><span class="w"> </span>--local
-</span></code></pre></div></p>
+<p>Turn this feature on from configuration with the following command:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># For all your projects</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>experimental.use-environment-activation-cache<span class="w"> </span><span class="nb">true</span><span class="w"> </span>--global
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="c1"># For a specific project</span>
+</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>experimental.use-environment-activation-cache<span class="w"> </span><span class="nb">true</span><span class="w"> </span>--local
+</span></code></pre></div>
 <p>This will cache the environment activation in the <code>.pixi/activation-env-v0</code> folder in the project root.
-It will create a json file for each environment that is activated, and it will be used to activate the environment in the future.
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>&gt;<span class="w"> </span>tree<span class="w"> </span>.pixi/activation-env-v0/
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>.pixi/activation-env-v0/
-</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a>├──<span class="w"> </span>activation_default.json
-</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a>└──<span class="w"> </span>activation_lint.json
-</span><span id="__span-17-5"><a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>
-</span><span id="__span-17-6"><a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a>&gt;<span class="w"> </span>cat<span class="w">  </span>.pixi/activation-env-v0/activation_lint.json
-</span><span id="__span-17-7"><a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="o">{</span><span class="s2">&quot;hash&quot;</span>:<span class="s2">&quot;8d8344e0751d377a&quot;</span>,<span class="s2">&quot;environment_variables&quot;</span>:<span class="o">{</span>&lt;ENVIRONMENT_VARIABLES_USED_IN_ACTIVATION&gt;<span class="o">}}</span>
-</span></code></pre></div></p>
+It will create a json file for each environment that is activated, and it will be used to activate the environment in
+the future.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>&gt;<span class="w"> </span>tree<span class="w"> </span>.pixi/activation-env-v0/
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>.pixi/activation-env-v0/
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>├──<span class="w"> </span>activation_default.json
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>└──<span class="w"> </span>activation_lint.json
+</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a>
+</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a>&gt;<span class="w"> </span>cat<span class="w">  </span>.pixi/activation-env-v0/activation_lint.json
+</span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="o">{</span><span class="s2">&quot;hash&quot;</span>:<span class="s2">&quot;8d8344e0751d377a&quot;</span>,<span class="s2">&quot;environment_variables&quot;</span>:<span class="o">{</span>&lt;ENVIRONMENT_VARIABLES_USED_IN_ACTIVATION&gt;<span class="o">}}</span>
+</span></code></pre></div>
 <ul>
-<li>The <code>hash</code> is a hash of the data on that environment in the <code>pixi.lock</code>, plus some important information on the environment activation.
+<li>The <code>hash</code> is a hash of the data on that environment in the <code>pixi.lock</code>, plus some important information on the
+  environment activation.
   Like <code>[activation.scripts]</code> and <code>[activation.env]</code> from the manifest file.</li>
 <li>The <code>environment_variables</code> are the environment variables that are set when activating the environment.</li>
 </ul>
-<p>You can ignore the cache by running:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>pixi run/shell/shell-hook --force-activate
-</span></code></pre></div></p>
-<p>Set the configuration with:
-<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="k">[experimental]</span>
-</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="c1"># Enable the use of the environment activation cache</span>
-</span><span id="__span-19-3"><a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="n">use-environment-activation-cache</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
-</span></code></pre></div></p>
+<p>You can ignore the cache by running:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>pixi run/shell/shell-hook --force-activate
+</span></code></pre></div>
+<p>Set the configuration with:</p>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="k">[experimental]</span>
+</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="c1"># Enable the use of the environment activation cache</span>
+</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="n">use-environment-activation-cache</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+</span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Why is this experimental?</p>
+</div>
 <p>This feature is experimental because the cache invalidation is very tricky,
 and we don't want to disturb users that are not affected by activation times.</p>
-</div>
 <h2 id="mirror-configuration">Mirror configuration<a class="headerlink" href="#mirror-configuration" title="Permanent link">#</a></h2>
 <p>You can configure mirrors for conda channels. We expect that mirrors are exact
 copies of the original channel. The implementation will look for the mirror key
@@ -3420,13 +3470,13 @@ the repodata (the most important file) from the first mirror in the list. The
 repodata contains all the SHA256 hashes of the individual packages, so it is
 important to get this file from a trusted source.</p>
 <p>You can also specify mirrors for an entire "host", e.g.</p>
-<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="k">[mirrors]</span>
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="s2">&quot;https://conda.anaconda.org&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://prefix.dev/&quot;</span><span class="p">]</span>
-</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="c1"># prefix.dev doesn&#39;t mirror conda-forge&#39;s label channels</span>
-</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="c1"># pixi uses the longest matching prefix for the mirror</span>
-</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="s2">&quot;https://conda.anaconda.org/conda-forge/label&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="w">  </span><span class="s2">&quot;https://conda.anaconda.org/conda-forge/label&quot;</span><span class="p">,</span>
-</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="p">]</span>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="k">[mirrors]</span>
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="s2">&quot;https://conda.anaconda.org&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://prefix.dev/&quot;</span><span class="p">]</span>
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="c1"># prefix.dev doesn&#39;t mirror conda-forge&#39;s label channels</span>
+</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="c1"># pixi uses the longest matching prefix for the mirror</span>
+</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a><span class="s2">&quot;https://conda.anaconda.org/conda-forge/label&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-21-6"><a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a><span class="w">  </span><span class="s2">&quot;https://conda.anaconda.org/conda-forge/label&quot;</span><span class="p">,</span>
+</span><span id="__span-21-7"><a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a><span class="p">]</span>
 </span></code></pre></div>
 <p>This will forward all request to channels on anaconda.org to prefix.dev.
 Channels that are not currently mirrored on prefix.dev will fail in the above example.
@@ -3436,10 +3486,10 @@ by providing a longer prefix that points to itself.</p>
 <p>You can also specify mirrors on the OCI registry. There is a public mirror on
 the Github container registry (ghcr.io) that is maintained by the conda-forge
 team. You can use it like this:</p>
-<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="k">[mirrors]</span>
-</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="s2">&quot;https://conda.anaconda.org/conda-forge&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="w">  </span><span class="s2">&quot;oci://ghcr.io/channel-mirrors/conda-forge&quot;</span><span class="p">,</span>
-</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="p">]</span>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="k">[mirrors]</span>
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="s2">&quot;https://conda.anaconda.org/conda-forge&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="w">  </span><span class="s2">&quot;oci://ghcr.io/channel-mirrors/conda-forge&quot;</span><span class="p">,</span>
+</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="p">]</span>
 </span></code></pre></div>
 <p>The GHCR mirror also contains <code>bioconda</code> packages. You can search the <a href="https://github.com/orgs/channel-mirrors/packages">available
 packages on Github</a>.</p>
