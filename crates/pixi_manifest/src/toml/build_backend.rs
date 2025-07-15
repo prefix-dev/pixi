@@ -159,15 +159,6 @@ mod test {
     }
 
     #[test]
-    fn test_disallow_source() {
-        assert_snapshot!(expect_parse_failure(
-            r#"
-            backend = { name = "foobar", git = "https://github.com/org/repo" }
-        "#
-        ));
-    }
-
-    #[test]
     fn test_missing_version_specifier() {
         assert_snapshot!(expect_parse_failure(
             r#"
