@@ -39,7 +39,7 @@ impl HasSpecs for GlobalSpecs {
 }
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
-enum GlobalSpecsConversionError {
+pub enum GlobalSpecsConversionError {
     #[error(transparent)]
     ParseMatchSpecError(#[from] ParseMatchSpecError),
     #[error("name is required, when --git or --path is not specified")]
@@ -64,7 +64,7 @@ impl GlobalSpecs {
                 // Handle git dependencies
                 let git_spec = pixi_spec::GitSpec {
                     git: git_url.clone(),
-                    rev: None,
+                    rev: self.rev.clone().map(Into::into),
                     subdirectory: self.subdir.clone(),
                 };
 
@@ -74,7 +74,11 @@ impl GlobalSpecs {
                 PixiSpec::Path(pixi_spec::PathSpec { path: path.clone() })
             } else {
                 // Handle regular conda/version dependencies
-                let (_, nameless_spec) = match_spec.clone().into_nameless();
+                let (name, nameless_spec) = match_spec.clone().into_nameless();
+                // Don't allow nameless matchspec for non-git/path dependencies
+                if name.is_none() {
+                    return Err(GlobalSpecsConversionError::NameRequired);
+                }
                 PixiSpec::from_nameless_matchspec(nameless_spec, channel_config)
             };
 

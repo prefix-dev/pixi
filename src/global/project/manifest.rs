@@ -11,10 +11,9 @@ use miette::IntoDiagnostic;
 use pixi_config::Config;
 use pixi_consts::consts;
 use pixi_manifest::{PrioritizedChannel, toml::TomlDocument};
-use pixi_spec::PixiSpec;
 use pixi_toml::TomlIndexMap;
 use pixi_utils::{executable_from_path, strip_executable_extension};
-use rattler_conda_types::{ChannelConfig, MatchSpec, NamedChannelOrUrl, PackageName, Platform};
+use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
 use toml_edit::{DocumentMut, Item};
 use toml_span::{DeserError, Value};
 
@@ -653,10 +652,7 @@ mod tests {
     use insta::assert_snapshot;
     use itertools::Itertools;
     use pixi_consts::consts::DEFAULT_CHANNELS;
-    use pixi_manifest::toml::FromTomlStr;
-    use rattler_conda_types::ParseStrictness;
-
-    use crate::cli::workspace::name;
+    use rattler_conda_types::ChannelConfig;
 
     use super::*;
 
@@ -953,7 +949,7 @@ mod tests {
         let env_name = EnvironmentName::from_str("test-env").unwrap();
 
         let named_global_spec =
-            NamedGlobalSpec::from_str("pythonic ==3.15.0", &channel_config).unwrap();
+            NamedGlobalSpec::try_from_str("pythonic ==3.15.0", &channel_config).unwrap();
 
         // Add environment
         manifest
@@ -1003,7 +999,7 @@ mod tests {
         assert_eq!(actual_value, *named_global_spec.spec());
 
         // Add another dependency
-        let build_match_spec = NamedGlobalSpec::from_str(
+        let build_match_spec = NamedGlobalSpec::try_from_str(
             "python [version='==3.11.0', build=he550d4f_1_cpython]",
             &channel_config,
         )
@@ -1011,7 +1007,7 @@ mod tests {
         manifest
             .add_dependency(&env_name, &build_match_spec)
             .unwrap();
-        let any_spec = NamedGlobalSpec::from_str("any-spec", &channel_config).unwrap();
+        let any_spec = NamedGlobalSpec::try_from_str("any-spec", &channel_config).unwrap();
         manifest.add_dependency(&env_name, &any_spec).unwrap();
 
         assert_snapshot!(manifest.document.to_string());
@@ -1023,7 +1019,7 @@ mod tests {
         let env_name = EnvironmentName::from_str("test-env").unwrap();
 
         let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
-        let spec = NamedGlobalSpec::from_str("pythonic ==3.15.0", &channel_config).unwrap();
+        let spec = NamedGlobalSpec::try_from_str("pythonic ==3.15.0", &channel_config).unwrap();
 
         // Add environment
         manifest.add_environment(&env_name, None).unwrap();
@@ -1032,7 +1028,7 @@ mod tests {
         manifest.add_dependency(&env_name, &spec).unwrap();
 
         // Add the same dependency again, with a new match_spec
-        let new_spec = NamedGlobalSpec::from_str("pythonic==3.18.0", &channel_config).unwrap();
+        let new_spec = NamedGlobalSpec::try_from_str("pythonic==3.18.0", &channel_config).unwrap();
         manifest.add_dependency(&env_name, &new_spec).unwrap();
 
         // Check document

@@ -2,17 +2,12 @@ use std::{collections::HashMap, ops::Not, str::FromStr};
 
 use clap::Parser;
 use fancy_display::FancyDisplay;
-use indexmap::IndexMap;
 use itertools::Itertools;
-use miette::{Context, IntoDiagnostic};
-use pixi_spec::PixiSpec;
-use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, PackageName, Platform};
+use miette::Context;
+use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, Platform};
 
 use crate::{
-    cli::{
-        global::{global_specs::GlobalSpecs, revert_environment_after_error},
-        has_specs::HasSpecs,
-    },
+    cli::global::{global_specs::GlobalSpecs, revert_environment_after_error},
     global::{
         self, EnvChanges, EnvState, EnvironmentName, Mapping, Project, StateChange, StateChanges,
         common::{NotChangedReason, contains_menuinst_document},
@@ -89,7 +84,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let specs = args
         .packages
-        .to_global_specs(config.global_channel_config())?
+        .to_global_specs(project_original.global_channel_config())?
         .into_iter()
         .filter_map(|s| s.into_named());
 
@@ -194,11 +189,11 @@ async fn setup_environment(
         project.manifest.set_platform(env_name, platform)?;
     }
 
-    let converted_withs = args
+    let converted_with_inclusions = args
         .with
         .iter()
         .map(|spec| {
-            NamedGlobalSpec::from_matchspec_with_name(
+            NamedGlobalSpec::try_from_matchspec_with_name(
                 spec.clone(),
                 &project.config().global_channel_config(),
             )
@@ -208,7 +203,7 @@ async fn setup_environment(
     // Add the dependencies to the environment
     let packages_to_add = specs
         .into_iter()
-        .chain(converted_withs.iter())
+        .chain(converted_with_inclusions.iter())
         .collect_vec();
 
     for spec in &packages_to_add {
@@ -246,7 +241,13 @@ async fn setup_environment(
     }
 
     // Figure out added packages and their corresponding versions
-    state_changes |= project.added_packages(packages_to_add, env_name).await?;
+    state_changes |= project
+        .added_packages(
+            &packages_to_add.into_iter().cloned().collect_vec(),
+            env_name,
+            project.global_channel_config(),
+        )
+        .await?;
 
     // Expose executables of the new environment
     state_changes |= project

@@ -52,7 +52,6 @@ use pixi_config::{Config, default_channel_config, pixi_home};
 use pixi_consts::consts::{self};
 use pixi_manifest::PrioritizedChannel;
 use pixi_progress::global_multi_progress;
-use pixi_spec::PixiSpec;
 use pixi_spec_containers::DependencyMap;
 use pixi_utils::{executable_from_path, reqwest::build_reqwest_clients};
 use rattler_conda_types::{
@@ -487,6 +486,10 @@ impl Project {
 
     pub(crate) fn config(&self) -> &Config {
         &self.config
+    }
+
+    pub(crate) fn global_channel_config(&self) -> &ChannelConfig {
+        self.config.global_channel_config()
     }
 
     pub(crate) async fn install_environment(
@@ -1091,10 +1094,18 @@ impl Project {
     // Figure which packages have been added
     pub async fn added_packages(
         &self,
-        specs: impl IntoIterator<Item = &NamedGlobalSpec>,
+        specs: &[NamedGlobalSpec],
         env_name: &EnvironmentName,
+        channel_config: &ChannelConfig,
     ) -> miette::Result<StateChanges> {
+        // TODO: now just matching binary specs, we need to integrate source specs instead
+        // I think we can just remove this function and couple it to the transaction instead
         let mut state_changes = StateChanges::default();
+        let match_specs = specs
+            .iter()
+            .filter_map(|s| s.clone().try_into_matchspec(channel_config).ok().flatten())
+            .collect_vec();
+
         state_changes.push_changes(
             env_name,
             self.environment_prefix(env_name)
@@ -1102,9 +1113,9 @@ impl Project {
                 .find_installed_packages()?
                 .into_iter()
                 .filter(|r| {
-                    specs
-                        .into_iter()
-                        .any(|s| s.spec().matches(&r.repodata_record))
+                    match_specs
+                        .iter()
+                        .any(|spec| spec.matches(&r.repodata_record))
                 })
                 .map(|r| r.repodata_record.package_record)
                 .map(StateChange::AddedPackage),

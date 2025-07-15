@@ -69,7 +69,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         state_changes |= project.sync_environment(env_name, None).await?;
 
         // Figure out added packages and their corresponding versions
-        state_changes |= project.added_packages(specs, env_name).await?;
+        state_changes |= project
+            .added_packages(specs, env_name, project.global_channel_config())
+            .await?;
 
         state_changes |= project.sync_completions(env_name).await?;
 
@@ -82,10 +84,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let specs = args
         .packages
-        .to_global_specs(&project_original.config().global_channel_config())
+        .to_global_specs(&project_original.global_channel_config())
         .into_diagnostic()?
         .into_iter()
-        .filter_map(|(spec)| spec.into_named())
+        .filter_map(|spec| spec.into_named())
         .collect::<Vec<_>>();
 
     match apply_changes(

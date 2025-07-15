@@ -1,5 +1,5 @@
 //! This module makes it a bit easier to pass around a package name and the pixi specification
-use pixi_spec::PixiSpec;
+use pixi_spec::{PixiSpec, SpecConversionError};
 use rattler_conda_types::{MatchSpec, PackageName, ParseStrictness};
 
 /// The encapsulation of a package name and its associated
@@ -21,18 +21,18 @@ pub struct NamedGlobalSpec {
 
 impl NamedGlobalSpec {
     /// Convert from a &str and a ChannelConfig into a [`NamedGlobalSpec`].
-    pub fn from_str(
+    pub fn try_from_str(
         spec_str: &str,
         channel_config: &rattler_conda_types::ChannelConfig,
     ) -> Result<Self, FromMatchSpecError> {
         let match_spec = MatchSpec::from_str(spec_str, ParseStrictness::Lenient)?;
-        NamedGlobalSpec::from_matchspec_with_name(match_spec, channel_config)
+        NamedGlobalSpec::try_from_matchspec_with_name(match_spec, channel_config)
     }
 
     /// Converts a [`MatchSpec`] into a [`GlobalSpec`].
     /// this can only result in a [`PixiSpec::Version`] or [`PixiSpec::DetailedVersion`] because
     /// a `MatchSpec` has no direct support for source specifications
-    pub fn from_matchspec_with_name(
+    pub fn try_from_matchspec_with_name(
         match_spec: MatchSpec,
         channel_config: &rattler_conda_types::ChannelConfig,
     ) -> Result<Self, FromMatchSpecError> {
@@ -44,10 +44,19 @@ impl NamedGlobalSpec {
             Err(FromMatchSpecError::NameRequired(nameless_spec.to_string()))
         }
     }
+
+    pub fn try_into_matchspec(
+        self,
+        channel_config: &rattler_conda_types::ChannelConfig,
+    ) -> Result<Option<MatchSpec>, SpecConversionError> {
+        let (name, pixi_spec) = self.into_tuple();
+        let nameless_spec = pixi_spec.try_into_nameless_match_spec(channel_config)?;
+        Ok(nameless_spec.map(|spec| MatchSpec::from_nameless(spec, Some(name))))
+    }
 }
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
-enum FromMatchSpecError {
+pub enum FromMatchSpecError {
     #[error("package name is required, not found for {0}")]
     NameRequired(String),
     #[error(transparent)]
