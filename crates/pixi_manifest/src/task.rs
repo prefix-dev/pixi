@@ -14,7 +14,7 @@ use itertools::Itertools;
 use miette::{Diagnostic, SourceSpan};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use toml_edit::{Array, Item, Table, Value};
+use toml_edit::{Array, InlineTable, Item, Table, Value};
 
 use crate::EnvironmentName;
 
@@ -49,14 +49,20 @@ impl From<String> for TaskName {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub struct Dependency {
     pub task_name: TaskName,
-    pub args: Option<Vec<TemplateString>>,
+    pub args: Option<Vec<DependencyArg>>,
     pub environment: Option<EnvironmentName>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+pub enum DependencyArg {
+    Positional(TemplateString),
+    Named(String, TemplateString),
 }
 
 impl Dependency {
     pub fn new(
         s: &str,
-        args: Option<Vec<TemplateString>>,
+        args: Option<Vec<DependencyArg>>,
         environment: Option<EnvironmentName>,
     ) -> Self {
         Dependency {
@@ -66,7 +72,7 @@ impl Dependency {
         }
     }
 
-    pub fn new_without_env(s: &str, args: Option<Vec<TemplateString>>) -> Self {
+    pub fn new_without_env(s: &str, args: Option<Vec<DependencyArg>>) -> Self {
         Dependency {
             task_name: TaskName(s.to_string()),
             args,
@@ -76,12 +82,19 @@ impl Dependency {
     pub fn render_args(
         &self,
         args: Option<&ArgValues>,
-    ) -> Result<Option<Vec<String>>, TemplateStringError> {
+    ) -> Result<Option<Vec<TypedDependencyArg>>, TemplateStringError> {
         match &self.args {
             Some(task_args) => {
                 let mut result = Vec::new();
                 for arg in task_args {
-                    result.push(arg.render(args)?);
+                    match arg {
+                        DependencyArg::Positional(val) => {
+                            result.push(TypedDependencyArg::Positional(val.render(args)?));
+                        }
+                        DependencyArg::Named(key, val) => {
+                            result.push(TypedDependencyArg::Named(key.clone(), val.render(args)?));
+                        }
+                    }
                 }
                 Ok(Some(result))
             }
@@ -116,8 +129,14 @@ impl FromStr for TaskName {
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct TypedDependency {
     pub task_name: TaskName,
-    pub args: Option<Vec<String>>,
+    pub args: Option<Vec<TypedDependencyArg>>,
     pub environment: Option<EnvironmentName>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, PartialOrd, Ord)]
+pub enum TypedDependencyArg {
+    Positional(String),
+    Named(String, String),
 }
 
 impl TypedDependency {
@@ -722,10 +741,21 @@ impl From<Task> for Item {
                                     table.insert("task", dep.task_name.to_string().into());
                                     table.insert(
                                         "args",
-                                        Value::Array(Array::from_iter(
-                                            args.iter()
-                                                .map(|arg| Value::from(arg.source().to_string())),
-                                        )),
+                                        Value::Array(Array::from_iter(args.iter().map(|arg| {
+                                            match arg {
+                                                DependencyArg::Positional(val) => {
+                                                    Value::from(val.source().to_string())
+                                                }
+                                                DependencyArg::Named(name, val) => {
+                                                    let mut table = InlineTable::new();
+                                                    table.insert(
+                                                        name,
+                                                        Value::from(val.source().to_string()),
+                                                    );
+                                                    Value::InlineTable(table)
+                                                }
+                                            }
+                                        }))),
                                     );
                                     Value::InlineTable(table)
                                 }
@@ -774,9 +804,16 @@ impl From<Task> for Item {
                         if let Some(args) = &dep.args {
                             dep_table.insert(
                                 "args",
-                                Value::Array(Array::from_iter(
-                                    args.iter().map(|arg| Value::from(arg.source().to_string())),
-                                )),
+                                Value::Array(Array::from_iter(args.iter().map(|arg| match arg {
+                                    DependencyArg::Positional(val) => {
+                                        Value::from(val.source().to_string())
+                                    }
+                                    DependencyArg::Named(name, val) => {
+                                        let mut table = InlineTable::new();
+                                        table.insert(name, Value::from(val.source().to_string()));
+                                        Value::InlineTable(table)
+                                    }
+                                }))),
                             );
                         }
 
@@ -802,9 +839,16 @@ impl From<Task> for Item {
                         if let Some(args) = &dep.args {
                             table.insert(
                                 "args",
-                                Value::Array(Array::from_iter(
-                                    args.iter().map(|arg| Value::from(arg.source().to_string())),
-                                )),
+                                Value::Array(Array::from_iter(args.iter().map(|arg| match arg {
+                                    DependencyArg::Positional(val) => {
+                                        Value::from(val.source().to_string())
+                                    }
+                                    DependencyArg::Named(name, val) => {
+                                        let mut table = InlineTable::new();
+                                        table.insert(name, Value::from(val.source().to_string()));
+                                        Value::InlineTable(table)
+                                    }
+                                }))),
                             );
                         }
 
