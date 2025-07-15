@@ -1,3 +1,7 @@
+use std::fmt::{Debug, Formatter};
+
+use crate::in_memory;
+use crate::in_memory::InMemoryBackend;
 use pixi_build_types::{
     BackendCapabilities, PixiBuildApiVersion,
     procedures::{
@@ -27,22 +31,38 @@ pub struct Backend {
     capabilities: BackendCapabilities,
 }
 
-#[derive(Debug)]
 pub enum BackendImplementation {
     /// The backend is a JSON-RPC backend.
     JsonRpc(json_rpc::JsonRpcBackend),
+
+    /// An in memory backend.
+    InMemory(Box<dyn InMemoryBackend>),
+}
+
+impl Debug for BackendImplementation {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BackendImplementation::JsonRpc(json_rpc) => json_rpc.fmt(f),
+            BackendImplementation::InMemory(backend) => f
+                .debug_struct("InMemoryBackend")
+                .field("identifier", &backend.identifier())
+                .finish(),
+        }
+    }
 }
 
 impl BackendImplementation {
-    pub fn capabilities(&self) -> &BackendCapabilities {
+    pub fn capabilities(&self) -> BackendCapabilities {
         match self {
-            BackendImplementation::JsonRpc(json_rpc) => json_rpc.capabilities(),
+            BackendImplementation::JsonRpc(json_rpc) => json_rpc.capabilities().clone(),
+            BackendImplementation::InMemory(in_memory) => in_memory.capabilities(),
         }
     }
 
     pub fn identifier(&self) -> &str {
         match self {
             BackendImplementation::JsonRpc(json_rpc) => json_rpc.identifier(),
+            BackendImplementation::InMemory(in_memory) => in_memory.identifier(),
         }
     }
 }
@@ -50,6 +70,12 @@ impl BackendImplementation {
 impl From<json_rpc::JsonRpcBackend> for BackendImplementation {
     fn from(json_rpc: json_rpc::JsonRpcBackend) -> Self {
         BackendImplementation::JsonRpc(json_rpc)
+    }
+}
+
+impl From<Box<dyn in_memory::InMemoryBackend>> for BackendImplementation {
+    fn from(in_memory: Box<dyn in_memory::InMemoryBackend>) -> Self {
+        BackendImplementation::InMemory(in_memory)
     }
 }
 
@@ -95,6 +121,7 @@ impl Backend {
         );
         match &self.inner {
             BackendImplementation::JsonRpc(json_rpc) => json_rpc.conda_get_metadata(params).await,
+            BackendImplementation::InMemory(in_memory) => in_memory.conda_get_metadata(params),
         }
     }
 
@@ -110,6 +137,9 @@ impl Backend {
         match &self.inner {
             BackendImplementation::JsonRpc(json_rpc) => {
                 json_rpc.conda_build_v0(params, output_stream).await
+            }
+            BackendImplementation::InMemory(in_memory) => {
+                in_memory.conda_build_v0(params, &output_stream)
             }
         }
     }
@@ -127,6 +157,9 @@ impl Backend {
             BackendImplementation::JsonRpc(json_rpc) => {
                 json_rpc.conda_build_v1(params, output_stream).await
             }
+            BackendImplementation::InMemory(in_memory) => {
+                in_memory.conda_build_v1(params, &output_stream)
+            }
         }
     }
 
@@ -141,6 +174,7 @@ impl Backend {
         );
         match &self.inner {
             BackendImplementation::JsonRpc(json_rpc) => json_rpc.conda_outputs(params).await,
+            BackendImplementation::InMemory(in_memory) => in_memory.conda_outputs(params),
         }
     }
 }
