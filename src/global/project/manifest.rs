@@ -1009,12 +1009,10 @@ mod tests {
         )
         .unwrap();
         manifest
-            .add_dependency(&env_name, &build_match_spec, &channel_config)
+            .add_dependency(&env_name, &build_match_spec)
             .unwrap();
-        let any_spec = MatchSpec::from_str("any-spec", ParseStrictness::Strict).unwrap();
-        manifest
-            .add_dependency(&env_name, &any_spec, &channel_config)
-            .unwrap();
+        let any_spec = NamedGlobalSpec::from_str("any-spec", &channel_config).unwrap();
+        manifest.add_dependency(&env_name, &any_spec).unwrap();
 
         assert_snapshot!(manifest.document.to_string());
     }
@@ -1024,31 +1022,26 @@ mod tests {
         let mut manifest = Manifest::default();
         let env_name = EnvironmentName::from_str("test-env").unwrap();
 
-        let match_spec = MatchSpec::from_str("pythonic ==3.15.0", ParseStrictness::Strict).unwrap();
         let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
+        let spec = NamedGlobalSpec::from_str("pythonic ==3.15.0", &channel_config).unwrap();
 
         // Add environment
         manifest.add_environment(&env_name, None).unwrap();
 
         // Add dependency
-        manifest
-            .add_dependency(&env_name, &match_spec, &channel_config)
-            .unwrap();
+        manifest.add_dependency(&env_name, &spec).unwrap();
 
         // Add the same dependency again, with a new match_spec
-        let new_match_spec =
-            MatchSpec::from_str("pythonic==3.18.0", ParseStrictness::Strict).unwrap();
-        manifest
-            .add_dependency(&env_name, &new_match_spec, &channel_config)
-            .unwrap();
+        let new_spec = NamedGlobalSpec::from_str("pythonic==3.18.0", &channel_config).unwrap();
+        manifest.add_dependency(&env_name, &new_spec).unwrap();
 
         // Check document
-        let name = match_spec.name.clone().unwrap();
+        let name = spec.name();
         let actual_value = manifest
             .document
             .get_or_insert_nested_table(&format!("envs.{env_name}.dependencies"))
             .unwrap()
-            .get(name.clone().as_normalized());
+            .get(name.as_normalized());
         assert!(actual_value.is_some());
         assert_eq!(
             actual_value.unwrap().to_string().replace('"', ""),
@@ -1063,7 +1056,7 @@ mod tests {
             .unwrap()
             .dependencies
             .specs
-            .get(&name)
+            .get(name)
             .unwrap()
             .clone();
         assert_eq!(
@@ -1149,7 +1142,7 @@ mod tests {
     #[test]
     fn test_remove_dependency() {
         let env_name = EnvironmentName::from_str("test-env").unwrap();
-        let match_spec = MatchSpec::from_str("pytest", ParseStrictness::Strict).unwrap();
+        let name = PackageName::from_str("pytest").unwrap();
 
         let mut manifest = Manifest::from_str(
             Path::new("global.toml"),
@@ -1162,14 +1155,14 @@ dependencies = { "python" = "*", pytest = "*"}
         .unwrap();
 
         // Remove dependency
-        manifest.remove_dependency(&env_name, &match_spec).unwrap();
+        manifest.remove_dependency(&env_name, &name).unwrap();
 
         // Check document
         assert!(
             !manifest
                 .document
                 .to_string()
-                .contains(match_spec.name.clone().unwrap().as_normalized())
+                .contains(name.clone().as_normalized())
         );
 
         // Check parsed
@@ -1180,7 +1173,7 @@ dependencies = { "python" = "*", pytest = "*"}
             .unwrap()
             .dependencies
             .specs
-            .get(&match_spec.name.unwrap());
+            .get(&name);
         assert!(actual_value.is_none());
 
         assert_snapshot!(manifest.document.to_string());

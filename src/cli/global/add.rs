@@ -1,14 +1,11 @@
 use crate::cli::global::global_specs::GlobalSpecs;
 use crate::cli::global::revert_environment_after_error;
-use crate::cli::has_specs::HasSpecs;
+
 use crate::global::project::NamedGlobalSpec;
 use crate::global::{EnvironmentName, Mapping, Project, StateChanges};
 use clap::Parser;
-use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_config::{Config, ConfigCli};
-use pixi_spec::PixiSpec;
-use rattler_conda_types::MatchSpec;
 
 /// Adds dependencies to an environment
 ///
@@ -52,7 +49,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     async fn apply_changes(
         env_name: &EnvironmentName,
-        specs: impl IntoIterator<Item = &NamedGlobalSpec>,
+        specs: &[NamedGlobalSpec],
         expose: &[Mapping],
         project: &mut Project,
     ) -> miette::Result<StateChanges> {
@@ -88,11 +85,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .to_global_specs(&project_original.config().global_channel_config())
         .into_diagnostic()?
         .into_iter()
-        .filter_map(|(spec)| spec.as_named());
+        .filter_map(|(spec)| spec.into_named())
+        .collect::<Vec<_>>();
 
     match apply_changes(
         &args.environment,
-        specs,
+        &specs,
         args.expose.as_slice(),
         &mut project_modified,
     )
