@@ -17,7 +17,7 @@ use pixi_spec::{GitReference, GitSpec, PathSpec, PixiSpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_test_utils::format_diagnostic;
 use rattler_conda_types::{
-    ChannelConfig, GenericVirtualPackage, PackageName, Platform, VersionSpec, prefix::Prefix,
+    GenericVirtualPackage, PackageName, Platform, VersionSpec, prefix::Prefix,
 };
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use url::Url;
