@@ -1,6 +1,5 @@
 ---
 source: crates/pixi_command_dispatcher/tests/integration/main.rs
-assertion_line: 215
 expression: "format!(\"ERROR:\\n{}\\n\\nTRACE:\\n{}\", format_diagnostic(&error),\nevent_tree.to_string())"
 ---
 ERROR:
