@@ -1,4 +1,4 @@
-mod build_system;
+mod build_backend;
 mod channel;
 mod document;
 mod environment;
@@ -18,7 +18,7 @@ mod workspace;
 
 use std::{borrow::Cow, ops::Range};
 
-pub use build_system::TomlPackageBuild;
+pub use build_backend::TomlPackageBuild;
 pub use channel::TomlPrioritizedChannel;
 pub use document::TomlDocument;
 pub use environment::{TomlEnvironment, TomlEnvironmentList};

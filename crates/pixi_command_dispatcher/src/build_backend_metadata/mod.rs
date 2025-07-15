@@ -374,9 +374,12 @@ pub enum BuildBackendMetadataError {
     #[diagnostic(transparent)]
     Discovery(#[from] pixi_build_discovery::DiscoveryError),
 
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    Initialize(#[from] InstantiateBackendError),
+    #[error("could not initialize the build-backend")]
+    Initialize(
+        #[diagnostic_source]
+        #[from]
+        InstantiateBackendError,
+    ),
 
     #[error(transparent)]
     #[diagnostic(transparent)]

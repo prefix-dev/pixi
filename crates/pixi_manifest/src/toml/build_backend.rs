@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 
-use itertools::Either;
 use pixi_spec::TomlSpec;
 use pixi_toml::{TomlFromStr, TomlWith};
 use rattler_conda_types::NamedChannelOrUrl;
@@ -30,35 +29,14 @@ pub struct TomlBuildBackend {
 impl TomlPackageBuild {
     pub fn into_build_system(self) -> Result<PackageBuild, TomlError> {
         // Parse the build backend and ensure it is a binary spec.
-        let build_backend_spec = self.backend.value.spec.into_binary_spec().map_err(|e| {
+        let build_backend_spec = self.backend.value.spec.into_spec().map_err(|e| {
             TomlError::Generic(
                 GenericError::new(e.to_string()).with_opt_span(self.backend.span.clone()),
             )
         })?;
 
         // Convert the additional dependencies and make sure that they are binary.
-        let additional_dependencies = self
-            .additional_dependencies
-            .specs
-            .into_iter()
-            .map(|(name, spec)| match spec.into_source_or_binary() {
-                Either::Right(binary) => Ok((name, binary)),
-                Either::Left(_source) => {
-                    let spec_range = self
-                        .additional_dependencies
-                        .value_spans
-                        .get(&name)
-                        .or_else(|| self.additional_dependencies.name_spans.get(&name))
-                        .cloned();
-                    Err(TomlError::Generic(
-                        GenericError::new(
-                            "Cannot use source dependencies for build backends dependencies",
-                        )
-                        .with_opt_span(spec_range),
-                    ))
-                }
-            })
-            .collect::<Result<_, TomlError>>()?;
+        let additional_dependencies = self.additional_dependencies.specs;
 
         // Make sure there are no empty channels
         if let Some(channels) = &self.channels {
@@ -155,9 +133,10 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use insta::assert_snapshot;
     use pixi_test_utils::format_parse_error;
+
+    use super::*;
 
     fn expect_parse_failure(pixi_toml: &str) -> String {
         let parse_error = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(pixi_toml)

@@ -1,11 +1,13 @@
 //! Defines the build section for the pixi manifest.
 
 use indexmap::IndexMap;
-use pixi_spec::BinarySpec;
+use pixi_spec::PixiSpec;
 use rattler_conda_types::NamedChannelOrUrl;
 
-use crate::toml::FromTomlStr;
-use crate::{TomlError, toml::TomlPackageBuild};
+use crate::{
+    TomlError,
+    toml::{FromTomlStr, TomlPackageBuild},
+};
 
 /// A build section in the pixi manifest.
 /// that defines what backend is used to build the project.
@@ -15,7 +17,7 @@ pub struct PackageBuild {
     pub backend: BuildBackend,
 
     /// Additional dependencies that should be installed alongside the backend.
-    pub additional_dependencies: IndexMap<rattler_conda_types::PackageName, BinarySpec>,
+    pub additional_dependencies: IndexMap<rattler_conda_types::PackageName, PixiSpec>,
 
     /// The channels to use for fetching build tools. If this is `None` the
     /// channels from the containing workspace should be used.
@@ -43,7 +45,7 @@ pub struct BuildBackend {
     pub name: rattler_conda_types::PackageName,
 
     /// The spec for the backend
-    pub spec: BinarySpec,
+    pub spec: PixiSpec,
 }
 
 impl PackageBuild {

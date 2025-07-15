@@ -110,6 +110,11 @@ impl From<VersionSpec> for PixiSpec {
 }
 
 impl PixiSpec {
+    /// Creates a new instance that matches any version.
+    pub const fn any() -> Self {
+        Self::Version(VersionSpec::Any)
+    }
+
     /// Convert a [`NamelessMatchSpec`] into a [`PixiSpec`].
     pub fn from_nameless_matchspec(
         spec: NamelessMatchSpec,
