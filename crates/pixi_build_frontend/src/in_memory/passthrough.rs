@@ -29,9 +29,9 @@ pub struct PassthroughBackend {
 }
 
 impl PassthroughBackend {
-    /// Returns a new instance of the [`PassthroughBackendInstantiator`] which
-    /// can be used to instantiate a [`PassthroughBackend`].
-    pub fn instantiator() -> PassthroughBackendInstantiator {
+    /// Returns an object that can be used to instantiate a
+    /// [`PassthroughBackend`].
+    pub fn instantiator() -> impl InMemoryBackendInstantiator<Backend = Self> {
         PassthroughBackendInstantiator
     }
 }
