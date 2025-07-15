@@ -58,6 +58,11 @@ fn workspace_dir() -> PathBuf {
     repository_dir().join("tests/data/workspaces")
 }
 
+fn default_build_environment() -> BuildEnvironment {
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    BuildEnvironment::simple(tool_platform, tool_virtual_packages)
+}
+
 #[tokio::test]
 pub async fn simple_test() {
     let (reporter, events) = EventReporter::new();
@@ -71,7 +76,7 @@ pub async fn simple_test() {
         .with_tool_platform(tool_platform, tool_virtual_packages.clone())
         .finish();
 
-    let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages);
+    let build_env = default_build_environment();
 
     let records = dispatcher
         .solve_pixi_environment(PixiEnvironmentSpec {
@@ -181,7 +186,19 @@ pub async fn instantiate_backend_without_compatible_api_version() {
 
 #[tokio::test]
 pub async fn test_cycle() {
+    // Setup a reporter that allows us to trace the steps taken by the command
+    // dispatcher.
     let (reporter, events) = EventReporter::new();
+
+    // Construct a command dispatcher with:
+    // - a root directory located in the `cycle` workspace
+    // - the default cache directories but with a temporary workspace cache
+    //   directory
+    // - the tracing event reporter and a serial executor to trace the flow through
+    //   the command dispatcher
+    // - the default tool platform and virtual packages
+    // - a backend override that uses a passthrough backend to avoid any actual
+    //   backend calls
     let (tool_platform, tool_virtual_packages) = tool_platform();
     let root_dir = workspace_dir().join("cycle");
     let tempdir = tempfile::tempdir().unwrap();
@@ -196,6 +213,8 @@ pub async fn test_cycle() {
         ))
         .finish();
 
+    // Solve an environment with package_a. This should introduce a cycle because
+    // package_a depends on package_b, which depends on package_a.
     let error = dispatcher
         .solve_pixi_environment(PixiEnvironmentSpec {
             dependencies: DependencyMap::from_iter([(
@@ -211,6 +230,7 @@ pub async fn test_cycle() {
         .await
         .expect_err("expected a cycle error");
 
+    // Output the error and the event tree to a snapshot for debugging.
     let event_tree = EventTree::new(events.lock().unwrap().iter());
     insta::assert_snapshot!(format!(
         "ERROR:\n{}\n\nTRACE:\n{}",
