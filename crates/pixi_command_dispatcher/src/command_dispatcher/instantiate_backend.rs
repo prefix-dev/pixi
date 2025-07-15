@@ -1,3 +1,11 @@
+use crate::{
+    BuildEnvironment, CommandDispatcher, CommandDispatcherErrorResultExt,
+    command_dispatcher::error::CommandDispatcherError,
+    instantiate_tool_env::{
+        InstantiateToolEnvironmentError, InstantiateToolEnvironmentResult,
+        InstantiateToolEnvironmentSpec,
+    },
+};
 use miette::Diagnostic;
 use pixi_build_discovery::{
     BackendInitializationParams, BackendSpec, CommandSpec, EnabledProtocols,
@@ -7,6 +15,7 @@ use pixi_build_frontend::{
     json_rpc::JsonRpcBackend,
     tool::{IsolatedTool, SystemTool, Tool},
 };
+use pixi_build_types::PixiBuildApiVersion;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::ChannelConfig;
 use rattler_shell::{
@@ -15,12 +24,6 @@ use rattler_shell::{
 };
 use rattler_virtual_packages::DetectVirtualPackageError;
 use thiserror::Error;
-
-use crate::{
-    BuildEnvironment, CommandDispatcher, CommandDispatcherErrorResultExt,
-    command_dispatcher::error::CommandDispatcherError,
-    instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec},
-};
 
 #[derive(Debug)]
 pub struct InstantiateBackendSpec {
@@ -51,33 +54,26 @@ impl CommandDispatcher {
             .named_backend_override(&backend_spec.name)
             .unwrap_or(backend_spec.command);
 
-        let tool = match command_spec {
-            CommandSpec::System(system_spec) => Tool::System(SystemTool::new(
-                system_spec.command.unwrap_or(backend_spec.name),
-            )),
+        let (tool, api_version) = match command_spec {
+            CommandSpec::System(system_spec) => (
+                Tool::System(SystemTool::new(
+                    system_spec.command.unwrap_or(backend_spec.name),
+                )),
+                // Assume the latest version of the backend
+                PixiBuildApiVersion::current(),
+            ),
             CommandSpec::EnvironmentSpec(env_spec) => {
                 let (tool_platform, tool_platform_virtual_packages) = self.tool_platform();
-                let prefix = self
+                let InstantiateToolEnvironmentResult { prefix, api } = self
                     .instantiate_tool_environment(InstantiateToolEnvironmentSpec {
                         requirement: (
                             env_spec.requirement.0,
-                            PixiSpec::from_nameless_matchspec(
-                                env_spec.requirement.1,
-                                &spec.channel_config,
-                            ),
+                            PixiSpec::from(env_spec.requirement.1),
                         ),
                         additional_requirements: env_spec
                             .additional_requirements
                             .into_specs()
-                            .map(|(name, nameless)| {
-                                (
-                                    name,
-                                    PixiSpec::from_nameless_matchspec(
-                                        nameless,
-                                        &spec.channel_config,
-                                    ),
-                                )
-                            })
+                            .map(|(name, spec)| (name, PixiSpec::from(spec)))
                             .collect(),
                         constraints: env_spec.constraints,
                         build_environment: BuildEnvironment {
@@ -106,11 +102,14 @@ impl CommandDispatcher {
                     .map_err(InstantiateBackendError::from)
                     .map_err(CommandDispatcherError::Failed)?;
 
-                Tool::from(IsolatedTool::new(
-                    env_spec.command.unwrap_or(backend_spec.name),
-                    prefix.path().to_path_buf(),
-                    activation_scripts,
-                ))
+                (
+                    Tool::from(IsolatedTool::new(
+                        env_spec.command.unwrap_or(backend_spec.name),
+                        prefix.path().to_path_buf(),
+                        activation_scripts,
+                    )),
+                    api,
+                )
             }
         };
 
@@ -133,7 +132,7 @@ impl CommandDispatcher {
         .await
         .map_err(InstantiateBackendError::from)
         .map_err(CommandDispatcherError::Failed)
-        .map(Backend::JsonRpc)
+        .map(|backend| Backend::new(backend.into(), api_version))
     }
 }
 

@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use pixi_consts::consts;
 
-use crate::{build::BuildCache, source_metadata::SourceMetadataCache};
+use crate::build::{BuildCache, source_metadata_cache::SourceMetadataCache};
 
 pub struct CacheDirs {
     /// The root cache directory, all other cache directories are derived from

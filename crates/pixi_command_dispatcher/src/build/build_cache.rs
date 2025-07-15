@@ -2,10 +2,9 @@ use std::{
     collections::BTreeSet,
     hash::{Hash, Hasher},
     io::SeekFrom,
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
-use crate::build::{MoveError, move_file, source_checkout_cache_key};
 use async_fd_lock::{LockWrite, RwLockWriteGuard};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_record::PinnedSourceSpec;
@@ -15,6 +14,8 @@ use thiserror::Error;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use url::Url;
 use xxhash_rust::xxh3::Xxh3;
+
+use crate::build::{MoveError, move_file, source_checkout_cache_key};
 
 /// A cache for caching build artifacts of a source checkout.
 #[derive(Clone)]
@@ -103,10 +104,10 @@ impl BuildCache {
     /// cache. If the cache doesn't contain an entry for this source and input,
     /// it returns `None`.
     ///
-    /// This function also returns a [`BuildCacheEntry`] which can be used to update
-    /// the cache. The [`BuildCacheEntry`] also holds an exclusive lock on the cache
-    /// which prevents other processes from accessing the cache entry. Drop
-    /// the entry as soon as possible to release the lock.
+    /// This function also returns a [`BuildCacheEntry`] which can be used to
+    /// update the cache. The [`BuildCacheEntry`] also holds an exclusive
+    /// lock on the cache which prevents other processes from accessing the
+    /// cache entry. Drop the entry as soon as possible to release the lock.
     pub async fn entry(
         &self,
         source: &PinnedSourceSpec,
@@ -203,6 +204,11 @@ pub struct BuildCacheEntry {
 }
 
 impl BuildCacheEntry {
+    /// The directory where the cache is stored.
+    pub fn cache_dir(&self) -> &Path {
+        &self.cache_dir
+    }
+
     /// Consumes this instance and writes the given metadata to the cache.
     pub async fn insert(
         mut self,
