@@ -3,7 +3,8 @@ use pixi_git::resolver::RepositoryReference;
 use serde::Serialize;
 
 use crate::{
-    PixiEnvironmentSpec, SolveCondaEnvironmentSpec, SourceBuildSpec, SourceMetadataSpec,
+    BackendSourceBuildSpec, BuildBackendMetadataSpec, PixiEnvironmentSpec,
+    SolveCondaEnvironmentSpec, SourceBuildSpec, SourceMetadataSpec,
     install_pixi::InstallPixiEnvironmentSpec, instantiate_tool_env::InstantiateToolEnvironmentSpec,
 };
 
@@ -128,6 +129,25 @@ pub trait InstantiateToolEnvironmentReporter {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
 #[serde(transparent)]
+pub struct BuildBackendMetadataId(pub usize);
+
+pub trait BuildBackendMetadataReporter {
+    /// Called when an operation was queued on the [`crate::CommandDispatcher`].
+    fn on_queued(
+        &mut self,
+        reason: Option<ReporterContext>,
+        env: &BuildBackendMetadataSpec,
+    ) -> BuildBackendMetadataId;
+
+    /// Called when the operation has started.
+    fn on_started(&mut self, id: BuildBackendMetadataId);
+
+    /// Called when the operation has finished.
+    fn on_finished(&mut self, id: BuildBackendMetadataId);
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(transparent)]
 pub struct SourceMetadataId(pub usize);
 
 pub trait SourceMetadataReporter {
@@ -159,16 +179,37 @@ pub trait SourceBuildReporter {
         env: &SourceBuildSpec,
     ) -> SourceBuildId;
 
+    /// Called when the operation has started.
+    fn on_started(&mut self, id: SourceBuildId);
+
+    /// Called when the operation has finished.
+    fn on_finished(&mut self, id: SourceBuildId);
+}
+
+/// A trait that is used to report the progress of a source build performed by
+/// the [`crate::CommandDispatcher`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize)]
+#[serde(transparent)]
+pub struct BackendSourceBuildId(pub usize);
+
+pub trait BackendSourceBuildReporter {
+    /// Called when an operation was queued on the [`crate::CommandDispatcher`].
+    fn on_queued(
+        &mut self,
+        reason: Option<ReporterContext>,
+        env: &BackendSourceBuildSpec,
+    ) -> BackendSourceBuildId;
+
     /// Called when the operation has started. The `backend_output_stream`
     /// stream can be used to capture the output of the build process.
     fn on_started(
         &mut self,
-        id: SourceBuildId,
+        id: BackendSourceBuildId,
         backend_output_stream: Box<dyn Stream<Item = String> + Unpin + Send>,
     );
 
     /// Called when the operation has finished.
-    fn on_finished(&mut self, id: SourceBuildId);
+    fn on_finished(&mut self, id: BackendSourceBuildId);
 }
 
 /// A trait that is used to report the progress of the
@@ -213,6 +254,15 @@ pub trait Reporter: Send {
     ) -> Option<&mut dyn InstantiateToolEnvironmentReporter> {
         None
     }
+
+    /// Returns a mutable reference to a reporter that reports on the progress
+    /// of fetching build backend metadata.
+    fn as_build_backend_metadata_reporter(
+        &mut self,
+    ) -> Option<&mut dyn BuildBackendMetadataReporter> {
+        None
+    }
+
     /// Returns a mutable reference to a reporter that reports on the progress
     /// of fetching source metadata.
     fn as_source_metadata_reporter(&mut self) -> Option<&mut dyn SourceMetadataReporter> {
@@ -240,6 +290,12 @@ pub trait Reporter: Send {
     fn as_source_build_reporter(&mut self) -> Option<&mut dyn SourceBuildReporter> {
         None
     }
+
+    /// Returns a mutable reference to a reporter that reports on the progress
+    /// of a backend that is building source packages.
+    fn as_backend_source_build_reporter(&mut self) -> Option<&mut dyn BackendSourceBuildReporter> {
+        None
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, derive_more::From)]
@@ -249,6 +305,8 @@ pub enum ReporterContext {
     SolveConda(CondaSolveId),
     InstallPixi(PixiInstallId),
     SourceMetadata(SourceMetadataId),
+    BuildBackendMetadata(BuildBackendMetadataId),
     InstantiateToolEnv(InstantiateToolEnvId),
     SourceBuild(SourceBuildId),
+    BackendSourceBuild(BackendSourceBuildId),
 }

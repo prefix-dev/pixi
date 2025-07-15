@@ -8,7 +8,7 @@ use std::{
 use async_fd_lock::{LockWrite, RwLockWriteGuard};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_build_discovery::EnabledProtocols;
-use pixi_build_types::CondaPackageMetadata;
+use pixi_build_types::{CondaPackageMetadata, procedures::conda_outputs::CondaOutput};
 use pixi_record::{InputHash, PinnedSourceSpec};
 use rattler_conda_types::ChannelUrl;
 use serde::{Deserialize, Serialize};
@@ -52,6 +52,9 @@ pub struct SourceMetadataKey {
 
     /// The protocols that are enabled for source packages
     pub enabled_protocols: EnabledProtocols,
+
+    /// The pinned source location
+    pub pinned_source: PinnedSourceSpec,
 }
 
 impl SourceMetadataKey {
@@ -68,8 +71,9 @@ impl SourceMetadataKey {
             .hash(&mut hasher);
         self.build_variants.hash(&mut hasher);
         self.enabled_protocols.hash(&mut hasher);
+        let source_dir = source_checkout_cache_key(&self.pinned_source);
         format!(
-            "{}-{}",
+            "{source_dir}/{}-{}",
             self.build_environment.host_platform,
             URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes())
         )
@@ -92,11 +96,10 @@ impl SourceMetadataCache {
     /// [`CacheEntry`] is held, another process cannot update the cache.
     pub async fn entry(
         &self,
-        source: &PinnedSourceSpec,
         input: &SourceMetadataKey,
     ) -> Result<(Option<CachedCondaMetadata>, CacheEntry), SourceMetadataCacheError> {
         // Locate the cache file and lock it.
-        let cache_dir = self.root.join(source_checkout_cache_key(source));
+        let cache_dir = self.root.join(input.hash_key());
         tokio::fs::create_dir_all(&cache_dir).await.map_err(|e| {
             SourceMetadataCacheError::IoError(
                 "creating cache directory".to_string(),
@@ -106,7 +109,7 @@ impl SourceMetadataCache {
         })?;
 
         // Try to acquire a lock on the cache file.
-        let cache_file_path = cache_dir.join(input.hash_key()).with_extension("json");
+        let cache_file_path = cache_dir.join("metadata.json");
         let cache_file = tokio::fs::OpenOptions::new()
             .write(true)
             .read(true)
@@ -158,15 +161,16 @@ impl SourceMetadataCache {
 /// updating the cache.
 ///
 /// As long as this entry is held, no other process can access this cache entry.
+#[derive(Debug)]
 pub struct CacheEntry {
     file: RwLockWriteGuard<tokio::fs::File>,
     path: PathBuf,
 }
 
 impl CacheEntry {
-    /// Consumes this instance and writes the given metadata to the cache.
-    pub async fn insert(
-        mut self,
+    /// Writes the given metadata to the cache.
+    pub async fn write(
+        &mut self,
         metadata: CachedCondaMetadata,
     ) -> Result<(), SourceMetadataCacheError> {
         self.file.seek(SeekFrom::Start(0)).await.map_err(|e| {
@@ -201,9 +205,29 @@ impl CacheEntry {
 
 /// Cached result of calling `conda/getMetadata` on a build backend. This is
 /// returned by [`SourceMetadataCache::entry`].
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CachedCondaMetadata {
+    /// A randomly generated identifier that is generated for each metadata
+    /// file.
+    ///
+    /// Cache information for each output is stored in a separate file, this ID
+    /// is present in each file. This is to ensure that the cache can be
+    /// invalidated if the metadata changes.
+    pub id: u64,
+
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub input_hash: Option<InputHash>,
-    pub packages: Vec<CondaPackageMetadata>,
+
+    #[serde(flatten)]
+    pub metadata: MetadataKind,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum MetadataKind {
+    /// The result of calling `conda/getMetadata` on a build backend.
+    GetMetadata { packages: Vec<CondaPackageMetadata> },
+
+    /// The result of calling `conda/outputs` on a build backend.
+    Outputs { outputs: Vec<CondaOutput> },
 }

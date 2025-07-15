@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use miette::IntoDiagnostic;
 use pixi_command_dispatcher::CommandDispatcher;
@@ -45,8 +45,8 @@ impl BuildContext {
         &self.channel_config
     }
 
-    pub fn resolve_variant(&self, platform: Platform) -> HashMap<String, Vec<String>> {
-        let mut result = HashMap::new();
+    pub fn resolve_variant(&self, platform: Platform) -> BTreeMap<String, Vec<String>> {
+        let mut result = BTreeMap::new();
 
         // Resolves from most specific to least specific.
         for variants in self.variant_config.resolve(Some(platform)).flatten() {

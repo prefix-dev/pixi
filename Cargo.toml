@@ -28,6 +28,7 @@ clap_complete = "4.5.46"
 clap_complete_nushell = "4.5.5"
 concat-idents = "1.1.5"
 console = "0.15.10"
+console-subscriber = "0.4.1"
 crossbeam-channel = "0.5.14"
 csv = "1.3.1"
 ctrlc = "3.4.5"
@@ -69,6 +70,7 @@ pep508_rs = "0.9.2"
 percent-encoding = "2.3.1"
 pin-project-lite = "0.2.16"
 pyproject-toml = "0.13.4"
+rand = { version = "0.9.1", default-features = false }
 regex = "1.11.1"
 reqwest = { version = "0.12.12", default-features = false }
 reqwest-middleware = "0.4"
@@ -219,6 +221,7 @@ rustls-tls = [
 ]
 self_update = []
 slow_integration_tests = []
+tokio-console = ["console-subscriber", "tokio/tracing"]
 
 # This feature enables performance optimizations but at the cost of increased
 # compile times. By default, it is only used when building the release binary.
@@ -242,6 +245,7 @@ clap = { workspace = true, features = [
 clap_complete = { workspace = true }
 clap_complete_nushell = { workspace = true }
 console = { workspace = true, features = ["windows-console-colors"] }
+console-subscriber = { workspace = true, optional = true }
 crossbeam-channel = { workspace = true }
 csv = { workspace = true }
 dashmap = { workspace = true }
