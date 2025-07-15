@@ -110,7 +110,6 @@ This works for both built-in commands and any extensions you have installed, mak
 
 ## See Also
 
-- [Pixi Pack](../pixi_pack.md) - Official extension for packaging environments
 - [Pixi Diff](pixi_diff.md) - Compare lock files and environments  
 - [Pixi Inject](pixi_inject.md) - Inject dependencies into existing environments
 - [Global Tools](../../global_tools/introduction.md) - Managing global tool installations
