@@ -8,7 +8,7 @@ use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_record::{PinnedSourceSpec, SourceRecord};
 use pixi_spec::{SourceAnchor, SourceSpec};
-use rattler_conda_types::{ChannelConfig, ChannelUrl, MatchSpec, PackageName, ParseStrictness};
+use rattler_conda_types::{ChannelConfig, ChannelUrl, MatchSpec, ParseStrictness};
 use thiserror::Error;
 
 use crate::{
@@ -44,14 +44,14 @@ pub struct CollectedSourceMetadata {
 pub enum CollectSourceMetadataError {
     #[error("failed to extract metadata for package '{}'", .name.as_source())]
     SourceMetadataError {
-        name: PackageName,
+        name: rattler_conda_types::PackageName,
         #[source]
         #[diagnostic_source]
         error: SourceMetadataError,
     },
     #[error("the package '{}' is not provided by the project located at '{}'", .name.as_source(), &.pinned_source)]
     PackageMetadataNotFound {
-        name: PackageName,
+        name: rattler_conda_types::PackageName,
         pinned_source: Box<PinnedSourceSpec>,
         #[help]
         help: String,
@@ -182,9 +182,10 @@ impl SourceMetadataCollector {
                 return Err(CommandDispatcherError::Cancelled);
             }
             Err(CommandDispatcherError::Failed(SourceMetadataError::Cycle(mut cycle))) => {
-                for name in chain.into_iter().rev() {
-                    cycle.stack.push(CycleEnvironment::Run(name));
-                }
+                // Push the packages that led up to this cycle onto the cycle stack.
+                cycle
+                    .stack
+                    .extend(chain.into_iter().map(|pkg| (pkg, CycleEnvironment::Run)));
                 return Err(CommandDispatcherError::Failed(
                     CollectSourceMetadataError::SourceMetadataError {
                         name,

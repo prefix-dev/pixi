@@ -2,7 +2,7 @@
 source: crates/pixi_command_dispatcher/src/source_metadata/cycle.rs
 expression: cycle.to_string()
 ---
-┌─────┐
+┌──→──┐
 |  package_a
 |    requires package_b (host)
 ↑     ↓
@@ -14,4 +14,4 @@ expression: cycle.to_string()
 ↑     ↓
 |  package_d
 |    requires package_a (host)
-└─────┘
+└──←──┘

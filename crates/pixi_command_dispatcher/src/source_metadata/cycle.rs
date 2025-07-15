@@ -1,53 +1,30 @@
 use std::fmt::{self, Display, Formatter};
 
+use itertools::Itertools;
 use rattler_conda_types::PackageName;
 
+/// Defines a package and in which dependency set the cycle occurred.
 #[derive(Debug)]
 pub enum CycleEnvironment {
-    Host(PackageName),
-    Build(PackageName),
-    Run(PackageName),
+    Host,
+    Build,
+    Run,
 }
 
 #[derive(Debug, Default)]
 pub struct Cycle {
-    pub stack: Vec<CycleEnvironment>,
-}
-
-impl CycleEnvironment {
-    pub fn package_name(&self) -> &PackageName {
-        match self {
-            CycleEnvironment::Host(name) => name,
-            CycleEnvironment::Build(name) => name,
-            CycleEnvironment::Run(name) => name,
-        }
-    }
-
-    pub fn dependency_type(&self) -> &str {
-        match self {
-            CycleEnvironment::Host(_) => "host",
-            CycleEnvironment::Build(_) => "build",
-            CycleEnvironment::Run(_) => "run",
-        }
-    }
-
-    pub fn with_package_name(self, package_name: PackageName) -> Self {
-        match self {
-            CycleEnvironment::Host(_) => CycleEnvironment::Host(package_name),
-            CycleEnvironment::Build(_) => CycleEnvironment::Build(package_name),
-            CycleEnvironment::Run(_) => CycleEnvironment::Run(package_name),
-        }
-    }
+    /// A list of package and in which environment the next package is used.
+    /// Together, these form a cycle.
+    pub stack: Vec<(PackageName, CycleEnvironment)>,
 }
 
 impl Display for CycleEnvironment {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{} ({} environment)",
-            self.package_name().as_source(),
-            self.dependency_type()
-        )
+        match self {
+            CycleEnvironment::Host => write!(f, "host"),
+            CycleEnvironment::Build => write!(f, "build"),
+            CycleEnvironment::Run => write!(f, "run"),
+        }
     }
 }
 
@@ -58,28 +35,24 @@ impl Display for Cycle {
         }
 
         // Top border
-        writeln!(f, "┌─────┐")?;
+        writeln!(f, "┌──→──┐")?;
 
         // Display each step in the cycle
-        for (i, dep) in self.stack.iter().enumerate().rev() {
-            let next_idx = (i + self.stack.len() - 1) % self.stack.len();
-            let next_dep = &self.stack[next_idx];
-            let from_package = dep.package_name();
-            let env_type = dep.dependency_type();
-            let to_package = next_dep.package_name();
-
+        for (i, ((from_package, env_type), (to_package, _))) in
+            self.stack.iter().rev().circular_tuple_windows().enumerate()
+        {
             // Show the package that declares the dependency
             writeln!(f, "|  {}", from_package.as_source())?;
             writeln!(f, "|    requires {} ({})", to_package.as_source(), env_type)?;
 
             // Add flow arrows except for the last item
-            if i > 0 {
+            if i < self.stack.len() - 1 {
                 writeln!(f, "↑     ↓")?;
             }
         }
 
         // Bottom border
-        writeln!(f, "└─────┘")?;
+        writeln!(f, "└──←──┘")?;
 
         Ok(())
     }
@@ -93,10 +66,10 @@ mod tests {
     fn test_cycle_display() {
         let cycle = Cycle {
             stack: vec![
-                CycleEnvironment::Host("package_d".parse().unwrap()),
-                CycleEnvironment::Run("package_c".parse().unwrap()),
-                CycleEnvironment::Build("package_b".parse().unwrap()),
-                CycleEnvironment::Host("package_a".parse().unwrap()),
+                ("package_d".parse().unwrap(), CycleEnvironment::Host),
+                ("package_c".parse().unwrap(), CycleEnvironment::Run),
+                ("package_b".parse().unwrap(), CycleEnvironment::Build),
+                ("package_a".parse().unwrap(), CycleEnvironment::Host),
             ],
         };
 

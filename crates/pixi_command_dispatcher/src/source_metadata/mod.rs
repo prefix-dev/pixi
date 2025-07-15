@@ -122,7 +122,8 @@ impl SourceMetadataSpec {
             .unwrap_or_default();
         let build_records = self
             .solve_dependencies(
-                CycleEnvironment::Build(self.package.clone()),
+                self.package.clone(),
+                CycleEnvironment::Build,
                 command_dispatcher,
                 build_dependencies.clone(),
                 self.backend_metadata
@@ -146,7 +147,8 @@ impl SourceMetadataSpec {
             .extend_with_run_exports_from_build(&build_run_exports);
         let host_records = self
             .solve_dependencies(
-                CycleEnvironment::Host(self.package.clone()),
+                self.package.clone(),
+                CycleEnvironment::Host,
                 command_dispatcher,
                 host_dependencies.clone(),
                 self.backend_metadata.build_environment.clone(),
@@ -313,7 +315,8 @@ impl SourceMetadataSpec {
 
     async fn solve_dependencies(
         &self,
-        pkg: CycleEnvironment,
+        pkg_name: PackageName,
+        env_type: CycleEnvironment,
         command_dispatcher: &CommandDispatcher,
         dependencies: Dependencies,
         build_environment: BuildEnvironment,
@@ -323,7 +326,7 @@ impl SourceMetadataSpec {
         }
         match command_dispatcher
             .solve_pixi_environment(PixiEnvironmentSpec {
-                name: Some(pkg.package_name().as_source().to_string()),
+                name: Some(format!("{} ({})", pkg_name.as_source(), env_type)),
                 dependencies: dependencies.dependencies,
                 constraints: dependencies.constraints,
                 installed: vec![], // TODO: To lock build environments, fill this.
@@ -339,19 +342,24 @@ impl SourceMetadataSpec {
             .await
         {
             Err(CommandDispatcherError::Failed(SolvePixiEnvironmentError::Cycle(mut cycle))) => {
-                cycle.stack.push(pkg);
+                // If a cycle was detected, add the current environment to the cycle.
+                cycle.stack.push((pkg_name, env_type));
                 Err(CommandDispatcherError::Failed(SourceMetadataError::Cycle(
                     cycle,
                 )))
             }
-            Err(CommandDispatcherError::Failed(e)) => match pkg {
-                CycleEnvironment::Build(_) => Err(CommandDispatcherError::Failed(
-                    SourceMetadataError::SolveBuildEnvironment(Box::new(e)),
-                )),
-                _ => Err(CommandDispatcherError::Failed(
-                    SourceMetadataError::SolveHostEnvironment(Box::new(e)),
-                )),
-            },
+            Err(CommandDispatcherError::Failed(e)) => {
+                // If solving failed, we return an error based on the environment type that we
+                // tried to solve.
+                match env_type {
+                    CycleEnvironment::Build => Err(CommandDispatcherError::Failed(
+                        SourceMetadataError::SolveBuildEnvironment(Box::new(e)),
+                    )),
+                    _ => Err(CommandDispatcherError::Failed(
+                        SourceMetadataError::SolveHostEnvironment(Box::new(e)),
+                    )),
+                }
+            }
             Err(CommandDispatcherError::Cancelled) => Err(CommandDispatcherError::Cancelled),
             Ok(records) => Ok(records),
         }
