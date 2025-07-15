@@ -20,6 +20,7 @@ use toml_span::{DeserError, Value};
 
 use super::{
     EnvironmentName, ExposedName,
+    global_spec::NamedGlobalSpec,
     parsed_manifest::{ManifestParsingError, ManifestVersion, ParsedManifest},
 };
 use crate::global::project::ParsedEnvironment;
@@ -138,10 +139,10 @@ impl Manifest {
     pub fn add_dependency(
         &mut self,
         env_name: &EnvironmentName,
-        name: &PackageName,
-        spec: &PixiSpec,
+        named_spec: &NamedGlobalSpec,
     ) -> miette::Result<()> {
-        let spec = spec.clone();
+        let name = named_spec.name();
+        let spec = named_spec.spec();
 
         // Update self.parsed
         self.parsed
@@ -652,7 +653,10 @@ mod tests {
     use insta::assert_snapshot;
     use itertools::Itertools;
     use pixi_consts::consts::DEFAULT_CHANNELS;
+    use pixi_manifest::toml::FromTomlStr;
     use rattler_conda_types::ParseStrictness;
+
+    use crate::cli::workspace::name;
 
     use super::*;
 
@@ -948,8 +952,8 @@ mod tests {
         let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
         let env_name = EnvironmentName::from_str("test-env").unwrap();
 
-        let version_match_spec =
-            MatchSpec::from_str("pythonic ==3.15.0", ParseStrictness::Strict).unwrap();
+        let named_global_spec =
+            NamedGlobalSpec::from_str("pythonic ==3.15.0", &channel_config).unwrap();
 
         // Add environment
         manifest
@@ -966,7 +970,7 @@ mod tests {
 
         // Add dependency
         manifest
-            .add_dependency(&env_name, &version_match_spec, &channel_config)
+            .add_dependency(&env_name, &named_global_spec)
             .unwrap();
 
         // Check document
@@ -974,11 +978,15 @@ mod tests {
             .document
             .get_or_insert_nested_table(&format!("envs.{env_name}.dependencies"))
             .unwrap()
-            .get(version_match_spec.name.clone().unwrap().as_normalized());
+            .get(named_global_spec.name().as_normalized());
         assert!(actual_value.is_some());
         assert_eq!(
             actual_value.unwrap().to_string().replace('"', ""),
-            version_match_spec.clone().version.unwrap().to_string()
+            named_global_spec
+                .spec()
+                .as_version_spec()
+                .unwrap()
+                .to_string()
         );
 
         // Check parsed
@@ -989,21 +997,15 @@ mod tests {
             .unwrap()
             .dependencies
             .specs
-            .get(&version_match_spec.clone().name.unwrap())
+            .get(named_global_spec.name().as_normalized())
             .unwrap()
             .clone();
-        assert_eq!(
-            actual_value,
-            PixiSpec::from_nameless_matchspec(
-                version_match_spec.into_nameless().1,
-                &channel_config
-            )
-        );
+        assert_eq!(actual_value, *named_global_spec.spec());
 
         // Add another dependency
-        let build_match_spec = MatchSpec::from_str(
+        let build_match_spec = NamedGlobalSpec::from_str(
             "python [version='==3.11.0', build=he550d4f_1_cpython]",
-            ParseStrictness::Strict,
+            &channel_config,
         )
         .unwrap();
         manifest

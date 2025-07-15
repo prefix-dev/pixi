@@ -52,6 +52,7 @@ use pixi_config::{Config, default_channel_config, pixi_home};
 use pixi_consts::consts::{self};
 use pixi_manifest::PrioritizedChannel;
 use pixi_progress::global_multi_progress;
+use pixi_spec::PixiSpec;
 use pixi_spec_containers::DependencyMap;
 use pixi_utils::{executable_from_path, reqwest::build_reqwest_clients};
 use rattler_conda_types::{
@@ -67,8 +68,10 @@ use tokio::sync::Semaphore;
 use toml_edit::DocumentMut;
 
 mod environment;
+mod global_spec;
 mod manifest;
 mod parsed_manifest;
+pub use global_spec::{GlobalSpec, NamedGlobalSpec};
 
 pub(crate) const MANIFESTS_DIR: &str = "manifests";
 
@@ -1088,7 +1091,7 @@ impl Project {
     // Figure which packages have been added
     pub async fn added_packages(
         &self,
-        specs: Vec<MatchSpec>,
+        specs: impl IntoIterator<Item = &NamedGlobalSpec>,
         env_name: &EnvironmentName,
     ) -> miette::Result<StateChanges> {
         let mut state_changes = StateChanges::default();
@@ -1098,7 +1101,11 @@ impl Project {
                 .await?
                 .find_installed_packages()?
                 .into_iter()
-                .filter(|r| specs.iter().any(|s| s.matches(&r.repodata_record)))
+                .filter(|r| {
+                    specs
+                        .into_iter()
+                        .any(|s| s.spec().matches(&r.repodata_record))
+                })
                 .map(|r| r.repodata_record.package_record)
                 .map(StateChange::AddedPackage),
         );

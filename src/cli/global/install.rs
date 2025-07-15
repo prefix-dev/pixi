@@ -1,4 +1,4 @@
-use std::ops::Not;
+use std::{collections::HashMap, ops::Not, str::FromStr};
 
 use clap::Parser;
 use fancy_display::FancyDisplay;
@@ -10,14 +10,14 @@ use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 
 use crate::{
     cli::{
-        global::{revert_environment_after_error, spec::GlobalSpecs},
+        global::{global_specs::GlobalSpecs, revert_environment_after_error},
         has_specs::HasSpecs,
     },
     global::{
         self, EnvChanges, EnvState, EnvironmentName, Mapping, Project, StateChange, StateChanges,
         common::{NotChangedReason, contains_menuinst_document},
         list::list_all_global_environments,
-        project::ExposedType,
+        project::{ExposedType, NamedGlobalSpec},
     },
 };
 use pixi_config::{self, Config, ConfigCli};
@@ -87,39 +87,42 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?
         .with_cli_config(config.clone());
 
-    let env_names = match &args.environment {
-        Some(env_name) => Vec::from([env_name.clone()]),
-        None => args
-            .packages
-            .specs()?
-            .iter()
-            .map(|(package_name, _)| package_name.as_normalized().parse().into_diagnostic())
-            .collect::<miette::Result<Vec<_>>>()?,
+    let specs = args
+        .packages
+        .to_global_specs(config.global_channel_config())?
+        .into_iter()
+        .filter_map(|s| s.into_named());
+
+    let env_to_specs: HashMap<EnvironmentName, Vec<NamedGlobalSpec>> = match &args.environment {
+        Some(env_name) => HashMap::from_iter(std::iter::once((
+            env_name.clone(),
+            specs.collect::<Vec<_>>(),
+        ))),
+        None => specs
+            .into_iter()
+            .map(|spec| {
+                (
+                    EnvironmentName::from_str(spec.name().as_source())
+                        .expect("valid environment name"),
+                    vec![spec],
+                )
+            })
+            .collect(),
     };
 
-    let multiple_envs = env_names.len() > 1;
-
-    if !args.expose.is_empty() && env_names.len() != 1 {
+    if !args.expose.is_empty() && env_to_specs.len() != 1 {
         miette::bail!("Can't add exposed mappings with `--exposed` for more than one environment");
     }
 
-    if !args.with.is_empty() && env_names.len() != 1 {
+    if !args.with.is_empty() && env_to_specs.len() != 1 {
         miette::bail!("Can't add packages with `--with` for more than one environment");
     }
 
     let mut env_changes = EnvChanges::default();
     let mut last_updated_project = project_original;
-    let specs = args.packages.specs()?;
-    for env_name in &env_names {
-        let specs = specs.clone();
-        let specs = if multiple_envs {
-            specs
-                .into_iter()
-                .filter(|(package_name, _)| env_name.as_str() == package_name.as_source())
-                .collect()
-        } else {
-            specs
-        };
+    // Convert the packages into named global specs
+
+    for (env_name, specs) in &env_to_specs {
         let mut project = last_updated_project.clone();
         match setup_environment(env_name, &args, specs, &mut project)
             .await
@@ -139,7 +142,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
             Err(err) => {
                 if let Err(revert_err) =
-                    revert_environment_after_error(env_name, &last_updated_project).await
+                    revert_environment_after_error(&env_name, &last_updated_project).await
                 {
                     tracing::warn!("Reverting of the operation failed");
                     tracing::info!("Reversion error: {:?}", revert_err);
@@ -153,7 +156,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // After installing, we always want to list the changed environments
     list_all_global_environments(
         &last_updated_project,
-        Some(env_names),
+        Some(env_to_specs.into_keys().collect()),
         Some(&env_changes),
         None,
         false,
@@ -166,7 +169,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 async fn setup_environment(
     env_name: &EnvironmentName,
     args: &Args,
-    specs: IndexMap<PackageName, MatchSpec>,
+    specs: &[NamedGlobalSpec],
     project: &mut Project,
 ) -> miette::Result<StateChanges> {
     let mut state_changes = StateChanges::new_with_env(env_name.clone());
@@ -191,22 +194,25 @@ async fn setup_environment(
         project.manifest.set_platform(env_name, platform)?;
     }
 
+    let converted_withs = args
+        .with
+        .iter()
+        .map(|spec| {
+            NamedGlobalSpec::from_matchspec_with_name(
+                spec.clone(),
+                &project.config().global_channel_config(),
+            )
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
     // Add the dependencies to the environment
     let packages_to_add = specs
-        .clone()
         .into_iter()
-        .map(|(_, spec)| spec)
-        .chain(args.with.clone())
+        .chain(converted_withs.iter())
         .collect_vec();
+
     for spec in &packages_to_add {
-        let package_name = spec.name.as_ref().unwrap();
-        let pixi_spec = PixiSpec::from_nameless_matchspec(
-            spec.clone().into_nameless().1,
-            &project.config().global_channel_config(),
-        );
-        project
-            .manifest
-            .add_dependency(env_name, package_name, &pixi_spec)?;
+        project.manifest.add_dependency(env_name, spec)?;
     }
 
     if !args.expose.is_empty() {
@@ -230,10 +236,10 @@ async fn setup_environment(
     // Add shortcuts
     if !args.no_shortcuts {
         let prefix = project.environment_prefix(env_name).await?;
-        for (package_name, _) in specs.iter() {
-            let prefix_record = prefix.find_designated_package(package_name).await?;
+        for spec in specs.into_iter() {
+            let prefix_record = prefix.find_designated_package(spec.name()).await?;
             if contains_menuinst_document(&prefix_record, prefix.root()) {
-                project.manifest.add_shortcut(env_name, package_name)?;
+                project.manifest.add_shortcut(env_name, spec.name())?;
             }
         }
         state_changes |= project.sync_shortcuts(env_name).await?;

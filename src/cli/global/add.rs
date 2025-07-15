@@ -1,9 +1,11 @@
+use crate::cli::global::global_specs::GlobalSpecs;
 use crate::cli::global::revert_environment_after_error;
-use crate::cli::global::spec::GlobalSpecs;
 use crate::cli::has_specs::HasSpecs;
+use crate::global::project::NamedGlobalSpec;
 use crate::global::{EnvironmentName, Mapping, Project, StateChanges};
 use clap::Parser;
 use itertools::Itertools;
+use miette::IntoDiagnostic;
 use pixi_config::{Config, ConfigCli};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::MatchSpec;
@@ -50,22 +52,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     async fn apply_changes(
         env_name: &EnvironmentName,
-        specs: Vec<MatchSpec>,
+        specs: impl IntoIterator<Item = &NamedGlobalSpec>,
         expose: &[Mapping],
         project: &mut Project,
     ) -> miette::Result<StateChanges> {
         let mut state_changes = StateChanges::new_with_env(env_name.clone());
 
         // Add specs to the manifest
-        for spec in &specs {
-            let package_name = spec.name.as_ref().unwrap();
-            let pixi_spec = PixiSpec::from_nameless_matchspec(
-                spec.clone().into_nameless().1,
-                &project.config().global_channel_config(),
-            );
-            project
-                .manifest
-                .add_dependency(env_name, package_name, &pixi_spec)?;
+        for spec in specs {
+            project.manifest.add_dependency(env_name, &spec)?;
         }
 
         // Add expose mappings to the manifest
@@ -90,10 +85,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let specs = args
         .packages
-        .specs()?
+        .to_global_specs(&project_original.config().global_channel_config())
+        .into_diagnostic()?
         .into_iter()
-        .map(|(_, specs)| specs)
-        .collect_vec();
+        .filter_map(|(spec)| spec.as_named());
 
     match apply_changes(
         &args.environment,
