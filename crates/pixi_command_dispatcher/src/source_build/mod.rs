@@ -209,8 +209,6 @@ impl SourceBuildSpec {
             })?;
 
         // Determine final directories for everything.
-        // TODO: There is some magic in how we decide the name for the host prefix. This
-        // magic should ideally be managed by the backend.
         let directories = Directories::new(&work_directory, host_platform);
 
         // Solve the build environment.
@@ -354,23 +352,31 @@ pub struct Directories {
 
 impl Directories {
     pub fn new(working_directory: &Path, host_platform: Platform) -> Self {
-        let build_prefix = working_directory.join("bld");
+        const BUILD_DIR: &str = "bld";
+        const HOST_ENV_DIR: &str = "host";
+        const PLACEHOLDER_TEMPLATE_STR: &str = "_placehold";
+
+        let build_prefix = working_directory.join(BUILD_DIR);
         let host_prefix = if host_platform.is_windows() {
-            working_directory.join("host")
+            working_directory.join(HOST_ENV_DIR)
         } else {
-            let placeholder_template = "_placehold";
+            // On non-Windows platforms, the name of the host environment has to be exactly
+            // 255 characters long for prefix replacement in rattler build to work
+            // correctly. This code constructs a directory name padded with a
+            // template string so its exactly 255 characters long.
+            //
+            // TODO: This is really an implementation detail of how backends are generally
+            // implemented, but this code should not really live in pixi.
+            const PLACEHOLDER_LENGTH: usize = 255;
             let mut placeholder = String::new();
-            let placeholder_length: usize = 255;
-
-            while placeholder.len() < placeholder_length {
-                placeholder.push_str(placeholder_template);
+            while placeholder.len() < PLACEHOLDER_LENGTH {
+                placeholder.push_str(PLACEHOLDER_TEMPLATE_STR);
             }
-
             let placeholder = placeholder
-                [0..placeholder_length - working_directory.join("host_env").as_os_str().len()]
+                [0..PLACEHOLDER_LENGTH - working_directory.join(HOST_ENV_DIR).as_os_str().len()]
                 .to_string();
 
-            working_directory.join(format!("host_env{}", placeholder))
+            working_directory.join(format!("{HOST_ENV_DIR}{}", placeholder))
         };
         Self {
             host_prefix,
