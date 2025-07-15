@@ -44,7 +44,7 @@ impl InMemoryBackend for PassthroughBackend {
         }
     }
 
-    fn identifier(&self) -> &'static str {
+    fn identifier(&self) -> &str {
         BACKEND_NAME
     }
 
@@ -113,19 +113,7 @@ fn extract_dependencies<F: Fn(&TargetV1) -> Option<&OrderMap<SourcePackageName, 
                         .iter()
                         .flatten()
                         .flat_map(|(selector, target)| {
-                            if match selector {
-                                TargetSelectorV1::Unix => platform.is_unix(),
-                                TargetSelectorV1::Linux => platform.is_linux(),
-                                TargetSelectorV1::Win => platform.is_windows(),
-                                TargetSelectorV1::MacOs => platform.is_osx(),
-                                TargetSelectorV1::Platform(target_platform) => {
-                                    target_platform == platform.as_str()
-                                }
-                            } {
-                                Some(target)
-                            } else {
-                                None
-                            }
+                            matches_target_selector(selector, platform).then_some(target)
                         }),
                 )
                 .flat_map(|target| extract(target).into_iter().flat_map(OrderMap::iter))
@@ -139,6 +127,18 @@ fn extract_dependencies<F: Fn(&TargetV1) -> Option<&OrderMap<SourcePackageName, 
     CondaOutputDependencies {
         depends,
         constraints: Vec::new(),
+    }
+}
+
+/// Returns true if the given [`TargetSelectorV1`] matches the specified
+/// `platform`.
+fn matches_target_selector(selector: &TargetSelectorV1, platform: Platform) -> bool {
+    match selector {
+        TargetSelectorV1::Unix => platform.is_unix(),
+        TargetSelectorV1::Linux => platform.is_linux(),
+        TargetSelectorV1::Win => platform.is_windows(),
+        TargetSelectorV1::MacOs => platform.is_osx(),
+        TargetSelectorV1::Platform(target_platform) => target_platform == platform.as_str(),
     }
 }
 
@@ -161,7 +161,7 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
         Ok(PassthroughBackend { project_model })
     }
 
-    fn identifier(&self) -> &'static str {
+    fn identifier(&self) -> &str {
         BACKEND_NAME
     }
 }

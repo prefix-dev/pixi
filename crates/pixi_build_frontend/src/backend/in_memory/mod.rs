@@ -30,7 +30,7 @@ pub trait InMemoryBackendInstantiator {
 
     fn initialize(&self, params: InitializeParams) -> Result<Self::Backend, CommunicationError>;
 
-    fn identifier(&self) -> &'static str;
+    fn identifier(&self) -> &str;
 
     /// Returns the api version that this backend supports.
     fn api_version(&self) -> PixiBuildApiVersion {
@@ -44,7 +44,7 @@ pub trait InMemoryBackend: Send {
         BackendCapabilities::default()
     }
 
-    fn identifier(&self) -> &'static str;
+    fn identifier(&self) -> &str;
 
     fn conda_get_metadata(
         &self,
@@ -84,7 +84,7 @@ type ErasedInitializationFn =
 
 /// A helper type that erases the type of the in-memory build backend.
 pub struct BoxedInMemoryBackend {
-    identifier: &'static str,
+    identifier: String,
     initialize: Box<ErasedInitializationFn>,
     api_version: PixiBuildApiVersion,
 }
@@ -115,7 +115,7 @@ impl Debug for BoxedInMemoryBackend {
 impl<T: InMemoryBackendInstantiator + Send + Sync + 'static> From<T> for BoxedInMemoryBackend {
     fn from(instantiator: T) -> Self {
         Self {
-            identifier: instantiator.identifier(),
+            identifier: instantiator.identifier().to_owned(),
             api_version: instantiator.api_version(),
             initialize: Box::new(move |params| {
                 instantiator

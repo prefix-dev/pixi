@@ -46,18 +46,17 @@ fn tool_platform() -> (Platform, Vec<GenericVirtualPackage>) {
     (platform, virtual_packages)
 }
 
-fn manifest_dir() -> &'static Path {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
+/// Returns the path to the root of the workspace.
+fn cargo_workspace_dir() -> &'static Path {
+    Path::new(env!("CARGO_WORKSPACE_DIR"))
 }
 
-fn repository_dir() -> PathBuf {
-    manifest_dir().join("../..")
+/// Returns the path to the `tests/data/workspaces` directory in the repository.
+fn workspaces_dir() -> PathBuf {
+    cargo_workspace_dir().join("tests/data/workspaces")
 }
 
-fn workspace_dir() -> PathBuf {
-    repository_dir().join("tests/data/workspaces")
-}
-
+/// Returns the default build environment to use for tests.
 fn default_build_environment() -> BuildEnvironment {
     let (tool_platform, tool_virtual_packages) = tool_platform();
     BuildEnvironment::simple(tool_platform, tool_virtual_packages)
@@ -200,7 +199,7 @@ pub async fn test_cycle() {
     // - a backend override that uses a passthrough backend to avoid any actual
     //   backend calls
     let (tool_platform, tool_virtual_packages) = tool_platform();
-    let root_dir = workspace_dir().join("cycle");
+    let root_dir = workspaces_dir().join("cycle");
     let tempdir = tempfile::tempdir().unwrap();
     let dispatcher = CommandDispatcher::builder()
         .with_root_dir(root_dir.clone())

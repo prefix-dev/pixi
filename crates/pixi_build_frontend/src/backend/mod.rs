@@ -1,7 +1,8 @@
 use std::fmt::{Debug, Formatter};
 
-use crate::in_memory;
-use crate::in_memory::InMemoryBackend;
+pub mod in_memory;
+
+use in_memory::InMemoryBackend;
 use pixi_build_types::{
     BackendCapabilities, PixiBuildApiVersion,
     procedures::{
