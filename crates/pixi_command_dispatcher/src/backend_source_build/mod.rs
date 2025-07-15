@@ -14,8 +14,10 @@ use pixi_build_frontend::{Backend, json_rpc::CommunicationError};
 use pixi_build_types::{
     ChannelConfiguration, PlatformAndVirtualPackages,
     procedures::{
-        conda_build_v0::{CondaBuildParams, CondaOutputIdentifier},
-        conda_build_v1::{CondaBuildV2Output, CondaBuildV2Params, CondaBuildV2Prefix},
+        conda_build_v0::{CondaBuildParams, CondaBuiltPackage, CondaOutputIdentifier},
+        conda_build_v1::{
+            CondaBuildV2Output, CondaBuildV2Params, CondaBuildV2Prefix, CondaBuildV2Result,
+        },
     },
 };
 use pixi_record::SourceRecord;
@@ -46,12 +48,12 @@ pub struct BackendSourceBuildSpec {
 
 #[derive(Debug, Serialize)]
 pub enum BackendSourceBuildMethod {
+    BuildV0(BackendSourceBuildV0Method),
     BuildV1(BackendSourceBuildV1Method),
-    BuildV2(BackendSourceBuildV2Method),
 }
 
 #[derive(Debug, Serialize)]
-pub struct BackendSourceBuildV1Method {
+pub struct BackendSourceBuildV0Method {
     /// The channel configuration to use when resolving metadata
     pub channel_config: ChannelConfig,
 
@@ -71,7 +73,7 @@ pub struct BackendSourceBuildV1Method {
 }
 
 #[derive(Debug, Serialize)]
-pub struct BackendSourceBuildV2Method {
+pub struct BackendSourceBuildV1Method {
     /// The build prefix that was prepared for the backend.
     pub build_prefix: BackendSourceBuildPrefix,
 
@@ -117,8 +119,8 @@ impl BackendSourceBuildSpec {
         log_sink: UnboundedSender<String>,
     ) -> Result<BackendBuiltSource, CommandDispatcherError<BackendSourceBuildError>> {
         match self.method {
-            BackendSourceBuildMethod::BuildV1(params) => {
-                Self::build_v1(
+            BackendSourceBuildMethod::BuildV0(params) => {
+                Self::build_v0(
                     self.backend,
                     self.record,
                     params,
@@ -127,8 +129,8 @@ impl BackendSourceBuildSpec {
                 )
                 .await
             }
-            BackendSourceBuildMethod::BuildV2(params) => {
-                Self::build_v2(
+            BackendSourceBuildMethod::BuildV1(params) => {
+                Self::build_v1(
                     self.backend,
                     self.record,
                     params,
@@ -140,10 +142,10 @@ impl BackendSourceBuildSpec {
         }
     }
 
-    async fn build_v1(
+    async fn build_v0(
         backend: Backend,
         record: SourceRecord,
-        params: BackendSourceBuildV1Method,
+        params: BackendSourceBuildV0Method,
         mut log_sink: UnboundedSender<String>,
         command_dispatcher: CommandDispatcher,
     ) -> Result<BackendBuiltSource, CommandDispatcherError<BackendSourceBuildError>> {
@@ -210,13 +212,11 @@ impl BackendSourceBuildSpec {
         }
 
         // Locate the package that matches the source record we requested to be build.
-        let built_package = if let Some(idx) = build_result.packages.iter().position(|pkg| {
-            pkg.name == record.package_record.name
-                && Version::from_str(&pkg.version).ok().as_ref()
-                    == Some(&record.package_record.version)
-                && pkg.build == record.package_record.build
-                && pkg.subdir == record.package_record.subdir
-        }) {
+        let built_package = if let Some(idx) = build_result
+            .packages
+            .iter()
+            .position(|pkg| v0_built_package_matches_request(&record, &pkg))
+        {
             build_result.packages.swap_remove(idx)
         } else {
             return Err(CommandDispatcherError::Failed(
@@ -248,10 +248,10 @@ impl BackendSourceBuildSpec {
         })
     }
 
-    async fn build_v2(
+    async fn build_v1(
         backend: Backend,
         record: SourceRecord,
-        params: BackendSourceBuildV2Method,
+        params: BackendSourceBuildV1Method,
         mut log_sink: UnboundedSender<String>,
         command_dispatcher: CommandDispatcher,
     ) -> Result<BackendBuiltSource, CommandDispatcherError<BackendSourceBuildError>> {
@@ -299,11 +299,7 @@ impl BackendSourceBuildSpec {
             .map_err(CommandDispatcherError::Failed)?;
 
         // Make sure that the built package matches the expected output.
-        if built_package.name != record.package_record.name.as_normalized()
-            || built_package.version != record.package_record.version
-            || built_package.build != record.package_record.build
-            || built_package.subdir.as_str() != record.package_record.subdir
-        {
+        if v1_built_package_matches_requested(&built_package, &record) {
             return Err(CommandDispatcherError::Failed(
                 BackendSourceBuildError::UnexpectedPackage(UnexpectedPackageError {
                     subdir: record.package_record.subdir.clone(),
@@ -326,6 +322,27 @@ impl BackendSourceBuildSpec {
             output_file: built_package.output_file,
         })
     }
+}
+
+/// Returns true if the requested package matches the one that was built by a
+/// backend.
+fn v0_built_package_matches_request(record: &SourceRecord, pkg: &&CondaBuiltPackage) -> bool {
+    pkg.name == record.package_record.name
+        && Version::from_str(&pkg.version).ok().as_ref() == Some(&record.package_record.version)
+        && pkg.build == record.package_record.build
+        && pkg.subdir == record.package_record.subdir
+}
+
+/// Returns true if the requested package matches the one that was built by a
+/// backend.
+fn v1_built_package_matches_requested(
+    built_package: &CondaBuildV2Result,
+    record: &SourceRecord,
+) -> bool {
+    built_package.name != record.package_record.name.as_normalized()
+        || built_package.version != record.package_record.version
+        || built_package.build != record.package_record.build
+        || built_package.subdir.as_str() != record.package_record.subdir
 }
 
 #[derive(Debug, thiserror::Error, Diagnostic)]

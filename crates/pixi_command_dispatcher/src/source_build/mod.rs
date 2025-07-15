@@ -17,8 +17,8 @@ use tracing::instrument;
 
 use crate::{
     BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildMethod,
-    BackendSourceBuildPrefix, BackendSourceBuildSpec, BackendSourceBuildV1Method,
-    BackendSourceBuildV2Method, BuildEnvironment, CommandDispatcher, CommandDispatcherError,
+    BackendSourceBuildPrefix, BackendSourceBuildSpec, BackendSourceBuildV0Method,
+    BackendSourceBuildV1Method, BuildEnvironment, CommandDispatcher, CommandDispatcherError,
     CommandDispatcherErrorResultExt, InstallPixiEnvironmentError, InstallPixiEnvironmentSpec,
     InstantiateBackendError, InstantiateBackendSpec, PixiEnvironmentSpec,
     SolvePixiEnvironmentError, SourceCheckout, SourceCheckoutError,
@@ -144,7 +144,7 @@ impl SourceBuildSpec {
             .backend_source_build(BackendSourceBuildSpec {
                 backend,
                 record: self.source,
-                method: BackendSourceBuildMethod::BuildV1(BackendSourceBuildV1Method {
+                method: BackendSourceBuildMethod::BuildV0(BackendSourceBuildV0Method {
                     channel_config: self.channel_config,
                     channels: self.channels,
                     build_environment: self.build_environment,
@@ -301,7 +301,7 @@ impl SourceBuildSpec {
             .backend_source_build(BackendSourceBuildSpec {
                 backend,
                 record: self.source,
-                method: BackendSourceBuildMethod::BuildV2(BackendSourceBuildV2Method {
+                method: BackendSourceBuildMethod::BuildV1(BackendSourceBuildV1Method {
                     build_prefix: BackendSourceBuildPrefix {
                         platform: self.build_environment.build_platform,
                         prefix: directories.build_prefix,
