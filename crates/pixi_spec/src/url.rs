@@ -2,6 +2,7 @@ use crate::BinarySpec;
 use itertools::Either;
 use rattler_conda_types::{NamelessMatchSpec, package::ArchiveIdentifier};
 use rattler_digest::{Md5Hash, Sha256Hash};
+use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::fmt::Display;
 use url::Url;
@@ -9,7 +10,7 @@ use url::Url;
 /// A specification of a package from a URL. This is used to represent both
 /// source and binary packages.
 #[serde_as]
-#[derive(Debug, Clone, Hash, Eq, PartialEq, ::serde::Serialize, ::serde::Deserialize)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct UrlSpec {
     /// The URL of the package
     pub url: Url,
@@ -136,7 +137,7 @@ impl From<UrlSourceSpec> for UrlSpec {
 }
 
 /// A specification of a source archive from a URL.
-#[derive(Debug, Clone, Hash, Eq, PartialEq, ::serde::Serialize)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize)]
 pub struct UrlBinarySpec {
     /// The URL of the package
     pub url: Url,

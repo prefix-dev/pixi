@@ -97,7 +97,7 @@ pub struct CondaOutput {
 
     /// A cache that might be shared between multiple outputs based on the
     /// contents of the cache.
-    /// TODO: No yet supported, see `CondaCacheMetadata`.
+    /// TODO: No yet supported, see commented `CondaCacheMetadata` below.
     // pub cache: Option<CondaCacheMetadata>,
 
     /// Explicit input globs for this specific output. If this is `None`,
