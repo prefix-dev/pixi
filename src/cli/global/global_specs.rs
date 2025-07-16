@@ -42,8 +42,8 @@ impl HasSpecs for GlobalSpecs {
 pub enum GlobalSpecsConversionError {
     #[error(transparent)]
     ParseMatchSpecError(#[from] ParseMatchSpecError),
-    #[error("name is required, when --git or --path is not specified")]
-    #[diagnostic(help = "use `python==3.12` instead of `==3.12`")]
+    #[error("package name is required when specifying version constraints without --git or --path")]
+    #[diagnostic(help = "Use a full package specification like `python==3.12` instead of just `==3.12`")]
     NameRequired,
 }
 
@@ -53,7 +53,11 @@ impl GlobalSpecs {
         &self,
         channel_config: &ChannelConfig,
     ) -> Result<Vec<GlobalSpec>, GlobalSpecsConversionError> {
-        let mut result = Vec::new();
+        if self.specs.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut result = Vec::with_capacity(self.specs.len());
 
         for spec_str in &self.specs {
             // Parse the string into a MatchSpec
@@ -138,6 +142,14 @@ mod tests {
     }
 
     #[test]
+    fn test_to_global_specs_empty() {
+        let specs = GlobalSpecs::default();
+        let channel_config = ChannelConfig::default_with_root_dir(PathBuf::from("."));
+        let global_specs = specs.to_global_specs(&channel_config).unwrap();
+        assert!(global_specs.is_empty());
+    }
+
+    #[test]
     fn test_to_global_specs_nameless() {
         let specs = GlobalSpecs {
             specs: vec![">=1.0".to_string()],
@@ -168,7 +180,7 @@ mod tests {
         assert_eq!(global_specs.len(), 1);
         assert!(matches!(
             global_specs.get(0).unwrap().pixi_spec(),
-            &PixiSpec::Git(..)
+            &PixiSpec::Path(..)
         ))
     }
 }
