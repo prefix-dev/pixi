@@ -43,7 +43,9 @@ pub enum GlobalSpecsConversionError {
     #[error(transparent)]
     ParseMatchSpecError(#[from] ParseMatchSpecError),
     #[error("package name is required when specifying version constraints without --git or --path")]
-    #[diagnostic(help = "Use a full package specification like `python==3.12` instead of just `==3.12`")]
+    #[diagnostic(
+        help = "Use a full package specification like `python==3.12` instead of just `==3.12`"
+    )]
     NameRequired,
 }
 
