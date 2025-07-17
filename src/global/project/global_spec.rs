@@ -119,6 +119,7 @@ impl GlobalSpec {
         }
     }
 
+    #[cfg(test)]
     pub fn spec(&self) -> &PixiSpec {
         match self {
             GlobalSpec::Nameless(spec) => spec,

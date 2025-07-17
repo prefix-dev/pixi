@@ -4,7 +4,6 @@ use crate::cli::global::revert_environment_after_error;
 use crate::global::project::NamedGlobalSpec;
 use crate::global::{EnvironmentName, Mapping, Project, StateChanges};
 use clap::Parser;
-use miette::IntoDiagnostic;
 use pixi_config::{Config, ConfigCli};
 
 /// Adds dependencies to an environment
