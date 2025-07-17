@@ -1,11 +1,13 @@
 //! This module makes it a bit easier to pass around a package name and the pixi specification
 use pixi_spec::{PixiSpec, SpecConversionError};
-use rattler_conda_types::{MatchSpec, PackageName, ParseStrictness};
+use rattler_conda_types::{MatchSpec, NamelessMatchSpec, PackageName, ParseStrictness};
 
 /// The encapsulation of a package name and its associated
 /// Pixi specification.
 #[derive(Debug, Clone)]
 pub enum GlobalSpec {
+    // TODO: this will be used later
+    #[allow(dead_code)]
     /// A global specification without a package name.
     /// can be a path or a URL.
     Nameless(PixiSpec),
@@ -41,7 +43,7 @@ impl NamedGlobalSpec {
             let pixi_spec = PixiSpec::from_nameless_matchspec(nameless_spec, channel_config);
             Ok(NamedGlobalSpec::new(name, pixi_spec))
         } else {
-            Err(FromMatchSpecError::NameRequired(nameless_spec.to_string()))
+            Err(FromMatchSpecError::NameRequired(nameless_spec))
         }
     }
 
@@ -58,7 +60,7 @@ impl NamedGlobalSpec {
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
 pub enum FromMatchSpecError {
     #[error("package name is required, not found for {0}")]
-    NameRequired(String),
+    NameRequired(NamelessMatchSpec),
     #[error(transparent)]
     ParseMatchSpec(#[from] rattler_conda_types::ParseMatchSpecError),
 }
@@ -96,43 +98,19 @@ impl GlobalSpec {
         GlobalSpec::Named(NamedGlobalSpec { name, spec })
     }
 
-    /// Returns the package name of the global spec if it has one.
-    pub fn name(&self) -> Option<&PackageName> {
-        match self {
-            GlobalSpec::Named(named_spec) => Some(&named_spec.name),
-            GlobalSpec::Nameless(_) => None,
-        }
-    }
-
-    /// Returns the Pixi specification of the global spec.
-    pub fn pixi_spec(&self) -> &PixiSpec {
-        match self {
-            GlobalSpec::Named(named_spec) => &named_spec.spec,
-            GlobalSpec::Nameless(spec) => spec,
-        }
-    }
-
-    /// Converts the `GlobalSpec` into a tuple containing the optional package name and Pixi specification.
-    pub fn into_tuple(self) -> (Option<PackageName>, PixiSpec) {
-        match self {
-            GlobalSpec::Named(named_spec) => (Some(named_spec.name), named_spec.spec),
-            GlobalSpec::Nameless(spec) => (None, spec),
-        }
-    }
-
-    /// Converts a reference to the `GlobalSpec` into a tuple containing references to the optional package name and Pixi specification.
-    pub fn into_tuple_ref(&self) -> (Option<&PackageName>, &PixiSpec) {
-        match self {
-            GlobalSpec::Named(named_spec) => (Some(&named_spec.name), &named_spec.spec),
-            GlobalSpec::Nameless(spec) => (None, spec),
-        }
-    }
-
-    /// Returns the named global spec if this is a named variant.
-    pub fn as_named(&self) -> Option<&NamedGlobalSpec> {
-        match self {
-            GlobalSpec::Named(named_spec) => Some(named_spec),
-            GlobalSpec::Nameless(_) => None,
+    /// Convert from a &str and a ChannelConfig into a [`GlobalSpec`].
+    /// If the spec contains a package name, it will create a Named variant,
+    /// otherwise it will create a Nameless variant.
+    pub fn try_from_str(
+        spec_str: &str,
+        channel_config: &rattler_conda_types::ChannelConfig,
+    ) -> Result<Self, FromMatchSpecError> {
+        match NamedGlobalSpec::try_from_str(spec_str, channel_config) {
+            Ok(named_spec) => Ok(GlobalSpec::Named(named_spec)),
+            Err(FromMatchSpecError::NameRequired(nameless)) => Ok(GlobalSpec::Nameless(
+                PixiSpec::from_nameless_matchspec(nameless, channel_config),
+            )),
+            Err(e) => Err(e),
         }
     }
 
@@ -143,18 +121,15 @@ impl GlobalSpec {
         }
     }
 
-    /// Returns the named global spec if this is a named variant.
-    pub fn as_nameless(&self) -> Option<&PixiSpec> {
+    #[cfg(test)]
+    pub fn pixi_spec(&self) -> &PixiSpec {
         match self {
-            GlobalSpec::Named(_) => None,
-            GlobalSpec::Nameless(spec) => Some(spec),
+            GlobalSpec::Nameless(spec) => spec,
+            GlobalSpec::Named(named_spec) => &named_spec.spec,
         }
     }
 
-    pub fn into_nameless(self) -> Option<PixiSpec> {
-        match self {
-            GlobalSpec::Named(_) => None,
-            GlobalSpec::Nameless(spec) => Some(spec),
-        }
+    pub fn is_nameless(&self) -> bool {
+        matches!(self, GlobalSpec::Nameless(_))
     }
 }

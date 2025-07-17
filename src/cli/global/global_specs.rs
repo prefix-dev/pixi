@@ -5,7 +5,7 @@ use typed_path::Utf8TypedPathBuf;
 use url::Url;
 
 use crate::cli::has_specs::HasSpecs;
-use crate::global::project::GlobalSpec;
+use crate::global::project::{FromMatchSpecError, GlobalSpec};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{ChannelConfig, MatchSpec, ParseMatchSpecError, ParseStrictness};
 
@@ -42,11 +42,15 @@ impl HasSpecs for GlobalSpecs {
 pub enum GlobalSpecsConversionError {
     #[error(transparent)]
     ParseMatchSpecError(#[from] ParseMatchSpecError),
+    #[error(transparent)]
+    FromMatchSpec(#[from] FromMatchSpecError),
     #[error("package name is required when specifying version constraints without --git or --path")]
     #[diagnostic(
         help = "Use a full package specification like `python==3.12` instead of just `==3.12`"
     )]
     NameRequired,
+    #[error("specs cannot be empty if git or path is not specified")]
+    SpecsMissing,
 }
 
 impl GlobalSpecs {
@@ -55,16 +59,12 @@ impl GlobalSpecs {
         &self,
         channel_config: &ChannelConfig,
     ) -> Result<Vec<GlobalSpec>, GlobalSpecsConversionError> {
-        if self.specs.is_empty() {
-            return Ok(Vec::new());
+        if self.specs.is_empty() && self.git.is_none() && self.path.is_none() {
+            return Err(GlobalSpecsConversionError::SpecsMissing);
         }
 
         let mut result = Vec::with_capacity(self.specs.len());
-
         for spec_str in &self.specs {
-            // Parse the string into a MatchSpec
-            let match_spec = MatchSpec::from_str(spec_str, ParseStrictness::Lenient)?;
-
             // Create PixiSpec based on whether we have git/path dependencies
             let pixi_spec = if let Some(git_url) = &self.git {
                 // Handle git dependencies
@@ -79,16 +79,17 @@ impl GlobalSpecs {
                 // Handle path dependencies
                 PixiSpec::Path(pixi_spec::PathSpec { path: path.clone() })
             } else {
-                // Handle regular conda/version dependencies
-                let (name, nameless_spec) = match_spec.clone().into_nameless();
-                // Don't allow nameless matchspec for non-git/path dependencies
-                if name.is_none() {
+                // Handle regular conda/version dependencies - use the new try_from_str method
+                let global_spec = GlobalSpec::try_from_str(spec_str, channel_config)?;
+                if global_spec.is_nameless() {
                     return Err(GlobalSpecsConversionError::NameRequired);
                 }
-                PixiSpec::from_nameless_matchspec(nameless_spec, channel_config)
+                result.push(global_spec);
+                continue;
             };
 
-            // Create GlobalSpec based on whether we have a package name
+            // For git/path dependencies, we need to parse the spec to get the name
+            let match_spec = MatchSpec::from_str(spec_str, ParseStrictness::Lenient)?;
             if let Some(name) = match_spec.name {
                 result.push(GlobalSpec::named(name, pixi_spec));
             } else {
