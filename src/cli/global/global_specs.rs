@@ -28,7 +28,7 @@ pub struct GlobalSpecs {
     pub subdir: Option<String>,
 
     /// The path to the local directory to use when adding a local dependency
-    #[clap(long, short, conflicts_with = "git")]
+    #[clap(long, conflicts_with = "git")]
     pub path: Option<Utf8TypedPathBuf>,
 }
 
@@ -149,8 +149,8 @@ mod tests {
     fn test_to_global_specs_empty() {
         let specs = GlobalSpecs::default();
         let channel_config = ChannelConfig::default_with_root_dir(PathBuf::from("."));
-        let global_specs = specs.to_global_specs(&channel_config).unwrap();
-        assert!(global_specs.is_empty());
+        let global_specs = specs.to_global_specs(&channel_config);
+        assert!(global_specs.is_err());
     }
 
     #[test]
