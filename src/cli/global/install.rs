@@ -1,4 +1,6 @@
-use std::{collections::HashMap, ops::Not, str::FromStr};
+use std::{ops::Not, str::FromStr};
+
+use indexmap::IndexMap;
 
 use clap::Parser;
 use fancy_display::FancyDisplay;
@@ -88,8 +90,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into_iter()
         .filter_map(|s| s.into_named());
 
-    let env_to_specs: HashMap<EnvironmentName, Vec<NamedGlobalSpec>> = match &args.environment {
-        Some(env_name) => HashMap::from_iter(std::iter::once((
+    let env_to_specs: IndexMap<EnvironmentName, Vec<NamedGlobalSpec>> = match &args.environment {
+        Some(env_name) => IndexMap::from_iter(std::iter::once((
             env_name.clone(),
             specs.collect::<Vec<_>>(),
         ))),
