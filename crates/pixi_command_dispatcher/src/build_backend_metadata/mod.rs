@@ -25,6 +25,7 @@ use crate::{
         source_metadata_cache::{self, CachedCondaMetadata, MetadataKind, SourceMetadataKey},
     },
 };
+use crate::build::SourceRecordOrCheckout;
 
 /// Represents a request for metadata from a build backend for a particular
 /// source location. The result of this request is the metadata for that
@@ -235,7 +236,7 @@ impl BuildBackendMetadataSpec {
             variant_configuration: self.variants.map(|variants| variants.into_iter().collect()),
             work_directory: command_dispatcher.cache_dirs().working_dirs().join(
                 WorkDirKey {
-                    source: Box::new(source_checkout.clone()).into(),
+                    source: SourceRecordOrCheckout::Checkout { checkout: source_checkout.clone() },
                     host_platform: self.build_environment.host_platform,
                     build_backend: backend.identifier().to_string(),
                 }
@@ -291,7 +292,7 @@ impl BuildBackendMetadataSpec {
             variant_configuration: self.variants.map(|variants| variants.into_iter().collect()),
             work_directory: command_dispatcher.cache_dirs().working_dirs().join(
                 WorkDirKey {
-                    source: Box::new(source_checkout.clone()).into(),
+                    source: SourceRecordOrCheckout::Checkout { checkout: source_checkout.clone() },
                     host_platform: self.build_environment.host_platform,
                     build_backend: backend.identifier().to_string(),
                 }

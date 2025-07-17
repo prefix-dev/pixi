@@ -6,11 +6,10 @@ use pixi_consts::consts;
 use pixi_manifest::FeaturesExt;
 use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, LockedPackageRef};
-
+use pixi_glob::GlobHashCache;
 use super::{verify_environment_satisfiability, verify_platform_satisfiability};
 use crate::{
     Workspace,
-    build::GlobHashCache,
     lock_file::satisfiability::{EnvironmentUnsat, verify_solve_group_satisfiability},
     workspace::{Environment, SolveGroup},
 };

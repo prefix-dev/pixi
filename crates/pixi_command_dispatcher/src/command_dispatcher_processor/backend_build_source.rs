@@ -4,7 +4,7 @@ use super::{CommandDispatcherProcessor, PendingBackendSourceBuild, TaskResult};
 use crate::{
     BackendBuiltSource, CommandDispatcherError, CommandDispatcherErrorResultExt, Reporter,
     backend_source_build::BackendSourceBuildError,
-    command_dispatcher::{BackendSourceBuildId, BackendSourceBuildTask, CommandDispatcherContext},
+    command_dispatcher::{BackendSourceBuildId, BackendSourceBuildTask},
 };
 
 impl CommandDispatcherProcessor {
@@ -70,11 +70,8 @@ impl CommandDispatcherProcessor {
             }
 
             // Add the task to the list of pending futures.
-            let dispatcher = self.create_task_command_dispatcher(
-                CommandDispatcherContext::BackendSourceBuild(backend_source_build_id),
-            );
             self.pending_futures.push(
-                spec.build(dispatcher, tx)
+                spec.build(tx)
                     .map(move |result| {
                         TaskResult::BackendSourceBuild(backend_source_build_id, result)
                     })

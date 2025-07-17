@@ -6,8 +6,8 @@ use std::{
 };
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use pixi_record::{PinnedSourceSpec, SourceRecord};
-use rattler_conda_types::Platform;
+use pixi_record::{PinnedSourceSpec};
+use rattler_conda_types::{PackageName, Platform};
 use xxhash_rust::xxh3::Xxh3;
 
 use crate::SourceCheckout;
@@ -15,17 +15,20 @@ use crate::SourceCheckout;
 #[derive(derive_more::From)]
 pub enum SourceRecordOrCheckout {
     /// A source record that has not been checked out yet.
-    Record(Box<SourceRecord>),
+    Record {
+        pinned: PinnedSourceSpec,
+        package_name: PackageName,
+    },
 
     /// A source checkout that has already been checked out.
-    Checkout(Box<SourceCheckout>),
+    Checkout { checkout: SourceCheckout },
 }
 
 impl SourceRecordOrCheckout {
     pub fn pinned(&self) -> &PinnedSourceSpec {
         match self {
-            SourceRecordOrCheckout::Record(record) => &record.source,
-            SourceRecordOrCheckout::Checkout(checkout) => &checkout.pinned,
+            SourceRecordOrCheckout::Record { pinned, .. } => pinned,
+            SourceRecordOrCheckout::Checkout { checkout } => &checkout.pinned,
         }
     }
 }
@@ -55,10 +58,10 @@ impl WorkDirKey {
         let unique_key = URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes());
 
         let name = match &self.source {
-            SourceRecordOrCheckout::Record(record) => {
-                Some(record.package_record.name.as_normalized())
+            SourceRecordOrCheckout::Record { package_name, .. } => {
+                Some(package_name.as_normalized())
             }
-            SourceRecordOrCheckout::Checkout(checkout) => {
+            SourceRecordOrCheckout::Checkout { checkout} => {
                 checkout.path.file_name().and_then(OsStr::to_str)
             }
         };

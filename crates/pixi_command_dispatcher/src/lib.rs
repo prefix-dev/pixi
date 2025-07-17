@@ -42,6 +42,7 @@ mod executor;
 mod install_pixi;
 mod instantiate_tool_env;
 mod limits;
+mod package_identifier;
 pub mod reporter;
 mod solve_conda;
 mod solve_pixi;
@@ -69,6 +70,7 @@ pub use install_pixi::{
 };
 pub use instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec};
 pub use limits::Limits;
+pub use package_identifier::PackageIdentifier;
 pub use reporter::{
     CondaSolveReporter, GitCheckoutReporter, PixiInstallReporter, PixiSolveReporter, Reporter,
     ReporterContext,
@@ -83,6 +85,3 @@ pub use source_metadata::{Cycle, SourceMetadata, SourceMetadataError, SourceMeta
 fn is_default<T: Default + PartialEq>(value: &T) -> bool {
     T::default() == *value
 }
-
-#[cfg(test)]
-mod test {}
