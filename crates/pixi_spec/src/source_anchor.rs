@@ -1,10 +1,13 @@
-use typed_path::Utf8TypedPath;
+use typed_path::{
+    Utf8Component, Utf8Encoding, Utf8Path, Utf8PathBuf, Utf8TypedPath, Utf8TypedPathBuf,
+};
 
 use crate::{GitSpec, PathSourceSpec, SourceSpec, UrlSourceSpec};
 
 /// `SourceAnchor` represents the resolved base location of a `SourceSpec`.
 /// It serves as a reference point for interpreting relative or recursive
 /// source specifications, enabling consistent resolution of nested sources.
+#[derive(Clone, Debug)]
 pub enum SourceAnchor {
     /// The source is relative to the workspace root.
     Workspace,
@@ -30,7 +33,7 @@ impl SourceAnchor {
                 SourceSpec::Git(git) => SourceSpec::Git(git),
                 SourceSpec::Path(PathSourceSpec { path }) => SourceSpec::Path(PathSourceSpec {
                     // Normalize the input path.
-                    path: path.normalize(),
+                    path: normalize_typed(path.to_path()),
                 }),
             };
         };
@@ -47,7 +50,7 @@ impl SourceAnchor {
 
         match base {
             SourceSpec::Path(PathSourceSpec { path: base }) => {
-                let relative_path = base.join(path).normalize();
+                let relative_path = normalize_typed(base.join(path).to_path());
                 SourceSpec::Path(PathSourceSpec {
                     path: relative_path,
                 })
@@ -60,10 +63,11 @@ impl SourceAnchor {
                 rev,
                 subdirectory,
             }) => {
-                let relative_subdir =
+                let relative_subdir = normalize_typed(
                     Utf8TypedPath::from(subdirectory.as_deref().unwrap_or_default())
                         .join(path)
-                        .normalize();
+                        .to_path(),
+                );
                 SourceSpec::Git(GitSpec {
                     git: git.clone(),
                     rev: rev.clone(),
@@ -72,4 +76,42 @@ impl SourceAnchor {
             }
         }
     }
+}
+
+/// A slightly modified version of [`Utf8TypedPath::normalize`] that retains
+/// `..` components that lead outside the path.
+fn normalize_typed(path: Utf8TypedPath<'_>) -> Utf8TypedPathBuf {
+    match path {
+        Utf8TypedPath::Unix(path) => Utf8TypedPathBuf::Unix(normalize(path)),
+        Utf8TypedPath::Windows(path) => Utf8TypedPathBuf::Windows(normalize(path)),
+    }
+}
+
+/// A slightly modified version of [`Utf8Path::normalize`] that retains `..`
+/// components that lead outside the path.
+fn normalize<T: Utf8Encoding>(path: &Utf8Path<T>) -> Utf8PathBuf<T> {
+    let mut components = Vec::new();
+    for component in path.components() {
+        if !component.is_current() && !component.is_parent() {
+            components.push(component);
+        } else if component.is_parent() {
+            if let Some(last) = components.last() {
+                if last.is_normal() {
+                    components.pop();
+                } else {
+                    components.push(component);
+                }
+            } else {
+                components.push(component);
+            }
+        }
+    }
+
+    let mut path = Utf8PathBuf::<T>::new();
+
+    for component in components {
+        path.push(component.as_str());
+    }
+
+    path
 }

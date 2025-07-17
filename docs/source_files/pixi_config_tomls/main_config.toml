@@ -24,6 +24,10 @@ pinning-strategy = "no-pin"
 run-post-link-scripts = "false" # set to "insecure" to allow running post-link scripts
 #  --8<-- [end:run-post-link-scripts]
 
+#  --8<-- [start:tool-platform]
+tool-platform = "win-64" # force tools like build backends to be installed for a specific platform
+#  --8<-- [end:tool-platform]
+
 #  --8<-- [start:repodata-config]
 [repodata-config]
 # disable fetching of jlap, bz2 or zstd repodata files.

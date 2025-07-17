@@ -1,26 +1,3 @@
-use self::trampoline::{Configuration, ConfigurationParseError, Trampoline};
-use super::{
-    BinDir, EnvRoot, StateChange, StateChanges,
-    common::{EnvironmentUpdate, get_install_changes, shortcuts_sync_status},
-    install::find_binary_by_name,
-    trampoline::{self, GlobalExecutable},
-};
-use crate::{
-    global::{
-        EnvDir,
-        common::{
-            channel_url_to_prioritized_channel, expose_scripts_sync_status, find_package_records,
-        },
-        find_executables, find_executables_for_many_records,
-        install::{create_executable_trampolines, script_exec_mapping},
-        project::environment::environment_specs_in_sync,
-    },
-    prefix::{Executable, Prefix},
-    repodata::Repodata,
-    reporters::TopLevelProgress,
-    rlimit::try_increase_rlimit_to_sensible,
-};
-
 use std::{
     ffi::OsStr,
     fmt::{Debug, Formatter},
@@ -65,6 +42,29 @@ use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use reqwest_middleware::ClientWithMiddleware;
 use tokio::sync::Semaphore;
 use toml_edit::DocumentMut;
+
+use self::trampoline::{Configuration, ConfigurationParseError, Trampoline};
+use super::{
+    BinDir, EnvRoot, StateChange, StateChanges,
+    common::{EnvironmentUpdate, get_install_changes, shortcuts_sync_status},
+    install::find_binary_by_name,
+    trampoline::{self, GlobalExecutable},
+};
+use crate::{
+    global::{
+        EnvDir,
+        common::{
+            channel_url_to_prioritized_channel, expose_scripts_sync_status, find_package_records,
+        },
+        find_executables, find_executables_for_many_records,
+        install::{create_executable_trampolines, script_exec_mapping},
+        project::environment::environment_specs_in_sync,
+    },
+    prefix::{Executable, Prefix},
+    repodata::Repodata,
+    reporters::TopLevelProgress,
+    rlimit::try_increase_rlimit_to_sensible,
+};
 
 mod environment;
 mod global_spec;
@@ -553,10 +553,11 @@ impl Project {
             .map(|channel| channel.base_url.clone())
             .collect::<Vec<_>>();
 
+        let build_environment = BuildEnvironment::simple(platform, virtual_packages);
         let solve_spec = PixiEnvironmentSpec {
             name: Some(env_name.to_string()),
             dependencies: pixi_specs,
-            build_environment: BuildEnvironment::simple(platform, virtual_packages),
+            build_environment: build_environment.clone(),
             channels: channels.clone(),
             channel_config: self.config.global_channel_config().clone(),
             ..Default::default()
@@ -578,7 +579,7 @@ impl Project {
                 records: pixi_records,
                 prefix: rattler_conda_types::prefix::Prefix::create(prefix.root())
                     .into_diagnostic()?,
-                target_platform: platform,
+                build_environment,
                 channels,
                 channel_config: self.config.global_channel_config().clone(),
                 enabled_protocols: EnabledProtocols::default(),
@@ -597,7 +598,8 @@ impl Project {
         &mut self,
         env_name: &EnvironmentName,
     ) -> miette::Result<StateChanges> {
-        // Check if the environment exists in the manifest first, before creating any directories
+        // Check if the environment exists in the manifest first, before creating any
+        // directories
         if !self.manifest.parsed.envs.contains_key(env_name) {
             miette::bail!("Environment {} doesn't exist.", env_name.fancy_display());
         }

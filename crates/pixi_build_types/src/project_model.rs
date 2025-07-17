@@ -183,6 +183,15 @@ pub enum PackageSpecV1 {
     Source(SourcePackageSpecV1),
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct NamedSpecV1<T> {
+    pub name: SourcePackageName,
+
+    #[serde(flatten)]
+    pub spec: T,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub enum SourcePackageSpecV1 {
     /// The spec is represented as an archive that can be downloaded from the
@@ -296,6 +305,10 @@ pub struct BinaryPackageSpecV1 {
     /// The sha256 hash of the package
     #[serde_as(as = "Option<SerializableHash<Sha256>>")]
     pub sha256: Option<Sha256Hash>,
+    /// The URL of the package, if it is available
+    pub url: Option<Url>,
+    /// The license of the package
+    pub license: Option<String>,
 }
 
 impl From<VersionSpec> for BinaryPackageSpecV1 {
@@ -587,6 +600,8 @@ impl Hash for BinaryPackageSpecV1 {
             subdir,
             md5,
             sha256,
+            url,
+            license,
         } = self;
 
         if let Some(version) = version {
@@ -612,6 +627,12 @@ impl Hash for BinaryPackageSpecV1 {
         }
         if let Some(sha256) = sha256 {
             sha256.hash(state);
+        }
+        if let Some(url) = url {
+            url.hash(state);
+        }
+        if let Some(license) = license {
+            license.hash(state);
         }
     }
 }
@@ -741,6 +762,8 @@ mod tests {
             subdir: None,
             md5: None,
             sha256: None,
+            url: None,
+            license: None,
         };
         let hash2 = calculate_hash(&spec2);
 
