@@ -43,7 +43,7 @@ impl NamedGlobalSpec {
             let pixi_spec = PixiSpec::from_nameless_matchspec(nameless_spec, channel_config);
             Ok(NamedGlobalSpec::new(name, pixi_spec))
         } else {
-            Err(FromMatchSpecError::NameRequired(nameless_spec))
+            Err(FromMatchSpecError::NameRequired(Box::new(nameless_spec)))
         }
     }
 
@@ -60,7 +60,7 @@ impl NamedGlobalSpec {
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
 pub enum FromMatchSpecError {
     #[error("package name is required, not found for {0}")]
-    NameRequired(NamelessMatchSpec),
+    NameRequired(Box<NamelessMatchSpec>),
     #[error(transparent)]
     ParseMatchSpec(#[from] rattler_conda_types::ParseMatchSpecError),
 }
@@ -108,7 +108,7 @@ impl GlobalSpec {
         match NamedGlobalSpec::try_from_str(spec_str, channel_config) {
             Ok(named_spec) => Ok(GlobalSpec::Named(named_spec)),
             Err(FromMatchSpecError::NameRequired(nameless)) => Ok(GlobalSpec::Nameless(
-                PixiSpec::from_nameless_matchspec(nameless, channel_config),
+                PixiSpec::from_nameless_matchspec(*nameless, channel_config),
             )),
             Err(e) => Err(e),
         }

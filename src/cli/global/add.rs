@@ -57,7 +57,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         // Add specs to the manifest
         for spec in specs {
-            project.manifest.add_dependency(env_name, &spec)?;
+            project.manifest.add_dependency(env_name, spec)?;
         }
 
         // Add expose mappings to the manifest
@@ -84,7 +84,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let specs = args
         .packages
-        .to_global_specs(&project_original.global_channel_config())
+        .to_global_specs(project_original.global_channel_config())
         .into_diagnostic()?
         .into_iter()
         .filter_map(|spec| spec.into_named())

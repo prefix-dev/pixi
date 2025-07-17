@@ -137,7 +137,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
             Err(err) => {
                 if let Err(revert_err) =
-                    revert_environment_after_error(&env_name, &last_updated_project).await
+                    revert_environment_after_error(env_name, &last_updated_project).await
                 {
                     tracing::warn!("Reverting of the operation failed");
                     tracing::info!("Reversion error: {:?}", revert_err);
@@ -195,14 +195,14 @@ async fn setup_environment(
         .map(|spec| {
             NamedGlobalSpec::try_from_matchspec_with_name(
                 spec.clone(),
-                &project.config().global_channel_config(),
+                project.config().global_channel_config(),
             )
         })
         .collect::<Result<Vec<_>, _>>()?;
 
     // Add the dependencies to the environment
     let packages_to_add = specs
-        .into_iter()
+        .iter()
         .chain(converted_with_inclusions.iter())
         .collect_vec();
 
@@ -231,7 +231,7 @@ async fn setup_environment(
     // Add shortcuts
     if !args.no_shortcuts {
         let prefix = project.environment_prefix(env_name).await?;
-        for spec in specs.into_iter() {
+        for spec in specs.iter() {
             let prefix_record = prefix.find_designated_package(spec.name()).await?;
             if contains_menuinst_document(&prefix_record, prefix.root()) {
                 project.manifest.add_shortcut(env_name, spec.name())?;

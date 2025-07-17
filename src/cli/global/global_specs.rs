@@ -43,7 +43,7 @@ pub enum GlobalSpecsConversionError {
     #[error(transparent)]
     ParseMatchSpecError(#[from] ParseMatchSpecError),
     #[error(transparent)]
-    FromMatchSpec(#[from] FromMatchSpecError),
+    FromMatchSpec(#[from] Box<FromMatchSpecError>),
     #[error("package name is required when specifying version constraints without --git or --path")]
     #[diagnostic(
         help = "Use a full package specification like `python==3.12` instead of just `==3.12`"
@@ -80,7 +80,8 @@ impl GlobalSpecs {
                 PixiSpec::Path(pixi_spec::PathSpec { path: path.clone() })
             } else {
                 // Handle regular conda/version dependencies - use the new try_from_str method
-                let global_spec = GlobalSpec::try_from_str(spec_str, channel_config)?;
+                let global_spec =
+                    GlobalSpec::try_from_str(spec_str, channel_config).map_err(Box::new)?;
                 if global_spec.is_nameless() {
                     return Err(GlobalSpecsConversionError::NameRequired);
                 }
@@ -139,7 +140,7 @@ mod tests {
 
         assert_eq!(global_specs.len(), 1);
         assert!(matches!(
-            global_specs.get(0).unwrap().pixi_spec(),
+            global_specs.first().unwrap().pixi_spec(),
             &PixiSpec::Git(..)
         ))
     }
@@ -182,7 +183,7 @@ mod tests {
 
         assert_eq!(global_specs.len(), 1);
         assert!(matches!(
-            global_specs.get(0).unwrap().pixi_spec(),
+            global_specs.first().unwrap().pixi_spec(),
             &PixiSpec::Path(..)
         ))
     }
