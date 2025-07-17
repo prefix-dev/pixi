@@ -28,27 +28,75 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use url::Url;
 
-/// A field discriminant used in hash implementations to ensure different field 
-/// configurations produce different hashes while maintaining forward/backward compatibility.
-/// 
-/// This type wraps a static string that identifies which field is being hashed,
-/// preventing hash collisions when the same value appears in different fields.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct FieldDiscriminant(&'static str);
 
-impl FieldDiscriminant {
-    /// Create a new field discriminant with the given field name.
-    pub const fn new(field_name: &'static str) -> Self {
-        Self(field_name)
+impl<K, V> IsDefault for OrderMap<K, V> {
+    fn is_default(&self) -> bool {
+        self.is_empty()
     }
 }
 
-impl Hash for FieldDiscriminant {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.0.hash(state);
+impl IsDefault for String {
+    fn is_default(&self) -> bool {
+        false // Never skip required string fields
     }
 }
 
+impl IsDefault for url::Url {
+    fn is_default(&self) -> bool {
+        false // Never skip required URL fields
+    }
+}
+
+impl IsDefault for std::path::PathBuf {
+    fn is_default(&self) -> bool {
+        false // Never skip PathBuf fields
+    }
+}
+
+impl<T> IsDefault for Vec<T> {
+    fn is_default(&self) -> bool {
+        self.is_empty()
+    }
+}
+
+impl IsDefault for rattler_conda_types::Version {
+    fn is_default(&self) -> bool {
+        false // Never skip version fields
+    }
+}
+
+impl IsDefault for rattler_conda_types::StringMatcher {
+    fn is_default(&self) -> bool {
+        false // Never skip StringMatcher fields
+    }
+}
+
+impl IsDefault for rattler_conda_types::BuildNumberSpec {
+    fn is_default(&self) -> bool {
+        false // Never skip BuildNumberSpec fields
+    }
+}
+
+impl IsDefault for rattler_conda_types::VersionSpec {
+    fn is_default(&self) -> bool {
+        false // Never skip VersionSpec fields
+    }
+}
+
+impl IsDefault for GitReferenceV1 {
+    fn is_default(&self) -> bool {
+        false // Never skip GitReferenceV1 fields  
+    }
+}
+
+impl<U, T: rattler_digest::digest::generic_array::ArrayLength<U>> IsDefault for GenericArray<U, T> {
+    fn is_default(&self) -> bool {
+        false // Never skip digest output fields
+    }
+}
+
+use rattler_digest::digest::generic_array::GenericArray;
+use crate::stable_hash::{IsDefault, StableHashBuilder};
 
 /// Enum containing all versions of the project model.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -186,10 +234,26 @@ pub struct TargetsV1 {
 impl TargetsV1 {
     /// Check if this targets struct is effectively empty (contains no meaningful data that should affect the hash).
     pub fn is_empty(&self) -> bool {
-        let has_meaningful_default_target = self.default_target.as_ref().is_some_and(|t| !t.is_empty());
+        let has_meaningful_default_target =
+            self.default_target.as_ref().is_some_and(|t| !t.is_empty());
         let has_non_empty_targets = self.targets.as_ref().is_some_and(|t| !t.is_empty());
-        
+
         !has_meaningful_default_target && !has_non_empty_targets
+    }
+}
+
+impl IsDefault for TargetsV1 {
+    fn is_default(&self) -> bool {
+        self.is_empty()
+    }
+}
+
+impl<T: IsDefault> IsDefault for Option<T> {
+    fn is_default(&self) -> bool {
+        match self {
+            None => true,
+            Some(value) => value.is_default(),
+        }
     }
 }
 
@@ -209,11 +273,26 @@ pub struct TargetV1 {
 impl TargetV1 {
     /// Check if this target is effectively empty (contains no meaningful data that should affect the hash).
     pub fn is_empty(&self) -> bool {
-        let has_build_deps = self.build_dependencies.as_ref().is_some_and(|d| !d.is_empty());
-        let has_host_deps = self.host_dependencies.as_ref().is_some_and(|d| !d.is_empty());
-        let has_run_deps = self.run_dependencies.as_ref().is_some_and(|d| !d.is_empty());
-        
+        let has_build_deps = self
+            .build_dependencies
+            .as_ref()
+            .is_some_and(|d| !d.is_empty());
+        let has_host_deps = self
+            .host_dependencies
+            .as_ref()
+            .is_some_and(|d| !d.is_empty());
+        let has_run_deps = self
+            .run_dependencies
+            .as_ref()
+            .is_some_and(|d| !d.is_empty());
+
         !has_build_deps && !has_host_deps && !has_run_deps
+    }
+}
+
+impl IsDefault for TargetV1 {
+    fn is_default(&self) -> bool {
+        self.is_empty()
     }
 }
 
@@ -407,8 +486,7 @@ impl std::fmt::Debug for BinaryPackageSpecV1 {
 
 // Custom Hash implementations that skip default values for stability
 impl Hash for ProjectModelV1 {
-    /// Custom hash implementation that includes field discriminators only for non-default 
-    /// values and processes fields in alphabetical order to ensure different field 
+    /// Custom hash implementation using StableHashBuilder to ensure different field
     /// configurations produce different hashes while maintaining forward/backward compatibility.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let ProjectModelV1 {
@@ -424,65 +502,20 @@ impl Hash for ProjectModelV1 {
             documentation,
             targets,
         } = self;
-
-        // Process fields in alphabetical order with field discriminators only for non-None values
         
-        if let Some(authors) = authors {
-            FieldDiscriminant::new("authors").hash(state);
-            authors.hash(state);
-        }
-        
-        if let Some(description) = description {
-            FieldDiscriminant::new("description").hash(state);
-            description.hash(state);
-        }
-        
-        if let Some(documentation) = documentation {
-            FieldDiscriminant::new("documentation").hash(state);
-            documentation.hash(state);
-        }
-        
-        if let Some(homepage) = homepage {
-            FieldDiscriminant::new("homepage").hash(state);
-            homepage.hash(state);
-        }
-        
-        if let Some(license) = license {
-            FieldDiscriminant::new("license").hash(state);
-            license.hash(state);
-        }
-        
-        if let Some(license_file) = license_file {
-            FieldDiscriminant::new("license_file").hash(state);
-            license_file.hash(state);
-        }
-        
-        // Name is always present (not Optional), so always hash it with discriminator
-        FieldDiscriminant::new("name").hash(state);
-        name.hash(state);
-        
-        if let Some(readme) = readme {
-            FieldDiscriminant::new("readme").hash(state);
-            readme.hash(state);
-        }
-        
-        if let Some(repository) = repository {
-            FieldDiscriminant::new("repository").hash(state);
-            repository.hash(state);
-        }
-        
-        if let Some(targets) = targets {
-            // Only hash if the targets struct contains meaningful data
-            if !targets.is_empty() {
-                FieldDiscriminant::new("targets").hash(state);
-                targets.hash(state);
-            }
-        }
-        
-        if let Some(version) = version {
-            FieldDiscriminant::new("version").hash(state);
-            version.hash(state);
-        }
+        StableHashBuilder::<H>::new()
+            .field("authors", authors)
+            .field("description", description)
+            .field("documentation", documentation)
+            .field("homepage", homepage)
+            .field("license", license)
+            .field("license_file", license_file)
+            .field("name", name)
+            .field("readme", readme)
+            .field("repository", repository)
+            .field("targets", targets)
+            .field("version", version)
+            .finish(state);
     }
 }
 
@@ -504,64 +537,36 @@ impl Hash for TargetSelectorV1 {
 }
 
 impl Hash for TargetsV1 {
-    /// Custom hash implementation that includes field discriminators only for non-default 
-    /// values and processes fields in alphabetical order to ensure different field 
+    /// Custom hash implementation using StableHashBuilder to ensure different field
     /// configurations produce different hashes while maintaining forward/backward compatibility.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let TargetsV1 {
             default_target,
             targets,
         } = self;
-
-        // Process fields in alphabetical order with field discriminators only for non-None values
         
-        if let Some(default_target) = default_target {
-            FieldDiscriminant::new("default_target").hash(state);
-            default_target.hash(state);
-        }
-        
-        if let Some(targets) = targets {
-            if !targets.is_empty() {
-                FieldDiscriminant::new("targets").hash(state);
-                targets.hash(state);
-            }
-        }
+        StableHashBuilder::<H>::new()
+            .field("default_target", default_target)
+            .field("targets", targets)
+            .finish(state);
     }
 }
 
 impl Hash for TargetV1 {
-    /// Custom hash implementation that includes field discriminators only for non-default 
-    /// values and processes fields in alphabetical order to ensure different field 
+    /// Custom hash implementation using StableHashBuilder to ensure different field
     /// configurations produce different hashes while maintaining forward/backward compatibility.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let TargetV1 {
-            host_dependencies,
             build_dependencies,
+            host_dependencies,
             run_dependencies,
         } = self;
-
-        // Process fields in alphabetical order with field discriminators only for non-empty values
         
-        if let Some(build_dependencies) = build_dependencies {
-            if !build_dependencies.is_empty() {
-                FieldDiscriminant::new("build_dependencies").hash(state);
-                build_dependencies.hash(state);
-            }
-        }
-        
-        if let Some(host_dependencies) = host_dependencies {
-            if !host_dependencies.is_empty() {
-                FieldDiscriminant::new("host_dependencies").hash(state);
-                host_dependencies.hash(state);
-            }
-        }
-        
-        if let Some(run_dependencies) = run_dependencies {
-            if !run_dependencies.is_empty() {
-                FieldDiscriminant::new("run_dependencies").hash(state);
-                run_dependencies.hash(state);
-            }
-        }
+        StableHashBuilder::<H>::new()
+            .field("build_dependencies", build_dependencies)
+            .field("host_dependencies", host_dependencies)
+            .field("run_dependencies", run_dependencies)
+            .finish(state);
     }
 }
 
@@ -604,56 +609,28 @@ impl Hash for SourcePackageSpecV1 {
 }
 
 impl Hash for UrlSpecV1 {
-    /// Custom hash implementation that includes field discriminators only for non-default 
-    /// values and processes fields in alphabetical order to ensure different field 
+    /// Custom hash implementation using StableHashBuilder to ensure different field
     /// configurations produce different hashes while maintaining forward/backward compatibility.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let UrlSpecV1 { url, md5, sha256 } = self;
-
-        // Process fields in alphabetical order with field discriminators only for non-None values
         
-        if let Some(md5) = md5 {
-            FieldDiscriminant::new("md5").hash(state);
-            md5.hash(state);
-        }
-        
-        if let Some(sha256) = sha256 {
-            FieldDiscriminant::new("sha256").hash(state);
-            sha256.hash(state);
-        }
-        
-        // URL is always present (not Optional), so always hash it with discriminator
-        FieldDiscriminant::new("url").hash(state);
-        url.hash(state);
+        StableHashBuilder::<H>::new()
+            .field("md5", md5)
+            .field("sha256", sha256)
+            .field("url", url)
+            .finish(state);
     }
 }
 
 impl Hash for GitSpecV1 {
-    /// Custom hash implementation that includes field discriminators only for non-default 
-    /// values and processes fields in alphabetical order to ensure different field 
+    /// Custom hash implementation using StableHashBuilder to ensure different field
     /// configurations produce different hashes while maintaining forward/backward compatibility.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        let GitSpecV1 {
-            git,
-            rev,
-            subdirectory,
-        } = self;
-
-        // Process fields in alphabetical order with field discriminators only for non-None values
-        
-        // Git is always present (not Optional), so always hash it with discriminator
-        FieldDiscriminant::new("git").hash(state);
-        git.hash(state);
-        
-        if let Some(rev) = rev {
-            FieldDiscriminant::new("rev").hash(state);
-            rev.hash(state);
-        }
-        
-        if let Some(subdirectory) = subdirectory {
-            FieldDiscriminant::new("subdirectory").hash(state);
-            subdirectory.hash(state);
-        }
+        StableHashBuilder::<H>::new()
+            .field("git", &self.git)
+            .field("rev", &self.rev)
+            .field("subdirectory", &self.subdirectory)
+            .finish(state);
     }
 }
 
@@ -691,74 +668,21 @@ impl Hash for GitReferenceV1 {
 }
 
 impl Hash for BinaryPackageSpecV1 {
-    /// Custom hash implementation that includes field discriminators only for non-default 
-    /// values and processes fields in alphabetical order to ensure different field 
+    /// Custom hash implementation using StableHashBuilder to ensure different field
     /// configurations produce different hashes while maintaining forward/backward compatibility.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        let BinaryPackageSpecV1 {
-            version,
-            build,
-            build_number,
-            file_name,
-            channel,
-            subdir,
-            md5,
-            sha256,
-            url,
-            license,
-        } = self;
-
-        // Process fields in alphabetical order with field discriminators only for non-None values
-        
-        if let Some(build) = build {
-            FieldDiscriminant::new("build").hash(state);
-            build.hash(state);
-        }
-        
-        if let Some(build_number) = build_number {
-            FieldDiscriminant::new("build_number").hash(state);
-            build_number.hash(state);
-        }
-        
-        if let Some(channel) = channel {
-            FieldDiscriminant::new("channel").hash(state);
-            channel.hash(state);
-        }
-        
-        if let Some(file_name) = file_name {
-            FieldDiscriminant::new("file_name").hash(state);
-            file_name.hash(state);
-        }
-        
-        if let Some(license) = license {
-            FieldDiscriminant::new("license").hash(state);
-            license.hash(state);
-        }
-        
-        if let Some(md5) = md5 {
-            FieldDiscriminant::new("md5").hash(state);
-            md5.hash(state);
-        }
-        
-        if let Some(sha256) = sha256 {
-            FieldDiscriminant::new("sha256").hash(state);
-            sha256.hash(state);
-        }
-        
-        if let Some(subdir) = subdir {
-            FieldDiscriminant::new("subdir").hash(state);
-            subdir.hash(state);
-        }
-        
-        if let Some(url) = url {
-            FieldDiscriminant::new("url").hash(state);
-            url.hash(state);
-        }
-        
-        if let Some(version) = version {
-            FieldDiscriminant::new("version").hash(state);
-            version.hash(state);
-        }
+        StableHashBuilder::<H>::new()
+            .field("build", &self.build)
+            .field("build_number", &self.build_number)
+            .field("channel", &self.channel)
+            .field("file_name", &self.file_name)
+            .field("license", &self.license)
+            .field("md5", &self.md5)
+            .field("sha256", &self.sha256)
+            .field("subdir", &self.subdir)
+            .field("url", &self.url)
+            .field("version", &self.version)
+            .finish(state);
     }
 }
 
@@ -1057,12 +981,10 @@ mod tests {
         );
     }
 
-
-
     #[test]
     fn test_hash_collision_bug_dependency_fields() {
         // Test that moving dependencies between different dependency types produces different hashes
-        
+
         let mut deps = OrderMap::new();
         deps.insert("python".to_string(), PackageSpecV1::Binary(Box::default()));
 
@@ -1091,9 +1013,18 @@ mod tests {
         let hash2 = calculate_hash(&target2);
         let hash3 = calculate_hash(&target3);
 
-        assert_ne!(hash1, hash2, "Same dependency in host vs run should produce different hashes");
-        assert_ne!(hash1, hash3, "Same dependency in host vs build should produce different hashes");
-        assert_ne!(hash2, hash3, "Same dependency in run vs build should produce different hashes");
+        assert_ne!(
+            hash1, hash2,
+            "Same dependency in host vs run should produce different hashes"
+        );
+        assert_ne!(
+            hash1, hash3,
+            "Same dependency in host vs build should produce different hashes"
+        );
+        assert_ne!(
+            hash2, hash3,
+            "Same dependency in run vs build should produce different hashes"
+        );
 
         // Test with TargetsV1 as well
         let targets1 = TargetsV1 {
@@ -1109,9 +1040,11 @@ mod tests {
         let targets_hash1 = calculate_hash(&targets1);
         let targets_hash2 = calculate_hash(&targets2);
 
-        assert_ne!(targets_hash1, targets_hash2, "TargetsV1 should produce different hashes for different dependency types");
+        assert_ne!(
+            targets_hash1, targets_hash2,
+            "TargetsV1 should produce different hashes for different dependency types"
+        );
     }
-
 
     #[test]
     fn test_hash_collision_bug_project_model() {
@@ -1147,6 +1080,9 @@ mod tests {
         let hash1 = calculate_hash(&project1);
         let hash2 = calculate_hash(&project2);
 
-        assert_ne!(hash1, hash2, "Same value in different fields should produce different hashes in ProjectModelV1");
+        assert_ne!(
+            hash1, hash2,
+            "Same value in different fields should produce different hashes in ProjectModelV1"
+        );
     }
 }
