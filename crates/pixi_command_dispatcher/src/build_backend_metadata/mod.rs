@@ -17,6 +17,7 @@ use rand::random;
 use rattler_conda_types::{ChannelConfig, ChannelUrl};
 use thiserror::Error;
 
+use crate::build::SourceRecordOrCheckout;
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
     InstantiateBackendError, InstantiateBackendSpec, SourceCheckout, SourceCheckoutError,
@@ -25,7 +26,6 @@ use crate::{
         source_metadata_cache::{self, CachedCondaMetadata, MetadataKind, SourceMetadataKey},
     },
 };
-use crate::build::SourceRecordOrCheckout;
 
 /// Represents a request for metadata from a build backend for a particular
 /// source location. The result of this request is the metadata for that
@@ -236,7 +236,9 @@ impl BuildBackendMetadataSpec {
             variant_configuration: self.variants.map(|variants| variants.into_iter().collect()),
             work_directory: command_dispatcher.cache_dirs().working_dirs().join(
                 WorkDirKey {
-                    source: SourceRecordOrCheckout::Checkout { checkout: source_checkout.clone() },
+                    source: SourceRecordOrCheckout::Checkout {
+                        checkout: source_checkout.clone(),
+                    },
                     host_platform: self.build_environment.host_platform,
                     build_backend: backend.identifier().to_string(),
                 }
@@ -292,7 +294,9 @@ impl BuildBackendMetadataSpec {
             variant_configuration: self.variants.map(|variants| variants.into_iter().collect()),
             work_directory: command_dispatcher.cache_dirs().working_dirs().join(
                 WorkDirKey {
-                    source: SourceRecordOrCheckout::Checkout { checkout: source_checkout.clone() },
+                    source: SourceRecordOrCheckout::Checkout {
+                        checkout: source_checkout.clone(),
+                    },
                     host_platform: self.build_environment.host_platform,
                     build_backend: backend.identifier().to_string(),
                 }

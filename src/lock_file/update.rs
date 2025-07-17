@@ -1,3 +1,25 @@
+use super::{
+    CondaPrefixUpdater, PixiRecordsByName, PypiRecordsByName, UvResolutionContext,
+    outdated::OutdatedEnvironments, utils::IoConcurrencyLimit,
+};
+use crate::{
+    Workspace,
+    activation::CurrentEnvVarBehavior,
+    environment::{
+        self, CondaPrefixUpdated, EnvironmentFile, LockFileUsage, LockedEnvironmentHash,
+        PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PythonStatus,
+        read_environment_file, write_environment_file,
+    },
+    lock_file::{
+        self, PypiRecord, records_by_name::HasNameVersion, reporter::SolveProgressBar,
+        virtual_packages::validate_system_meets_environment_requirements,
+    },
+    prefix::Prefix,
+    workspace::{
+        Environment, EnvironmentVars, HasWorkspaceRef, get_activated_environment_variables,
+        grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
+    },
+};
 use barrier_cell::BarrierCell;
 use dashmap::DashMap;
 use fancy_display::FancyDisplay;
@@ -8,6 +30,7 @@ use itertools::{Either, Itertools};
 use miette::{Diagnostic, IntoDiagnostic, MietteDiagnostic, Report, WrapErr};
 use pixi_command_dispatcher::{BuildEnvironment, CommandDispatcher, PixiEnvironmentSpec};
 use pixi_consts::consts;
+use pixi_glob::GlobHashCache;
 use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
 use pixi_record::{ParseLockFileError, PixiRecord};
@@ -36,29 +59,6 @@ use thiserror::Error;
 use tokio::sync::Semaphore;
 use tracing::Instrument;
 use uv_normalize::ExtraName;
-use pixi_glob::GlobHashCache;
-use super::{
-    CondaPrefixUpdater, PixiRecordsByName, PypiRecordsByName, UvResolutionContext,
-    outdated::OutdatedEnvironments, utils::IoConcurrencyLimit,
-};
-use crate::{
-    Workspace,
-    activation::CurrentEnvVarBehavior,
-    environment::{
-        self, CondaPrefixUpdated, EnvironmentFile, LockFileUsage, LockedEnvironmentHash,
-        PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PythonStatus,
-        read_environment_file, write_environment_file,
-    },
-    lock_file::{
-        self, PypiRecord, records_by_name::HasNameVersion, reporter::SolveProgressBar,
-        virtual_packages::validate_system_meets_environment_requirements,
-    },
-    prefix::Prefix,
-    workspace::{
-        Environment, EnvironmentVars, HasWorkspaceRef, get_activated_environment_variables,
-        grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
-    },
-};
 
 impl Workspace {
     /// Ensures that the lock-file is up-to-date with the project.

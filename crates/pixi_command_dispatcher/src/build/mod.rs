@@ -19,7 +19,7 @@ pub use dependencies::{Dependencies, DependenciesError, PixiRunExports};
 pub(crate) use move_file::{MoveError, move_file};
 use pixi_record::PinnedSourceSpec;
 use url::Url;
-pub use work_dir_key::{WorkDirKey, SourceRecordOrCheckout};
+pub use work_dir_key::{SourceRecordOrCheckout, WorkDirKey};
 use xxhash_rust::xxh3::Xxh3;
 
 const KNOWN_SUFFIXES: [&str; 3] = [".git", ".tar.gz", ".zip"];

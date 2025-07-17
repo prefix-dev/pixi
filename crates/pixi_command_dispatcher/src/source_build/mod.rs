@@ -146,7 +146,7 @@ impl SourceBuildSpec {
 
         // Clean the working directory if requested.
         if self.clean {
-            if let Err(err) = std::fs::remove_dir_all(&working_directory) {
+            if let Err(err) = fs_err::remove_dir_all(&working_directory) {
                 return Err(CommandDispatcherError::Failed(
                     SourceBuildError::CleanWorkingDirectory(working_directory, err),
                 ));
@@ -180,7 +180,7 @@ impl SourceBuildSpec {
         // Make sure the package resides in the output directory that was requested.
         if let Some(output_directory) = output_directory {
             // Create the output directory if it does not exist.
-            std::fs::create_dir_all(&output_directory).map_err(|err| {
+            fs_err::create_dir_all(&output_directory).map_err(|err| {
                 CommandDispatcherError::Failed(SourceBuildError::CreateOutputDirectory(err))
             })?;
 

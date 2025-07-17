@@ -107,6 +107,7 @@ impl CondaPrefixUpdater {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         channels: Vec<ChannelUrl>,
         channel_config: ChannelConfig,

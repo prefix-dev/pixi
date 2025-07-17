@@ -98,10 +98,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let channels = workspace
         .default_environment()
         .channel_urls(&channel_config)
-        .into_diagnostic()?
-        .into_iter()
-        .map(Into::into)
-        .collect::<Vec<_>>();
+        .into_diagnostic()?;
 
     // Determine the source of the package.
     let source: PinnedSourceSpec = PinnedPathSpec {

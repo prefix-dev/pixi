@@ -6,7 +6,7 @@ use std::{
 };
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use pixi_record::{PinnedSourceSpec};
+use pixi_record::PinnedSourceSpec;
 use rattler_conda_types::{PackageName, Platform};
 use xxhash_rust::xxh3::Xxh3;
 
@@ -61,7 +61,7 @@ impl WorkDirKey {
             SourceRecordOrCheckout::Record { package_name, .. } => {
                 Some(package_name.as_normalized())
             }
-            SourceRecordOrCheckout::Checkout { checkout} => {
+            SourceRecordOrCheckout::Checkout { checkout } => {
                 checkout.path.file_name().and_then(OsStr::to_str)
             }
         };
