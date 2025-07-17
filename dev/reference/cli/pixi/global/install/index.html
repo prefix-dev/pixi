@@ -2641,6 +2641,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#git-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      Git Options
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#description" class="md-nav__link">
     <span class="md-ellipsis">
       Description
@@ -2701,7 +2710,7 @@
 <li>
 <dl>
 <dt><a id="arg-\<PACKAGE>" href="#arg-\<PACKAGE>"><code>&lt;PACKAGE&gt;</code></a></dt>
-<dd>Specifies the package that should be installed
+<dd>The dependency as names, conda MatchSpecs
 <br>May be provided more than once.
 <br><strong>required</strong>: <code>true</code></dd>
 </dl>
@@ -2709,6 +2718,12 @@
 </ul>
 <h2 id="options">Options<a class="headerlink" href="#options" title="Permanent link">#</a></h2>
 <ul>
+<li>
+<dl>
+<dt><a id="arg---path" href="#arg---path"><code>--path &lt;PATH&gt;</code></a></dt>
+<dd>The path to the local directory to use when adding a local dependency</dd>
+</dl>
+</li>
 <li>
 <dl>
 <dt><a id="arg---channel" href="#arg---channel"><code>--channel (-c) &lt;CHANNEL&gt;</code></a></dt>
@@ -2786,6 +2801,39 @@
 <dl>
 <dt><a id="arg---concurrent-downloads" href="#arg---concurrent-downloads"><code>--concurrent-downloads &lt;CONCURRENT_DOWNLOADS&gt;</code></a></dt>
 <dd>Max concurrent network requests, default is <code>50</code></dd>
+</dl>
+</li>
+</ul>
+<h2 id="git-options">Git Options<a class="headerlink" href="#git-options" title="Permanent link">#</a></h2>
+<ul>
+<li>
+<dl>
+<dt><a id="arg---git" href="#arg---git"><code>--git (-g) &lt;GIT&gt;</code></a></dt>
+<dd>The git url to use when adding a git dependency</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---branch" href="#arg---branch"><code>--branch &lt;BRANCH&gt;</code></a></dt>
+<dd>The git branch</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---tag" href="#arg---tag"><code>--tag &lt;TAG&gt;</code></a></dt>
+<dd>The git tag</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---rev" href="#arg---rev"><code>--rev &lt;REV&gt;</code></a></dt>
+<dd>The git revision</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---subdir" href="#arg---subdir"><code>--subdir (-s) &lt;SUBDIR&gt;</code></a></dt>
+<dd>The subdirectory of the git repository to use</dd>
 </dl>
 </li>
 </ul>
