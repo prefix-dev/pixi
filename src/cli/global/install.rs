@@ -93,10 +93,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // TODO: Filter out non-binary specs, we are adding support for them later
         .partition(|s| s.spec().is_binary());
 
-    for source_spec in source {
+    if !source.is_empty() {
         tracing::warn!(
-            "Ignoring source spec {}.",
-            source_spec.name().as_normalized()
+            "Ignoring found source packages {}. Implementation will be added soon.",
+            source.iter().map(|s| s.name().as_source()).join(", ")
         );
     }
 
