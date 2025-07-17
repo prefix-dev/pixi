@@ -6,6 +6,8 @@
 //! - Prevent hash collisions between different field configurations
 //! - Use direct references without intermediate hashing for efficiency
 
+use ordermap::OrderMap;
+use rattler_digest::digest::generic_array::GenericArray;
 use std::collections::BTreeMap;
 use std::hash::Hash;
 
@@ -15,7 +17,7 @@ use std::hash::Hash;
 /// This type wraps a static string that identifies which field is being hashed,
 /// preventing hash collisions when the same value appears in different fields.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct FieldDiscriminant(&'static str);
+pub(crate) struct FieldDiscriminant(&'static str);
 
 impl FieldDiscriminant {
     /// Create a new field discriminant with the given field name.
@@ -32,7 +34,7 @@ impl Hash for FieldDiscriminant {
 
 /// Trait to determine if a value should be considered "default" and thus skipped in hash calculations.
 /// This helps maintain forward/backward compatibility by only including discriminants for meaningful values.
-pub trait IsDefault {
+pub(crate) trait IsDefault {
     fn is_default(&self) -> bool;
 }
 
@@ -50,7 +52,7 @@ impl<T: Hash, H: std::hash::Hasher> DynHashable<H> for T {
 
 /// Builder pattern for creating stable hash implementations that automatically handle
 /// field discriminants, default value detection, and alphabetical ordering.
-pub struct StableHashBuilder<'a, H: std::hash::Hasher> {
+pub(crate) struct StableHashBuilder<'a, H: std::hash::Hasher> {
     fields: BTreeMap<&'static str, &'a dyn DynHashable<H>>,
 }
 
@@ -77,5 +79,65 @@ impl<'a, H: std::hash::Hasher> StableHashBuilder<'a, H> {
             FieldDiscriminant::new(key).hash(hasher);
             value.dyn_hash(hasher);
         }
+    }
+}
+
+impl<K, V> IsDefault for OrderMap<K, V> {
+    fn is_default(&self) -> bool {
+        self.is_empty()
+    }
+}
+
+impl IsDefault for String {
+    fn is_default(&self) -> bool {
+        false // Never skip required string fields
+    }
+}
+
+impl IsDefault for url::Url {
+    fn is_default(&self) -> bool {
+        false // Never skip required URL fields
+    }
+}
+
+impl IsDefault for std::path::PathBuf {
+    fn is_default(&self) -> bool {
+        false // Never skip PathBuf fields
+    }
+}
+
+impl<T> IsDefault for Vec<T> {
+    fn is_default(&self) -> bool {
+        self.is_empty()
+    }
+}
+
+impl IsDefault for rattler_conda_types::Version {
+    fn is_default(&self) -> bool {
+        false // Never skip version fields
+    }
+}
+
+impl IsDefault for rattler_conda_types::StringMatcher {
+    fn is_default(&self) -> bool {
+        false // Never skip StringMatcher fields
+    }
+}
+
+impl IsDefault for rattler_conda_types::BuildNumberSpec {
+    fn is_default(&self) -> bool {
+        false // Never skip BuildNumberSpec fields
+    }
+}
+
+impl IsDefault for rattler_conda_types::VersionSpec {
+    fn is_default(&self) -> bool {
+        false // Never skip VersionSpec fields
+    }
+}
+
+impl<U, T: rattler_digest::digest::generic_array::ArrayLength<U>> IsDefault for GenericArray<U, T> {
+    fn is_default(&self) -> bool {
+        false // Never skip digest output fields
     }
 }

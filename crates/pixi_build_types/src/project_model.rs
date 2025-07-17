@@ -15,6 +15,7 @@
 //!
 //! Only the whole ProjectModel is versioned explicitly in an enum.
 //! When making a change to one of the types, be sure to add another enum declaration if it is breaking.
+use crate::stable_hash::{IsDefault, StableHashBuilder};
 use ordermap::OrderMap;
 use rattler_conda_types::{BuildNumberSpec, StringMatcher, Version, VersionSpec};
 use rattler_digest::{Md5, Md5Hash, Sha256, Sha256Hash, serde::SerializableHash};
@@ -27,76 +28,6 @@ use std::hash::Hash;
 use std::path::PathBuf;
 use std::str::FromStr;
 use url::Url;
-
-
-impl<K, V> IsDefault for OrderMap<K, V> {
-    fn is_default(&self) -> bool {
-        self.is_empty()
-    }
-}
-
-impl IsDefault for String {
-    fn is_default(&self) -> bool {
-        false // Never skip required string fields
-    }
-}
-
-impl IsDefault for url::Url {
-    fn is_default(&self) -> bool {
-        false // Never skip required URL fields
-    }
-}
-
-impl IsDefault for std::path::PathBuf {
-    fn is_default(&self) -> bool {
-        false // Never skip PathBuf fields
-    }
-}
-
-impl<T> IsDefault for Vec<T> {
-    fn is_default(&self) -> bool {
-        self.is_empty()
-    }
-}
-
-impl IsDefault for rattler_conda_types::Version {
-    fn is_default(&self) -> bool {
-        false // Never skip version fields
-    }
-}
-
-impl IsDefault for rattler_conda_types::StringMatcher {
-    fn is_default(&self) -> bool {
-        false // Never skip StringMatcher fields
-    }
-}
-
-impl IsDefault for rattler_conda_types::BuildNumberSpec {
-    fn is_default(&self) -> bool {
-        false // Never skip BuildNumberSpec fields
-    }
-}
-
-impl IsDefault for rattler_conda_types::VersionSpec {
-    fn is_default(&self) -> bool {
-        false // Never skip VersionSpec fields
-    }
-}
-
-impl IsDefault for GitReferenceV1 {
-    fn is_default(&self) -> bool {
-        false // Never skip GitReferenceV1 fields  
-    }
-}
-
-impl<U, T: rattler_digest::digest::generic_array::ArrayLength<U>> IsDefault for GenericArray<U, T> {
-    fn is_default(&self) -> bool {
-        false // Never skip digest output fields
-    }
-}
-
-use rattler_digest::digest::generic_array::GenericArray;
-use crate::stable_hash::{IsDefault, StableHashBuilder};
 
 /// Enum containing all versions of the project model.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -502,7 +433,7 @@ impl Hash for ProjectModelV1 {
             documentation,
             targets,
         } = self;
-        
+
         StableHashBuilder::<H>::new()
             .field("authors", authors)
             .field("description", description)
@@ -544,7 +475,7 @@ impl Hash for TargetsV1 {
             default_target,
             targets,
         } = self;
-        
+
         StableHashBuilder::<H>::new()
             .field("default_target", default_target)
             .field("targets", targets)
@@ -561,7 +492,7 @@ impl Hash for TargetV1 {
             host_dependencies,
             run_dependencies,
         } = self;
-        
+
         StableHashBuilder::<H>::new()
             .field("build_dependencies", build_dependencies)
             .field("host_dependencies", host_dependencies)
@@ -613,7 +544,7 @@ impl Hash for UrlSpecV1 {
     /// configurations produce different hashes while maintaining forward/backward compatibility.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let UrlSpecV1 { url, md5, sha256 } = self;
-        
+
         StableHashBuilder::<H>::new()
             .field("md5", md5)
             .field("sha256", sha256)
@@ -664,6 +595,12 @@ impl Hash for GitReferenceV1 {
                 3u8.hash(state);
             }
         }
+    }
+}
+
+impl IsDefault for GitReferenceV1 {
+    fn is_default(&self) -> bool {
+        false // Never skip GitReferenceV1 fields
     }
 }
 
