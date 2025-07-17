@@ -3,7 +3,7 @@
 use crate::PixiBuildApiVersion;
 use serde::{Deserialize, Serialize};
 
-#[derive(Default, Debug, Serialize, Deserialize)]
+#[derive(Default, Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 /// Capabilities that the backend provides.
 pub struct BackendCapabilities {
