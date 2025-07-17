@@ -28,6 +28,28 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use url::Url;
 
+/// A field discriminant used in hash implementations to ensure different field 
+/// configurations produce different hashes while maintaining forward/backward compatibility.
+/// 
+/// This type wraps a static string that identifies which field is being hashed,
+/// preventing hash collisions when the same value appears in different fields.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FieldDiscriminant(&'static str);
+
+impl FieldDiscriminant {
+    /// Create a new field discriminant with the given field name.
+    pub const fn new(field_name: &'static str) -> Self {
+        Self(field_name)
+    }
+}
+
+impl Hash for FieldDiscriminant {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+
 /// Enum containing all versions of the project model.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "version", content = "data")]
@@ -161,6 +183,16 @@ pub struct TargetsV1 {
     pub targets: Option<OrderMap<TargetSelectorV1, TargetV1>>,
 }
 
+impl TargetsV1 {
+    /// Check if this targets struct is effectively empty (contains no meaningful data that should affect the hash).
+    pub fn is_empty(&self) -> bool {
+        let has_meaningful_default_target = self.default_target.as_ref().is_some_and(|t| !t.is_empty());
+        let has_non_empty_targets = self.targets.as_ref().is_some_and(|t| !t.is_empty());
+        
+        !has_meaningful_default_target && !has_non_empty_targets
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TargetV1 {
@@ -172,6 +204,17 @@ pub struct TargetV1 {
 
     /// Run dependencies of the project
     pub run_dependencies: Option<OrderMap<SourcePackageName, PackageSpecV1>>,
+}
+
+impl TargetV1 {
+    /// Check if this target is effectively empty (contains no meaningful data that should affect the hash).
+    pub fn is_empty(&self) -> bool {
+        let has_build_deps = self.build_dependencies.as_ref().is_some_and(|d| !d.is_empty());
+        let has_host_deps = self.host_dependencies.as_ref().is_some_and(|d| !d.is_empty());
+        let has_run_deps = self.run_dependencies.as_ref().is_some_and(|d| !d.is_empty());
+        
+        !has_build_deps && !has_host_deps && !has_run_deps
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
@@ -364,8 +407,9 @@ impl std::fmt::Debug for BinaryPackageSpecV1 {
 
 // Custom Hash implementations that skip default values for stability
 impl Hash for ProjectModelV1 {
-    /// Custom hash implementation that skips default/empty values to keep the hash
-    /// as stable as possible when adding new optional fields to the struct.
+    /// Custom hash implementation that includes field discriminators only for non-default 
+    /// values and processes fields in alphabetical order to ensure different field 
+    /// configurations produce different hashes while maintaining forward/backward compatibility.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let ProjectModelV1 {
             name,
@@ -381,36 +425,63 @@ impl Hash for ProjectModelV1 {
             targets,
         } = self;
 
-        name.hash(state);
-        if let Some(version) = version {
-            version.hash(state);
-        }
-        if let Some(description) = description {
-            description.hash(state);
-        }
+        // Process fields in alphabetical order with field discriminators only for non-None values
+        
         if let Some(authors) = authors {
+            FieldDiscriminant::new("authors").hash(state);
             authors.hash(state);
         }
-        if let Some(license) = license {
-            license.hash(state);
+        
+        if let Some(description) = description {
+            FieldDiscriminant::new("description").hash(state);
+            description.hash(state);
         }
-        if let Some(license_file) = license_file {
-            license_file.hash(state);
-        }
-        if let Some(readme) = readme {
-            readme.hash(state);
-        }
-        if let Some(homepage) = homepage {
-            homepage.hash(state);
-        }
-        if let Some(repository) = repository {
-            repository.hash(state);
-        }
+        
         if let Some(documentation) = documentation {
+            FieldDiscriminant::new("documentation").hash(state);
             documentation.hash(state);
         }
+        
+        if let Some(homepage) = homepage {
+            FieldDiscriminant::new("homepage").hash(state);
+            homepage.hash(state);
+        }
+        
+        if let Some(license) = license {
+            FieldDiscriminant::new("license").hash(state);
+            license.hash(state);
+        }
+        
+        if let Some(license_file) = license_file {
+            FieldDiscriminant::new("license_file").hash(state);
+            license_file.hash(state);
+        }
+        
+        // Name is always present (not Optional), so always hash it with discriminator
+        FieldDiscriminant::new("name").hash(state);
+        name.hash(state);
+        
+        if let Some(readme) = readme {
+            FieldDiscriminant::new("readme").hash(state);
+            readme.hash(state);
+        }
+        
+        if let Some(repository) = repository {
+            FieldDiscriminant::new("repository").hash(state);
+            repository.hash(state);
+        }
+        
         if let Some(targets) = targets {
-            targets.hash(state);
+            // Only hash if the targets struct contains meaningful data
+            if !targets.is_empty() {
+                FieldDiscriminant::new("targets").hash(state);
+                targets.hash(state);
+            }
+        }
+        
+        if let Some(version) = version {
+            FieldDiscriminant::new("version").hash(state);
+            version.hash(state);
         }
     }
 }
@@ -433,19 +504,25 @@ impl Hash for TargetSelectorV1 {
 }
 
 impl Hash for TargetsV1 {
-    /// Custom hash implementation that skips empty collections to keep the hash
-    /// as stable as possible when adding new optional fields to the struct.
+    /// Custom hash implementation that includes field discriminators only for non-default 
+    /// values and processes fields in alphabetical order to ensure different field 
+    /// configurations produce different hashes while maintaining forward/backward compatibility.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let TargetsV1 {
             default_target,
             targets,
         } = self;
 
+        // Process fields in alphabetical order with field discriminators only for non-None values
+        
         if let Some(default_target) = default_target {
+            FieldDiscriminant::new("default_target").hash(state);
             default_target.hash(state);
         }
+        
         if let Some(targets) = targets {
             if !targets.is_empty() {
+                FieldDiscriminant::new("targets").hash(state);
                 targets.hash(state);
             }
         }
@@ -453,8 +530,9 @@ impl Hash for TargetsV1 {
 }
 
 impl Hash for TargetV1 {
-    /// Custom hash implementation that skips empty collections to keep the hash
-    /// as stable as possible when adding new optional fields to the struct.
+    /// Custom hash implementation that includes field discriminators only for non-default 
+    /// values and processes fields in alphabetical order to ensure different field 
+    /// configurations produce different hashes while maintaining forward/backward compatibility.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let TargetV1 {
             host_dependencies,
@@ -462,18 +540,25 @@ impl Hash for TargetV1 {
             run_dependencies,
         } = self;
 
-        if let Some(host_dependencies) = host_dependencies {
-            if !host_dependencies.is_empty() {
-                host_dependencies.hash(state);
-            }
-        }
+        // Process fields in alphabetical order with field discriminators only for non-empty values
+        
         if let Some(build_dependencies) = build_dependencies {
             if !build_dependencies.is_empty() {
+                FieldDiscriminant::new("build_dependencies").hash(state);
                 build_dependencies.hash(state);
             }
         }
+        
+        if let Some(host_dependencies) = host_dependencies {
+            if !host_dependencies.is_empty() {
+                FieldDiscriminant::new("host_dependencies").hash(state);
+                host_dependencies.hash(state);
+            }
+        }
+        
         if let Some(run_dependencies) = run_dependencies {
             if !run_dependencies.is_empty() {
+                FieldDiscriminant::new("run_dependencies").hash(state);
                 run_dependencies.hash(state);
             }
         }
@@ -519,24 +604,34 @@ impl Hash for SourcePackageSpecV1 {
 }
 
 impl Hash for UrlSpecV1 {
-    /// Custom hash implementation that skips None values to keep the hash
-    /// as stable as possible when adding new optional fields to the struct.
+    /// Custom hash implementation that includes field discriminators only for non-default 
+    /// values and processes fields in alphabetical order to ensure different field 
+    /// configurations produce different hashes while maintaining forward/backward compatibility.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let UrlSpecV1 { url, md5, sha256 } = self;
 
-        url.hash(state);
+        // Process fields in alphabetical order with field discriminators only for non-None values
+        
         if let Some(md5) = md5 {
+            FieldDiscriminant::new("md5").hash(state);
             md5.hash(state);
         }
+        
         if let Some(sha256) = sha256 {
+            FieldDiscriminant::new("sha256").hash(state);
             sha256.hash(state);
         }
+        
+        // URL is always present (not Optional), so always hash it with discriminator
+        FieldDiscriminant::new("url").hash(state);
+        url.hash(state);
     }
 }
 
 impl Hash for GitSpecV1 {
-    /// Custom hash implementation that skips None values to keep the hash
-    /// as stable as possible when adding new optional fields to the struct.
+    /// Custom hash implementation that includes field discriminators only for non-default 
+    /// values and processes fields in alphabetical order to ensure different field 
+    /// configurations produce different hashes while maintaining forward/backward compatibility.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let GitSpecV1 {
             git,
@@ -544,11 +639,19 @@ impl Hash for GitSpecV1 {
             subdirectory,
         } = self;
 
+        // Process fields in alphabetical order with field discriminators only for non-None values
+        
+        // Git is always present (not Optional), so always hash it with discriminator
+        FieldDiscriminant::new("git").hash(state);
         git.hash(state);
+        
         if let Some(rev) = rev {
+            FieldDiscriminant::new("rev").hash(state);
             rev.hash(state);
         }
+        
         if let Some(subdirectory) = subdirectory {
+            FieldDiscriminant::new("subdirectory").hash(state);
             subdirectory.hash(state);
         }
     }
@@ -588,8 +691,9 @@ impl Hash for GitReferenceV1 {
 }
 
 impl Hash for BinaryPackageSpecV1 {
-    /// Custom hash implementation that skips None values to keep the hash
-    /// as stable as possible when adding new optional fields to the struct.
+    /// Custom hash implementation that includes field discriminators only for non-default 
+    /// values and processes fields in alphabetical order to ensure different field 
+    /// configurations produce different hashes while maintaining forward/backward compatibility.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let BinaryPackageSpecV1 {
             version,
@@ -604,35 +708,56 @@ impl Hash for BinaryPackageSpecV1 {
             license,
         } = self;
 
-        if let Some(version) = version {
-            version.hash(state);
-        }
+        // Process fields in alphabetical order with field discriminators only for non-None values
+        
         if let Some(build) = build {
+            FieldDiscriminant::new("build").hash(state);
             build.hash(state);
         }
+        
         if let Some(build_number) = build_number {
+            FieldDiscriminant::new("build_number").hash(state);
             build_number.hash(state);
         }
-        if let Some(file_name) = file_name {
-            file_name.hash(state);
-        }
+        
         if let Some(channel) = channel {
+            FieldDiscriminant::new("channel").hash(state);
             channel.hash(state);
         }
-        if let Some(subdir) = subdir {
-            subdir.hash(state);
+        
+        if let Some(file_name) = file_name {
+            FieldDiscriminant::new("file_name").hash(state);
+            file_name.hash(state);
         }
+        
+        if let Some(license) = license {
+            FieldDiscriminant::new("license").hash(state);
+            license.hash(state);
+        }
+        
         if let Some(md5) = md5 {
+            FieldDiscriminant::new("md5").hash(state);
             md5.hash(state);
         }
+        
         if let Some(sha256) = sha256 {
+            FieldDiscriminant::new("sha256").hash(state);
             sha256.hash(state);
         }
+        
+        if let Some(subdir) = subdir {
+            FieldDiscriminant::new("subdir").hash(state);
+            subdir.hash(state);
+        }
+        
         if let Some(url) = url {
+            FieldDiscriminant::new("url").hash(state);
             url.hash(state);
         }
-        if let Some(license) = license {
-            license.hash(state);
+        
+        if let Some(version) = version {
+            FieldDiscriminant::new("version").hash(state);
+            version.hash(state);
         }
     }
 }
@@ -667,14 +792,15 @@ mod tests {
 
         let hash1 = calculate_hash(&project_model);
 
-        // Add empty targets field (should NOT change hash due to our custom implementation)
+        // Add empty targets field - with corrected implementation, this should NOT change hash
+        // because we only include discriminants for non-default/non-empty values
         project_model.targets = Some(TargetsV1 {
             default_target: None,
             targets: Some(OrderMap::new()),
         });
         let hash2 = calculate_hash(&project_model);
 
-        // Add a target with empty dependencies (should NOT change hash)
+        // Add a target with empty dependencies - this should also NOT change hash
         let empty_target = TargetV1 {
             host_dependencies: Some(OrderMap::new()),
             build_dependencies: Some(OrderMap::new()),
@@ -686,14 +812,19 @@ mod tests {
         });
         let hash3 = calculate_hash(&project_model);
 
-        // Hash should remain the same when adding empty/default values
+        // With corrected implementation, hashes should remain stable when adding empty/default values
+        // This preserves forward/backward compatibility
         assert_eq!(
             hash1, hash2,
-            "Hash should not change when adding empty targets"
+            "Hash should not change when adding empty targets (maintains forward compatibility)"
         );
         assert_eq!(
             hash1, hash3,
             "Hash should not change when adding empty target with empty dependencies"
+        );
+        assert_eq!(
+            hash2, hash3,
+            "Hash should remain stable across different empty configurations"
         );
     }
 
@@ -924,5 +1055,98 @@ mod tests {
                 .unwrap()
                 .contains_key(&TargetSelectorV1::Unix)
         );
+    }
+
+
+
+    #[test]
+    fn test_hash_collision_bug_dependency_fields() {
+        // Test that moving dependencies between different dependency types produces different hashes
+        
+        let mut deps = OrderMap::new();
+        deps.insert("python".to_string(), PackageSpecV1::Binary(Box::default()));
+
+        // Same dependency in host_dependencies
+        let target1 = TargetV1 {
+            host_dependencies: Some(deps.clone()),
+            build_dependencies: None,
+            run_dependencies: None,
+        };
+
+        // Same dependency in run_dependencies
+        let target2 = TargetV1 {
+            host_dependencies: None,
+            build_dependencies: None,
+            run_dependencies: Some(deps.clone()),
+        };
+
+        // Same dependency in build_dependencies
+        let target3 = TargetV1 {
+            host_dependencies: None,
+            build_dependencies: Some(deps.clone()),
+            run_dependencies: None,
+        };
+
+        let hash1 = calculate_hash(&target1);
+        let hash2 = calculate_hash(&target2);
+        let hash3 = calculate_hash(&target3);
+
+        assert_ne!(hash1, hash2, "Same dependency in host vs run should produce different hashes");
+        assert_ne!(hash1, hash3, "Same dependency in host vs build should produce different hashes");
+        assert_ne!(hash2, hash3, "Same dependency in run vs build should produce different hashes");
+
+        // Test with TargetsV1 as well
+        let targets1 = TargetsV1 {
+            default_target: Some(target1),
+            targets: None,
+        };
+
+        let targets2 = TargetsV1 {
+            default_target: Some(target2),
+            targets: None,
+        };
+
+        let targets_hash1 = calculate_hash(&targets1);
+        let targets_hash2 = calculate_hash(&targets2);
+
+        assert_ne!(targets_hash1, targets_hash2, "TargetsV1 should produce different hashes for different dependency types");
+    }
+
+
+    #[test]
+    fn test_hash_collision_bug_project_model() {
+        // Test the same issue in ProjectModelV1
+        let project1 = ProjectModelV1 {
+            name: "test".to_string(),
+            description: Some("test description".to_string()),
+            license: None,
+            version: None,
+            authors: None,
+            license_file: None,
+            readme: None,
+            homepage: None,
+            repository: None,
+            documentation: None,
+            targets: None,
+        };
+
+        let project2 = ProjectModelV1 {
+            name: "test".to_string(),
+            description: None,
+            license: Some("test description".to_string()),
+            version: None,
+            authors: None,
+            license_file: None,
+            readme: None,
+            homepage: None,
+            repository: None,
+            documentation: None,
+            targets: None,
+        };
+
+        let hash1 = calculate_hash(&project1);
+        let hash2 = calculate_hash(&project2);
+
+        assert_ne!(hash1, hash2, "Same value in different fields should produce different hashes in ProjectModelV1");
     }
 }
