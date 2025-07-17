@@ -84,22 +84,29 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?
         .with_cli_config(config.clone());
 
-    let specs = args
+    let (specs, source): (Vec<_>, Vec<_>) = args
         .packages
         .to_global_specs(project_original.global_channel_config())?
         .into_iter()
-        .filter_map(|s| s.into_named());
+        // TODO: will allow nameless specs later
+        .filter_map(|s| s.into_named())
+        // TODO: Filter out non-binary specs, we are adding support for them later
+        .partition(|s| s.spec().is_binary());
+
+    for source_spec in source {
+        tracing::warn!(
+            "Ignoring source spec {}.",
+            source_spec.name().as_normalized()
+        );
+    }
 
     let env_to_specs: IndexMap<EnvironmentName, Vec<NamedGlobalSpec>> = match &args.environment {
-        Some(env_name) => IndexMap::from_iter(std::iter::once((
-            env_name.clone(),
-            specs.collect::<Vec<_>>(),
-        ))),
+        Some(env_name) => IndexMap::from_iter(std::iter::once((env_name.clone(), specs))),
         None => specs
             .into_iter()
             .map(|spec| {
                 (
-                    EnvironmentName::from_str(spec.name().as_source())
+                    EnvironmentName::from_str(spec.name().as_normalized())
                         .expect("valid environment name"),
                     vec![spec],
                 )

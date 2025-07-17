@@ -22,6 +22,26 @@ pub struct NamedGlobalSpec {
 }
 
 impl NamedGlobalSpec {
+    /// Creates a new `NamedGlobalSpec` with a package name and a Pixi specification.
+    pub fn new(name: PackageName, spec: PixiSpec) -> Self {
+        Self { name, spec }
+    }
+
+    /// Returns the package name.
+    pub fn name(&self) -> &PackageName {
+        &self.name
+    }
+
+    /// Returns the Pixi specification.
+    pub fn spec(&self) -> &PixiSpec {
+        &self.spec
+    }
+
+    /// Converts into tuple of (name, spec).
+    pub fn into_tuple(self) -> (PackageName, PixiSpec) {
+        (self.name, self.spec)
+    }
+
     /// Convert from a &str and a ChannelConfig into a [`NamedGlobalSpec`].
     pub fn try_from_str(
         spec_str: &str,
@@ -65,28 +85,6 @@ pub enum FromMatchSpecError {
     ParseMatchSpec(#[from] rattler_conda_types::ParseMatchSpecError),
 }
 
-impl NamedGlobalSpec {
-    /// Creates a new `NamedGlobalSpec` with a package name and a Pixi specification.
-    pub fn new(name: PackageName, spec: PixiSpec) -> Self {
-        Self { name, spec }
-    }
-
-    /// Returns the package name.
-    pub fn name(&self) -> &PackageName {
-        &self.name
-    }
-
-    /// Returns the Pixi specification.
-    pub fn spec(&self) -> &PixiSpec {
-        &self.spec
-    }
-
-    /// Converts into tuple of (name, spec).
-    pub fn into_tuple(self) -> (PackageName, PixiSpec) {
-        (self.name, self.spec)
-    }
-}
-
 impl GlobalSpec {
     /// Creates a new `GlobalSpec` without a package name.
     pub fn nameless(spec: PixiSpec) -> Self {
@@ -121,8 +119,7 @@ impl GlobalSpec {
         }
     }
 
-    #[cfg(test)]
-    pub fn pixi_spec(&self) -> &PixiSpec {
+    pub fn spec(&self) -> &PixiSpec {
         match self {
             GlobalSpec::Nameless(spec) => spec,
             GlobalSpec::Named(named_spec) => &named_spec.spec,

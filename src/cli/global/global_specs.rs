@@ -140,7 +140,7 @@ mod tests {
 
         assert_eq!(global_specs.len(), 1);
         assert!(matches!(
-            global_specs.first().unwrap().pixi_spec(),
+            global_specs.first().unwrap().spec(),
             &PixiSpec::Git(..)
         ))
     }
@@ -183,7 +183,7 @@ mod tests {
 
         assert_eq!(global_specs.len(), 1);
         assert!(matches!(
-            global_specs.first().unwrap().pixi_spec(),
+            global_specs.first().unwrap().spec(),
             &PixiSpec::Path(..)
         ))
     }
