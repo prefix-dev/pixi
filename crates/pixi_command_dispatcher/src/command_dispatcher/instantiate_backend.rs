@@ -3,11 +3,11 @@ use pixi_build_discovery::{
     BackendInitializationParams, BackendSpec, CommandSpec, EnabledProtocols,
 };
 use pixi_build_frontend::{
-    Backend, json_rpc,
-    json_rpc::JsonRpcBackend,
+    Backend, BackendOverride, json_rpc,
+    json_rpc::{CommunicationError, JsonRpcBackend},
     tool::{IsolatedTool, SystemTool, Tool},
 };
-use pixi_build_types::PixiBuildApiVersion;
+use pixi_build_types::{PixiBuildApiVersion, procedures::initialize::InitializeParams};
 use rattler_conda_types::ChannelConfig;
 use rattler_shell::{
     activation::{ActivationError, ActivationVariables, Activator},
@@ -49,10 +49,24 @@ impl CommandDispatcher {
     ) -> Result<Backend, CommandDispatcherError<InstantiateBackendError>> {
         let BackendSpec::JsonRpc(backend_spec) = spec.backend_spec;
 
-        let command_spec = self
-            .build_backend_overrides()
-            .named_backend_override(&backend_spec.name)
-            .unwrap_or(backend_spec.command);
+        let command_spec = match self.build_backend_overrides() {
+            BackendOverride::System(overridden_backends) => overridden_backends
+                .named_backend_override(&backend_spec.name)
+                .unwrap_or(backend_spec.command),
+            BackendOverride::InMemory(memory) => {
+                let backend = memory
+                    .initialize(InitializeParams {
+                        manifest_path: spec.init_params.manifest_path,
+                        source_dir: Some(spec.init_params.source_dir),
+                        cache_directory: Some(self.cache_dirs().root().clone()),
+                        project_model: spec.init_params.project_model.map(Into::into),
+                        configuration: spec.init_params.configuration,
+                    })
+                    .map_err(InstantiateBackendError::InMemoryError)
+                    .map_err(CommandDispatcherError::Failed)?;
+                return Ok(Backend::new(backend.into(), memory.api_version()));
+            }
+        };
 
         let (tool, api_version) = match command_spec {
             CommandSpec::System(system_spec) => (
@@ -135,6 +149,11 @@ pub enum InstantiateBackendError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     JsonRpc(#[from] json_rpc::InitializeError),
+
+    /// The command dispatcher could not be initialized.
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    InMemoryError(CommunicationError),
 
     /// Could not detect the virtual packages for the system
     #[error(transparent)]
