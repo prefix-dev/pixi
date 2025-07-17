@@ -123,3 +123,21 @@ pub enum SortBy {
     Kind,
 }
 ```
+## Test
+
+To run all tests, use:
+```bash
+pixi run test
+```
+But if you have modified recipe data under the tests/data directory, you need to update the test channel before running tests:
+```bash
+pixi run update-test-channel <channel_name>
+```
+For example, if you modified data for dummy_channel_1:
+```bash
+pixi run update-test-channel dummy_channel_1
+```
+After updating the test channel, run the tests again:
+```
+pixi run test
+```
