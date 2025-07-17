@@ -1386,6 +1386,10 @@ def test_run_with_environment_variable_priority(
     cmd = "echo $MY_ENV"
     [tasks.foobar]
     cmd = "echo $FOO_PATH"
+    [tasks.bar]
+    cmd = "echo $BAR_PATH"
+    [tasks.outside]
+    cmd = "echo $OUTSIDE_ENV"
     [dependencies]
     pixi-foobar = "*"
     """
@@ -1411,36 +1415,51 @@ def test_run_with_environment_variable_priority(
         stdout_contains="test456",
     )
 
-    # Test 1: task.env > outside environment variable - should use environment variable defined in specific tasks
-    verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "task"],
-        stdout_contains="test456",
-        stdout_excludes="outside_env",
-        env={"MY_ENV": "outside_env"},
-    )
-
-    # Test 2: task.env > activation.env - should use environment variable defined in specific tasks
+    # Test 1: task.env > activation.env - should use environment variable defined in specific tasks
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "task"],
         stdout_contains="test456",
     )
 
-    # Test 3: activation.env > outside environment variable - should use activation.env
-    verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "foo"],
-        stdout_contains="test123",
-        stdout_excludes="outside_env",
-        env={"MY_ENV": "outside_env"},
-    )
-
-    # Test 4: activation.env > activation.script - should use activation.env
+    # Test 2: activation.env > activation.script - should use activation.env
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "foo"],
         stdout_contains="test123",
     )
 
-    # Test 5: activation.script > activation scripts from dependencies - should use activation.script
+    # Test 3: activation.script > activation scripts from dependencies
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "foobar"],
         stdout_contains="activation_script",
+    )
+
+    # Test 4: activation scripts from dependencies > outside environment variable
+    verify_cli_command(
+       [pixi, "run", "--manifest-path", manifest, "bar"],
+        stdout_contains="bar/path",
+        stdout_excludes="outside_env",
+        env={"BAR_PATH": "outside_env"},
+    )
+
+    # Test 5: if nothing specified, use outside environment variable
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "outside"],
+        stdout_contains="outside_env",
+        env={"OUTSIDE_ENV": "outside_env"},
+    )
+
+    # Test 6: activation.env > outside environment variable - should use activation.env
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "foo"],
+        stdout_contains="test123",
+        stdout_excludes="outside_env",
+        env={"MY_ENV": "outside_env"},
+    )
+
+    # Test 7: task.env > outside environment variable - should use environment variable defined in specific tasks
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "task"],
+        stdout_contains="test456",
+        stdout_excludes="outside_env",
+        env={"MY_ENV": "outside_env"},
     )
