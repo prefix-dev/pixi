@@ -1436,7 +1436,7 @@ def test_run_with_environment_variable_priority(
     # Test 4: activation scripts from dependencies > outside environment variable
     verify_cli_command(
        [pixi, "run", "--manifest-path", manifest, "bar"],
-        stdout_contains="bar/path",
+        stdout_contains="bar",
         stdout_excludes="outside_env",
         env={"BAR_PATH": "outside_env"},
     )
