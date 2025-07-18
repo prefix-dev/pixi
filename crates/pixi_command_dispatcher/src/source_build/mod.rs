@@ -67,7 +67,7 @@ pub struct SourceBuildSpec {
 
     /// The working directory to use for the build. If this is `None` a
     /// deterministic workspace local directory will be used.
-    pub working_directory: Option<PathBuf>,
+    pub work_directory: Option<PathBuf>,
 
     /// Whether the build directory should be cleared before building.
     pub clean: bool,
@@ -129,8 +129,8 @@ impl SourceBuildSpec {
             .map_err_with(SourceBuildError::Initialize)?;
 
         // Determine the working directory for the build.
-        let working_directory = match std::mem::take(&mut self.working_directory) {
-            Some(working_directory) => working_directory,
+        let work_directory = match std::mem::take(&mut self.work_directory) {
+            Some(work_directory) => work_directory,
             None => command_dispatcher.cache_dirs().working_dirs().join(
                 WorkDirKey {
                     source: SourceRecordOrCheckout::Record {
@@ -146,9 +146,9 @@ impl SourceBuildSpec {
 
         // Clean the working directory if requested.
         if self.clean {
-            if let Err(err) = fs_err::remove_dir_all(&working_directory) {
+            if let Err(err) = fs_err::remove_dir_all(&work_directory) {
                 return Err(CommandDispatcherError::Failed(
-                    SourceBuildError::CleanWorkingDirectory(working_directory, err),
+                    SourceBuildError::CleanWorkingDirectory(work_directory, err),
                 ));
             }
         }
@@ -157,7 +157,7 @@ impl SourceBuildSpec {
         let output_directory = self.output_directory.clone();
         let mut built_source = if backend.capabilities().provides_conda_build_v1() {
             let built_package = self
-                .build_v1(command_dispatcher, backend, working_directory)
+                .build_v1(command_dispatcher, backend, work_directory)
                 .await?;
 
             BuiltSource {
@@ -167,7 +167,7 @@ impl SourceBuildSpec {
             }
         } else {
             let built_package = self
-                .build_v0(command_dispatcher, backend, working_directory)
+                .build_v0(command_dispatcher, backend, work_directory)
                 .await?;
 
             BuiltSource {
@@ -224,14 +224,14 @@ impl SourceBuildSpec {
         self,
         command_dispatcher: CommandDispatcher,
         backend: Backend,
-        working_directory: PathBuf,
+        work_directory: PathBuf,
     ) -> Result<BackendBuiltSource, CommandDispatcherError<SourceBuildError>> {
         command_dispatcher
             .backend_source_build(BackendSourceBuildSpec {
                 backend,
                 package: self.package,
                 source: self.source,
-                working_directory,
+                work_directory,
                 method: BackendSourceBuildMethod::BuildV0(BackendSourceBuildV0Method {
                     channel_config: self.channel_config,
                     channels: self.channels,
@@ -248,7 +248,7 @@ impl SourceBuildSpec {
         self,
         command_dispatcher: CommandDispatcher,
         backend: Backend,
-        working_directory: PathBuf,
+        work_directory: PathBuf,
     ) -> Result<BackendBuiltSource, CommandDispatcherError<SourceBuildError>> {
         let source_anchor = SourceAnchor::from(SourceSpec::from(self.source.clone()));
         let host_platform = self.build_environment.host_platform;
@@ -261,7 +261,7 @@ impl SourceBuildSpec {
                 host_platform,
                 build_platform,
                 variant_configuration: self.variants.clone(),
-                work_directory: working_directory.clone(),
+                work_directory: work_directory.clone(),
             })
             .await
             .map_err(BackendSourceBuildError::BuildError)
@@ -288,7 +288,7 @@ impl SourceBuildSpec {
             })?;
 
         // Determine final directories for everything.
-        let directories = Directories::new(&working_directory, host_platform);
+        let directories = Directories::new(&work_directory, host_platform);
 
         // Solve the build environment.
         let build_dependencies = output
@@ -379,7 +379,7 @@ impl SourceBuildSpec {
                 backend,
                 package: self.package,
                 source: self.source,
-                working_directory,
+                work_directory,
                 method: BackendSourceBuildMethod::BuildV1(BackendSourceBuildV1Method {
                     build_prefix: BackendSourceBuildPrefix {
                         platform: self.build_environment.build_platform,
@@ -432,14 +432,14 @@ pub struct Directories {
 }
 
 impl Directories {
-    pub fn new(working_directory: &Path, host_platform: Platform) -> Self {
+    pub fn new(work_directory: &Path, host_platform: Platform) -> Self {
         const BUILD_DIR: &str = "bld";
         const HOST_ENV_DIR: &str = "host";
         const PLACEHOLDER_TEMPLATE_STR: &str = "_placehold";
 
-        let build_prefix = working_directory.join(BUILD_DIR);
+        let build_prefix = work_directory.join(BUILD_DIR);
         let host_prefix = if host_platform.is_windows() {
-            working_directory.join(HOST_ENV_DIR)
+            work_directory.join(HOST_ENV_DIR)
         } else {
             // On non-Windows platforms, the name of the host environment has to be exactly
             // 255 characters long for prefix replacement in rattler build to work
@@ -454,10 +454,10 @@ impl Directories {
                 placeholder.push_str(PLACEHOLDER_TEMPLATE_STR);
             }
             let placeholder = placeholder
-                [0..PLACEHOLDER_LENGTH - working_directory.join(HOST_ENV_DIR).as_os_str().len()]
+                [0..PLACEHOLDER_LENGTH - work_directory.join(HOST_ENV_DIR).as_os_str().len()]
                 .to_string();
 
-            working_directory.join(format!("{HOST_ENV_DIR}{}", placeholder))
+            work_directory.join(format!("{HOST_ENV_DIR}{}", placeholder))
         };
         Self {
             host_prefix,

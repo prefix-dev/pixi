@@ -144,7 +144,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 build_environment: build_environment.clone(),
                 variants: Some(variant_configuration.clone()),
                 enabled_protocols: Default::default(),
-                working_directory: None,
+                work_directory: None,
                 clean: args.clean,
             })
             .await?;

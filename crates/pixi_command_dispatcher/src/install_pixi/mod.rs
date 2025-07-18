@@ -260,7 +260,7 @@ impl InstallPixiEnvironmentSpec {
                 variants: self.variants.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
                 output_directory: Some(output_directory.to_path_buf()),
-                working_directory: None,
+                work_directory: None,
                 clean: false,
             })
             .await

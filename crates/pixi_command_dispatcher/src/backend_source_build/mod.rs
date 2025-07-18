@@ -49,7 +49,7 @@ pub struct BackendSourceBuildSpec {
     pub method: BackendSourceBuildMethod,
 
     /// The working directory to use for the build.
-    pub working_directory: PathBuf,
+    pub work_directory: PathBuf,
 }
 
 #[derive(Debug, Serialize)]
@@ -130,7 +130,7 @@ impl BackendSourceBuildSpec {
                     self.package,
                     self.source,
                     params,
-                    self.working_directory,
+                    self.work_directory,
                     log_sink,
                 )
                 .await
@@ -141,7 +141,7 @@ impl BackendSourceBuildSpec {
                     self.package,
                     self.source,
                     params,
-                    self.working_directory,
+                    self.work_directory,
                     log_sink,
                 )
                 .await
@@ -154,7 +154,7 @@ impl BackendSourceBuildSpec {
         record: PackageIdentifier,
         source: PinnedSourceSpec,
         params: BackendSourceBuildV0Method,
-        working_directory: PathBuf,
+        work_directory: PathBuf,
         mut log_sink: UnboundedSender<String>,
     ) -> Result<BackendBuiltSource, CommandDispatcherError<BackendSourceBuildError>> {
         // Use the backend to build the source package.
@@ -177,7 +177,7 @@ impl BackendSourceBuildSpec {
                     variant_configuration: params
                         .variants
                         .map(|variants| variants.into_iter().collect()),
-                    work_directory: working_directory,
+                    work_directory,
                     host_platform: Some(PlatformAndVirtualPackages {
                         platform: params.build_environment.host_platform,
                         virtual_packages: Some(
