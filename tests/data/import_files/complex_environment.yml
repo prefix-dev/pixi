@@ -1,0 +1,8 @@
+name: complex-env
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - cowpy=1.1.4
+  - libblas=*=*openblas
+  - snakemake-minimal
