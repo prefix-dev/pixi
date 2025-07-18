@@ -358,6 +358,8 @@ pub(crate) enum StateChange {
     AddedCompletion(String),
     #[allow(dead_code)] // This variant is not used on Windows
     RemovedCompletion(String),
+    AddedManPage(String),
+    RemovedManPage(String),
 }
 
 #[must_use]
@@ -705,6 +707,66 @@ impl StateChanges {
                         } else {
                             eprintln!(
                                 "{}Removed completions of environment {}:",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                env_name.fancy_display()
+                            );
+                            for uninstalled_item in uninstalled_items {
+                                eprintln!("   - {}", uninstalled_item);
+                            }
+                        }
+                    }
+                    StateChange::AddedManPage(name) => {
+                        let mut installed_items = StateChanges::accumulate_changes(
+                            &mut iter,
+                            |next| match next {
+                                Some(StateChange::AddedManPage(name)) => Some(name.clone()),
+                                _ => None,
+                            },
+                            Some(name.clone()),
+                        );
+
+                        installed_items.sort();
+
+                        if installed_items.len() == 1 {
+                            eprintln!(
+                                "{}Exposed man page {} of environment {}.",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                installed_items[0],
+                                env_name.fancy_display()
+                            );
+                        } else {
+                            eprintln!(
+                                "{}Exposed man pages of environment {}:",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                env_name.fancy_display()
+                            );
+                            for installed_item in installed_items {
+                                eprintln!("   - {}", installed_item);
+                            }
+                        }
+                    }
+                    StateChange::RemovedManPage(name) => {
+                        let mut uninstalled_items = StateChanges::accumulate_changes(
+                            &mut iter,
+                            |next| match next {
+                                Some(StateChange::RemovedManPage(name)) => Some(name.clone()),
+                                _ => None,
+                            },
+                            Some(name.clone()),
+                        );
+
+                        uninstalled_items.sort();
+
+                        if uninstalled_items.len() == 1 {
+                            eprintln!(
+                                "{}Removed man page {} of environment {}.",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                uninstalled_items[0],
+                                env_name.fancy_display()
+                            );
+                        } else {
+                            eprintln!(
+                                "{}Removed man pages of environment {}:",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 env_name.fancy_display()
                             );

@@ -27,6 +27,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // Prune broken completions
         let completions_dir = crate::global::completions::CompletionsDir::from_env().await?;
         completions_dir.prune_old_completions()?;
+
+        // Prune broken man pages
+        let man_dir = crate::global::man_pages::ManDir::from_env().await?;
+        man_dir.prune_old_man_pages()?;
     }
 
     if state_change.has_changed() {
