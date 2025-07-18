@@ -3,7 +3,7 @@ use std::{cmp::Ordering, fmt, path::Path, str::FromStr};
 use console::StyledObject;
 use fancy_display::FancyDisplay;
 use indexmap::{IndexMap, IndexSet};
-use itertools::Itertools;
+use itertools::{Either, Itertools};
 use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Report};
 use pixi_consts::consts;
 use pixi_manifest::{PrioritizedChannel, toml::TomlPlatform, utils::package_map::UniquePackageMap};
@@ -344,6 +344,22 @@ impl ParsedEnvironment {
     /// Returns the channels associated with this environment.
     pub(crate) fn channels(&self) -> IndexSet<&NamedChannelOrUrl> {
         PrioritizedChannel::sort_channels_by_priority(&self.channels).collect()
+    }
+
+    /// Splits the dependencies into source and binary requirements.
+    pub(crate) fn split_into_source_and_binary_requirements(
+        &self,
+    ) -> (UniquePackageMap, UniquePackageMap) {
+        self.dependencies
+            .specs
+            .clone()
+            .into_iter()
+            .partition_map(
+                |(name, constraint)| match constraint.into_source_or_binary() {
+                    Either::Left(source) => Either::Left((name, source)),
+                    Either::Right(binary) => Either::Right((name, binary)),
+                },
+            )
     }
 }
 

@@ -6,6 +6,9 @@ use std::{
     sync::Arc,
 };
 
+use dashmap::DashMap;
+use tokio::sync::OnceCell as AsyncOnceCell;
+
 use ahash::HashSet;
 pub(crate) use environment::EnvironmentName;
 use fancy_display::FancyDisplay;
@@ -23,7 +26,8 @@ use parsed_manifest::ParsedManifest;
 pub(crate) use parsed_manifest::{ExposedName, ParsedEnvironment};
 use pixi_build_discovery::EnabledProtocols;
 use pixi_command_dispatcher::{
-    BuildEnvironment, CommandDispatcher, InstallPixiEnvironmentSpec, Limits, PixiEnvironmentSpec,
+    BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, InstallPixiEnvironmentSpec,
+    Limits, PixiEnvironmentSpec, SourceMetadata, SourceMetadataSpec,
 };
 use pixi_config::{Config, RunPostLinkScripts, default_channel_config, pixi_home};
 use pixi_consts::consts::{self};
@@ -39,7 +43,9 @@ use rattler_conda_types::{
 use rattler_lock::Matches;
 use rattler_repodata_gateway::Gateway;
 // Removed unused rattler_solve imports
-use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
+use rattler_virtual_packages::{
+    DetectVirtualPackageError, VirtualPackage, VirtualPackageOverrides,
+};
 use reqwest_middleware::ClientWithMiddleware;
 use tokio::sync::Semaphore;
 use toml_edit::DocumentMut;
@@ -104,6 +110,9 @@ pub struct Project {
     /// The command dispatcher for solving environments
     /// This is wrapped in a `OnceCell` to allow for lazy initialization.
     command_dispatcher: OnceCell<CommandDispatcher>,
+    /// Cache for source metadata per environment name
+    source_metadata_cache:
+        DashMap<EnvironmentName, DashMap<PackageName, AsyncOnceCell<Arc<SourceMetadata>>>>,
 }
 
 impl Debug for Project {
@@ -283,6 +292,7 @@ impl Project {
             repodata_gateway,
             concurrent_downloads_semaphore: OnceCell::new(),
             command_dispatcher: OnceCell::new(),
+            source_metadata_cache: DashMap::new(),
         }
     }
 
@@ -493,6 +503,27 @@ impl Project {
         self.config.global_channel_config()
     }
 
+    /// Check if the platform matches the current platform (OS)
+    /// We only need to detect virtual packages if the platform is the current one.
+    /// Otherwise, we use an empty list
+    pub(crate) fn virtual_packages_for(
+        platform: &Platform,
+    ) -> Result<Vec<GenericVirtualPackage>, DetectVirtualPackageError> {
+        if platform
+            .only_platform()
+            .map(|p| p == Platform::current().only_platform().unwrap_or(""))
+            .unwrap_or(false)
+        {
+            Ok(VirtualPackage::detect(&VirtualPackageOverrides::default())?
+                .iter()
+                .cloned()
+                .map(GenericVirtualPackage::from)
+                .collect())
+        } else {
+            Ok(vec![])
+        }
+    }
+
     pub(crate) async fn install_environment(
         &self,
         env_name: &EnvironmentName,
@@ -524,37 +555,16 @@ impl Project {
 
         let command_dispatcher = self.command_dispatcher()?;
 
-        // Check if the platform matches the current platform (OS)
-        // We only need to detect virtual packages if the platform is the current one.
-        // Otherwise, we use an empty list
-        let virtual_packages = if platform
-            .only_platform()
-            .map(|p| p == Platform::current().only_platform().unwrap_or(""))
-            .unwrap_or(false)
-        {
-            VirtualPackage::detect(&VirtualPackageOverrides::default())
-                .into_diagnostic()
-                .wrap_err_with(|| {
-                    miette::miette!(
-                        "Failed to determine virtual packages for environment {}",
-                        env_name.fancy_display()
-                    )
-                })?
-                .iter()
-                .cloned()
-                .map(GenericVirtualPackage::from)
-                .collect()
-        } else {
-            vec![]
-        };
-
-        // Create solve spec
         let channels = channels
             .into_iter()
             .map(|channel| channel.base_url.clone())
             .collect::<Vec<_>>();
 
-        let build_environment = BuildEnvironment::simple(platform, virtual_packages);
+        let build_environment = BuildEnvironment::simple(
+            platform,
+            Self::virtual_packages_for(&platform).into_diagnostic()?,
+        );
+        // Create solve spec
         let solve_spec = PixiEnvironmentSpec {
             name: Some(env_name.to_string()),
             dependencies: pixi_specs,
@@ -686,6 +696,104 @@ impl Project {
         let all_executables = find_executables_for_many_records(&prefix, prefix_records);
 
         Ok(all_executables)
+    }
+
+    pub async fn source_metadata(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<IndexMap<PackageName, Arc<SourceMetadata>>> {
+        let environment = self
+            .environment(env_name)
+            .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
+
+        let (source, _) = environment.split_into_source_and_binary_requirements();
+
+        // Get or create the environment-specific cache
+        let env_cache = self
+            .source_metadata_cache
+            .entry(env_name.clone())
+            .or_insert_with(|| DashMap::new());
+
+        let dispatch = self.command_dispatcher()?;
+        let platform = environment.platform.unwrap_or_else(Platform::current);
+
+        let channels = environment
+            .channels()
+            .into_iter()
+            .map(|channel| channel.clone().into_channel(self.global_channel_config()))
+            .collect::<Result<Vec<_>, _>>()
+            .into_diagnostic()?
+            .into_iter()
+            .map(|channel| channel.base_url)
+            .collect_vec();
+
+        let mut metadata_results = IndexMap::new();
+
+        for (name, spec) in source.specs.into_iter() {
+            // Get or create the AsyncOnceCell for this package
+            let package_cell = env_cache
+                .entry(name.clone())
+                .or_insert_with(|| AsyncOnceCell::new());
+
+            // Use get_or_try_init to ensure the metadata is only computed once
+            let metadata_result = package_cell
+                .get_or_try_init(|| async {
+                    let source = spec
+                        .try_into_source_spec()
+                        .expect("at this point this cannot be a binary spec");
+                    let source = dispatch.pin_and_checkout(source).await.into_diagnostic()?;
+
+                    let source_metadata_spec = SourceMetadataSpec {
+                        package: name.clone(),
+                        backend_metadata: BuildBackendMetadataSpec {
+                            source: source.pinned,
+                            channel_config: self.global_channel_config().clone(),
+                            channels: channels.clone(),
+                            build_environment: BuildEnvironment::simple(
+                                platform,
+                                Self::virtual_packages_for(&platform).into_diagnostic()?,
+                            ),
+                            variants: None,
+                            enabled_protocols: EnabledProtocols::default(),
+                        },
+                    };
+
+                    dispatch
+                        .source_metadata(source_metadata_spec)
+                        .await
+                        .into_diagnostic()
+                })
+                .await?;
+
+            metadata_results.insert(name, metadata_result.clone());
+        }
+
+        Ok(metadata_results)
+    }
+
+    /// Get cached source metadata for a specific environment, if available
+    pub async fn get_cached_source_metadata(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> Option<IndexMap<PackageName, Arc<SourceMetadata>>> {
+        let env_cache = self.source_metadata_cache.get(env_name)?;
+        let mut results = IndexMap::new();
+
+        for entry in env_cache.iter() {
+            let package_name = entry.key().clone();
+            let once_cell = entry.value();
+
+            // Only include packages that have been computed
+            if let Some(metadata) = once_cell.get() {
+                results.insert(package_name, metadata.clone());
+            }
+        }
+
+        if results.is_empty() {
+            None
+        } else {
+            Some(results)
+        }
     }
 
     /// Get installed executables of direct dependencies of a specific
