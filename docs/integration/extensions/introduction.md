@@ -6,7 +6,7 @@ Then it will execute it by passing any additional arguments to it.
 
 ## How Extensions Work
 
-Pixi extensions are standalone executables that follow a simple naming convention: they must be named `pixi-{command}` where `{command}` is the name of the subcommand you want to add. When you run `pixi {command}`, pixi will automatically discover and execute the corresponding `pixi-{command}` executable.
+Pixi extensions are standalone executables that follow a simple naming convention: they must be named `pixi-{command}` where `{command}` is the name of the subcommand you want to add. When you run `pixi {command}`, Pixi will automatically discover and execute the corresponding `pixi-{command}` executable.
 
 For example:
 - `pixi diff` → looks for `pixi-diff` executable
@@ -29,19 +29,19 @@ When you run `pixi --help`, all discovered extensions are automatically listed i
 
 ### Using Pixi Global (Recommended)
 
-The easiest way to install pixi extensions is using `pixi global install`:
+The easiest way to install Pixi extensions is using `pixi global install`:
 
 ```bash
 # Install a single extension
 pixi global install pixi-pack
 
 # Install multiple extensions at once
-pixi global install pixi-pack pixi-diff rattler-build
+pixi global install pixi-pack pixi-diff
 ```
 
 This approach has several advantages:
 - **Isolated environments**: Each extension gets its own environment, preventing dependency conflicts
-- **Automatic discovery**: Extensions are automatically found by pixi without modifying PATH
+- **Automatic discovery**: Extensions are automatically found by Pixi without modifying PATH
 - **Easy management**: Use `pixi global list` and `pixi global remove` to manage extensions
 - **Consistent experience**: Extensions appear in `pixi --help` just like built-in commands
 
@@ -89,11 +89,11 @@ Usage: `pixi hello Alice` outputs `Hello, Alice!`
 - **Use standard argument parsing**: Libraries like `clap` (Rust) or `argparse` (Python) provide consistent behavior
 - **Support `--help`**: Users expect this standard flag
 - **Follow UNIX conventions**: Use exit code 0 for success, non-zero for errors
-- **Work with pixi environments**: Extensions should respect pixi's environment management
+- **Work with Pixi environments**: Extensions should respect Pixi's environment management
 
 ## Command Suggestions
 
-Pixi includes intelligent command suggestions powered by string similarity. If you mistype a command name, pixi will suggest the closest match from both built-in commands and available extensions:
+Pixi includes intelligent command suggestions powered by string similarity. If you mistype a command name, Pixi will suggest the closest match from both built-in commands and available extensions:
 
 ```bash
 $ pixi pck
@@ -106,7 +106,7 @@ This works for both built-in commands and any extensions you have installed, mak
 ## Getting Help
 
 - **List available extensions**: Run `pixi --help` to see all available extensions
-- **Community**: Join the [pixi Discord](https://discord.gg/kKV8ZxyzY4) for discussions and support
+- **Community**: Join our [Discord](https://discord.gg/kKV8ZxyzY4) for discussions and support
 
 ## See Also
 
