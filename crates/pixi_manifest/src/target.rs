@@ -172,6 +172,27 @@ impl WorkspaceTarget {
         Ok(true)
     }
 
+    /// Adds activation.env to a target
+    pub fn add_activation_env(
+        &mut self,
+        env: HashMap<String, String>,
+    ) -> Result<bool, DependencyError> {
+        let mut env_map: IndexMap<String, String> = env.into_iter().collect();
+
+        if let Some(activation) = &self.activation {
+            if let Some(existing_env) = &activation.env {
+                env_map.extend(existing_env.clone());
+            }
+        }
+
+        self.activation.insert(Activation {
+            scripts: None,
+            env: Some(env_map),
+        });
+
+        Ok(true)
+    }
+
     /// Checks if this target contains a specific pypi dependency
     pub fn has_pypi_dependency(&self, requirement: &pep508_rs::Requirement, exact: bool) -> bool {
         let current_requirement = self
