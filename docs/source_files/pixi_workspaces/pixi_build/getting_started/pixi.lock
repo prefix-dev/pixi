@@ -729,7 +729,7 @@ packages:
   - rich 13.9.*
   - python
   input:
-    hash: 59c64633228bda74cb147f1415c99d4827e2edb7883520555569262724396c3a
+    hash: caed070f36e08e1cd2cd126bdd8b0f46c080e248f6d8b2ee62ae97cb218066bc
     globs: []
 - conda: ./recipe_by_file/recipe.yaml
   name: python_rich_by_file
