@@ -1,7 +1,4 @@
-use std::{
-    collections::{BTreeMap, HashSet},
-    sync::Arc,
-};
+use std::{collections::HashSet, sync::Arc};
 
 use async_once_cell::OnceCell as AsyncOnceCell;
 use miette::IntoDiagnostic;
@@ -20,6 +17,7 @@ use super::{
 use crate::{
     environment::PythonStatus,
     prefix::Prefix,
+    variants::VariantConfig,
     workspace::{
         HasWorkspaceRef,
         grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
@@ -46,7 +44,7 @@ pub struct CondaPrefixUpdaterInner {
     pub prefix: Prefix,
     pub platform: Platform,
     pub virtual_packages: Vec<GenericVirtualPackage>,
-    pub variant_config: BTreeMap<String, Vec<String>>,
+    pub variant_config: VariantConfig,
     pub command_dispatcher: CommandDispatcher,
 
     /// A flag that indicates if the prefix was created.
@@ -115,7 +113,7 @@ impl CondaPrefixUpdater {
         prefix: Prefix,
         platform: Platform,
         virtual_packages: Vec<GenericVirtualPackage>,
-        variant_config: BTreeMap<String, Vec<String>>,
+        variant_config: VariantConfig,
         command_dispatcher: CommandDispatcher,
     ) -> Self {
         Self {
@@ -186,7 +184,7 @@ pub async fn update_prefix_conda(
     channel_config: ChannelConfig,
     host_platform: Platform,
     host_virtual_packages: Vec<GenericVirtualPackage>,
-    variant_config: BTreeMap<String, Vec<String>>,
+    variant_config: VariantConfig,
     command_dispatcher: CommandDispatcher,
     reinstall_packages: Option<HashSet<PackageName>>,
 ) -> miette::Result<PythonStatus> {

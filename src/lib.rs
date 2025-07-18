@@ -17,5 +17,7 @@ mod reporters;
 
 mod rlimit;
 mod uv_reporter;
+pub mod variants;
+
 pub use lock_file::UpdateLockFileOptions;
 pub use workspace::{DependencyType, Workspace, WorkspaceLocator};

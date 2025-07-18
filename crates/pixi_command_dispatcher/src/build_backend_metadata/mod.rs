@@ -17,12 +17,11 @@ use rand::random;
 use rattler_conda_types::{ChannelConfig, ChannelUrl};
 use thiserror::Error;
 
-use crate::build::SourceRecordOrCheckout;
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
     InstantiateBackendError, InstantiateBackendSpec, SourceCheckout, SourceCheckoutError,
     build::{
-        WorkDirKey,
+        SourceRecordOrCheckout, WorkDirKey,
         source_metadata_cache::{self, CachedCondaMetadata, MetadataKind, SourceMetadataKey},
     },
 };
@@ -334,27 +333,28 @@ impl BuildBackendMetadataSpec {
         input_globs: BTreeSet<String>,
         project_model_hash: Option<Vec<u8>>,
     ) -> Result<Option<InputHash>, CommandDispatcherError<BuildBackendMetadataError>> {
-        let input_hash = if source.pinned.is_immutable() {
-            None
-        } else {
-            // Compute the input hash based on the manifest path and the input globs.
-            let input_hash = command_queue
-                .glob_hash_cache()
-                .compute_hash(GlobHashKey::new(
-                    &source.path,
-                    input_globs.clone(),
-                    project_model_hash,
-                ))
-                .await
-                .map_err(BuildBackendMetadataError::GlobHash)
-                .map_err(CommandDispatcherError::Failed)?;
+        if source.pinned.is_immutable() {
+            // If the source is immutable (e.g., a git commit), we do not need to compute an
+            // input hash because the contents of the source are fixed.
+            return Ok(None);
+        }
 
-            Some(InputHash {
-                hash: input_hash.hash,
-                globs: input_globs,
-            })
-        };
-        Ok(input_hash)
+        // Compute the input hash based on the manifest path and the input globs.
+        let input_hash = command_queue
+            .glob_hash_cache()
+            .compute_hash(GlobHashKey::new(
+                &source.path,
+                input_globs.clone(),
+                project_model_hash,
+            ))
+            .await
+            .map_err(BuildBackendMetadataError::GlobHash)
+            .map_err(CommandDispatcherError::Failed)?;
+
+        Ok(Some(InputHash {
+            hash: input_hash.hash,
+            globs: input_globs,
+        }))
     }
 
     /// Computes the cache key for this instance

@@ -11,7 +11,7 @@ mod workspace_mut;
 #[cfg(not(windows))]
 use std::os::unix::fs::symlink;
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     fmt::{Debug, Formatter},
     hash::Hash,
     path::{Path, PathBuf},
@@ -58,6 +58,7 @@ use crate::{
     diff::LockFileDiff,
     lock_file::filter_lock_file,
     repodata::Repodata,
+    variants::VariantConfig,
 };
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
@@ -465,8 +466,8 @@ impl Workspace {
     }
 
     /// Returns the resolved variant configuration for a given platform.
-    pub fn variants(&self, platform: Platform) -> BTreeMap<String, Vec<String>> {
-        let mut result = BTreeMap::new();
+    pub fn variants(&self, platform: Platform) -> VariantConfig {
+        let mut result = VariantConfig::new();
 
         // Resolves from most specific to least specific.
         for variants in self

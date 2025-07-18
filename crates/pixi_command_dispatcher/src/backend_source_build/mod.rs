@@ -184,7 +184,7 @@ impl BackendSourceBuildSpec {
                             params.build_environment.host_virtual_packages.clone(),
                         ),
                     }),
-                    editable: !source.is_immutable(),
+                    editable: source.is_mutable(),
                 },
                 move |line| {
                     let _err = futures::executor::block_on(log_sink.send(line));
@@ -254,7 +254,7 @@ impl BackendSourceBuildSpec {
         record: PackageIdentifier,
         source: PinnedSourceSpec,
         params: BackendSourceBuildV1Method,
-        working_directory: PathBuf,
+        work_directory: PathBuf,
         mut log_sink: UnboundedSender<String>,
     ) -> Result<BackendBuiltSource, CommandDispatcherError<BackendSourceBuildError>> {
         let built_package = backend
@@ -278,9 +278,9 @@ impl BackendSourceBuildSpec {
                             .expect("found a package record with an unparsable subdir"),
                         variant: params.variant,
                     },
-                    work_directory: working_directory,
+                    work_directory,
                     output_directory: params.output_directory,
-                    editable: Some(!source.is_immutable()),
+                    editable: Some(source.is_mutable()),
                 },
                 move |line| {
                     let _err = futures::executor::block_on(log_sink.send(line));
