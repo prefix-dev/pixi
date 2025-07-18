@@ -3,6 +3,7 @@ use std::{
     collections::HashMap,
     ffi::OsString,
     fmt::{Display, Formatter},
+    io::Write,
     path::PathBuf,
 };
 
@@ -49,6 +50,9 @@ pub enum FailedToParseShellScript {
     #[error(transparent)]
     #[diagnostic(transparent)]
     ArgumentReplacement(#[from] TemplateStringError),
+
+    #[error("failed to create temporary file for interpreter")]
+    TempFileCreation(#[from] std::io::Error),
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -151,15 +155,10 @@ impl<'p> ExecutableTask<'p> {
 
             // Handle interpreter mode
             if let Some(interpreter) = self.task().interpreter() {
-                use std::io::Write;
-
                 // Create a temporary file to store the script
-                let mut temp_file =
-                    tempfile::NamedTempFile::new().expect("Failed to create temporary file");
-                temp_file
-                    .write_all(task.as_bytes())
-                    .expect("Failed to write script to temporary file");
-                temp_file.flush().expect("Failed to flush temporary file");
+                let mut temp_file = tempfile::NamedTempFile::new()?;
+                temp_file.write_all(task.as_bytes())?;
+                temp_file.flush()?;
 
                 // Get the temporary file path
                 let temp_path = temp_file.path().to_string_lossy().to_string();
@@ -172,7 +171,7 @@ impl<'p> ExecutableTask<'p> {
                 };
 
                 // Keep temp file alive
-                let _ = temp_file.keep().expect("Failed to persist temporary file");
+                let _ = temp_file.keep();
 
                 // Build final command with freeargs
                 let full_script = if export.is_empty() {

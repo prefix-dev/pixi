@@ -106,7 +106,7 @@ pub struct AddArgs {
     #[arg(long = "arg", action = clap::ArgAction::Append)]
     pub args: Option<Vec<TaskArg>>,
 
-    /// The interpreter to use for executing the command (e.g., "bash", "sh", "nu")
+    /// The interpreter to use for executing the command (e.g., "bash", "sh", "nu", "python {0}")
     #[arg(long)]
     pub interpreter: Option<String>,
 }
