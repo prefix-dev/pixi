@@ -10,7 +10,10 @@ use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_manifest::{
     EnvironmentName, Task, TaskName,
-    task::{ArgValues, CmdArgs, Custom, TaskArg, TemplateStringError, TypedArg, TypedDependency},
+    task::{
+        ArgValues, CmdArgs, Custom, TaskArg, TemplateStringError, TypedArg, TypedDependency,
+        TypedDependencyArg,
+    },
 };
 use thiserror::Error;
 
@@ -32,7 +35,11 @@ pub struct TaskId(usize);
 
 /// A dependency is a task name and a list of arguments along with the environment to run the task in.
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord)]
-pub struct GraphDependency(TaskId, Option<Vec<String>>, Option<EnvironmentName>);
+pub struct GraphDependency(
+    TaskId,
+    Option<Vec<TypedDependencyArg>>,
+    Option<EnvironmentName>,
+);
 
 impl GraphDependency {
     pub fn task_id(&self) -> TaskId {
@@ -208,10 +215,15 @@ impl<'p> TaskGraph<'p> {
                             return Err(TaskGraphError::TooManyArguments(task_name.to_string()));
                         }
 
+                        let typed_dep_args = args
+                            .iter()
+                            .map(|a| TypedDependencyArg::Positional(a.to_string()))
+                            .collect();
+
                         Some(Self::merge_args(
                             &TaskName::from(task_name.clone()),
                             Some(&task_arguments.to_vec()),
-                            Some(&args),
+                            Some(&typed_dep_args),
                         )?)
                     } else {
                         Some(ArgValues::FreeFormArgs(args.clone()))
@@ -240,7 +252,11 @@ impl<'p> TaskGraph<'p> {
                             args: arg_values,
                             dependencies: vec![],
                         },
-                        Some(args),
+                        Some(
+                            args.iter()
+                                .map(|a| TypedDependencyArg::Positional(a.clone()))
+                                .collect(),
+                        ),
                     );
                 }
             }
@@ -292,7 +308,7 @@ impl<'p> TaskGraph<'p> {
         project: &'p Workspace,
         search_environments: &SearchEnvironments<'p, D>,
         root: TaskNode<'p>,
-        root_args: Option<Vec<String>>,
+        root_args: Option<Vec<TypedDependencyArg>>,
     ) -> Result<Self, TaskGraphError> {
         let mut task_name_with_args_to_node: HashMap<TypedDependency, TaskId> =
             HashMap::from_iter(root.name.clone().into_iter().map(|name| {
@@ -400,35 +416,86 @@ impl<'p> TaskGraph<'p> {
     fn merge_args(
         task_name: &TaskName,
         task_arguments: Option<&Vec<TaskArg>>,
-        arg_values: Option<&Vec<String>>,
+        dep_args: Option<&Vec<TypedDependencyArg>>,
     ) -> Result<ArgValues, TaskGraphError> {
         let task_arguments = match task_arguments {
             Some(args) => args,
             None => &Vec::new(),
         };
 
-        let arg_values = match arg_values {
-            Some(values) => values,
+        let task_arg_names: Vec<String> = task_arguments
+            .iter()
+            .map(|arg| arg.name.as_str().to_owned())
+            .collect();
+
+        let dep_args = match dep_args {
+            Some(args) => args,
             None => &Vec::new(),
         };
+
+        let mut named_args = Vec::new();
+        let mut seen_named = false;
+
+        // build up vec of named args whilst validating that all named args are valid for this task,
+        // and that all positional args precede any named args
+        for arg in dep_args {
+            match arg {
+                TypedDependencyArg::Named(name, value) => {
+                    if !task_arg_names.contains(name) {
+                        // TODO: make an error variant for this
+                        return Err(TaskGraphError::TooManyArguments(format!(
+                            "named argument '{}' does not exist for task {}",
+                            name, task_name
+                        )));
+                    }
+                    seen_named = true;
+                    named_args.push((name.to_string(), value.to_string()));
+                }
+                _ => {
+                    if seen_named {
+                        // TODO: make an error variant for this
+                        return Err(TaskGraphError::TooManyArguments(
+                            "Positional argument found after named argument".into(),
+                        ));
+                    }
+                }
+            }
+        }
 
         let mut typed_args = Vec::with_capacity(task_arguments.len());
 
         for (i, arg) in task_arguments.iter().enumerate() {
-            let value = if i < arg_values.len() {
-                arg_values[i].clone()
+            let arg_name = arg.name.as_str();
+            let arg_value = if let Some((_n, v)) = named_args.iter().find(|(n, _v)| n == arg_name) {
+                // a matching named arg was specified
+                v.to_string()
+            } else if i < dep_args.len() {
+                // check for a positional arg, or a default value, or error
+                match &dep_args[i] {
+                    TypedDependencyArg::Positional(v) => v.clone(),
+                    _ => {
+                        if let Some(default) = &arg.default {
+                            default.clone()
+                        } else {
+                            return Err(TaskGraphError::MissingArgument(
+                                arg_name.to_string(),
+                                task_name.to_string(),
+                            ));
+                        }
+                    }
+                }
             } else if let Some(default) = &arg.default {
                 default.clone()
             } else {
                 return Err(TaskGraphError::MissingArgument(
-                    arg.name.as_str().to_owned(),
+                    arg_name.to_owned(),
                     task_name.to_string(),
                 ));
             };
 
             typed_args.push(TypedArg {
-                name: arg.name.as_str().to_owned(),
-                value,
+                name: arg_name.to_owned(),
+                value: arg_value,
             });
         }
 

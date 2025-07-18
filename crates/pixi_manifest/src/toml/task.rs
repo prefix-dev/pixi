@@ -9,7 +9,10 @@ use toml_span::{
 
 use crate::{
     EnvironmentName, Task, TaskName, WithWarnings,
-    task::{Alias, ArgName, CmdArgs, Dependency, Execute, GlobPatterns, TaskArg, TemplateString},
+    task::{
+        Alias, ArgName, CmdArgs, Dependency, DependencyArg, Execute, GlobPatterns, TaskArg,
+        TemplateString,
+    },
     warning::Deprecation,
 };
 
@@ -71,6 +74,35 @@ impl<'de> toml_span::Deserialize<'de> for TaskArg {
 /// A task defined in the manifest.
 pub type TomlTask = WithWarnings<Task>;
 
+impl<'de> toml_span::Deserialize<'de> for DependencyArg {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        match value.take() {
+            ValueInner::String(s) => Ok(DependencyArg::Positional(TemplateString::new(
+                s.into_owned(),
+            ))),
+            ValueInner::Table(table) => {
+                if table.len() != 1 {
+                    return Err(DeserError::from(toml_span::Error {
+                        kind: ErrorKind::Custom(
+                            "expected exactly one key in named argument".into(),
+                        ),
+                        span: value.span,
+                        line_info: None,
+                    }));
+                }
+
+                let (k, mut v) = table.into_iter().next().unwrap();
+                let inner = v.take_string(None)?;
+                Ok(DependencyArg::Named(
+                    k.to_string(),
+                    TemplateString::new(inner.into_owned()),
+                ))
+            }
+            other => Err(expected("string or {string = string}", other, value.span).into()),
+        }
+    }
+}
+
 impl<'de> toml_span::Deserialize<'de> for TomlTask {
     fn deserialize(value: &mut toml_span::Value<'de>) -> Result<Self, DeserError> {
         let mut th = match value.take() {
@@ -83,7 +115,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                         ValueInner::Table(table) => {
                             let mut th = TableHelper::from((table, item.span));
                             let name = th.required::<String>("task")?;
-                            let args = th.optional::<Vec<TemplateString>>("args");
+                            let args = th.optional::<Vec<DependencyArg>>("args");
                             let environment = th
                                 .optional::<TomlFromStr<EnvironmentName>>("environment")
                                 .map(TomlFromStr::into_inner);
@@ -121,7 +153,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                                 ValueInner::Table(table) => {
                                     let mut th = TableHelper::from((table, span));
                                     let name = th.required::<String>("task")?;
-                                    let args = th.optional::<Vec<TemplateString>>("args");
+                                    let args = th.optional::<Vec<DependencyArg>>("args");
                                     let environment = th
                                         .optional::<TomlFromStr<EnvironmentName>>("environment")
                                         .map(TomlFromStr::into_inner);
@@ -158,7 +190,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                                 ValueInner::Table(table) => {
                                     let mut th = TableHelper::from((table, span));
                                     let name = th.required::<String>("task")?;
-                                    let args = th.optional::<Vec<TemplateString>>("args");
+                                    let args = th.optional::<Vec<DependencyArg>>("args");
                                     let environment = th
                                         .optional::<TomlFromStr<EnvironmentName>>("environment")
                                         .map(TomlFromStr::into_inner);
