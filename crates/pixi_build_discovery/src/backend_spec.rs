@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use pixi_spec::BinarySpec;
+use pixi_spec::{BinarySpec, PixiSpec};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{Channel, ChannelConfig, ChannelUrl};
 use url::Url;
@@ -55,14 +55,14 @@ pub struct SystemCommandSpec {
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub struct EnvironmentSpec {
     /// The main requirement
-    pub requirement: (rattler_conda_types::PackageName, BinarySpec),
+    pub requirement: (rattler_conda_types::PackageName, PixiSpec),
 
     /// The requirements for the environment.
     #[cfg_attr(
         feature = "serde",
         serde(skip_serializing_if = "DependencyMap::is_empty")
     )]
-    pub additional_requirements: DependencyMap<rattler_conda_types::PackageName, BinarySpec>,
+    pub additional_requirements: DependencyMap<rattler_conda_types::PackageName, PixiSpec>,
 
     /// Additional constraints to apply to the environment
     #[cfg_attr(
@@ -93,7 +93,7 @@ impl JsonRpcBackendSpec {
         Self {
             name: DEFAULT_BUILD_TOOL.to_string(),
             command: CommandSpec::EnvironmentSpec(Box::new(EnvironmentSpec {
-                requirement: (DEFAULT_BUILD_TOOL.parse().unwrap(), BinarySpec::any()),
+                requirement: (DEFAULT_BUILD_TOOL.parse().unwrap(), PixiSpec::any()),
                 additional_requirements: Default::default(),
                 constraints: Default::default(),
                 channels: vec![conda_forge_channel, backends_channel],
