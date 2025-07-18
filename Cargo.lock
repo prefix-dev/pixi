@@ -4274,7 +4274,6 @@ dependencies = [
  "pixi_build_discovery",
  "pixi_build_frontend",
  "pixi_build_type_conversions",
- "pixi_build_types",
  "pixi_command_dispatcher",
  "pixi_config",
  "pixi_consts",

@@ -7,7 +7,7 @@ use miette::Diagnostic;
 use pixi_build_discovery::{DiscoveredBackend, EnabledProtocols};
 use pixi_build_frontend::Backend;
 use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
-use pixi_record::{PixiRecord, SourceRecord};
+use pixi_record::{PinnedSourceSpec, PixiRecord};
 use pixi_spec::{SourceAnchor, SourceSpec};
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, InvalidPackageNameError, Platform, prefix::Prefix,
@@ -22,7 +22,10 @@ use crate::{
     CommandDispatcherErrorResultExt, InstallPixiEnvironmentError, InstallPixiEnvironmentSpec,
     InstantiateBackendError, InstantiateBackendSpec, PixiEnvironmentSpec,
     SolvePixiEnvironmentError, SourceCheckout, SourceCheckoutError,
-    build::{Dependencies, DependenciesError, WorkDirKey},
+    build::{
+        Dependencies, DependenciesError, MoveError, SourceRecordOrCheckout, WorkDirKey, move_file,
+    },
+    package_identifier::PackageIdentifier,
 };
 
 /// Describes all parameters required to build a conda package from a pixi
@@ -35,8 +38,11 @@ use crate::{
 /// be done serially.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct SourceBuildSpec {
-    /// The source specification
-    pub source: SourceRecord,
+    /// The source to build
+    pub package: PackageIdentifier,
+
+    /// The location of the source code to build.
+    pub source: PinnedSourceSpec,
 
     /// The channel configuration to use when resolving metadata
     pub channel_config: ChannelConfig,
@@ -56,9 +62,15 @@ pub struct SourceBuildSpec {
     /// Variant configuration
     pub variants: Option<BTreeMap<String, Vec<String>>>,
 
-    /// The directory where to place the built package. This is used as a hint
-    /// for the backend, it may still place the package elsewhere.
+    /// The directory where to place the built package.
     pub output_directory: Option<PathBuf>,
+
+    /// The working directory to use for the build. If this is `None` a
+    /// deterministic workspace local directory will be used.
+    pub work_directory: Option<PathBuf>,
+
+    /// Whether the build directory should be cleared before building.
+    pub clean: bool,
 
     /// The protocols that are enabled for this source
     #[serde(skip_serializing_if = "crate::is_default")]
@@ -79,20 +91,20 @@ pub struct BuiltSource {
 
 impl SourceBuildSpec {
     #[instrument(skip_all, fields(
-        source = %self.source.source,
-        subdir = %self.source.package_record.subdir,
-        name = %self.source.package_record.name.as_normalized(),
-        version = %self.source.package_record.version,
-        build = %self.source.package_record.build))]
+        source = %self.source,
+        subdir = %self.package.subdir,
+        name = %self.package.name.as_normalized(),
+        version = %self.package.version,
+        build = %self.package.build))]
     pub(crate) async fn build(
-        self,
+        mut self,
         command_dispatcher: CommandDispatcher,
     ) -> Result<BuiltSource, CommandDispatcherError<SourceBuildError>> {
-        tracing::debug!("Building package for source spec: {}", self.source.source);
+        tracing::debug!("Building package for source spec: {}", self.source);
 
         // Check out the source code.
         let source_checkout = command_dispatcher
-            .checkout_pinned_source(self.source.source.clone())
+            .checkout_pinned_source(self.source.clone())
             .await
             .map_err_with(SourceBuildError::SourceCheckout)?;
 
@@ -116,34 +128,110 @@ impl SourceBuildSpec {
             .await
             .map_err_with(SourceBuildError::Initialize)?;
 
-        if backend.capabilities().provides_conda_build_v1() {
-            let built_package = self.build_v1(command_dispatcher, backend).await?;
+        // Determine the working directory for the build.
+        let work_directory = match std::mem::take(&mut self.work_directory) {
+            Some(work_directory) => work_directory,
+            None => command_dispatcher.cache_dirs().working_dirs().join(
+                WorkDirKey {
+                    source: SourceRecordOrCheckout::Record {
+                        pinned: self.source.clone(),
+                        package_name: self.package.name.clone(),
+                    },
+                    host_platform: self.build_environment.host_platform,
+                    build_backend: backend.identifier().to_string(),
+                }
+                .key(),
+            ),
+        };
 
-            Ok(BuiltSource {
-                source: source_checkout,
-                input_globs: built_package.input_globs,
-                output_file: built_package.output_file,
-            })
-        } else {
-            let built_package = self.build_v0(command_dispatcher, backend).await?;
-
-            Ok(BuiltSource {
-                source: source_checkout,
-                input_globs: built_package.input_globs,
-                output_file: built_package.output_file,
-            })
+        // Clean the working directory if requested.
+        if self.clean {
+            if let Err(err) = fs_err::remove_dir_all(&work_directory) {
+                return Err(CommandDispatcherError::Failed(
+                    SourceBuildError::CleanWorkingDirectory(work_directory, err),
+                ));
+            }
         }
+
+        // Build the package based on the support backend capabilities.
+        let output_directory = self.output_directory.clone();
+        let mut built_source = if backend.capabilities().provides_conda_build_v1() {
+            let built_package = self
+                .build_v1(command_dispatcher, backend, work_directory)
+                .await?;
+
+            BuiltSource {
+                source: source_checkout,
+                input_globs: built_package.input_globs,
+                output_file: built_package.output_file,
+            }
+        } else {
+            let built_package = self
+                .build_v0(command_dispatcher, backend, work_directory)
+                .await?;
+
+            BuiltSource {
+                source: source_checkout,
+                input_globs: built_package.input_globs,
+                output_file: built_package.output_file,
+            }
+        };
+
+        // Make sure the package resides in the output directory that was requested.
+        if let Some(output_directory) = output_directory {
+            // Create the output directory if it does not exist.
+            fs_err::create_dir_all(&output_directory).map_err(|err| {
+                CommandDispatcherError::Failed(SourceBuildError::CreateOutputDirectory(err))
+            })?;
+
+            // At this point, the directory should exist, so we can canonicalize the path.
+            let output_directory = fs_err::canonicalize(&output_directory)
+                .map_err(CommandDispatcherError::Failed)
+                .map_err_with(SourceBuildError::CreateOutputDirectory)?;
+
+            // The output file should also exist.
+            let output_file = match fs_err::canonicalize(&built_source.output_file) {
+                Ok(output_file) => output_file,
+                Err(_err) => {
+                    return Err(CommandDispatcherError::Failed(
+                        SourceBuildError::MissingOutputFile(built_source.output_file),
+                    ));
+                }
+            };
+
+            if output_file.parent() != Some(&output_directory) {
+                // Take the file name of the file and move it to the output directory.
+                let file_name = built_source
+                    .output_file
+                    .file_name()
+                    .expect("the build backend did not return a file name");
+                let destination = output_directory.join(file_name);
+                if let Err(err) = move_file(&output_file, &destination) {
+                    return Err(CommandDispatcherError::Failed(SourceBuildError::Move(
+                        output_file,
+                        output_directory,
+                        err,
+                    )));
+                }
+                built_source.output_file = destination;
+            }
+        }
+
+        Ok(built_source)
     }
 
     async fn build_v0(
         self,
         command_dispatcher: CommandDispatcher,
         backend: Backend,
+        work_directory: PathBuf,
     ) -> Result<BackendBuiltSource, CommandDispatcherError<SourceBuildError>> {
         command_dispatcher
             .backend_source_build(BackendSourceBuildSpec {
                 backend,
-                record: self.source,
+                package: self.package,
+                source: self.source,
+                work_directory,
                 method: BackendSourceBuildMethod::BuildV0(BackendSourceBuildV0Method {
                     channel_config: self.channel_config,
                     channels: self.channels,
@@ -160,20 +248,11 @@ impl SourceBuildSpec {
         self,
         command_dispatcher: CommandDispatcher,
         backend: Backend,
+        work_directory: PathBuf,
     ) -> Result<BackendBuiltSource, CommandDispatcherError<SourceBuildError>> {
-        let source_anchor = SourceAnchor::from(SourceSpec::from(self.source.source.clone()));
+        let source_anchor = SourceAnchor::from(SourceSpec::from(self.source.clone()));
         let host_platform = self.build_environment.host_platform;
         let build_platform = self.build_environment.build_platform;
-
-        // Determine the working directory for the build.
-        let work_directory = command_dispatcher.cache_dirs().working_dirs().join(
-            WorkDirKey {
-                source: Box::new(self.source.clone()).into(),
-                host_platform,
-                build_backend: backend.identifier().to_string(),
-            }
-            .key(),
-        );
 
         // Request the metadata from the backend.
         // TODO: Can we somehow cache this metadata?
@@ -194,17 +273,17 @@ impl SourceBuildSpec {
             .outputs
             .into_iter()
             .find(|output| {
-                output.metadata.name == self.source.package_record.name
-                    && output.metadata.version == self.source.package_record.version
-                    && output.metadata.build == self.source.package_record.build
-                    && output.metadata.subdir.as_str() == self.source.package_record.subdir
+                output.metadata.name == self.package.name
+                    && output.metadata.version == self.package.version
+                    && output.metadata.build == self.package.build
+                    && output.metadata.subdir.as_str() == self.package.subdir
             })
             .ok_or_else(|| {
                 CommandDispatcherError::Failed(SourceBuildError::MissingOutput {
-                    subdir: self.source.package_record.subdir.clone(),
-                    name: self.source.package_record.name.as_normalized().to_string(),
-                    version: self.source.package_record.version.to_string(),
-                    build: self.source.package_record.build.clone(),
+                    subdir: self.package.subdir.clone(),
+                    name: self.package.name.as_normalized().to_string(),
+                    version: self.package.version.to_string(),
+                    build: self.package.build.clone(),
                 })
             })?;
 
@@ -222,7 +301,7 @@ impl SourceBuildSpec {
             .unwrap_or_default();
         let build_records = self
             .solve_dependencies(
-                format!("{} (build)", self.source.package_record.name.as_source()),
+                format!("{} (build)", self.package.name.as_source()),
                 &command_dispatcher,
                 build_dependencies.clone(),
                 self.build_environment.to_build_from_build(),
@@ -246,7 +325,7 @@ impl SourceBuildSpec {
             .extend_with_run_exports_from_build(&build_run_exports);
         let host_records = self
             .solve_dependencies(
-                format!("{} (host)", self.source.package_record.name.as_source()),
+                format!("{} (host)", self.package.name.as_source()),
                 &command_dispatcher,
                 host_dependencies.clone(),
                 self.build_environment.clone(),
@@ -258,7 +337,7 @@ impl SourceBuildSpec {
         // Install the build environment
         let _build_prefix = command_dispatcher
             .install_pixi_environment(InstallPixiEnvironmentSpec {
-                name: format!("{} (build)", self.source.package_record.name.as_source()),
+                name: format!("{} (build)", self.package.name.as_source()),
                 records: build_records,
                 prefix: Prefix::create(&directories.build_prefix)
                     .map_err(SourceBuildError::CreateBuildEnvironmentDirectory)
@@ -278,7 +357,7 @@ impl SourceBuildSpec {
         // Install the host environment.
         let _host_prefix = command_dispatcher
             .install_pixi_environment(InstallPixiEnvironmentSpec {
-                name: format!("{} (host)", self.source.package_record.name.as_source()),
+                name: format!("{} (host)", self.package.name.as_source()),
                 records: host_records,
                 prefix: Prefix::create(&directories.host_prefix)
                     .map_err(SourceBuildError::CreateBuildEnvironmentDirectory)
@@ -298,7 +377,9 @@ impl SourceBuildSpec {
         command_dispatcher
             .backend_source_build(BackendSourceBuildSpec {
                 backend,
-                record: self.source,
+                package: self.package,
+                source: self.source,
+                work_directory,
                 method: BackendSourceBuildMethod::BuildV1(BackendSourceBuildV1Method {
                     build_prefix: BackendSourceBuildPrefix {
                         platform: self.build_environment.build_platform,
@@ -351,14 +432,14 @@ pub struct Directories {
 }
 
 impl Directories {
-    pub fn new(working_directory: &Path, host_platform: Platform) -> Self {
+    pub fn new(work_directory: &Path, host_platform: Platform) -> Self {
         const BUILD_DIR: &str = "bld";
         const HOST_ENV_DIR: &str = "host";
         const PLACEHOLDER_TEMPLATE_STR: &str = "_placehold";
 
-        let build_prefix = working_directory.join(BUILD_DIR);
+        let build_prefix = work_directory.join(BUILD_DIR);
         let host_prefix = if host_platform.is_windows() {
-            working_directory.join(HOST_ENV_DIR)
+            work_directory.join(HOST_ENV_DIR)
         } else {
             // On non-Windows platforms, the name of the host environment has to be exactly
             // 255 characters long for prefix replacement in rattler build to work
@@ -373,10 +454,10 @@ impl Directories {
                 placeholder.push_str(PLACEHOLDER_TEMPLATE_STR);
             }
             let placeholder = placeholder
-                [0..PLACEHOLDER_LENGTH - working_directory.join(HOST_ENV_DIR).as_os_str().len()]
+                [0..PLACEHOLDER_LENGTH - work_directory.join(HOST_ENV_DIR).as_os_str().len()]
                 .to_string();
 
-            working_directory.join(format!("{HOST_ENV_DIR}{}", placeholder))
+            work_directory.join(format!("{HOST_ENV_DIR}{}", placeholder))
         };
         Self {
             host_prefix,
@@ -435,12 +516,26 @@ pub enum SourceBuildError {
         build: String,
     },
 
+    #[error(
+        "The build backend returned a path for the build package ({0}), but the path does not exist."
+    )]
+    MissingOutputFile(PathBuf),
+
     #[error("backend returned a dependency on an invalid package name: {0}")]
     InvalidPackageName(String, #[source] InvalidPackageNameError),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
     BackendBuildError(#[from] BackendSourceBuildError),
+
+    #[error("failed to clean the working directory: {0}")]
+    CleanWorkingDirectory(PathBuf, #[source] std::io::Error),
+
+    #[error("moving the built package from {0} to the output directory {1} failed")]
+    Move(PathBuf, PathBuf, #[source] MoveError),
+
+    #[error("failed to create the output directory")]
+    CreateOutputDirectory(#[source] std::io::Error),
 }
 
 impl From<DependenciesError> for SourceBuildError {

@@ -110,6 +110,13 @@ impl PinnedSourceSpec {
         !matches!(self, PinnedSourceSpec::Path(_))
     }
 
+    /// Returns true if the pinned source may change even if the pinned source
+    /// itself does not. This indicates that the contents of this instance may
+    /// change over time, such as a local path.
+    pub fn is_mutable(&self) -> bool {
+        matches!(self, PinnedSourceSpec::Path(_))
+    }
+
     /// Returns a URL that uniquely identifies this path spec. This URL is not
     /// portable, e.g. it might result in a different URL on different systems.
     pub fn identifiable_url(&self) -> Url {

@@ -1,3 +1,25 @@
+use super::{
+    CondaPrefixUpdater, PixiRecordsByName, PypiRecordsByName, UvResolutionContext,
+    outdated::OutdatedEnvironments, utils::IoConcurrencyLimit,
+};
+use crate::{
+    Workspace,
+    activation::CurrentEnvVarBehavior,
+    environment::{
+        self, CondaPrefixUpdated, EnvironmentFile, LockFileUsage, LockedEnvironmentHash,
+        PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PythonStatus,
+        read_environment_file, write_environment_file,
+    },
+    lock_file::{
+        self, PypiRecord, records_by_name::HasNameVersion, reporter::SolveProgressBar,
+        virtual_packages::validate_system_meets_environment_requirements,
+    },
+    prefix::Prefix,
+    workspace::{
+        Environment, EnvironmentVars, HasWorkspaceRef, get_activated_environment_variables,
+        grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
+    },
+};
 use barrier_cell::BarrierCell;
 use dashmap::DashMap;
 use fancy_display::FancyDisplay;
@@ -8,6 +30,7 @@ use itertools::{Either, Itertools};
 use miette::{Diagnostic, IntoDiagnostic, MietteDiagnostic, Report, WrapErr};
 use pixi_command_dispatcher::{BuildEnvironment, CommandDispatcher, PixiEnvironmentSpec};
 use pixi_consts::consts;
+use pixi_glob::GlobHashCache;
 use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
 use pixi_record::{ParseLockFileError, PixiRecord};
@@ -36,30 +59,6 @@ use thiserror::Error;
 use tokio::sync::Semaphore;
 use tracing::Instrument;
 use uv_normalize::ExtraName;
-
-use super::{
-    CondaPrefixUpdater, PixiRecordsByName, PypiRecordsByName, UvResolutionContext,
-    outdated::OutdatedEnvironments, utils::IoConcurrencyLimit,
-};
-use crate::{
-    Workspace,
-    activation::CurrentEnvVarBehavior,
-    build::{BuildContext, GlobHashCache},
-    environment::{
-        self, CondaPrefixUpdated, EnvironmentFile, LockFileUsage, LockedEnvironmentHash,
-        PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PythonStatus,
-        read_environment_file, write_environment_file,
-    },
-    lock_file::{
-        self, PypiRecord, records_by_name::HasNameVersion, reporter::SolveProgressBar,
-        virtual_packages::validate_system_meets_environment_requirements,
-    },
-    prefix::Prefix,
-    workspace::{
-        Environment, EnvironmentVars, HasWorkspaceRef, get_activated_environment_variables,
-        grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
-    },
-};
 
 impl Workspace {
     /// Ensures that the lock-file is up-to-date with the project.
@@ -107,7 +106,7 @@ impl Workspace {
                 updated_pypi_prefixes: Default::default(),
                 uv_context: Default::default(),
                 io_concurrency_limit: IoConcurrencyLimit::default(),
-                build_context: BuildContext::from_workspace(self, command_dispatcher)?,
+                command_dispatcher,
                 glob_hash_cache,
                 was_outdated: false,
             });
@@ -132,7 +131,7 @@ impl Workspace {
                 updated_pypi_prefixes: Default::default(),
                 uv_context: Default::default(),
                 io_concurrency_limit: IoConcurrencyLimit::default(),
-                build_context: BuildContext::from_workspace(self, command_dispatcher)?,
+                command_dispatcher,
                 glob_hash_cache,
                 was_outdated: false,
             });
@@ -255,8 +254,8 @@ pub struct LockFileDerivedData<'p> {
     /// The IO concurrency semaphore to use when updating environments
     pub io_concurrency_limit: IoConcurrencyLimit,
 
-    /// The build context that was used to create the lock-file
-    pub build_context: BuildContext,
+    /// The command dispatcher that is used to build and solve.
+    pub command_dispatcher: CommandDispatcher,
 
     /// An object that caches input hashes
     pub glob_hash_cache: GlobHashCache,
@@ -617,7 +616,7 @@ impl<'p> LockFileDerivedData<'p> {
                         .into_iter()
                         .map(GenericVirtualPackage::from)
                         .collect(),
-                    self.build_context.clone(),
+                    self.command_dispatcher.clone(),
                 )
                 .finish()?;
 
@@ -702,8 +701,8 @@ pub struct UpdateContext<'p> {
     /// operations.
     io_concurrency_limit: IoConcurrencyLimit,
 
-    /// The build context to use for building source packages
-    build_context: BuildContext,
+    /// The command dispatcher
+    command_dispatcher: CommandDispatcher,
 
     /// The input hash cache
     glob_hash_cache: GlobHashCache,
@@ -1142,9 +1141,6 @@ impl<'p> UpdateContextBuilder<'p> {
                 .finish(),
         };
 
-        // tool context
-        let build_context = BuildContext::from_workspace(project, command_dispatcher)?;
-
         let mapping_client = self.mapping_client.unwrap_or_else(|| {
             MappingClient::builder(client)
                 .with_concurrency_limit(project.concurrent_downloads_semaphore())
@@ -1170,7 +1166,7 @@ impl<'p> UpdateContextBuilder<'p> {
             package_cache,
             pypi_solve_semaphore: Arc::new(Semaphore::new(determine_pypi_solve_permits(project))),
             io_concurrency_limit: self.io_concurrency_limit.unwrap_or_default(),
-            build_context,
+            command_dispatcher,
             glob_hash_cache,
             dispatcher_progress_bar: anchor_pb,
 
@@ -1268,7 +1264,7 @@ impl<'p> UpdateContext<'p> {
                     self.mapping_client.clone(),
                     platform,
                     channel_priority,
-                    self.build_context.clone(),
+                    self.command_dispatcher.clone(),
                 )
                 .boxed_local();
 
@@ -1343,7 +1339,7 @@ impl<'p> UpdateContext<'p> {
                     .into_iter()
                     .map(GenericVirtualPackage::from)
                     .collect(),
-                self.build_context.clone(),
+                self.command_dispatcher.clone(),
             )
             .finish()?;
 
@@ -1674,7 +1670,7 @@ impl<'p> UpdateContext<'p> {
             updated_pypi_prefixes: Default::default(),
             uv_context,
             io_concurrency_limit: self.io_concurrency_limit,
-            build_context: self.build_context,
+            command_dispatcher: self.command_dispatcher,
             glob_hash_cache: self.glob_hash_cache,
             was_outdated: true,
         })
@@ -1764,7 +1760,7 @@ async fn spawn_solve_conda_environment_task(
     mapping_client: MappingClient,
     platform: Platform,
     channel_priority: ChannelPriority,
-    build_context: BuildContext,
+    command_dispatcher: CommandDispatcher,
 ) -> miette::Result<TaskResult> {
     // Get the dependencies for this platform
     let dependencies = group.combined_dependencies(Some(platform));
@@ -1809,17 +1805,12 @@ async fn spawn_solve_conda_environment_task(
         .into_diagnostic()?;
 
     // Determine the build variants
-    // TODO: Refactor this by moving it out of the build context
-    let variants = build_context
-        .resolve_variant(platform)
-        .into_iter()
-        .collect();
+    let variants = group.workspace().variants(platform);
 
     let start = Instant::now();
 
     // Solve the environment using the command dispatcher.
-    let mut records = build_context
-        .command_dispatcher()
+    let mut records = command_dispatcher
         .solve_pixi_environment(PixiEnvironmentSpec {
             name: Some(group_name.to_string()),
             dependencies,

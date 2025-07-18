@@ -223,11 +223,10 @@ impl InstallPixiEnvironmentSpec {
         // package, the returned updated repodata record will reflect that.
         let repodata_record = build_cache_entry
             .insert(CachedBuild {
-                source: if !source_checkout.pinned.is_immutable() {
-                    Some(CachedBuildSourceInfo { globs: input_globs })
-                } else {
-                    None
-                },
+                source: source_checkout
+                    .pinned
+                    .is_mutable()
+                    .then_some(CachedBuildSourceInfo { globs: input_globs }),
                 record: repodata_record.clone(),
             })
             .await
@@ -253,13 +252,16 @@ impl InstallPixiEnvironmentSpec {
         // Build the source package.
         let built_source = command_dispatcher
             .source_build(SourceBuildSpec {
-                source: source_record.clone(),
+                source: source_record.source.clone(),
+                package: source_record.into(),
                 channel_config: self.channel_config.clone(),
                 channels: self.channels.clone(),
                 build_environment: self.build_environment.clone(),
                 variants: self.variants.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
                 output_directory: Some(output_directory.to_path_buf()),
+                work_directory: None,
+                clean: false,
             })
             .await
             .map_err_with(BuildSourceError::BuildError)?;

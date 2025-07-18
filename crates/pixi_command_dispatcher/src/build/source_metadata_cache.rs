@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 
-use crate::{BuildEnvironment, build::source_checkout_cache_key};
+use crate::{BuildEnvironment, PackageIdentifier, build::source_checkout_cache_key};
 
 /// A cache for caching the metadata of a source checkout.
 ///
@@ -230,4 +230,31 @@ pub enum MetadataKind {
 
     /// The result of calling `conda/outputs` on a build backend.
     Outputs { outputs: Vec<CondaOutput> },
+}
+
+impl CachedCondaMetadata {
+    /// Returns the unique package identifiers for the packages in this
+    /// metadata.
+    pub fn outputs(&self) -> Vec<PackageIdentifier> {
+        match &self.metadata {
+            MetadataKind::GetMetadata { packages } => packages
+                .iter()
+                .map(|pkg| PackageIdentifier {
+                    name: pkg.name.clone(),
+                    version: pkg.version.clone(),
+                    build: pkg.build.clone(),
+                    subdir: pkg.subdir.to_string(),
+                })
+                .collect(),
+            MetadataKind::Outputs { outputs } => outputs
+                .iter()
+                .map(|output| PackageIdentifier {
+                    name: output.metadata.name.clone(),
+                    version: output.metadata.version.clone(),
+                    build: output.metadata.build.clone(),
+                    subdir: output.metadata.subdir.to_string(),
+                })
+                .collect(),
+        }
+    }
 }
