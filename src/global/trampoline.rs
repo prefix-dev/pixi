@@ -74,6 +74,11 @@ const TRAMPOLINE_BIN: &[u8] =
 const TRAMPOLINE_BIN: &[u8] =
     include_bytes!("../../trampoline/binaries/pixi-trampoline-x86_64-unknown-linux-musl.zst");
 
+#[cfg(target_arch = "loongarch64")]
+#[cfg(target_os = "linux")]
+const TRAMPOLINE_BIN: &[u8] =
+    include_bytes!("../../trampoline/binaries/pixi-trampoline-loongarch64-unknown-linux-gnu.zst");
+
 // trampoline configuration folder name
 pub const TRAMPOLINE_CONFIGURATION: &str = "trampoline_configuration";
 // original trampoline binary name
