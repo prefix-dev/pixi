@@ -5,6 +5,7 @@ use crate::global::{self, EnvironmentName};
 mod add;
 mod edit;
 mod expose;
+mod global_specs;
 mod install;
 mod list;
 mod remove;

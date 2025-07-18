@@ -11,15 +11,15 @@ use miette::IntoDiagnostic;
 use pixi_config::Config;
 use pixi_consts::consts;
 use pixi_manifest::{PrioritizedChannel, toml::TomlDocument};
-use pixi_spec::PixiSpec;
 use pixi_toml::TomlIndexMap;
 use pixi_utils::{executable_from_path, strip_executable_extension};
-use rattler_conda_types::{ChannelConfig, MatchSpec, NamedChannelOrUrl, PackageName, Platform};
+use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
 use toml_edit::{DocumentMut, Item};
 use toml_span::{DeserError, Value};
 
 use super::{
     EnvironmentName, ExposedName,
+    global_spec::NamedGlobalSpec,
     parsed_manifest::{ManifestParsingError, ManifestVersion, ParsedManifest},
 };
 use crate::global::project::ParsedEnvironment;
@@ -138,14 +138,10 @@ impl Manifest {
     pub fn add_dependency(
         &mut self,
         env_name: &EnvironmentName,
-        spec: &MatchSpec,
-        channel_config: &ChannelConfig,
+        named_spec: &NamedGlobalSpec,
     ) -> miette::Result<()> {
-        // Determine the name of the package to add
-        let (Some(name), spec) = spec.clone().into_nameless() else {
-            miette::bail!("pixi doesn't support wildcard dependencies")
-        };
-        let spec = PixiSpec::from_nameless_matchspec(spec, channel_config);
+        let name = named_spec.name();
+        let spec = named_spec.spec();
 
         // Update self.parsed
         self.parsed
@@ -161,8 +157,8 @@ impl Manifest {
         // Update self.document
         self.document.insert_into_inline_table(
             &format!("envs.{env_name}.dependencies"),
-            name.clone().as_normalized(),
-            spec.clone().to_toml_value(),
+            name.as_normalized(),
+            spec.to_toml_value(),
         )?;
 
         tracing::debug!(
@@ -178,13 +174,8 @@ impl Manifest {
     pub fn remove_dependency(
         &mut self,
         env_name: &EnvironmentName,
-        spec: &MatchSpec,
+        name: &PackageName,
     ) -> miette::Result<PackageName> {
-        // Determine the name of the package to add
-        let (Some(name), _spec) = spec.clone().into_nameless() else {
-            miette::bail!("pixi does not support wildcard dependencies")
-        };
-
         // Update self.parsed
         self.parsed
             .envs
@@ -194,7 +185,7 @@ impl Manifest {
             })?
             .dependencies
             .specs
-            .swap_remove(&name)
+            .swap_remove(name)
             .ok_or(miette::miette!(
                 "Dependency {} not found in {}",
                 console::style(name.as_normalized()).green(),
@@ -211,7 +202,7 @@ impl Manifest {
             console::style(name.as_normalized()).green(),
             env_name.fancy_display()
         );
-        Ok(name)
+        Ok(name.clone())
     }
 
     /// Sets the platform of a specific environment in the manifest
@@ -661,7 +652,7 @@ mod tests {
     use insta::assert_snapshot;
     use itertools::Itertools;
     use pixi_consts::consts::DEFAULT_CHANNELS;
-    use rattler_conda_types::ParseStrictness;
+    use rattler_conda_types::ChannelConfig;
 
     use super::*;
 
@@ -957,8 +948,8 @@ mod tests {
         let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
         let env_name = EnvironmentName::from_str("test-env").unwrap();
 
-        let version_match_spec =
-            MatchSpec::from_str("pythonic ==3.15.0", ParseStrictness::Strict).unwrap();
+        let named_global_spec =
+            NamedGlobalSpec::try_from_str("pythonic ==3.15.0", &channel_config).unwrap();
 
         // Add environment
         manifest
@@ -975,7 +966,7 @@ mod tests {
 
         // Add dependency
         manifest
-            .add_dependency(&env_name, &version_match_spec, &channel_config)
+            .add_dependency(&env_name, &named_global_spec)
             .unwrap();
 
         // Check document
@@ -983,11 +974,15 @@ mod tests {
             .document
             .get_or_insert_nested_table(&format!("envs.{env_name}.dependencies"))
             .unwrap()
-            .get(version_match_spec.name.clone().unwrap().as_normalized());
+            .get(named_global_spec.name().as_normalized());
         assert!(actual_value.is_some());
         assert_eq!(
             actual_value.unwrap().to_string().replace('"', ""),
-            version_match_spec.clone().version.unwrap().to_string()
+            named_global_spec
+                .spec()
+                .as_version_spec()
+                .unwrap()
+                .to_string()
         );
 
         // Check parsed
@@ -998,30 +993,22 @@ mod tests {
             .unwrap()
             .dependencies
             .specs
-            .get(&version_match_spec.clone().name.unwrap())
+            .get(named_global_spec.name().as_normalized())
             .unwrap()
             .clone();
-        assert_eq!(
-            actual_value,
-            PixiSpec::from_nameless_matchspec(
-                version_match_spec.into_nameless().1,
-                &channel_config
-            )
-        );
+        assert_eq!(actual_value, *named_global_spec.spec());
 
         // Add another dependency
-        let build_match_spec = MatchSpec::from_str(
+        let build_match_spec = NamedGlobalSpec::try_from_str(
             "python [version='==3.11.0', build=he550d4f_1_cpython]",
-            ParseStrictness::Strict,
+            &channel_config,
         )
         .unwrap();
         manifest
-            .add_dependency(&env_name, &build_match_spec, &channel_config)
+            .add_dependency(&env_name, &build_match_spec)
             .unwrap();
-        let any_spec = MatchSpec::from_str("any-spec", ParseStrictness::Strict).unwrap();
-        manifest
-            .add_dependency(&env_name, &any_spec, &channel_config)
-            .unwrap();
+        let any_spec = NamedGlobalSpec::try_from_str("any-spec", &channel_config).unwrap();
+        manifest.add_dependency(&env_name, &any_spec).unwrap();
 
         assert_snapshot!(manifest.document.to_string());
     }
@@ -1031,31 +1018,26 @@ mod tests {
         let mut manifest = Manifest::default();
         let env_name = EnvironmentName::from_str("test-env").unwrap();
 
-        let match_spec = MatchSpec::from_str("pythonic ==3.15.0", ParseStrictness::Strict).unwrap();
         let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
+        let spec = NamedGlobalSpec::try_from_str("pythonic ==3.15.0", &channel_config).unwrap();
 
         // Add environment
         manifest.add_environment(&env_name, None).unwrap();
 
         // Add dependency
-        manifest
-            .add_dependency(&env_name, &match_spec, &channel_config)
-            .unwrap();
+        manifest.add_dependency(&env_name, &spec).unwrap();
 
         // Add the same dependency again, with a new match_spec
-        let new_match_spec =
-            MatchSpec::from_str("pythonic==3.18.0", ParseStrictness::Strict).unwrap();
-        manifest
-            .add_dependency(&env_name, &new_match_spec, &channel_config)
-            .unwrap();
+        let new_spec = NamedGlobalSpec::try_from_str("pythonic==3.18.0", &channel_config).unwrap();
+        manifest.add_dependency(&env_name, &new_spec).unwrap();
 
         // Check document
-        let name = match_spec.name.clone().unwrap();
+        let name = spec.name();
         let actual_value = manifest
             .document
             .get_or_insert_nested_table(&format!("envs.{env_name}.dependencies"))
             .unwrap()
-            .get(name.clone().as_normalized());
+            .get(name.as_normalized());
         assert!(actual_value.is_some());
         assert_eq!(
             actual_value.unwrap().to_string().replace('"', ""),
@@ -1070,7 +1052,7 @@ mod tests {
             .unwrap()
             .dependencies
             .specs
-            .get(&name)
+            .get(name)
             .unwrap()
             .clone();
         assert_eq!(
@@ -1156,7 +1138,7 @@ mod tests {
     #[test]
     fn test_remove_dependency() {
         let env_name = EnvironmentName::from_str("test-env").unwrap();
-        let match_spec = MatchSpec::from_str("pytest", ParseStrictness::Strict).unwrap();
+        let name = PackageName::from_str("pytest").unwrap();
 
         let mut manifest = Manifest::from_str(
             Path::new("global.toml"),
@@ -1169,14 +1151,14 @@ dependencies = { "python" = "*", pytest = "*"}
         .unwrap();
 
         // Remove dependency
-        manifest.remove_dependency(&env_name, &match_spec).unwrap();
+        manifest.remove_dependency(&env_name, &name).unwrap();
 
         // Check document
         assert!(
             !manifest
                 .document
                 .to_string()
-                .contains(match_spec.name.clone().unwrap().as_normalized())
+                .contains(name.clone().as_normalized())
         );
 
         // Check parsed
@@ -1187,7 +1169,7 @@ dependencies = { "python" = "*", pytest = "*"}
             .unwrap()
             .dependencies
             .specs
-            .get(&match_spec.name.unwrap());
+            .get(&name);
         assert!(actual_value.is_none());
 
         assert_snapshot!(manifest.document.to_string());

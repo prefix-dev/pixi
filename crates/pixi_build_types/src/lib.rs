@@ -4,6 +4,7 @@ mod channel_configuration;
 mod conda_package_metadata;
 pub mod procedures;
 mod project_model;
+mod stable_hash;
 
 use std::sync::LazyLock;
 

@@ -13,11 +13,13 @@ pixi global add [OPTIONS] --environment <ENVIRONMENT> <PACKAGE>...
 
 ## Arguments
 - <a id="arg-<PACKAGE>" href="#arg-<PACKAGE>">`<PACKAGE>`</a>
-:  Specifies the package that should be added to the environment
+:  The dependency as names, conda MatchSpecs
 <br>May be provided more than once.
 <br>**required**: `true`
 
 ## Options
+- <a id="arg---path" href="#arg---path">`--path <PATH>`</a>
+:  The path to the local directory to use when adding a local dependency
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
 :  Specifies the environment that the dependencies need to be added to
 <br>**required**: `true`
@@ -37,6 +39,18 @@ pixi global add [OPTIONS] --environment <ENVIRONMENT> <PACKAGE>...
 :  Max concurrent solves, default is the number of CPUs
 - <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
 :  Max concurrent network requests, default is `50`
+
+## Git Options
+- <a id="arg---git" href="#arg---git">`--git (-g) <GIT>`</a>
+:  The git url to use when adding a git dependency
+- <a id="arg---branch" href="#arg---branch">`--branch <BRANCH>`</a>
+:  The git branch
+- <a id="arg---tag" href="#arg---tag">`--tag <TAG>`</a>
+:  The git tag
+- <a id="arg---rev" href="#arg---rev">`--rev <REV>`</a>
+:  The git revision
+- <a id="arg---subdir" href="#arg---subdir">`--subdir (-s) <SUBDIR>`</a>
+:  The subdirectory of the git repository to use
 
 ## Description
 Adds dependencies to an environment
