@@ -1,9 +1,10 @@
+use std::collections::hash_map::Entry;
+
 use futures::FutureExt;
 
-use super::{CommandDispatcherProcessor, PendingSourceBuild, TaskResult};
+use super::{CommandDispatcherProcessor, PendingDeduplicatingTask, TaskResult};
 use crate::{
-    BuiltSource, CommandDispatcherError, CommandDispatcherErrorResultExt, Reporter,
-    SourceBuildError,
+    BuiltSource, CommandDispatcherError, Reporter, SourceBuildError,
     command_dispatcher::{CommandDispatcherContext, SourceBuildId, SourceBuildTask},
 };
 
@@ -11,47 +12,72 @@ impl CommandDispatcherProcessor {
     /// Called when a [`crate::command_dispatcher::SourceBuildTask`]
     /// task was received.
     pub(crate) fn on_source_build(&mut self, task: SourceBuildTask) {
-        // Notify the reporter that a new build has been queued.
-        let parent_context = task
-            .parent
-            .and_then(|context| self.reporter_context(context));
-        let reporter_id = self
-            .reporter
-            .as_deref_mut()
-            .and_then(Reporter::as_source_build_reporter)
-            .map(|reporter| reporter.on_queued(parent_context, &task.spec));
+        // Lookup the id of the source metadata to avoid deduplication.
+        let source_build_id = {
+            match self.source_build_ids.get(&task.spec) {
+                Some(id) => *id,
+                None => {
+                    // If the source build is not in the map we need to create a new id for it.
+                    let id = SourceBuildId(self.source_build_ids.len());
+                    self.source_build_ids.insert(task.spec.clone(), id);
+                    if let Some(parent) = task.parent {
+                        self.parent_contexts.insert(id.into(), parent);
+                    }
+                    id
+                }
+            }
+        };
 
-        // Store information about the pending environment.
-        let pending_env_id = self.source_builds.insert(PendingSourceBuild {
-            tx: task.tx,
-            reporter_id,
-        });
+        match self.source_build.entry(source_build_id) {
+            Entry::Occupied(mut entry) => match entry.get_mut() {
+                PendingDeduplicatingTask::Pending(pending, _) => pending.push(task.tx),
+                PendingDeduplicatingTask::Result(result, _) => {
+                    let _ = task.tx.send(Ok(result.clone()));
+                }
+                PendingDeduplicatingTask::Errored => {
+                    // Drop the sender, this will cause a cancellation on the other side.
+                    drop(task.tx);
+                }
+            },
+            Entry::Vacant(entry) => {
+                entry.insert(PendingDeduplicatingTask::Pending(
+                    vec![task.tx],
+                    task.parent,
+                ));
 
-        if let Some(parent_context) = task.parent {
-            self.parent_contexts
-                .insert(pending_env_id.into(), parent_context);
+                // Notify the reporter that a new solve has been queued and started.
+                let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
+                let reporter_id = self
+                    .reporter
+                    .as_deref_mut()
+                    .and_then(Reporter::as_source_build_reporter)
+                    .map(|reporter| reporter.on_queued(parent_context, &task.spec));
+
+                if let Some(reporter_id) = reporter_id {
+                    self.source_build_reporters
+                        .insert(source_build_id, reporter_id);
+                }
+
+                if let Some((reporter, reporter_id)) = self
+                    .reporter
+                    .as_deref_mut()
+                    .and_then(Reporter::as_source_build_reporter)
+                    .zip(reporter_id)
+                {
+                    reporter.on_started(reporter_id)
+                }
+
+                // Add the task to the list of pending futures.
+                let dispatcher_context = CommandDispatcherContext::SourceBuild(source_build_id);
+                let dispatcher = self.create_task_command_dispatcher(dispatcher_context);
+                self.pending_futures.push(
+                    task.spec
+                        .build(dispatcher)
+                        .map(move |result| TaskResult::SourceBuild(source_build_id, result))
+                        .boxed_local(),
+                );
+            }
         }
-
-        // Notify the reporter that the build has started.
-        if let Some((reporter, id)) = self
-            .reporter
-            .as_deref_mut()
-            .and_then(Reporter::as_source_build_reporter)
-            .zip(reporter_id)
-        {
-            reporter.on_started(id)
-        }
-
-        let dispatcher_context = CommandDispatcherContext::SourceBuild(pending_env_id);
-
-        // Add the task to the list of pending futures.
-        let dispatcher = self.create_task_command_dispatcher(dispatcher_context);
-        self.pending_futures.push(
-            task.spec
-                .build(dispatcher)
-                .map(move |result| TaskResult::SourceBuild(pending_env_id, result))
-                .boxed_local(),
-        );
     }
 
     /// Called when a [`TaskResult::SourceBuild`] task was
@@ -65,28 +91,18 @@ impl CommandDispatcherProcessor {
         result: Result<BuiltSource, CommandDispatcherError<SourceBuildError>>,
     ) {
         self.parent_contexts.remove(&id.into());
-        let env = self
-            .source_builds
-            .remove(id)
-            .expect("got a result for a conda environment that was not pending");
-
-        // Notify the reporter that the solve finished.
-        if let Some((reporter, id)) = self
+        if let Some((reporter, reporter_id)) = self
             .reporter
             .as_deref_mut()
             .and_then(Reporter::as_source_build_reporter)
-            .zip(env.reporter_id)
+            .zip(self.source_build_reporters.remove(&id))
         {
-            reporter.on_finished(id)
+            reporter.on_finished(reporter_id);
         }
 
-        let Some(result) = result.into_ok_or_failed() else {
-            // If the job was canceled, we can just drop the sending end
-            // which will also cause a cancel on the receiving end.
-            return;
-        };
-
-        // We can silently ignore the result if the task was cancelled.
-        let _ = env.tx.send(result);
+        self.source_build
+            .get_mut(&id)
+            .expect("cannot find pending task")
+            .on_pending_result(result)
     }
 }

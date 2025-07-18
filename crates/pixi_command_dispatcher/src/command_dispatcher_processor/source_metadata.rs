@@ -125,7 +125,7 @@ impl CommandDispatcherProcessor {
 
         self.source_metadata
             .get_mut(&id)
-            .expect("cannot find pending build backend metadata task")
+            .expect("cannot find pending task")
             .on_pending_result(result)
     }
 }

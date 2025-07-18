@@ -43,6 +43,7 @@ mod install_pixi;
 mod instantiate_tool_env;
 mod limits;
 mod package_identifier;
+mod query_source_build_cache;
 pub mod reporter;
 mod solve_conda;
 mod solve_pixi;
@@ -71,6 +72,9 @@ pub use install_pixi::{
 pub use instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec};
 pub use limits::Limits;
 pub use package_identifier::PackageIdentifier;
+pub use query_source_build_cache::{
+    QuerySourceBuildCache, QuerySourceBuildCacheError, SourceBuildCacheEntry,
+};
 pub use reporter::{
     CondaSolveReporter, GitCheckoutReporter, PixiInstallReporter, PixiSolveReporter, Reporter,
     ReporterContext,

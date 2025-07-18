@@ -29,8 +29,9 @@ use typed_path::Utf8TypedPath;
 
 use crate::{
     BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec, Executor,
-    InvalidPathError, PixiEnvironmentSpec, SolveCondaEnvironmentSpec, SolvePixiEnvironmentError,
-    SourceCheckout, SourceCheckoutError, SourceMetadata, SourceMetadataError, SourceMetadataSpec,
+    InvalidPathError, PixiEnvironmentSpec, QuerySourceBuildCacheError, SolveCondaEnvironmentSpec,
+    SolvePixiEnvironmentError, SourceBuildCacheEntry, SourceCheckout, SourceCheckoutError,
+    SourceMetadata, SourceMetadataError, SourceMetadataSpec,
     backend_source_build::{BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildSpec},
     build::{BuildCache, source_metadata_cache::SourceMetadataCache},
     cache_dirs::CacheDirs,
@@ -42,6 +43,7 @@ use crate::{
         InstantiateToolEnvironmentSpec,
     },
     limits::ResolvedLimits,
+    query_source_build_cache::QuerySourceBuildCache,
     solve_conda::SolveCondaEnvironmentError,
     source_build::{BuiltSource, SourceBuildError, SourceBuildSpec},
 };
@@ -173,6 +175,7 @@ pub(crate) enum CommandDispatcherContext {
     BackendSourceBuild(BackendSourceBuildId),
     SourceMetadata(SourceMetadataId),
     SourceBuild(SourceBuildId),
+    QuerySourceBuildCache(QuerySourceBuildCacheId),
     InstallPixiEnvironment(InstallPixiEnvironmentId),
     InstantiateToolEnv(InstantiatedToolEnvId),
 }
@@ -180,9 +183,6 @@ pub(crate) enum CommandDispatcherContext {
 slotmap::new_key_type! {
     /// An id that uniquely identifies a conda environment that is being solved.
     pub(crate) struct SolveCondaEnvironmentId;
-
-    /// An id that uniquely identifies a conda environment that is being solved.
-    pub(crate) struct SourceBuildId;
 
     /// An id that uniquely identifies a build backend source build request.
     pub(crate) struct BackendSourceBuildId;
@@ -205,6 +205,14 @@ pub(crate) struct BuildBackendMetadataId(pub usize);
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub(crate) struct SourceMetadataId(pub usize);
 
+/// An id that uniquely identifies a source build request.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub(crate) struct SourceBuildId(pub usize);
+
+/// An id that uniquely identifies a source build cache request.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub(crate) struct QuerySourceBuildCacheId(pub usize);
+
 /// An id that uniquely identifies a tool environment.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub(crate) struct InstantiatedToolEnvId(pub usize);
@@ -218,6 +226,7 @@ pub(crate) enum ForegroundMessage {
     BackendSourceBuild(BackendSourceBuildTask),
     SourceMetadata(SourceMetadataTask),
     SourceBuild(SourceBuildTask),
+    QuerySourceBuildCache(QuerySourceBuildCacheTask),
     GitCheckout(GitCheckoutTask),
     InstallPixiEnvironment(InstallPixiEnvironmentTask),
     InstantiateToolEnvironment(Task<InstantiateToolEnvironmentSpec>),
@@ -281,6 +290,13 @@ impl TaskSpec for BackendSourceBuildSpec {
 impl TaskSpec for InstantiateToolEnvironmentSpec {
     type Output = InstantiateToolEnvironmentResult;
     type Error = InstantiateToolEnvironmentError;
+}
+
+pub(crate) type QuerySourceBuildCacheTask = Task<QuerySourceBuildCache>;
+
+impl TaskSpec for QuerySourceBuildCache {
+    type Output = Arc<SourceBuildCacheEntry>;
+    type Error = QuerySourceBuildCacheError;
 }
 
 impl Default for CommandDispatcher {
@@ -417,6 +433,15 @@ impl CommandDispatcher {
         &self,
         spec: SourceMetadataSpec,
     ) -> Result<Arc<SourceMetadata>, CommandDispatcherError<SourceMetadataError>> {
+        self.execute_task(spec).await
+    }
+
+    /// Query the source build cache for a particular source package.
+    pub async fn query_source_build_cache(
+        &self,
+        spec: QuerySourceBuildCache,
+    ) -> Result<Arc<SourceBuildCacheEntry>, CommandDispatcherError<QuerySourceBuildCacheError>>
+    {
         self.execute_task(spec).await
     }
 

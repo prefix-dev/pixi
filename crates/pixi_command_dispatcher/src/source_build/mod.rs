@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     path::{Path, PathBuf},
 };
 
@@ -10,22 +10,28 @@ use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
 use pixi_record::{PinnedSourceSpec, PixiRecord};
 use pixi_spec::{SourceAnchor, SourceSpec};
 use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, InvalidPackageNameError, Platform, prefix::Prefix,
+    ChannelConfig, ChannelUrl, ConvertSubdirError, InvalidPackageNameError, PackageRecord,
+    Platform, RepoDataRecord, prefix::Prefix,
 };
+use rattler_digest::Sha256Hash;
+use serde::Serialize;
 use thiserror::Error;
 use tracing::instrument;
+use url::Url;
 
 use crate::{
     BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildMethod,
     BackendSourceBuildPrefix, BackendSourceBuildSpec, BackendSourceBuildV0Method,
     BackendSourceBuildV1Method, BuildEnvironment, CommandDispatcher, CommandDispatcherError,
     CommandDispatcherErrorResultExt, InstallPixiEnvironmentError, InstallPixiEnvironmentSpec,
-    InstantiateBackendError, InstantiateBackendSpec, PixiEnvironmentSpec,
-    SolvePixiEnvironmentError, SourceCheckout, SourceCheckoutError,
+    InstantiateBackendError, InstantiateBackendSpec, PixiEnvironmentSpec, QuerySourceBuildCache,
+    QuerySourceBuildCacheError, SolvePixiEnvironmentError, SourceCheckoutError,
     build::{
-        Dependencies, DependenciesError, MoveError, SourceRecordOrCheckout, WorkDirKey, move_file,
+        BuildCacheError, CachedBuild, CachedBuildSourceInfo, Dependencies, DependenciesError,
+        MoveError, SourceRecordOrCheckout, WorkDirKey, move_file,
     },
     package_identifier::PackageIdentifier,
+    query_source_build_cache::CachedBuildStatus,
 };
 
 /// Describes all parameters required to build a conda package from a pixi
@@ -36,7 +42,7 @@ use crate::{
 /// [`BackendSourceBuildSpec`]. This allows preparation (installing host, build,
 /// envs) to progress concurrently while the actual building of the package can
 /// be done serially.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, Serialize, Eq, PartialEq, Hash)]
 pub struct SourceBuildSpec {
     /// The source to build
     pub package: PackageIdentifier,
@@ -77,30 +83,58 @@ pub struct SourceBuildSpec {
     pub enabled_protocols: EnabledProtocols,
 }
 
+#[derive(Debug, Clone)]
 pub struct BuiltSource {
-    /// The source checkout that was built
-    pub source: SourceCheckout,
-
     /// The location on disk where the built package is located.
     pub output_file: PathBuf,
 
-    /// The globs that were used as input to the build. Use these for
-    /// re-verifying the build.
-    pub input_globs: BTreeSet<String>,
+    /// The repodata record associated with the built package.
+    pub record: RepoDataRecord,
 }
 
 impl SourceBuildSpec {
-    #[instrument(skip_all, fields(
-        source = %self.source,
-        subdir = %self.package.subdir,
-        name = %self.package.name.as_normalized(),
-        version = %self.package.version,
-        build = %self.package.build))]
+    #[instrument(skip_all, fields(package = %self.package, source = %self.source))]
     pub(crate) async fn build(
         mut self,
         command_dispatcher: CommandDispatcher,
     ) -> Result<BuiltSource, CommandDispatcherError<SourceBuildError>> {
-        tracing::debug!("Building package for source spec: {}", self.source);
+        // If the output directory is not set, we want to use the build cache. Read the
+        // build cache in that case.
+        let (output_directory, build_cache) =
+            if let Some(output_directory) = self.output_directory.clone() {
+                (output_directory, None)
+            } else {
+                // Query the source build cache.
+                let build_cache = command_dispatcher
+                    .query_source_build_cache(QuerySourceBuildCache {
+                        package: self.package.clone(),
+                        build_environment: self.build_environment.clone(),
+                        source: self.source.clone(),
+                        channels: self.channels.clone(),
+                    })
+                    .await
+                    .map_err_with(SourceBuildError::from)?;
+
+                match &build_cache.cached_build {
+                    CachedBuildStatus::UpToDate(cached_build) => {
+                        tracing::debug!("Reusing package from up-to-date cache");
+
+                        // If the build is up to date, we can return the cached build.
+                        return Ok(BuiltSource {
+                            output_file: build_cache.cache_dir.join(&cached_build.record.file_name),
+                            record: cached_build.record.clone(),
+                        });
+                    }
+                    CachedBuildStatus::Stale(_, reason) => {
+                        tracing::debug!("Build cache is stale, {}", reason);
+                    }
+                    CachedBuildStatus::Missing => {
+                        tracing::debug!("Not found in cache");
+                    }
+                }
+
+                (build_cache.cache_dir.clone(), Some(build_cache))
+            };
 
         // Check out the source code.
         let source_checkout = command_dispatcher
@@ -154,70 +188,104 @@ impl SourceBuildSpec {
         }
 
         // Build the package based on the support backend capabilities.
-        let output_directory = self.output_directory.clone();
         let mut built_source = if backend.capabilities().provides_conda_build_v1() {
-            let built_package = self
-                .build_v1(command_dispatcher, backend, work_directory)
-                .await?;
-
-            BuiltSource {
-                source: source_checkout,
-                input_globs: built_package.input_globs,
-                output_file: built_package.output_file,
-            }
+            self.build_v1(command_dispatcher, backend, work_directory)
+                .await?
         } else {
-            let built_package = self
-                .build_v0(command_dispatcher, backend, work_directory)
-                .await?;
+            self.build_v0(command_dispatcher, backend, work_directory)
+                .await?
+        };
 
-            BuiltSource {
-                source: source_checkout,
-                input_globs: built_package.input_globs,
-                output_file: built_package.output_file,
+        // Create the output directory if it does not exist.
+        fs_err::create_dir_all(&output_directory).map_err(|err| {
+            CommandDispatcherError::Failed(SourceBuildError::CreateOutputDirectory(err))
+        })?;
+
+        // At this point, the directory should exist, so we can canonicalize the path.
+        let output_directory = fs_err::canonicalize(&output_directory)
+            .map_err(CommandDispatcherError::Failed)
+            .map_err_with(SourceBuildError::CreateOutputDirectory)?;
+
+        // The output file should also exist.
+        let output_file = match fs_err::canonicalize(&built_source.output_file) {
+            Ok(output_file) => output_file,
+            Err(_err) => {
+                return Err(CommandDispatcherError::Failed(
+                    SourceBuildError::MissingOutputFile(built_source.output_file),
+                ));
             }
         };
 
-        // Make sure the package resides in the output directory that was requested.
-        if let Some(output_directory) = output_directory {
-            // Create the output directory if it does not exist.
-            fs_err::create_dir_all(&output_directory).map_err(|err| {
-                CommandDispatcherError::Failed(SourceBuildError::CreateOutputDirectory(err))
-            })?;
-
-            // At this point, the directory should exist, so we can canonicalize the path.
-            let output_directory = fs_err::canonicalize(&output_directory)
-                .map_err(CommandDispatcherError::Failed)
-                .map_err_with(SourceBuildError::CreateOutputDirectory)?;
-
-            // The output file should also exist.
-            let output_file = match fs_err::canonicalize(&built_source.output_file) {
-                Ok(output_file) => output_file,
-                Err(_err) => {
-                    return Err(CommandDispatcherError::Failed(
-                        SourceBuildError::MissingOutputFile(built_source.output_file),
-                    ));
-                }
-            };
-
-            if output_file.parent() != Some(&output_directory) {
-                // Take the file name of the file and move it to the output directory.
-                let file_name = built_source
-                    .output_file
-                    .file_name()
-                    .expect("the build backend did not return a file name");
-                let destination = output_directory.join(file_name);
-                if let Err(err) = move_file(&output_file, &destination) {
-                    return Err(CommandDispatcherError::Failed(SourceBuildError::Move(
-                        output_file,
-                        output_directory,
-                        err,
-                    )));
-                }
-                built_source.output_file = destination;
+        if output_file.parent() != Some(&output_directory) {
+            // Take the file name of the file and move it to the output directory.
+            let file_name = built_source
+                .output_file
+                .file_name()
+                .expect("the build backend did not return a file name");
+            let destination = output_directory.join(file_name);
+            if let Err(err) = move_file(&output_file, &destination) {
+                return Err(CommandDispatcherError::Failed(SourceBuildError::Move(
+                    output_file,
+                    output_directory,
+                    err,
+                )));
             }
+            built_source.output_file = destination;
         }
 
-        Ok(built_source)
+        // TODO: Instead of reading this from the resulting file, maybe we can construct
+        // this during the build?
+        let output_file = built_source.output_file.clone();
+        let read_index_json_fut = simple_spawn_blocking::tokio::run_blocking_task(move || {
+            rattler_package_streaming::seek::read_package_file(&output_file)
+                .map_err(|err| CommandDispatcherError::Failed(SourceBuildError::ReadIndexJson(err)))
+        });
+
+        // Read the SHA256 hash of the package file.
+        let read_sha256_fut = compute_package_sha256(&built_source.output_file);
+
+        // Wait for both futures to complete.
+        let (sha, index_json) = tokio::try_join!(read_sha256_fut, read_index_json_fut)?;
+
+        // Construct the record from the index JSON and the SHA256 hash.
+        let record = RepoDataRecord {
+            package_record: PackageRecord::from_index_json(index_json, None, Some(sha), None)
+                .map_err(|err| {
+                    CommandDispatcherError::Failed(SourceBuildError::ConvertSubdir(err))
+                })?,
+            file_name: built_source
+                .output_file
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string(),
+            url: Url::from_file_path(&built_source.output_file)
+                .expect("the output file should be a valid URL"),
+            channel: None,
+        };
+
+        // Update the cache entry if we have one.
+        if let Some(build_cache) = build_cache {
+            let mut entry = build_cache.entry.lock().await;
+            entry
+                .insert(CachedBuild {
+                    source: source_checkout
+                        .pinned
+                        .is_mutable()
+                        .then_some(CachedBuildSourceInfo {
+                            globs: built_source.input_globs,
+                        }),
+                    record: record.clone(),
+                })
+                .await
+                .map_err(SourceBuildError::BuildCache)
+                .map_err(CommandDispatcherError::Failed)?;
+        }
+
+        Ok(BuiltSource {
+            output_file: built_source.output_file,
+            record,
+        })
     }
 
     async fn build_v0(
@@ -466,11 +534,27 @@ impl Directories {
     }
 }
 
+/// Computes the SHA256 hash of the package at the given path in a separate
+/// thread.
+async fn compute_package_sha256(
+    package_path: &Path,
+) -> Result<Sha256Hash, CommandDispatcherError<SourceBuildError>> {
+    let path = package_path.to_path_buf();
+    simple_spawn_blocking::tokio::run_blocking_task(move || {
+        rattler_digest::compute_file_digest::<rattler_digest::Sha256>(&path)
+            .map_err(|e| CommandDispatcherError::Failed(SourceBuildError::CalculateSha256(path, e)))
+    })
+    .await
+}
+
 #[derive(Debug, Error, Diagnostic)]
 pub enum SourceBuildError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     SourceCheckout(#[from] SourceCheckoutError),
+
+    #[error(transparent)]
+    BuildCache(#[from] BuildCacheError),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -536,6 +620,15 @@ pub enum SourceBuildError {
 
     #[error("failed to create the output directory")]
     CreateOutputDirectory(#[source] std::io::Error),
+
+    #[error("failed to read metadata from the output package")]
+    ReadIndexJson(#[source] rattler_package_streaming::ExtractError),
+
+    #[error("failed to calculate sha256 hash of {}", .0.display())]
+    CalculateSha256(std::path::PathBuf, #[source] std::io::Error),
+
+    #[error("the package does not contain a valid subdir")]
+    ConvertSubdir(#[source] ConvertSubdirError),
 }
 
 impl From<DependenciesError> for SourceBuildError {
@@ -543,6 +636,17 @@ impl From<DependenciesError> for SourceBuildError {
         match value {
             DependenciesError::InvalidPackageName(name, error) => {
                 SourceBuildError::InvalidPackageName(name, error)
+            }
+        }
+    }
+}
+
+impl From<QuerySourceBuildCacheError> for SourceBuildError {
+    fn from(value: QuerySourceBuildCacheError) -> Self {
+        match value {
+            QuerySourceBuildCacheError::BuildCache(err) => SourceBuildError::BuildCache(err),
+            QuerySourceBuildCacheError::SourceCheckout(err) => {
+                SourceBuildError::SourceCheckout(err)
             }
         }
     }

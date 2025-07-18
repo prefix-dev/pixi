@@ -12,10 +12,9 @@ use rattler_conda_types::{ChannelUrl, GenericVirtualPackage, Platform, RepoDataR
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
-use url::Url;
 use xxhash_rust::xxh3::Xxh3;
 
-use crate::build::{MoveError, move_file, source_checkout_cache_key};
+use crate::build::{MoveError, source_checkout_cache_key};
 
 /// A cache for caching build artifacts of a source checkout.
 #[derive(Clone)]
@@ -211,23 +210,9 @@ impl BuildCacheEntry {
 
     /// Consumes this instance and writes the given metadata to the cache.
     pub async fn insert(
-        mut self,
-        mut metadata: CachedBuild,
+        &mut self,
+        metadata: CachedBuild,
     ) -> Result<RepoDataRecord, BuildCacheError> {
-        // Move the file into the cache
-        if let Ok(file_path) = metadata.record.url.to_file_path() {
-            let file_name = file_path
-                .file_name()
-                .expect("the path cannot be empty because that wouldnt be a valid url");
-            let destination = self.cache_dir.join(file_name);
-            if let Err(err) = move_file(&file_path, &destination) {
-                return Err(BuildCacheError::MoveError(file_path, destination, err));
-            }
-
-            metadata.record.url = Url::from_file_path(&destination)
-                .expect("the cache directory path should be a valid url");
-        }
-
         self.file.seek(SeekFrom::Start(0)).await.map_err(|e| {
             BuildCacheError::IoError(
                 "seeking to start of cache file".to_string(),

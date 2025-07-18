@@ -16,15 +16,16 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::{
     BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec, BuiltSource,
-    CommandDispatcherErrorResultExt, InstallPixiEnvironmentResult, Reporter,
-    SolveCondaEnvironmentSpec, SolvePixiEnvironmentError, SourceBuildError, SourceMetadata,
-    SourceMetadataError, SourceMetadataSpec,
+    CommandDispatcherErrorResultExt, InstallPixiEnvironmentResult, QuerySourceBuildCache,
+    QuerySourceBuildCacheError, Reporter, SolveCondaEnvironmentSpec, SolvePixiEnvironmentError,
+    SourceBuildCacheEntry, SourceBuildError, SourceBuildSpec, SourceMetadata, SourceMetadataError,
+    SourceMetadataSpec,
     backend_source_build::{BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildSpec},
     command_dispatcher::{
         BackendSourceBuildId, BuildBackendMetadataId, CommandDispatcher, CommandDispatcherChannel,
         CommandDispatcherContext, CommandDispatcherData, CommandDispatcherError, ForegroundMessage,
-        InstallPixiEnvironmentId, InstantiatedToolEnvId, SolveCondaEnvironmentId,
-        SolvePixiEnvironmentId, SourceBuildId, SourceMetadataId,
+        InstallPixiEnvironmentId, InstantiatedToolEnvId, QuerySourceBuildCacheId,
+        SolveCondaEnvironmentId, SolvePixiEnvironmentId, SourceBuildId, SourceMetadataId,
     },
     executor::ExecutorFutures,
     install_pixi::InstallPixiEnvironmentError,
@@ -38,6 +39,7 @@ mod build_backend_metadata;
 mod git;
 mod install_pixi;
 mod instantiate_tool_env;
+mod query_source_build_cache;
 mod solve_conda;
 mod solve_pixi;
 mod source_build;
@@ -106,7 +108,16 @@ pub(crate) struct CommandDispatcherProcessor {
     git_checkouts: HashMap<RepositoryReference, PendingGitCheckout>,
 
     /// Source builds that are currently being processed.
-    source_builds: slotmap::SlotMap<SourceBuildId, PendingSourceBuild>,
+    source_build: HashMap<SourceBuildId, PendingDeduplicatingTask<BuiltSource, SourceBuildError>>,
+    source_build_reporters: HashMap<SourceBuildId, reporter::SourceBuildId>,
+    source_build_ids: HashMap<SourceBuildSpec, SourceBuildId>,
+
+    /// Queries of source builds cache that are currently being processed.
+    query_source_build_cache: HashMap<
+        QuerySourceBuildCacheId,
+        PendingDeduplicatingTask<Arc<SourceBuildCacheEntry>, QuerySourceBuildCacheError>,
+    >,
+    query_source_build_cache_ids: HashMap<QuerySourceBuildCache, QuerySourceBuildCacheId>,
 
     /// Backend source builds that are currently being processed.
     backend_source_builds: slotmap::SlotMap<BackendSourceBuildId, PendingBackendSourceBuild>,
@@ -156,6 +167,10 @@ enum TaskResult {
         SourceBuildId,
         Result<BuiltSource, CommandDispatcherError<SourceBuildError>>,
     ),
+    QuerySourceBuildCache(
+        QuerySourceBuildCacheId,
+        Result<SourceBuildCacheEntry, CommandDispatcherError<QuerySourceBuildCacheError>>,
+    ),
     BackendSourceBuild(
         BackendSourceBuildId,
         Result<BackendBuiltSource, CommandDispatcherError<BackendSourceBuildError>>,
@@ -183,14 +198,6 @@ enum PendingGitCheckout {
 struct PendingSolveCondaEnvironment {
     tx: oneshot::Sender<Result<Vec<PixiRecord>, SolveCondaEnvironmentError>>,
     reporter_id: Option<reporter::CondaSolveId>,
-}
-
-/// Information about a pending conda environment solve. This is used by the
-/// background task to keep track of which command_dispatcher is awaiting the
-/// result.
-struct PendingSourceBuild {
-    tx: oneshot::Sender<Result<BuiltSource, SourceBuildError>>,
-    reporter_id: Option<reporter::SourceBuildId>,
 }
 
 struct PendingBackendSourceBuild {
@@ -305,7 +312,11 @@ impl CommandDispatcherProcessor {
                 instantiated_tool_envs_reporters: HashMap::default(),
                 instantiated_tool_cache_keys: HashMap::default(),
                 git_checkouts: HashMap::default(),
-                source_builds: Default::default(),
+                source_build: HashMap::default(),
+                source_build_reporters: HashMap::default(),
+                source_build_ids: HashMap::default(),
+                query_source_build_cache: Default::default(),
+                query_source_build_cache_ids: Default::default(),
                 backend_source_builds: Default::default(),
                 pending_backend_source_builds: Default::default(),
                 pending_futures: ExecutorFutures::new(inner.executor),
@@ -363,6 +374,9 @@ impl CommandDispatcherProcessor {
             ForegroundMessage::BuildBackendMetadata(task) => self.on_build_backend_metadata(task),
             ForegroundMessage::GitCheckout(task) => self.on_checkout_git(task),
             ForegroundMessage::SourceBuild(task) => self.on_source_build(task),
+            ForegroundMessage::QuerySourceBuildCache(task) => {
+                self.on_query_source_build_cache(task)
+            }
             ForegroundMessage::ClearReporter(sender) => self.clear_reporter(sender),
             ForegroundMessage::SourceMetadata(task) => self.on_source_metadata(task),
             ForegroundMessage::BackendSourceBuild(task) => self.on_backend_source_build(task),
@@ -392,6 +406,9 @@ impl CommandDispatcherProcessor {
             TaskResult::SourceMetadata(id, result) => self.on_source_metadata_result(id, result),
             TaskResult::BackendSourceBuild(id, result) => {
                 self.on_backend_source_build_result(id, result)
+            }
+            TaskResult::QuerySourceBuildCache(id, result) => {
+                self.on_query_source_build_cache_result(id, result)
             }
         }
     }
@@ -487,14 +504,30 @@ impl CommandDispatcherProcessor {
                         })?
                 }
                 CommandDispatcherContext::SourceBuild(id) => {
-                    return self.source_builds[id]
-                        .reporter_id
-                        .map(reporter::ReporterContext::SourceBuild);
+                    if let Some(context) = self
+                        .source_build_reporters
+                        .get(&id)
+                        .copied()
+                        .map(reporter::ReporterContext::SourceBuild)
+                    {
+                        return Some(context);
+                    }
+
+                    self.source_build
+                        .get(&id)
+                        .and_then(|pending| match pending {
+                            PendingDeduplicatingTask::Pending(_, context) => Some(*context),
+                            PendingDeduplicatingTask::Result(_, context) => Some(*context),
+                            PendingDeduplicatingTask::Errored => None,
+                        })?
                 }
                 CommandDispatcherContext::BackendSourceBuild(id) => {
                     return self.backend_source_builds[id]
                         .reporter_id
                         .map(reporter::ReporterContext::BackendSourceBuild);
+                }
+                CommandDispatcherContext::QuerySourceBuildCache(_id) => {
+                    return None;
                 }
             };
         }
