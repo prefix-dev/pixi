@@ -405,6 +405,25 @@ pub async fn resolve_pypi(
         &pypi_options.no_binary.clone().unwrap_or_default(),
     )
     .into_diagnostic()?;
+    let dependency_overrides =
+        pypi_options.dependency_overrides.as_ref().map(|overrides|->Result<Vec<_>, _> {
+            overrides
+                .iter()
+                .map(|(name, spec)| {
+                    as_uv_req(spec,name.as_normalized().as_ref(), project_root)
+                    .into_diagnostic()
+                    .with_context(||{
+                        format!(
+                            "dependency override {name}:{spec:?} should able to convert to uv requirement",
+                            name = name.as_source(),
+                            spec = spec.to_string()
+                        )
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()
+        }).transpose()?.unwrap_or_default();
+
+    let overrides = Overrides::from_requirements(dependency_overrides);
 
     // Resolve the flat indexes from `--find-links`.
     // In UV 0.7.8, we need to fetch flat index entries from the index locations
@@ -552,7 +571,7 @@ pub async fn resolve_pypi(
     let lookaheads = LookaheadResolver::new(
         &requirements,
         &constraints,
-        &Overrides::default(),
+        &overrides,
         &context.hash_strategy,
         &lookahead_index,
         DistributionDatabase::new(
@@ -571,7 +590,7 @@ pub async fn resolve_pypi(
     let manifest = Manifest::new(
         requirements,
         constraints,
-        Overrides::default(),
+        overrides,
         Preferences::from_iter(preferences, &resolver_env),
         None,
         Default::default(),
