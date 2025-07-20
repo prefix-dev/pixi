@@ -10,7 +10,8 @@ use crate::{
 use indexmap::IndexSet;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use pixi_record::SourceRecord;
+use pixi_command_dispatcher::SourceMetadata;
+use std::sync::Arc;
 use pixi_utils::{executable_from_path, is_binary_folder};
 use rattler_conda_types::{
     MatchSpec, Matches, PackageName, PackageRecord, ParseStrictness, Platform,
@@ -225,7 +226,7 @@ fn path_diff(path_before: &str, path_after: &str, prefix: &Prefix) -> miette::Re
 pub(crate) fn local_environment_matches_spec(
     prefix_records: Vec<PackageRecord>,
     binary_specs: &IndexSet<MatchSpec>,
-    source_records: &[SourceRecord],
+    source_metadata: &[Arc<SourceMetadata>],
     platform: Option<Platform>,
 ) -> bool {
     // Check whether all specs in the manifest are present in the installed
@@ -234,10 +235,12 @@ pub(crate) fn local_environment_matches_spec(
         .iter()
         .all(|spec| prefix_records.iter().any(|record| spec.matches(record)));
 
-    let source_specs_in_manifest_are_present = source_records.iter().all(|source| {
-        prefix_records
-            .iter()
-            .any(|record| &source.package_record == record)
+    let source_specs_in_manifest_are_present = source_metadata.iter().all(|metadata| {
+        metadata.records.iter().all(|source| {
+            prefix_records
+                .iter()
+                .any(|record| &source.package_record == record)
+        })
     });
 
     if !specs_in_manifest_are_present && source_specs_in_manifest_are_present {
@@ -426,7 +429,7 @@ mod tests {
         ripgrep_bat_specs: IndexSet<MatchSpec>,
     ) {
         assert!(
-            !local_environment_matches_spec(ripgrep_bat_records.clone(), &[], &ripgrep_specs, None),
+            !local_environment_matches_spec(ripgrep_bat_records.clone(), &ripgrep_specs, &[], None),
             "The function needs to detect that records coming from ripgrep and bat don't match ripgrep alone."
         );
 
