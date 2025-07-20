@@ -3,12 +3,12 @@ use console::StyledObject;
 use fancy_display::FancyDisplay;
 use indexmap::IndexSet;
 use miette::Diagnostic;
-use pixi_consts::consts;
 use pixi_command_dispatcher::SourceMetadata;
-use std::sync::Arc;
+use pixi_consts::consts;
 use rattler_conda_types::{MatchSpec, Platform, PrefixRecord};
 use regex::Regex;
 use serde::{self, Deserialize, Deserializer, Serialize};
+use std::sync::Arc;
 use std::{fmt, str::FromStr};
 use thiserror::Error;
 
