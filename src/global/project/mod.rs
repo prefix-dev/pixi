@@ -31,7 +31,7 @@ use pixi_command_dispatcher::{
 };
 use pixi_config::{Config, RunPostLinkScripts, default_channel_config, pixi_home};
 use pixi_consts::consts::{self};
-use pixi_manifest::PrioritizedChannel;
+use pixi_manifest::{PrioritizedChannel, utils::package_map::UniquePackageMap};
 use pixi_progress::global_multi_progress;
 use pixi_reporters::TopLevelProgress;
 use pixi_spec_containers::DependencyMap;
@@ -701,12 +701,11 @@ impl Project {
     pub async fn source_metadata(
         &self,
         env_name: &EnvironmentName,
+        source_records: UniquePackageMap,
     ) -> miette::Result<IndexMap<PackageName, Arc<SourceMetadata>>> {
         let environment = self
             .environment(env_name)
             .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
-
-        let (source, _) = environment.split_into_source_and_binary_requirements();
 
         // Get or create the environment-specific cache
         let env_cache = self
@@ -729,7 +728,7 @@ impl Project {
 
         let mut metadata_results = IndexMap::new();
 
-        for (name, spec) in source.specs.into_iter() {
+        for (name, spec) in source_records.into_iter() {
             // Get or create the AsyncOnceCell for this package
             let package_cell = env_cache
                 .entry(name.clone())
@@ -971,10 +970,11 @@ impl Project {
             env_name.fancy_display()
         ))?;
 
-        let specs = environment
-            .dependencies
-            .specs
-            .iter()
+        // Split the environment into source and binary requirements
+        let (source_specs, binary_specs) = environment.split_into_source_and_binary_requirements();
+        // Convert binary specs to MatchSpec, these can be matched against the prefix directly
+        let specs = binary_specs
+            .into_iter()
             .map(|(name, spec)| {
                 let match_spec = MatchSpec::from_nameless(
                     spec.clone()
@@ -989,13 +989,25 @@ impl Project {
             })
             .collect::<Result<IndexSet<MatchSpec>, miette::Report>>()?;
 
+        // Get source metadata for the environment, these can also be matched against the prefix
+        let source_metadata = self
+            .source_metadata(env_name, source_specs)
+            .await?
+            .into_values()
+            .collect::<Vec<_>>();
+
         let env_dir =
             EnvDir::from_path(self.env_root.clone().path().join(env_name.clone().as_str()));
 
         let prefix = self.environment_prefix(env_name).await?;
         let prefix_records = prefix.find_installed_packages()?;
-        let specs_in_sync =
-            environment_specs_in_sync(&prefix_records, &specs, environment.platform).await?;
+        let specs_in_sync = environment_specs_in_sync(
+            &prefix_records,
+            &specs,
+            &source_metadata,
+            environment.platform,
+        )
+        .await?;
         if !specs_in_sync {
             return Ok(false);
         }
