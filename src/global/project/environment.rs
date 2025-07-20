@@ -2,7 +2,6 @@ use crate::global::install::local_environment_matches_spec;
 use console::StyledObject;
 use fancy_display::FancyDisplay;
 use indexmap::IndexSet;
-use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_consts::consts;
 use rattler_conda_types::{MatchSpec, Platform, PrefixRecord};
@@ -86,12 +85,12 @@ pub(crate) async fn environment_specs_in_sync(
     specs: &IndexSet<MatchSpec>,
     platform: Option<Platform>,
 ) -> miette::Result<bool> {
-    let repodata_records = prefix_records
+    let package_records = prefix_records
         .iter()
-        .map(|r| r.repodata_record.clone())
-        .collect_vec();
-
-    if !local_environment_matches_spec(repodata_records, specs, platform) {
+        .map(|r| r.repodata_record.package_record.clone())
+        .collect();
+    
+    if !local_environment_matches_spec(package_records, specs, &[], platform) {
         return Ok(false);
     }
     Ok(true)
