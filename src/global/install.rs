@@ -11,12 +11,12 @@ use indexmap::IndexSet;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_command_dispatcher::SourceMetadata;
-use std::sync::Arc;
 use pixi_utils::{executable_from_path, is_binary_folder};
 use rattler_conda_types::{
     MatchSpec, Matches, PackageName, PackageRecord, ParseStrictness, Platform,
 };
 use rattler_shell::activation::prefix_path_entries;
+use std::sync::Arc;
 use std::{env, path::PathBuf, str::FromStr};
 
 use fs_err::tokio as tokio_fs;
