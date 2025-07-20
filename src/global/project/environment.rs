@@ -89,7 +89,7 @@ pub(crate) async fn environment_specs_in_sync(
         .iter()
         .map(|r| r.repodata_record.package_record.clone())
         .collect();
-    
+
     if !local_environment_matches_spec(package_records, specs, &[], platform) {
         return Ok(false);
     }
