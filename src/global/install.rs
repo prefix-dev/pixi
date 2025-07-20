@@ -10,9 +10,10 @@ use crate::{
 use indexmap::IndexSet;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
+use pixi_record::SourceRecord;
 use pixi_utils::{executable_from_path, is_binary_folder};
 use rattler_conda_types::{
-    MatchSpec, Matches, PackageName, ParseStrictness, Platform, RepoDataRecord,
+    MatchSpec, Matches, PackageName, PackageRecord, ParseStrictness, Platform,
 };
 use rattler_shell::activation::prefix_path_entries;
 use std::{env, path::PathBuf, str::FromStr};
@@ -222,17 +223,24 @@ fn path_diff(path_before: &str, path_after: &str, prefix: &Prefix) -> miette::Re
 /// local environment's prefix records and that there are no extra entries in
 /// the prefix records that do not match any of the specifications.
 pub(crate) fn local_environment_matches_spec(
-    prefix_records: Vec<RepoDataRecord>,
-    specs: &IndexSet<MatchSpec>,
+    prefix_records: Vec<PackageRecord>,
+    binary_specs: &IndexSet<MatchSpec>,
+    source_records: &[SourceRecord],
     platform: Option<Platform>,
 ) -> bool {
     // Check whether all specs in the manifest are present in the installed
     // environment
-    let specs_in_manifest_are_present = specs
+    let specs_in_manifest_are_present = binary_specs
         .iter()
         .all(|spec| prefix_records.iter().any(|record| spec.matches(record)));
 
-    if !specs_in_manifest_are_present {
+    let source_specs_in_manifest_are_present = source_records.iter().all(|source| {
+        prefix_records
+            .iter()
+            .any(|record| &source.package_record == record)
+    });
+
+    if !specs_in_manifest_are_present && source_specs_in_manifest_are_present {
         tracing::debug!("Not all specs in the manifest are present in the environment");
         return false;
     }
@@ -241,7 +249,7 @@ pub(crate) fn local_environment_matches_spec(
     // platform
     if let Some(platform) = platform {
         let platform_specs_match_env = prefix_records.iter().all(|record| {
-            let Ok(package_platform) = Platform::from_str(&record.package_record.subdir) else {
+            let Ok(package_platform) = Platform::from_str(&record.subdir) else {
                 return true;
             };
 
@@ -260,9 +268,9 @@ pub(crate) fn local_environment_matches_spec(
 
     // Prune dependencies from the repodata that are valid for the requested specs
     fn prune_dependencies(
-        mut remaining_prefix_records: Vec<RepoDataRecord>,
-        matched_record: &RepoDataRecord,
-    ) -> Vec<RepoDataRecord> {
+        mut remaining_prefix_records: Vec<PackageRecord>,
+        matched_record: &PackageRecord,
+    ) -> Vec<PackageRecord> {
         let mut work_queue = Vec::from([matched_record.as_ref().clone()]);
 
         while let Some(current_record) = work_queue.pop() {
@@ -274,7 +282,7 @@ pub(crate) fn local_environment_matches_spec(
                 };
                 let Some(index) = remaining_prefix_records
                     .iter()
-                    .position(|record| match_spec.matches(&record.package_record))
+                    .position(|record| match_spec.matches(record))
                 else {
                     continue;
                 };
@@ -288,7 +296,7 @@ pub(crate) fn local_environment_matches_spec(
     }
 
     // Process each spec and remove matched entries and their dependencies
-    let remaining_prefix_records = specs.iter().fold(prefix_records, |mut acc, spec| {
+    let remaining_prefix_records = binary_specs.iter().fold(prefix_records, |mut acc, spec| {
         let Some(index) = acc.iter().position(|record| spec.matches(record.as_ref())) else {
             return acc;
         };
@@ -347,7 +355,7 @@ mod tests {
     }
 
     #[fixture]
-    fn ripgrep_records() -> Vec<RepoDataRecord> {
+    fn ripgrep_records() -> Vec<PackageRecord> {
         LockFile::from_str(include_str!("./test_data/lockfiles/ripgrep.lock"))
             .unwrap()
             .default_environment()
@@ -355,6 +363,9 @@ mod tests {
             .conda_repodata_records(Platform::Linux64)
             .unwrap()
             .unwrap()
+            .into_iter()
+            .map(|record| record.package_record)
+            .collect()
     }
 
     #[fixture]
@@ -366,7 +377,7 @@ mod tests {
     }
 
     #[fixture]
-    fn ripgrep_bat_records() -> Vec<RepoDataRecord> {
+    fn ripgrep_bat_records() -> Vec<PackageRecord> {
         LockFile::from_str(include_str!("./test_data/lockfiles/ripgrep_bat.lock"))
             .unwrap()
             .default_environment()
@@ -374,23 +385,27 @@ mod tests {
             .conda_repodata_records(Platform::Linux64)
             .unwrap()
             .unwrap()
+            .into_iter()
+            .map(|record| record.package_record)
+            .collect()
     }
 
     #[rstest]
     fn test_local_environment_matches_spec(
-        ripgrep_records: Vec<RepoDataRecord>,
+        ripgrep_records: Vec<PackageRecord>,
         ripgrep_specs: IndexSet<MatchSpec>,
     ) {
         assert!(local_environment_matches_spec(
             ripgrep_records,
             &ripgrep_specs,
+            &[],
             None
         ));
     }
 
     #[rstest]
     fn test_local_environment_misses_entries_for_specs(
-        mut ripgrep_records: Vec<RepoDataRecord>,
+        mut ripgrep_records: Vec<PackageRecord>,
         ripgrep_specs: IndexSet<MatchSpec>,
     ) {
         // Remove last repodata record
@@ -399,36 +414,38 @@ mod tests {
         assert!(!local_environment_matches_spec(
             ripgrep_records,
             &ripgrep_specs,
+            &[],
             None
         ));
     }
 
     #[rstest]
     fn test_local_environment_has_too_many_entries_to_match_spec(
-        ripgrep_bat_records: Vec<RepoDataRecord>,
+        ripgrep_bat_records: Vec<PackageRecord>,
         ripgrep_specs: IndexSet<MatchSpec>,
         ripgrep_bat_specs: IndexSet<MatchSpec>,
     ) {
         assert!(
-            !local_environment_matches_spec(ripgrep_bat_records.clone(), &ripgrep_specs, None),
+            !local_environment_matches_spec(ripgrep_bat_records.clone(), &[], &ripgrep_specs, None),
             "The function needs to detect that records coming from ripgrep and bat don't match ripgrep alone."
         );
 
         assert!(
-            local_environment_matches_spec(ripgrep_bat_records, &ripgrep_bat_specs, None),
+            local_environment_matches_spec(ripgrep_bat_records, &ripgrep_bat_specs, &[], None),
             "The records and specs match and the function should return `true`."
         );
     }
 
     #[rstest]
     fn test_local_environment_matches_given_platform(
-        ripgrep_records: Vec<RepoDataRecord>,
+        ripgrep_records: Vec<PackageRecord>,
         ripgrep_specs: IndexSet<MatchSpec>,
     ) {
         assert!(
             local_environment_matches_spec(
                 ripgrep_records,
                 &ripgrep_specs,
+                &[],
                 Some(Platform::Linux64)
             ),
             "The records contains only linux-64 entries"
@@ -437,11 +454,16 @@ mod tests {
 
     #[rstest]
     fn test_local_environment_doesnt_match_given_platform(
-        ripgrep_records: Vec<RepoDataRecord>,
+        ripgrep_records: Vec<PackageRecord>,
         ripgrep_specs: IndexSet<MatchSpec>,
     ) {
         assert!(
-            !local_environment_matches_spec(ripgrep_records, &ripgrep_specs, Some(Platform::Win64),),
+            !local_environment_matches_spec(
+                ripgrep_records,
+                &ripgrep_specs,
+                &[],
+                Some(Platform::Win64)
+            ),
             "The record contains linux-64 entries, so the function should always return `false`"
         );
     }
