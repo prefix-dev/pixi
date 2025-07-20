@@ -796,6 +796,36 @@ impl Project {
         }
     }
 
+    /// Add pre-resolved source metadata to the cache for a specific environment and package
+    pub fn add_source_metadata(
+        &self,
+        env_name: &EnvironmentName,
+        package_name: PackageName,
+        metadata: Arc<SourceMetadata>,
+    ) {
+        let env_cache = self
+            .source_metadata_cache
+            .entry(env_name.clone())
+            .or_insert_with(|| DashMap::new());
+
+        let package_cell = env_cache
+            .entry(package_name)
+            .or_insert_with(|| AsyncOnceCell::new());
+
+        // Try to set the metadata if the cell is empty
+        let _ = package_cell.set(metadata);
+    }
+
+    /// Extend the source metadata cache with multiple entries for a specific environment
+    pub fn extend_source_metadata<I>(&self, env_name: &EnvironmentName, metadata_iter: I)
+    where
+        I: IntoIterator<Item = (PackageName, Arc<SourceMetadata>)>,
+    {
+        for (package_name, metadata) in metadata_iter {
+            self.add_source_metadata(env_name, package_name, metadata);
+        }
+    }
+
     /// Get installed executables of direct dependencies of a specific
     /// environment.
     pub async fn executables_of_direct_dependencies(
