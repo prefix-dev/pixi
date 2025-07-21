@@ -6,8 +6,6 @@ use std::{
     sync::Arc,
 };
 
-use dashmap::DashMap;
-use tokio::sync::OnceCell as AsyncOnceCell;
 
 use ahash::HashSet;
 pub(crate) use environment::EnvironmentName;
@@ -110,9 +108,6 @@ pub struct Project {
     /// The command dispatcher for solving environments
     /// This is wrapped in a `OnceCell` to allow for lazy initialization.
     command_dispatcher: OnceCell<CommandDispatcher>,
-    /// Cache for source metadata per environment name
-    source_metadata_cache:
-        DashMap<EnvironmentName, DashMap<PackageName, AsyncOnceCell<Arc<SourceMetadata>>>>,
 }
 
 impl Debug for Project {
@@ -292,7 +287,6 @@ impl Project {
             repodata_gateway,
             concurrent_downloads_semaphore: OnceCell::new(),
             command_dispatcher: OnceCell::new(),
-            source_metadata_cache: DashMap::new(),
         }
     }
 
@@ -707,12 +701,6 @@ impl Project {
             .environment(env_name)
             .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
 
-        // Get or create the environment-specific cache
-        let env_cache = self
-            .source_metadata_cache
-            .entry(env_name.clone())
-            .or_insert_with(|| DashMap::new());
-
         let dispatch = self.command_dispatcher()?;
         let platform = environment.platform.unwrap_or_else(Platform::current);
 
@@ -729,101 +717,39 @@ impl Project {
         let mut metadata_results = IndexMap::new();
 
         for (name, spec) in source_records.into_iter() {
-            // Get or create the AsyncOnceCell for this package
-            let package_cell = env_cache
-                .entry(name.clone())
-                .or_insert_with(|| AsyncOnceCell::new());
+            let source = spec
+                .try_into_source_spec()
+                .expect("at this point this cannot be a binary spec");
+            let source = dispatch.pin_and_checkout(source).await.into_diagnostic()?;
 
-            // Use get_or_try_init to ensure the metadata is only computed once
-            let metadata_result = package_cell
-                .get_or_try_init(|| async {
-                    let source = spec
-                        .try_into_source_spec()
-                        .expect("at this point this cannot be a binary spec");
-                    let source = dispatch.pin_and_checkout(source).await.into_diagnostic()?;
+            let source_metadata_spec = SourceMetadataSpec {
+                package: name.clone(),
+                backend_metadata: BuildBackendMetadataSpec {
+                    source: source.pinned,
+                    channel_config: self.global_channel_config().clone(),
+                    channels: channels.clone(),
+                    build_environment: BuildEnvironment::simple(
+                        platform,
+                        Self::virtual_packages_for(&platform).into_diagnostic()?,
+                    ),
+                    variants: None,
+                    enabled_protocols: EnabledProtocols::default(),
+                },
+            };
 
-                    let source_metadata_spec = SourceMetadataSpec {
-                        package: name.clone(),
-                        backend_metadata: BuildBackendMetadataSpec {
-                            source: source.pinned,
-                            channel_config: self.global_channel_config().clone(),
-                            channels: channels.clone(),
-                            build_environment: BuildEnvironment::simple(
-                                platform,
-                                Self::virtual_packages_for(&platform).into_diagnostic()?,
-                            ),
-                            variants: None,
-                            enabled_protocols: EnabledProtocols::default(),
-                        },
-                    };
+            let metadata_result = dispatch
+                .source_metadata(source_metadata_spec)
+                .await
+                .into_diagnostic()?;
 
-                    dispatch
-                        .source_metadata(source_metadata_spec)
-                        .await
-                        .into_diagnostic()
-                })
-                .await?;
-
-            metadata_results.insert(name, metadata_result.clone());
+            metadata_results.insert(name, metadata_result);
         }
 
         Ok(metadata_results)
     }
 
-    /// Get cached source metadata for a specific environment, if available
-    pub async fn get_cached_source_metadata(
-        &self,
-        env_name: &EnvironmentName,
-    ) -> Option<IndexMap<PackageName, Arc<SourceMetadata>>> {
-        let env_cache = self.source_metadata_cache.get(env_name)?;
-        let mut results = IndexMap::new();
 
-        for entry in env_cache.iter() {
-            let package_name = entry.key().clone();
-            let once_cell = entry.value();
 
-            // Only include packages that have been computed
-            if let Some(metadata) = once_cell.get() {
-                results.insert(package_name, metadata.clone());
-            }
-        }
-
-        if results.is_empty() {
-            None
-        } else {
-            Some(results)
-        }
-    }
-
-    /// Add pre-resolved source metadata to the cache for a specific environment and package
-    pub fn add_source_metadata(
-        &self,
-        env_name: &EnvironmentName,
-        package_name: PackageName,
-        metadata: Arc<SourceMetadata>,
-    ) {
-        let env_cache = self
-            .source_metadata_cache
-            .entry(env_name.clone())
-            .or_insert_with(|| DashMap::new());
-
-        let package_cell = env_cache
-            .entry(package_name)
-            .or_insert_with(|| AsyncOnceCell::new());
-
-        // Try to set the metadata if the cell is empty
-        let _ = package_cell.set(metadata);
-    }
-
-    /// Extend the source metadata cache with multiple entries for a specific environment
-    pub fn extend_source_metadata<I>(&self, env_name: &EnvironmentName, metadata_iter: I)
-    where
-        I: IntoIterator<Item = (PackageName, Arc<SourceMetadata>)>,
-    {
-        for (package_name, metadata) in metadata_iter {
-            self.add_source_metadata(env_name, package_name, metadata);
-        }
-    }
 
     /// Get installed executables of direct dependencies of a specific
     /// environment.
