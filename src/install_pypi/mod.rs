@@ -176,7 +176,8 @@ impl<'a> PyPIPrefixUpdaterBuilder<'a> {
         python_packages: &[CombinedPypiPackageData],
     ) -> miette::Result<PyPIPrefixUpdater> {
         // Create required distributions with pre-created Dist objects
-        let required_packages: Vec<_> = python_packages.iter().map(|(pkg, _)| pkg.clone()).collect();
+        let required_packages: Vec<_> =
+            python_packages.iter().map(|(pkg, _)| pkg.clone()).collect();
         let required_dists = RequiredDists::from_packages(&required_packages, &self.lock_file_dir)
             .into_diagnostic()
             .context("Failed to create required distributions")?;
