@@ -6,7 +6,6 @@ use std::{
     sync::Arc,
 };
 
-
 use ahash::HashSet;
 pub(crate) use environment::EnvironmentName;
 use fancy_display::FancyDisplay;
@@ -747,9 +746,6 @@ impl Project {
 
         Ok(metadata_results)
     }
-
-
-
 
     /// Get installed executables of direct dependencies of a specific
     /// environment.
