@@ -10,7 +10,7 @@ use std::{
 use clap::{Parser, ValueEnum};
 use miette::{Context, IntoDiagnostic};
 use minijinja::{Environment, context};
-use pixi_config::{get_default_author, pixi_home, Config};
+use pixi_config::{Config, get_default_author, pixi_home};
 use pixi_consts::consts;
 use pixi_manifest::{
     DependencyOverwriteBehavior, FeatureName, SpecType, pyproject::PyProjectManifest,
@@ -276,9 +276,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::load_global();
 
     if is_init_dir_equal_to_pixi_home_parent(&dir) {
-        miette::bail!(
-            "You cannot create a workspace in the parent of the pixi home directory."
-        );
+        miette::bail!("You cannot create a workspace in the parent of the pixi home directory.");
     }
 
     // Deprecation warning for the `pyproject` option
