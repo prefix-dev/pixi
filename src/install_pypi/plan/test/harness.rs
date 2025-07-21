@@ -399,7 +399,7 @@ impl PyPIPackageDataBuilder {
 pub struct NoCache;
 
 impl<'a> CachedDistProvider<'a> for NoCache {
-    fn get_cached_dist(
+    fn get_cached_registry_dist(
         &mut self,
         _name: &'a uv_normalize::PackageName,
         _version: uv_pep440::Version,
@@ -411,7 +411,7 @@ impl<'a> CachedDistProvider<'a> for NoCache {
 /// Implementor of the [`CachedDistProvider`] that assumes to have cached everything
 pub struct AllCached;
 impl<'a> CachedDistProvider<'a> for AllCached {
-    fn get_cached_dist(
+    fn get_cached_registry_dist(
         &mut self,
         name: &'a uv_normalize::PackageName,
         version: uv_pep440::Version,

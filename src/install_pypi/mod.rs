@@ -26,7 +26,7 @@ use uv_auth::store_credentials_from_url;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
 use uv_configuration::{BuildOptions, ConfigSettings, Constraints, IndexStrategy, PreviewMode};
 use uv_dispatch::{BuildDispatch, SharedState};
-use uv_distribution::{DistributionDatabase, RegistryWheelIndex};
+use uv_distribution::{BuiltWheelIndex, DistributionDatabase, RegistryWheelIndex};
 use uv_distribution_types::{
     CachedDist, DependencyMetadata, Dist, IndexLocations, IndexUrl, InstalledDist, Name, Resolution,
 };
@@ -38,6 +38,7 @@ use uv_types::HashStrategy;
 use uv_workspace::WorkspaceCache;
 
 use crate::{
+    install_pypi::plan::CachedWheelsProvider,
     lock_file::UvResolutionContext,
     prefix::Prefix,
     uv_reporter::{UvReporter, UvReporterOptions},
@@ -203,12 +204,22 @@ impl<'a> PyPIPrefixUpdaterBuilder<'a> {
             &HashStrategy::None,
             &self.config_settings,
         );
+        let built_wheel_index = BuiltWheelIndex::new(
+            &self.uv_context.cache,
+            &self.tags,
+            &HashStrategy::None,
+            &self.config_settings,
+        );
 
         // Partition into those that should be linked from the cache (`local`), those
         // that need to be downloaded (`remote`)
         let installation_plan =
             InstallPlanner::new(self.uv_context.cache.clone(), &self.lock_file_dir)
-                .plan(&site_packages, registry_index, &required_map)
+                .plan(
+                    &site_packages,
+                    CachedWheelsProvider::new(registry_index, built_wheel_index),
+                    &required_map,
+                )
                 .into_diagnostic()
                 .context("error while determining PyPI installation plan")?;
 
