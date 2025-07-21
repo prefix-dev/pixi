@@ -30,9 +30,9 @@ pub enum CacheResolverError {
 /// Decide if we need to get the distribution from the local cache or the registry
 /// this method will add the distribution to the local or remote vector,
 /// depending on whether the version is stale, available locally or not
-pub fn decide_installation_source<'a, Op: OperationToReason>(
+pub fn decide_installation_source<'a, 'b: 'a, Op: OperationToReason>(
     uv_cache: &Cache,
-    dist: &'a Dist,
+    dist: &'b Dist,
     local: &mut Vec<(CachedDist, InstallReason)>,
     remote: &mut Vec<(Dist, InstallReason)>,
     dist_cache: &mut impl CachedDistProvider<'a>,
@@ -149,7 +149,7 @@ pub fn decide_installation_source<'a, Op: OperationToReason>(
             }
         }
         Dist::Source(source_dist) => {
-            match &source_dist {
+            match source_dist {
                 SourceDist::Path(p) => {
                     // Validate that the path exists.
                     if !p.install_path.exists() {
@@ -178,7 +178,7 @@ pub fn decide_installation_source<'a, Op: OperationToReason>(
                         return Ok(());
                     }
                 }
-                dist => match dist_cache.get_cached_source_dist(source_dist) {
+                _ => match dist_cache.get_cached_source_dist(&source_dist) {
                     Ok(cached_dist) => {
                         if let Some(cached) = cached_dist {
                             local.push((CachedDist::Url(cached), op_to_reason.cached()));

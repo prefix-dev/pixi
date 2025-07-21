@@ -9,9 +9,9 @@ use pixi_consts::consts;
 use rattler_lock::PypiPackageData;
 use std::collections::HashSet;
 use uv_cache::Cache;
-use uv_distribution_types::{InstalledDist, Name};
+use uv_distribution_types::{Dist, InstalledDist, Name};
 
-use crate::install_pypi::conversions::{ConvertToUvDistError, convert_to_dist};
+use crate::install_pypi::conversions::ConvertToUvDistError;
 
 use super::{
     NeedReinstall, PyPIInstallationPlan,
@@ -74,7 +74,7 @@ impl InstallPlanner {
         &self,
         site_packages: &'a Installed,
         mut cached_wheels_provider: Cached,
-        required_pkgs: &'a HashMap<uv_normalize::PackageName, &PypiPackageData>,
+        required_dists: &'a HashMap<uv_normalize::PackageName, (&PypiPackageData, &'a Dist)>,
     ) -> Result<PyPIInstallationPlan, InstallPlannerError> {
         // Packages to be installed directly from the cache
         let mut local = vec![];
@@ -91,14 +91,14 @@ impl InstallPlanner {
         // Walk over all installed packages and check if they are required
         for dist in site_packages.iter() {
             // Check if we require the package to be installed
-            let pkg = required_pkgs.get(dist.name());
+            let pkg_and_dist = required_dists.get(dist.name());
             // Get the installer name
             let installer = dist
                 .installer()
                 // Empty string if no installer or any other error
                 .map_or(String::new(), |f| f.unwrap_or_default());
 
-            if let Some(required_pkg) = pkg {
+            if let Some((required_pkg, required_dist)) = pkg_and_dist {
                 // Add to the list of previously installed packages
                 prev_installed_packages.insert(dist.name());
                 // Check if we need this package installed but it is not currently installed by us
@@ -129,12 +129,12 @@ impl InstallPlanner {
                         }
                     }
                 }
-                let dist = convert_to_dist(required_pkg, &self.lock_file_dir)?;
+                // Use pre-created dist for cache resolution
                 // Okay so we need to re-install the package
                 // let's see if we need the remote or local version
                 cache_resolver::decide_installation_source(
                     &self.uv_cache,
-                    &dist,
+                    required_dist,
                     &mut local,
                     &mut remote,
                     &mut cached_wheels_provider,
@@ -145,17 +145,17 @@ impl InstallPlanner {
         }
 
         // Now we need to check if we have any packages left in the required_map
-        for (name, pkg) in required_pkgs
+        for (_name, (_pkg, dist)) in required_dists
             .iter()
             // Only check the packages that have not been previously installed
             .filter(|(name, _)| !prev_installed_packages.contains(name))
         {
-            let dist = convert_to_dist(pkg, &self.lock_file_dir)?;
+            // Use pre-created dist for cache resolution
             // Okay so we need to re-install the package
             // let's see if we need the remote or local version
             cache_resolver::decide_installation_source(
                 &self.uv_cache,
-                &dist,
+                dist,
                 &mut local,
                 &mut remote,
                 &mut cached_wheels_provider,
@@ -173,7 +173,8 @@ impl InstallPlanner {
         // Walk over all installed packages and check if they are required
         let mut extraneous = HashMap::new();
         for dist in site_packages.iter() {
-            let pkg = required_pkgs.get(dist.name());
+            let pkg_and_dist = required_dists.get(dist.name());
+            let pkg = pkg_and_dist.map(|(pkg, _dist)| *pkg);
             let installer = dist
                 .installer()
                 .map_or(String::new(), |f| f.unwrap_or_default());

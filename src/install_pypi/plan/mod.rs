@@ -39,6 +39,7 @@ mod models;
 mod planner;
 mod providers;
 mod reasons;
+mod required_dists;
 mod validation;
 
 pub(crate) use models::NeedReinstall;
@@ -46,6 +47,7 @@ pub use models::PyPIInstallationPlan;
 pub use planner::InstallPlanner;
 pub use providers::CachedWheelsProvider;
 pub use reasons::InstallReason;
+pub use required_dists::RequiredDists;
 
 #[cfg(test)]
 mod test;

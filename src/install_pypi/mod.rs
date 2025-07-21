@@ -1,7 +1,6 @@
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
-    str::FromStr,
     sync::Arc,
 };
 
@@ -38,7 +37,7 @@ use uv_types::HashStrategy;
 use uv_workspace::WorkspaceCache;
 
 use crate::{
-    install_pypi::plan::CachedWheelsProvider,
+    install_pypi::plan::{CachedWheelsProvider, RequiredDists},
     lock_file::UvResolutionContext,
     prefix::Prefix,
     uv_reporter::{UvReporter, UvReporterOptions},
@@ -176,16 +175,11 @@ impl<'a> PyPIPrefixUpdaterBuilder<'a> {
         self,
         python_packages: &[CombinedPypiPackageData],
     ) -> miette::Result<PyPIPrefixUpdater> {
-        // Create a map of the required packages
-        let required_map: std::collections::HashMap<uv_normalize::PackageName, &PypiPackageData> =
-            python_packages
-                .iter()
-                .map(|(pkg, _)| {
-                    let uv_name = uv_normalize::PackageName::from_str(pkg.name.as_ref())
-                        .expect("should be correct");
-                    (uv_name, pkg)
-                })
-                .collect();
+        // Create required distributions with pre-created Dist objects
+        let required_packages: Vec<_> = python_packages.iter().map(|(pkg, _)| pkg.clone()).collect();
+        let required_dists = RequiredDists::from_packages(&required_packages, &self.lock_file_dir)
+            .into_diagnostic()
+            .context("Failed to create required distributions")?;
 
         // Find out what packages are already installed
         let site_packages =
@@ -211,6 +205,9 @@ impl<'a> PyPIPrefixUpdaterBuilder<'a> {
             &self.config_settings,
         );
 
+        // Get reference map for the plan() method
+        let required_refs = required_dists.as_ref_map();
+
         // Partition into those that should be linked from the cache (`local`), those
         // that need to be downloaded (`remote`)
         let installation_plan =
@@ -218,14 +215,14 @@ impl<'a> PyPIPrefixUpdaterBuilder<'a> {
                 .plan(
                     &site_packages,
                     CachedWheelsProvider::new(registry_index, built_wheel_index),
-                    &required_map,
+                    &required_refs,
                 )
                 .into_diagnostic()
                 .context("error while determining PyPI installation plan")?;
 
         // Show totals
         let total_to_install = installation_plan.local.len() + installation_plan.remote.len();
-        let total_required = required_map.len();
+        let total_required = required_dists.len();
         tracing::debug!(
             "{} of {} required packages are considered installed and up-to-date",
             total_required - total_to_install,

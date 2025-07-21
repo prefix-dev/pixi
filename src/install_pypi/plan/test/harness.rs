@@ -402,9 +402,26 @@ impl<'a> CachedDistProvider<'a> for NoCache {
     fn get_cached_registry_dist(
         &mut self,
         _name: &'a uv_normalize::PackageName,
-        _version: uv_pep440::Version,
+        _index: &uv_distribution_types::IndexUrl,
+        _wheel_filename: &uv_distribution_filename::WheelFilename,
     ) -> Option<uv_distribution_types::CachedRegistryDist> {
         None
+    }
+
+    fn get_cached_registry_source_dist(
+        &mut self,
+        _name: &'a uv_normalize::PackageName,
+        _index: &uv_distribution_types::IndexUrl,
+        _version: &uv_pep440::Version,
+    ) -> Option<uv_distribution_types::CachedRegistryDist> {
+        None
+    }
+
+    fn get_cached_source_dist(
+        &mut self,
+        _source_dist: &uv_distribution_types::SourceDist,
+    ) -> Result<Option<uv_distribution_types::CachedDirectUrlDist>, uv_distribution::Error> {
+        Ok(None)
     }
 }
 
@@ -413,8 +430,24 @@ pub struct AllCached;
 impl<'a> CachedDistProvider<'a> for AllCached {
     fn get_cached_registry_dist(
         &mut self,
+        _name: &'a uv_normalize::PackageName,
+        _index: &uv_distribution_types::IndexUrl,
+        wheel_filename: &uv_distribution_filename::WheelFilename,
+    ) -> Option<uv_distribution_types::CachedRegistryDist> {
+        let dist = uv_distribution_types::CachedRegistryDist {
+            filename: wheel_filename.clone(),
+            path: PathBuf::new().into(),
+            hashes: vec![].into(),
+            cache_info: Default::default(),
+        };
+        Some(dist)
+    }
+
+    fn get_cached_registry_source_dist(
+        &mut self,
         name: &'a uv_normalize::PackageName,
-        version: uv_pep440::Version,
+        _index: &uv_distribution_types::IndexUrl,
+        version: &uv_pep440::Version,
     ) -> Option<uv_distribution_types::CachedRegistryDist> {
         let wheel_filename =
             WheelFilename::from_str(format!("{}-{}-py3-none-any.whl", name, version).as_str())
@@ -426,6 +459,13 @@ impl<'a> CachedDistProvider<'a> for AllCached {
             cache_info: Default::default(),
         };
         Some(dist)
+    }
+
+    fn get_cached_source_dist(
+        &mut self,
+        _source_dist: &uv_distribution_types::SourceDist,
+    ) -> Result<Option<uv_distribution_types::CachedDirectUrlDist>, uv_distribution::Error> {
+        Ok(None) // Not implemented for test purposes
     }
 }
 
@@ -493,11 +533,24 @@ impl RequiredPackages {
     pub fn to_borrowed(&self) -> HashMap<uv_normalize::PackageName, &PypiPackageData> {
         self.required.iter().map(|(k, v)| (k.clone(), v)).collect()
     }
+
+    /// Convert to RequiredDists for the new install planner API
+    /// Uses the default lock file directory from the test setup
+    pub fn to_required_dists(&self) -> super::super::RequiredDists {
+        let packages: Vec<_> = self.required.values().cloned().collect();
+        super::super::RequiredDists::from_packages(&packages, &default_lock_file_dir())
+            .expect("Failed to create RequiredDists in test")
+    }
+}
+
+/// Default lock file directory for tests
+pub fn default_lock_file_dir() -> PathBuf {
+    PathBuf::new()
 }
 
 /// Simple function to create an installation planner
 pub fn install_planner() -> InstallPlanner {
-    InstallPlanner::new(uv_cache::Cache::temp().unwrap(), PathBuf::new())
+    InstallPlanner::new(uv_cache::Cache::temp().unwrap(), default_lock_file_dir())
 }
 
 pub fn install_planner_with_lock_dir(lock_dir: PathBuf) -> InstallPlanner {
