@@ -20,15 +20,16 @@ use tracing::instrument;
 use url::Url;
 
 use crate::{
-    BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildMethod,
-    BackendSourceBuildPrefix, BackendSourceBuildSpec, BackendSourceBuildV0Method,
-    BackendSourceBuildV1Method, BuildEnvironment, CommandDispatcher, CommandDispatcherError,
-    CommandDispatcherErrorResultExt, InstallPixiEnvironmentError, InstallPixiEnvironmentSpec,
+    BackendSourceBuildError, BackendSourceBuildMethod, BackendSourceBuildPrefix,
+    BackendSourceBuildSpec, BackendSourceBuildV0Method, BackendSourceBuildV1Method,
+    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
+    InstallPixiEnvironmentError, InstallPixiEnvironmentResult, InstallPixiEnvironmentSpec,
     InstantiateBackendError, InstantiateBackendSpec, PixiEnvironmentSpec, QuerySourceBuildCache,
     QuerySourceBuildCacheError, SolvePixiEnvironmentError, SourceCheckoutError,
     build::{
-        BuildCacheError, CachedBuild, CachedBuildSourceInfo, Dependencies, DependenciesError,
-        MoveError, SourceRecordOrCheckout, TransitiveSourceDependency, WorkDirKey, move_file,
+        BuildCacheError, BuildHostEnvironment, BuildHostPackage, CachedBuild,
+        CachedBuildSourceInfo, Dependencies, DependenciesError, MoveError, SourceRecordOrCheckout,
+        WorkDirKey, move_file,
     },
     package_identifier::PackageIdentifier,
     query_source_build_cache::CachedBuildStatus,
@@ -84,7 +85,7 @@ pub struct SourceBuildSpec {
 }
 
 #[derive(Debug, Clone)]
-pub struct BuiltSource {
+pub struct SourceBuildResult {
     /// The location on disk where the built package is located.
     pub output_file: PathBuf,
 
@@ -92,12 +93,22 @@ pub struct BuiltSource {
     pub record: RepoDataRecord,
 }
 
+#[derive(Debug, Serialize)]
+pub struct BuiltPackage {
+    /// The location on disk where the built package is located.
+    #[serde(skip)]
+    pub output_file: PathBuf,
+
+    /// The metadata of the built package.
+    pub metadata: CachedBuildSourceInfo,
+}
+
 impl SourceBuildSpec {
     #[instrument(skip_all, fields(package = %self.package, source = %self.source))]
     pub(crate) async fn build(
         mut self,
         command_dispatcher: CommandDispatcher,
-    ) -> Result<BuiltSource, CommandDispatcherError<SourceBuildError>> {
+    ) -> Result<SourceBuildResult, CommandDispatcherError<SourceBuildError>> {
         // If the output directory is not set, we want to use the build cache. Read the
         // build cache in that case.
         let (output_directory, build_cache) =
@@ -115,22 +126,12 @@ impl SourceBuildSpec {
                     .await
                     .map_err_with(SourceBuildError::from)?;
 
-                match &build_cache.cached_build {
-                    CachedBuildStatus::UpToDate(cached_build) => {
-                        tracing::debug!("Reusing package from up-to-date cache");
-
-                        // If the build is up to date, we can return the cached build.
-                        return Ok(BuiltSource {
-                            output_file: build_cache.cache_dir.join(&cached_build.record.file_name),
-                            record: cached_build.record.clone(),
-                        });
-                    }
-                    CachedBuildStatus::Stale(_, reason) => {
-                        tracing::debug!("Build cache is stale, {}", reason);
-                    }
-                    CachedBuildStatus::Missing => {
-                        tracing::debug!("Not found in cache");
-                    }
+                if let CachedBuildStatus::UpToDate(cached_build) = &build_cache.cached_build {
+                    // If the build is up to date, we can return the cached build.
+                    return Ok(SourceBuildResult {
+                        output_file: build_cache.cache_dir.join(&cached_build.record.file_name),
+                        record: cached_build.record.clone(),
+                    });
                 }
 
                 (build_cache.cache_dir.clone(), Some(build_cache))
@@ -272,10 +273,7 @@ impl SourceBuildSpec {
                     source: source_checkout
                         .pinned
                         .is_mutable()
-                        .then_some(CachedBuildSourceInfo {
-                            globs: built_source.input_globs,
-                            transitive: built_source.transitive,
-                        }),
+                        .then_some(built_source.metadata),
                     record: record.clone(),
                 })
                 .await
@@ -283,7 +281,7 @@ impl SourceBuildSpec {
                 .map_err(CommandDispatcherError::Failed)?;
         }
 
-        Ok(BuiltSource {
+        Ok(SourceBuildResult {
             output_file: built_source.output_file,
             record,
         })
@@ -294,8 +292,8 @@ impl SourceBuildSpec {
         command_dispatcher: CommandDispatcher,
         backend: Backend,
         work_directory: PathBuf,
-    ) -> Result<BackendBuiltSource, CommandDispatcherError<SourceBuildError>> {
-        command_dispatcher
+    ) -> Result<BuiltPackage, CommandDispatcherError<SourceBuildError>> {
+        let result = command_dispatcher
             .backend_source_build(BackendSourceBuildSpec {
                 backend,
                 package: self.package,
@@ -310,7 +308,16 @@ impl SourceBuildSpec {
                 }),
             })
             .await
-            .map_err_with(SourceBuildError::from)
+            .map_err_with(SourceBuildError::from)?;
+
+        Ok(BuiltPackage {
+            output_file: result.output_file,
+            metadata: CachedBuildSourceInfo {
+                globs: result.input_globs,
+                build: Default::default(),
+                host: Default::default(),
+            },
+        })
     }
 
     async fn build_v1(
@@ -318,7 +325,7 @@ impl SourceBuildSpec {
         command_dispatcher: CommandDispatcher,
         backend: Backend,
         work_directory: PathBuf,
-    ) -> Result<BackendBuiltSource, CommandDispatcherError<SourceBuildError>> {
+    ) -> Result<BuiltPackage, CommandDispatcherError<SourceBuildError>> {
         let source_anchor = SourceAnchor::from(SourceSpec::from(self.source.clone()));
         let host_platform = self.build_environment.host_platform;
         let build_platform = self.build_environment.build_platform;
@@ -453,10 +460,12 @@ impl SourceBuildSpec {
                     build_prefix: BackendSourceBuildPrefix {
                         platform: self.build_environment.build_platform,
                         prefix: directories.build_prefix,
+                        records: build_records.clone(),
                     },
                     host_prefix: BackendSourceBuildPrefix {
                         platform: self.build_environment.host_platform,
                         prefix: directories.host_prefix,
+                        records: host_records.clone(),
                     },
                     variant: output.metadata.variant,
                     output_directory: self.output_directory,
@@ -465,38 +474,41 @@ impl SourceBuildSpec {
             .await
             .map_err_with(SourceBuildError::from)?;
 
-        // Determine the transitive dependencies of the built package.
-        let mut transitive = Vec::new();
-        for source_record in host_records.into_iter().filter_map(PixiRecord::into_source) {
-            if let Some(sha256) = host_prefix
-                .resolved_source_records
-                .get(&source_record.package_record.name)
-                .and_then(|record| record.package_record.sha256.as_ref())
-            {
-                transitive.push(TransitiveSourceDependency {
-                    package: PackageIdentifier::from(source_record.package_record),
-                    source: source_record.source,
-                    hash: *sha256,
-                });
-            }
-        }
-        for source_record in build_records.into_iter().filter_map(PixiRecord::into_source) {
-            if let Some(sha256) = build_prefix
-                .resolved_source_records
-                .get(&source_record.package_record.name)
-                .and_then(|record| record.package_record.sha256.as_ref())
-            {
-                transitive.push(TransitiveSourceDependency {
-                    package: PackageIdentifier::from(source_record.package_record),
-                    source: source_record.source,
-                    hash: *sha256,
-                });
-            }
-        }
+        // Little helper function the build a `BuildHostEnvironment` from expected and
+        // installed records.
+        let build_host_environment =
+            |records: Vec<PixiRecord>, prefix: InstallPixiEnvironmentResult| BuildHostEnvironment {
+                packages: records
+                    .into_iter()
+                    .map(|record| match record {
+                        PixiRecord::Binary(repodata_record) => BuildHostPackage {
+                            repodata_record,
+                            source: None,
+                        },
+                        PixiRecord::Source(source) => {
+                            let repodata_record = prefix
+                                .resolved_source_records
+                                .get(&source.package_record.name)
+                                .cloned()
+                                .expect(
+                                    "the source record should be present in the result sources",
+                                );
+                            BuildHostPackage {
+                                repodata_record,
+                                source: Some(source.source),
+                            }
+                        }
+                    })
+                    .collect(),
+            };
 
-        Ok(BackendBuiltSource {
-            transitive,
-            ..built_source
+        Ok(BuiltPackage {
+            output_file: built_source.output_file,
+            metadata: CachedBuildSourceInfo {
+                globs: built_source.input_globs,
+                build: build_host_environment(build_records, build_prefix),
+                host: build_host_environment(host_records, host_prefix),
+            },
         })
     }
 
@@ -682,6 +694,9 @@ impl From<QuerySourceBuildCacheError> for SourceBuildError {
             QuerySourceBuildCacheError::BuildCache(err) => SourceBuildError::BuildCache(err),
             QuerySourceBuildCacheError::SourceCheckout(err) => {
                 SourceBuildError::SourceCheckout(err)
+            }
+            QuerySourceBuildCacheError::Cycle => {
+                unreachable!("a build time cycle should never happen")
             }
         }
     }

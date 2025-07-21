@@ -1,17 +1,19 @@
 use std::path::PathBuf;
+
+use chrono::Utc;
+use itertools::chain;
+use miette::Diagnostic;
+use pixi_glob::GlobModificationTime;
+use pixi_record::PinnedSourceSpec;
+use rattler_conda_types::ChannelUrl;
 use tokio::sync::Mutex;
+use tracing::instrument;
 
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
     PackageIdentifier, SourceCheckoutError,
     build::{BuildCacheEntry, BuildCacheError, BuildInput, CachedBuild},
 };
-use chrono::Utc;
-use miette::Diagnostic;
-use pixi_glob::{GlobModificationTime, GlobModificationTimeError};
-use pixi_record::PinnedSourceSpec;
-use rattler_conda_types::ChannelUrl;
-use thiserror::Error;
 
 /// A query to retrieve information from the source build cache. This is
 /// memoized to allow querying information from the cache while it is also
@@ -35,21 +37,9 @@ pub struct QuerySourceBuildCache {
     pub build_environment: BuildEnvironment,
 }
 
-#[derive(Debug, Error)]
-pub enum StaleReason {
-    #[error("failed to determine modification time of input files: {0}")]
-    GlobError(GlobModificationTimeError),
-
-    #[error("no files match the source glob")]
-    NoMatches,
-
-    #[error("the file {} is newer than the package in cache", .0.display())]
-    Timestamp(PathBuf),
-}
-
 pub enum CachedBuildStatus {
     /// The build was found in the cache but is stale.
-    Stale(CachedBuild, StaleReason),
+    Stale(CachedBuild),
 
     /// The build was found in the cache and is up to date.
     UpToDate(CachedBuild),
@@ -73,6 +63,7 @@ pub struct SourceBuildCacheEntry {
 
 impl QuerySourceBuildCache {
     /// Creates a new query for the source build cache.
+    #[instrument(skip_all, fields(package = %self.package, source = %self.source))]
     pub async fn query(
         self,
         command_dispatcher: CommandDispatcher,
@@ -84,8 +75,8 @@ impl QuerySourceBuildCache {
             build: self.package.build.to_string(),
             subdir: self.package.subdir.clone(),
             host_platform: self.build_environment.host_platform,
-            host_virtual_packages: self.build_environment.host_virtual_packages,
-            build_virtual_packages: self.build_environment.build_virtual_packages,
+            host_virtual_packages: self.build_environment.host_virtual_packages.clone(),
+            build_virtual_packages: self.build_environment.build_virtual_packages.clone(),
         };
         let (cached_build, build_cache_entry) = command_dispatcher
             .build_cache()
@@ -97,7 +88,7 @@ impl QuerySourceBuildCache {
         Ok(SourceBuildCacheEntry {
             cached_build: match cached_build {
                 Some(cached_build) => {
-                    Self::determine_cache_status(&command_dispatcher, cached_build, &self.source)
+                    self.determine_cache_status(&command_dispatcher, cached_build)
                         .await?
                 }
                 None => CachedBuildStatus::Missing,
@@ -110,10 +101,12 @@ impl QuerySourceBuildCache {
     /// Given a cached build, verify that it is still valid for the given source
     /// record.
     async fn determine_cache_status(
+        &self,
         command_dispatcher: &CommandDispatcher,
         cached_build: CachedBuild,
-        source: &PinnedSourceSpec,
     ) -> Result<CachedBuildStatus, CommandDispatcherError<QuerySourceBuildCacheError>> {
+        let source = &self.source;
+
         // Immutable source records are always considered valid.
         if source.is_immutable() {
             return Ok(CachedBuildStatus::UpToDate(cached_build));
@@ -146,10 +139,7 @@ impl QuerySourceBuildCache {
                     "failed to determine modification time of input files: {}. Assuming the package is out-of-date.",
                     e
                 );
-                return Ok(CachedBuildStatus::Stale(
-                    cached_build,
-                    StaleReason::GlobError(e),
-                ));
+                return Ok(CachedBuildStatus::Stale(cached_build));
             }
         };
 
@@ -162,25 +152,79 @@ impl QuerySourceBuildCache {
                     .record
                     .package_record
                     .timestamp
-                    .map(|t| t >= chrono::DateTime::<Utc>::from(modified_at))
-                    .unwrap_or(false)
+                    .map(|t| t < chrono::DateTime::<Utc>::from(modified_at))
+                    .unwrap_or(true)
                 {
-                    Ok(CachedBuildStatus::UpToDate(cached_build))
-                } else {
-                    Ok(CachedBuildStatus::Stale(
-                        cached_build,
-                        StaleReason::Timestamp(designated_file),
-                    ))
+                    tracing::debug!(
+                        "package is stale, the file {} is newer than the package in cache",
+                        designated_file.display()
+                    );
+                    return Ok(CachedBuildStatus::Stale(cached_build));
                 }
             }
             GlobModificationTime::NoMatches => {
-                // No matches, so we should rebuild.
-                Ok(CachedBuildStatus::Stale(
-                    cached_build,
-                    StaleReason::NoMatches,
-                ))
+                tracing::debug!("package is stale, no files match the source globs",);
+                return Ok(CachedBuildStatus::Stale(cached_build));
             }
         }
+
+        // Check if any of the transitive source dependencies have changed.
+        for dep in chain!(&source_info.host.packages, &source_info.build.packages) {
+            let Some(source) = &dep.source else {
+                continue;
+            };
+
+            let identifier = PackageIdentifier::from(&dep.repodata_record.package_record);
+
+            // Check the build cache to see if the source of that package is still fresh.
+            match command_dispatcher
+                .query_source_build_cache(QuerySourceBuildCache {
+                    package: identifier.clone(),
+                    source: source.clone(),
+                    channels: self.channels.clone(),
+                    build_environment: self.build_environment.clone(),
+                })
+                .await
+                .try_into_failed()?
+            {
+                Err(QuerySourceBuildCacheError::Cycle) => {
+                    tracing::debug!(
+                        "a cycle was detected in the build/host dependencies of the package",
+                    );
+                    return Ok(CachedBuildStatus::Stale(cached_build));
+                }
+                Err(err) => {
+                    return Err(CommandDispatcherError::Failed(err));
+                }
+                Ok(entry) => {
+                    match &entry.cached_build {
+                        CachedBuildStatus::Missing | CachedBuildStatus::Stale(_) => {
+                            tracing::debug!(
+                                "package is stale because its build dependency '{identifier}' is missing or stale",
+                            );
+                            return Ok(CachedBuildStatus::Stale(cached_build));
+                        }
+                        CachedBuildStatus::UpToDate(dependency_cached_build) => {
+                            // Is this version of the package also what we expect?
+                            //
+                            // Maybe the package that we previously used was actually updated
+                            // without also updating this package, or the build of this package
+                            // failed previously.
+                            if dependency_cached_build.record.package_record.sha256
+                                != dep.repodata_record.package_record.sha256
+                            {
+                                tracing::debug!(
+                                    "package is stale because its build dependency '{identifier}' has changed",
+                                );
+                                return Ok(CachedBuildStatus::Stale(cached_build));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(CachedBuildStatus::UpToDate(cached_build))
     }
 }
 
@@ -192,4 +236,7 @@ pub enum QuerySourceBuildCacheError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     SourceCheckout(SourceCheckoutError),
+
+    #[error("a cycle was detected in the build/host dependencies of the package")]
+    Cycle,
 }

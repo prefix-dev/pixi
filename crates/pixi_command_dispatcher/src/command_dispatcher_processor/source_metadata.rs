@@ -1,7 +1,6 @@
 use std::{collections::hash_map::Entry, sync::Arc};
 
 use futures::FutureExt;
-use itertools::Itertools;
 
 use super::{CommandDispatcherProcessor, PendingDeduplicatingTask, TaskResult};
 use crate::{
@@ -20,15 +19,7 @@ impl CommandDispatcherProcessor {
                 Some(id) => {
                     // We already have a pending task for this source metadata. Let's make sure that
                     // we are not trying to resolve the same source metadata in a cycle.
-                    if std::iter::successors(task.parent, |ctx| {
-                        self.parent_contexts.get(ctx).cloned()
-                    })
-                    .filter_map(|context| match context {
-                        CommandDispatcherContext::SourceMetadata(id) => Some(id),
-                        _ => None,
-                    })
-                    .contains(id)
-                    {
+                    if self.contains_cycle(*id, task.parent) {
                         let _ = task
                             .tx
                             .send(Err(SourceMetadataError::Cycle(Cycle::default())));

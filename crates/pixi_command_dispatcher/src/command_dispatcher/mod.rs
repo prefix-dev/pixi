@@ -45,7 +45,7 @@ use crate::{
     limits::ResolvedLimits,
     query_source_build_cache::QuerySourceBuildCache,
     solve_conda::SolveCondaEnvironmentError,
-    source_build::{BuiltSource, SourceBuildError, SourceBuildSpec},
+    source_build::{SourceBuildError, SourceBuildResult, SourceBuildSpec},
 };
 
 mod builder;
@@ -167,7 +167,7 @@ impl CommandDispatcherChannel {
 ///
 /// This enum is used to track dependencies and associate tasks with specific
 /// contexts.
-#[derive(Debug, Copy, Clone, derive_more::From, Hash, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, derive_more::From, derive_more::TryInto, Hash, Eq, PartialEq)]
 pub(crate) enum CommandDispatcherContext {
     SolveCondaEnvironment(SolveCondaEnvironmentId),
     SolvePixiEnvironment(SolvePixiEnvironmentId),
@@ -275,7 +275,7 @@ impl TaskSpec for SourceMetadataSpec {
 pub(crate) type SourceBuildTask = Task<SourceBuildSpec>;
 
 impl TaskSpec for SourceBuildSpec {
-    type Output = BuiltSource;
+    type Output = SourceBuildResult;
     type Error = SourceBuildError;
 }
 
@@ -449,7 +449,7 @@ impl CommandDispatcher {
     pub async fn source_build(
         &self,
         spec: SourceBuildSpec,
-    ) -> Result<BuiltSource, CommandDispatcherError<SourceBuildError>> {
+    ) -> Result<SourceBuildResult, CommandDispatcherError<SourceBuildError>> {
         self.execute_task(spec).await
     }
 

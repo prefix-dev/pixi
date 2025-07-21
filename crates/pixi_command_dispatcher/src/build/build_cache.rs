@@ -9,17 +9,13 @@ use async_fd_lock::{LockWrite, RwLockWriteGuard};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_record::PinnedSourceSpec;
 use rattler_conda_types::{ChannelUrl, GenericVirtualPackage, Platform, RepoDataRecord};
-use rattler_digest::Sha256Hash;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use thiserror::Error;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use xxhash_rust::xxh3::Xxh3;
 
-use crate::{
-    PackageIdentifier,
-    build::{MoveError, source_checkout_cache_key},
-};
+use crate::build::{MoveError, source_checkout_cache_key};
 
 /// A cache for caching build artifacts of a source checkout.
 #[derive(Clone)]
@@ -194,24 +190,33 @@ pub struct CachedBuild {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CachedBuildSourceInfo {
+    /// The files that were used during the build process. If any of these
+    /// change, the build should be considered stale.
     pub globs: BTreeSet<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub transitive: Vec<TransitiveSourceDependency>,
+    /// The packages that were used during the build process.
+    #[serde(default)]
+    pub build: BuildHostEnvironment,
+    /// The packages that were installed in the host environment.
+    #[serde(default)]
+    pub host: BuildHostEnvironment,
+}
+
+#[serde_as]
+#[derive(Default, Debug, Serialize, Deserialize)]
+pub struct BuildHostEnvironment {
+    /// Describes the packages that were installed in the host environment.
+    pub packages: Vec<BuildHostPackage>,
 }
 
 #[serde_as]
 #[derive(Debug, Serialize, Deserialize)]
-pub struct TransitiveSourceDependency {
-    /// The source location of the package that was used as a dependency.
-    pub source: PinnedSourceSpec,
-
-    /// The identifier of the package that was used as a dependency.
+pub struct BuildHostPackage {
+    /// The repodata record of the package.
     #[serde(flatten)]
-    pub package: PackageIdentifier,
+    pub repodata_record: RepoDataRecord,
 
-    /// The hash of the package was used during the build.
-    #[serde_as(as = "rattler_digest::serde::SerializableHash<rattler_digest::Sha256>")]
-    pub hash: Sha256Hash,
+    /// The source location from which the package was built.
+    pub source: Option<PinnedSourceSpec>,
 }
 
 /// A cache entry returned by [`BuildCache::entry`] which enables

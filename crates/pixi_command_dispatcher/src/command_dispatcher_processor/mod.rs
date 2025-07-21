@@ -10,16 +10,17 @@ use std::{
 };
 
 use futures::{StreamExt, future::LocalBoxFuture};
+use itertools::Itertools;
 use pixi_git::{GitError, resolver::RepositoryReference, source::Fetch};
 use pixi_record::PixiRecord;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::{
-    BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec, BuiltSource,
+    BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec,
     CommandDispatcherErrorResultExt, InstallPixiEnvironmentResult, QuerySourceBuildCache,
     QuerySourceBuildCacheError, Reporter, SolveCondaEnvironmentSpec, SolvePixiEnvironmentError,
-    SourceBuildCacheEntry, SourceBuildError, SourceBuildSpec, SourceMetadata, SourceMetadataError,
-    SourceMetadataSpec,
+    SourceBuildCacheEntry, SourceBuildError, SourceBuildResult, SourceBuildSpec, SourceMetadata,
+    SourceMetadataError, SourceMetadataSpec,
     backend_source_build::{BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildSpec},
     command_dispatcher::{
         BackendSourceBuildId, BuildBackendMetadataId, CommandDispatcher, CommandDispatcherChannel,
@@ -108,7 +109,8 @@ pub(crate) struct CommandDispatcherProcessor {
     git_checkouts: HashMap<RepositoryReference, PendingGitCheckout>,
 
     /// Source builds that are currently being processed.
-    source_build: HashMap<SourceBuildId, PendingDeduplicatingTask<BuiltSource, SourceBuildError>>,
+    source_build:
+        HashMap<SourceBuildId, PendingDeduplicatingTask<SourceBuildResult, SourceBuildError>>,
     source_build_reporters: HashMap<SourceBuildId, reporter::SourceBuildId>,
     source_build_ids: HashMap<SourceBuildSpec, SourceBuildId>,
 
@@ -165,7 +167,7 @@ enum TaskResult {
     ),
     SourceBuild(
         SourceBuildId,
-        Result<BuiltSource, CommandDispatcherError<SourceBuildError>>,
+        Result<SourceBuildResult, CommandDispatcherError<SourceBuildError>>,
     ),
     QuerySourceBuildCache(
         QuerySourceBuildCacheId,
@@ -541,5 +543,17 @@ impl CommandDispatcherProcessor {
             reporter.on_clear()
         }
         let _ = sender.send(());
+    }
+
+    /// Returns true if by following the parent chain of the `parent` context we
+    /// stumble on `id`.
+    pub fn contains_cycle<T: TryFrom<CommandDispatcherContext> + PartialEq>(
+        &self,
+        id: T,
+        parent: Option<CommandDispatcherContext>,
+    ) -> bool {
+        std::iter::successors(parent, |ctx| self.parent_contexts.get(ctx).cloned())
+            .filter_map(|context| T::try_from(context).ok())
+            .contains(&id)
     }
 }

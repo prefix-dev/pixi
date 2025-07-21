@@ -4,7 +4,7 @@ use futures::FutureExt;
 
 use super::{CommandDispatcherProcessor, PendingDeduplicatingTask, TaskResult};
 use crate::{
-    BuiltSource, CommandDispatcherError, Reporter, SourceBuildError,
+    CommandDispatcherError, Reporter, SourceBuildError, SourceBuildResult,
     command_dispatcher::{CommandDispatcherContext, SourceBuildId, SourceBuildTask},
 };
 
@@ -88,7 +88,7 @@ impl CommandDispatcherProcessor {
     pub(crate) fn on_source_build_result(
         &mut self,
         id: SourceBuildId,
-        result: Result<BuiltSource, CommandDispatcherError<SourceBuildError>>,
+        result: Result<SourceBuildResult, CommandDispatcherError<SourceBuildError>>,
     ) {
         self.parent_contexts.remove(&id.into());
         if let Some((reporter, reporter_id)) = self

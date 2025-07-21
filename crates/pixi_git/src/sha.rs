@@ -3,12 +3,12 @@
 /// This module expose types that represent Git object IDs (OIDs) and SHAs, and
 /// some utility functions to convert to them from strings.
 use core::str;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::borrow::Cow;
 use std::{
     fmt::{Debug, Display},
     str::FromStr,
 };
-use std::borrow::Cow;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 
 /// Unique identity of any Git object (commit, tree, blob, tag).

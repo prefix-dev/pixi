@@ -17,7 +17,16 @@ impl CommandDispatcherProcessor {
         // Lookup the id of the request to avoid duplication.
         let query_source_build_id = {
             match self.query_source_build_cache_ids.get(&task.spec) {
-                Some(id) => *id,
+                Some(id) => {
+                    // We already have a pending task. Let's make sure that we are not trying to
+                    // resolve the same thing in a cycle.
+                    if self.contains_cycle(*id, task.parent) {
+                        let _ = task.tx.send(Err(QuerySourceBuildCacheError::Cycle));
+                        return;
+                    }
+
+                    *id
+                }
                 None => {
                     // If the source build is not in the map we need to create a new id for it.
                     let id = QuerySourceBuildCacheId(self.query_source_build_cache_ids.len());

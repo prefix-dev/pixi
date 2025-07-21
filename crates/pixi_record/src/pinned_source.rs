@@ -360,7 +360,10 @@ impl From<PinnedGitSpec> for PinnedSourceSpec {
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct PinnedPathSpec {
     /// The path of the source.
-    #[serde_as(serialize_as = "serde_with::DisplayFromStr", deserialize_as = "serde_with::FromInto<String>")]
+    #[serde_as(
+        serialize_as = "serde_with::DisplayFromStr",
+        deserialize_as = "serde_with::FromInto<String>"
+    )]
     pub path: Utf8TypedPathBuf,
 }
 
