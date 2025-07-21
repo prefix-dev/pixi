@@ -26,6 +26,7 @@ use serde::Serialize;
 use thiserror::Error;
 
 use crate::{BuildEnvironment, CommandDispatcherError, PackageIdentifier};
+use crate::build::TransitiveSourceDependency;
 
 /// The `BackendSourceBuildSpec` struct is used to define the specifications for
 /// building a source package using a pre-instantiated backend. This task
@@ -116,6 +117,9 @@ pub struct BackendBuiltSource {
     /// The globs that were used as input to the build. Use these for
     /// re-verifying the build.
     pub input_globs: BTreeSet<String>,
+
+    /// The transitive source dependencies that were used during the build.
+    pub transitive: Vec<TransitiveSourceDependency>,
 }
 
 impl BackendSourceBuildSpec {
@@ -246,6 +250,7 @@ impl BackendSourceBuildSpec {
         Ok(BackendBuiltSource {
             input_globs: built_package.input_globs,
             output_file: built_package.output_file,
+            transitive: Vec::new(),
         })
     }
 
@@ -312,6 +317,7 @@ impl BackendSourceBuildSpec {
         Ok(BackendBuiltSource {
             input_globs: built_package.input_globs,
             output_file: built_package.output_file,
+            transitive: Vec::new(),
         })
     }
 }

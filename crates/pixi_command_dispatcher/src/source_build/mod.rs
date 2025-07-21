@@ -28,7 +28,7 @@ use crate::{
     QuerySourceBuildCacheError, SolvePixiEnvironmentError, SourceCheckoutError,
     build::{
         BuildCacheError, CachedBuild, CachedBuildSourceInfo, Dependencies, DependenciesError,
-        MoveError, SourceRecordOrCheckout, WorkDirKey, move_file,
+        MoveError, SourceRecordOrCheckout, TransitiveSourceDependency, WorkDirKey, move_file,
     },
     package_identifier::PackageIdentifier,
     query_source_build_cache::CachedBuildStatus,
@@ -274,6 +274,7 @@ impl SourceBuildSpec {
                         .is_mutable()
                         .then_some(CachedBuildSourceInfo {
                             globs: built_source.input_globs,
+                            transitive: built_source.transitive,
                         }),
                     record: record.clone(),
                 })
@@ -403,10 +404,10 @@ impl SourceBuildSpec {
             .map_err_with(SourceBuildError::SolveBuildEnvironment)?;
 
         // Install the build environment
-        let _build_prefix = command_dispatcher
+        let build_prefix = command_dispatcher
             .install_pixi_environment(InstallPixiEnvironmentSpec {
                 name: format!("{} (build)", self.package.name.as_source()),
-                records: build_records,
+                records: build_records.clone(),
                 prefix: Prefix::create(&directories.build_prefix)
                     .map_err(SourceBuildError::CreateBuildEnvironmentDirectory)
                     .map_err(CommandDispatcherError::Failed)?,
@@ -423,10 +424,10 @@ impl SourceBuildSpec {
             .map_err_with(SourceBuildError::InstallBuildEnvironment)?;
 
         // Install the host environment.
-        let _host_prefix = command_dispatcher
+        let host_prefix = command_dispatcher
             .install_pixi_environment(InstallPixiEnvironmentSpec {
                 name: format!("{} (host)", self.package.name.as_source()),
-                records: host_records,
+                records: host_records.clone(),
                 prefix: Prefix::create(&directories.host_prefix)
                     .map_err(SourceBuildError::CreateBuildEnvironmentDirectory)
                     .map_err(CommandDispatcherError::Failed)?,
@@ -442,7 +443,7 @@ impl SourceBuildSpec {
             .map_err_with(Box::new)
             .map_err_with(SourceBuildError::InstallBuildEnvironment)?;
 
-        command_dispatcher
+        let built_source = command_dispatcher
             .backend_source_build(BackendSourceBuildSpec {
                 backend,
                 package: self.package,
@@ -462,7 +463,41 @@ impl SourceBuildSpec {
                 }),
             })
             .await
-            .map_err_with(SourceBuildError::from)
+            .map_err_with(SourceBuildError::from)?;
+
+        // Determine the transitive dependencies of the built package.
+        let mut transitive = Vec::new();
+        for source_record in host_records.into_iter().filter_map(PixiRecord::into_source) {
+            if let Some(sha256) = host_prefix
+                .resolved_source_records
+                .get(&source_record.package_record.name)
+                .and_then(|record| record.package_record.sha256.as_ref())
+            {
+                transitive.push(TransitiveSourceDependency {
+                    package: PackageIdentifier::from(source_record.package_record),
+                    source: source_record.source,
+                    hash: *sha256,
+                });
+            }
+        }
+        for source_record in build_records.into_iter().filter_map(PixiRecord::into_source) {
+            if let Some(sha256) = build_prefix
+                .resolved_source_records
+                .get(&source_record.package_record.name)
+                .and_then(|record| record.package_record.sha256.as_ref())
+            {
+                transitive.push(TransitiveSourceDependency {
+                    package: PackageIdentifier::from(source_record.package_record),
+                    source: source_record.source,
+                    hash: *sha256,
+                });
+            }
+        }
+
+        Ok(BackendBuiltSource {
+            transitive,
+            ..built_source
+        })
     }
 
     async fn solve_dependencies(

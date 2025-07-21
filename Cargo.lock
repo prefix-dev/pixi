@@ -4480,6 +4480,7 @@ dependencies = [
  "reqwest-middleware",
  "serde",
  "serde_json",
+ "serde_with",
  "simple_spawn_blocking",
  "slotmap",
  "strsim",

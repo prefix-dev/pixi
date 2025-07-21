@@ -7,8 +7,8 @@ use std::{
     fmt::{Debug, Display},
     str::FromStr,
 };
-
-use serde::{Serialize, Serializer};
+use std::borrow::Cow;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 
 /// Unique identity of any Git object (commit, tree, blob, tag).
@@ -116,6 +116,16 @@ impl Serialize for GitSha {
         S: Serializer,
     {
         serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for GitSha {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = Cow::<'de, str>::deserialize(deserializer)?;
+        GitSha::from_str(&s).map_err(serde::de::Error::custom)
     }
 }
 

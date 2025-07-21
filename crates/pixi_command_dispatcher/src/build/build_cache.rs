@@ -9,12 +9,17 @@ use async_fd_lock::{LockWrite, RwLockWriteGuard};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_record::PinnedSourceSpec;
 use rattler_conda_types::{ChannelUrl, GenericVirtualPackage, Platform, RepoDataRecord};
+use rattler_digest::Sha256Hash;
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use thiserror::Error;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use xxhash_rust::xxh3::Xxh3;
 
-use crate::build::{MoveError, source_checkout_cache_key};
+use crate::{
+    PackageIdentifier,
+    build::{MoveError, source_checkout_cache_key},
+};
 
 /// A cache for caching build artifacts of a source checkout.
 #[derive(Clone)]
@@ -190,6 +195,23 @@ pub struct CachedBuild {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CachedBuildSourceInfo {
     pub globs: BTreeSet<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub transitive: Vec<TransitiveSourceDependency>,
+}
+
+#[serde_as]
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TransitiveSourceDependency {
+    /// The source location of the package that was used as a dependency.
+    pub source: PinnedSourceSpec,
+
+    /// The identifier of the package that was used as a dependency.
+    #[serde(flatten)]
+    pub package: PackageIdentifier,
+
+    /// The hash of the package was used during the build.
+    #[serde_as(as = "rattler_digest::serde::SerializableHash<rattler_digest::Sha256>")]
+    pub hash: Sha256Hash,
 }
 
 /// A cache entry returned by [`BuildCache::entry`] which enables

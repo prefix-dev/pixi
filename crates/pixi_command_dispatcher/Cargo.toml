@@ -23,6 +23,7 @@ rand = { workspace = true }
 reqwest-middleware = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+serde_with = { workspace = true }
 slotmap = { workspace = true }
 strsim = { workspace = true }
 thiserror = { workspace = true }

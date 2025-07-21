@@ -14,6 +14,7 @@ use pixi_git::{
 use pixi_spec::{GitReference, GitSpec, PathSourceSpec, SourceSpec, UrlSourceSpec};
 use rattler_digest::{Md5Hash, Sha256Hash};
 use rattler_lock::UrlOrPath;
+use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use thiserror::Error;
 use typed_path::Utf8TypedPathBuf;
@@ -22,7 +23,7 @@ use url::Url;
 /// Describes an exact revision of a source checkout. This is used to pin a
 /// particular source definition to a revision. A git source spec does not
 /// describe an exact commit. This struct describes an exact commit.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum PinnedSourceSpec {
     /// A pinned url source package.
@@ -154,7 +155,7 @@ impl From<MutablePinnedSourceSpec> for PinnedSourceSpec {
 
 /// A pinned url archive.
 #[serde_as]
-#[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct PinnedUrlSpec {
     /// The URL of the archive.
     pub url: Url,
@@ -184,7 +185,7 @@ impl From<PinnedUrlSpec> for PinnedSourceSpec {
 }
 
 /// A pinned version of a git checkout.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord, serde::Serialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct PinnedGitCheckout {
     /// The commit hash of the git checkout.
     pub commit: GitSha,
@@ -269,7 +270,7 @@ impl PinnedGitCheckout {
 
 /// A pinned version of a git checkout.
 /// Similar with [`GitUrl`] but with a resolved commit field.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize, Deserialize)]
 pub struct PinnedGitSpec {
     /// The URL of the repository without the revision and subdirectory
     /// fragment.
@@ -356,10 +357,10 @@ impl From<PinnedGitSpec> for PinnedSourceSpec {
 /// `PathSpec` this path is always either absolute or relative to the project
 /// root.
 #[serde_as]
-#[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct PinnedPathSpec {
     /// The path of the source.
-    #[serde_as(as = "serde_with::DisplayFromStr")]
+    #[serde_as(serialize_as = "serde_with::DisplayFromStr", deserialize_as = "serde_with::FromInto<String>")]
     pub path: Utf8TypedPathBuf,
 }
 

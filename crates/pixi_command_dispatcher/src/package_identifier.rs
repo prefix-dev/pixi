@@ -2,10 +2,10 @@ use std::fmt::Display;
 
 use pixi_record::SourceRecord;
 use rattler_conda_types::{PackageName, PackageRecord, VersionWithSource};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// A struct that uniquely identifies a single package in a channel.
-#[derive(Debug, Clone, Serialize, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Hash)]
 pub struct PackageIdentifier {
     pub name: PackageName,
     pub version: VersionWithSource,

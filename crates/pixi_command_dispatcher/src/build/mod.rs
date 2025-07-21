@@ -13,6 +13,7 @@ use std::hash::{Hash, Hasher};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 pub use build_cache::{
     BuildCache, BuildCacheEntry, BuildCacheError, BuildInput, CachedBuild, CachedBuildSourceInfo,
+    TransitiveSourceDependency,
 };
 pub use build_environment::BuildEnvironment;
 pub use dependencies::{Dependencies, DependenciesError, PixiRunExports};
