@@ -10,7 +10,7 @@ use std::{
 use clap::{Parser, ValueEnum};
 use miette::{Context, IntoDiagnostic};
 use minijinja::{Environment, context};
-use pixi_config::{Config, get_default_author};
+use pixi_config::{get_default_author, pixi_home, Config};
 use pixi_consts::consts;
 use pixi_manifest::{
     DependencyOverwriteBehavior, FeatureName, SpecType, pyproject::PyProjectManifest,
@@ -255,6 +255,14 @@ pixi.lock merge=binary gitlab-language=yaml gitlab-generated=true
     }
 }
 
+fn is_init_dir_equal_to_pixi_home_parent(init_dir: &Path) -> bool {
+    pixi_home()
+        .as_ref()
+        .and_then(|home_dir| home_dir.parent())
+        .map(|parent| parent == init_dir)
+        .unwrap_or(false)
+}
+
 pub async fn execute(args: Args) -> miette::Result<()> {
     let env = Environment::new();
     // Fail silently if the directory already exists or cannot be created.
@@ -266,6 +274,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let gitignore_path = dir.join(".gitignore");
     let gitattributes_path = dir.join(".gitattributes");
     let config = Config::load_global();
+
+    if is_init_dir_equal_to_pixi_home_parent(&dir) {
+        miette::bail!(
+            "You cannot create a workspace in the parent of the pixi home directory."
+        );
+    }
 
     // Deprecation warning for the `pyproject` option
     if args.pyproject_toml {
