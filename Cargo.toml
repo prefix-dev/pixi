@@ -451,7 +451,7 @@ aarch64-pc-windows-msvc = "windows_x64_2025_large"
 x86_64-pc-windows-msvc = "windows_x64_2025_large"
 
 # Linux targets
-aarch64-unknown-linux-musl = "8core_ubuntu_latest_runner"
+aarch64-unknown-linux-musl = "ubuntu-24.04-arm"
 x86_64-unknown-linux-musl = "8core_ubuntu_latest_runner"
 
 [workspace.metadata.dist.dependencies.apt]
