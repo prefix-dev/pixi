@@ -81,7 +81,7 @@ impl CommandDispatcherProcessor {
                     reporter.on_started(reporter_id)
                 }
 
-                self.queue_source_metadata_task(source_metadata_id, task);
+                self.queue_source_metadata_task(source_metadata_id, task.spec);
             }
         }
     }

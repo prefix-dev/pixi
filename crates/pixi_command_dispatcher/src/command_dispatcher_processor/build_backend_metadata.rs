@@ -8,7 +8,6 @@ use crate::{
     CommandDispatcherError, Reporter,
     command_dispatcher::{
         BuildBackendMetadataId, BuildBackendMetadataTask, CommandDispatcherContext,
-        SourceMetadataId,
     },
 };
 

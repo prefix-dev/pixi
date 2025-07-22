@@ -69,7 +69,7 @@ impl CommandDispatcherProcessor {
                     reporter.on_started(reporter_id)
                 }
 
-                self.queue_source_build_task(source_build_id, task);
+                self.queue_source_build_task(source_build_id, task.spec);
             }
         }
     }
