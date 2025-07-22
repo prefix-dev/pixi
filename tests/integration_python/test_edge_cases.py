@@ -496,8 +496,13 @@ def test_issue_4123_cache_prevents_editable_install(
     """
     Reproduce issue #4123: cached registry package prevents proper editable installation
     of same name/version from local source.
+
+    In this issue when installing a wheel from PyPI, that would be cached, when subsequently (even in a different project)
+    using a local version of the same package name and version, it would use the cached registry version instead of the local source.
+    This is basically a reproduction of the linked issue.
     """
-    # Use shared cache directory for all pixi commands
+    # Use shared cache directory for all pixi commands,
+    # so that we have no cache interference
     cache_env = {"PIXI_CACHE_DIR": str(tmp_path / "pixi_cache")}
 
     # Create local package with same name/version as will be installed from PyPI
@@ -514,8 +519,10 @@ build-backend = "hatchling.build"
 
     src_dir = local_pkg / "six"
     src_dir.mkdir()
+    # Write a simple module with a local marker
     (src_dir / "__init__.py").write_text('__version__ = "1.16.0"\nlocal_marker = "LOCAL"')
 
+    # Create a new pixi workspace
     # Step 1: Install from PyPI (caches the package)
     proj1 = tmp_pixi_workspace / "proj1"
     proj1.mkdir()
