@@ -528,12 +528,6 @@ impl RequiredPackages {
         self
     }
 
-    /// Convert the required packages where the data is borrowed
-    /// this is needed to pass it into the [`InstallPlanner`]
-    pub fn to_borrowed(&self) -> HashMap<uv_normalize::PackageName, &PypiPackageData> {
-        self.required.iter().map(|(k, v)| (k.clone(), v)).collect()
-    }
-
     /// Convert to RequiredDists for the new install planner API
     /// Uses the default lock file directory from the test setup
     pub fn to_required_dists(&self) -> super::super::RequiredDists {

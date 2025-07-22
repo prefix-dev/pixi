@@ -11,7 +11,7 @@
 use uv_distribution::{BuiltWheelIndex, RegistryWheelIndex};
 use uv_distribution_filename::WheelFilename;
 use uv_distribution_types::{
-    CachedDirectUrlDist, CachedDist, CachedRegistryDist, IndexUrl, InstalledDist, Name, SourceDist,
+    CachedDirectUrlDist, CachedRegistryDist, IndexUrl, InstalledDist, Name, SourceDist,
 };
 use uv_installer::SitePackages;
 

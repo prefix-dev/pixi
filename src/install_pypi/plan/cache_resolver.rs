@@ -178,7 +178,7 @@ pub fn decide_installation_source<'a, Op: OperationToReason>(
                         return Ok(());
                     }
                 }
-                _ => match dist_cache.get_cached_source_dist(&source_dist) {
+                _ => match dist_cache.get_cached_source_dist(source_dist) {
                     Ok(cached_dist) => {
                         if let Some(cached) = cached_dist {
                             local.push((CachedDist::Url(cached), op_to_reason.cached()));
