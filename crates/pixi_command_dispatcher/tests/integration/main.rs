@@ -304,7 +304,7 @@ pub async fn test_stale_host_dependency_triggers_rebuild() {
     );
 
     // Install the environment to a temporary prefix.
-    let prefix = Prefix::create(&tempdir.path().join("prefix")).unwrap();
+    let prefix = Prefix::create(tempdir.path().join("prefix")).unwrap();
     let _ = dispatcher
         .install_pixi_environment(InstallPixiEnvironmentSpec {
             build_environment: build_env.clone(),
