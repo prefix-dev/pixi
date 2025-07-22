@@ -18,7 +18,9 @@ use crate::{
     environment::sanity_check_workspace,
 };
 
-/// Imports an environment into an existing workspace.
+/// Imports a file into an environment in an existing workspace.
+///
+/// If `--format` isn't provided, `import` will try to guess the format based on the file extension.
 #[derive(Parser, Debug, Default)]
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
@@ -26,7 +28,7 @@ pub struct Args {
     pub workspace_config: WorkspaceConfig,
 
     /// File to import into the workspace.
-    #[arg(required = true, id = "FILE")]
+    #[arg(id = "FILE")]
     pub file: PathBuf,
 
     /// Which format to interpret the file as.
@@ -37,12 +39,12 @@ pub struct Args {
     #[arg(long = "platform", short, value_name = "PLATFORM")]
     pub platforms: Vec<Platform>,
 
-    /// A name for the created feature
-    #[clap(long, short, value_name = "ENVIRONMENT")]
+    /// A name for the created environment
+    #[clap(long, short)]
     pub environment: Option<String>,
 
-    /// A name for the created environment
-    #[clap(long, short, value_name = "FEATURE")]
+    /// A name for the created feature
+    #[clap(long, short)]
     pub feature: Option<String>,
 
     #[clap(flatten)]
