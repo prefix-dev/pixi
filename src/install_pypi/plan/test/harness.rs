@@ -532,7 +532,7 @@ impl RequiredPackages {
     /// Uses the default lock file directory from the test setup
     pub fn to_required_dists(&self) -> super::super::RequiredDists {
         let packages: Vec<_> = self.required.values().cloned().collect();
-        super::super::RequiredDists::from_packages(&packages, &default_lock_file_dir())
+        super::super::RequiredDists::from_packages(&packages, default_lock_file_dir())
             .expect("Failed to create RequiredDists in test")
     }
 }
