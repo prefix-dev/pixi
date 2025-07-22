@@ -16,6 +16,8 @@ use uv_pypi_types::DirectUrl::VcsUrl;
 use uv_pypi_types::{ArchiveInfo, DirectUrl, ParsedGitUrl, VcsInfo, VcsKind};
 use uv_redacted::DisplaySafeUrl;
 
+use uv_distribution_types::{BuiltDist, CachedRegistryDist, SourceDist};
+
 #[derive(Default)]
 /// Builder to create installed dists
 struct InstalledDistBuilder;
@@ -399,28 +401,11 @@ impl PyPIPackageDataBuilder {
 pub struct NoCache;
 
 impl<'a> CachedDistProvider<'a> for NoCache {
-    fn get_cached_registry_dist(
+    fn is_cached(
         &mut self,
-        _name: &'a uv_normalize::PackageName,
-        _index: &uv_distribution_types::IndexUrl,
-        _wheel_filename: &uv_distribution_filename::WheelFilename,
-    ) -> Option<uv_distribution_types::CachedRegistryDist> {
-        None
-    }
-
-    fn get_cached_registry_source_dist(
-        &mut self,
-        _name: &'a uv_normalize::PackageName,
-        _index: &uv_distribution_types::IndexUrl,
-        _version: &uv_pep440::Version,
-    ) -> Option<uv_distribution_types::CachedRegistryDist> {
-        None
-    }
-
-    fn get_cached_source_dist(
-        &mut self,
-        _source_dist: &uv_distribution_types::SourceDist,
-    ) -> Result<Option<uv_distribution_types::CachedDirectUrlDist>, uv_distribution::Error> {
+        _dist: &'a uv_distribution_types::Dist,
+        _uv_cache: &uv_cache::Cache,
+    ) -> Result<Option<uv_distribution_types::CachedDist>, uv_distribution::Error> {
         Ok(None)
     }
 }
@@ -428,44 +413,36 @@ impl<'a> CachedDistProvider<'a> for NoCache {
 /// Implementor of the [`CachedDistProvider`] that assumes to have cached everything
 pub struct AllCached;
 impl<'a> CachedDistProvider<'a> for AllCached {
-    fn get_cached_registry_dist(
+    fn is_cached(
         &mut self,
-        _name: &'a uv_normalize::PackageName,
-        _index: &uv_distribution_types::IndexUrl,
-        wheel_filename: &uv_distribution_filename::WheelFilename,
-    ) -> Option<uv_distribution_types::CachedRegistryDist> {
-        let dist = uv_distribution_types::CachedRegistryDist {
-            filename: wheel_filename.clone(),
-            path: PathBuf::new().into(),
-            hashes: vec![].into(),
-            cache_info: Default::default(),
-        };
-        Some(dist)
-    }
-
-    fn get_cached_registry_source_dist(
-        &mut self,
-        name: &'a uv_normalize::PackageName,
-        _index: &uv_distribution_types::IndexUrl,
-        version: &uv_pep440::Version,
-    ) -> Option<uv_distribution_types::CachedRegistryDist> {
-        let wheel_filename =
-            WheelFilename::from_str(format!("{}-{}-py3-none-any.whl", name, version).as_str())
+        dist: &'a uv_distribution_types::Dist,
+        _uv_cache: &uv_cache::Cache,
+    ) -> Result<Option<uv_distribution_types::CachedDist>, uv_distribution::Error> {
+        match dist {
+            uv_distribution_types::Dist::Built(BuiltDist::Registry(wheel)) => {
+                let dist = CachedRegistryDist {
+                    filename: wheel.best_wheel().filename.clone(),
+                    path: PathBuf::new().into(),
+                    hashes: vec![].into(),
+                    cache_info: Default::default(),
+                };
+                Ok(Some(uv_distribution_types::CachedDist::Registry(dist)))
+            }
+            uv_distribution_types::Dist::Source(SourceDist::Registry(sdist)) => {
+                let wheel_filename = WheelFilename::from_str(
+                    format!("{}-{}-py3-none-any.whl", sdist.name, sdist.version).as_str(),
+                )
                 .unwrap();
-        let dist = uv_distribution_types::CachedRegistryDist {
-            filename: wheel_filename,
-            path: PathBuf::new().into(),
-            hashes: vec![].into(),
-            cache_info: Default::default(),
-        };
-        Some(dist)
-    }
-
-    fn get_cached_source_dist(
-        &mut self,
-        _source_dist: &uv_distribution_types::SourceDist,
-    ) -> Result<Option<uv_distribution_types::CachedDirectUrlDist>, uv_distribution::Error> {
-        Ok(None) // Not implemented for test purposes
+                let dist = CachedRegistryDist {
+                    filename: wheel_filename,
+                    path: PathBuf::new().into(),
+                    hashes: vec![].into(),
+                    cache_info: Default::default(),
+                };
+                Ok(Some(uv_distribution_types::CachedDist::Registry(dist)))
+            }
+            _ => Ok(None), // Not implemented for other distribution types in tests
+        }
     }
 }
 

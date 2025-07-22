@@ -6,25 +6,15 @@
 //! - Local cache availability
 //! - Package requirements and versions
 
-use uv_cache::{Cache, CacheBucket, WheelCache};
-use uv_cache_info::Timestamp;
-use uv_distribution::{HttpArchivePointer, LocalArchivePointer};
-use uv_distribution_types::{BuiltDist, CachedDirectUrlDist, CachedDist, Dist, Name, SourceDist};
-use uv_pypi_types::VerbatimParsedUrl;
-use uv_redacted::DisplaySafeUrl;
-
-use crate::install_pypi::conversions::ConvertToUvDistError;
+use uv_cache::Cache;
+use uv_distribution_types::{CachedDist, Dist, Name};
 
 use super::{InstallReason, providers::CachedDistProvider, reasons::OperationToReason};
 
 #[derive(thiserror::Error, Debug)]
 pub enum CacheResolverError {
     #[error(transparent)]
-    ConvertToUvDist(#[from] ConvertToUvDistError),
-    #[error(transparent)]
-    UvConversion(#[from] pixi_uv_conversions::ConversionError),
-    #[error("the distribution could not be found at the specified path: {0}")]
-    NotFound(DisplaySafeUrl),
+    UvDistribution(#[from] uv_distribution::Error),
 }
 
 /// Decide if we need to get the distribution from the local cache or the registry
@@ -49,151 +39,15 @@ pub fn decide_installation_source<'a, Op: OperationToReason>(
         return Ok(());
     }
 
-    match dist {
-        Dist::Built(BuiltDist::Registry(wheel)) => {
-            if let Some(distribution) = dist_cache.get_cached_registry_dist(
-                wheel.name(),
-                &wheel.best_wheel().index,
-                &wheel.best_wheel().filename,
-            ) {
-                local.push((
-                    CachedDist::Registry(distribution.clone()),
-                    op_to_reason.cached(),
-                ));
-                return Ok(());
-            }
+    // Check if the distribution is cached
+    match dist_cache.is_cached(dist, uv_cache)? {
+        Some(cached_dist) => {
+            local.push((cached_dist, op_to_reason.cached()));
         }
-        Dist::Built(BuiltDist::DirectUrl(wheel)) => {
-            // Find the exact wheel from the cache, since we know the filename in
-            // advance.
-            let cache_entry = uv_cache
-                .shard(
-                    CacheBucket::Wheels,
-                    WheelCache::Url(&wheel.url).wheel_dir(wheel.name().as_ref()),
-                )
-                .entry(format!("{}.http", wheel.filename.cache_key()));
-
-            // Read the HTTP pointer.
-            match HttpArchivePointer::read_from(&cache_entry) {
-                Ok(Some(pointer)) => {
-                    let cache_info = pointer.to_cache_info();
-                    let archive = pointer.into_archive();
-                    let cached_dist = CachedDirectUrlDist {
-                        filename: wheel.filename.clone(),
-                        url: VerbatimParsedUrl {
-                            parsed_url: wheel.parsed_url(),
-                            verbatim: wheel.url.clone(),
-                        },
-                        hashes: archive.hashes,
-                        cache_info,
-                        path: uv_cache.archive(&archive.id).into_boxed_path(),
-                    };
-
-                    local.push((CachedDist::Url(cached_dist), op_to_reason.cached()));
-                    return Ok(());
-                }
-                Ok(None) => {}
-                Err(err) => {
-                    tracing::debug!(
-                        "failed to deserialize cached URL wheel requirement for: {wheel} ({err})"
-                    );
-                }
-            }
-        }
-        Dist::Built(BuiltDist::Path(wheel)) => {
-            // Validate that the path exists.
-            if !wheel.install_path.exists() {
-                return Err(CacheResolverError::NotFound(wheel.url.to_url()));
-            }
-
-            // Find the exact wheel from the cache, since we know the filename in
-            // advance.
-            let cache_entry = uv_cache
-                .shard(
-                    CacheBucket::Wheels,
-                    WheelCache::Url(&wheel.url).wheel_dir(wheel.name().as_ref()),
-                )
-                .entry(format!("{}.rev", wheel.filename.cache_key()));
-
-            match LocalArchivePointer::read_from(&cache_entry) {
-                Ok(Some(pointer)) => match Timestamp::from_path(&wheel.install_path) {
-                    Ok(timestamp) => {
-                        if pointer.is_up_to_date(timestamp) {
-                            let cache_info = pointer.to_cache_info();
-                            let archive = pointer.into_archive();
-                            let cached_dist = CachedDirectUrlDist {
-                                filename: wheel.filename.clone(),
-                                url: VerbatimParsedUrl {
-                                    parsed_url: wheel.parsed_url(),
-                                    verbatim: wheel.url.clone(),
-                                },
-                                hashes: archive.hashes,
-                                cache_info,
-                                path: uv_cache.archive(&archive.id).into_boxed_path(),
-                            };
-
-                            local.push((CachedDist::Url(cached_dist), op_to_reason.cached()));
-                            return Ok(());
-                        }
-                    }
-                    Err(err) => {
-                        tracing::debug!("failed to get timestamp for wheel {wheel} ({err})");
-                    }
-                },
-                Ok(None) => {}
-                Err(err) => {
-                    tracing::debug!(
-                        "failed to deserialize cached path wheel requirement for: {wheel} ({err})"
-                    );
-                }
-            }
-        }
-        Dist::Source(source_dist) => {
-            match source_dist {
-                SourceDist::Path(p) => {
-                    // Validate that the path exists.
-                    if !p.install_path.exists() {
-                        return Err(CacheResolverError::NotFound(p.url.to_url()));
-                    }
-                }
-                SourceDist::Directory(p) => {
-                    // Validate that the path exists.
-                    if !p.install_path.exists() {
-                        return Err(CacheResolverError::NotFound(p.url.to_url()));
-                    }
-                }
-                _ => {}
-            }
-            match source_dist {
-                SourceDist::Registry(sdist) => {
-                    if let Some(distribution) = dist_cache.get_cached_registry_source_dist(
-                        sdist.name(),
-                        &sdist.index,
-                        &sdist.version,
-                    ) {
-                        local.push((
-                            CachedDist::Registry(distribution.clone()),
-                            op_to_reason.cached(),
-                        ));
-                        return Ok(());
-                    }
-                }
-                _ => match dist_cache.get_cached_source_dist(source_dist) {
-                    Ok(cached_dist) => {
-                        if let Some(cached) = cached_dist {
-                            local.push((CachedDist::Url(cached), op_to_reason.cached()));
-                            return Ok(());
-                        }
-                    }
-                    Err(e) => {
-                        tracing::warn!("failed to deserialize cached source dist {e}")
-                    }
-                },
-            }
+        None => {
+            remote.push((dist.clone(), op_to_reason.missing()));
         }
     }
 
-    // If we reach here, it means we didn't find the distribution in the local cache
-    remote.push((dist.clone(), op_to_reason.missing()));
     Ok(())
 }

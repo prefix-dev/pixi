@@ -8,12 +8,17 @@
 //! mocking for testing purposes. The module implements these traits for concrete types
 //! `SitePackages` and `RegistryWheelIndex`, `BuiltWheelIndex` respectively.
 //!
+use uv_cache::Cache;
+use uv_cache::{CacheBucket, WheelCache};
+use uv_cache_info::Timestamp;
 use uv_distribution::{BuiltWheelIndex, RegistryWheelIndex};
-use uv_distribution_filename::WheelFilename;
+use uv_distribution::{HttpArchivePointer, LocalArchivePointer};
+use uv_distribution_types::BuiltDist;
 use uv_distribution_types::{
-    CachedDirectUrlDist, CachedRegistryDist, IndexUrl, InstalledDist, Name, SourceDist,
+    CachedDirectUrlDist, CachedDist, Dist, InstalledDist, Name, SourceDist,
 };
 use uv_installer::SitePackages;
+use uv_pypi_types::VerbatimParsedUrl;
 
 // Below we define a couple of traits so that we can make the creaton of the install plan
 // somewhat more abstract
@@ -34,27 +39,13 @@ impl<'a> InstalledDistProvider<'a> for SitePackages {
 /// Provides a way to get the potentially cached distribution, if it exists
 /// This trait can also be used to mock the cache for testing purposes
 pub trait CachedDistProvider<'a> {
-    /// Returns a cached distribution for a registry distribution with the given name, index, and wheel filename.
-    fn get_cached_registry_dist(
+    /// Returns a cached distribution if it exists in the cache.
+    /// This method consolidates all cache lookup logic for different distribution types.
+    fn is_cached(
         &mut self,
-        name: &'a uv_normalize::PackageName,
-        index: &IndexUrl,
-        wheel_filename: &WheelFilename,
-    ) -> Option<CachedRegistryDist>;
-
-    /// Returns a cached distribution for a source distribution with the given name, index, and version.
-    fn get_cached_registry_source_dist(
-        &mut self,
-        name: &'a uv_normalize::PackageName,
-        index: &IndexUrl,
-        version: &uv_pep440::Version,
-    ) -> Option<CachedRegistryDist>;
-
-    /// Returns a cached distribution for a source distribution.
-    fn get_cached_source_dist(
-        &mut self,
-        source_dist: &SourceDist,
-    ) -> Result<Option<CachedDirectUrlDist>, uv_distribution::Error>;
+        dist: &'a Dist,
+        uv_cache: &Cache,
+    ) -> Result<Option<CachedDist>, uv_distribution::Error>;
 }
 
 /// Provides both access to registry dists and locally built dists
@@ -70,80 +61,193 @@ impl<'a> CachedWheelsProvider<'a> {
 }
 
 impl<'a> CachedDistProvider<'a> for CachedWheelsProvider<'a> {
-    fn get_cached_registry_dist(
+    fn is_cached(
         &mut self,
-        name: &'a uv_normalize::PackageName,
-        index: &IndexUrl,
-        wheel_filename: &WheelFilename,
-    ) -> Option<CachedRegistryDist> {
-        self.registry.get(name).find_map(|entry| {
-            if entry.index.url() != index {
-                return None;
-            }
-            if entry.dist.filename != *wheel_filename {
-                return None;
-            }
-            Some(&entry.dist).cloned()
-        })
-    }
+        dist: &'a Dist,
+        uv_cache: &Cache,
+    ) -> Result<Option<CachedDist>, uv_distribution::Error> {
+        match dist {
+            Dist::Built(BuiltDist::Registry(wheel)) => {
+                let cached = self.registry.get(wheel.name()).find_map(|entry| {
+                    if entry.index.url() != &wheel.best_wheel().index {
+                        return None;
+                    }
+                    if entry.dist.filename == wheel.best_wheel().filename {
+                        Some(&entry.dist)
+                    } else {
+                        None
+                    }
+                });
 
-    fn get_cached_registry_source_dist(
-        &mut self,
-        name: &'a uv_normalize::PackageName,
-        index: &IndexUrl,
-        version: &uv_pep440::Version,
-    ) -> Option<CachedRegistryDist> {
-        self.registry.get(name).find_map(|entry| {
-            if entry.index.url() != index {
-                return None;
+                if let Some(distribution) = cached {
+                    Ok(Some(CachedDist::Registry(distribution.clone())))
+                } else {
+                    Ok(None)
+                }
             }
-            if entry.dist.filename.name != *name {
-                return None;
+            Dist::Built(BuiltDist::DirectUrl(wheel)) => {
+                // Find the exact wheel from the cache, since we know the filename in advance.
+                let cache_entry = uv_cache
+                    .shard(
+                        CacheBucket::Wheels,
+                        WheelCache::Url(&wheel.url).wheel_dir(wheel.name().as_ref()),
+                    )
+                    .entry(format!("{}.http", wheel.filename.cache_key()));
+
+                // Read the HTTP pointer.
+                match HttpArchivePointer::read_from(&cache_entry) {
+                    Ok(Some(pointer)) => {
+                        let cache_info = pointer.to_cache_info();
+                        let archive = pointer.into_archive();
+                        let cached_dist = CachedDirectUrlDist {
+                            filename: wheel.filename.clone(),
+                            url: VerbatimParsedUrl {
+                                parsed_url: wheel.parsed_url(),
+                                verbatim: wheel.url.clone(),
+                            },
+                            hashes: archive.hashes,
+                            cache_info,
+                            path: uv_cache.archive(&archive.id).into_boxed_path(),
+                        };
+
+                        Ok(Some(CachedDist::Url(cached_dist)))
+                    }
+                    Ok(None) => Ok(None),
+                    Err(err) => {
+                        tracing::debug!(
+                            "failed to deserialize cached URL wheel requirement for: {wheel} ({err})"
+                        );
+                        Ok(None)
+                    }
+                }
             }
-            if entry.dist.filename.version != *version {
-                return None;
+            Dist::Built(BuiltDist::Path(wheel)) => {
+                // Validate that the path exists.
+                if !wheel.install_path.exists() {
+                    return Ok(None);
+                }
+
+                // Find the exact wheel from the cache, since we know the filename in advance.
+                let cache_entry = uv_cache
+                    .shard(
+                        CacheBucket::Wheels,
+                        WheelCache::Url(&wheel.url).wheel_dir(wheel.name().as_ref()),
+                    )
+                    .entry(format!("{}.rev", wheel.filename.cache_key()));
+
+                match LocalArchivePointer::read_from(&cache_entry) {
+                    Ok(Some(pointer)) => match Timestamp::from_path(&wheel.install_path) {
+                        Ok(timestamp) => {
+                            if pointer.is_up_to_date(timestamp) {
+                                let cache_info = pointer.to_cache_info();
+                                let archive = pointer.into_archive();
+                                let cached_dist = CachedDirectUrlDist {
+                                    filename: wheel.filename.clone(),
+                                    url: VerbatimParsedUrl {
+                                        parsed_url: wheel.parsed_url(),
+                                        verbatim: wheel.url.clone(),
+                                    },
+                                    hashes: archive.hashes,
+                                    cache_info,
+                                    path: uv_cache.archive(&archive.id).into_boxed_path(),
+                                };
+
+                                Ok(Some(CachedDist::Url(cached_dist)))
+                            } else {
+                                Ok(None)
+                            }
+                        }
+                        Err(err) => {
+                            tracing::debug!("failed to get timestamp for wheel {wheel} ({err})");
+                            Ok(None)
+                        }
+                    },
+                    Ok(None) => Ok(None),
+                    Err(err) => {
+                        tracing::debug!(
+                            "failed to deserialize cached path wheel requirement for: {wheel} ({err})"
+                        );
+                        Ok(None)
+                    }
+                }
             }
-            Some(&entry.dist).cloned()
-        })
-    }
+            Dist::Source(source_dist) => {
+                match source_dist {
+                    SourceDist::Path(p) => {
+                        // Validate that the path exists.
+                        if !p.install_path.exists() {
+                            return Ok(None);
+                        }
+                    }
+                    SourceDist::Directory(p) => {
+                        // Validate that the path exists.
+                        if !p.install_path.exists() {
+                            return Ok(None);
+                        }
+                    }
+                    _ => {}
+                }
 
-    fn get_cached_source_dist(
-        &mut self,
-        source_dist: &SourceDist,
-    ) -> Result<Option<CachedDirectUrlDist>, uv_distribution::Error> {
-        let dist = match &source_dist {
-            SourceDist::Directory(directory_source_dist) => self
-                .built
-                .directory(directory_source_dist)?
-                .map(|dist| dist.into_directory_dist(directory_source_dist)),
+                match source_dist {
+                    SourceDist::Registry(sdist) => {
+                        let cached = self.registry.get(sdist.name()).find_map(|entry| {
+                            if entry.index.url() != &sdist.index {
+                                return None;
+                            }
+                            if entry.dist.filename.name != *sdist.name() {
+                                return None;
+                            }
+                            if entry.dist.filename.version == sdist.version {
+                                Some(&entry.dist)
+                            } else {
+                                None
+                            }
+                        });
 
-            SourceDist::DirectUrl(direct_url_source_dist) => self
-                .built
-                .url(direct_url_source_dist)?
-                .map(|dist| dist.into_url_dist(direct_url_source_dist)),
+                        if let Some(distribution) = cached {
+                            Ok(Some(CachedDist::Registry(distribution.clone())))
+                        } else {
+                            Ok(None)
+                        }
+                    }
+                    _ => {
+                        let dist = match &source_dist {
+                            SourceDist::Directory(directory_source_dist) => self
+                                .built
+                                .directory(directory_source_dist)?
+                                .map(|dist| dist.into_directory_dist(directory_source_dist)),
 
-            SourceDist::Git(git_source_dist) => self
-                .built
-                .git(git_source_dist)
-                .map(|dist| dist.into_git_dist(git_source_dist)),
+                            SourceDist::DirectUrl(direct_url_source_dist) => self
+                                .built
+                                .url(direct_url_source_dist)?
+                                .map(|dist| dist.into_url_dist(direct_url_source_dist)),
 
-            SourceDist::Path(path_source_dist) => self
-                .built
-                .path(path_source_dist)?
-                .map(|dist| dist.into_path_dist(path_source_dist)),
+                            SourceDist::Git(git_source_dist) => self
+                                .built
+                                .git(git_source_dist)
+                                .map(|dist| dist.into_git_dist(git_source_dist)),
 
-            SourceDist::Registry(_) => {
-                unimplemented!("call get_cached_registry_source_dist instead")
+                            SourceDist::Path(path_source_dist) => self
+                                .built
+                                .path(path_source_dist)?
+                                .map(|dist| dist.into_path_dist(path_source_dist)),
+
+                            SourceDist::Registry(_) => {
+                                unreachable!("handled above")
+                            }
+                        };
+                        if let Some(dist) = dist {
+                            if &dist.filename.name == source_dist.name() {
+                                Ok(Some(CachedDist::Url(dist)))
+                            } else {
+                                Ok(None)
+                            }
+                        } else {
+                            Ok(None)
+                        }
+                    }
+                }
             }
-        };
-        if let Some(dist) = dist {
-            if &dist.filename.name == source_dist.name() {
-                Ok(Some(dist))
-            } else {
-                Ok(None)
-            }
-        } else {
-            Ok(None)
         }
     }
 }
