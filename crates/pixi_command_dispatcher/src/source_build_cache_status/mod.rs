@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use chrono::Utc;
-use itertools::{Either, chain};
+use itertools::chain;
 use miette::Diagnostic;
 use pixi_glob::GlobModificationTime;
 use pixi_record::PinnedSourceSpec;
@@ -12,7 +12,7 @@ use tracing::instrument;
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
     PackageIdentifier, SourceCheckoutError,
-    build::{BuildCacheEntry, BuildCacheError, BuildInput, CachedBuild, CachedBuildSourceInfo},
+    build::{BuildCacheEntry, BuildCacheError, BuildInput, CachedBuild},
 };
 
 /// A list of globs that should be ignored when calculating any input hash.

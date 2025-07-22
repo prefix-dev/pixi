@@ -80,7 +80,8 @@ pub use solve_conda::SolveCondaEnvironmentSpec;
 pub use solve_pixi::{PixiEnvironmentSpec, SolvePixiEnvironmentError};
 pub use source_build::{SourceBuildError, SourceBuildResult, SourceBuildSpec};
 pub use source_build_cache_status::{
-    SourceBuildCacheEntry, SourceBuildCacheStatusError, SourceBuildCacheStatusSpec,
+    CachedBuildStatus, SourceBuildCacheEntry, SourceBuildCacheStatusError,
+    SourceBuildCacheStatusSpec,
 };
 pub use source_checkout::{InvalidPathError, SourceCheckout, SourceCheckoutError};
 pub use source_metadata::{Cycle, SourceMetadata, SourceMetadataError, SourceMetadataSpec};

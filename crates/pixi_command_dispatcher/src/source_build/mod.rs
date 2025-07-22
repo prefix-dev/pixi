@@ -22,18 +22,17 @@ use url::Url;
 use crate::{
     BackendSourceBuildError, BackendSourceBuildMethod, BackendSourceBuildPrefix,
     BackendSourceBuildSpec, BackendSourceBuildV0Method, BackendSourceBuildV1Method,
-    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    InstallPixiEnvironmentError, InstallPixiEnvironmentResult, InstallPixiEnvironmentSpec,
-    InstantiateBackendError, InstantiateBackendSpec, PixiEnvironmentSpec,
-    SolvePixiEnvironmentError, SourceBuildCacheStatusError, SourceBuildCacheStatusSpec,
-    SourceCheckoutError,
+    BuildEnvironment, CachedBuildStatus, CommandDispatcher, CommandDispatcherError,
+    CommandDispatcherErrorResultExt, InstallPixiEnvironmentError, InstallPixiEnvironmentResult,
+    InstallPixiEnvironmentSpec, InstantiateBackendError, InstantiateBackendSpec,
+    PixiEnvironmentSpec, SolvePixiEnvironmentError, SourceBuildCacheStatusError,
+    SourceBuildCacheStatusSpec, SourceCheckoutError,
     build::{
         BuildCacheError, BuildHostEnvironment, BuildHostPackage, CachedBuild,
         CachedBuildSourceInfo, Dependencies, DependenciesError, MoveError, SourceRecordOrCheckout,
         WorkDirKey, move_file,
     },
     package_identifier::PackageIdentifier,
-    query_source_build_cache::CachedBuildStatus,
 };
 
 /// Describes all parameters required to build a conda package from a pixi
