@@ -457,6 +457,8 @@ x86_64-unknown-linux-musl = "8core_ubuntu_latest_runner"
 [workspace.metadata.dist.dependencies.apt]
 gcc-aarch64-linux-gnu = { version = '*', targets = [
   "aarch64-unknown-linux-gnu",
+] }
+gcc-aarch64-unknown-linux-musl = { version = '*', targets = [
   "aarch64-unknown-linux-musl",
 ] }
 
