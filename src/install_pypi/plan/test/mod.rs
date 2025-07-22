@@ -646,7 +646,7 @@ fn test_uv_refresh() {
 /// we would keep reinstalling foobar
 #[test]
 fn test_archive_is_path() {
-    let (tmp, _file, wheel_path) = empty_wheel("foobar");
+    let (tmp, _file, wheel_path) = empty_wheel("foobar-0.1.0-py3-none-any");
     // This needs to be absolute otherwise we cannot parse it into a file url
     let site_packages = MockedSitePackages::new().add_archive(
         "foobar",
@@ -659,10 +659,10 @@ fn test_archive_is_path() {
     let required = RequiredPackages::new().add_local_wheel(
         "foobar",
         "0.1.0",
-        PathBuf::from("./some-dir/../foobar.whl"),
+        PathBuf::from("./some-dir/../foobar-0.1.0-py3-none-any.whl"),
     );
     let plan = harness::install_planner_with_lock_dir(tmp.path().to_path_buf());
-    let required_dists = required.to_required_dists();
+    let required_dists = required.to_required_dists_with_lock_dir(tmp.path());
     let installs = plan
         .plan(&site_packages, AllCached, &required_dists.as_ref_map())
         .expect("should install");
