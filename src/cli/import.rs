@@ -70,13 +70,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 }
 
 async fn import_conda_env(args: Args) -> miette::Result<()> {
-    let (file, platforms, config, workspace_config) = (
-        args.file,
-        args.platforms,
-        args.config,
-        args.workspace_config,
-    );
-    let config = Config::from(config.clone());
+    let (file, platforms, workspace_config) = (args.file, args.platforms, args.workspace_config);
+    let config = Config::from(args.config);
 
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(workspace_config.workspace_locator_start())
