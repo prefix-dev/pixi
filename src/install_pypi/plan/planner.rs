@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use super::{cache_resolver, reasons, validation::NeedsReinstallError};
+use super::{installation_source, reasons, validation::NeedsReinstallError};
 use itertools::{Either, Itertools};
 use pixi_consts::consts;
 use rattler_lock::PypiPackageData;
@@ -45,7 +45,7 @@ pub enum InstallPlannerError {
     #[error(transparent)]
     UvConversion(#[from] pixi_uv_conversions::ConversionError),
     #[error(transparent)]
-    CacheResolver(#[from] cache_resolver::CacheResolverError),
+    RetrieveDistFromCache(#[from] uv_distribution::Error),
 }
 
 impl InstallPlanner {
@@ -132,7 +132,7 @@ impl InstallPlanner {
                 // Use pre-created dist for cache resolution
                 // Okay so we need to re-install the package
                 // let's see if we need the remote or local version
-                cache_resolver::decide_installation_source(
+                installation_source::decide_installation_source(
                     &self.uv_cache,
                     required_dist,
                     &mut local,
@@ -153,7 +153,7 @@ impl InstallPlanner {
             // Use pre-created dist for cache resolution
             // Okay so we need to re-install the package
             // let's see if we need the remote or local version
-            cache_resolver::decide_installation_source(
+            installation_source::decide_installation_source(
                 &self.uv_cache,
                 dist,
                 &mut local,

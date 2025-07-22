@@ -34,7 +34,7 @@
 //!
 //! This module builds on UV's distribution handling while applying Pixi-specific
 //! customizations for managing Python packages in Conda environments.
-mod cache_resolver;
+mod installation_source;
 mod models;
 mod planner;
 mod providers;

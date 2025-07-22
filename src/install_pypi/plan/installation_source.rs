@@ -11,12 +11,6 @@ use uv_distribution_types::{CachedDist, Dist, Name};
 
 use super::{InstallReason, providers::CachedDistProvider, reasons::OperationToReason};
 
-#[derive(thiserror::Error, Debug)]
-pub enum CacheResolverError {
-    #[error(transparent)]
-    UvDistribution(#[from] uv_distribution::Error),
-}
-
 /// Decide if we need to get the distribution from the local cache or the registry
 /// this method will add the distribution to the local or remote vector,
 /// depending on whether the version is stale, available locally or not
@@ -27,7 +21,7 @@ pub fn decide_installation_source<'a, Op: OperationToReason>(
     remote: &mut Vec<(Dist, InstallReason)>,
     dist_cache: &mut impl CachedDistProvider<'a>,
     op_to_reason: Op,
-) -> Result<(), CacheResolverError> {
+) -> Result<(), uv_distribution::Error> {
     // First, check if we need to revalidate the package
     // then we should get it from the remote
     if uv_cache.must_revalidate_package(dist.name())
