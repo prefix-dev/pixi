@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use super::{installation_source, reasons, validation::NeedsReinstallError};
+use super::{installation_source::{self, Operation}, validation::NeedsReinstallError};
 use itertools::{Either, Itertools};
 use pixi_consts::consts;
 use rattler_lock::PypiPackageData;
@@ -136,7 +136,7 @@ impl InstallPlanner {
                     &mut local,
                     &mut remote,
                     &mut cached_wheels_provider,
-                    reasons::Reinstall,
+                    Operation::Reinstall,
                 )
                 .map_err(InstallPlannerError::from)?;
             }
@@ -157,7 +157,7 @@ impl InstallPlanner {
                 &mut local,
                 &mut remote,
                 &mut cached_wheels_provider,
-                reasons::Install,
+                Operation::Install,
             )
             .map_err(InstallPlannerError::from)?;
         }
