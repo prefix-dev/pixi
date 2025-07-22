@@ -80,7 +80,7 @@ impl<'a> CachedDistProvider<'a> for CachedWheelsProvider<'a> {
             if entry.index.url() != index {
                 return None;
             }
-            if entry.dist.filename == *wheel_filename {
+            if entry.dist.filename != *wheel_filename {
                 return None;
             }
             Some(&entry.dist).cloned()
