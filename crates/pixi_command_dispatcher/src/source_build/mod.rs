@@ -411,44 +411,61 @@ impl SourceBuildSpec {
             .map_err_with(SourceBuildError::SolveBuildEnvironment)?;
 
         // Install the build environment
-        let build_prefix = command_dispatcher
-            .install_pixi_environment(InstallPixiEnvironmentSpec {
-                name: format!("{} (build)", self.package.name.as_source()),
-                records: build_records.clone(),
-                prefix: Prefix::create(&directories.build_prefix)
-                    .map_err(SourceBuildError::CreateBuildEnvironmentDirectory)
-                    .map_err(CommandDispatcherError::Failed)?,
-                installed: None,
-                build_environment: self.build_environment.to_build_from_build(),
-                force_reinstall: Default::default(),
-                channels: self.channels.clone(),
-                channel_config: self.channel_config.clone(),
-                variants: self.variants.clone(),
-                enabled_protocols: self.enabled_protocols.clone(),
-            })
-            .await
-            .map_err_with(Box::new)
-            .map_err_with(SourceBuildError::InstallBuildEnvironment)?;
+        let build_prefix = if build_records.is_empty() {
+            None
+        } else {
+            Some(
+                command_dispatcher
+                    .install_pixi_environment(InstallPixiEnvironmentSpec {
+                        name: format!("{} (build)", self.package.name.as_source()),
+                        records: build_records.clone(),
+                        prefix: Prefix::create(&directories.build_prefix)
+                            .map_err(SourceBuildError::CreateBuildEnvironmentDirectory)
+                            .map_err(CommandDispatcherError::Failed)?,
+                        installed: None,
+                        build_environment: self.build_environment.to_build_from_build(),
+                        force_reinstall: Default::default(),
+                        channels: self.channels.clone(),
+                        channel_config: self.channel_config.clone(),
+                        variants: self.variants.clone(),
+                        enabled_protocols: self.enabled_protocols.clone(),
+                    })
+                    .await
+                    .map_err_with(Box::new)
+                    .map_err_with(SourceBuildError::InstallBuildEnvironment)?,
+            )
+        };
 
         // Install the host environment.
-        let host_prefix = command_dispatcher
-            .install_pixi_environment(InstallPixiEnvironmentSpec {
-                name: format!("{} (host)", self.package.name.as_source()),
-                records: host_records.clone(),
-                prefix: Prefix::create(&directories.host_prefix)
-                    .map_err(SourceBuildError::CreateBuildEnvironmentDirectory)
-                    .map_err(CommandDispatcherError::Failed)?,
-                installed: None,
-                build_environment: self.build_environment.to_build_from_build(),
-                force_reinstall: Default::default(),
-                channels: self.channels.clone(),
-                channel_config: self.channel_config.clone(),
-                variants: self.variants.clone(),
-                enabled_protocols: self.enabled_protocols.clone(),
-            })
-            .await
-            .map_err_with(Box::new)
-            .map_err_with(SourceBuildError::InstallBuildEnvironment)?;
+        let host_prefix = if host_records.is_empty() {
+            None
+        } else {
+            Some(
+                command_dispatcher
+                    .install_pixi_environment(InstallPixiEnvironmentSpec {
+                        name: format!("{} (host)", self.package.name.as_source()),
+                        records: host_records.clone(),
+                        prefix: Prefix::create(&directories.host_prefix)
+                            .map_err(SourceBuildError::CreateBuildEnvironmentDirectory)
+                            .map_err(CommandDispatcherError::Failed)?,
+                        installed: None,
+                        build_environment: self.build_environment.to_build_from_build(),
+                        force_reinstall: Default::default(),
+                        channels: self.channels.clone(),
+                        channel_config: self.channel_config.clone(),
+                        variants: self.variants.clone(),
+                        enabled_protocols: self.enabled_protocols.clone(),
+                    })
+                    .await
+                    .map_err_with(Box::new)
+                    .map_err_with(SourceBuildError::InstallBuildEnvironment)?,
+            )
+        };
+
+        // Ensure the work directory exists.
+        fs_err::create_dir_all(&work_directory).map_err(|err| {
+            CommandDispatcherError::Failed(SourceBuildError::CreateWorkDirectory(err))
+        })?;
 
         let built_source = command_dispatcher
             .backend_source_build(BackendSourceBuildSpec {
@@ -477,29 +494,35 @@ impl SourceBuildSpec {
         // Little helper function the build a `BuildHostEnvironment` from expected and
         // installed records.
         let build_host_environment =
-            |records: Vec<PixiRecord>, prefix: InstallPixiEnvironmentResult| BuildHostEnvironment {
-                packages: records
-                    .into_iter()
-                    .map(|record| match record {
-                        PixiRecord::Binary(repodata_record) => BuildHostPackage {
-                            repodata_record,
-                            source: None,
-                        },
-                        PixiRecord::Source(source) => {
-                            let repodata_record = prefix
-                                .resolved_source_records
-                                .get(&source.package_record.name)
-                                .cloned()
-                                .expect(
-                                    "the source record should be present in the result sources",
-                                );
-                            BuildHostPackage {
+            |records: Vec<PixiRecord>, prefix: Option<InstallPixiEnvironmentResult>| {
+                let Some(prefix) = prefix else {
+                    return BuildHostEnvironment { packages: vec![] };
+                };
+
+                BuildHostEnvironment {
+                    packages: records
+                        .into_iter()
+                        .map(|record| match record {
+                            PixiRecord::Binary(repodata_record) => BuildHostPackage {
                                 repodata_record,
-                                source: Some(source.source),
+                                source: None,
+                            },
+                            PixiRecord::Source(source) => {
+                                let repodata_record = prefix
+                                    .resolved_source_records
+                                    .get(&source.package_record.name)
+                                    .cloned()
+                                    .expect(
+                                        "the source record should be present in the result sources",
+                                    );
+                                BuildHostPackage {
+                                    repodata_record,
+                                    source: Some(source.source),
+                                }
                             }
-                        }
-                    })
-                    .collect(),
+                        })
+                        .collect(),
+                }
             };
 
         Ok(BuiltPackage {
@@ -602,6 +625,9 @@ pub enum SourceBuildError {
 
     #[error(transparent)]
     BuildCache(#[from] BuildCacheError),
+
+    #[error(transparent)]
+    CreateWorkDirectory(std::io::Error),
 
     #[error(transparent)]
     #[diagnostic(transparent)]

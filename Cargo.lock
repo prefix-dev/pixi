@@ -4403,6 +4403,7 @@ dependencies = [
  "pixi_build_discovery",
  "pixi_build_types",
  "rattler_conda_types",
+ "rattler_package_streaming",
  "serde",
  "serde_json",
  "thiserror 2.0.12",

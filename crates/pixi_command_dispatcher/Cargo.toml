@@ -58,6 +58,7 @@ pixi_utils = { workspace = true }
 [dev-dependencies]
 indexmap = { workspace = true }
 insta = { workspace = true, features = ["json"] }
+pixi_build_frontend = { workspace = true, features = ["passthrough_backend"] }
 pixi_config = { workspace = true }
 pixi_test_utils = { workspace = true }
 tempfile = { workspace = true }

@@ -1,6 +1,11 @@
 mod reporter;
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::{
+    borrow::Cow,
+    collections::{BTreeMap, HashMap, HashSet},
+    ffi::OsStr,
+    path::PathBuf,
+};
 
 use futures::{FutureExt, StreamExt};
 use itertools::{Either, Itertools};
@@ -83,6 +88,25 @@ pub struct InstallPixiEnvironmentResult {
 }
 
 impl InstallPixiEnvironmentSpec {
+    pub fn new(records: Vec<PixiRecord>, prefix: Prefix) -> Self {
+        InstallPixiEnvironmentSpec {
+            name: prefix
+                .file_name()
+                .map(OsStr::to_string_lossy)
+                .map(Cow::into_owned)
+                .unwrap_or_default(),
+            records,
+            prefix,
+            installed: None,
+            build_environment: BuildEnvironment::default(),
+            force_reinstall: HashSet::new(),
+            channels: Vec::new(),
+            channel_config: ChannelConfig::default_with_root_dir(PathBuf::from(".")),
+            variants: None,
+            enabled_protocols: EnabledProtocols::default(),
+        }
+    }
+
     pub async fn install(
         mut self,
         command_dispatcher: CommandDispatcher,

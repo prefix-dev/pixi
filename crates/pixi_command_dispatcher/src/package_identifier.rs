@@ -1,16 +1,25 @@
-use std::fmt::Display;
+use std::{fmt::Display, hash::Hash};
 
 use pixi_record::SourceRecord;
 use rattler_conda_types::{PackageName, PackageRecord, VersionWithSource};
 use serde::{Deserialize, Serialize};
 
 /// A struct that uniquely identifies a single package in a channel.
-#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 pub struct PackageIdentifier {
     pub name: PackageName,
     pub version: VersionWithSource,
     pub build: String,
     pub subdir: String,
+}
+
+impl Hash for PackageIdentifier {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+        self.version.as_str().hash(state);
+        self.build.hash(state);
+        self.subdir.hash(state);
+    }
 }
 
 impl Display for PackageIdentifier {

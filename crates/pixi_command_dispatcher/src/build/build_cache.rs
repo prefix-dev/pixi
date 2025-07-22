@@ -15,7 +15,7 @@ use thiserror::Error;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
 use xxhash_rust::xxh3::Xxh3;
 
-use crate::build::{MoveError, source_checkout_cache_key};
+use crate::build::source_checkout_cache_key;
 
 /// A cache for caching build artifacts of a source checkout.
 #[derive(Clone)]
@@ -28,10 +28,6 @@ pub enum BuildCacheError {
     /// An I/O error occurred while reading or writing the cache.
     #[error("an IO error occurred while {0} {1}")]
     IoError(String, PathBuf, #[source] std::io::Error),
-
-    /// Failed to move the build artifact
-    #[error("failed to move build artifact from '{}' to cache '{}'", .0.display(), .1.display())]
-    MoveError(PathBuf, PathBuf, #[source] MoveError),
 }
 
 /// Defines additional input besides the source files that are used to compute

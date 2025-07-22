@@ -43,10 +43,7 @@ use uv_pypi_types::ParsedUrlError;
 use super::{
     PixiRecordsByName, PypiRecord, PypiRecordsByName, package_identifier::ConversionError,
 };
-use crate::{
-    lock_file::records_by_name::HasNameVersion,
-    workspace::{Environment, grouped_environment::GroupedEnvironment},
-};
+use crate::workspace::{Environment, grouped_environment::GroupedEnvironment};
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum EnvironmentUnsat {
