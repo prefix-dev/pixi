@@ -10,6 +10,16 @@ use crate::{
 };
 
 impl CommandDispatcherProcessor {
+    /// Constructs a new [`SourceBuildId`] for the given `task`.
+    fn gen_source_metadata_id(&mut self, task: &SourceMetadataTask) -> SourceMetadataId {
+        let id = SourceMetadataId(self.source_metadata_ids.len());
+        self.source_metadata_ids.insert(task.spec.clone(), id);
+        if let Some(parent) = task.parent {
+            self.parent_contexts.insert(id.into(), parent);
+        }
+        id
+    }
+
     /// Called when a [`crate::command_dispatcher::SourceMetadataTask`]
     /// task was received.
     pub(crate) fn on_source_metadata(&mut self, task: SourceMetadataTask) {
@@ -28,16 +38,7 @@ impl CommandDispatcherProcessor {
 
                     *id
                 }
-                None => {
-                    // If the source metadata is not in the map, we need to
-                    // create a new id for it.
-                    let id = SourceMetadataId(self.source_metadata_ids.len());
-                    self.source_metadata_ids.insert(task.spec.clone(), id);
-                    if let Some(parent) = task.parent {
-                        self.parent_contexts.insert(id.into(), parent);
-                    }
-                    id
-                }
+                None => self.gen_source_metadata_id(&task),
             }
         };
 

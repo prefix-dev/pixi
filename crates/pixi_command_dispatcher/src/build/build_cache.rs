@@ -235,7 +235,7 @@ impl BuildCacheEntry {
         &self.cache_dir
     }
 
-    /// Consumes this instance and writes the given metadata to the cache.
+    /// Write the given metadata to the cache file.
     pub async fn insert(
         &mut self,
         metadata: CachedBuild,

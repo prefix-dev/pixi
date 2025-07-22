@@ -11,6 +11,20 @@ use crate::{
 };
 
 impl CommandDispatcherProcessor {
+    /// Constructs a new [`BuildBackendMetadataId`] for the given `task`.
+    fn gen_build_backend_metadata_id(
+        &mut self,
+        task: &BuildBackendMetadataTask,
+    ) -> BuildBackendMetadataId {
+        let id = BuildBackendMetadataId(self.build_backend_metadata_ids.len());
+        self.build_backend_metadata_ids
+            .insert(task.spec.clone(), id);
+        if let Some(parent) = task.parent {
+            self.parent_contexts.insert(id.into(), parent);
+        }
+        id
+    }
+
     /// Called when a [`crate::command_dispatcher::BuildBackendMetadataTask`]
     /// task was received.
     pub(crate) fn on_build_backend_metadata(&mut self, task: BuildBackendMetadataTask) {
@@ -18,17 +32,7 @@ impl CommandDispatcherProcessor {
         let source_metadata_id = {
             match self.build_backend_metadata_ids.get(&task.spec) {
                 Some(id) => *id,
-                None => {
-                    // If the source metadata is not in the map, we need to
-                    // create a new id for it.
-                    let id = BuildBackendMetadataId(self.build_backend_metadata_ids.len());
-                    self.build_backend_metadata_ids
-                        .insert(task.spec.clone(), id);
-                    if let Some(parent) = task.parent {
-                        self.parent_contexts.insert(id.into(), parent);
-                    }
-                    id
-                }
+                None => self.gen_build_backend_metadata_id(&task),
             }
         };
 

@@ -9,22 +9,24 @@ use crate::{
 };
 
 impl CommandDispatcherProcessor {
+    /// Constructs a new [`SourceBuildId`] for the given `task`.
+    fn gen_source_build_id(&mut self, task: &SourceBuildTask) -> SourceBuildId {
+        let id = SourceBuildId(self.source_build_ids.len());
+        self.source_build_ids.insert(task.spec.clone(), id);
+        if let Some(parent) = task.parent {
+            self.parent_contexts.insert(id.into(), parent);
+        }
+        id
+    }
+
     /// Called when a [`crate::command_dispatcher::SourceBuildTask`]
     /// task was received.
     pub(crate) fn on_source_build(&mut self, task: SourceBuildTask) {
-        // Lookup the id of the source metadata to avoid deduplication.
+        // Lookup the id of the source metadata to avoid duplication.
         let source_build_id = {
             match self.source_build_ids.get(&task.spec) {
                 Some(id) => *id,
-                None => {
-                    // If the source build is not in the map we need to create a new id for it.
-                    let id = SourceBuildId(self.source_build_ids.len());
-                    self.source_build_ids.insert(task.spec.clone(), id);
-                    if let Some(parent) = task.parent {
-                        self.parent_contexts.insert(id.into(), parent);
-                    }
-                    id
-                }
+                None => self.gen_source_build_id(&task),
             }
         };
 
@@ -68,8 +70,9 @@ impl CommandDispatcherProcessor {
                 }
 
                 // Add the task to the list of pending futures.
-                let dispatcher_context = CommandDispatcherContext::SourceBuild(source_build_id);
-                let dispatcher = self.create_task_command_dispatcher(dispatcher_context);
+                let dispatcher = self.create_task_command_dispatcher(
+                    CommandDispatcherContext::SourceBuild(source_build_id),
+                );
                 self.pending_futures.push(
                     task.spec
                         .build(dispatcher)
