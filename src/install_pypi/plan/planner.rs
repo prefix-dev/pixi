@@ -16,8 +16,8 @@ use uv_distribution_types::{InstalledDist, Name};
 use crate::install_pypi::conversions::ConvertToUvDistError;
 
 use super::{
-    NeedReinstall, PyPIInstallationPlan, RequiredDists, cache::DistCache, installed_dists::InstalledDists,
-    models::ValidateCurrentInstall, validation::need_reinstall,
+    NeedReinstall, PyPIInstallationPlan, RequiredDists, cache::DistCache,
+    installed_dists::InstalledDists, models::ValidateCurrentInstall, validation::need_reinstall,
 };
 
 /// Struct that handles the planning of the installation
@@ -78,7 +78,7 @@ impl InstallPlanner {
     ) -> Result<PyPIInstallationPlan, InstallPlannerError> {
         // Convert RequiredDists to the reference map for internal processing
         let required_dists_map = required_dists.as_ref_map();
-        
+
         // Packages to be installed directly from the cache
         let mut local = vec![];
         // Try to install from the registry or direct url or w/e
