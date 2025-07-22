@@ -1935,7 +1935,16 @@ mod tests {
         // testing of non-pixi files
         if manifest_path.file_name().unwrap() == "pyproject.toml" {
             let manifest_str = fs_err::read_to_string(&manifest_path).unwrap();
-            if !manifest_str.contains("tool.pixi") {
+            if !manifest_str.contains("tool.pixi.workspace") {
+                return;
+            }
+        }
+
+        // If a pixi.toml is present check for `workspace` in the file to avoid
+        // testing of non-pixi workspace files
+        if manifest_path.file_name().unwrap() == "pixi.toml" {
+            let manifest_str = fs_err::read_to_string(&manifest_path).unwrap();
+            if !manifest_str.contains("workspace") {
                 return;
             }
         }
