@@ -14,6 +14,9 @@ use rattler_conda_types::{
     ChannelConfig, InvalidPackageNameError, MatchSpec, PackageName, PackageRecord,
     package::RunExportsJson,
 };
+use rattler_repodata_gateway::{
+    DumpPackageCacheReporter, Gateway, RunExportExtractorError, RunExportsReporter,
+};
 use thiserror::Error;
 use tracing::instrument;
 
@@ -120,7 +123,7 @@ impl SourceMetadataSpec {
             .map_err(SourceMetadataError::from)
             .map_err(CommandDispatcherError::Failed)?
             .unwrap_or_default();
-        let build_records = self
+        let mut build_records = self
             .solve_dependencies(
                 self.package.clone(),
                 CycleEnvironment::Build,
@@ -131,6 +134,18 @@ impl SourceMetadataSpec {
                     .to_build_from_build(),
             )
             .await?;
+
+        ensure_run_exports_in_pixi_records(
+            &command_dispatcher.data.gateway,
+            &mut build_records,
+            DumpPackageCacheReporter,
+        )
+        .await
+        .map_err(SourceMetadataError::RunExportsExtract)
+        .map_err(CommandDispatcherError::Failed)?;
+
+        // command_dispatcher.gateway.en
+
         let build_run_exports =
             build_dependencies.extract_run_exports(&build_records, &output.ignore_run_exports);
 
@@ -366,6 +381,38 @@ impl SourceMetadataSpec {
     }
 }
 
+async fn ensure_run_exports_in_pixi_records<R: RunExportsReporter + Clone + 'static>(
+    gateway: &Gateway,
+    records: &mut [PixiRecord],
+    reporter: R,
+) -> Result<(), RunExportExtractorError> {
+    let mut repo_data_records_indices: Vec<usize> = Vec::with_capacity(records.len());
+    let mut repo_data_records = records
+        .iter()
+        .enumerate()
+        .flat_map(|(idx, r)| match r {
+            PixiRecord::Binary(repo_data_record) => {
+                repo_data_records_indices.push(idx);
+                Some(repo_data_record.clone())
+            }
+            PixiRecord::Source(_source_record) => None,
+        })
+        .collect::<Vec<_>>();
+
+    gateway
+        .ensure_run_exports(&mut repo_data_records, reporter)
+        .await?;
+
+    for (original_idx, updated_record) in repo_data_records_indices
+        .into_iter()
+        .zip(repo_data_records.into_iter())
+    {
+        records[original_idx] = PixiRecord::Binary(updated_record);
+    }
+
+    Ok(())
+}
+
 struct PackageRecordDependencies {
     pub depends: Vec<String>,
     pub constrains: Vec<String>,
@@ -445,6 +492,9 @@ pub enum SourceMetadataError {
         source1: Box<SourceSpec>,
         source2: Box<SourceSpec>,
     },
+
+    #[error(transparent)]
+    RunExportsExtract(RunExportExtractorError),
 
     #[error("the dependencies of some packages in the environment form a cycle")]
     Cycle(Cycle),
