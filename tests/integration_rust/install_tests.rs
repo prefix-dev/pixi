@@ -9,7 +9,6 @@ use std::{
 use fs_err::tokio as tokio_fs;
 use pixi::{
     UpdateLockFileOptions, Workspace,
-    build::BuildContext,
     cli::{
         LockFileUsageConfig,
         cli_config::{LockFileUpdateConfig, WorkspaceConfig},
@@ -23,7 +22,8 @@ use pixi_config::{Config, DetachedEnvironments};
 use pixi_consts::consts;
 use pixi_manifest::{FeatureName, FeaturesExt};
 use pixi_record::PixiRecord;
-use rattler_conda_types::{ChannelConfig, Platform, RepoDataRecord};
+use rattler_conda_types::{Platform, RepoDataRecord};
+use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use tempfile::{TempDir, tempdir};
 use tokio::{fs, task::JoinSet};
 use url::Url;
@@ -757,7 +757,7 @@ async fn test_ensure_gitignore_file_creation() {
     );
     let contents = tokio_fs::read_to_string(&gitignore_path).await.unwrap();
     assert_eq!(
-        contents, "*\n",
+        contents, "*\n!config.toml\n",
         ".pixi/.gitignore file does not contain the expected content"
     );
 
@@ -785,7 +785,7 @@ async fn test_ensure_gitignore_file_creation() {
     );
     let contents = tokio_fs::read_to_string(&gitignore_path).await.unwrap();
     assert_eq!(
-        contents, "*\n",
+        contents, "*\n!config.toml\n",
         ".pixi/.gitignore file does not contain the expected content"
     );
 }
@@ -888,6 +888,10 @@ async fn conda_pypi_override_correct_per_platform() {
 
 async fn test_multiple_prefix_update() {
     let current_platform = Platform::current();
+    let virtual_packages = VirtualPackages::detect(&VirtualPackageOverrides::default())
+        .unwrap()
+        .into_generic_virtual_packages()
+        .collect();
 
     let pixi = PixiControl::from_manifest(
         format!(
@@ -905,29 +909,46 @@ async fn test_multiple_prefix_update() {
 
     let project = pixi.workspace().unwrap();
 
-    let python_package = Package::build("python", "3.13.1").finish();
+    let (url, sha256, md5) = if cfg!(target_os = "windows") {
+        (
+            "https://repo.prefix.dev/conda-forge/win-64/python-3.13.1-h071d269_105_cp313.conda",
+            "de3bb832ff3982c993c6af15e6c45bb647159f25329caceed6f73fd4769c7628",
+            "3ddb0531ecfb2e7274d471203e053d78",
+        )
+    } else if cfg!(target_os = "macos") {
+        (
+            "https://repo.prefix.dev/conda-forge/osx-64/python-3.13.1-h2334245_105_cp313.conda",
+            "a9d224fa69c8b58c8112997f03988de569504c36ba619a08144c47512219e5ad",
+            "c3318c58d14fefd755852e989c991556",
+        )
+    } else {
+        (
+            "https://repo.prefix.dev/conda-forge/linux-64/python-3.13.1-ha99a958_105_cp313.conda",
+            "d3eb7d0820cf0189103bba1e60e242ffc15fd2f727640ac3a10394b27adf3cca",
+            "34945787453ee52a8f8271c1d19af1e8",
+        )
+    };
 
-    #[cfg(target_os = "windows")]
-    let package_url =
-        "https://repo.prefix.dev/conda-forge/win-64/python-3.13.1-h071d269_105_cp313.conda";
-    #[cfg(target_os = "linux")]
-    let package_url =
-        "https://repo.prefix.dev/conda-forge/linux-64/python-3.13.1-ha99a958_105_cp313.conda";
-    #[cfg(target_os = "macos")]
-    let package_url =
-        "https://repo.prefix.dev/conda-forge/osx-64/python-3.13.1-h2334245_105_cp313.conda";
+    let python_package = Package::build("python", "3.13.1")
+        .with_hashes(sha256, md5)
+        .finish();
 
     let python_repo_data_record = RepoDataRecord {
         package_record: python_package.package_record,
         file_name: "python".to_owned(),
-        url: Url::parse(package_url).unwrap(),
+        url: Url::parse(url).unwrap(),
         channel: Some("https://repo.prefix.dev/conda-forge/".to_owned()),
     };
 
-    let boltons_package = Package::build("wheel", "0.45.1").finish();
+    let wheel_package = Package::build("wheel", "0.45.1")
+        .with_hashes(
+            "1b34021e815ff89a4d902d879c3bd2040bc1bd6169b32e9427497fa05c55f1ce",
+            "75cb7132eb58d97896e173ef12ac9986",
+        )
+        .finish();
 
-    let boltons_repo_data_record = RepoDataRecord {
-        package_record: boltons_package.package_record,
+    let wheel_repo_data_record = RepoDataRecord {
+        package_record: wheel_package.package_record,
         file_name: "wheel".to_owned(),
         url: Url::parse(
             "https://repo.prefix.dev/conda-forge/noarch/wheel-0.45.1-pyhd8ed1ab_1.conda",
@@ -935,8 +956,6 @@ async fn test_multiple_prefix_update() {
         .unwrap(),
         channel: Some("https://repo.prefix.dev/conda-forge/".to_owned()),
     };
-
-    let tmp_dir = tempfile::tempdir().unwrap();
 
     let group = GroupedEnvironment::from(project.default_environment().clone());
 
@@ -954,19 +973,17 @@ async fn test_multiple_prefix_update() {
 
     let conda_prefix_updater = CondaPrefixUpdater::new(
         channels,
+        group.workspace().channel_config(),
         name,
         prefix,
         current_platform,
-        BuildContext::new(
-            ChannelConfig::default_with_root_dir(tmp_dir.path().to_path_buf()),
-            Default::default(),
-            command_dispatcher,
-        )
-        .unwrap(),
+        virtual_packages,
+        group.workspace().variants(current_platform),
+        command_dispatcher,
     );
 
     let pixi_records = Vec::from([
-        PixiRecord::Binary(boltons_repo_data_record),
+        PixiRecord::Binary(wheel_repo_data_record),
         PixiRecord::Binary(python_repo_data_record),
     ]);
 

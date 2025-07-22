@@ -16,6 +16,8 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref_name }}-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
 
+permissions: read-all
+
 env:
   CARGO_INCREMENTAL: 0
   CARGO_NET_RETRY: 10
@@ -82,7 +84,7 @@ jobs:
             code:
               - "install/install.ps1"
 
-  pre-commit:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
@@ -90,8 +92,8 @@ jobs:
         uses: prefix-dev/setup-pixi@main
         with:
           environments: lint
-      - name: pre-commit
-        run: pixi run pre-commit-run --color=always --show-diff-on-failure
+      - name: lint (if this step fails, please 'pixi run lint' locally and push the changes)
+        run: pixi run lint
 
   # Check that all the code references are correct.
   check-rustdoc-links:
@@ -101,7 +103,7 @@ jobs:
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
+      - uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: |
@@ -128,7 +130,7 @@ jobs:
       - uses: prefix-dev/setup-pixi@main
         with:
           cache: ${{ github.ref == 'refs/heads/main' }}
-      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
+      - uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2
         with:
           workspaces: ". -> target/pixi"
           key: ${{ hashFiles('pixi.lock') }}
@@ -142,7 +144,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       - uses: prefix-dev/setup-pixi@main
 
-      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
+      - uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2
         with:
           workspaces: ". -> target/pixi"
           key: ${{ hashFiles('pixi.lock') }}
@@ -179,7 +181,7 @@ jobs:
       - uses: prefix-dev/setup-pixi@main
         with:
           cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
-      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
+      - uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2
         with:
           workspaces: ". -> target/pixi"
           key: ${{ hashFiles('pixi.lock') }}
@@ -201,7 +203,7 @@ jobs:
       - uses: prefix-dev/setup-pixi@main
         with:
           cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
-      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
+      - uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2
         with:
           workspaces: ". -> target/pixi"
           key: ${{ hashFiles('pixi.lock') }}
@@ -223,7 +225,7 @@ jobs:
       - uses: prefix-dev/setup-pixi@main
         with:
           cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
-      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
+      - uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2
         with:
           workspaces: ". -> target/pixi"
           key: ${{ hashFiles('pixi.lock') }}
@@ -248,7 +250,7 @@ jobs:
       - uses: prefix-dev/setup-pixi@main
         with:
           cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
-      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
+      - uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2
         with:
           cache-directories: ${{ env.DEV_DRIVE }}/target
           key: ${{ hashFiles('pixi.lock') }}
@@ -271,12 +273,12 @@ jobs:
     name: "build binary | linux x86_64"
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: rui314/setup-mold@85c79d00377f0d32cdbae595a46de6f7c2fa6599 # v1
+      - uses: rui314/setup-mold@702b1908b5edf30d71a8d1666b724e0f0c6fa035 # v1
       - name: "Setup musl"
         run: |
           sudo apt-get install musl-tools
           rustup target add x86_64-unknown-linux-musl
-      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
+      - uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2
       - name: "Build"
         run: >
           cargo build
@@ -298,8 +300,8 @@ jobs:
     name: "build binary | macos aarch64"
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: rui314/setup-mold@85c79d00377f0d32cdbae595a46de6f7c2fa6599 # v1
-      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
+      - uses: rui314/setup-mold@702b1908b5edf30d71a8d1666b724e0f0c6fa035 # v1
+      - uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2
       - name: "Build"
         run: >
           cargo build
@@ -320,8 +322,8 @@ jobs:
     name: "build binary | macos x86_64"
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-      - uses: rui314/setup-mold@85c79d00377f0d32cdbae595a46de6f7c2fa6599 # v1
-      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
+      - uses: rui314/setup-mold@702b1908b5edf30d71a8d1666b724e0f0c6fa035 # v1
+      - uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2
       - name: "Build"
         run: >
           cargo build
@@ -347,7 +349,7 @@ jobs:
       - name: Copy Git Repo to Dev Drive
         run: |
           Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.PIXI_WORKSPACE }}" -Recurse
-      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
+      - uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2
         with:
           workspaces: ${{ env.PIXI_WORKSPACE }}
       - name: "Build"
@@ -379,7 +381,7 @@ jobs:
           Copy-Item -Path "${{ github.workspace }}" -Destination "${{ env.PIXI_WORKSPACE }}" -Recurse
       - name: "Install Rust toolchain"
         run: rustup target add aarch64-pc-windows-msvc
-      - uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6 # v2
+      - uses: Swatinem/rust-cache@98c8021b550208e191a6a3145459bfc9fb29c4c0 # v2
         with:
           workspaces: ${{ env.PIXI_WORKSPACE }}
       - name: "Build"

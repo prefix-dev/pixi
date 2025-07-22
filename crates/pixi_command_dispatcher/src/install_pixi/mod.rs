@@ -11,7 +11,6 @@ use futures::{FutureExt, StreamExt};
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
-use pixi_build_types::PlatformAndVirtualPackages;
 use pixi_glob::GlobModificationTime;
 use pixi_record::{PixiRecord, SourceRecord};
 use rattler::install::{
@@ -19,7 +18,7 @@ use rattler::install::{
     link_script::{LinkScriptError, PrePostLinkResult},
 };
 use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, Platform, PrefixRecord, RepoDataRecord, prefix::Prefix,
+    ChannelConfig, ChannelUrl, PrefixRecord, RepoDataRecord, prefix::Prefix,
 };
 use rattler_digest::Sha256Hash;
 use thiserror::Error;
@@ -27,8 +26,8 @@ use tracing::instrument;
 use url::Url;
 
 use crate::{
-    CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt, SourceBuildError,
-    SourceBuildSpec, SourceCheckout, SourceCheckoutError,
+    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
+    SourceBuildError, SourceBuildSpec, SourceCheckout, SourceCheckoutError,
     build::{BuildCacheError, BuildInput, CachedBuild, CachedBuildSourceInfo},
     executor::ExecutorFutures,
     install_pixi::reporter::WrappingInstallReporter,
@@ -57,8 +56,8 @@ pub struct InstallPixiEnvironmentSpec {
     #[serde(skip)]
     pub installed: Option<Vec<PrefixRecord>>,
 
-    /// Describes the platform
-    pub target_platform: Platform,
+    /// Describes the platform and how packages should be built for it.
+    pub build_environment: BuildEnvironment,
 
     /// Packages to force reinstalling.
     #[serde(skip_serializing_if = "HashSet::is_empty")]
@@ -138,7 +137,7 @@ impl InstallPixiEnvironmentSpec {
 
         // Install the environment using the prefix installer
         let mut installer = Installer::new()
-            .with_target_platform(self.target_platform)
+            .with_target_platform(self.build_environment.host_platform)
             .with_download_client(command_dispatcher.download_client().clone())
             .with_package_cache(command_dispatcher.package_cache().clone())
             .with_reinstall_packages(self.force_reinstall)
@@ -213,18 +212,21 @@ impl InstallPixiEnvironmentSpec {
 
         // Otherwise, build the package from source
         let (repodata_record, input_globs, source_checkout) = self
-            .build_from_source(command_dispatcher, source_record)
+            .build_from_source(
+                command_dispatcher,
+                source_record,
+                build_cache_entry.cache_dir(),
+            )
             .await?;
 
         // Store the built package in the cache. This will modify the location of the
         // package, the returned updated repodata record will reflect that.
         let repodata_record = build_cache_entry
             .insert(CachedBuild {
-                source: if !source_checkout.pinned.is_immutable() {
-                    Some(CachedBuildSourceInfo { globs: input_globs })
-                } else {
-                    None
-                },
+                source: source_checkout
+                    .pinned
+                    .is_mutable()
+                    .then_some(CachedBuildSourceInfo { globs: input_globs }),
                 record: repodata_record.clone(),
             })
             .await
@@ -242,24 +244,24 @@ impl InstallPixiEnvironmentSpec {
         &self,
         command_dispatcher: &CommandDispatcher,
         source_record: &SourceRecord,
+        output_directory: &Path,
     ) -> Result<
         (RepoDataRecord, BTreeSet<String>, SourceCheckout),
         CommandDispatcherError<BuildSourceError>,
     > {
-        let (tool_platform, tool_virtual_packages) = command_dispatcher.tool_platform();
-
         // Build the source package.
         let built_source = command_dispatcher
             .source_build(SourceBuildSpec {
-                source: source_record.clone(),
+                source: source_record.source.clone(),
+                package: source_record.into(),
                 channel_config: self.channel_config.clone(),
                 channels: self.channels.clone(),
-                host_platform: Some(PlatformAndVirtualPackages {
-                    platform: tool_platform,
-                    virtual_packages: Some(tool_virtual_packages.to_vec()),
-                }),
+                build_environment: self.build_environment.clone(),
                 variants: self.variants.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
+                output_directory: Some(output_directory.to_path_buf()),
+                work_directory: None,
+                clean: false,
             })
             .await
             .map_err_with(BuildSourceError::BuildError)?;

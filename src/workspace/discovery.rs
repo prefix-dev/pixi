@@ -32,6 +32,17 @@ pub enum DiscoveryStart {
     ExplicitManifest(PathBuf),
 }
 
+impl DiscoveryStart {
+    /// Returns the path where the search should start.
+    pub fn path(&self) -> std::io::Result<PathBuf> {
+        match self {
+            DiscoveryStart::CurrentDir => std::env::current_dir(),
+            DiscoveryStart::SearchRoot(path) => Ok(path.clone()),
+            DiscoveryStart::ExplicitManifest(path) => Ok(path.clone()),
+        }
+    }
+}
+
 /// A helper struct that helps discover the workspace root and potentially the
 /// "current" package.
 #[derive(Default)]
@@ -66,6 +77,14 @@ pub enum WorkspaceLocatorError {
         pyproject_prefix = consts::PYPROJECT_PIXI_PREFIX
     )]
     WorkspaceNotFound(PathBuf),
+
+    /// A pyproject.toml file exists but lacks [tool.pixi] configuration.
+    #[error(
+        "found {pyproject_manifest} without {pyproject_prefix} section at directory {0}\n\nSuggestion: Run 'pixi init' to initialize pixi support in the existing {pyproject_manifest}",
+        pyproject_manifest = consts::PYPROJECT_MANIFEST,
+        pyproject_prefix = consts::PYPROJECT_PIXI_PREFIX
+    )]
+    PyprojectWithoutPixi(PathBuf),
 
     #[error("unable to canonicalize '{}'", .path.display())]
     Canonicalize {
@@ -186,6 +205,18 @@ impl WorkspaceLocator {
 
         // Early out if discovery failed.
         let Some(discovered_manifests) = workspace_manifests else {
+            // Check if a pyproject.toml exists in the discovery source directory
+            let pyproject_path = discovery_source.join(consts::PYPROJECT_MANIFEST);
+            if pyproject_path.is_file() {
+                // Check if it's a valid Python project by looking for project metadata
+                if let Ok(content) = fs_err::read_to_string(&pyproject_path) {
+                    if content.contains("[project]") {
+                        return Err(WorkspaceLocatorError::PyprojectWithoutPixi(
+                            discovery_source,
+                        ));
+                    }
+                }
+            }
             return Err(WorkspaceLocatorError::WorkspaceNotFound(discovery_source));
         };
 
@@ -254,8 +285,9 @@ impl WorkspaceLocator {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use std::path::{Path, PathBuf};
+
+    use super::*;
 
     #[test]
     fn test_workspace_locator() {
@@ -306,5 +338,44 @@ mod test {
         );
         let workspace = workspace_locator.locate().unwrap();
         assert_eq!(workspace.root, PathBuf::from(project_root));
+    }
+
+    #[test]
+    fn test_pyproject_without_pixi_error() {
+        use tempfile::TempDir;
+
+        // Create a temporary directory
+        let temp_dir = TempDir::new().unwrap();
+        let temp_path = temp_dir.path();
+
+        // Create a pyproject.toml file without [tool.pixi] section
+        let pyproject_content = r#"
+[project]
+name = "test-project"
+version = "0.1.0"
+description = "A test project"
+dependencies = []
+"#;
+        let pyproject_path = temp_path.join("pyproject.toml");
+        fs_err::write(&pyproject_path, pyproject_content).unwrap();
+
+        // Try to locate workspace - should return PyprojectWithoutPixi error
+        let workspace_locator = WorkspaceLocator::default()
+            .with_search_start(DiscoveryStart::SearchRoot(temp_path.to_path_buf()));
+
+        let result = workspace_locator.locate();
+        assert!(result.is_err());
+
+        let error = result.unwrap_err();
+        assert!(matches!(
+            error,
+            WorkspaceLocatorError::PyprojectWithoutPixi(_)
+        ));
+
+        // Check that the error message contains the suggestion
+        let error_message = error.to_string();
+        assert!(error_message.contains("pixi init"));
+        assert!(error_message.contains("pyproject.toml"));
+        assert!(error_message.contains("tool.pixi"));
     }
 }

@@ -88,11 +88,14 @@ async fn generate_activation_script(
     // If we are in a conda environment, we need to deactivate it before activating
     // the host / build prefix
     let conda_prefix = std::env::var("CONDA_PREFIX").ok().map(|p| p.into());
+    let current_env = std::env::vars().collect::<HashMap<_, _>>();
+
     let mut result = activator
         .activation(ActivationVariables {
             conda_prefix,
             path,
             path_modification_behavior: PathModificationBehavior::default(),
+            current_env,
         })
         .into_diagnostic()?;
 
@@ -159,7 +162,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         &environment,
         args.prefix_update_config.update_mode(),
         UpdateLockFileOptions {
-            lock_file_usage: args.lock_file_update_config.lock_file_usage(),
+            lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
             no_install: args.prefix_update_config.no_install
                 && args.lock_file_update_config.no_lockfile_update,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),

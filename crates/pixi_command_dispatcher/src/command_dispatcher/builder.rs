@@ -9,13 +9,13 @@ use rattler_repodata_gateway::{Gateway, MaxConcurrency};
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use reqwest_middleware::ClientWithMiddleware;
 
+use crate::build::source_metadata_cache::SourceMetadataCache;
 use crate::{
     CacheDirs, CommandDispatcher, Executor, Limits, Reporter,
     build::BuildCache,
     command_dispatcher::{CommandDispatcherChannel, CommandDispatcherData},
     command_dispatcher_processor::CommandDispatcherProcessor,
     limits::ResolvedLimits,
-    source_metadata::SourceMetadataCache,
 };
 
 #[derive(Default)]

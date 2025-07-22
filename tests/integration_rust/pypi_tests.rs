@@ -378,3 +378,81 @@ async fn test_indexes_are_passed_when_solving_build_pypi_dependencies() {
     // verify that
     assert_eq!(local_pypi_index, lock_file_index,);
 }
+
+#[tokio::test]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn test_cross_platform_resolve_with_no_build() {
+    // non-current platform
+    let resolve_platform = if Platform::current().is_osx() {
+        Platform::Linux64
+    } else {
+        Platform::OsxArm64
+    };
+
+    let pypi_indexes = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/pypi-indexes");
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+        [project]
+        name = "pypi-extra-index-url"
+        platforms = ["{platform}"]
+        channels = ["https://prefix.dev/conda-forge"]
+
+        [dependencies]
+        python = "~=3.12.0"
+
+        [pypi-dependencies]
+        foo = "*"
+
+        [pypi-options]
+        no-build = true
+        find-links = [{{ path = "{pypi_indexes}/multiple-indexes-a/flat"}}]"#,
+        platform = resolve_platform,
+        pypi_indexes = pypi_indexes.display().to_string().replace("\\", "/"),
+    ));
+    let lock_file = pixi.unwrap().update_lock_file().await.unwrap();
+
+    assert_eq!(
+        lock_file
+            .get_pypi_package_url("default", resolve_platform, "foo")
+            .unwrap()
+            .as_path()
+            .unwrap(),
+        Utf8TypedPath::from(&*pypi_indexes.as_os_str().to_string_lossy())
+            .join("multiple-indexes-a")
+            .join("flat")
+            .join("foo-1.0.0-py2.py3-none-any.whl")
+    );
+}
+
+/// This test checks that the help message is correctly generated when a PyPI package is pinned
+/// by the conda solve, which may cause a conflict with the PyPI dependencies.
+///
+/// We expect there to be a help message that informs the user about the pinned package
+#[tokio::test]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn test_pinned_help_message() {
+    let pixi = PixiControl::from_manifest(
+        r#"
+        [workspace]
+        channels = ["https://prefix.dev/conda-forge"]
+        name = "deleteme"
+        platforms = ["linux-64"]
+        version = "0.1.0"
+
+        [dependencies]
+        python = "3.12.*"
+        pandas = "*"
+
+        [pypi-dependencies]
+        databricks-sql-connector = ">=4.0.0"
+        "#,
+    );
+    // First, it should fail
+    let result = pixi.unwrap().update_lock_file().await;
+    let err = result.err().unwrap();
+    // Second, it should contain a help message
+    assert_eq!(
+        format!("{}", err.help().unwrap()),
+        "The following PyPI packages have been pinned by the conda solve, and this version may be causing a conflict:\npandas==2.3.1"
+    );
+}

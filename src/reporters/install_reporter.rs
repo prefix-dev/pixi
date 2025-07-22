@@ -4,8 +4,10 @@ use futures::{Stream, StreamExt};
 use indicatif::MultiProgress;
 use parking_lot::Mutex;
 use pixi_command_dispatcher::{
-    ReporterContext, SourceBuildSpec,
-    reporter::{SourceBuildId, SourceBuildReporter},
+    BackendSourceBuildSpec, ReporterContext, SourceBuildSpec,
+    reporter::{
+        BackendSourceBuildId, BackendSourceBuildReporter, SourceBuildId, SourceBuildReporter,
+    },
 };
 use pixi_progress::ProgressBarPlacement;
 use rattler::install::Transaction;
@@ -56,6 +58,43 @@ impl SyncReporter {
     }
 }
 
+impl BackendSourceBuildReporter for SyncReporter {
+    fn on_queued(
+        &mut self,
+        reason: Option<ReporterContext>,
+        _env: &BackendSourceBuildSpec,
+    ) -> BackendSourceBuildId {
+        // Find the source build that was the reason for this build. This has queued a
+        // task to the progress bar.
+        let Some(ReporterContext::SourceBuild(source_build)) = reason else {
+            unreachable!("SourceBuildReporter should only be called with a SourceBuild context");
+        };
+        BackendSourceBuildId(source_build.0)
+    }
+
+    fn on_started(
+        &mut self,
+        _id: BackendSourceBuildId,
+        mut backend_output_stream: Box<dyn Stream<Item = String> + Unpin + Send>,
+    ) {
+        // Enable streaming of the logs from the backend
+        if tracing::event_enabled!(tracing::Level::INFO) {
+            // Stream the progress of the output to the screen.
+            let progress_bar = self.multi_progress.clone();
+            tokio::spawn(async move {
+                while let Some(line) = backend_output_stream.next().await {
+                    // Suspend the main progress bar while we print the line.
+                    progress_bar.suspend(|| eprintln!("{}", line));
+                }
+            });
+        }
+    }
+
+    fn on_finished(&mut self, _id: BackendSourceBuildId) {
+        // Handled by the parent of this task.
+    }
+}
+
 impl SourceBuildReporter for SyncReporter {
     fn on_queued(
         &mut self,
@@ -67,22 +106,8 @@ impl SourceBuildReporter for SyncReporter {
         SourceBuildId(id)
     }
 
-    fn on_started(
-        &mut self,
-        id: SourceBuildId,
-        mut backend_output_stream: Box<dyn Stream<Item = String> + Unpin + Send>,
-    ) {
-        if tracing::event_enabled!(tracing::Level::INFO) {
-            // Stream the progress of the output to the screen.
-            let progress_bar = self.multi_progress.clone();
-            tokio::spawn(async move {
-                while let Some(line) = backend_output_stream.next().await {
-                    // Suspend the main progress bar while we print the line.
-                    progress_bar.suspend(|| eprintln!("{}", line));
-                }
-            });
-        }
-
+    fn on_started(&mut self, id: SourceBuildId) {
+        // Notify the progress bar that the build has started.
         let mut inner = self.combined_inner.lock();
         inner.preparing_progress_bar.on_build_start(id.0);
     }
@@ -202,9 +227,9 @@ impl CombinedInstallReporterInner {
         cache_entry
     }
 
-    fn on_validate_complete(&mut self, _id: TransactionId, cache_entry: usize) {
+    fn on_validate_complete(&mut self, _id: TransactionId, validation_id: usize) {
         self.preparing_progress_bar
-            .on_validation_complete(cache_entry);
+            .on_validation_complete(validation_id);
     }
 
     fn on_download_start(&mut self, _id: TransactionId, cache_entry: usize) -> usize {

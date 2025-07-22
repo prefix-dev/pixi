@@ -19,6 +19,7 @@ futures = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
 pin-project-lite = { workspace = true }
+rand = { workspace = true }
 reqwest-middleware = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
@@ -42,6 +43,7 @@ simple_spawn_blocking = { workspace = true, features = ["tokio"] }
 
 pixi_build_discovery = { workspace = true, features = ["serde"] }
 pixi_build_frontend = { workspace = true }
+pixi_build_type_conversions = { workspace = true }
 pixi_build_types = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_git = { workspace = true }

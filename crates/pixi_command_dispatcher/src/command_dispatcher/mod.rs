@@ -21,24 +21,29 @@ use pixi_glob::GlobHashCache;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec, PixiRecord};
 use pixi_spec::SourceSpec;
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{GenericVirtualPackage, Platform, prefix::Prefix};
+use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 use tokio::sync::{mpsc, oneshot};
 use typed_path::Utf8TypedPath;
 
 use crate::{
-    Executor, InvalidPathError, PixiEnvironmentSpec, SolveCondaEnvironmentSpec,
-    SolvePixiEnvironmentError, SourceCheckout, SourceCheckoutError, SourceMetadataSpec,
-    build::BuildCache,
+    BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec, Executor,
+    InvalidPathError, PixiEnvironmentSpec, SolveCondaEnvironmentSpec, SolvePixiEnvironmentError,
+    SourceCheckout, SourceCheckoutError, SourceMetadata, SourceMetadataError, SourceMetadataSpec,
+    backend_source_build::{BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildSpec},
+    build::{BuildCache, source_metadata_cache::SourceMetadataCache},
     cache_dirs::CacheDirs,
     install_pixi::{
         InstallPixiEnvironmentError, InstallPixiEnvironmentResult, InstallPixiEnvironmentSpec,
     },
-    instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec},
+    instantiate_tool_env::{
+        InstantiateToolEnvironmentError, InstantiateToolEnvironmentResult,
+        InstantiateToolEnvironmentSpec,
+    },
     limits::ResolvedLimits,
+    solve_conda::SolveCondaEnvironmentError,
     source_build::{BuiltSource, SourceBuildError, SourceBuildSpec},
-    source_metadata::{SourceMetadata, SourceMetadataCache, SourceMetadataError},
 };
 
 mod builder;
@@ -160,10 +165,12 @@ impl CommandDispatcherChannel {
 ///
 /// This enum is used to track dependencies and associate tasks with specific
 /// contexts.
-#[derive(Debug, Copy, Clone, derive_more::From)]
+#[derive(Debug, Copy, Clone, derive_more::From, Hash, Eq, PartialEq)]
 pub(crate) enum CommandDispatcherContext {
     SolveCondaEnvironment(SolveCondaEnvironmentId),
     SolvePixiEnvironment(SolvePixiEnvironmentId),
+    BuildBackendMetadata(BuildBackendMetadataId),
+    BackendSourceBuild(BackendSourceBuildId),
     SourceMetadata(SourceMetadataId),
     SourceBuild(SourceBuildId),
     InstallPixiEnvironment(InstallPixiEnvironmentId),
@@ -177,6 +184,9 @@ slotmap::new_key_type! {
     /// An id that uniquely identifies a conda environment that is being solved.
     pub(crate) struct SourceBuildId;
 
+    /// An id that uniquely identifies a build backend source build request.
+    pub(crate) struct BackendSourceBuildId;
+
     /// An id that uniquely identifies a conda environment that is being solved.
     pub(crate) struct SolvePixiEnvironmentId;
 
@@ -186,6 +196,10 @@ slotmap::new_key_type! {
     /// A unique id that identifies a git source checkout.
     pub(crate) struct GitCheckoutId;
 }
+
+/// An id that uniquely identifies a build backend metadata request.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub(crate) struct BuildBackendMetadataId(pub usize);
 
 /// An id that uniquely identifies a source metadata request.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
@@ -200,6 +214,8 @@ pub(crate) struct InstantiatedToolEnvId(pub usize);
 pub(crate) enum ForegroundMessage {
     SolveCondaEnvironment(SolveCondaEnvironmentTask),
     SolvePixiEnvironment(SolvePixiEnvironmentTask),
+    BuildBackendMetadata(BuildBackendMetadataTask),
+    BackendSourceBuild(BackendSourceBuildTask),
     SourceMetadata(SourceMetadataTask),
     SourceBuild(SourceBuildTask),
     GitCheckout(GitCheckoutTask),
@@ -229,13 +245,19 @@ impl TaskSpec for InstallPixiEnvironmentSpec {
 pub(crate) type SolveCondaEnvironmentTask = Task<SolveCondaEnvironmentSpec>;
 impl TaskSpec for SolveCondaEnvironmentSpec {
     type Output = Vec<PixiRecord>;
-    type Error = rattler_solve::SolveError;
+    type Error = SolveCondaEnvironmentError;
 }
 
 /// A message that is send to the background task to requesting the metadata for
 /// a particular source spec.
-pub(crate) type SourceMetadataTask = Task<SourceMetadataSpec>;
+pub(crate) type BuildBackendMetadataTask = Task<BuildBackendMetadataSpec>;
 
+impl TaskSpec for BuildBackendMetadataSpec {
+    type Output = Arc<BuildBackendMetadata>;
+    type Error = BuildBackendMetadataError;
+}
+
+pub(crate) type SourceMetadataTask = Task<SourceMetadataSpec>;
 impl TaskSpec for SourceMetadataSpec {
     type Output = Arc<SourceMetadata>;
     type Error = SourceMetadataError;
@@ -248,9 +270,16 @@ impl TaskSpec for SourceBuildSpec {
     type Error = SourceBuildError;
 }
 
+pub(crate) type BackendSourceBuildTask = Task<BackendSourceBuildSpec>;
+
+impl TaskSpec for BackendSourceBuildSpec {
+    type Output = BackendBuiltSource;
+    type Error = BackendSourceBuildError;
+}
+
 /// Instantiates a tool environment.
 impl TaskSpec for InstantiateToolEnvironmentSpec {
-    type Output = Prefix;
+    type Output = InstantiateToolEnvironmentResult;
     type Error = InstantiateToolEnvironmentError;
 }
 
@@ -376,6 +405,14 @@ impl CommandDispatcher {
     }
 
     /// Returns the metadata of the source spec.
+    pub async fn build_backend_metadata(
+        &self,
+        spec: BuildBackendMetadataSpec,
+    ) -> Result<Arc<BuildBackendMetadata>, CommandDispatcherError<BuildBackendMetadataError>> {
+        self.execute_task(spec).await
+    }
+
+    /// Returns the metadata of a particular source package.
     pub async fn source_metadata(
         &self,
         spec: SourceMetadataSpec,
@@ -388,6 +425,14 @@ impl CommandDispatcher {
         &self,
         spec: SourceBuildSpec,
     ) -> Result<BuiltSource, CommandDispatcherError<SourceBuildError>> {
+        self.execute_task(spec).await
+    }
+
+    /// Calls into a pixi build backend to perform a source build.
+    pub(crate) async fn backend_source_build(
+        &self,
+        spec: BackendSourceBuildSpec,
+    ) -> Result<BackendBuiltSource, CommandDispatcherError<BackendSourceBuildError>> {
         self.execute_task(spec).await
     }
 
@@ -437,7 +482,7 @@ impl CommandDispatcher {
     pub async fn solve_conda_environment(
         &self,
         spec: SolveCondaEnvironmentSpec,
-    ) -> Result<Vec<PixiRecord>, CommandDispatcherError<rattler_solve::SolveError>> {
+    ) -> Result<Vec<PixiRecord>, CommandDispatcherError<SolveCondaEnvironmentError>> {
         self.execute_task(spec).await
     }
 
@@ -451,7 +496,10 @@ impl CommandDispatcher {
     pub async fn instantiate_tool_environment(
         &self,
         spec: InstantiateToolEnvironmentSpec,
-    ) -> Result<Prefix, CommandDispatcherError<InstantiateToolEnvironmentError>> {
+    ) -> Result<
+        InstantiateToolEnvironmentResult,
+        CommandDispatcherError<InstantiateToolEnvironmentError>,
+    > {
         self.execute_task(spec).await
     }
 
@@ -474,7 +522,9 @@ impl CommandDispatcher {
         source_spec: SourceSpec,
     ) -> Result<SourceCheckout, CommandDispatcherError<SourceCheckoutError>> {
         match source_spec {
-            SourceSpec::Url(_) => unimplemented!("fetching URL sources is not yet implemented"),
+            SourceSpec::Url(url) => {
+                unimplemented!("fetching URL sources ({}) is not yet implemented", url.url)
+            }
             SourceSpec::Path(path) => {
                 let source_path = self
                     .data

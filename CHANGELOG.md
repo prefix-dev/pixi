@@ -5,6 +5,115 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.50.0] - 2025-07-22
+#### ✨ Highlights
+This release contains loads of bug fixes and refactors, primarily to make `pixi build` more stable and feature rich in the near future.
+
+#### Added
+
+- Add `pypi-option.no-binary` by @thomas-maschler in [#4008](https://github.com/prefix-dev/pixi/pull/4008)
+- Add explicit workspace inheritance syntax by @baszalmstra in [#4078](https://github.com/prefix-dev/pixi/pull/4078)
+- Add `conda/outputs` and `conda/build_v2` backend protocol by @baszalmstra in [#4118](https://github.com/prefix-dev/pixi/pull/4118)
+- Add cyclic dependency support by @baszalmstra in [#4143](https://github.com/prefix-dev/pixi/pull/4143)
+
+#### Changed
+
+- Add `pixi init` as a suggestion in the error message, when `pyproject.toml` is without the `tool.pixi` section by @mrswastik-robot in [#3943](https://github.com/prefix-dev/pixi/pull/3943)
+- Improve error messages when a python interpreter is needed by @tdejager in [#4075](https://github.com/prefix-dev/pixi/pull/4075)
+- Manual validation of frozen and locked CLI arguments by @gshiba in [#4044](https://github.com/prefix-dev/pixi/pull/4044)
+- Better error for unexpected packages from build backend by @baszalmstra in [#4098](https://github.com/prefix-dev/pixi/pull/4098)
+- Implement stable hash for ProjectModelV1 to improve cache consistency by @baszalmstra in [#4094](https://github.com/prefix-dev/pixi/pull/4094)
+- Upgrade to uv 0.7.20 by @tdejager in [#4091](https://github.com/prefix-dev/pixi/pull/4091)[#4115](https://github.com/prefix-dev/pixi/pull/4115)
+- Use command dispatcher for `pixi global install` by @tdejager in [#4126](https://github.com/prefix-dev/pixi/pull/4126)
+- Notify which conda packages may have influenced the conflict by @tdejager in [#4135](https://github.com/prefix-dev/pixi/pull/4135)
+- Refactor spec implementation handling in global by @tdejager in [#4138](https://github.com/prefix-dev/pixi/pull/4138)
+- Use command dispatcher for pixi build by @baszalmstra in [#4156](https://github.com/prefix-dev/pixi/pull/4156)
+
+#### Documentation
+
+- Add `site_description` by @lucascolley in [#4088](https://github.com/prefix-dev/pixi/pull/4088)
+- Improve the `system-requirements` documentation by @ruben-arts in [#4068](https://github.com/prefix-dev/pixi/pull/4068)
+- Enable `content.code.select` by @lucascolley in [#4092](https://github.com/prefix-dev/pixi/pull/4092)
+- Add `conda-deny` documentation by @PaulKMueller in [#4090](https://github.com/prefix-dev/pixi/pull/4090) [#4124](https://github.com/prefix-dev/pixi/pull/4124)
+- Update setup-pixi docs for pixi-url-bearer-token by @ytausch in [#4127](https://github.com/prefix-dev/pixi/pull/4127)
+- Update the python tutorial to use the workspace command by @rongou in [#4128](https://github.com/prefix-dev/pixi/pull/4128)
+
+#### Fixed
+
+- Only print release notes on new version with `self-update` by @lucascolley in [#4054](https://github.com/prefix-dev/pixi/pull/4054)
+- Add an early check, before creating directories for `<non-existent-env>` while uninstalling them by @mrswastik-robot in [#4049](https://github.com/prefix-dev/pixi/pull/4049)
+- Update template variable for extra index URLs in init file by @noamgot in [#4072](https://github.com/prefix-dev/pixi/pull/4072)
+- Allow to set `pypi-config.allow-insecure-host` by @zen-xu in [#4107](https://github.com/prefix-dev/pixi/pull/4107)
+
+#### New Contributors
+* @rongou made their first contribution in [#4128](https://github.com/prefix-dev/pixi/pull/4128)
+* @PaulKMueller made their first contribution in [#4124](https://github.com/prefix-dev/pixi/pull/4124)
+* @gshiba made their first contribution in [#4044](https://github.com/prefix-dev/pixi/pull/4044)
+* @thomas-maschler made their first contribution in [#4008](https://github.com/prefix-dev/pixi/pull/4008)
+
+### [0.49.0] - 2025-06-30
+#### ✨ Highlights
+This release enables `pixi` to pick up extensions that are installed as `pixi-`.
+This is similar to `cargo`, `git` and other tools.
+This means that you can now install extensions like this:
+
+```shell
+pixi global install pixi-pack
+pixi pack
+```
+
+It also allows you to use `pixi exec` more easily:
+```shell
+pixi exec --with numpy python -c "import numpy; print(numpy.__version__)"
+# Previous command is equivalent to:
+pixi exec --spec numpy --spec python python -c "import numpy; print(numpy.__version__)"
+```
+
+#### Added
+
+- Add `turtlebot4` simulation example to `ros2-nav2` by @wep21 in [#3988](https://github.com/prefix-dev/pixi/pull/3988)
+- Add `--with` option to `pixi exec` by @lucascolley in [#4011](https://github.com/prefix-dev/pixi/pull/4011)
+- Implement external `pixi-` command discovery for pixi extensions by @mrswastik-robot in [#3968](https://github.com/prefix-dev/pixi/pull/3968)
+
+
+#### Changed
+
+- Remove egg-info from gitignore and fix whitespace in beginning by @pavelzw in [#3964](https://github.com/prefix-dev/pixi/pull/3964)
+
+#### Documentation
+
+- Refactor getting started and python tutorial by @ruben-arts in [#3977](https://github.com/prefix-dev/pixi/pull/3977)
+- Add links to backend docs by @Hofer-Julian in [#4010](https://github.com/prefix-dev/pixi/pull/4010)
+- Improve content and layout by @ruben-arts in [#4003](https://github.com/prefix-dev/pixi/pull/4003)
+- Update pixi-pack documentation for parallel downloads by @delsner in [#4018](https://github.com/prefix-dev/pixi/pull/4018)
+- Add pixi pack to our extensions by @Hofer-Julian in [#4019](https://github.com/prefix-dev/pixi/pull/4019)
+- Explain conda and pypi mix by @ruben-arts in [#4022](https://github.com/prefix-dev/pixi/pull/4022)
+- Mention other extensions by @pavelzw in [#4026](https://github.com/prefix-dev/pixi/pull/4026)
+- Update pixi-pack docs for separate packages by @delsner in [#4025](https://github.com/prefix-dev/pixi/pull/4025)
+- Update title pixi-diff-to-markdown by @Hofer-Julian in [#4027](https://github.com/prefix-dev/pixi/pull/4027)
+- Add example of passing `arg` to `depended-on` task by @theavey in [#4030](https://github.com/prefix-dev/pixi/pull/4030)
+- Tweak nav headings by @lucascolley in [#4045](https://github.com/prefix-dev/pixi/pull/4045)
+- Fix formatting in pixi-pack by @pavelzw in [#4050](https://github.com/prefix-dev/pixi/pull/4050)
+
+#### Fixed
+
+- Multi output handling in Pixi by @Hofer-Julian in [#3961](https://github.com/prefix-dev/pixi/pull/3961)
+- Check for the environments not the environments dir by @ruben-arts in [#4005](https://github.com/prefix-dev/pixi/pull/4005)
+- Only trigger rebuild when relevant parts of the package manifest changed by @Hofer-Julian in [#3966](https://github.com/prefix-dev/pixi/pull/3966)
+- Lazy raise error of pypi building environment by @gzm55 in [#4009](https://github.com/prefix-dev/pixi/pull/4009)
+- Don't error on readonly fs with ignore files by @ruben-arts in [#3984](https://github.com/prefix-dev/pixi/pull/3984)
+- Fix example & tweak some wording by @lucascolley in [#4046](https://github.com/prefix-dev/pixi/pull/4046)
+
+#### Refactor
+
+- Building with command dispatcher by @baszalmstra in [#3967](https://github.com/prefix-dev/pixi/pull/3967)
+
+
+#### New Contributors
+* @theavey made their first contribution in [#4030](https://github.com/prefix-dev/pixi/pull/4030)
+* @xhochy made their first contribution in [#4014](https://github.com/prefix-dev/pixi/pull/4014)
+* @wep21 made their first contribution in [#3988](https://github.com/prefix-dev/pixi/pull/3988)
+
 ### [0.48.2] - 2025-06-16
 #### ✨ Highlights
 

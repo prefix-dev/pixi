@@ -73,9 +73,12 @@ options:
 ```
 
 ## Get your code ready for a PR
-We use [`pre-commit`](https://pre-commit.com/) to run all the formatters and linters that we use.
-If you have `pre-commit` installed on your system you can run `pre-commit install` to run the tools before you commit or push.
-If you don't have it on your system either use `pixi global install pre-commit` or use the one in your environment.
+We use [`leftook`](https://lefthook.dev/) to run all the formatters and linters that we use.
+You can run `pixi run pre-commit-install` to automatically run the formatters and linters before you commit.
+This also installs a pre-push hook which runs `cargo clippy` —
+use `pixi run pre-commit-install-minimal` instead to opt out of this hook.
+To run all formatters and linters on all files:
+
 ```shell
 pixi run lint
 ```
@@ -87,7 +90,7 @@ git add FILES_YOU_CHANGED
 # This is the conventional commit convention:
 git commit -m "<type>[optional scope]: <description>"
 # An example:
-git commit -m "feat: add xxx to the pixi.toml"
+git commit -m "feat(exec): add xxx option"
 ```
 
 ## Color decisions in the ui code

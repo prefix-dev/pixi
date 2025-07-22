@@ -2,6 +2,7 @@ use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
     fmt::{Display, Formatter},
+    hash::Hash,
     ops::Sub,
     path::{Path, PathBuf},
     str::FromStr,
@@ -10,6 +11,8 @@ use std::{
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
+use pixi_build_discovery::{DiscoveredBackend, EnabledProtocols};
+use pixi_build_type_conversions::compute_project_model_hash;
 use pixi_git::url::RepositoryUrl;
 use pixi_glob::{GlobHashCache, GlobHashError, GlobHashKey};
 use pixi_manifest::{FeaturesExt, pypi::pypi_options::NoBuild};
@@ -33,9 +36,9 @@ use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_distribution_filename::{DistExtension, ExtensionError, SourceDistExtension};
 use uv_distribution_types::RequirementSource;
+use uv_distribution_types::RequiresPython;
 use uv_git_types::GitReference;
 use uv_pypi_types::ParsedUrlError;
-use uv_resolver::RequiresPython;
 
 use super::{
     PixiRecordsByName, PypiRecord, PypiRecordsByName, package_identifier::ConversionError,
@@ -386,6 +389,10 @@ pub enum PlatformUnsat {
 
     #[error("failed to convert between pep508 and uv types: {0}")]
     UvTypesConversionError(#[from] ConversionError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    BackendDiscovery(#[from] pixi_build_discovery::DiscoveryError),
 
     #[error("'{name}' is locked as a conda package but only requested by pypi dependencies")]
     CondaPackageShouldBePypi { name: String },
@@ -850,7 +857,7 @@ pub(crate) fn pypi_satifisfies_requirement(
                     .and_then(|str| Url::parse(str).ok())
                     .unwrap_or(locked_url.clone());
 
-                if *spec_url.raw() == locked_url {
+                if *spec_url.raw() == locked_url.clone().into() {
                     return Ok(());
                 } else {
                     return Err(PlatformUnsat::LockedPyPIDirectUrlMismatch {
@@ -1471,10 +1478,25 @@ pub(crate) async fn verify_package_platform_satisfiability(
             ))
         })?;
 
+        let discovered_backend = DiscoveredBackend::discover(
+            &source_dir,
+            &environment.channel_config(),
+            &EnabledProtocols::default(),
+        )
+        .map_err(PlatformUnsat::BackendDiscovery)
+        .map_err(Box::new)?;
+
+        let project_model_hash = discovered_backend
+            .init_params
+            .project_model
+            .as_ref()
+            .map(compute_project_model_hash);
+
         let input_hash = input_hash_cache
             .compute_hash(GlobHashKey::new(
                 source_dir,
                 locked_input_hash.globs.clone(),
+                project_model_hash,
             ))
             .await
             .map_err(PlatformUnsat::FailedToComputeInputHash)
@@ -1908,12 +1930,21 @@ mod tests {
     #[rstest]
     #[tokio::test]
     #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
-    async fn test_example_satisfiability(#[files("examples/*/p*.toml")] manifest_path: PathBuf) {
+    async fn test_example_satisfiability(#[files("examples/**/p*.toml")] manifest_path: PathBuf) {
         // If a pyproject.toml is present check for `tool.pixi` in the file to avoid
         // testing of non-pixi files
         if manifest_path.file_name().unwrap() == "pyproject.toml" {
             let manifest_str = fs_err::read_to_string(&manifest_path).unwrap();
-            if !manifest_str.contains("tool.pixi") {
+            if !manifest_str.contains("tool.pixi.workspace") {
+                return;
+            }
+        }
+
+        // If a pixi.toml is present check for `workspace` in the file to avoid
+        // testing of non-pixi workspace files
+        if manifest_path.file_name().unwrap() == "pixi.toml" {
+            let manifest_str = fs_err::read_to_string(&manifest_path).unwrap();
+            if !manifest_str.contains("workspace") {
                 return;
             }
         }

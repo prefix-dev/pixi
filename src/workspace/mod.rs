@@ -45,6 +45,7 @@ use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platfo
 use rattler_lock::{LockFile, LockedPackageRef};
 use rattler_networking::s3_middleware;
 use rattler_repodata_gateway::Gateway;
+use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use reqwest_middleware::ClientWithMiddleware;
 pub use solve_group::SolveGroup;
 use tokio::sync::Semaphore;
@@ -57,6 +58,7 @@ use crate::{
     diff::LockFileDiff,
     lock_file::filter_lock_file,
     repodata::Repodata,
+    variants::VariantConfig,
 };
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
@@ -349,7 +351,7 @@ impl Workspace {
             let detached_environments_path =
                 detached_environments_path.join(consts::ENVIRONMENTS_DIR);
             let _ = CUSTOM_TARGET_DIR_WARN.get_or_init(|| {
-                if default_envs_dir.exists() && !default_envs_dir.is_symlink() {
+                if !default_envs_dir.is_symlink() && self.environments().iter().any(|env| default_envs_dir.join(env.name().as_str()).exists()) {
                     tracing::warn!(
                         "Environments found in '{}', this will be ignored and the environment will be installed in the 'detached-environments' directory: '{}'. It's advised to remove the {} folder from the default directory to avoid confusion{}.",
                         default_envs_dir.display(),
@@ -463,6 +465,28 @@ impl Workspace {
             })
     }
 
+    /// Returns the resolved variant configuration for a given platform.
+    pub fn variants(&self, platform: Platform) -> VariantConfig {
+        let mut result = VariantConfig::new();
+
+        // Resolves from most specific to least specific.
+        for variants in self
+            .workspace
+            .value
+            .workspace
+            .build_variants
+            .resolve(Some(platform))
+            .flatten()
+        {
+            // Update the hash map, but only items that are not already in the map.
+            for (key, value) in variants {
+                result.entry(key.clone()).or_insert_with(|| value.clone());
+            }
+        }
+
+        result
+    }
+
     // /// Returns the reqwest client used for http networking
     // /// this api is not used now, uncomment when use in the future
     // pub(crate) fn client(&self) -> miette::Result<&reqwest::Client> {
@@ -491,6 +515,21 @@ impl Workspace {
     pub fn command_dispatcher_builder(&self) -> miette::Result<CommandDispatcherBuilder> {
         let cache_dirs =
             CacheDirs::new(pixi_config::get_cache_dir()?).with_workspace(self.pixi_dir());
+
+        // Determine the tool platform to use
+        let tool_platform = self.config().tool_platform();
+        let tool_virtual_packages =
+            if tool_platform.only_platform() == Platform::current().only_platform() {
+                // If the tool platform is the same as the current platform, we just assume the
+                // same virtual packages apply.
+                VirtualPackages::detect(&VirtualPackageOverrides::from_env())
+                    .unwrap_or_default()
+                    .into_generic_virtual_packages()
+                    .collect()
+            } else {
+                vec![]
+            };
+
         Ok(CommandDispatcher::builder()
             .with_gateway(self.repodata_gateway()?.clone())
             .with_cache_dirs(cache_dirs)
@@ -505,7 +544,8 @@ impl Workspace {
             .execute_link_scripts(match self.config.run_post_link_scripts() {
                 RunPostLinkScripts::Insecure => true,
                 RunPostLinkScripts::False => false,
-            }))
+            })
+            .with_tool_platform(tool_platform, tool_virtual_packages))
     }
 
     fn client_and_authenticated_client(

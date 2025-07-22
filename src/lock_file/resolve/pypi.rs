@@ -1,6 +1,6 @@
 use std::{
     cell::RefCell,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     iter::once,
     ops::Deref,
     path::{Path, PathBuf},
@@ -20,7 +20,7 @@ use pixi_pypi_spec::PixiPypiSpec;
 use pixi_record::PixiRecord;
 use pixi_uv_conversions::{
     ConversionError, as_uv_req, convert_uv_requirements_to_pep508, into_pinned_git_spec,
-    no_build_to_build_options, pypi_options_to_index_locations, to_exclude_newer,
+    pypi_options_to_build_options, pypi_options_to_index_locations, to_exclude_newer,
     to_index_strategy, to_normalize, to_requirements, to_uv_normalize, to_uv_version,
     to_version_specifiers,
 };
@@ -39,13 +39,14 @@ use uv_configuration::{ConfigSettings, Constraints, Overrides};
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{
     BuiltDist, DependencyMetadata, Diagnostic, Dist, FileLocation, HashPolicy, IndexCapabilities,
-    IndexUrl, Name, RequirementSource, Resolution, ResolvedDist, SourceDist, ToUrlError,
+    IndexUrl, Name, RequirementSource, RequiresPython, Resolution, ResolvedDist, SourceDist,
+    ToUrlError,
 };
 use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigests};
 use uv_requirements::LookaheadResolver;
 use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
-    PreferenceError, Preferences, PythonRequirement, Resolver, ResolverEnvironment,
+    PreferenceError, Preferences, PythonRequirement, ResolveError, Resolver, ResolverEnvironment,
 };
 use uv_types::EmptyInstalledPackages;
 
@@ -201,6 +202,60 @@ fn print_overridden_requests(package_requests: &HashMap<uv_normalize::PackageNam
     }
 }
 
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum SolveError {
+    #[error("failed to resolve pypi dependencies")]
+    NoSolution {
+        source: Box<uv_resolver::NoSolutionError>,
+        #[help]
+        advice: Option<String>,
+    },
+    #[error("failed to resolve pypi dependencies")]
+    Other(#[from] ResolveError),
+}
+
+/// Creates a custom `SolveError` from a `ResolveError`.
+/// to add some extra information about locked conda packages
+fn create_solve_error(
+    error: ResolveError,
+    conda_python_packages: &CondaPythonPackages,
+) -> SolveError {
+    match error {
+        ResolveError::NoSolution(no_solution) => {
+            let packages: HashSet<_> = no_solution.packages().collect();
+            let conflicting_packages: Vec<String> = conda_python_packages
+                .iter()
+                .filter_map(|(pypi_name, (_, pypi_identifier))| {
+                    if packages.contains(pypi_name) {
+                        Some(format!(
+                            "{}=={}",
+                            pypi_identifier.name.as_source(),
+                            pypi_identifier.version
+                        ))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            let advice = if conflicting_packages.is_empty() {
+                None
+            } else {
+                Some(format!(
+                    "The following PyPI packages have been pinned by the conda solve, and this version may be causing a conflict:\n{}",
+                    conflicting_packages.join("\n")
+                ))
+            };
+
+            SolveError::NoSolution {
+                source: no_solution,
+                advice,
+            }
+        }
+        _ => SolveError::Other(error),
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn resolve_pypi(
     context: UvResolutionContext,
@@ -213,7 +268,7 @@ pub async fn resolve_pypi(
     pb: &ProgressBar,
     project_root: &Path,
     prefix_updater: CondaPrefixUpdater,
-    platform_repodata_records: Arc<PixiRecordsByName>,
+    repodata_building_records: miette::Result<Arc<PixiRecordsByName>>,
     project_env_vars: HashMap<EnvironmentName, EnvironmentVars>,
     environment_name: Environment<'_>,
     disallow_install_conda_prefix: bool,
@@ -318,9 +373,8 @@ pub async fn resolve_pypi(
         uv_pep440::VersionSpecifier::from_version(uv_pep440::Operator::EqualStar, pep_version)
             .into_diagnostic()
             .context("error creating version specifier for python version")?;
-    let requires_python = uv_resolver::RequiresPython::from_specifiers(
-        &uv_pep440::VersionSpecifiers::from(python_specifier),
-    );
+    let requires_python =
+        RequiresPython::from_specifiers(&uv_pep440::VersionSpecifiers::from(python_specifier));
     tracing::debug!(
         "using requires-python specifier (this may differ from the above): {}",
         requires_python
@@ -346,9 +400,11 @@ pub async fn resolve_pypi(
 
     let registry_client = Arc::new(uv_client_builder.build());
 
-    let build_options =
-        no_build_to_build_options(&pypi_options.no_build.clone().unwrap_or_default())
-            .into_diagnostic()?;
+    let build_options = pypi_options_to_build_options(
+        &pypi_options.no_build.clone().unwrap_or_default(),
+        &pypi_options.no_binary.clone().unwrap_or_default(),
+    )
+    .into_diagnostic()?;
 
     // Resolve the flat indexes from `--find-links`.
     // In UV 0.7.8, we need to fetch flat index entries from the index locations
@@ -414,7 +470,7 @@ pub async fn resolve_pypi(
         prefix_updater,
         project_env_vars,
         environment_name,
-        platform_repodata_records.records.clone(),
+        repodata_building_records.map(|r| r.records.clone()),
         pypi_options.no_build_isolation.clone(),
         &lazy_build_dispatch_dependencies,
         disallow_install_conda_prefix,
@@ -554,6 +610,7 @@ pub async fn resolve_pypi(
         options,
         &context.hash_strategy,
         resolver_env,
+        &marker_environment,
         Some(tags),
         &PythonRequirement::from_marker_environment(&marker_environment, requires_python.clone()),
         Conflicts::default(),
@@ -571,8 +628,7 @@ pub async fn resolve_pypi(
     ))
     .resolve()
     .await
-    .into_diagnostic()
-    .context("failed to resolve pypi dependencies")?;
+    .map_err(|e| create_solve_error(e, &conda_python_packages))?;
     let resolution = Resolution::from(resolution);
 
     // Print the overridden package requests

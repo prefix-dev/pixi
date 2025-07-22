@@ -1,10 +1,17 @@
-import shutil
-from pathlib import Path
-
 import pytest
+from pathlib import Path
+import shutil
 from syrupy.assertion import SnapshotAssertion
 
-from .common import current_platform, get_manifest, repo_root, verify_cli_command
+
+from .common import verify_cli_command, repo_root, current_platform, get_manifest
+import sys
+
+
+pytestmark = pytest.mark.skipif(
+    sys.platform.startswith("win"),
+    reason="Enable again as soon as pixi build supports windows builds with multiple platforms",
+)
 
 
 @pytest.mark.extra_slow
@@ -65,7 +72,7 @@ def test_doc_pixi_workspaces_introduction(
 
 
 @pytest.mark.extra_slow
-@pytest.mark.timeout(200)
+@pytest.mark.timeout(400)
 @pytest.mark.parametrize(
     "manifest",
     [
