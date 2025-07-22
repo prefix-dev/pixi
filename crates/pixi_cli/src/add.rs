@@ -2,13 +2,14 @@ use clap::Parser;
 use indexmap::IndexMap;
 use miette::IntoDiagnostic;
 use pixi_config::ConfigCli;
-use pixi_core::{WorkspaceLocator, environment::sanity_check_workspace, workspace::DependencyType};
-use pixi_manifest::{FeatureName, KnownPreviewFeature, SpecType};
-use pixi_spec::{GitSpec, SourceLocationSpec, SourceSpec};
-use rattler_conda_types::{MatchSpec, PackageName};
+use pixi_core::{WorkspaceLocator, environment::sanity_check_workspace, DependencyType, repodata::Repodata};
+use pixi_manifest::{FeatureName, SpecType, KnownPreviewFeature};
+use pixi_spec::{GitSpec, SourceSpec, SourceLocationSpec};
+use rattler_conda_types::{MatchSpec, PackageName, Platform};
 
+use super::package_suggestions;
 use crate::{
-    cli_config::{DependencyConfig, LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig},
+    cli_config::{ChannelsConfig, DependencyConfig, LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig},
     has_specs::HasSpecs,
 };
 
@@ -212,8 +213,40 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             update_deps
         }
         Err(e) => {
+            let enhanced_error = if let Some(failed_package) =
+                package_suggestions::extract_failed_package_name(&e)
+            {
+                // Use CEP-0016 shard index with strict timeout for sub-second response
+                let result = async {
+                    let default_channels = ChannelsConfig::default();
+                    let channels =
+                        default_channels.resolve_from_project(Some(workspace.workspace())).ok()?;
+                    let platform = dependency_config
+                        .platforms
+                        .first()
+                        .copied()
+                        .unwrap_or(Platform::current());
+
+                    let gateway = workspace.workspace().repodata_gateway().ok()?.clone();
+
+                    let suggester =
+                        package_suggestions::PackageSuggester::new(channels, platform, gateway);
+
+                    Some(package_suggestions::get_fast_suggestions(&failed_package, &suggester).await)
+                }.await;
+
+                result
+            } else {
+                None
+            };
+
             workspace.revert().await.into_diagnostic()?;
-            return Err(e);
+
+            // Return enhanced error with suggestions or original error
+            return match enhanced_error {
+                Some(enhanced) => Err(enhanced),
+                None => Err(e),
+            };
         }
     };
 
