@@ -4,7 +4,7 @@ use futures::FutureExt;
 
 use super::{CommandDispatcherProcessor, PendingDeduplicatingTask, TaskResult};
 use crate::{
-    CommandDispatcherError, Reporter, SourceBuildError, SourceBuildResult,
+    CommandDispatcherError, Reporter, SourceBuildError, SourceBuildResult, SourceBuildSpec,
     command_dispatcher::{CommandDispatcherContext, SourceBuildId, SourceBuildTask},
 };
 
@@ -69,18 +69,20 @@ impl CommandDispatcherProcessor {
                     reporter.on_started(reporter_id)
                 }
 
-                // Add the task to the list of pending futures.
-                let dispatcher = self.create_task_command_dispatcher(
-                    CommandDispatcherContext::SourceBuild(source_build_id),
-                );
-                self.pending_futures.push(
-                    task.spec
-                        .build(dispatcher)
-                        .map(move |result| TaskResult::SourceBuild(source_build_id, result))
-                        .boxed_local(),
-                );
+                self.queue_source_build_task(source_build_id, task);
             }
         }
+    }
+
+    /// Queues a source build task to be executed.
+    fn queue_source_build_task(&mut self, source_build_id: SourceBuildId, spec: SourceBuildSpec) {
+        let dispatcher = self
+            .create_task_command_dispatcher(CommandDispatcherContext::SourceBuild(source_build_id));
+        self.pending_futures.push(
+            spec.build(dispatcher)
+                .map(move |result| TaskResult::SourceBuild(source_build_id, result))
+                .boxed_local(),
+        );
     }
 
     /// Called when a [`TaskResult::SourceBuild`] task was

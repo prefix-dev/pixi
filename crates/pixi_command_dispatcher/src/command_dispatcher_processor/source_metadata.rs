@@ -4,7 +4,7 @@ use futures::FutureExt;
 
 use super::{CommandDispatcherProcessor, PendingDeduplicatingTask, TaskResult};
 use crate::{
-    CommandDispatcherError, Reporter, SourceMetadata, SourceMetadataError,
+    CommandDispatcherError, Reporter, SourceMetadata, SourceMetadataError, SourceMetadataSpec,
     command_dispatcher::{CommandDispatcherContext, SourceMetadataId, SourceMetadataTask},
     source_metadata::Cycle,
 };
@@ -81,19 +81,27 @@ impl CommandDispatcherProcessor {
                     reporter.on_started(reporter_id)
                 }
 
-                let dispatcher = self.create_task_command_dispatcher(
-                    CommandDispatcherContext::SourceMetadata(source_metadata_id),
-                );
-                self.pending_futures.push(
-                    task.spec
-                        .request(dispatcher)
-                        .map(move |result| {
-                            TaskResult::SourceMetadata(source_metadata_id, result.map(Arc::new))
-                        })
-                        .boxed_local(),
-                );
+                self.queue_source_metadata_task(source_metadata_id, task);
             }
         }
+    }
+
+    /// Queues a source metadata task to be executed.
+    fn queue_source_metadata_task(
+        &mut self,
+        source_metadata_id: SourceMetadataId,
+        spec: SourceMetadataSpec,
+    ) {
+        let dispatcher = self.create_task_command_dispatcher(
+            CommandDispatcherContext::SourceMetadata(source_metadata_id),
+        );
+        self.pending_futures.push(
+            spec.request(dispatcher)
+                .map(move |result| {
+                    TaskResult::SourceMetadata(source_metadata_id, result.map(Arc::new))
+                })
+                .boxed_local(),
+        );
     }
 
     /// Called when a [`super::TaskResult::SourceMetadata`] task was

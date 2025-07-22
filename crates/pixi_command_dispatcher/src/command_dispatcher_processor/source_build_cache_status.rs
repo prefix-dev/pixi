@@ -5,6 +5,7 @@ use futures::FutureExt;
 use super::{CommandDispatcherProcessor, PendingDeduplicatingTask, TaskResult};
 use crate::{
     CommandDispatcherError, SourceBuildCacheEntry, SourceBuildCacheStatusError,
+    SourceBuildCacheStatusSpec,
     command_dispatcher::{
         CommandDispatcherContext, SourceBuildCacheStatusId, SourceBuildCacheStatusTask,
     },
@@ -65,20 +66,27 @@ impl CommandDispatcherProcessor {
                     task.parent,
                 ));
 
-                // Add the task to the list of pending futures.
-                let dispatcher = self.create_task_command_dispatcher(
-                    CommandDispatcherContext::QuerySourceBuildCache(source_build_cache_status_id),
-                );
-                self.pending_futures.push(
-                    task.spec
-                        .query(dispatcher)
-                        .map(move |result| {
-                            TaskResult::QuerySourceBuildCache(source_build_cache_status_id, result)
-                        })
-                        .boxed_local(),
-                );
+                self.queue_source_build_cache_status_task(source_build_cache_status_id, task.spec);
             }
         }
+    }
+
+    /// Queues a source build cache status task to be executed.
+    fn queue_source_build_cache_status_task(
+        &mut self,
+        source_build_cache_status_id: SourceBuildCacheStatusId,
+        spec: SourceBuildCacheStatusSpec,
+    ) {
+        let dispatcher = self.create_task_command_dispatcher(
+            CommandDispatcherContext::QuerySourceBuildCache(source_build_cache_status_id),
+        );
+        self.pending_futures.push(
+            spec.query(dispatcher)
+                .map(move |result| {
+                    TaskResult::QuerySourceBuildCache(source_build_cache_status_id, result)
+                })
+                .boxed_local(),
+        );
     }
 
     /// Called when a [`TaskResult::QuerySourceBuildCache`] task was

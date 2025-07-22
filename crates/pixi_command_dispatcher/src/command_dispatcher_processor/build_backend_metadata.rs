@@ -4,9 +4,11 @@ use futures::FutureExt;
 
 use super::{CommandDispatcherProcessor, PendingDeduplicatingTask, TaskResult};
 use crate::{
-    BuildBackendMetadata, BuildBackendMetadataError, CommandDispatcherError, Reporter,
+    BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec,
+    CommandDispatcherError, Reporter,
     command_dispatcher::{
         BuildBackendMetadataId, BuildBackendMetadataTask, CommandDispatcherContext,
+        SourceMetadataId,
     },
 };
 
@@ -75,22 +77,30 @@ impl CommandDispatcherProcessor {
                     reporter.on_started(reporter_id)
                 }
 
-                let dispatcher = self.create_task_command_dispatcher(
-                    CommandDispatcherContext::BuildBackendMetadata(source_metadata_id),
-                );
-                self.pending_futures.push(
-                    task.spec
-                        .request(dispatcher)
-                        .map(move |result| {
-                            TaskResult::BuildBackendMetadata(
-                                source_metadata_id,
-                                result.map(Arc::new),
-                            )
-                        })
-                        .boxed_local(),
-                );
+                self.queue_build_backend_metadata_task(source_metadata_id, task.spec);
             }
         }
+    }
+
+    /// Queues a [`BuildBackendMetadata`] task to be processed.
+    fn queue_build_backend_metadata_task(
+        &mut self,
+        build_backend_metadata_id: BuildBackendMetadataId,
+        spec: BuildBackendMetadataSpec,
+    ) {
+        let dispatcher = self.create_task_command_dispatcher(
+            CommandDispatcherContext::BuildBackendMetadata(build_backend_metadata_id),
+        );
+        self.pending_futures.push(
+            spec.request(dispatcher)
+                .map(move |result| {
+                    TaskResult::BuildBackendMetadata(
+                        build_backend_metadata_id,
+                        result.map(Arc::new),
+                    )
+                })
+                .boxed_local(),
+        );
     }
 
     /// Called when a [`super::TaskResult::BuildBackendMetadata`] task was
