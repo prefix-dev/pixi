@@ -9,7 +9,8 @@ use pixi_spec::PixiSpec;
 use pixi_utils::conda_environment_file::CondaEnvFile;
 use rattler_conda_types::Platform;
 
-use miette::IntoDiagnostic;
+use miette::{Diagnostic, IntoDiagnostic, Result};
+use thiserror::Error;
 
 use super::cli_config::LockFileUpdateConfig;
 use crate::{
@@ -76,6 +77,36 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 }
 
+#[derive(Debug, Error, Diagnostic)]
+#[error("Missing name: provide --feature or --environment, or set `name:` in environment.yml")]
+struct MissingEnvironmentName;
+
+fn get_feature_and_environment(
+    feature_arg: &Option<String>,
+    environment_arg: &Option<String>,
+    file: &CondaEnvFile,
+) -> Result<(String, String), miette::Report> {
+    let fallback = || {
+        file.name()
+            .map(|s| s.to_string())
+            .ok_or(MissingEnvironmentName)
+    };
+
+    let feature_string = match (feature_arg, environment_arg) {
+        (Some(f), _) => f.clone(),
+        (_, Some(e)) => e.clone(),
+        _ => fallback()?,
+    };
+
+    let environment_string = match (environment_arg, feature_arg) {
+        (Some(e), _) => e.clone(),
+        (_, Some(f)) => f.clone(),
+        _ => fallback()?,
+    };
+
+    Ok((feature_string, environment_string))
+}
+
 async fn import_conda_env(args: Args) -> miette::Result<()> {
     let (file, platforms, workspace_config) = (args.file, args.platforms, args.workspace_config);
     let config = Config::from(args.config);
@@ -93,8 +124,8 @@ async fn import_conda_env(args: Args) -> miette::Result<()> {
     // TODO: add dry_run logic to import
 
     let file = CondaEnvFile::from_path(&file)?;
-    let feature_string = args.feature.clone().unwrap_or(args.environment.clone().unwrap_or(file.name().expect("A name must be provided with `--feature` or `--environment` when an `environment.yml` has no specified `name`.").to_string()));
-    let environment_string = args.environment.unwrap_or(args.feature.unwrap_or(file.name().expect("A name must be provided with `--feature` or `--environment` when an `environment.yml` has no specified `name`.").to_string()));
+    let (feature_string, environment_string) =
+        get_feature_and_environment(&args.feature, &args.environment, &file)?;
     let feature_name = FeatureName::from(feature_string.clone());
 
     // Add the platforms if they are not already present

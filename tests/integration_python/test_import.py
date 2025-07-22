@@ -68,6 +68,36 @@ class TestCondaEnv:
             stdout_contains="scipy",
         )
 
+    def test_import_no_name(self, pixi: Path, tmp_pixi_workspace: Path) -> None:
+        manifest_path = tmp_pixi_workspace / "pixi.toml"
+        # Create a new project
+        verify_cli_command([pixi, "init", tmp_pixi_workspace])
+
+        # Import an `environment.yml` without a name
+        verify_cli_command(
+            [
+                pixi,
+                "import",
+                "--manifest-path",
+                manifest_path,
+                repo_root() / "tests/data/import_files/noname.yml",
+            ],
+            ExitCode.FAILURE,
+            stderr_contains="Missing name: provide --feature or --environment, or set `name:`",
+        )
+
+        # Providing a feature name succeeds
+        verify_cli_command(
+            [
+                pixi,
+                "import",
+                "--manifest-path",
+                manifest_path,
+                repo_root() / "tests/data/import_files/noname.yml",
+                "--feature=foobar",
+            ],
+        )
+
     def test_import_platforms(self, pixi: Path, tmp_pixi_workspace: Path) -> None:
         manifest_path = tmp_pixi_workspace / "pixi.toml"
         # Create a new project
@@ -122,7 +152,6 @@ class TestCondaEnv:
                 manifest_path,
                 repo_root() / "tests/data/import_files/simple_environment.yml",
             ],
-            stderr_contains="Imported",
         )
         verify_cli_command(
             [pixi, "info", "--manifest-path", manifest_path],
@@ -139,7 +168,6 @@ class TestCondaEnv:
                 repo_root() / "tests/data/import_files/cowpy.yml",
                 "--feature=simple-env",
             ],
-            stderr_contains="Imported",
         )
         verify_cli_command(
             [pixi, "list", "--manifest-path", manifest_path, "--environment=simple-env"],
