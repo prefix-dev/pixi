@@ -276,7 +276,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::load_global();
 
     if is_init_dir_equal_to_pixi_home_parent(&dir) {
-        miette::bail!("You cannot create a workspace in the parent of the pixi home directory.");
+        miette::bail!(
+            "You cannot create a workspace in the parent of the pixi home directory.\n\
+            Please see https://pixi.sh/pixi/v{}/reference/environment_variables/ \
+            for more information about the pixi home directory.",
+            consts::PIXI_VERSION
+        );
     }
 
     // Deprecation warning for the `pyproject` option
