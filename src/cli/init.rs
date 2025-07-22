@@ -18,6 +18,7 @@ use pixi_manifest::{
 use pixi_spec::PixiSpec;
 use pixi_utils::conda_environment_file::CondaEnvFile;
 use rattler_conda_types::{NamedChannelOrUrl, Platform};
+use same_file::is_same_file;
 use tokio::fs::OpenOptions;
 use url::Url;
 use uv_normalize::PackageName;
@@ -259,7 +260,7 @@ fn is_init_dir_equal_to_pixi_home_parent(init_dir: &Path) -> bool {
     pixi_home()
         .as_ref()
         .and_then(|home_dir| home_dir.parent())
-        .map(|parent| parent == init_dir)
+        .and_then(|parent| is_same_file(parent, init_dir).ok())
         .unwrap_or(false)
 }
 
