@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use pixi_config::{Config, ConfigCli};
 use pixi_manifest::{
     DependencyOverwriteBehavior, FeatureName, HasFeaturesIter, PrioritizedChannel, SpecType,
@@ -18,6 +18,12 @@ use crate::{
     environment::sanity_check_workspace,
 };
 
+#[derive(Parser, Debug, Clone, PartialEq, ValueEnum)]
+pub enum ImportFileFormat {
+    // TODO: implement conda-lock, conda-txt, pypi-txt
+    CondaEnv,
+}
+
 /// Imports a file into an environment in an existing workspace.
 ///
 /// If `--format` isn't provided, `import` will try to guess the format based on the file extension.
@@ -32,8 +38,8 @@ pub struct Args {
     pub file: PathBuf,
 
     /// Which format to interpret the file as.
-    #[arg(long)]
-    pub format: Option<String>,
+    #[arg(long, ignore_case = true)]
+    pub format: Option<ImportFileFormat>,
 
     /// The platforms for the imported environment
     #[arg(long = "platform", short, value_name = "PLATFORM")]
@@ -59,8 +65,7 @@ pub struct Args {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     if let Some(format) = &args.format {
-        if *format != *"conda-env" {
-            // TODO: implement conda-lock, conda-txt, pypi-txt
+        if *format != ImportFileFormat::CondaEnv {
             miette::bail!(
                 "Only the conda environment.yml format is supported currently. Please pass `conda-env` to `format`."
             );

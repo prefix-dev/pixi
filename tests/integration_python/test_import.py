@@ -23,7 +23,7 @@ class TestCondaEnv:
                 repo_root() / "tests/data/import_files/simple_environment.yml",
                 "--format=foobar",
             ],
-            ExitCode.FAILURE,
+            ExitCode.INCORRECT_USAGE,
             stderr_contains="format",
         )
 
