@@ -2,11 +2,12 @@ mod download_verify_reporter;
 mod git;
 mod install_reporter;
 mod main_progress_bar;
+mod package_cache_reporter;
 mod release_notes;
 mod repodata_reporter;
 pub mod uv_reporter;
 
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 
 use git::GitCheckoutProgress;
 use indicatif::{MultiProgress, ProgressBar};
@@ -17,9 +18,10 @@ use pixi_command_dispatcher::{
     },
 };
 use pixi_spec::PixiSpec;
-use rattler_repodata_gateway::Reporter;
+use rattler_repodata_gateway::{Reporter, RunExportsReporter};
 pub use release_notes::format_release_notes;
 use uv_configuration::RAYON_INITIALIZE;
+use package_cache_reporter::PackageCacheReporter;
 
 use install_reporter::SyncReporter;
 use main_progress_bar::MainProgressBar;
@@ -36,6 +38,7 @@ pub struct TopLevelProgress {
     conda_solve_reporter: MainProgressBar<String>,
     repodata_reporter: RepodataReporter,
     sync_reporter: SyncReporter,
+    package_cache_reporter: PackageCacheReporter,
 }
 
 impl TopLevelProgress {
@@ -56,11 +59,18 @@ impl TopLevelProgress {
             multi_progress.clone(),
             pixi_progress::ProgressBarPlacement::Before(anchor_pb.clone()),
         );
-        let source_checkout_reporter = GitCheckoutProgress::new(anchor_pb, multi_progress.clone());
+        let source_checkout_reporter =
+            GitCheckoutProgress::new(multi_progress.clone(), anchor_pb.clone());
+        let package_cache_reporter = PackageCacheReporter::new(
+            multi_progress.clone(),
+            pixi_progress::ProgressBarPlacement::Before(anchor_pb.clone()),
+        )
+        .with_prefix("fetching run exports");
         Self {
             source_checkout_reporter,
             conda_solve_reporter,
             repodata_reporter,
+            package_cache_reporter,
             sync_reporter: install_reporter,
         }
     }
@@ -116,6 +126,14 @@ impl pixi_command_dispatcher::Reporter for TopLevelProgress {
         _reason: Option<ReporterContext>,
     ) -> Option<Box<dyn Reporter>> {
         Some(Box::new(self.repodata_reporter.clone()))
+    }
+
+    /// Returns a reporter that run exports fetching progress.
+    fn create_run_exports_reporter(
+        &mut self,
+        _reason: Option<ReporterContext>,
+    ) -> Option<Arc<dyn RunExportsReporter + Send>> {
+        Some(Arc::new(self.package_cache_reporter.clone()))
     }
 
     fn create_install_reporter(

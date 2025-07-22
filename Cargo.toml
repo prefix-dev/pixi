@@ -122,24 +122,24 @@ wax = "0.6.0"
 which = "8.0.0"
 
 # Rattler crates
-file_url = "0.2.6"
-rattler = { version = "0.34.10", default-features = false }
-rattler_cache = { version = "0.3.28", default-features = false }
-rattler_conda_types = { version = "0.37.0", default-features = false, features = [
+file_url = { git = "https://github.com/remimimimimi/rattler.git", branch = "feat/extract-run-export" }
+rattler = { git = "https://github.com/remimimimimi/rattler.git", branch = "feat/extract-run-export", default-features = false }
+rattler_cache = { git = "https://github.com/remimimimimi/rattler.git", branch = "feat/extract-run-export", default-features = false }
+rattler_conda_types = { git = "https://github.com/remimimimimi/rattler.git", branch = "feat/extract-run-export", default-features = false, features = [
   "rayon",
 ] }
-rattler_digest = { version = "1.1.5", default-features = false }
-rattler_lock = { version = "0.23.13", default-features = false }
-rattler_menuinst = { version = "0.2.20", default-features = false }
-rattler_networking = { version = "0.25.8", default-features = false, features = [
+rattler_digest = { git = "https://github.com/remimimimimi/rattler.git", branch = "feat/extract-run-export", default-features = false }
+rattler_lock = { git = "https://github.com/remimimimimi/rattler.git", branch = "feat/extract-run-export", default-features = false }
+rattler_menuinst = { git = "https://github.com/remimimimimi/rattler.git", branch = "feat/extract-run-export", default-features = false }
+rattler_networking = { git = "https://github.com/remimimimimi/rattler.git", branch = "feat/extract-run-export", default-features = false, features = [
   "google-cloud-auth",
   "dirs",
 ] }
-rattler_package_streaming = { version = "0.22.48", default-features = false }
-rattler_repodata_gateway = { version = "0.23.9", default-features = false }
-rattler_shell = { version = "0.24.7", default-features = false }
-rattler_solve = { version = "2.1.8", default-features = false }
-rattler_virtual_packages = { version = "2.1.1", default-features = false }
+rattler_package_streaming = { git = "https://github.com/remimimimimi/rattler.git", branch = "feat/extract-run-export", default-features = false }
+rattler_repodata_gateway = { git = "https://github.com/remimimimimi/rattler.git", branch = "feat/extract-run-export", default-features = false }
+rattler_shell = { git = "https://github.com/remimimimimi/rattler.git", branch = "feat/extract-run-export", default-features = false }
+rattler_solve = { git = "https://github.com/remimimimimi/rattler.git", branch = "feat/extract-run-export", default-features = false }
+rattler_virtual_packages = { git = "https://github.com/remimimimimi/rattler.git", branch = "feat/extract-run-export", default-features = false }
 simple_spawn_blocking = { version = "1.1.0", default-features = false }
 
 # Bumping this to a higher version breaks the Windows path handling.

@@ -1,6 +1,6 @@
 mod cycle;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 pub use cycle::{Cycle, CycleEnvironment};
 use futures::TryStreamExt;
@@ -14,6 +14,7 @@ use rattler_conda_types::{
     ChannelConfig, InvalidPackageNameError, MatchSpec, PackageName, PackageRecord,
     package::RunExportsJson,
 };
+use rattler_repodata_gateway::{Gateway, RunExportExtractorError, RunExportsReporter};
 use thiserror::Error;
 use tracing::instrument;
 
@@ -50,9 +51,10 @@ pub struct SourceMetadata {
 
 impl SourceMetadataSpec {
     #[instrument(skip_all, fields(name = %self.package.as_source(), platform = %self.backend_metadata.build_environment.host_platform))]
-    pub(crate) async fn request(
+    pub async fn request(
         self,
         command_dispatcher: CommandDispatcher,
+        reporter: Option<Arc<(dyn RunExportsReporter + Send)>>,
     ) -> Result<SourceMetadata, CommandDispatcherError<SourceMetadataError>> {
         tracing::debug!(
             "Requesting source metadata from '{}'",
@@ -91,6 +93,7 @@ impl SourceMetadataSpec {
                         output,
                         build_backend_metadata.metadata.input_hash.clone(),
                         build_backend_metadata.source.clone(),
+                        reporter.clone(),
                     ));
                 }
 
@@ -108,7 +111,9 @@ impl SourceMetadataSpec {
         output: &CondaOutput,
         input_hash: Option<InputHash>,
         source: PinnedSourceSpec,
+        reporter: Option<Arc<(dyn RunExportsReporter + Send)>>,
     ) -> Result<SourceRecord, CommandDispatcherError<SourceMetadataError>> {
+        // let run_exports_reporter = self.reporter.clone();
         let source_anchor = SourceAnchor::from(SourceSpec::from(source.clone()));
 
         // Solve the build environment for the output.
@@ -120,7 +125,7 @@ impl SourceMetadataSpec {
             .map_err(SourceMetadataError::from)
             .map_err(CommandDispatcherError::Failed)?
             .unwrap_or_default();
-        let build_records = self
+        let mut build_records = self
             .solve_dependencies(
                 self.package.clone(),
                 CycleEnvironment::Build,
@@ -131,6 +136,18 @@ impl SourceMetadataSpec {
                     .to_build_from_build(),
             )
             .await?;
+
+        ensure_run_exports_in_pixi_records(
+            &command_dispatcher.data.gateway,
+            &mut build_records,
+            reporter,
+        )
+        .await
+        .map_err(SourceMetadataError::from)
+        .map_err(CommandDispatcherError::Failed)?;
+
+        // command_dispatcher.gateway.en
+
         let build_run_exports =
             build_dependencies.extract_run_exports(&build_records, &output.ignore_run_exports);
 
@@ -366,6 +383,38 @@ impl SourceMetadataSpec {
     }
 }
 
+async fn ensure_run_exports_in_pixi_records(
+    gateway: &Gateway,
+    records: &mut [PixiRecord],
+    reporter: Option<Arc<(dyn RunExportsReporter + Send)>>,
+) -> Result<(), RunExportExtractorError> {
+    let mut repo_data_records_indices: Vec<usize> = Vec::with_capacity(records.len());
+    let mut repo_data_records = records
+        .iter()
+        .enumerate()
+        .flat_map(|(idx, r)| match r {
+            PixiRecord::Binary(repo_data_record) => {
+                repo_data_records_indices.push(idx);
+                Some(repo_data_record.clone())
+            }
+            PixiRecord::Source(_source_record) => None,
+        })
+        .collect::<Vec<_>>();
+
+    gateway
+        .ensure_run_exports(&mut repo_data_records, reporter)
+        .await?;
+
+    for (original_idx, updated_record) in repo_data_records_indices
+        .into_iter()
+        .zip(repo_data_records.into_iter())
+    {
+        records[original_idx] = PixiRecord::Binary(updated_record);
+    }
+
+    Ok(())
+}
+
 struct PackageRecordDependencies {
     pub depends: Vec<String>,
     pub constrains: Vec<String>,
@@ -445,6 +494,9 @@ pub enum SourceMetadataError {
         source1: Box<SourceSpec>,
         source2: Box<SourceSpec>,
     },
+
+    #[error(transparent)]
+    RunExportsExtract(#[from] RunExportExtractorError),
 
     #[error("the dependencies of some packages in the environment form a cycle")]
     Cycle(Cycle),
