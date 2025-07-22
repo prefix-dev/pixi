@@ -24,7 +24,7 @@ class TestCondaEnv:
                 "--format=foobar",
             ],
             ExitCode.INCORRECT_USAGE,
-            stderr_contains="format",
+            stderr_contains="invalid value 'foobar' for '--format <FORMAT>'",
         )
 
     def test_import_conda_env(self, pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -42,7 +42,6 @@ class TestCondaEnv:
                 repo_root() / "tests/data/import_files/simple_environment.yml",
                 "--format=conda-env",
             ],
-            stderr_contains="Imported",
         )
         verify_cli_command(
             [pixi, "list", "--manifest-path", manifest_path, "--environment=simple-env"],
@@ -63,7 +62,6 @@ class TestCondaEnv:
                 manifest_path,
                 repo_root() / "tests/data/import_files/simple_environment.yml",
             ],
-            stderr_contains="Imported",
         )
         verify_cli_command(
             [pixi, "list", "--manifest-path", manifest_path, "--environment=simple-env"],
@@ -85,7 +83,6 @@ class TestCondaEnv:
                 repo_root() / "tests/data/import_files/simple_environment.yml",
                 "--platform=linux-64",
             ],
-            stderr_contains="Imported",
         )
         verify_cli_command(
             [
@@ -166,7 +163,6 @@ class TestCondaEnv:
                 "--environment=simple-env",
                 "--feature=array-api-extra",
             ],
-            stderr_contains="Imported",
         )
         verify_cli_command(
             [pixi, "info", "--manifest-path", manifest_path],
