@@ -24,7 +24,7 @@ pub struct GitCheckoutProgress {
 
 impl GitCheckoutProgress {
     /// Creates a new source checkout reporter.
-    pub fn new(anchor: ProgressBar, multi_progress: MultiProgress) -> Self {
+    pub fn new(multi_progress: MultiProgress, anchor: ProgressBar) -> Self {
         Self {
             multi_progress,
             anchor,

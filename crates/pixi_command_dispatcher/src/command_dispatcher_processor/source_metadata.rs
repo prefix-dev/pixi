@@ -95,8 +95,16 @@ impl CommandDispatcherProcessor {
         let dispatcher = self.create_task_command_dispatcher(
             CommandDispatcherContext::SourceMetadata(source_metadata_id),
         );
+
+        let dispatcher_context = CommandDispatcherContext::SourceMetadata(source_metadata_id);
+        let reporter_context = self.reporter_context(dispatcher_context);
+        let run_exports_reporter = self
+            .reporter
+            .as_mut()
+            .and_then(|reporter| reporter.create_run_exports_reporter(reporter_context));
+
         self.pending_futures.push(
-            spec.request(dispatcher)
+            spec.request(dispatcher, run_exports_reporter)
                 .map(move |result| {
                     TaskResult::SourceMetadata(source_metadata_id, result.map(Arc::new))
                 })
