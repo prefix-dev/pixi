@@ -1929,7 +1929,6 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    // #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
     async fn test_example_satisfiability(#[files("examples/**/p*.toml")] manifest_path: PathBuf) {
         // If a pyproject.toml is present check for `tool.pixi` in the file to avoid
         // testing of non-pixi files
