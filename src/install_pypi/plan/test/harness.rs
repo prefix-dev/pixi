@@ -1,5 +1,6 @@
 use crate::install_pypi::plan::InstallPlanner;
-use crate::install_pypi::plan::providers::{CachedDistProvider, InstalledDistProvider};
+use crate::install_pypi::plan::cache::DistCache;
+use crate::install_pypi::plan::installed_dists::InstalledDists;
 use pixi_consts::consts;
 use pixi_uv_conversions::GitUrlWithPrefix;
 use rattler_lock::{PypiPackageData, UrlOrPath};
@@ -329,7 +330,7 @@ impl MockedSitePackages {
     }
 }
 
-impl<'a> InstalledDistProvider<'a> for MockedSitePackages {
+impl<'a> InstalledDists<'a> for MockedSitePackages {
     fn iter(&'a self) -> impl Iterator<Item = &'a InstalledDist> {
         self.installed_dist.iter()
     }
@@ -397,10 +398,10 @@ impl PyPIPackageDataBuilder {
     }
 }
 
-/// Implementor of the [`CachedDistProvider`] that does not cache anything
+/// Implementor of the [`DistCache`] that does not cache anything
 pub struct NoCache;
 
-impl<'a> CachedDistProvider<'a> for NoCache {
+impl<'a> DistCache<'a> for NoCache {
     fn is_cached(
         &mut self,
         _dist: &'a uv_distribution_types::Dist,
@@ -410,9 +411,9 @@ impl<'a> CachedDistProvider<'a> for NoCache {
     }
 }
 
-/// Implementor of the [`CachedDistProvider`] that assumes to have cached everything
+/// Implementor of the [`DistCache`] that assumes to have cached everything
 pub struct AllCached;
-impl<'a> CachedDistProvider<'a> for AllCached {
+impl<'a> DistCache<'a> for AllCached {
     fn is_cached(
         &mut self,
         dist: &'a uv_distribution_types::Dist,

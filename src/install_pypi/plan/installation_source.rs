@@ -9,7 +9,7 @@
 use uv_cache::Cache;
 use uv_distribution_types::{CachedDist, Dist, Name};
 
-use super::{InstallReason, providers::CachedDistProvider, reasons::OperationToReason};
+use super::{InstallReason, cache::DistCache, reasons::OperationToReason};
 
 /// Decide if we need to get the distribution from the local cache or the registry
 /// this method will add the distribution to the local or remote vector,
@@ -19,7 +19,7 @@ pub fn decide_installation_source<'a, Op: OperationToReason>(
     dist: &'a Dist,
     local: &mut Vec<(CachedDist, InstallReason)>,
     remote: &mut Vec<(Dist, InstallReason)>,
-    dist_cache: &mut impl CachedDistProvider<'a>,
+    dist_cache: &mut impl DistCache<'a>,
     op_to_reason: Op,
 ) -> Result<(), uv_distribution::Error> {
     // First, check if we need to revalidate the package

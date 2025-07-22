@@ -14,10 +14,8 @@ use uv_distribution_types::{Dist, InstalledDist, Name};
 use crate::install_pypi::conversions::ConvertToUvDistError;
 
 use super::{
-    NeedReinstall, PyPIInstallationPlan,
-    models::ValidateCurrentInstall,
-    providers::{CachedDistProvider, InstalledDistProvider},
-    validation::need_reinstall,
+    NeedReinstall, PyPIInstallationPlan, cache::DistCache, installed_dists::InstalledDists,
+    models::ValidateCurrentInstall, validation::need_reinstall,
 };
 
 /// Struct that handles the planning of the installation
@@ -70,7 +68,7 @@ impl InstallPlanner {
     ///
     /// All the 'a lifetimes are to to make sure that the names provided to the CachedDistProvider
     /// are valid for the lifetime of the CachedDistProvider and what is passed to the method
-    pub fn plan<'a, Installed: InstalledDistProvider<'a>, Cached: CachedDistProvider<'a> + 'a>(
+    pub fn plan<'a, Installed: InstalledDists<'a>, Cached: DistCache<'a> + 'a>(
         &self,
         site_packages: &'a Installed,
         mut cached_wheels_provider: Cached,

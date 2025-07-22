@@ -1,44 +1,24 @@
-//! Defines provider traits for accessing installed Python packages and cached distributions.
+//! Cache resolution for distribution packages.
 //!
-//! This module contains two key traits:
-//! - `InstalledDistProvider`: Provides iteration over installed Python distributions
-//! - `CachedDistProvider`: Provides access to cached package distributions
+//! This module provides traits and implementations for resolving cached distributions,
+//! determining whether packages can be installed from local cache or need to be fetched remotely.
 //!
-//! These traits enable abstraction over package installation operations and support
-//! mocking for testing purposes. The module implements these traits for concrete types
-//! `SitePackages` and `RegistryWheelIndex`, `BuiltWheelIndex` respectively.
-//!
+//! The main components are:
+//! - `DistCache`: Trait for checking if distributions are cached
+//! - `CachedWheelsProvider`: Implementation that checks both registry and built wheel caches
+
 use uv_cache::Cache;
 use uv_cache::{CacheBucket, WheelCache};
 use uv_cache_info::Timestamp;
 use uv_distribution::{BuiltWheelIndex, RegistryWheelIndex};
 use uv_distribution::{HttpArchivePointer, LocalArchivePointer};
 use uv_distribution_types::BuiltDist;
-use uv_distribution_types::{
-    CachedDirectUrlDist, CachedDist, Dist, InstalledDist, Name, SourceDist,
-};
-use uv_installer::SitePackages;
+use uv_distribution_types::{CachedDirectUrlDist, CachedDist, Dist, Name, SourceDist};
 use uv_pypi_types::VerbatimParsedUrl;
 
-// Below we define a couple of traits so that we can make the creaton of the install plan
-// somewhat more abstract
-//
-/// Provide an iterator over the installed distributions
-/// This trait can also be used to mock the installed distributions for testing purposes
-pub trait InstalledDistProvider<'a> {
-    /// Provide an iterator over the installed distributions
-    fn iter(&'a self) -> impl Iterator<Item = &'a InstalledDist>;
-}
-
-impl<'a> InstalledDistProvider<'a> for SitePackages {
-    fn iter(&'a self) -> impl Iterator<Item = &'a InstalledDist> {
-        self.iter()
-    }
-}
-
-/// Provides a way to get the potentially cached distribution, if it exists
-/// This trait can also be used to mock the cache for testing purposes
-pub trait CachedDistProvider<'a> {
+/// Provides cache lookup functionality for distributions.
+/// This trait can also be used to mock the cache for testing purposes.
+pub trait DistCache<'a> {
     /// Returns a cached distribution if it exists in the cache.
     /// This method consolidates all cache lookup logic for different distribution types.
     fn is_cached(
@@ -60,7 +40,7 @@ impl<'a> CachedWheelsProvider<'a> {
     }
 }
 
-impl<'a> CachedDistProvider<'a> for CachedWheelsProvider<'a> {
+impl<'a> DistCache<'a> for CachedWheelsProvider<'a> {
     fn is_cached(
         &mut self,
         dist: &'a Dist,
