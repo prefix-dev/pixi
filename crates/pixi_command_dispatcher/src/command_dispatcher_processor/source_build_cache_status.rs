@@ -4,24 +4,24 @@ use futures::FutureExt;
 
 use super::{CommandDispatcherProcessor, PendingDeduplicatingTask, TaskResult};
 use crate::{
-    CommandDispatcherError, QuerySourceBuildCacheError, SourceBuildCacheEntry,
+    CommandDispatcherError, SourceBuildCacheEntry, SourceBuildCacheStatusError,
     command_dispatcher::{
-        CommandDispatcherContext, QuerySourceBuildCacheId, QuerySourceBuildCacheTask,
+        CommandDispatcherContext, SourceBuildCacheStatusId, SourceBuildCacheStatusTask,
     },
 };
 
 impl CommandDispatcherProcessor {
-    /// Called when a [`crate::command_dispatcher::QuerySourceBuildCacheTask`]
+    /// Called when a [`crate::command_dispatcher::SourceBuildCacheStatusTask`]
     /// task was received.
-    pub(crate) fn on_query_source_build_cache(&mut self, task: QuerySourceBuildCacheTask) {
+    pub(crate) fn on_source_build_cache_status(&mut self, task: SourceBuildCacheStatusTask) {
         // Lookup the id of the request to avoid duplication.
         let query_source_build_id = {
-            match self.query_source_build_cache_ids.get(&task.spec) {
+            match self.source_build_cache_status_ids.get(&task.spec) {
                 Some(id) => {
                     // We already have a pending task. Let's make sure that we are not trying to
                     // resolve the same thing in a cycle.
                     if self.contains_cycle(*id, task.parent) {
-                        let _ = task.tx.send(Err(QuerySourceBuildCacheError::Cycle));
+                        let _ = task.tx.send(Err(SourceBuildCacheStatusError::Cycle));
                         return;
                     }
 
@@ -29,8 +29,8 @@ impl CommandDispatcherProcessor {
                 }
                 None => {
                     // If the source build is not in the map we need to create a new id for it.
-                    let id = QuerySourceBuildCacheId(self.query_source_build_cache_ids.len());
-                    self.query_source_build_cache_ids
+                    let id = SourceBuildCacheStatusId(self.source_build_cache_status_ids.len());
+                    self.source_build_cache_status_ids
                         .insert(task.spec.clone(), id);
                     if let Some(parent) = task.parent {
                         self.parent_contexts.insert(id.into(), parent);
@@ -40,7 +40,7 @@ impl CommandDispatcherProcessor {
             }
         };
 
-        match self.query_source_build_cache.entry(query_source_build_id) {
+        match self.source_build_cache_status.entry(query_source_build_id) {
             Entry::Occupied(mut entry) => match entry.get_mut() {
                 PendingDeduplicatingTask::Pending(pending, _) => pending.push(task.tx),
                 PendingDeduplicatingTask::Result(result, _) => {
@@ -78,13 +78,13 @@ impl CommandDispatcherProcessor {
     ///
     /// This function will relay the result of the task back to the
     /// [`crate::CommandDispatcher`] that issues it.
-    pub(crate) fn on_query_source_build_cache_result(
+    pub(crate) fn on_source_build_cache_status_result(
         &mut self,
-        id: QuerySourceBuildCacheId,
-        result: Result<SourceBuildCacheEntry, CommandDispatcherError<QuerySourceBuildCacheError>>,
+        id: SourceBuildCacheStatusId,
+        result: Result<SourceBuildCacheEntry, CommandDispatcherError<SourceBuildCacheStatusError>>,
     ) {
         self.parent_contexts.remove(&id.into());
-        self.query_source_build_cache
+        self.source_build_cache_status
             .get_mut(&id)
             .expect("cannot find pending task")
             .on_pending_result(result.map(Arc::new));

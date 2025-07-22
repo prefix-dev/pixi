@@ -24,8 +24,9 @@ use crate::{
     BackendSourceBuildSpec, BackendSourceBuildV0Method, BackendSourceBuildV1Method,
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
     InstallPixiEnvironmentError, InstallPixiEnvironmentResult, InstallPixiEnvironmentSpec,
-    InstantiateBackendError, InstantiateBackendSpec, PixiEnvironmentSpec, QuerySourceBuildCache,
-    QuerySourceBuildCacheError, SolvePixiEnvironmentError, SourceCheckoutError,
+    InstantiateBackendError, InstantiateBackendSpec, PixiEnvironmentSpec,
+    SolvePixiEnvironmentError, SourceBuildCacheStatusError, SourceBuildCacheStatusSpec,
+    SourceCheckoutError,
     build::{
         BuildCacheError, BuildHostEnvironment, BuildHostPackage, CachedBuild,
         CachedBuildSourceInfo, Dependencies, DependenciesError, MoveError, SourceRecordOrCheckout,
@@ -117,7 +118,7 @@ impl SourceBuildSpec {
             } else {
                 // Query the source build cache.
                 let build_cache = command_dispatcher
-                    .query_source_build_cache(QuerySourceBuildCache {
+                    .source_build_cache_status(SourceBuildCacheStatusSpec {
                         package: self.package.clone(),
                         build_environment: self.build_environment.clone(),
                         source: self.source.clone(),
@@ -688,14 +689,14 @@ impl From<DependenciesError> for SourceBuildError {
     }
 }
 
-impl From<QuerySourceBuildCacheError> for SourceBuildError {
-    fn from(value: QuerySourceBuildCacheError) -> Self {
+impl From<SourceBuildCacheStatusError> for SourceBuildError {
+    fn from(value: SourceBuildCacheStatusError) -> Self {
         match value {
-            QuerySourceBuildCacheError::BuildCache(err) => SourceBuildError::BuildCache(err),
-            QuerySourceBuildCacheError::SourceCheckout(err) => {
+            SourceBuildCacheStatusError::BuildCache(err) => SourceBuildError::BuildCache(err),
+            SourceBuildCacheStatusError::SourceCheckout(err) => {
                 SourceBuildError::SourceCheckout(err)
             }
-            QuerySourceBuildCacheError::Cycle => {
+            SourceBuildCacheStatusError::Cycle => {
                 unreachable!("a build time cycle should never happen")
             }
         }

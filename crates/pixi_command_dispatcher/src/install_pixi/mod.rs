@@ -22,11 +22,6 @@ use crate::{
     install_pixi::reporter::WrappingInstallReporter,
 };
 
-/// A list of globs that should be ignored when calculating any input hash.
-/// These are typically used for build artifacts that should not be included in
-/// the input hash.
-pub const DEFAULT_BUILD_IGNORE_GLOBS: &[&str] = &["!.pixi/**"];
-
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct InstallPixiEnvironmentSpec {

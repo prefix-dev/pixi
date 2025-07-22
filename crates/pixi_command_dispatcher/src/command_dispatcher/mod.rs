@@ -29,9 +29,9 @@ use typed_path::Utf8TypedPath;
 
 use crate::{
     BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec, Executor,
-    InvalidPathError, PixiEnvironmentSpec, QuerySourceBuildCacheError, SolveCondaEnvironmentSpec,
-    SolvePixiEnvironmentError, SourceBuildCacheEntry, SourceCheckout, SourceCheckoutError,
-    SourceMetadata, SourceMetadataError, SourceMetadataSpec,
+    InvalidPathError, PixiEnvironmentSpec, SolveCondaEnvironmentSpec, SolvePixiEnvironmentError,
+    SourceBuildCacheEntry, SourceBuildCacheStatusError, SourceBuildCacheStatusSpec, SourceCheckout,
+    SourceCheckoutError, SourceMetadata, SourceMetadataError, SourceMetadataSpec,
     backend_source_build::{BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildSpec},
     build::{BuildCache, source_metadata_cache::SourceMetadataCache},
     cache_dirs::CacheDirs,
@@ -43,7 +43,6 @@ use crate::{
         InstantiateToolEnvironmentSpec,
     },
     limits::ResolvedLimits,
-    query_source_build_cache::QuerySourceBuildCache,
     solve_conda::SolveCondaEnvironmentError,
     source_build::{SourceBuildError, SourceBuildResult, SourceBuildSpec},
 };
@@ -175,7 +174,7 @@ pub(crate) enum CommandDispatcherContext {
     BackendSourceBuild(BackendSourceBuildId),
     SourceMetadata(SourceMetadataId),
     SourceBuild(SourceBuildId),
-    QuerySourceBuildCache(QuerySourceBuildCacheId),
+    QuerySourceBuildCache(SourceBuildCacheStatusId),
     InstallPixiEnvironment(InstallPixiEnvironmentId),
     InstantiateToolEnv(InstantiatedToolEnvId),
 }
@@ -211,7 +210,7 @@ pub(crate) struct SourceBuildId(pub usize);
 
 /// An id that uniquely identifies a source build cache request.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-pub(crate) struct QuerySourceBuildCacheId(pub usize);
+pub(crate) struct SourceBuildCacheStatusId(pub usize);
 
 /// An id that uniquely identifies a tool environment.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
@@ -226,7 +225,7 @@ pub(crate) enum ForegroundMessage {
     BackendSourceBuild(BackendSourceBuildTask),
     SourceMetadata(SourceMetadataTask),
     SourceBuild(SourceBuildTask),
-    QuerySourceBuildCache(QuerySourceBuildCacheTask),
+    QuerySourceBuildCache(SourceBuildCacheStatusTask),
     GitCheckout(GitCheckoutTask),
     InstallPixiEnvironment(InstallPixiEnvironmentTask),
     InstantiateToolEnvironment(Task<InstantiateToolEnvironmentSpec>),
@@ -292,11 +291,11 @@ impl TaskSpec for InstantiateToolEnvironmentSpec {
     type Error = InstantiateToolEnvironmentError;
 }
 
-pub(crate) type QuerySourceBuildCacheTask = Task<QuerySourceBuildCache>;
+pub(crate) type SourceBuildCacheStatusTask = Task<SourceBuildCacheStatusSpec>;
 
-impl TaskSpec for QuerySourceBuildCache {
+impl TaskSpec for SourceBuildCacheStatusSpec {
     type Output = Arc<SourceBuildCacheEntry>;
-    type Error = QuerySourceBuildCacheError;
+    type Error = SourceBuildCacheStatusError;
 }
 
 impl Default for CommandDispatcher {
@@ -437,10 +436,10 @@ impl CommandDispatcher {
     }
 
     /// Query the source build cache for a particular source package.
-    pub async fn query_source_build_cache(
+    pub async fn source_build_cache_status(
         &self,
-        spec: QuerySourceBuildCache,
-    ) -> Result<Arc<SourceBuildCacheEntry>, CommandDispatcherError<QuerySourceBuildCacheError>>
+        spec: SourceBuildCacheStatusSpec,
+    ) -> Result<Arc<SourceBuildCacheEntry>, CommandDispatcherError<SourceBuildCacheStatusError>>
     {
         self.execute_task(spec).await
     }
