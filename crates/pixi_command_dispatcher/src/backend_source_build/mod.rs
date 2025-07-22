@@ -20,7 +20,7 @@ use pixi_build_types::{
         },
     },
 };
-use pixi_record::PinnedSourceSpec;
+use pixi_record::{PinnedSourceSpec, PixiRecord};
 use rattler_conda_types::{ChannelConfig, ChannelUrl, Platform, Version};
 use serde::Serialize;
 use thiserror::Error;
@@ -105,6 +105,9 @@ pub struct BackendSourceBuildPrefix {
     /// The location of the prefix on disk.
     #[serde(skip)]
     pub prefix: PathBuf,
+
+    /// The records that are installed in the prefix.
+    pub records: Vec<PixiRecord>,
 }
 
 #[derive(Debug, Serialize)]
