@@ -77,7 +77,6 @@ impl SourceBuildCacheStatusSpec {
         self,
         command_dispatcher: CommandDispatcher,
     ) -> Result<SourceBuildCacheEntry, CommandDispatcherError<SourceBuildCacheStatusError>> {
-        dbg!("source build cache status query {:?}", &self);
         // Query the build cache directly.
         let build_input = BuildInput {
             channel_urls: self.channels.clone(),
