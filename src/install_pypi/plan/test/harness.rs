@@ -537,7 +537,10 @@ impl RequiredPackages {
     }
 
     /// Convert to RequiredDists with a specific lock file directory
-    pub fn to_required_dists_with_lock_dir(&self, lock_dir: impl AsRef<Path>) -> super::super::RequiredDists {
+    pub fn to_required_dists_with_lock_dir(
+        &self,
+        lock_dir: impl AsRef<Path>,
+    ) -> super::super::RequiredDists {
         let packages: Vec<_> = self.required.values().cloned().collect();
         super::super::RequiredDists::from_packages(&packages, lock_dir)
             .expect("Failed to create RequiredDists in test")
