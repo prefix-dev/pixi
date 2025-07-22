@@ -59,19 +59,4 @@ impl RequiredDists {
     pub fn len(&self) -> usize {
         self.dists.len()
     }
-
-    /// Check if the collection is empty
-    pub fn is_empty(&self) -> bool {
-        self.dists.is_empty()
-    }
-
-    /// Get an iterator over the package names
-    pub fn package_names(&self) -> impl Iterator<Item = &PackageName> {
-        self.dists.keys()
-    }
-
-    /// Get an iterator over the distributions
-    pub fn distributions(&self) -> impl Iterator<Item = &Dist> {
-        self.dists.values().map(|(_, dist)| dist)
-    }
 }

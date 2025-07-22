@@ -2,7 +2,7 @@ use self::harness::{InstalledDistOptions, MockedSitePackages, NoCache, RequiredP
 use crate::install_pypi::NeedReinstall;
 use crate::install_pypi::plan::test::harness::AllCached;
 use assert_matches::assert_matches;
-use harness::fake_wheel;
+use harness::empty_wheel;
 use std::path::PathBuf;
 use std::str::FromStr;
 use url::Url;
@@ -646,7 +646,7 @@ fn test_uv_refresh() {
 /// we would keep reinstalling foobar
 #[test]
 fn test_archive_is_path() {
-    let (tmp, _file, wheel_path) = fake_wheel("foobar");
+    let (tmp, _file, wheel_path) = empty_wheel("foobar");
     // This needs to be absolute otherwise we cannot parse it into a file url
     let site_packages = MockedSitePackages::new().add_archive(
         "foobar",

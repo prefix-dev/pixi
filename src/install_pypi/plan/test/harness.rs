@@ -583,7 +583,8 @@ pub fn fake_pyproject_toml(
     (temp_dir, pyproject_toml)
 }
 
-pub fn fake_wheel(name: &str) -> (TempDir, std::fs::File, PathBuf) {
+/// Generate an empty wheel file in a temp dir
+pub fn empty_wheel(name: &str) -> (TempDir, std::fs::File, PathBuf) {
     let temp_dir = tempfile::tempdir().unwrap();
     let wheel_path = temp_dir.path().join(format!("{}.whl", name));
     let wheel = std::fs::File::create(wheel_path.clone()).unwrap();

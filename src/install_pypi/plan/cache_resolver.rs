@@ -30,9 +30,9 @@ pub enum CacheResolverError {
 /// Decide if we need to get the distribution from the local cache or the registry
 /// this method will add the distribution to the local or remote vector,
 /// depending on whether the version is stale, available locally or not
-pub fn decide_installation_source<'a, 'b: 'a, Op: OperationToReason>(
+pub fn decide_installation_source<'a, Op: OperationToReason>(
     uv_cache: &Cache,
-    dist: &'b Dist,
+    dist: &'a Dist,
     local: &mut Vec<(CachedDist, InstallReason)>,
     remote: &mut Vec<(Dist, InstallReason)>,
     dist_cache: &mut impl CachedDistProvider<'a>,
@@ -188,9 +188,7 @@ pub fn decide_installation_source<'a, 'b: 'a, Op: OperationToReason>(
                     Err(e) => {
                         tracing::warn!("failed to deserialize cached source dist {e}")
                     }
-                }, // SourceDist::Git(git_source_dist) => todo!(),
-                   // SourceDist::Path(path_source_dist) => todo!(),
-                   // SourceDist::Directory(directory_source_dist) => todo!(),
+                },
             }
         }
     }
