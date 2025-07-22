@@ -18,6 +18,7 @@ use crate::{
     environment::sanity_check_workspace,
 };
 
+/// Imports an environment into an existing workspace.
 #[derive(Parser, Debug, Default)]
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {

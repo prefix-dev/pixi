@@ -21,7 +21,7 @@ pixi [OPTIONS] <COMMAND>
 | [`global`](pixi/global.md) | Subcommand for global package management actions |
 | [`info`](pixi/info.md) | Information about the system, workspace and environments for the current machine |
 | [`init`](pixi/init.md) | Creates a new workspace |
-| [`import`](pixi/import.md) | Configuration for lock file usage, used by LockFileUpdateConfig |
+| [`import`](pixi/import.md) | Imports an environment into an existing workspace. |
 | [`install`](pixi/install.md) | Install an environment, both updating the lockfile and installing the environment |
 | [`list`](pixi/list.md) | List workspace's packages |
 | [`lock`](pixi/lock.md) | Solve environment and update the lock file without installing the environments |

@@ -2,7 +2,7 @@
 # <code>[pixi](../pixi.md) import</code>
 
 ## About
-Configuration for lock file usage, used by LockFileUpdateConfig
+Imports an environment into an existing workspace.
 
 --8<-- "docs/reference/cli/pixi/import_extender:description"
 
