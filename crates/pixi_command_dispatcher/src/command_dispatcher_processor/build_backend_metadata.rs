@@ -4,13 +4,28 @@ use futures::FutureExt;
 
 use super::{CommandDispatcherProcessor, PendingDeduplicatingTask, TaskResult};
 use crate::{
-    BuildBackendMetadata, BuildBackendMetadataError, CommandDispatcherError, Reporter,
+    BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec,
+    CommandDispatcherError, Reporter,
     command_dispatcher::{
         BuildBackendMetadataId, BuildBackendMetadataTask, CommandDispatcherContext,
     },
 };
 
 impl CommandDispatcherProcessor {
+    /// Constructs a new [`BuildBackendMetadataId`] for the given `task`.
+    fn gen_build_backend_metadata_id(
+        &mut self,
+        task: &BuildBackendMetadataTask,
+    ) -> BuildBackendMetadataId {
+        let id = BuildBackendMetadataId(self.build_backend_metadata_ids.len());
+        self.build_backend_metadata_ids
+            .insert(task.spec.clone(), id);
+        if let Some(parent) = task.parent {
+            self.parent_contexts.insert(id.into(), parent);
+        }
+        id
+    }
+
     /// Called when a [`crate::command_dispatcher::BuildBackendMetadataTask`]
     /// task was received.
     pub(crate) fn on_build_backend_metadata(&mut self, task: BuildBackendMetadataTask) {
@@ -18,17 +33,7 @@ impl CommandDispatcherProcessor {
         let source_metadata_id = {
             match self.build_backend_metadata_ids.get(&task.spec) {
                 Some(id) => *id,
-                None => {
-                    // If the source metadata is not in the map, we need to
-                    // create a new id for it.
-                    let id = BuildBackendMetadataId(self.build_backend_metadata_ids.len());
-                    self.build_backend_metadata_ids
-                        .insert(task.spec.clone(), id);
-                    if let Some(parent) = task.parent {
-                        self.parent_contexts.insert(id.into(), parent);
-                    }
-                    id
-                }
+                None => self.gen_build_backend_metadata_id(&task),
             }
         };
 
@@ -71,22 +76,30 @@ impl CommandDispatcherProcessor {
                     reporter.on_started(reporter_id)
                 }
 
-                let dispatcher = self.create_task_command_dispatcher(
-                    CommandDispatcherContext::BuildBackendMetadata(source_metadata_id),
-                );
-                self.pending_futures.push(
-                    task.spec
-                        .request(dispatcher)
-                        .map(move |result| {
-                            TaskResult::BuildBackendMetadata(
-                                source_metadata_id,
-                                result.map(Arc::new),
-                            )
-                        })
-                        .boxed_local(),
-                );
+                self.queue_build_backend_metadata_task(source_metadata_id, task.spec);
             }
         }
+    }
+
+    /// Queues a [`BuildBackendMetadata`] task to be processed.
+    fn queue_build_backend_metadata_task(
+        &mut self,
+        build_backend_metadata_id: BuildBackendMetadataId,
+        spec: BuildBackendMetadataSpec,
+    ) {
+        let dispatcher = self.create_task_command_dispatcher(
+            CommandDispatcherContext::BuildBackendMetadata(build_backend_metadata_id),
+        );
+        self.pending_futures.push(
+            spec.request(dispatcher)
+                .map(move |result| {
+                    TaskResult::BuildBackendMetadata(
+                        build_backend_metadata_id,
+                        result.map(Arc::new),
+                    )
+                })
+                .boxed_local(),
+        );
     }
 
     /// Called when a [`super::TaskResult::BuildBackendMetadata`] task was
