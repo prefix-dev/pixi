@@ -154,25 +154,18 @@ async fn import_conda_env(args: Args) -> miette::Result<()> {
         Ok(env) => {
             // otherwise, add feature to environment if it is not already there
             if !env.features().any(|f| f.name == feature_name) {
-                let (env_name, features, solve_group, no_default_feature) = (
-                    env.name().as_str().to_string(),
-                    {
-                        let mut features: Vec<String> = env
-                            .features()
-                            .map(|f| f.name.as_str().to_string())
-                            .collect();
-                        if features.is_empty() {
-                            Some(vec![feature_string])
-                        } else {
-                            Some({
-                                features.push(feature_string);
-                                features
-                            })
-                        }
-                    },
-                    env.solve_group().map(|g| g.name().to_string()),
-                    env.no_default_feature(),
-                );
+                let env_name = env.name().as_str().to_string();
+                let features = {
+                    let features = env
+                        .features()
+                        .map(|f| f.name.as_str().to_string())
+                        .chain(std::iter::once(feature_string))
+                        .collect();
+                    Some(features)
+                };
+                let solve_group = env.solve_group().map(|g| g.name().to_string());
+                let no_default_feature = env.no_default_feature();
+
                 workspace.manifest().add_environment(
                     env_name,
                     features,
