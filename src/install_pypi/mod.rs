@@ -37,7 +37,7 @@ use uv_types::HashStrategy;
 use uv_workspace::WorkspaceCache;
 
 use crate::{
-    install_pypi::plan::{CachedWheelsProvider, RequiredDists},
+    install_pypi::plan::{CachedWheels, RequiredDists},
     lock_file::UvResolutionContext,
     prefix::Prefix,
     uv_reporter::{UvReporter, UvReporterOptions},
@@ -215,7 +215,7 @@ impl<'a> PyPIPrefixUpdaterBuilder<'a> {
             InstallPlanner::new(self.uv_context.cache.clone(), &self.lock_file_dir)
                 .plan(
                     &site_packages,
-                    CachedWheelsProvider::new(registry_index, built_wheel_index),
+                    CachedWheels::new(registry_index, built_wheel_index),
                     &required_refs,
                 )
                 .into_diagnostic()

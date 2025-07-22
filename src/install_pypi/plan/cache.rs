@@ -29,18 +29,18 @@ pub trait DistCache<'a> {
 }
 
 /// Provides both access to registry dists and locally built dists
-pub struct CachedWheelsProvider<'a> {
+pub struct CachedWheels<'a> {
     registry: RegistryWheelIndex<'a>,
     built: BuiltWheelIndex<'a>,
 }
 
-impl<'a> CachedWheelsProvider<'a> {
+impl<'a> CachedWheels<'a> {
     pub fn new(registry: RegistryWheelIndex<'a>, built: BuiltWheelIndex<'a>) -> Self {
         Self { registry, built }
     }
 }
 
-impl<'a> DistCache<'a> for CachedWheelsProvider<'a> {
+impl<'a> DistCache<'a> for CachedWheels<'a> {
     fn is_cached(
         &mut self,
         dist: &'a Dist,

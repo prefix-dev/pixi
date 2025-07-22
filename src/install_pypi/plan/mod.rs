@@ -43,7 +43,7 @@ mod reasons;
 mod required_dists;
 mod validation;
 
-pub use cache::CachedWheelsProvider;
+pub use cache::CachedWheels;
 pub(crate) use models::NeedReinstall;
 pub use models::PyPIInstallationPlan;
 pub use planner::InstallPlanner;
