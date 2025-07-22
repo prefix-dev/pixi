@@ -3,7 +3,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use super::{installation_source::{self, Operation}, validation::NeedsReinstallError};
+use super::{
+    installation_source::{self, Operation},
+    validation::NeedsReinstallError,
+};
 use itertools::{Either, Itertools};
 use pixi_consts::consts;
 use rattler_lock::PypiPackageData;

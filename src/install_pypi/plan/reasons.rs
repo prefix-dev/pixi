@@ -13,4 +13,3 @@ pub enum InstallReason {
     /// Install a package that is missing from the local cache, but is available in the registry
     InstallMissing,
 }
-
