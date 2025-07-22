@@ -56,8 +56,8 @@ pub struct Args {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    if let Some(format) = args.format.clone() {
-        if format != *"conda-env" {
+    if let Some(format) = &args.format {
+        if *format != *"conda-env" {
             // TODO: implement conda-lock, conda-txt, pypi-txt
             miette::bail!(
                 "Only the conda environment.yml format is supported currently. Please pass `conda-env` to `format`."
