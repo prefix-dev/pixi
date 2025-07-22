@@ -206,9 +206,6 @@ impl<'a> PyPIPrefixUpdaterBuilder<'a> {
             &self.config_settings,
         );
 
-        // Get reference map for the plan() method
-        let required_refs = required_dists.as_ref_map();
-
         // Partition into those that should be linked from the cache (`local`), those
         // that need to be downloaded (`remote`)
         let installation_plan =
@@ -216,7 +213,7 @@ impl<'a> PyPIPrefixUpdaterBuilder<'a> {
                 .plan(
                     &site_packages,
                     CachedWheels::new(registry_index, built_wheel_index),
-                    &required_refs,
+                    &required_dists,
                 )
                 .into_diagnostic()
                 .context("error while determining PyPI installation plan")?;

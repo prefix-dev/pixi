@@ -9,15 +9,14 @@ use super::{
 };
 use itertools::{Either, Itertools};
 use pixi_consts::consts;
-use rattler_lock::PypiPackageData;
 use std::collections::HashSet;
 use uv_cache::Cache;
-use uv_distribution_types::{Dist, InstalledDist, Name};
+use uv_distribution_types::{InstalledDist, Name};
 
 use crate::install_pypi::conversions::ConvertToUvDistError;
 
 use super::{
-    NeedReinstall, PyPIInstallationPlan, cache::DistCache, installed_dists::InstalledDists,
+    NeedReinstall, PyPIInstallationPlan, RequiredDists, cache::DistCache, installed_dists::InstalledDists,
     models::ValidateCurrentInstall, validation::need_reinstall,
 };
 
@@ -74,9 +73,12 @@ impl InstallPlanner {
     pub fn plan<'a, Installed: InstalledDists<'a>, Cached: DistCache<'a> + 'a>(
         &self,
         site_packages: &'a Installed,
-        mut cached_wheels_provider: Cached,
-        required_dists: &'a HashMap<uv_normalize::PackageName, (&PypiPackageData, &'a Dist)>,
+        mut dist_cache: Cached,
+        required_dists: &'a RequiredDists,
     ) -> Result<PyPIInstallationPlan, InstallPlannerError> {
+        // Convert RequiredDists to the reference map for internal processing
+        let required_dists_map = required_dists.as_ref_map();
+        
         // Packages to be installed directly from the cache
         let mut local = vec![];
         // Try to install from the registry or direct url or w/e
@@ -92,7 +94,7 @@ impl InstallPlanner {
         // Walk over all installed packages and check if they are required
         for dist in site_packages.iter() {
             // Check if we require the package to be installed
-            let pkg_and_dist = required_dists.get(dist.name());
+            let pkg_and_dist = required_dists_map.get(dist.name());
             // Get the installer name
             let installer = dist
                 .installer()
@@ -138,7 +140,7 @@ impl InstallPlanner {
                     required_dist,
                     &mut local,
                     &mut remote,
-                    &mut cached_wheels_provider,
+                    &mut dist_cache,
                     Operation::Reinstall,
                 )
                 .map_err(InstallPlannerError::from)?;
@@ -146,7 +148,7 @@ impl InstallPlanner {
         }
 
         // Now we need to check if we have any packages left in the required_map
-        for (_name, (_pkg, dist)) in required_dists
+        for (_name, (_pkg, dist)) in required_dists_map
             .iter()
             // Only check the packages that have not been previously installed
             .filter(|(name, _)| !prev_installed_packages.contains(name))
@@ -159,7 +161,7 @@ impl InstallPlanner {
                 dist,
                 &mut local,
                 &mut remote,
-                &mut cached_wheels_provider,
+                &mut dist_cache,
                 Operation::Install,
             )
             .map_err(InstallPlannerError::from)?;
@@ -174,7 +176,7 @@ impl InstallPlanner {
         // Walk over all installed packages and check if they are required
         let mut extraneous = HashMap::new();
         for dist in site_packages.iter() {
-            let pkg_and_dist = required_dists.get(dist.name());
+            let pkg_and_dist = required_dists_map.get(dist.name());
             let pkg = pkg_and_dist.map(|(pkg, _dist)| *pkg);
             let installer = dist
                 .installer()
