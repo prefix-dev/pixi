@@ -488,8 +488,11 @@ def test_help_warning_when_platform_not_supported(pixi: Path, tmp_pixi_workspace
         stderr_contains=["pixi workspace platform add"],
     )
 
+
 @pytest.mark.slow
-def test_issue_4123_cache_prevents_editable_install(pixi: Path, tmp_pixi_workspace: Path, tmp_path: Path) -> None:
+def test_issue_4123_cache_prevents_editable_install(
+    pixi: Path, tmp_pixi_workspace: Path, tmp_path: Path
+) -> None:
     """
     Reproduce issue #4123: cached registry package prevents proper editable installation
     of same name/version from local source.
@@ -526,7 +529,9 @@ python = "3.12.*"
 [pypi-dependencies]
 six = "==1.16.0"
 """)
-    verify_cli_command([pixi, "install", "--manifest-path", proj1 / "pixi.toml"], ExitCode.SUCCESS, env=cache_env)
+    verify_cli_command(
+        [pixi, "install", "--manifest-path", proj1 / "pixi.toml"], ExitCode.SUCCESS, env=cache_env
+    )
 
     # Step 2: Install same name/version as editable from local source
     proj2 = tmp_pixi_workspace / "proj2"
@@ -542,11 +547,20 @@ python = "3.12.*"
 six = {{ path = "../local_project", editable = true }}
 """)
 
-    verify_cli_command([pixi, "install", "--manifest-path", proj2 / "pixi.toml"], ExitCode.SUCCESS, env=cache_env)
+    verify_cli_command(
+        [pixi, "install", "--manifest-path", proj2 / "pixi.toml"], ExitCode.SUCCESS, env=cache_env
+    )
     # Step 3: Verify we get local version (has local_marker), not cached registry version
     verify_cli_command(
-        [pixi, "run", "--manifest-path", proj2 / "pixi.toml", "python", "-c",
-         "import six; print(six.local_marker)"],
+        [
+            pixi,
+            "run",
+            "--manifest-path",
+            proj2 / "pixi.toml",
+            "python",
+            "-c",
+            "import six; print(six.local_marker)",
+        ],
         ExitCode.SUCCESS,
         stdout_contains="LOCAL",
         env=cache_env,
