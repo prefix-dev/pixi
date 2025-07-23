@@ -46,6 +46,10 @@ class TestCondaEnv:
                 "--format=conda-env",
             ],
         )
+
+        # check that no environments are installed
+        verify_cli_command(["ls", tmp_pixi_workspace / ".pixi/envs"], ExitCode.FAILURE)
+
         verify_cli_command(
             [pixi, "list", "--manifest-path", manifest_path, "--environment=simple-env"],
             stdout_contains="scipy",
