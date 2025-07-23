@@ -1,11 +1,12 @@
 from pathlib import Path
 import tomllib
 
+from dirty_equals import AnyThing
 from inline_snapshot import snapshot
+import yaml
 
 from .common import (
     ExitCode,
-    redact_manifest,
     verify_cli_command,
 )
 
@@ -15,6 +16,18 @@ class TestCondaEnv:
         self, pixi: Path, tmp_pixi_workspace: Path, import_files_dir: Path
     ) -> None:
         manifest_path = tmp_pixi_workspace / "pixi.toml"
+
+        simple_env_yaml = """name: simple-env
+channels:
+  - conda-forge
+dependencies:
+  - python
+"""
+
+        import_file_path = tmp_pixi_workspace / "simple_environment.yml"
+        with open(import_file_path) as file:
+            yaml.dump(simple_env_yaml, file)
+
         # Create a new project
         verify_cli_command([pixi, "init", tmp_pixi_workspace])
 
@@ -25,7 +38,7 @@ class TestCondaEnv:
                 "import",
                 "--manifest-path",
                 manifest_path,
-                import_files_dir / "simple_environment.yml",
+                import_file_path,
                 "--format=foobar",
             ],
             ExitCode.INCORRECT_USAGE,
@@ -56,13 +69,13 @@ class TestCondaEnv:
 
         parsed_manifest = tomllib.loads(manifest_path.read_text())
         assert "python" in parsed_manifest["feature"]["simple-env"]["dependencies"]
-        assert redact_manifest(parsed_manifest) == snapshot(
+        assert parsed_manifest == snapshot(
             {
                 "workspace": {
-                    "authors": ["John Doe"],
+                    "authors": AnyThing(),
                     "channels": ["conda-forge"],
                     "name": "test_import_conda_env0",
-                    "platforms": ["osx-arm64", "linux-64", "win-64"],
+                    "platforms": AnyThing(),
                     "version": "0.1.0",
                 },
                 "tasks": {},
@@ -99,13 +112,13 @@ class TestCondaEnv:
 
         parsed_manifest = tomllib.loads(manifest_path.read_text())
         assert "python" in parsed_manifest["feature"]["simple-env"]["dependencies"]
-        assert redact_manifest(parsed_manifest) == snapshot(
+        assert parsed_manifest == snapshot(
             {
                 "workspace": {
-                    "authors": ["John Doe"],
+                    "authors": AnyThing(),
                     "channels": ["conda-forge"],
                     "name": "test_import_no_format0",
-                    "platforms": ["osx-arm64", "linux-64", "win-64"],
+                    "platforms": AnyThing(),
                     "version": "0.1.0",
                 },
                 "tasks": {},
@@ -179,13 +192,13 @@ class TestCondaEnv:
             in parsed_manifest["feature"]["simple-env"]["target"]["linux-64"]["dependencies"]
         )
         assert "osx-arm64" not in parsed_manifest["feature"]["simple-env"]["target"]
-        assert redact_manifest(parsed_manifest) == snapshot(
+        assert parsed_manifest == snapshot(
             {
                 "workspace": {
-                    "authors": ["John Doe"],
+                    "authors": AnyThing(),
                     "channels": ["conda-forge"],
                     "name": "test_import_platforms0",
-                    "platforms": ["osx-arm64", "linux-64", "win-64"],
+                    "platforms": AnyThing(),
                     "version": "0.1.0",
                 },
                 "tasks": {},
@@ -224,13 +237,13 @@ class TestCondaEnv:
         parsed_manifest = tomllib.loads(manifest_path.read_text())
         assert "simple-env" in parsed_manifest["environments"]["simple-env"]["features"]
         assert parsed_manifest["environments"]["simple-env"]["no-default-feature"] is True
-        assert redact_manifest(parsed_manifest) == snapshot(
+        assert parsed_manifest == snapshot(
             {
                 "workspace": {
-                    "authors": ["John Doe"],
+                    "authors": AnyThing(),
                     "channels": ["conda-forge"],
                     "name": "test_import_feature_environment0",
-                    "platforms": ["osx-arm64", "linux-64", "win-64"],
+                    "platforms": AnyThing(),
                     "version": "0.1.0",
                 },
                 "tasks": {},
@@ -261,13 +274,13 @@ class TestCondaEnv:
         parsed_manifest = tomllib.loads(manifest_path.read_text())
         assert "cowpy" in parsed_manifest["feature"]["simple-env"]["dependencies"]
         assert "cowpy" not in parsed_manifest["environments"]
-        assert redact_manifest(parsed_manifest) == snapshot(
+        assert parsed_manifest == snapshot(
             {
                 "workspace": {
-                    "authors": ["John Doe"],
+                    "authors": AnyThing(),
                     "channels": ["conda-forge"],
                     "name": "test_import_feature_environment0",
-                    "platforms": ["osx-arm64", "linux-64", "win-64"],
+                    "platforms": AnyThing(),
                     "version": "0.1.0",
                 },
                 "tasks": {},
@@ -301,13 +314,13 @@ class TestCondaEnv:
         assert "array-api-extra" in parsed_manifest["environments"]["simple-env"]["features"]
         # no new environment should be created
         assert "array-api-extra" not in parsed_manifest["environments"]
-        assert redact_manifest(parsed_manifest) == snapshot(
+        assert parsed_manifest == snapshot(
             {
                 "workspace": {
-                    "authors": ["John Doe"],
+                    "authors": AnyThing(),
                     "channels": ["conda-forge"],
                     "name": "test_import_feature_environment0",
-                    "platforms": ["osx-arm64", "linux-64", "win-64"],
+                    "platforms": AnyThing(),
                     "version": "0.1.0",
                 },
                 "tasks": {},
@@ -344,13 +357,13 @@ class TestCondaEnv:
         )
         parsed_manifest = tomllib.loads(manifest_path.read_text())
         assert "farm" in parsed_manifest["environments"]["farm"]["features"]
-        assert redact_manifest(parsed_manifest) == snapshot(
+        assert parsed_manifest == snapshot(
             {
                 "workspace": {
-                    "authors": ["John Doe"],
+                    "authors": AnyThing(),
                     "channels": ["conda-forge"],
                     "name": "test_import_feature_environment0",
-                    "platforms": ["osx-arm64", "linux-64", "win-64"],
+                    "platforms": AnyThing(),
                     "version": "0.1.0",
                 },
                 "tasks": {},
@@ -389,13 +402,13 @@ class TestCondaEnv:
         )
         parsed_manifest = tomllib.loads(manifest_path.read_text())
         assert "data" in parsed_manifest["environments"]["data"]["features"]
-        assert redact_manifest(parsed_manifest) == snapshot(
+        assert parsed_manifest == snapshot(
             {
                 "workspace": {
-                    "authors": ["John Doe"],
+                    "authors": AnyThing(),
                     "channels": ["conda-forge"],
                     "name": "test_import_feature_environment0",
-                    "platforms": ["osx-arm64", "linux-64", "win-64"],
+                    "platforms": AnyThing(),
                     "version": "0.1.0",
                 },
                 "tasks": {},
@@ -441,13 +454,13 @@ class TestCondaEnv:
             ],
         )
         parsed_manifest = tomllib.loads(manifest_path.read_text())
-        assert redact_manifest(parsed_manifest) == snapshot(
+        assert parsed_manifest == snapshot(
             {
                 "workspace": {
-                    "authors": ["John Doe"],
+                    "authors": AnyThing(),
                     "channels": ["conda-forge"],
                     "name": "test_import_channels_and_versi0",
-                    "platforms": ["osx-arm64", "linux-64", "win-64"],
+                    "platforms": AnyThing(),
                     "version": "0.1.0",
                 },
                 "tasks": {},

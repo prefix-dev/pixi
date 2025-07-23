@@ -42,6 +42,7 @@ test-slow = """cargo nextest run --workspace --all-targets --features slow_integ
               --status-level skip --failure-output immediate-final --no-fail-fast --final-status-level slow"""
 
 [feature.pytest.dependencies]
+dirty-equals = ">=0.9.0,<0.10"
 filelock = ">=3.16.0,<4"
 inline-snapshot = ">=0.24.0,<0.25"
 mypy = ">=1.16,<1.17"
