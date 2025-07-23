@@ -55,7 +55,7 @@ class TestCondaEnv:
         verify_cli_command(["ls", tmp_pixi_workspace / ".pixi/envs"], ExitCode.FAILURE)
 
         parsed_manifest = tomllib.loads(manifest_path.read_text())
-        assert "scipy" in parsed_manifest["feature"]["simple-env"]["dependencies"]
+        assert "python" in parsed_manifest["feature"]["simple-env"]["dependencies"]
         assert redact_manifest(parsed_manifest) == snapshot(
             {
                 "workspace": {
@@ -70,7 +70,7 @@ class TestCondaEnv:
                 "feature": {
                     "simple-env": {
                         "channels": ["conda-forge"],
-                        "dependencies": {"python": "*", "scipy": "<=1.15.3"},
+                        "dependencies": {"python": "*"},
                     }
                 },
                 "environments": {
@@ -98,7 +98,7 @@ class TestCondaEnv:
         )
 
         parsed_manifest = tomllib.loads(manifest_path.read_text())
-        assert "scipy" in parsed_manifest["feature"]["simple-env"]["dependencies"]
+        assert "python" in parsed_manifest["feature"]["simple-env"]["dependencies"]
         assert redact_manifest(parsed_manifest) == snapshot(
             {
                 "workspace": {
@@ -113,7 +113,7 @@ class TestCondaEnv:
                 "feature": {
                     "simple-env": {
                         "channels": ["conda-forge"],
-                        "dependencies": {"python": "*", "scipy": "<=1.15.3"},
+                        "dependencies": {"python": "*"},
                     }
                 },
                 "environments": {
@@ -175,7 +175,7 @@ class TestCondaEnv:
 
         parsed_manifest = tomllib.loads(manifest_path.read_text())
         assert (
-            "scipy"
+            "python"
             in parsed_manifest["feature"]["simple-env"]["target"]["linux-64"]["dependencies"]
         )
         assert "osx-arm64" not in parsed_manifest["feature"]["simple-env"]["target"]
@@ -194,9 +194,7 @@ class TestCondaEnv:
                     "simple-env": {
                         "platforms": ["linux-64"],
                         "channels": ["conda-forge"],
-                        "target": {
-                            "linux-64": {"dependencies": {"python": "*", "scipy": "<=1.15.3"}}
-                        },
+                        "target": {"linux-64": {"dependencies": {"python": "*"}}},
                     }
                 },
                 "environments": {
@@ -240,7 +238,7 @@ class TestCondaEnv:
                 "feature": {
                     "simple-env": {
                         "channels": ["conda-forge"],
-                        "dependencies": {"python": "*", "scipy": "<=1.15.3"},
+                        "dependencies": {"python": "*"},
                     }
                 },
                 "environments": {
@@ -277,7 +275,7 @@ class TestCondaEnv:
                 "feature": {
                     "simple-env": {
                         "channels": ["conda-forge"],
-                        "dependencies": {"python": "*", "scipy": "<=1.15.3", "cowpy": "*"},
+                        "dependencies": {"python": "*", "cowpy": "*"},
                     }
                 },
                 "environments": {
@@ -317,7 +315,7 @@ class TestCondaEnv:
                 "feature": {
                     "simple-env": {
                         "channels": ["conda-forge"],
-                        "dependencies": {"python": "*", "scipy": "<=1.15.3", "cowpy": "*"},
+                        "dependencies": {"python": "*", "cowpy": "*"},
                     },
                     "array-api-extra": {
                         "channels": ["conda-forge"],
@@ -360,7 +358,7 @@ class TestCondaEnv:
                 "feature": {
                     "simple-env": {
                         "channels": ["conda-forge"],
-                        "dependencies": {"python": "*", "scipy": "<=1.15.3", "cowpy": "*"},
+                        "dependencies": {"python": "*", "cowpy": "*"},
                     },
                     "array-api-extra": {
                         "channels": ["conda-forge"],
@@ -405,7 +403,7 @@ class TestCondaEnv:
                 "feature": {
                     "simple-env": {
                         "channels": ["conda-forge"],
-                        "dependencies": {"python": "*", "scipy": "<=1.15.3", "cowpy": "*"},
+                        "dependencies": {"python": "*", "cowpy": "*"},
                     },
                     "array-api-extra": {
                         "channels": ["conda-forge"],

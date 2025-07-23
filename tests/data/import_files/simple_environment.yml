@@ -3,4 +3,3 @@ channels:
   - conda-forge
 dependencies:
   - python
-  - scipy<=1.15.3
