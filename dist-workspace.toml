@@ -58,6 +58,7 @@ container = { image = "messense/cargo-xwin", host = "x86_64-unknown-linux-musl",
 host = "x86_64-unknown-linux-gnu"
 
 [dist.dependencies.apt]
+clang = { version = '*', targets = ["aarch64-pc-windows-msvc"] }
 gcc-aarch64-linux-gnu = { version = '*', targets = [
   "aarch64-unknown-linux-gnu",
   "aarch64-unknown-linux-musl",
