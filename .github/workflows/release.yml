@@ -160,7 +160,7 @@ jobs:
           ${{ matrix.packages_install }}
       - name: Setup tmate session
         uses: mxschmitt/action-tmate@v3
-        timeout-minutes: 20
+        timeout-minutes: 50
       - name: Build artifacts
         shell: bash
         run: |

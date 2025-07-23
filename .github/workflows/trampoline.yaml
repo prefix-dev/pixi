@@ -22,37 +22,36 @@ jobs:
       fail-fast: true
       matrix:
         include:
-          - name: "Linux-x86_64"
-            target: x86_64-unknown-linux-musl
-            os: ubuntu-latest
-
+          # - name: "Linux-x86_64"
+          #   target: x86_64-unknown-linux-musl
+          #   os: ubuntu-latest
           - name: "Linux-aarch64"
             target: aarch64-unknown-linux-musl
             os: ubuntu-latest
 
-          - name: "Linux-powerpc64le"
-            target: powerpc64le-unknown-linux-gnu
-            os: ubuntu-latest
+          # - name: "Linux-powerpc64le"
+          #   target: powerpc64le-unknown-linux-gnu
+          #   os: ubuntu-latest
 
-          - name: "Linux-riscv64"
-            target: riscv64gc-unknown-linux-gnu
-            os: ubuntu-latest
+          # - name: "Linux-riscv64"
+          #   target: riscv64gc-unknown-linux-gnu
+          #   os: ubuntu-latest
 
-          - name: "macOS-x86"
-            target: x86_64-apple-darwin
-            os: macos-13
+          # - name: "macOS-x86"
+          #   target: x86_64-apple-darwin
+          #   os: macos-13
 
-          - name: "macOS-arm"
-            target: aarch64-apple-darwin
-            os: macos-14
+          # - name: "macOS-arm"
+          #   target: aarch64-apple-darwin
+          #   os: macos-14
 
-          - name: "Windows"
-            target: x86_64-pc-windows-msvc
-            os: windows-latest
+          # - name: "Windows"
+          #   target: x86_64-pc-windows-msvc
+          #   os: windows-latest
 
-          - name: "Windows-arm"
-            target: aarch64-pc-windows-msvc
-            os: windows-latest
+          # - name: "Windows-arm"
+          #   target: aarch64-pc-windows-msvc
+          #   os: windows-latest
 
     steps:
       - name: Checkout code
