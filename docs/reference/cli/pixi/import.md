@@ -2,7 +2,7 @@
 # <code>[pixi](../pixi.md) import</code>
 
 ## About
-Imports an environment into an existing workspace.
+Imports a file into an environment in an existing workspace.
 
 --8<-- "docs/reference/cli/pixi/import_extender:description"
 
@@ -19,13 +19,14 @@ pixi import [OPTIONS] <FILE>
 ## Options
 - <a id="arg---format" href="#arg---format">`--format <FORMAT>`</a>
 :  Which format to interpret the file as
+<br>**options**: `conda-env`
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
 :  The platforms for the imported environment
 <br>May be provided more than once.
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
-:  A name for the created feature
-- <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
 :  A name for the created environment
+- <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
+:  A name for the created feature
 
 ## Config Options
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
@@ -57,5 +58,11 @@ pixi import [OPTIONS] <FILE>
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
 :  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
+
+## Description
+Imports a file into an environment in an existing workspace.
+
+If `--format` isn't provided, `import` will try to guess the format based on the file extension.
+
 
 --8<-- "docs/reference/cli/pixi/import_extender:example"
