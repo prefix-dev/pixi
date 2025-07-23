@@ -12,9 +12,7 @@ from .common import (
 
 
 class TestCondaEnv:
-    def test_import_invalid_format(
-        self, pixi: Path, tmp_pixi_workspace: Path, import_files_dir: Path
-    ) -> None:
+    def test_import_invalid_format(self, pixi: Path, tmp_pixi_workspace: Path) -> None:
         manifest_path = tmp_pixi_workspace / "pixi.toml"
 
         simple_env_yaml = """
@@ -50,6 +48,17 @@ class TestCondaEnv:
         self, pixi: Path, tmp_pixi_workspace: Path, import_files_dir: Path
     ) -> None:
         manifest_path = tmp_pixi_workspace / "pixi.toml"
+
+        simple_env_yaml = {
+            "name": "simple-env",
+            "channels": ["conda-forge"],
+            "dependencies": ["python"],
+        }
+
+        import_file_path = tmp_pixi_workspace / "simple_environment.yml"
+        with open(import_file_path, "w") as file:
+            yaml.dump(simple_env_yaml, file)
+
         # Create a new project
         verify_cli_command([pixi, "init", tmp_pixi_workspace])
 
@@ -60,7 +69,7 @@ class TestCondaEnv:
                 "import",
                 "--manifest-path",
                 manifest_path,
-                import_files_dir / "simple_environment.yml",
+                import_file_path,
                 "--format=conda-env",
             ],
         )
