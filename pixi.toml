@@ -43,6 +43,7 @@ test-slow = """cargo nextest run --workspace --all-targets --features slow_integ
 
 [feature.pytest.dependencies]
 filelock = ">=3.16.0,<4"
+inline-snapshot = ">=0.24.0,<0.25"
 mypy = ">=1.16,<1.17"
 py-rattler = ">=0.14,<0.15"
 pytest = "*"

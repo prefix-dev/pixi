@@ -4,7 +4,7 @@ import subprocess
 from contextlib import contextmanager
 from enum import IntEnum
 from pathlib import Path
-from typing import Generator
+from typing import Any, Generator
 
 from rattler import Platform
 
@@ -165,3 +165,15 @@ def cwd(path: str | Path) -> Generator[None, None, None]:
         yield
     finally:
         os.chdir(oldpwd)
+
+
+def redact_manifest(manifest: dict[str, Any]) -> dict[str, Any]:
+    """
+    Redact machine-specific fields from a manifest generated at test-time.
+
+    This should be used before passing a manifest to `snapshot()` to ensure
+    snapshots are reproducible on different machines.
+    """
+    manifest["workspace"]["authors"] = ["John Doe"]
+    manifest["workspace"]["platforms"] = ["osx-arm64", "linux-64", "win-64"]
+    return manifest

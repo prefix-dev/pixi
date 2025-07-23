@@ -1,7 +1,11 @@
 from pathlib import Path
+import tomllib
+
+from inline_snapshot import snapshot
 
 from .common import (
     ExitCode,
+    redact_manifest,
     verify_cli_command,
 )
 
@@ -50,9 +54,29 @@ class TestCondaEnv:
         # check that no environments are installed
         verify_cli_command(["ls", tmp_pixi_workspace / ".pixi/envs"], ExitCode.FAILURE)
 
-        verify_cli_command(
-            [pixi, "list", "--manifest-path", manifest_path, "--environment=simple-env"],
-            stdout_contains="scipy",
+        parsed_manifest = tomllib.loads(manifest_path.read_text())
+        assert "scipy" in parsed_manifest["feature"]["simple-env"]["dependencies"]
+        assert redact_manifest(parsed_manifest) == snapshot(
+            {
+                "workspace": {
+                    "authors": ["John Doe"],
+                    "channels": ["conda-forge"],
+                    "name": "test_import_conda_env0",
+                    "platforms": ["osx-arm64", "linux-64", "win-64"],
+                    "version": "0.1.0",
+                },
+                "tasks": {},
+                "dependencies": {},
+                "feature": {
+                    "simple-env": {
+                        "channels": ["conda-forge"],
+                        "dependencies": {"python": "*", "scipy": "<=1.15.3"},
+                    }
+                },
+                "environments": {
+                    "simple-env": {"features": ["simple-env"], "no-default-feature": True}
+                },
+            }
         )
 
     def test_import_no_format(
@@ -72,9 +96,30 @@ class TestCondaEnv:
                 import_files_dir / "simple_environment.yml",
             ],
         )
-        verify_cli_command(
-            [pixi, "list", "--manifest-path", manifest_path, "--environment=simple-env"],
-            stdout_contains="scipy",
+
+        parsed_manifest = tomllib.loads(manifest_path.read_text())
+        assert "scipy" in parsed_manifest["feature"]["simple-env"]["dependencies"]
+        assert redact_manifest(parsed_manifest) == snapshot(
+            {
+                "workspace": {
+                    "authors": ["John Doe"],
+                    "channels": ["conda-forge"],
+                    "name": "test_import_no_format0",
+                    "platforms": ["osx-arm64", "linux-64", "win-64"],
+                    "version": "0.1.0",
+                },
+                "tasks": {},
+                "dependencies": {},
+                "feature": {
+                    "simple-env": {
+                        "channels": ["conda-forge"],
+                        "dependencies": {"python": "*", "scipy": "<=1.15.3"},
+                    }
+                },
+                "environments": {
+                    "simple-env": {"features": ["simple-env"], "no-default-feature": True}
+                },
+            }
         )
 
     def test_import_no_name(
@@ -127,28 +172,37 @@ class TestCondaEnv:
                 "--platform=linux-64",
             ],
         )
-        verify_cli_command(
-            [
-                pixi,
-                "list",
-                "--manifest-path",
-                manifest_path,
-                "--environment=simple-env",
-                "--platform=linux-64",
-            ],
-            stdout_contains="scipy",
+
+        parsed_manifest = tomllib.loads(manifest_path.read_text())
+        assert (
+            "scipy"
+            in parsed_manifest["feature"]["simple-env"]["target"]["linux-64"]["dependencies"]
         )
-        verify_cli_command(
-            [
-                pixi,
-                "list",
-                "--manifest-path",
-                manifest_path,
-                "--environment=simple-env",
-                "--platform=osx-arm64",
-            ],
-            ExitCode.FAILURE,
-            stderr_contains="platform",
+        assert "osx-arm64" not in parsed_manifest["feature"]["simple-env"]["target"]
+        assert redact_manifest(parsed_manifest) == snapshot(
+            {
+                "workspace": {
+                    "authors": ["John Doe"],
+                    "channels": ["conda-forge"],
+                    "name": "test_import_platforms0",
+                    "platforms": ["osx-arm64", "linux-64", "win-64"],
+                    "version": "0.1.0",
+                },
+                "tasks": {},
+                "dependencies": {},
+                "feature": {
+                    "simple-env": {
+                        "platforms": ["linux-64"],
+                        "channels": ["conda-forge"],
+                        "target": {
+                            "linux-64": {"dependencies": {"python": "*", "scipy": "<=1.15.3"}}
+                        },
+                    }
+                },
+                "environments": {
+                    "simple-env": {"features": ["simple-env"], "no-default-feature": True}
+                },
+            }
         )
 
     def test_import_feature_environment(
@@ -158,7 +212,8 @@ class TestCondaEnv:
         # Create a new project
         verify_cli_command([pixi, "init", tmp_pixi_workspace])
 
-        # by default, a new env and feature are created with the name of the imported file
+        # by default, a new env and feature are created with the name of the imported file,
+        # with no-default-feature: True
         verify_cli_command(
             [
                 pixi,
@@ -168,9 +223,30 @@ class TestCondaEnv:
                 import_files_dir / "simple_environment.yml",
             ],
         )
-        verify_cli_command(
-            [pixi, "info", "--manifest-path", manifest_path],
-            stdout_contains=["Environment: simple-env", "Features: simple-env"],
+        parsed_manifest = tomllib.loads(manifest_path.read_text())
+        assert "simple-env" in parsed_manifest["environments"]["simple-env"]["features"]
+        assert parsed_manifest["environments"]["simple-env"]["no-default-feature"] is True
+        assert redact_manifest(parsed_manifest) == snapshot(
+            {
+                "workspace": {
+                    "authors": ["John Doe"],
+                    "channels": ["conda-forge"],
+                    "name": "test_import_feature_environment0",
+                    "platforms": ["osx-arm64", "linux-64", "win-64"],
+                    "version": "0.1.0",
+                },
+                "tasks": {},
+                "dependencies": {},
+                "feature": {
+                    "simple-env": {
+                        "channels": ["conda-forge"],
+                        "dependencies": {"python": "*", "scipy": "<=1.15.3"},
+                    }
+                },
+                "environments": {
+                    "simple-env": {"features": ["simple-env"], "no-default-feature": True}
+                },
+            }
         )
 
         # we can import into an existing feature
@@ -184,15 +260,30 @@ class TestCondaEnv:
                 "--feature=simple-env",
             ],
         )
-        verify_cli_command(
-            [pixi, "list", "--manifest-path", manifest_path, "--environment=simple-env"],
-            stdout_contains=["cowpy"],
-        )
-        # no new environment should be created
-        verify_cli_command(
-            [pixi, "list", "--manifest-path", manifest_path, "--environment=cowpy"],
-            ExitCode.FAILURE,
-            stderr_contains=["unknown environment"],
+        parsed_manifest = tomllib.loads(manifest_path.read_text())
+        assert "cowpy" in parsed_manifest["feature"]["simple-env"]["dependencies"]
+        assert "cowpy" not in parsed_manifest["environments"]
+        assert redact_manifest(parsed_manifest) == snapshot(
+            {
+                "workspace": {
+                    "authors": ["John Doe"],
+                    "channels": ["conda-forge"],
+                    "name": "test_import_feature_environment0",
+                    "platforms": ["osx-arm64", "linux-64", "win-64"],
+                    "version": "0.1.0",
+                },
+                "tasks": {},
+                "dependencies": {},
+                "feature": {
+                    "simple-env": {
+                        "channels": ["conda-forge"],
+                        "dependencies": {"python": "*", "scipy": "<=1.15.3", "cowpy": "*"},
+                    }
+                },
+                "environments": {
+                    "simple-env": {"features": ["simple-env"], "no-default-feature": True}
+                },
+            }
         )
 
         # we can create a new feature and add it to an existing environment
@@ -207,15 +298,39 @@ class TestCondaEnv:
                 "--feature=array-api-extra",
             ],
         )
-        verify_cli_command(
-            [pixi, "info", "--manifest-path", manifest_path],
-            stdout_contains=["Environment: simple-env", "Features: simple-env, array-api-extra"],
-        )
+        parsed_manifest = tomllib.loads(manifest_path.read_text())
+        assert "array-api-extra" in parsed_manifest["feature"]["array-api-extra"]["dependencies"]
+        assert "array-api-extra" in parsed_manifest["environments"]["simple-env"]["features"]
         # no new environment should be created
-        verify_cli_command(
-            [pixi, "list", "--manifest-path", manifest_path, "--environment=array-api-extra"],
-            ExitCode.FAILURE,
-            stderr_contains=["unknown environment"],
+        assert "array-api-extra" not in parsed_manifest["environments"]
+        assert redact_manifest(parsed_manifest) == snapshot(
+            {
+                "workspace": {
+                    "authors": ["John Doe"],
+                    "channels": ["conda-forge"],
+                    "name": "test_import_feature_environment0",
+                    "platforms": ["osx-arm64", "linux-64", "win-64"],
+                    "version": "0.1.0",
+                },
+                "tasks": {},
+                "dependencies": {},
+                "feature": {
+                    "simple-env": {
+                        "channels": ["conda-forge"],
+                        "dependencies": {"python": "*", "scipy": "<=1.15.3", "cowpy": "*"},
+                    },
+                    "array-api-extra": {
+                        "channels": ["conda-forge"],
+                        "dependencies": {"array-api-extra": "*"},
+                    },
+                },
+                "environments": {
+                    "simple-env": {
+                        "features": ["simple-env", "array-api-extra"],
+                        "no-default-feature": True,
+                    }
+                },
+            }
         )
 
         # we can create a new feature (and a matching env by default)
@@ -228,11 +343,39 @@ class TestCondaEnv:
                 import_files_dir / "cowpy.yml",
                 "--feature=farm",
             ],
-            stderr_contains="Imported",
         )
-        verify_cli_command(
-            [pixi, "info", "--manifest-path", manifest_path],
-            stdout_contains=["Environment: farm", "Features: farm"],
+        parsed_manifest = tomllib.loads(manifest_path.read_text())
+        assert "farm" in parsed_manifest["environments"]["farm"]["features"]
+        assert redact_manifest(parsed_manifest) == snapshot(
+            {
+                "workspace": {
+                    "authors": ["John Doe"],
+                    "channels": ["conda-forge"],
+                    "name": "test_import_feature_environment0",
+                    "platforms": ["osx-arm64", "linux-64", "win-64"],
+                    "version": "0.1.0",
+                },
+                "tasks": {},
+                "dependencies": {},
+                "feature": {
+                    "simple-env": {
+                        "channels": ["conda-forge"],
+                        "dependencies": {"python": "*", "scipy": "<=1.15.3", "cowpy": "*"},
+                    },
+                    "array-api-extra": {
+                        "channels": ["conda-forge"],
+                        "dependencies": {"array-api-extra": "*"},
+                    },
+                    "farm": {"channels": ["conda-forge"], "dependencies": {"cowpy": "*"}},
+                },
+                "environments": {
+                    "simple-env": {
+                        "features": ["simple-env", "array-api-extra"],
+                        "no-default-feature": True,
+                    },
+                    "farm": {"features": ["farm"], "no-default-feature": True},
+                },
+            }
         )
 
         # we can create a new env (and a matching feature by default)
@@ -245,11 +388,41 @@ class TestCondaEnv:
                 import_files_dir / "array-api-extra.yml",
                 "--feature=data",
             ],
-            stderr_contains="Imported",
         )
-        verify_cli_command(
-            [pixi, "info", "--manifest-path", manifest_path],
-            stdout_contains=["Environment: data", "Features: data"],
+        parsed_manifest = tomllib.loads(manifest_path.read_text())
+        assert "data" in parsed_manifest["environments"]["data"]["features"]
+        assert redact_manifest(parsed_manifest) == snapshot(
+            {
+                "workspace": {
+                    "authors": ["John Doe"],
+                    "channels": ["conda-forge"],
+                    "name": "test_import_feature_environment0",
+                    "platforms": ["osx-arm64", "linux-64", "win-64"],
+                    "version": "0.1.0",
+                },
+                "tasks": {},
+                "dependencies": {},
+                "feature": {
+                    "simple-env": {
+                        "channels": ["conda-forge"],
+                        "dependencies": {"python": "*", "scipy": "<=1.15.3", "cowpy": "*"},
+                    },
+                    "array-api-extra": {
+                        "channels": ["conda-forge"],
+                        "dependencies": {"array-api-extra": "*"},
+                    },
+                    "farm": {"channels": ["conda-forge"], "dependencies": {"cowpy": "*"}},
+                    "data": {"channels": ["conda-forge"], "dependencies": {"array-api-extra": "*"}},
+                },
+                "environments": {
+                    "simple-env": {
+                        "features": ["simple-env", "array-api-extra"],
+                        "no-default-feature": True,
+                    },
+                    "farm": {"features": ["farm"], "no-default-feature": True},
+                    "data": {"features": ["data"], "no-default-feature": True},
+                },
+            }
         )
 
     def test_import_channels_and_versions(
@@ -268,23 +441,31 @@ class TestCondaEnv:
                 manifest_path,
                 import_files_dir / "complex_environment.yml",
             ],
-            stderr_contains="Imported",
         )
-        verify_cli_command(
-            [
-                pixi,
-                "list",
-                "--manifest-path",
-                manifest_path,
-                "--environment=complex-env",
-                "--explicit",
-            ],
-            stdout_contains=[
-                "cowpy",
-                "1.1.4",
-                "libblas",
-                "_openblas",
-                "snakemake-minimal",
-                "bioconda",
-            ],
+        parsed_manifest = tomllib.loads(manifest_path.read_text())
+        assert redact_manifest(parsed_manifest) == snapshot(
+            {
+                "workspace": {
+                    "authors": ["John Doe"],
+                    "channels": ["conda-forge"],
+                    "name": "test_import_channels_and_versi0",
+                    "platforms": ["osx-arm64", "linux-64", "win-64"],
+                    "version": "0.1.0",
+                },
+                "tasks": {},
+                "dependencies": {},
+                "feature": {
+                    "complex-env": {
+                        "channels": ["conda-forge", "bioconda"],
+                        "dependencies": {
+                            "cowpy": "1.1.4.*",
+                            "libblas": {"version": "*", "build": "*openblas"},
+                            "snakemake-minimal": "*",
+                        },
+                    }
+                },
+                "environments": {
+                    "complex-env": {"features": ["complex-env"], "no-default-feature": True}
+                },
+            }
         )
