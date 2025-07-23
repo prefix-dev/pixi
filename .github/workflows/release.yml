@@ -74,8 +74,9 @@ jobs:
         uses: baptiste0928/cargo-install@e38323ef017552d7f7af73a3f4db467f278310ed # v3
         with:
           crate: cargo-dist
-          git: https://github.com/ruben-arts/cargo-dist
-          branch: feature/update_bin_in_root_of_tar
+          git: https://github.com/ruben-arts/cargo-dist.git
+          branch: feature/update_bin_in_root_tar
+          args: dist
 
       - name: Install cargo-zigbuild
         uses: baptiste0928/cargo-install@e38323ef017552d7f7af73a3f4db467f278310ed # v3
