@@ -1,6 +1,8 @@
 use std::{collections::HashMap, path::Path, str::FromStr, sync::Arc};
 
+use crate::environment::{ContinuePyPIPrefixUpdate, on_python_interpreter_change};
 use conda_pypi_clobber::PypiCondaClobberRegistry;
+use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
 use pixi_consts::consts;
@@ -8,6 +10,7 @@ use pixi_manifest::{
     EnvironmentName, SystemRequirements,
     pypi::pypi_options::{NoBinary, NoBuild, NoBuildIsolation},
 };
+use pixi_progress::await_in_progress;
 use pixi_record::PixiRecord;
 use pixi_uv_conversions::{
     BuildIsolation, locked_indexes_to_index_locations, pypi_options_to_build_options,
@@ -111,10 +114,6 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         pypi_records: &[(PypiPackageData, PypiPackageEnvironmentData)],
         python_status: &crate::environment::PythonStatus,
     ) -> miette::Result<()> {
-        use crate::environment::{ContinuePyPIPrefixUpdate, on_python_interpreter_change};
-        use fancy_display::FancyDisplay;
-        use pixi_progress::await_in_progress;
-
         // Determine global site-packages status
         let python_info =
             match on_python_interpreter_change(python_status, self.config.prefix, pypi_records)
@@ -131,7 +130,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
                 self.config.environment_name.fancy_display()
             ),
             |_| async {
-                self.execute_update(pixi_records, pypi_records, &python_info)
+                self.execute_update(pixi_records, pypi_records, python_info)
                     .await
             },
         )

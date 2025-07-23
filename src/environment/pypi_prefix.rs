@@ -3,17 +3,9 @@ use std::path::Path;
 use miette::IntoDiagnostic;
 use rattler::install::PythonInfo;
 
-use crate::install_pypi::{
-    PyPIBuildConfig, PyPIContextConfig, PyPIEnvironmentUpdater, PyPIUpdateConfig,
-};
-use crate::{lock_file::UvResolutionContext, prefix::Prefix};
+use crate::prefix::Prefix;
 use pixi_consts::consts;
-use pixi_manifest::pypi::pypi_options::{NoBinary, NoBuild, NoBuildIsolation};
-use pixi_manifest::{EnvironmentName, SystemRequirements};
-use pixi_record::PixiRecord;
-use rattler_conda_types::Platform;
-use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
-use std::collections::HashMap;
+use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};
 use uv_distribution_types::{InstalledDist, Name};
 
 use super::PythonStatus;
@@ -125,46 +117,3 @@ pub async fn on_python_interpreter_change<'a>(
     }
 }
 
-/// Update PyPI packages in the environment using the new simplified API
-pub async fn update_prefix_pypi(
-    environment_name: &EnvironmentName,
-    prefix: &Prefix,
-    pixi_records: &[PixiRecord],
-    pypi_records: &[(PypiPackageData, PypiPackageEnvironmentData)],
-    status: &PythonStatus,
-    system_requirements: &SystemRequirements,
-    uv_context: &UvResolutionContext,
-    pypi_indexes: Option<&PypiIndexes>,
-    environment_variables: &HashMap<String, String>,
-    lock_file_dir: &Path,
-    platform: Platform,
-    non_isolated_packages: &NoBuildIsolation,
-    no_build: &NoBuild,
-    no_binary: &NoBinary,
-) -> miette::Result<()> {
-    // Create configuration structs grouping related parameters
-    let config = PyPIUpdateConfig {
-        environment_name,
-        prefix,
-        platform,
-        lock_file_dir,
-        system_requirements,
-    };
-
-    let build_config = PyPIBuildConfig {
-        non_isolated_packages,
-        no_build,
-        no_binary,
-    };
-
-    let context_config = PyPIContextConfig {
-        uv_context,
-        pypi_indexes,
-        environment_variables,
-    };
-
-    // Use the PyPIEnvironmentUpdater directly
-    PyPIEnvironmentUpdater::new(config, build_config, context_config)
-        .update_packages(pixi_records, pypi_records, status)
-        .await
-}
