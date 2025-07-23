@@ -45,12 +45,17 @@ aarch64-apple-darwin = "macos-latest"
 x86_64-apple-darwin = "macos-latest"
 
 # Windows targets
-aarch64-pc-windows-msvc = "windows_x64_2025_large"
 x86_64-pc-windows-msvc = "windows_x64_2025_large"
 
 # Linux targets
 aarch64-unknown-linux-musl = "8core_ubuntu_latest_runner"
 x86_64-unknown-linux-musl = "8core_ubuntu_latest_runner"
+
+[dist.github-custom-runners.aarch64-pc-windows-msvc]
+runner = "ubuntu-latest"
+# https://github.com/axodotdev/cargo-dist/blob/c8ba950c63f9c38c77782912ec6cdb6807bd0fbd/cargo-dist/src/backend/ci/github.rs#L678-L688
+container = { image = "messense/cargo-xwin", host = "x86_64-unknown-linux-musl", package_manager = "apt" }
+host = "x86_64-unknown-linux-gnu"
 
 [dist.dependencies.apt]
 gcc-aarch64-linux-gnu = { version = '*', targets = [
