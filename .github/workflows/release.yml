@@ -151,13 +151,24 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
           submodules: recursive
-      # Install fork of dist to allow for binaries in the root of the tarball
+      # Use fork of dist to allow for binaries in the root of the tarball
       - name: Install cargo-dist from git
         uses: baptiste0928/cargo-install@e38323ef017552d7f7af73a3f4db467f278310ed # v3
         with:
           crate: dist
-          git: https://github.com/ruben-arts/cargo-dist
+          git: https://github.com/ruben-arts/cargo-dist.git
           rev: eff7ec08d10db4c04f163def5ecbc04b2b7b8329
+
+      - name: Install cargo-zigbuild
+        uses: baptiste0928/cargo-install@e38323ef017552d7f7af73a3f4db467f278310ed # v3
+        with:
+          crate: cargo-zigbuild
+
+      - uses: prefix-dev/setup-pixi@main
+        with:
+          environments: dist
+          activate-environment: true
+
       # Get the dist-manifest
       - name: Fetch local artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
