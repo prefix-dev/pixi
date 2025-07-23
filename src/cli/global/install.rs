@@ -1,6 +1,6 @@
 use std::{ops::Not, str::FromStr};
 
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 
 use clap::Parser;
 use fancy_display::FancyDisplay;
@@ -10,12 +10,14 @@ use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, Platform};
 
 use crate::{
     cli::global::{global_specs::GlobalSpecs, revert_environment_after_error},
+    cli::package_suggestions,
     global::{
         self, EnvChanges, EnvState, EnvironmentName, Mapping, Project, StateChange, StateChanges,
         common::{NotChangedReason, contains_menuinst_document},
         list::list_all_global_environments,
         project::{ExposedType, NamedGlobalSpec},
     },
+    repodata::Repodata,
 };
 use pixi_config::{self, Config, ConfigCli};
 
@@ -145,13 +147,62 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 };
             }
             Err(err) => {
+                let enhanced_error = if let Some(failed_package) =
+                    package_suggestions::extract_failed_package_name(&err)
+                {
+                    let channel_urls = if args.channels.is_empty() {
+                        project.config().default_channels()
+                    } else {
+                        args.channels.clone()
+                    };
+
+                    let channels_result: Result<IndexSet<_>, _> = channel_urls
+                        .into_iter()
+                        .map(|channel_url| {
+                            channel_url.into_channel(project.global_channel_config())
+                        })
+                        .collect();
+
+                    if let Ok(channels) = channels_result {
+                        let platform = args.platform.unwrap_or_else(Platform::current);
+
+                        if let Ok(gateway) = project.repodata_gateway() {
+                            let suggester = package_suggestions::PackageSuggester::new(
+                                channels,
+                                platform,
+                                gateway.clone(),
+                            );
+
+                            match suggester.suggest_similar(&failed_package).await {
+                                Ok(suggestions) if !suggestions.is_empty() => {
+                                    Some(package_suggestions::create_enhanced_package_error(
+                                        &failed_package,
+                                        &suggestions,
+                                    ))
+                                }
+                                _ => None,
+                            }
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
                 if let Err(revert_err) =
                     revert_environment_after_error(env_name, &last_updated_project).await
                 {
                     tracing::warn!("Reverting of the operation failed");
                     tracing::info!("Reversion error: {:?}", revert_err);
                 }
-                return Err(err);
+
+                return match enhanced_error {
+                    Some(enhanced) => Err(enhanced),
+                    None => Err(err),
+                };
             }
         }
         last_updated_project = project;
