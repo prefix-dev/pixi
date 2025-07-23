@@ -280,6 +280,9 @@ pep508_rs = { workspace = true }
 percent-encoding = { workspace = true }
 rattler = { workspace = true, features = ["cli-tools", "indicatif"] }
 rattler_conda_types = { workspace = true }
+rattler_upload = { version = "0.1.0", default-features = false, features = [
+  "s3",
+] }
 rattler_digest = { workspace = true }
 rattler_lock = { workspace = true }
 rattler_menuinst = { workspace = true }
