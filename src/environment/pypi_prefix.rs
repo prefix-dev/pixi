@@ -116,4 +116,3 @@ pub async fn on_python_interpreter_change<'a>(
         PythonStatus::DoesNotExist => Ok(ContinuePyPIPrefixUpdate::Skip),
     }
 }
-

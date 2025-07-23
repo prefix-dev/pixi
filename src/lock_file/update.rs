@@ -10,7 +10,7 @@ use crate::{
         PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PythonStatus,
         read_environment_file, write_environment_file,
     },
-    install_pypi::{PyPIUpdateConfig, PyPIBuildConfig, PyPIContextConfig, PyPIEnvironmentUpdater},
+    install_pypi::{PyPIBuildConfig, PyPIContextConfig, PyPIEnvironmentUpdater, PyPIUpdateConfig},
     lock_file::{
         self, PypiRecord, reporter::SolveProgressBar,
         virtual_packages::validate_system_meets_environment_requirements,
@@ -509,7 +509,7 @@ impl<'p> LockFileDerivedData<'p> {
                 // Update the prefix with Pypi records
                 {
                     let pypi_indexes = self.pypi_indexes(environment)?;
-                    
+
                     let config = PyPIUpdateConfig {
                         environment_name: environment.name(),
                         prefix: &prefix,
