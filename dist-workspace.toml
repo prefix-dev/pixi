@@ -1,6 +1,7 @@
 [workspace]
 members = ["cargo:."]
 
+# Config for 'dist'
 [dist]
 # The preferred dist version to use in CI (Cargo.toml SemVer syntax)
 cargo-dist-version = "1.0.0-rc.1"
@@ -27,7 +28,7 @@ dispatch-releases = true
 github-release = "announce"
 # Whether to auto-include files like READMEs, LICENSEEs, and CHANGELOGs (default true)
 auto-includes = false
-# Whether to put the binaries in the root of the archive or not, this only applies to unix archives
+# Whether to place binaries in the root of the archive
 binaries-in-root = true
 # Which actions to run on pull requests
 pr-run-mode = "skip"
@@ -35,7 +36,7 @@ pr-run-mode = "skip"
 allow-dirty = ["msi", "ci"]
 # Whether to sign macOS executables
 macos-sign = true
-# Feature to be activated
+# Features to pass to cargo build
 features = ["self_update", "performance"]
 
 [dist.github-custom-runners]
@@ -56,3 +57,7 @@ gcc-aarch64-linux-gnu = { version = '*', targets = [
   "aarch64-unknown-linux-gnu",
   "aarch64-unknown-linux-musl",
 ] }
+
+# TODO:
+# - Install cargo-zigbuild
+# - Install zig

@@ -75,7 +75,17 @@ jobs:
         with:
           crate: cargo-dist
           git: https://github.com/ruben-arts/cargo-dist
-          branch: feature/allow_binaries_in_root_of_tar
+          branch: feature/update_bin_in_root_of_tar
+
+      - name: Install cargo-zigbuild
+        uses: baptiste0928/cargo-install@e38323ef017552d7f7af73a3f4db467f278310ed # v3
+        with:
+          crate: cargo-zigbuild
+
+      - uses: prefix-dev/setup-pixi@main
+        with:
+          environments: dist
+          activate-environment: true
 
       - name: Cache dist
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
