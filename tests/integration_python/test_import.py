@@ -17,15 +17,16 @@ class TestCondaEnv:
     ) -> None:
         manifest_path = tmp_pixi_workspace / "pixi.toml"
 
-        simple_env_yaml = """name: simple-env
-channels:
-  - conda-forge
-dependencies:
-  - python
-"""
+        simple_env_yaml = """
+            name: simple-env
+            channels:
+            - conda-forge
+            dependencies:
+            - python
+        """.strip()
 
         import_file_path = tmp_pixi_workspace / "simple_environment.yml"
-        with open(import_file_path) as file:
+        with open(import_file_path, "w") as file:
             yaml.dump(simple_env_yaml, file)
 
         # Create a new project
