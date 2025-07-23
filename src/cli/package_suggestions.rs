@@ -9,7 +9,8 @@ use strsim::jaro;
 /// Extracts package name from "No candidates were found" error messages
 pub fn extract_failed_package_name(error: &Report) -> Option<String> {
     static PACKAGE_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"No candidates were found for ([a-zA-Z0-9_-]+)").expect("Invalid regex")
+        Regex::new(r"No candidates were found for ([a-zA-Z0-9_-]+)(?:\s+\*)?")
+            .expect("Invalid regex")
     });
 
     let error_chain = std::iter::successors(Some(error.as_ref() as &dyn std::error::Error), |e| {
