@@ -1,9 +1,11 @@
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use clap::{Parser, ValueEnum};
 use pixi_config::{Config, ConfigCli};
 use pixi_manifest::{
-    DependencyOverwriteBehavior, FeatureName, HasFeaturesIter, PrioritizedChannel, SpecType,
+    DependencyOverwriteBehavior, EnvironmentName, FeatureName, HasFeaturesIter, PrioritizedChannel,
+    SpecType,
 };
 use pixi_spec::PixiSpec;
 use pixi_utils::conda_environment_file::CondaEnvFile;
@@ -178,9 +180,9 @@ async fn import_conda_env(args: Args) -> miette::Result<()> {
 
     match workspace
         .workspace()
-        .environment_from_name_or_env_var(Some(environment_string.clone()))
+        .environment(&EnvironmentName::from_str(&environment_string)?)
     {
-        Err(_) => {
+        None => {
             // add environment if it does not already exist
             workspace.manifest().add_environment(
                 environment_string.clone(),
@@ -189,7 +191,7 @@ async fn import_conda_env(args: Args) -> miette::Result<()> {
                 true,
             )?;
         }
-        Ok(env) => {
+        Some(env) => {
             // otherwise, add feature to environment if it is not already there
             if !env.features().any(|f| f.name == feature_name) {
                 let env_name = env.name().as_str().to_string();
