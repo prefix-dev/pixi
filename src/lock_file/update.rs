@@ -509,7 +509,6 @@ impl<'p> LockFileDerivedData<'p> {
                 environment::update_prefix_pypi(
                     environment.name(),
                     &prefix,
-                    platform,
                     &pixi_records,
                     &pypi_records,
                     &python_status,
