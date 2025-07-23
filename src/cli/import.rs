@@ -3,11 +3,7 @@ use std::str::FromStr;
 
 use clap::{Parser, ValueEnum};
 use pixi_config::{Config, ConfigCli};
-use pixi_manifest::{
-    DependencyOverwriteBehavior, EnvironmentName, FeatureName, HasFeaturesIter, PrioritizedChannel,
-    SpecType,
-};
-use pixi_spec::PixiSpec;
+use pixi_manifest::{EnvironmentName, FeatureName, HasFeaturesIter, PrioritizedChannel};
 use pixi_utils::conda_environment_file::CondaEnvFile;
 use rattler_conda_types::Platform;
 
@@ -121,7 +117,6 @@ async fn import_conda_env(args: Args) -> miette::Result<()> {
     sanity_check_workspace(&workspace).await?;
 
     let mut workspace = workspace.modify()?;
-    let channel_config = workspace.workspace().channel_config();
 
     // TODO: add dry_run logic to import
 
@@ -149,34 +144,7 @@ async fn import_conda_env(args: Args) -> miette::Result<()> {
         false,
     )?;
 
-    for spec in conda_deps {
-        // Determine the name of the package to add
-        let (Some(package_name), spec) = spec.clone().into_nameless() else {
-            miette::bail!(
-                "{} does not support wildcard dependencies",
-                pixi_utils::executable_name()
-            );
-        };
-        let spec = PixiSpec::from_nameless_matchspec(spec, &channel_config);
-        workspace.manifest().add_dependency(
-            &package_name,
-            &spec,
-            SpecType::Run,
-            &platforms,
-            &feature_name,
-            DependencyOverwriteBehavior::Overwrite,
-        )?;
-    }
-    for requirement in pypi_deps {
-        workspace.manifest().add_pep508_dependency(
-            (&requirement, None),
-            &platforms,
-            &feature_name,
-            None,
-            DependencyOverwriteBehavior::Overwrite,
-            None,
-        )?;
-    }
+    workspace.add_specs(conda_deps, pypi_deps, &platforms, &feature_name)?;
 
     match workspace
         .workspace()

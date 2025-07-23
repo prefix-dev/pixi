@@ -12,10 +12,7 @@ use miette::{Context, IntoDiagnostic};
 use minijinja::{Environment, context};
 use pixi_config::{Config, get_default_author};
 use pixi_consts::consts;
-use pixi_manifest::{
-    DependencyOverwriteBehavior, FeatureName, SpecType, pyproject::PyProjectManifest,
-};
-use pixi_spec::PixiSpec;
+use pixi_manifest::{FeatureName, pyproject::PyProjectManifest};
 use pixi_utils::conda_environment_file::CondaEnvFile;
 use rattler_conda_types::{NamedChannelOrUrl, Platform};
 use tokio::fs::OpenOptions;
@@ -318,37 +315,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         );
         let mut workspace =
             WorkspaceMut::from_template(pixi_manifest_path, rendered_workspace_template)?;
-        let channel_config = workspace.workspace().channel_config();
-        for spec in conda_deps {
-            // Determine the name of the package to add
-            let (Some(name), spec) = spec.clone().into_nameless() else {
-                miette::bail!(
-                    "{} does not support wildcard dependencies",
-                    pixi_utils::executable_name()
-                );
-            };
-            let spec = PixiSpec::from_nameless_matchspec(spec, &channel_config);
-            workspace.manifest().add_dependency(
-                &name,
-                &spec,
-                SpecType::Run,
-                // No platforms required as you can't define them in the yaml
-                &[],
-                &FeatureName::default(),
-                DependencyOverwriteBehavior::Overwrite,
-            )?;
-        }
-        for requirement in pypi_deps {
-            workspace.manifest().add_pep508_dependency(
-                (&requirement, None),
-                // No platforms required as you can't define them in the yaml
-                &[],
-                &FeatureName::default(),
-                None,
-                DependencyOverwriteBehavior::Overwrite,
-                None,
-            )?;
-        }
+        workspace.add_specs(
+            conda_deps,
+            pypi_deps,
+            &[] as &[Platform],
+            &FeatureName::default(),
+        )?;
         let workspace = workspace.save().await.into_diagnostic()?;
 
         eprintln!(
