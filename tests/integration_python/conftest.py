@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from .common import exec_extension
+from .common import exec_extension, repo_root
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -50,6 +50,11 @@ disable-sharded = false
 @pytest.fixture
 def test_data() -> Path:
     return Path(__file__).parents[1].joinpath("data").resolve()
+
+
+@pytest.fixture
+def import_files_dir() -> Path:
+    return repo_root() / "tests/data/import_files"
 
 
 @pytest.fixture
