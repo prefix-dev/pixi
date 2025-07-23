@@ -76,11 +76,20 @@ jobs:
           crate: dist
           git: https://github.com/ruben-arts/cargo-dist.git
           rev: eff7ec08d10db4c04f163def5ecbc04b2b7b8329
-
+      # TODO: validate the need for xwin and zigbuild in the plan step
       - name: Install cargo-zigbuild
         uses: baptiste0928/cargo-install@e38323ef017552d7f7af73a3f4db467f278310ed # v3
         with:
           crate: cargo-zigbuild
+          version: "0.20.1"
+
+      - name: Install cargo-xwin
+        # Only on windows
+        if: ${{ runner.os == 'Windows' }}
+        uses: baptiste0928/cargo-install@e38323ef017552d7f7af73a3f4db467f278310ed # v3
+        with:
+          crate: cargo-xwin
+          version: "0.19.0"
 
       - uses: prefix-dev/setup-pixi@main
         with:
@@ -163,6 +172,15 @@ jobs:
         uses: baptiste0928/cargo-install@e38323ef017552d7f7af73a3f4db467f278310ed # v3
         with:
           crate: cargo-zigbuild
+          version: "0.20.1"
+
+      - name: Install cargo-xwin
+        # Only on windows
+        if: ${{ runner.os == 'Windows' }}
+        uses: baptiste0928/cargo-install@e38323ef017552d7f7af73a3f4db467f278310ed # v3
+        with:
+          crate: cargo-xwin
+          version: "0.19.0"
 
       - uses: prefix-dev/setup-pixi@main
         with:
