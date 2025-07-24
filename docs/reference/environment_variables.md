@@ -50,3 +50,118 @@ The following environment variables are set by Pixi, when using the `pixi run`, 
 
 !!! note
     Even though the variables are environment variables these cannot be overridden. E.g. you can not change the root of the project by setting `PIXI_PROJECT_ROOT` in the environment.
+
+
+## Priority of Environment Variables
+
+Normally, in `Pixi`, we have the priority rule for environment variables: `task.env` > `activation.env` > `activation.scripts` > activation scripts of dependencies > outside environment variable.
+
+##### Example 1:  `task.env` > `activation.env`
+
+In `pixi.toml`, we defined an environment variable `HELLO_WORLD` in both `tasks.hello` and `activation.env`. 
+
+When we run `echo $HELLO_WORLD`, it should output:
+```
+Hello world!
+```
+
+```toml
+# pixi.toml
+[tasks.hello]
+cmd = "echo $HELLO_WORLD"
+env = {{ HELLO_WORLD = "Hello world!" }}
+[activation.env]
+HELLO_WORLD = "Activate!"
+```
+
+##### Example 2: `activation.env` > `activation.scripts`
+
+In `pixi.toml`, we defined the same environment variable `DEBUG_MODE` in both `activation.env` and in the activation script file `setup.sh`.
+When we run `echo Debug mode: $DEBUG_MODE`, it should output:
+```bash
+Debug mode: enabled
+```
+
+```toml
+# pixi.toml
+[activation.env]
+DEBUG_MODE = "enabled"
+
+[activation]
+scripts = ["setup.sh"]
+```
+
+```bash
+# setup.sh
+export DEBUG_MODE="disabled"
+```
+
+##### Example 3: `activation.scripts` > activation scripts of dependencies
+
+In `pixi.toml`, we have our local activation script and a dependency `my-package` that also sets environment variables through its activation scripts.
+When we run `echo Library path: $LIB_PATH`, it should output:
+```
+Library path: /my/lib
+```
+
+```toml
+# pixi.toml
+[activation]
+scripts = ["local_setup.sh"]
+
+[dependencies]
+my-package = "*"  # This package has its own activation scripts that set LIB_PATH="/dep/lib"
+```
+```bash
+# local_setup.sh
+export LIB_PATH="/local/lib"
+echo "Local setup complete"
+```
+
+##### Example 4: activation scripts of dependencies > outside environment variable
+
+If we have a dependency that sets `PYTHON_PATH` and the same variable is already set in the outside environment.
+When we run `echo Python path: $PYTHON_PATH`, it should output:
+```bash
+Python path: /pixi/python
+```
+```
+# Outside environment
+export PYTHON_PATH="/system/python"
+```
+```toml
+# pixi.toml
+[dependencies]
+python-utils = "*"  # This package sets PYTHON_PATH="/pixi/python" in its activation scripts
+```
+
+##### Example 5: Complex Example - All priorities combined
+In `pixi.toml`, we define the same variable `APP_CONFIG` across multiple levels:
+```toml
+[tasks.start]
+cmd = "echo Config: $APP_CONFIG"
+env = {{ APP_CONFIG = "task-specific" }}
+
+[activation.env]
+APP_CONFIG = "activation-env"
+
+[activation]
+scripts = ["app_setup.sh"]
+
+[dependencies]
+config-loader = "*"  # Sets APP_CONFIG="dependency-config"
+```
+```bash
+# app_setup.sh
+export APP_CONFIG="activation-script"
+```
+```bash
+# Outside environment
+export APP_CONFIG="system-config"
+```
+
+As we can see, `task.env` has the highest priority. So when we run `pixi run start`, it should output:
+
+```
+Config: task-specific
+```
