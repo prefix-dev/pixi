@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.50.0] - 2025-07-22
+#### ✨ Highlights
+This release contains loads of bug fixes and refactors, primarily to make `pixi build` more stable and feature rich in the near future.
+
+#### Added
+
+- Add `pypi-option.no-binary` by @thomas-maschler in [#4008](https://github.com/prefix-dev/pixi/pull/4008)
+- Add explicit workspace inheritance syntax by @baszalmstra in [#4078](https://github.com/prefix-dev/pixi/pull/4078)
+- Add `conda/outputs` and `conda/build_v2` backend protocol by @baszalmstra in [#4118](https://github.com/prefix-dev/pixi/pull/4118)
+- Add cyclic dependency support by @baszalmstra in [#4143](https://github.com/prefix-dev/pixi/pull/4143)
+
+#### Changed
+
+- Add `pixi init` as a suggestion in the error message, when `pyproject.toml` is without the `tool.pixi` section by @mrswastik-robot in [#3943](https://github.com/prefix-dev/pixi/pull/3943)
+- Improve error messages when a python interpreter is needed by @tdejager in [#4075](https://github.com/prefix-dev/pixi/pull/4075)
+- Manual validation of frozen and locked CLI arguments by @gshiba in [#4044](https://github.com/prefix-dev/pixi/pull/4044)
+- Better error for unexpected packages from build backend by @baszalmstra in [#4098](https://github.com/prefix-dev/pixi/pull/4098)
+- Implement stable hash for ProjectModelV1 to improve cache consistency by @baszalmstra in [#4094](https://github.com/prefix-dev/pixi/pull/4094)
+- Upgrade to uv 0.7.20 by @tdejager in [#4091](https://github.com/prefix-dev/pixi/pull/4091)[#4115](https://github.com/prefix-dev/pixi/pull/4115)
+- Use command dispatcher for `pixi global install` by @tdejager in [#4126](https://github.com/prefix-dev/pixi/pull/4126)
+- Notify which conda packages may have influenced the conflict by @tdejager in [#4135](https://github.com/prefix-dev/pixi/pull/4135)
+- Refactor spec implementation handling in global by @tdejager in [#4138](https://github.com/prefix-dev/pixi/pull/4138)
+- Use command dispatcher for pixi build by @baszalmstra in [#4156](https://github.com/prefix-dev/pixi/pull/4156)
+
+#### Documentation
+
+- Add `site_description` by @lucascolley in [#4088](https://github.com/prefix-dev/pixi/pull/4088)
+- Improve the `system-requirements` documentation by @ruben-arts in [#4068](https://github.com/prefix-dev/pixi/pull/4068)
+- Enable `content.code.select` by @lucascolley in [#4092](https://github.com/prefix-dev/pixi/pull/4092)
+- Add `conda-deny` documentation by @PaulKMueller in [#4090](https://github.com/prefix-dev/pixi/pull/4090) [#4124](https://github.com/prefix-dev/pixi/pull/4124)
+- Update setup-pixi docs for pixi-url-bearer-token by @ytausch in [#4127](https://github.com/prefix-dev/pixi/pull/4127)
+- Update the python tutorial to use the workspace command by @rongou in [#4128](https://github.com/prefix-dev/pixi/pull/4128)
+
+#### Fixed
+
+- Only print release notes on new version with `self-update` by @lucascolley in [#4054](https://github.com/prefix-dev/pixi/pull/4054)
+- Add an early check, before creating directories for `<non-existent-env>` while uninstalling them by @mrswastik-robot in [#4049](https://github.com/prefix-dev/pixi/pull/4049)
+- Update template variable for extra index URLs in init file by @noamgot in [#4072](https://github.com/prefix-dev/pixi/pull/4072)
+- Allow to set `pypi-config.allow-insecure-host` by @zen-xu in [#4107](https://github.com/prefix-dev/pixi/pull/4107)
+
+#### New Contributors
+* @rongou made their first contribution in [#4128](https://github.com/prefix-dev/pixi/pull/4128)
+* @PaulKMueller made their first contribution in [#4124](https://github.com/prefix-dev/pixi/pull/4124)
+* @gshiba made their first contribution in [#4044](https://github.com/prefix-dev/pixi/pull/4044)
+* @thomas-maschler made their first contribution in [#4008](https://github.com/prefix-dev/pixi/pull/4008)
+
 ### [0.49.0] - 2025-06-30
 #### ✨ Highlights
 This release enables `pixi` to pick up extensions that are installed as `pixi-`.

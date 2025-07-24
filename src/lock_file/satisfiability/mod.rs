@@ -43,10 +43,7 @@ use uv_pypi_types::ParsedUrlError;
 use super::{
     PixiRecordsByName, PypiRecord, PypiRecordsByName, package_identifier::ConversionError,
 };
-use crate::{
-    lock_file::records_by_name::HasNameVersion,
-    workspace::{Environment, grouped_environment::GroupedEnvironment},
-};
+use crate::workspace::{Environment, grouped_environment::GroupedEnvironment};
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum EnvironmentUnsat {
@@ -1930,12 +1927,21 @@ mod tests {
     #[rstest]
     #[tokio::test]
     #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
-    async fn test_example_satisfiability(#[files("examples/*/p*.toml")] manifest_path: PathBuf) {
+    async fn test_example_satisfiability(#[files("examples/**/p*.toml")] manifest_path: PathBuf) {
         // If a pyproject.toml is present check for `tool.pixi` in the file to avoid
         // testing of non-pixi files
         if manifest_path.file_name().unwrap() == "pyproject.toml" {
             let manifest_str = fs_err::read_to_string(&manifest_path).unwrap();
-            if !manifest_str.contains("tool.pixi") {
+            if !manifest_str.contains("tool.pixi.workspace") {
+                return;
+            }
+        }
+
+        // If a pixi.toml is present check for `workspace` in the file to avoid
+        // testing of non-pixi workspace files
+        if manifest_path.file_name().unwrap() == "pixi.toml" {
+            let manifest_str = fs_err::read_to_string(&manifest_path).unwrap();
+            if !manifest_str.contains("workspace") {
                 return;
             }
         }

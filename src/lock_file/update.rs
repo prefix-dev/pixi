@@ -11,7 +11,7 @@ use crate::{
         read_environment_file, write_environment_file,
     },
     lock_file::{
-        self, PypiRecord, records_by_name::HasNameVersion, reporter::SolveProgressBar,
+        self, PypiRecord, reporter::SolveProgressBar,
         virtual_packages::validate_system_meets_environment_requirements,
     },
     prefix::Prefix,

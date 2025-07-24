@@ -5,8 +5,11 @@ pub use pinned_source::{
     LockedGitUrl, MutablePinnedSourceSpec, ParseError, PinnedGitCheckout, PinnedGitSpec,
     PinnedPathSpec, PinnedSourceSpec, PinnedUrlSpec, SourceMismatchError,
 };
-use rattler_conda_types::{MatchSpec, Matches, NamelessMatchSpec, PackageRecord, RepoDataRecord};
+use rattler_conda_types::{
+    MatchSpec, Matches, NamelessMatchSpec, PackageName, PackageRecord, RepoDataRecord,
+};
 use rattler_lock::{CondaPackageData, ConversionError, UrlOrPath};
+use serde::Serialize;
 pub use source_record::{InputHash, SourceRecord};
 use thiserror::Error;
 
@@ -14,12 +17,18 @@ use thiserror::Error;
 /// binary file or something that still requires building.
 ///
 /// This is basically a superset of a regular [`RepoDataRecord`].
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
+#[serde(untagged)]
 pub enum PixiRecord {
     Binary(RepoDataRecord),
     Source(SourceRecord),
 }
 impl PixiRecord {
+    /// The name of the package
+    pub fn name(&self) -> &PackageName {
+        &self.package_record().name
+    }
+
     /// Metadata information of the package.
     pub fn package_record(&self) -> &PackageRecord {
         match self {
