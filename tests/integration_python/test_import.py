@@ -3,7 +3,7 @@ import tomllib
 
 from pathlib import Path
 
-from dirty_equals import AnyThing
+from dirty_equals import IsPartialDict
 from inline_snapshot import snapshot
 import yaml
 
@@ -96,13 +96,8 @@ class TestCondaEnv:
         assert "python" in parsed_manifest["feature"]["simple-env"]["dependencies"]
         assert parsed_manifest == snapshot(
             {
-                "workspace": {
-                    "authors": AnyThing(),
-                    "channels": ["conda-forge"],
-                    "name": "test_import_conda_env0",
-                    "platforms": AnyThing(),
-                    "version": "0.1.0",
-                },
+                # these keys are irrelevant and some are machine-dependent
+                "workspace": IsPartialDict,
                 "tasks": {},
                 "dependencies": {},
                 "feature": {
@@ -142,13 +137,8 @@ class TestCondaEnv:
         assert "python" in parsed_manifest["feature"]["simple-env"]["dependencies"]
         assert parsed_manifest == snapshot(
             {
-                "workspace": {
-                    "authors": AnyThing(),
-                    "channels": ["conda-forge"],
-                    "name": "test_import_no_format0",
-                    "platforms": AnyThing(),
-                    "version": "0.1.0",
-                },
+                # these keys are irrelevant and some are machine-dependent
+                "workspace": IsPartialDict,
                 "tasks": {},
                 "dependencies": {},
                 "feature": {
@@ -228,13 +218,8 @@ class TestCondaEnv:
         assert "osx-arm64" not in parsed_manifest["feature"]["simple-env"]["target"]
         assert parsed_manifest == snapshot(
             {
-                "workspace": {
-                    "authors": AnyThing(),
-                    "channels": ["conda-forge"],
-                    "name": "test_import_platforms0",
-                    "platforms": AnyThing(),
-                    "version": "0.1.0",
-                },
+                # these keys are irrelevant and some are machine-dependent
+                "workspace": IsPartialDict,
                 "tasks": {},
                 "dependencies": {},
                 "feature": {
@@ -276,13 +261,8 @@ class TestCondaEnv:
         assert parsed_manifest["environments"]["simple-env"]["no-default-feature"] is True
         assert parsed_manifest == snapshot(
             {
-                "workspace": {
-                    "authors": AnyThing(),
-                    "channels": ["conda-forge"],
-                    "name": "test_import_feature_environment0",
-                    "platforms": AnyThing(),
-                    "version": "0.1.0",
-                },
+                # these keys are irrelevant and some are machine-dependent
+                "workspace": IsPartialDict,
                 "tasks": {},
                 "dependencies": {},
                 "feature": {
@@ -317,13 +297,8 @@ class TestCondaEnv:
         assert "cowpy" not in parsed_manifest["environments"]
         assert parsed_manifest == snapshot(
             {
-                "workspace": {
-                    "authors": AnyThing(),
-                    "channels": ["conda-forge"],
-                    "name": "test_import_feature_environment0",
-                    "platforms": AnyThing(),
-                    "version": "0.1.0",
-                },
+                # these keys are irrelevant and some are machine-dependent
+                "workspace": IsPartialDict,
                 "tasks": {},
                 "dependencies": {},
                 "feature": {
@@ -361,13 +336,8 @@ class TestCondaEnv:
         assert "array-api-extra" not in parsed_manifest["environments"]
         assert parsed_manifest == snapshot(
             {
-                "workspace": {
-                    "authors": AnyThing(),
-                    "channels": ["conda-forge"],
-                    "name": "test_import_feature_environment0",
-                    "platforms": AnyThing(),
-                    "version": "0.1.0",
-                },
+                # these keys are irrelevant and some are machine-dependent
+                "workspace": IsPartialDict,
                 "tasks": {},
                 "dependencies": {},
                 "feature": {
@@ -405,13 +375,8 @@ class TestCondaEnv:
         assert "farm" in parsed_manifest["environments"]["farm"]["features"]
         assert parsed_manifest == snapshot(
             {
-                "workspace": {
-                    "authors": AnyThing(),
-                    "channels": ["conda-forge"],
-                    "name": "test_import_feature_environment0",
-                    "platforms": AnyThing(),
-                    "version": "0.1.0",
-                },
+                # these keys are irrelevant and some are machine-dependent
+                "workspace": IsPartialDict,
                 "tasks": {},
                 "dependencies": {},
                 "feature": {
@@ -451,13 +416,8 @@ class TestCondaEnv:
         assert "data" in parsed_manifest["environments"]["data"]["features"]
         assert parsed_manifest == snapshot(
             {
-                "workspace": {
-                    "authors": AnyThing(),
-                    "channels": ["conda-forge"],
-                    "name": "test_import_feature_environment0",
-                    "platforms": AnyThing(),
-                    "version": "0.1.0",
-                },
+                # these keys are irrelevant and some are machine-dependent
+                "workspace": IsPartialDict,
                 "tasks": {},
                 "dependencies": {},
                 "feature": {
@@ -506,13 +466,8 @@ class TestCondaEnv:
         parsed_manifest = tomllib.loads(manifest_path.read_text())
         assert parsed_manifest == snapshot(
             {
-                "workspace": {
-                    "authors": AnyThing(),
-                    "channels": ["conda-forge"],
-                    "name": "test_import_channels_and_versi0",
-                    "platforms": AnyThing(),
-                    "version": "0.1.0",
-                },
+                # these keys are irrelevant and some are machine-dependent
+                "workspace": IsPartialDict,
                 "tasks": {},
                 "dependencies": {},
                 "feature": {
