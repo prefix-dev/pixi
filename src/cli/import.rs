@@ -76,7 +76,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 }
 
 #[derive(Debug, Error, Diagnostic)]
-#[error("Missing name: provide --feature or --environment, or set `name:` in environment.yml")]
+#[error("Missing name: provide --feature or --environment, or set `name:` in input file.")]
 struct MissingEnvironmentName;
 
 fn get_feature_and_environment(
