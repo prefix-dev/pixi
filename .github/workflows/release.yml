@@ -87,7 +87,7 @@ jobs:
         with:
           name: cargo-dist-cache
           # TODO: revert after switching back to released dist
-          path: ~/.cargo-install/cargo-dist/bin/dist
+          path: ~/.cargo-install/dist/bin/dist
       # sure would be cool if github gave us proper conditionals...
       # so here's a doubly-nested ternary-via-truthiness to try to provide the best possible
       # functionality based on whether this is a pull_request, and whether it's from a fork.
@@ -146,13 +146,13 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
           submodules: recursive
-      # Use fork of dist to allow for binaries in the root of the tarball
-      - name: Install cargo-dist from git
-        uses: baptiste0928/cargo-install@e38323ef017552d7f7af73a3f4db467f278310ed # v3
+
+      - name: Install cached dist
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          crate: dist
-          git: https://github.com/ruben-arts/cargo-dist.git
-          rev: 6f945d0efcaeabb0fc3e3472330bb7a294f80d29
+          name: cargo-dist-cache
+          path: ~/.cargo/bin/
+      - run: chmod +x ~/.cargo/bin/dist
 
       - name: Install cargo-zigbuild
         # Only install on non windows platforms
