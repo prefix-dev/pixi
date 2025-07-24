@@ -63,7 +63,7 @@ pub struct Args {
     pub env_file: Option<PathBuf>,
 
     /// The manifest format to create.
-    #[arg(long, conflicts_with_all = ["ENVIRONMENT_FILE", "pyproject_toml"], ignore_case = true)]
+    #[arg(long, conflicts_with_all = ["pyproject_toml"], ignore_case = true)]
     pub format: Option<ManifestFormat>,
 
     /// Create a pyproject.toml manifest instead of a pixi.toml manifest
@@ -286,15 +286,37 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         args.platforms.clone()
     };
 
+    // Dialog with user to create a 'pyproject.toml' or 'pixi.toml' manifest
+    // If nothing is defined but there is a `pyproject.toml` file, ask the user.
+    let pyproject = if !pixi_manifest_path.is_file()
+        && args.format.is_none()
+        && !args.pyproject_toml
+        && pyproject_manifest_path.is_file()
+    {
+        eprintln!(
+            "\nA '{}' file already exists.\n",
+            console::style(consts::PYPROJECT_MANIFEST).bold()
+        );
+
+        dialoguer::Confirm::new()
+            .with_prompt(format!(
+                "Do you want to extend it with the '{}' configuration?",
+                console::style("[tool.pixi]").bold().green()
+            ))
+            .default(false)
+            .show_default(true)
+            .interact()
+            .into_diagnostic()?
+    } else {
+        args.format == Some(ManifestFormat::Pyproject) || args.pyproject_toml
+    };
+
+    let index_url = &(config.pypi_config.index_url);
+    let extra_index_urls = &(config.pypi_config.extra_index_urls);
+
     // Create a 'pixi.toml' manifest and populate it by importing a conda
     // environment file
     if let Some(env_file_path) = args.env_file {
-        // Check if the 'pixi.toml' file doesn't already exist. We don't want to
-        // overwrite it.
-        if pixi_manifest_path.is_file() {
-            miette::bail!("{} already exists", consts::WORKSPACE_MANIFEST);
-        }
-
         let env_file = CondaEnvFile::from_path(&env_file_path)?;
         let name = env_file
             .name()
@@ -305,93 +327,122 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // TODO: Improve this:
         //  - Use .condarc as channel config
         let (conda_deps, pypi_deps, channels) = env_file.to_manifest(&config)?;
-        let rendered_workspace_template = render_workspace(
-            &env,
-            name,
-            version,
-            author.as_ref(),
-            channels,
-            &platforms,
-            None,
-            &vec![],
-            config.s3_options,
-            Some(&env_vars),
-        );
-        let mut workspace =
-            WorkspaceMut::from_template(pixi_manifest_path, rendered_workspace_template)?;
-        let channel_config = workspace.workspace().channel_config();
-        for spec in conda_deps {
-            // Determine the name of the package to add
-            let (Some(name), spec) = spec.clone().into_nameless() else {
-                miette::bail!(
-                    "{} does not support wildcard dependencies",
-                    pixi_utils::executable_name()
-                );
-            };
-            let spec = PixiSpec::from_nameless_matchspec(spec, &channel_config);
-            workspace.manifest().add_dependency(
-                &name,
-                &spec,
-                SpecType::Run,
-                // No platforms required as you can't define them in the yaml
-                &[],
-                &FeatureName::default(),
-                DependencyOverwriteBehavior::Overwrite,
-            )?;
-        }
-        for requirement in pypi_deps {
-            workspace.manifest().add_pep508_dependency(
-                (&requirement, None),
-                // No platforms required as you can't define them in the yaml
-                &[],
-                &FeatureName::default(),
-                None,
-                DependencyOverwriteBehavior::Overwrite,
-                None,
-            )?;
-        }
-        let workspace = workspace.save().await.into_diagnostic()?;
 
-        eprintln!(
-            "{}Created {}",
-            console::style(console::Emoji("✔ ", "")).green(),
-            // Canonicalize the path to make it more readable, but if it fails just use the path as
-            // is.
-            workspace.workspace.provenance.path.display()
-        );
+        if pyproject {
+            // Python package names cannot contain '-', so we replace them with '_'
+            let pypi_package_name = PackageName::from_str(&name)
+                .map(|name| name.as_dist_info_name().to_string())
+                .unwrap_or_else(|_| name.clone());
+
+            let rv = env
+                .render_named_str(
+                    consts::PYPROJECT_MANIFEST,
+                    NEW_PYROJECT_TEMPLATE,
+                    context! {
+                        name,
+                        pypi_package_name,
+                        version,
+                        author,
+                        channels,
+                        platforms,
+                        index_url => index_url.as_ref(),
+                        extra_index_urls => &extra_index_urls,
+                        s3 => relevant_s3_options(config.s3_options, channels),
+                    },
+                )
+                .expect("should be able to render the template");
+            save_manifest_file(&pyproject_manifest_path, rv)?;
+
+            let src_dir = dir.join("src").join(pypi_package_name);
+            tokio::fs::create_dir_all(&src_dir)
+                .await
+                .into_diagnostic()
+                .wrap_err_with(|| format!("Could not create directory {}.", src_dir.display()))?;
+
+            let init_file = src_dir.join("__init__.py");
+            match OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&init_file)
+                .await
+            {
+                Ok(_) => (),
+                Err(e) if e.kind() == ErrorKind::AlreadyExists => {
+                    // If the file already exists, do nothing
+                }
+                Err(e) => {
+                    return Err(e).into_diagnostic().wrap_err_with(|| {
+                        format!("Could not create file {}.", init_file.display())
+                    });
+                }
+            };
+        } else {
+            // Check if the 'pixi.toml' file doesn't already exist. We don't want to
+            // overwrite it.
+            if pixi_manifest_path.is_file() {
+                miette::bail!("{} already exists", consts::WORKSPACE_MANIFEST);
+            }
+
+            let rendered_workspace_template = render_workspace(
+                &env,
+                name,
+                version,
+                author.as_ref(),
+                channels,
+                &platforms,
+                None,
+                &vec![],
+                config.s3_options,
+                Some(&env_vars),
+            );
+            let mut workspace =
+                WorkspaceMut::from_template(pixi_manifest_path, rendered_workspace_template)?;
+            let channel_config = workspace.workspace().channel_config();
+            for spec in conda_deps {
+                // Determine the name of the package to add
+                let (Some(name), spec) = spec.clone().into_nameless() else {
+                    miette::bail!(
+                        "{} does not support wildcard dependencies",
+                        pixi_utils::executable_name()
+                    );
+                };
+                let spec = PixiSpec::from_nameless_matchspec(spec, &channel_config);
+                workspace.manifest().add_dependency(
+                    &name,
+                    &spec,
+                    SpecType::Run,
+                    // No platforms required as you can't define them in the yaml
+                    &[],
+                    &FeatureName::default(),
+                    DependencyOverwriteBehavior::Overwrite,
+                )?;
+            }
+            for requirement in pypi_deps {
+                workspace.manifest().add_pep508_dependency(
+                    (&requirement, None),
+                    // No platforms required as you can't define them in the yaml
+                    &[],
+                    &FeatureName::default(),
+                    None,
+                    DependencyOverwriteBehavior::Overwrite,
+                    None,
+                )?;
+            }
+            let workspace = workspace.save().await.into_diagnostic()?;
+
+            eprintln!(
+                "{}Created {}",
+                console::style(console::Emoji("✔ ", "")).green(),
+                // Canonicalize the path to make it more readable, but if it fails just use the path as
+                // is.
+                workspace.workspace.provenance.path.display()
+            );
+        }
     } else {
         let channels = if let Some(channels) = args.channels {
             channels
         } else {
             config.default_channels().to_vec()
-        };
-
-        let index_url = config.pypi_config.index_url;
-        let extra_index_urls = config.pypi_config.extra_index_urls;
-
-        // Dialog with user to create a 'pyproject.toml' or 'pixi.toml' manifest
-        // If nothing is defined but there is a `pyproject.toml` file, ask the user.
-        let pyproject = if !pixi_manifest_path.is_file()
-            && args.format.is_none()
-            && !args.pyproject_toml
-            && pyproject_manifest_path.is_file()
-        {
-            eprintln!(
-                "\nA '{}' file already exists.\n",
-                console::style(consts::PYPROJECT_MANIFEST).bold()
-            );
-
-            dialoguer::Confirm::new()
-                .with_prompt(format!(
-                    "Do you want to extend it with the '{}' configuration?",
-                    console::style("[tool.pixi]").bold().green()
-                ))
-                .default(false)
-                .show_default(true)
-                .interact()
-                .into_diagnostic()?
-        } else {
-            args.format == Some(ManifestFormat::Pyproject) || args.pyproject_toml
         };
 
         // Inject a tool.pixi.workspace section into an existing pyproject.toml file if
@@ -459,7 +510,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 }
             }
 
-            // Create a 'pyproject.toml' manifest
+        // Create a 'pyproject.toml' manifest
         } else if pyproject {
             // Python package names cannot contain '-', so we replace them with '_'
             let pypi_package_name = PackageName::from_str(&default_name)
