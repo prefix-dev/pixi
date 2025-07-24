@@ -219,7 +219,7 @@ impl<'a> PyPIPrefixUpdaterBuilder<'a> {
                 .context("error while determining PyPI installation plan")?;
 
         // Show totals
-        let total_to_install = installation_plan.local.len() + installation_plan.remote.len();
+        let total_to_install = installation_plan.cached.len() + installation_plan.remote.len();
         let total_required = required_dists.len();
         tracing::debug!(
             "{} of {} required packages are considered installed and up-to-date",
@@ -354,7 +354,7 @@ impl PyPIPrefixUpdater {
 
         let start = std::time::Instant::now();
         let PyPIInstallationPlan {
-            local,
+            cached: local,
             remote,
             reinstalls,
             extraneous,

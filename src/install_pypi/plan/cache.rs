@@ -7,7 +7,6 @@
 //! - `DistCache`: Trait for checking if distributions are cached
 //! - `CachedWheelsProvider`: Implementation that checks both registry and built wheel caches
 
-use uv_cache::Cache;
 use uv_cache::{CacheBucket, WheelCache};
 use uv_cache_info::Timestamp;
 use uv_distribution::{BuiltWheelIndex, RegistryWheelIndex};
@@ -24,7 +23,7 @@ pub trait DistCache<'a> {
     fn is_cached(
         &mut self,
         dist: &'a Dist,
-        uv_cache: &Cache,
+        uv_cache: &uv_cache::Cache,
     ) -> Result<Option<CachedDist>, uv_distribution::Error>;
 }
 
@@ -44,7 +43,7 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
     fn is_cached(
         &mut self,
         dist: &'a Dist,
-        uv_cache: &Cache,
+        uv_cache: &uv_cache::Cache,
     ) -> Result<Option<CachedDist>, uv_distribution::Error> {
         match dist {
             Dist::Built(BuiltDist::Registry(wheel)) => {
@@ -167,7 +166,6 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
                     }
                     _ => {}
                 }
-
                 match source_dist {
                     SourceDist::Registry(sdist) => {
                         let cached = self.registry.get(sdist.name()).find_map(|entry| {

@@ -46,7 +46,7 @@ fn test_no_installed_require_one_cached() {
     // We should install a single package
     // from the remote because we do not cache
     assert!(installs.remote.is_empty());
-    assert_eq!(installs.local.len(), 1);
+    assert_eq!(installs.cached.len(), 1);
 }
 
 /// When we have a site-packages with the requested package, and the version matches we expect
@@ -74,7 +74,7 @@ fn test_install_required_equivalent() {
         "found reinstalls: {:?}",
         installs.reinstalls
     );
-    assert!(installs.local.is_empty());
+    assert!(installs.cached.is_empty());
     assert!(installs.remote.is_empty());
 }
 
@@ -104,7 +104,7 @@ fn test_install_required_mismatch() {
         NeedReinstall::VersionMismatch { ref installed_version, ref locked_version }
         if installed_version.to_string() == "0.6.0" && locked_version.to_string() == "0.7.0"
     );
-    assert!(installs.local.is_empty());
+    assert!(installs.cached.is_empty());
     // Not cached we get it from the remote
     assert_eq!(installs.remote.len(), 1);
 }
@@ -137,7 +137,7 @@ fn test_install_required_mismatch_cached() {
     );
     assert!(installs.remote.is_empty());
     // Not cached we get it from the remote
-    assert_eq!(installs.local.len(), 1);
+    assert_eq!(installs.cached.len(), 1);
 }
 
 /// When requiring a package that has a different INSTALLER but we *do require* it
@@ -162,7 +162,7 @@ fn test_install_required_installer_mismatch() {
         installs.reinstalls[0].1,
         NeedReinstall::InstallerMismatch { ref previous_installer } if previous_installer == "i-am-not-pixi"
     );
-    assert!(installs.local.is_empty());
+    assert!(installs.cached.is_empty());
     // Not cached we get it from the remote
     assert_eq!(installs.remote.len(), 1);
 }
@@ -186,7 +186,7 @@ fn test_installed_one_other_installer() {
         .expect("should install");
 
     // We should not do anything
-    assert!(installs.local.is_empty());
+    assert!(installs.cached.is_empty());
     assert!(installs.remote.is_empty());
     assert!(installs.extraneous.is_empty());
 }
@@ -217,7 +217,7 @@ fn test_install_required_python_mismatch() {
         } if installed_python_require == "<3.12"
         && locked_python_version == "None"
     );
-    assert!(installs.local.is_empty());
+    assert!(installs.cached.is_empty());
     // Not cached we get it from the remote
     assert_eq!(installs.remote.len(), 1);
 }
@@ -333,7 +333,7 @@ fn test_installed_local_required_local() {
         installs.reinstalls
     );
     assert!(installs.remote.is_empty());
-    assert!(installs.local.is_empty());
+    assert!(installs.cached.is_empty());
 }
 /// When requiring a local package and that same local package is installed, we should not reinstall it
 /// except if the pyproject.toml file, or some other source files we won't check here is newer than the cache
@@ -420,7 +420,7 @@ fn test_local_source_older_than_local_metadata() {
         .plan(&site_packages, NoCache, &required_dists)
         .expect("should install");
     assert_eq!(installs.reinstalls.len(), 0);
-    assert_eq!(installs.local.len(), 0);
+    assert_eq!(installs.cached.len(), 0);
     assert_eq!(installs.remote.len(), 0);
 }
 
@@ -489,7 +489,7 @@ fn test_installed_archive_require_registry() {
     let installs = plan
         .plan(&site_packages, NoCache, &required_dists)
         .expect("should install");
-    assert!(installs.local.is_empty());
+    assert!(installs.cached.is_empty());
     assert!(installs.remote.is_empty());
 }
 
@@ -632,7 +632,7 @@ fn test_uv_refresh() {
         installs.reinstalls[0].1,
         NeedReinstall::ReinstallationRequested
     );
-    assert!(installs.local.is_empty());
+    assert!(installs.cached.is_empty());
     assert_eq!(installs.remote.len(), 1);
 }
 
@@ -668,7 +668,7 @@ fn test_archive_is_path() {
         .expect("should install");
     // Should not install package
     assert!(installs.reinstalls.is_empty());
-    assert!(installs.local.is_empty());
+    assert!(installs.cached.is_empty());
     assert!(installs.remote.is_empty());
 }
 

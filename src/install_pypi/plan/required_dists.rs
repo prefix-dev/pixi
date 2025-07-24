@@ -3,9 +3,9 @@
 //! This module provides functionality to convert PypiPackageData into Dist objects
 //! and manage them in a way that satisfies lifetime requirements for the install planner.
 
-use std::collections::HashMap;
 use std::path::Path;
 use std::str::FromStr;
+use std::{collections::HashMap, ops::Deref};
 
 use rattler_lock::PypiPackageData;
 use uv_distribution_types::Dist;
@@ -15,10 +15,10 @@ use crate::install_pypi::conversions::{ConvertToUvDistError, convert_to_dist};
 
 /// A collection of required distributions with their associated package data.
 /// This struct owns the Dist objects to ensure proper lifetimes for the install planner.
-pub struct RequiredDists {
+pub struct RequiredDists(
     /// Map from normalized package name to (PypiPackageData, Dist)
-    dists: HashMap<PackageName, (PypiPackageData, Dist)>,
-}
+    HashMap<PackageName, (PypiPackageData, Dist)>,
+);
 
 impl RequiredDists {
     /// Create a new RequiredDists from a slice of PypiPackageData and a lock file directory.
@@ -43,13 +43,13 @@ impl RequiredDists {
             dists.insert(uv_name, (pkg.clone(), dist));
         }
 
-        Ok(Self { dists })
+        Ok(Self(dists))
     }
 
     /// Get a reference map suitable for passing to InstallPlanner::plan().
     /// Returns a map where the values are references to the owned data.
     pub fn as_ref_map(&self) -> HashMap<PackageName, (&PypiPackageData, &Dist)> {
-        self.dists
+        self.0
             .iter()
             .map(|(name, (pkg, dist))| (name.clone(), (pkg, dist)))
             .collect()
@@ -57,6 +57,14 @@ impl RequiredDists {
 
     /// Get the number of required packages
     pub fn len(&self) -> usize {
-        self.dists.len()
+        self.0.len()
+    }
+}
+
+impl Deref for RequiredDists {
+    type Target = HashMap<PackageName, (PypiPackageData, Dist)>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }

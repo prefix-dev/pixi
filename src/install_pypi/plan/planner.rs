@@ -80,7 +80,7 @@ impl InstallPlanner {
         let required_dists_map = required_dists.as_ref_map();
 
         // Packages to be installed directly from the cache
-        let mut local = vec![];
+        let mut cached = vec![];
         // Try to install from the registry or direct url or w/e
         let mut remote = vec![];
         // Packages that need to be reinstalled
@@ -135,15 +135,16 @@ impl InstallPlanner {
                 // Use pre-created dist for cache resolution
                 // Okay so we need to re-install the package
                 // let's see if we need the remote or local version
-                installation_source::decide_installation_source(
+                let installation_sources = installation_source::decide_installation_source(
                     &self.uv_cache,
                     required_dist,
-                    &mut local,
-                    &mut remote,
                     &mut dist_cache,
                     Operation::Reinstall,
                 )
                 .map_err(InstallPlannerError::from)?;
+
+                cached.extend(installation_sources.cached);
+                remote.extend(installation_sources.remote);
             }
         }
 
@@ -156,15 +157,16 @@ impl InstallPlanner {
             // Use pre-created dist for cache resolution
             // Okay so we need to re-install the package
             // let's see if we need the remote or local version
-            installation_source::decide_installation_source(
+            let installation_sources = installation_source::decide_installation_source(
                 &self.uv_cache,
                 dist,
-                &mut local,
-                &mut remote,
                 &mut dist_cache,
                 Operation::Install,
             )
             .map_err(InstallPlannerError::from)?;
+
+            cached.extend(installation_sources.cached);
+            remote.extend(installation_sources.remote);
         }
 
         #[derive(Debug)]
@@ -243,7 +245,7 @@ impl InstallPlanner {
             });
 
         Ok(PyPIInstallationPlan {
-            local,
+            cached,
             remote,
             reinstalls,
             extraneous: extraneous.into_iter().flatten().collect(),
