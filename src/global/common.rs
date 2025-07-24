@@ -340,6 +340,19 @@ impl EnvironmentUpdate {
     pub fn add_removed_packages(&mut self, packages: Vec<PackageName>) {
         self.current_packages.extend(packages);
     }
+
+    /// Get only the package changes that were explicitly requested by the user.
+    /// This filters out transitive dependency changes to focus on user-installed packages.
+    pub fn user_requested_changes(
+        &self,
+        requested_packages: &[PackageName],
+    ) -> HashMap<PackageName, InstallChange> {
+        self.package_changes
+            .iter()
+            .filter(|(name, _)| requested_packages.contains(name))
+            .map(|(name, change)| (name.clone(), change.clone()))
+            .collect()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -387,22 +400,42 @@ impl StateChanges {
         }
     }
 
-    pub(crate) fn push_changes(
-        &mut self,
-        env_name: &EnvironmentName,
-        changes: impl IntoIterator<Item = StateChange>,
-    ) {
-        if let Some(entry) = self.changes.get_mut(env_name) {
-            entry.extend(changes);
-        } else {
-            self.changes
-                .insert(env_name.clone(), changes.into_iter().collect());
-        }
-    }
-
     #[cfg(test)]
     pub fn changes(self) -> HashMap<EnvironmentName, Vec<StateChange>> {
         self.changes
+    }
+
+    /// Get changes for a specific environment
+    pub(crate) fn changes_for_env(&self, env_name: &EnvironmentName) -> Option<&Vec<StateChange>> {
+        self.changes.get(env_name)
+    }
+
+    /// Convert user-requested install changes to AddedPackage state changes
+    pub(crate) async fn add_packages_from_install_changes(
+        &mut self,
+        env_name: &EnvironmentName,
+        user_requested_changes: HashMap<PackageName, InstallChange>,
+        project: &super::Project,
+    ) -> miette::Result<()> {
+        // Convert to StateChange::AddedPackage for packages that were installed or upgraded
+        for (package_name, install_change) in user_requested_changes {
+            if matches!(
+                install_change,
+                InstallChange::Installed(_)
+                    | InstallChange::Upgraded(_, _)
+                    | InstallChange::Reinstalled(_, _)
+            ) {
+                // Get the package record from the environment prefix
+                let prefix = project.environment_prefix(env_name).await?;
+                if let Ok(prefix_record) = prefix.find_designated_package(&package_name).await {
+                    self.insert_change(
+                        env_name,
+                        StateChange::AddedPackage(prefix_record.repodata_record.package_record),
+                    );
+                }
+            }
+        }
+        Ok(())
     }
 
     fn accumulate_changes<F, T>(
