@@ -2,6 +2,13 @@
 #include <SDL.h>
 
 int main( int argc, char* args[] ) {
+    if (argc > 1 && std::string(args[1]) == "-h") {
+        std::cout << "Usage: sdl-example [options]\n"
+                  << "A simple SDL example that creates a window and draws a square that follows the mouse cursor.\n"
+                  << "Options:\n"
+                  << "  -h    Show this help message\n";
+        return 0;
+    }
 
     // Initialize SDL
     if( SDL_Init( SDL_INIT_VIDEO ) < 0 )

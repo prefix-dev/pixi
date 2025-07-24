@@ -12,3 +12,4 @@ root = { path = "src/root" }
 
 [tasks]
 start = "python -c 'import root'"
+test = [{ task = "start" }]

@@ -55,6 +55,19 @@ impl CacheDirs {
         }
     }
 
+    /// Sets the directory where source builds
+    pub fn with_working_dirs(self, working_dirs: PathBuf) -> Self {
+        Self {
+            work_dirs: Some(working_dirs),
+            ..self
+        }
+    }
+
+    /// Sets the working directories for builds.
+    pub fn set_working_dirs(&mut self, working_dirs: PathBuf) {
+        self.work_dirs = Some(working_dirs);
+    }
+
     /// Returns the root directory for the cache.
     pub fn root(&self) -> &PathBuf {
         &self.root

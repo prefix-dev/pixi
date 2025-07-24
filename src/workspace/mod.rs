@@ -58,6 +58,7 @@ use crate::{
     diff::LockFileDiff,
     lock_file::filter_lock_file,
     repodata::Repodata,
+    variants::VariantConfig,
 };
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
@@ -462,6 +463,28 @@ impl Workspace {
                 workspace: self,
                 solve_group: group,
             })
+    }
+
+    /// Returns the resolved variant configuration for a given platform.
+    pub fn variants(&self, platform: Platform) -> VariantConfig {
+        let mut result = VariantConfig::new();
+
+        // Resolves from most specific to least specific.
+        for variants in self
+            .workspace
+            .value
+            .workspace
+            .build_variants
+            .resolve(Some(platform))
+            .flatten()
+        {
+            // Update the hash map, but only items that are not already in the map.
+            for (key, value) in variants {
+                result.entry(key.clone()).or_insert_with(|| value.clone());
+            }
+        }
+
+        result
     }
 
     // /// Returns the reqwest client used for http networking

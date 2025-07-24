@@ -9,7 +9,6 @@ use std::{
 use fs_err::tokio as tokio_fs;
 use pixi::{
     UpdateLockFileOptions, Workspace,
-    build::BuildContext,
     cli::{
         LockFileUsageConfig,
         cli_config::{LockFileUpdateConfig, WorkspaceConfig},
@@ -23,7 +22,7 @@ use pixi_config::{Config, DetachedEnvironments};
 use pixi_consts::consts;
 use pixi_manifest::{FeatureName, FeaturesExt};
 use pixi_record::PixiRecord;
-use rattler_conda_types::{ChannelConfig, Platform, RepoDataRecord};
+use rattler_conda_types::{Platform, RepoDataRecord};
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use tempfile::{TempDir, tempdir};
 use tokio::{fs, task::JoinSet};
@@ -958,8 +957,6 @@ async fn test_multiple_prefix_update() {
         channel: Some("https://repo.prefix.dev/conda-forge/".to_owned()),
     };
 
-    let tmp_dir = tempfile::tempdir().unwrap();
-
     let group = GroupedEnvironment::from(project.default_environment().clone());
 
     // Normally in pixi, the RAYON_INITIALIZE is lazily initialized by the reporter
@@ -976,16 +973,13 @@ async fn test_multiple_prefix_update() {
 
     let conda_prefix_updater = CondaPrefixUpdater::new(
         channels,
+        group.workspace().channel_config(),
         name,
         prefix,
         current_platform,
         virtual_packages,
-        BuildContext::new(
-            ChannelConfig::default_with_root_dir(tmp_dir.path().to_path_buf()),
-            Default::default(),
-            command_dispatcher,
-        )
-        .unwrap(),
+        group.workspace().variants(current_platform),
+        command_dispatcher,
     );
 
     let pixi_records = Vec::from([

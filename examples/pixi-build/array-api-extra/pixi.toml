@@ -8,6 +8,9 @@ version = "0.1.0"
 [dependencies]
 array-api-extra = { path = "." }
 
+[tasks]
+test = "python -c 'import array_api_extra'"
+
 [package]
 name = "array-api-extra"
 version = "0.8.0"
