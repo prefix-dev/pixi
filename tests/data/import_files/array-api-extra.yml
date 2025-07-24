@@ -1,5 +1,0 @@
-name: array-api-extra
-channels:
-  - conda-forge
-dependencies:
-  - array-api-extra

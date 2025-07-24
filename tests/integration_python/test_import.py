@@ -14,20 +14,41 @@ from .common import (
 
 
 class TestCondaEnv:
+    simple_env_yaml = {
+        "name": "simple-env",
+        "channels": ["conda-forge"],
+        "dependencies": ["python"],
+    }
+
+    cowpy_env_yaml = {
+        "name": "cowpy",
+        "channels": ["conda-forge"],
+        "dependencies": ["cowpy"],
+    }
+
+    noname_env_yaml = {
+        "channels": ["conda-forge"],
+        "dependencies": ["python"],
+    }
+
+    xpx_env_yaml = {
+        "name": "array-api-extra",
+        "channels": ["conda-forge"],
+        "dependencies": ["array-api-extra"],
+    }
+
+    complex_env_yaml = {
+        "name": "complex-env",
+        "channels": ["conda-forge", "bioconda"],
+        "dependencies": ["cowpy=1.1.4", "libblas=*=*openblas", "snakemake-minimal"],
+    }
+
     def test_import_invalid_format(self, pixi: Path, tmp_pixi_workspace: Path) -> None:
         manifest_path = tmp_pixi_workspace / "pixi.toml"
 
-        simple_env_yaml = """
-            name: simple-env
-            channels:
-            - conda-forge
-            dependencies:
-            - python
-        """.strip()
-
         import_file_path = tmp_pixi_workspace / "simple_environment.yml"
         with open(import_file_path, "w") as file:
-            yaml.dump(simple_env_yaml, file)
+            yaml.dump(self.simple_env_yaml, file)
 
         # Create a new project
         verify_cli_command([pixi, "init", tmp_pixi_workspace])
@@ -46,20 +67,12 @@ class TestCondaEnv:
             stderr_contains="invalid value 'foobar' for '--format <FORMAT>'",
         )
 
-    def test_import_conda_env(
-        self, pixi: Path, tmp_pixi_workspace: Path, import_files_dir: Path
-    ) -> None:
+    def test_import_conda_env(self, pixi: Path, tmp_pixi_workspace: Path) -> None:
         manifest_path = tmp_pixi_workspace / "pixi.toml"
-
-        simple_env_yaml = {
-            "name": "simple-env",
-            "channels": ["conda-forge"],
-            "dependencies": ["python"],
-        }
 
         import_file_path = tmp_pixi_workspace / "simple_environment.yml"
         with open(import_file_path, "w") as file:
-            yaml.dump(simple_env_yaml, file)
+            yaml.dump(self.simple_env_yaml, file)
 
         # Create a new project
         verify_cli_command([pixi, "init", tmp_pixi_workspace])
@@ -104,10 +117,13 @@ class TestCondaEnv:
             }
         )
 
-    def test_import_no_format(
-        self, pixi: Path, tmp_pixi_workspace: Path, import_files_dir: Path
-    ) -> None:
+    def test_import_no_format(self, pixi: Path, tmp_pixi_workspace: Path) -> None:
         manifest_path = tmp_pixi_workspace / "pixi.toml"
+
+        import_file_path = tmp_pixi_workspace / "simple_environment.yml"
+        with open(import_file_path, "w") as file:
+            yaml.dump(self.simple_env_yaml, file)
+
         # Create a new project
         verify_cli_command([pixi, "init", tmp_pixi_workspace])
 
@@ -118,7 +134,7 @@ class TestCondaEnv:
                 "import",
                 "--manifest-path",
                 manifest_path,
-                import_files_dir / "simple_environment.yml",
+                import_file_path,
             ],
         )
 
@@ -147,10 +163,13 @@ class TestCondaEnv:
             }
         )
 
-    def test_import_no_name(
-        self, pixi: Path, tmp_pixi_workspace: Path, import_files_dir: Path
-    ) -> None:
+    def test_import_no_name(self, pixi: Path, tmp_pixi_workspace: Path) -> None:
         manifest_path = tmp_pixi_workspace / "pixi.toml"
+
+        import_file_path = tmp_pixi_workspace / "noname.yml"
+        with open(import_file_path, "w") as file:
+            yaml.dump(self.noname_env_yaml, file)
+
         # Create a new project
         verify_cli_command([pixi, "init", tmp_pixi_workspace])
 
@@ -161,7 +180,7 @@ class TestCondaEnv:
                 "import",
                 "--manifest-path",
                 manifest_path,
-                import_files_dir / "noname.yml",
+                import_file_path,
             ],
             ExitCode.FAILURE,
             stderr_contains="Missing name: provide --feature or --environment, or set `name:`",
@@ -174,15 +193,18 @@ class TestCondaEnv:
                 "import",
                 "--manifest-path",
                 manifest_path,
-                import_files_dir / "noname.yml",
+                import_file_path,
                 "--feature=foobar",
             ],
         )
 
-    def test_import_platforms(
-        self, pixi: Path, tmp_pixi_workspace: Path, import_files_dir: Path
-    ) -> None:
+    def test_import_platforms(self, pixi: Path, tmp_pixi_workspace: Path) -> None:
         manifest_path = tmp_pixi_workspace / "pixi.toml"
+
+        import_file_path = tmp_pixi_workspace / "simple_environment.yml"
+        with open(import_file_path, "w") as file:
+            yaml.dump(self.simple_env_yaml, file)
+
         # Create a new project
         verify_cli_command([pixi, "init", tmp_pixi_workspace])
 
@@ -193,7 +215,7 @@ class TestCondaEnv:
                 "import",
                 "--manifest-path",
                 manifest_path,
-                import_files_dir / "simple_environment.yml",
+                import_file_path,
                 "--platform=linux-64",
             ],
         )
@@ -228,10 +250,13 @@ class TestCondaEnv:
             }
         )
 
-    def test_import_feature_environment(
-        self, pixi: Path, tmp_pixi_workspace: Path, import_files_dir: Path
-    ) -> None:
+    def test_import_feature_environment(self, pixi: Path, tmp_pixi_workspace: Path) -> None:
         manifest_path = tmp_pixi_workspace / "pixi.toml"
+
+        import_file_path = tmp_pixi_workspace / "simple_environment.yml"
+        with open(import_file_path, "w") as file:
+            yaml.dump(self.simple_env_yaml, file)
+
         # Create a new project
         verify_cli_command([pixi, "init", tmp_pixi_workspace])
 
@@ -243,7 +268,7 @@ class TestCondaEnv:
                 "import",
                 "--manifest-path",
                 manifest_path,
-                import_files_dir / "simple_environment.yml",
+                import_file_path,
             ],
         )
         parsed_manifest = tomllib.loads(manifest_path.read_text())
@@ -273,13 +298,17 @@ class TestCondaEnv:
         )
 
         # we can import into an existing feature
+        import_file_path = tmp_pixi_workspace / "cowpy.yml"
+        with open(import_file_path, "w") as file:
+            yaml.dump(self.cowpy_env_yaml, file)
+
         verify_cli_command(
             [
                 pixi,
                 "import",
                 "--manifest-path",
                 manifest_path,
-                import_files_dir / "cowpy.yml",
+                import_file_path,
                 "--feature=simple-env",
             ],
         )
@@ -310,13 +339,17 @@ class TestCondaEnv:
         )
 
         # we can create a new feature and add it to an existing environment
+        import_file_path = tmp_pixi_workspace / "array-api-extra.yml"
+        with open(import_file_path, "w") as file:
+            yaml.dump(self.xpx_env_yaml, file)
+
         verify_cli_command(
             [
                 pixi,
                 "import",
                 "--manifest-path",
                 manifest_path,
-                import_files_dir / "array-api-extra.yml",
+                import_file_path,
                 "--environment=simple-env",
                 "--feature=array-api-extra",
             ],
@@ -357,13 +390,14 @@ class TestCondaEnv:
         )
 
         # we can create a new feature (and a matching env by default)
+        import_file_path = tmp_pixi_workspace / "cowpy.yml"
         verify_cli_command(
             [
                 pixi,
                 "import",
                 "--manifest-path",
                 manifest_path,
-                import_files_dir / "cowpy.yml",
+                import_file_path,
                 "--feature=farm",
             ],
         )
@@ -402,13 +436,14 @@ class TestCondaEnv:
         )
 
         # we can create a new env (and a matching feature by default)
+        import_file_path = tmp_pixi_workspace / "array-api-extra.yml"
         verify_cli_command(
             [
                 pixi,
                 "import",
                 "--manifest-path",
                 manifest_path,
-                import_files_dir / "array-api-extra.yml",
+                import_file_path,
                 "--feature=data",
             ],
         )
@@ -448,10 +483,13 @@ class TestCondaEnv:
             }
         )
 
-    def test_import_channels_and_versions(
-        self, pixi: Path, tmp_pixi_workspace: Path, import_files_dir: Path
-    ) -> None:
+    def test_import_channels_and_versions(self, pixi: Path, tmp_pixi_workspace: Path) -> None:
         manifest_path = tmp_pixi_workspace / "pixi.toml"
+
+        import_file_path = tmp_pixi_workspace / "complex_environment.yml"
+        with open(import_file_path, "w") as file:
+            yaml.dump(self.complex_env_yaml, file)
+
         # Create a new project
         verify_cli_command([pixi, "init", tmp_pixi_workspace])
 
@@ -462,7 +500,7 @@ class TestCondaEnv:
                 "import",
                 "--manifest-path",
                 manifest_path,
-                import_files_dir / "complex_environment.yml",
+                import_file_path,
             ],
         )
         parsed_manifest = tomllib.loads(manifest_path.read_text())
