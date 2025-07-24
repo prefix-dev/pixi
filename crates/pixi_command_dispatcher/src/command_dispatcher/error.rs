@@ -103,8 +103,10 @@ pub trait CommandDispatcherErrorResultExt<T, E> {
     /// If this result is not canceled, returns the inner result type. Returns
     /// `None` if the error is [`CommandDispatcherError`].
     fn into_ok_or_failed(self) -> Option<Result<T, E>>;
-}
 
+    /// Convert the result into a `Result<T, E>` if it is not canceled.
+    fn try_into_failed(self) -> Result<Result<T, E>, CommandDispatcherError<E>>;
+}
 impl<T, E> CommandDispatcherErrorResultExt<T, E> for Result<T, CommandDispatcherError<E>> {
     fn map_err_with<U, F: FnOnce(E) -> U>(self, fun: F) -> Result<T, CommandDispatcherError<U>> {
         self.map_err(|err| err.map(fun))
@@ -115,6 +117,14 @@ impl<T, E> CommandDispatcherErrorResultExt<T, E> for Result<T, CommandDispatcher
             Ok(ok) => Some(Ok(ok)),
             Err(CommandDispatcherError::Cancelled) => None,
             Err(CommandDispatcherError::Failed(err)) => Some(Err(err)),
+        }
+    }
+
+    fn try_into_failed(self) -> Result<Result<T, E>, CommandDispatcherError<E>> {
+        match self {
+            Ok(ok) => Ok(Ok(ok)),
+            Err(CommandDispatcherError::Cancelled) => Err(CommandDispatcherError::Cancelled),
+            Err(CommandDispatcherError::Failed(err)) => Ok(Err(err)),
         }
     }
 }

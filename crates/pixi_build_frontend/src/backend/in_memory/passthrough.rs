@@ -1,8 +1,11 @@
+use std::{collections::BTreeSet, path::PathBuf};
+
 use ordermap::OrderMap;
 use pixi_build_types::{
     BackendCapabilities, NamedSpecV1, PackageSpecV1, ProjectModelV1, SourcePackageName,
     TargetSelectorV1, TargetV1, TargetsV1, VersionedProjectModel,
     procedures::{
+        conda_build_v1::{CondaBuildV1Params, CondaBuildV1Result},
         conda_outputs::{
             CondaOutput, CondaOutputDependencies, CondaOutputMetadata, CondaOutputsParams,
             CondaOutputsResult,
@@ -10,9 +13,11 @@ use pixi_build_types::{
         initialize::InitializeParams,
     },
 };
-use rattler_conda_types::{NoArchType, Platform, Version};
+use rattler_conda_types::{Platform, Version, package::IndexJson};
+use serde::Deserialize;
 
 use crate::{
+    BackendOutputStream,
     error::BackendError,
     in_memory::{InMemoryBackend, InMemoryBackendInstantiator},
     json_rpc::CommunicationError,
@@ -26,6 +31,9 @@ const BACKEND_NAME: &str = "passthrough";
 /// any actual building or processing of the project model.
 pub struct PassthroughBackend {
     project_model: ProjectModelV1,
+    config: PassthroughBackendConfig,
+    source_dir: PathBuf,
+    index_json: Option<IndexJson>,
 }
 
 impl PassthroughBackend {
@@ -40,6 +48,7 @@ impl InMemoryBackend for PassthroughBackend {
     fn capabilities(&self) -> BackendCapabilities {
         BackendCapabilities {
             provides_conda_outputs: Some(true),
+            provides_conda_build_v1: Some(true),
             ..BackendCapabilities::default()
         }
     }
@@ -59,15 +68,34 @@ impl InMemoryBackend for PassthroughBackend {
                     version: self
                         .project_model
                         .version
-                        .clone()
+                        .as_ref()
+                        .or_else(|| self.index_json.as_ref().map(|j| j.version.version()))
+                        .cloned()
                         .unwrap_or_else(|| Version::major(0))
                         .into(),
-                    build: String::new(),
-                    build_number: 0,
-                    subdir: Platform::NoArch,
+                    build: self
+                        .index_json
+                        .as_ref()
+                        .map(|j| j.build.clone())
+                        .unwrap_or_default(),
+                    build_number: self
+                        .index_json
+                        .as_ref()
+                        .map(|j| j.build_number)
+                        .unwrap_or_default(),
+                    subdir: self
+                        .index_json
+                        .as_ref()
+                        .and_then(|j| j.subdir.as_deref())
+                        .map(|subdir| subdir.parse().unwrap())
+                        .unwrap_or(Platform::NoArch),
                     license: self.project_model.license.clone(),
                     license_family: None,
-                    noarch: NoArchType::generic(),
+                    noarch: self
+                        .index_json
+                        .as_ref()
+                        .map(|j| j.noarch)
+                        .unwrap_or_default(),
                     purls: None,
                     python_site_packages_path: None,
                     variant: Default::default(),
@@ -92,6 +120,38 @@ impl InMemoryBackend for PassthroughBackend {
                 input_globs: None,
             }],
             input_globs: Default::default(),
+        })
+    }
+
+    fn conda_build_v1(
+        &self,
+        params: CondaBuildV1Params,
+        _output_stream: &(dyn BackendOutputStream + Send + 'static),
+    ) -> Result<CondaBuildV1Result, CommunicationError> {
+        let (Some(index_json), Some(package)) = (&self.index_json, &self.config.package) else {
+            return Err(
+                BackendError::new("no 'package' configured for passthrough backend").into(),
+            );
+        };
+        let absolute_path = self.source_dir.join(package);
+        let output_file = params
+            .output_directory
+            .unwrap_or(params.work_directory)
+            .join(package);
+        fs_err::copy(absolute_path, &output_file).unwrap();
+
+        Ok(CondaBuildV1Result {
+            output_file,
+            input_globs: self.config.build_globs.clone().unwrap_or_default(),
+            name: index_json.name.as_normalized().to_owned(),
+            version: index_json.version.clone(),
+            build: index_json.build.clone(),
+            subdir: index_json
+                .subdir
+                .as_ref()
+                .expect("missing subdir in index.json")
+                .parse()
+                .expect("invalid subdir in index.json"),
         })
     }
 }
@@ -158,10 +218,51 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
                 )));
             }
         };
-        Ok(PassthroughBackend { project_model })
+
+        let config = match params.configuration {
+            Some(config) => serde_json::from_value(config).expect("Failed to parse configuration"),
+            None => PassthroughBackendConfig::default(),
+        };
+
+        // Read the package file if it is specified
+        let source_dir = params.source_dir.expect("Missing source directory");
+        let index_json = match &config.package {
+            Some(path) => {
+                let path = source_dir.join(path);
+                match rattler_package_streaming::seek::read_package_file(&path) {
+                    Err(err) => {
+                        return Err(BackendError::new(format!(
+                            "failed to read '{}' file: {}",
+                            path.display(),
+                            err
+                        ))
+                        .into());
+                    }
+                    Ok(index_json) => Some(index_json),
+                }
+            }
+            None => None,
+        };
+
+        Ok(PassthroughBackend {
+            project_model,
+            config,
+            source_dir,
+            index_json,
+        })
     }
 
     fn identifier(&self) -> &str {
         BACKEND_NAME
     }
+}
+
+#[derive(Default, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct PassthroughBackendConfig {
+    /// The path to a pre-build conda package.
+    pub package: Option<PathBuf>,
+
+    /// Build globs
+    pub build_globs: Option<BTreeSet<String>>,
 }
