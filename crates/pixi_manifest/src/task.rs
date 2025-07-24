@@ -876,6 +876,8 @@ impl From<Task> for Item {
 
 #[cfg(test)]
 mod tests {
+    use crate::task::{Alias, Dependency, DependencyArg, Task};
+
     use super::quote;
 
     #[test]
@@ -891,5 +893,21 @@ mod tests {
             "PATH=\"$PATH;build/Debug\""
         );
         assert_eq!(quote("name=[64,64]"), "\"name=[64,64]\"");
+    }
+
+    #[test]
+    fn test_table_from_dependency_args() {
+        let positional_arg = DependencyArg::Positional("foo".into());
+        let named_arg = DependencyArg::Named("bar".into(), "baz".into());
+        let args = vec![positional_arg, named_arg];
+        let dep = Dependency::new("depTask", Some(args), None);
+        let alias = Alias {
+            depends_on: vec![dep],
+            description: None,
+            args: None,
+        };
+        let task = Task::Alias(alias);
+        let toml = toml_edit::Item::from(task);
+        println!("{:#?}", toml);
     }
 }
