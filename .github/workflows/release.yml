@@ -75,7 +75,7 @@ jobs:
         with:
           crate: dist
           git: https://github.com/ruben-arts/cargo-dist.git
-          rev: eff7ec08d10db4c04f163def5ecbc04b2b7b8329
+          rev: 6f945d0efcaeabb0fc3e3472330bb7a294f80d29
 
       - uses: prefix-dev/setup-pixi@main
         with:
@@ -152,7 +152,7 @@ jobs:
         with:
           crate: dist
           git: https://github.com/ruben-arts/cargo-dist.git
-          rev: eff7ec08d10db4c04f163def5ecbc04b2b7b8329
+          rev: 6f945d0efcaeabb0fc3e3472330bb7a294f80d29
 
       - name: Install cargo-zigbuild
         # Only install on non windows platforms
