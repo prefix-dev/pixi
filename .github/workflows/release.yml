@@ -156,7 +156,7 @@ jobs:
 
       - name: Install cargo-zigbuild
         # Only install on non windows platforms
-        if: ${{ matrix.runner != 'Windows' }}
+        if: ${{ contains(matrix.runner, 'windows') == false }}
         uses: baptiste0928/cargo-install@e38323ef017552d7f7af73a3f4db467f278310ed # v3
         with:
           crate: cargo-zigbuild
