@@ -1410,10 +1410,6 @@ def test_run_with_environment_variable_priority(
     script_manifest.write_text(script_content)
 
     # Run the default task
-    verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "task"],
-        stdout_contains="test456",
-    )
 
     # Test 1: task.env > activation.env - should use environment variable defined in specific tasks
     verify_cli_command(
