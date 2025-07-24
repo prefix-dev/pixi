@@ -451,7 +451,7 @@ impl<'p> TaskGraph<'p> {
                     seen_named = true;
                     named_args.push((name.to_string(), value.to_string()));
                 }
-                _ => {
+                TypedDependencyArg::Positional(_) => {
                     if seen_named {
                         // TODO: make an error variant for this
                         return Err(TaskGraphError::TooManyArguments(

@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use itertools::Itertools;
 use pixi_toml::{TomlFromStr, TomlIndexMap};
 use toml_span::{
     DeserError, ErrorKind, Value,
@@ -81,24 +82,14 @@ impl<'de> toml_span::Deserialize<'de> for DependencyArg {
                 s.into_owned(),
             ))),
             ValueInner::Table(table) => {
-                if table.len() != 1 {
-                    return Err(DeserError::from(toml_span::Error {
-                        kind: ErrorKind::Custom(
-                            "expected exactly one key in named argument".into(),
-                        ),
-                        span: value.span,
-                        line_info: None,
-                    }));
-                }
-
-                let (k, mut v) = table.into_iter().next().unwrap();
+                let (k, mut v) = table.into_iter().exactly_one().unwrap();
                 let inner = v.take_string(None)?;
                 Ok(DependencyArg::Named(
                     k.to_string(),
                     TemplateString::new(inner.into_owned()),
                 ))
             }
-            other => Err(expected("string or {string = string}", other, value.span).into()),
+            other => Err(expected("string or { string = string }", other, value.span).into()),
         }
     }
 }
