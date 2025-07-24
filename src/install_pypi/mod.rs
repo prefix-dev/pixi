@@ -206,7 +206,7 @@ impl<'a> PyPIPrefixUpdaterBuilder<'a> {
             &self.config_settings,
         );
 
-        // Partition into those that should be linked from the cache (`local`), those
+        // Partition into those that should be linked from the cache (`cached`), those
         // that need to be downloaded (`remote`)
         let installation_plan =
             InstallPlanner::new(self.uv_context.cache.clone(), &self.lock_file_dir)
@@ -354,7 +354,7 @@ impl PyPIPrefixUpdater {
 
         let start = std::time::Instant::now();
         let PyPIInstallationPlan {
-            cached: local,
+            cached,
             remote,
             reinstalls,
             extraneous,
@@ -363,7 +363,7 @@ impl PyPIPrefixUpdater {
 
         // Nothing to do.
         if remote.is_empty()
-            && local.is_empty()
+            && cached.is_empty()
             && reinstalls.is_empty()
             && extraneous.is_empty()
             && duplicates.is_empty()
@@ -376,7 +376,7 @@ impl PyPIPrefixUpdater {
         }
 
         // Log installation details for debugging
-        self.log_installation_details(local, remote, reinstalls, extraneous, duplicates);
+        self.log_installation_details(cached, remote, reinstalls, extraneous, duplicates);
 
         // Download, build, and unzip any missing distributions.
         let remote_dists = if remote.is_empty() {
@@ -395,10 +395,10 @@ impl PyPIPrefixUpdater {
 
         // Install the resolved distributions.
         // At this point we have all the wheels we need to install available to link locally
-        let local_dists = local.iter().map(|(d, _)| d.clone());
+        let cached_dists = cached.iter().map(|(d, _)| d.clone());
         let all_dists = remote_dists
             .into_iter()
-            .chain(local_dists)
+            .chain(cached_dists)
             .collect::<Vec<_>>();
 
         self.check_and_warn_about_conflicts(&all_dists, reinstalls)
@@ -413,7 +413,7 @@ impl PyPIPrefixUpdater {
     /// Log any interesting installation details.
     fn log_installation_details(
         &self,
-        local: &[(CachedDist, InstallReason)],
+        cached: &[(CachedDist, InstallReason)],
         remote: &[(Dist, InstallReason)],
         reinstalls: &[(InstalledDist, NeedReinstall)],
         extraneous: &[InstalledDist],
@@ -427,9 +427,9 @@ impl PyPIPrefixUpdater {
 
         // Filter out the re-installs, mostly these are less interesting than the actual
         // re-install reasons do show the installs
-        for (dist, reason) in local.iter() {
+        for (dist, reason) in cached.iter() {
             match reason {
-                InstallReason::InstallStaleLocal => install_stale.push(dist.name().to_string()),
+                InstallReason::InstallStaleCached => install_stale.push(dist.name().to_string()),
                 InstallReason::InstallMissing => install_missing.push(dist.name().to_string()),
                 InstallReason::InstallCached => install_cached.push(dist.name().to_string()),
                 _ => {}
@@ -444,7 +444,7 @@ impl PyPIPrefixUpdater {
         }
         for (dist, reason) in remote.iter() {
             match reason {
-                InstallReason::InstallStaleLocal => install_stale.push(name_and_version(dist)),
+                InstallReason::InstallStaleCached => install_stale.push(name_and_version(dist)),
                 InstallReason::InstallMissing => install_missing.push(name_and_version(dist)),
                 InstallReason::InstallCached => install_cached.push(name_and_version(dist)),
                 _ => {}
@@ -459,7 +459,7 @@ impl PyPIPrefixUpdater {
         }
         if !install_stale.is_empty() {
             tracing::debug!(
-                "*installing* from remote because local version is stale: {}",
+                "*installing* from remote because cached version is stale: {}",
                 install_stale.iter().join(", ")
             );
         }

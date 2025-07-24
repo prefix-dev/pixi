@@ -32,7 +32,7 @@ impl Operation {
     /// Get the InstallReason for when a package is stale and needs remote fetch
     pub fn stale(self) -> InstallReason {
         match self {
-            Operation::Install => InstallReason::InstallStaleLocal,
+            Operation::Install => InstallReason::InstallStaleCached,
             Operation::Reinstall => InstallReason::ReinstallStaleLocal,
         }
     }
@@ -63,7 +63,7 @@ impl InstallationSources {
         }
     }
 
-    pub fn add_local(&mut self, cached_dist: &CachedDist, reason: InstallReason) {
+    pub fn add_cached(&mut self, cached_dist: &CachedDist, reason: InstallReason) {
         self.cached.push((cached_dist.clone(), reason));
     }
 
@@ -96,7 +96,7 @@ pub fn decide_installation_source<'a>(
     // Check if the distribution is cached
     match dist_cache.is_cached(dist, uv_cache)? {
         Some(cached_dist) => {
-            installation_sources.add_local(&cached_dist, operation.cached());
+            installation_sources.add_cached(&cached_dist, operation.cached());
         }
         None => {
             installation_sources.add_remote(dist, operation.missing());
