@@ -16,6 +16,7 @@ This release contains loads of bug fixes and refactors, primarily to make `pixi 
 - Add `conda/outputs` and `conda/build_v2` backend protocol by @baszalmstra in [#4118](https://github.com/prefix-dev/pixi/pull/4118)
 - Add cyclic dependency support by @baszalmstra in [#4143](https://github.com/prefix-dev/pixi/pull/4143)
 - Rebuild source package if a build dependency changed by @baszalmstra in [#4171](https://github.com/prefix-dev/pixi/pull/4171)
+- Add `pypi-options.dependency-overrides` to override pypi dependencies by @HernandoR  in [#3948](https://github.com/prefix-dev/pixi/pull/3948)
 
 #### Changed
 
