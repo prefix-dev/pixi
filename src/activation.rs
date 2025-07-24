@@ -303,7 +303,7 @@ pub async fn run_activation(
             None,
         );
 
-        // Activator.env_vars should override activator_result for duplicate keys
+        // `activator.env_vars` should override `activator_result` for duplicate keys
         new_activator.map(|mut map| {
             for (k, v) in &activator.env_vars {
                 map.insert(k.clone(), v.clone());
