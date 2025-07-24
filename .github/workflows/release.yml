@@ -147,12 +147,13 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Install cached dist
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      # Use fork of dist to allow for binaries in the root of the tarball
+      - name: Install cargo-dist from git
+        uses: baptiste0928/cargo-install@e38323ef017552d7f7af73a3f4db467f278310ed # v3
         with:
-          name: cargo-dist-cache
-          path: ~/.cargo/bin/
-      - run: chmod +x ~/.cargo/bin/dist
+          crate: dist
+          git: https://github.com/ruben-arts/cargo-dist.git
+          rev: 6f945d0efcaeabb0fc3e3472330bb7a294f80d29
 
       - name: Install cargo-zigbuild
         # Only install on non windows platforms
