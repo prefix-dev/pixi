@@ -33,7 +33,7 @@ def test_install_git_repository_basic(
 
     # Create git repository and start daemon
     git_repo = git_test_repo(source_project, "test-project")
-    git_url = git_repo.start_daemon()
+    git_url = git_repo.get_git_url()
 
     # Test git install
     verify_cli_command(
@@ -69,7 +69,7 @@ def test_install_git_repository_with_custom_environment(
 
     # Create git repository and start daemon
     git_repo = git_test_repo(source_project, "simple-project")
-    git_url = git_repo.start_daemon()
+    git_url = git_repo.get_git_url()
 
     verify_cli_command(
         [
@@ -108,7 +108,7 @@ def test_install_git_repository_with_expose(
 
     # Create git repository and start daemon
     git_repo = git_test_repo(source_project, "expose-test")
-    git_url = git_repo.start_daemon()
+    git_url = git_repo.get_git_url()
 
     verify_cli_command(
         [
