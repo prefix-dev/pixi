@@ -393,7 +393,7 @@ fn get_output_writer_and_handle() -> (ShellPipeWriter, JoinHandle<String>) {
     (writer, handle)
 }
 
-/// Get the environment variable based on their priority
+/// Get the environment variables based on their priority
 fn get_export_specific_task_env(task: &Task, command_env: IndexMap<String, String>) -> String {
     // Early return if task.env() is empty
     if task.env().is_none_or(|map| map.is_empty()) {
