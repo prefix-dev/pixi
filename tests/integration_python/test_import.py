@@ -1,5 +1,7 @@
-from pathlib import Path
+import os
 import tomllib
+
+from pathlib import Path
 
 from dirty_equals import AnyThing
 from inline_snapshot import snapshot
@@ -75,7 +77,7 @@ class TestCondaEnv:
         )
 
         # check that no environments are installed
-        verify_cli_command(["ls", tmp_pixi_workspace / ".pixi/envs"], ExitCode.FAILURE)
+        assert not os.path.isdir(tmp_pixi_workspace / ".pixi/envs")
 
         parsed_manifest = tomllib.loads(manifest_path.read_text())
         assert "python" in parsed_manifest["feature"]["simple-env"]["dependencies"]
