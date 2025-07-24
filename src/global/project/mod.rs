@@ -1167,7 +1167,6 @@ impl Project {
         Ok(state_changes)
     }
 
-
     /// Install shortcuts of a specific environment
     pub async fn sync_shortcuts(&self, env_name: &EnvironmentName) -> miette::Result<StateChanges> {
         let mut state_changes = StateChanges::default();
