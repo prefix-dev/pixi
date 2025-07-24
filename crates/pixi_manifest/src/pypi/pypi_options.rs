@@ -464,7 +464,7 @@ mod tests {
             ]),
             index_strategy: None,
             no_build: None,
-            dependency_overrides:Some(IndexMap::from_iter([
+            dependency_overrides: Some(IndexMap::from_iter([
                 (
                     "pkg1".parse().unwrap(),
                     PixiPypiSpec::RawVersion("==1.0.0".parse().unwrap()),

@@ -80,7 +80,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         environment_update.user_requested_changes(&requested_package_names);
 
                     // Convert to StateChange::AddedPackage for packages that were installed or upgraded
-                    state_changes.add_packages_from_install_changes(env_name, user_requested_changes, project).await?;
+                    state_changes
+                        .add_packages_from_install_changes(
+                            env_name,
+                            user_requested_changes,
+                            project,
+                        )
+                        .await?;
                     break;
                 }
             }
