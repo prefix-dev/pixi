@@ -1,5 +1,5 @@
 //! This module makes it a bit easier to pass around a package name and the pixi specification
-use pixi_spec::{PixiSpec, SpecConversionError};
+use pixi_spec::PixiSpec;
 use rattler_conda_types::{MatchSpec, NamelessMatchSpec, PackageName, ParseStrictness};
 
 /// The encapsulation of a package name and its associated
@@ -37,11 +37,6 @@ impl NamedGlobalSpec {
         &self.spec
     }
 
-    /// Converts into tuple of (name, spec).
-    pub fn into_tuple(self) -> (PackageName, PixiSpec) {
-        (self.name, self.spec)
-    }
-
     /// Convert from a &str and a ChannelConfig into a [`NamedGlobalSpec`].
     pub fn try_from_str(
         spec_str: &str,
@@ -65,15 +60,6 @@ impl NamedGlobalSpec {
         } else {
             Err(FromMatchSpecError::NameRequired(Box::new(nameless_spec)))
         }
-    }
-
-    pub fn try_into_matchspec(
-        self,
-        channel_config: &rattler_conda_types::ChannelConfig,
-    ) -> Result<Option<MatchSpec>, SpecConversionError> {
-        let (name, pixi_spec) = self.into_tuple();
-        let nameless_spec = pixi_spec.try_into_nameless_match_spec(channel_config)?;
-        Ok(nameless_spec.map(|spec| MatchSpec::from_nameless(spec, Some(name))))
     }
 }
 

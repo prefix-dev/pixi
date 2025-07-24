@@ -37,7 +37,6 @@ use rattler_conda_types::{
     ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, PrefixRecord,
     menuinst::MenuMode,
 };
-use rattler_lock::Matches;
 use rattler_repodata_gateway::Gateway;
 // Removed unused rattler_solve imports
 use rattler_virtual_packages::{
@@ -1168,37 +1167,6 @@ impl Project {
         Ok(state_changes)
     }
 
-    // Figure which packages have been added
-    pub async fn added_packages(
-        &self,
-        specs: &[NamedGlobalSpec],
-        env_name: &EnvironmentName,
-        channel_config: &ChannelConfig,
-    ) -> miette::Result<StateChanges> {
-        // TODO: now just matching binary specs, we need to integrate source specs instead
-        // I think we can just remove this function and couple it to the transaction instead
-        let mut state_changes = StateChanges::default();
-        let match_specs = specs
-            .iter()
-            .filter_map(|s| s.clone().try_into_matchspec(channel_config).ok().flatten())
-            .collect_vec();
-
-        state_changes.push_changes(
-            env_name,
-            self.environment_prefix(env_name)
-                .await?
-                .find_installed_packages()?
-                .into_iter()
-                .filter(|r| {
-                    match_specs
-                        .iter()
-                        .any(|spec| spec.matches(&r.repodata_record))
-                })
-                .map(|r| r.repodata_record.package_record)
-                .map(StateChange::AddedPackage),
-        );
-        Ok(state_changes)
-    }
 
     /// Install shortcuts of a specific environment
     pub async fn sync_shortcuts(&self, env_name: &EnvironmentName) -> miette::Result<StateChanges> {

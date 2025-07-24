@@ -233,7 +233,7 @@ async fn setup_environment(
     }
 
     // Installing the environment to be able to find the bin paths later
-    let _ = project.install_environment(env_name).await?;
+    let environment_update = project.install_environment(env_name).await?;
 
     // Sync exposed name
     sync_exposed_names(env_name, project, args).await?;
@@ -251,13 +251,14 @@ async fn setup_environment(
     }
 
     // Figure out added packages and their corresponding versions
-    state_changes |= project
-        .added_packages(
-            &packages_to_add.into_iter().cloned().collect_vec(),
-            env_name,
-            project.global_channel_config(),
-        )
-        .await?;
+    let requested_package_names: Vec<_> = packages_to_add
+        .iter()
+        .map(|spec| spec.name().clone())
+        .collect();
+    let user_requested_changes = environment_update.user_requested_changes(&requested_package_names);
+    
+    // Convert to StateChange::AddedPackage for packages that were installed or upgraded
+    state_changes.add_packages_from_install_changes(env_name, user_requested_changes, project).await?;
 
     // Expose executables of the new environment
     state_changes |= project
