@@ -67,8 +67,10 @@ use crate::{
 };
 
 mod environment;
+mod global_spec;
 mod manifest;
 mod parsed_manifest;
+pub use global_spec::{FromMatchSpecError, GlobalSpec, NamedGlobalSpec};
 
 pub(crate) const MANIFESTS_DIR: &str = "manifests";
 
@@ -486,6 +488,10 @@ impl Project {
         &self.config
     }
 
+    pub(crate) fn global_channel_config(&self) -> &ChannelConfig {
+        self.config.global_channel_config()
+    }
+
     pub(crate) async fn install_environment(
         &self,
         env_name: &EnvironmentName,
@@ -582,6 +588,8 @@ impl Project {
                 variants: None,
             })
             .await?;
+
+        command_dispatcher.clear_reporter().await;
 
         let install_changes = get_install_changes(result.transaction);
         Ok(EnvironmentUpdate::new(install_changes, dependencies_names))
@@ -1090,17 +1098,29 @@ impl Project {
     // Figure which packages have been added
     pub async fn added_packages(
         &self,
-        specs: Vec<MatchSpec>,
+        specs: &[NamedGlobalSpec],
         env_name: &EnvironmentName,
+        channel_config: &ChannelConfig,
     ) -> miette::Result<StateChanges> {
+        // TODO: now just matching binary specs, we need to integrate source specs instead
+        // I think we can just remove this function and couple it to the transaction instead
         let mut state_changes = StateChanges::default();
+        let match_specs = specs
+            .iter()
+            .filter_map(|s| s.clone().try_into_matchspec(channel_config).ok().flatten())
+            .collect_vec();
+
         state_changes.push_changes(
             env_name,
             self.environment_prefix(env_name)
                 .await?
                 .find_installed_packages()?
                 .into_iter()
-                .filter(|r| specs.iter().any(|s| s.matches(&r.repodata_record)))
+                .filter(|r| {
+                    match_specs
+                        .iter()
+                        .any(|spec| spec.matches(&r.repodata_record))
+                })
                 .map(|r| r.repodata_record.package_record)
                 .map(StateChange::AddedPackage),
         );

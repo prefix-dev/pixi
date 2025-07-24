@@ -357,7 +357,7 @@ impl WorkspaceMut {
             uv_context,
             updated_conda_prefixes,
             updated_pypi_prefixes,
-            build_context,
+            command_dispatcher,
             glob_hash_cache,
             io_concurrency_limit,
             was_outdated: _,
@@ -411,7 +411,7 @@ impl WorkspaceMut {
             updated_pypi_prefixes,
             uv_context,
             io_concurrency_limit,
-            build_context,
+            command_dispatcher,
             glob_hash_cache,
             was_outdated: true,
         };

@@ -58,6 +58,7 @@ impl EventTree {
         let mut build_backend_metadata_label = HashMap::new();
         let mut source_metadata_label = HashMap::new();
         let mut source_build_label = HashMap::new();
+        let mut backend_source_build_labels = HashMap::new();
         let mut instantiate_tool_env_label = HashMap::new();
 
         for event in events {
@@ -154,11 +155,7 @@ impl EventTree {
                 Event::SourceBuildQueued { id, context, spec } => {
                     source_build_label.insert(
                         *id,
-                        format!(
-                            "{} @ {}",
-                            spec.source.package_record.name.as_source(),
-                            spec.source.source
-                        ),
+                        format!("{} @ {}", spec.package.name.as_source(), spec.source),
                     );
                     builder.set_event_parent((*id).into(), *context);
                 }
@@ -169,11 +166,22 @@ impl EventTree {
                     );
                 }
                 Event::SourceBuildFinished { .. } => {}
-                Event::BackendSourceBuildQueued { id, context } => {
+                Event::BackendSourceBuildQueued {
+                    id,
+                    package,
+                    context,
+                } => {
+                    backend_source_build_labels.insert(*id, package.name.as_source().to_owned());
                     builder.set_event_parent((*id).into(), *context);
                 }
                 Event::BackendSourceBuildStarted { id } => {
-                    builder.alloc_node((*id).into(), String::from("Backend source build"));
+                    builder.alloc_node(
+                        (*id).into(),
+                        format!(
+                            "Backend source build ({})",
+                            backend_source_build_labels.get(id).unwrap()
+                        ),
+                    );
                 }
                 Event::BackendSourceBuildFinished { .. } => {}
                 Event::InstantiateToolEnvQueued { id, context, spec } => {

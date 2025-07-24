@@ -25,6 +25,11 @@ tokio = { workspace = true, features = ["process", "io-std"] }
 tokio-util = { workspace = true, features = ["codec"] }
 tracing = { workspace = true }
 
+rattler_package_streaming = { workspace = true, optional = true }
+
+[features]
+passthrough_backend = ["rattler_package_streaming"]
+
 
 [dev-dependencies]
 tokio = { workspace = true, features = [

@@ -265,11 +265,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .await?;
 
                 // Clear the current progress reports.
-                lock_file
-                    .build_context
-                    .command_dispatcher()
-                    .clear_reporter()
-                    .await;
+                lock_file.command_dispatcher.clear_reporter().await;
 
                 let command_env = get_task_env(
                     &executable_task.run_environment,
