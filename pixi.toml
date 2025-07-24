@@ -231,6 +231,9 @@ cmd = "rattler-build build --recipe-dir empty --output-dir ."
 cwd = "tests/build-backends"
 description = "Build build-backends used for testing purposes"
 
+[feature.dist.dependencies]
+zig = ">=0.14.0,<0.15"
+
 #
 # Environment descriptions
 #
@@ -243,6 +246,7 @@ default = { features = [
   "pytest",
   "rust",
 ], solve-group = "default" }
+dist = { features = ["dist"], no-default-feature = true }
 docs = { features = [
   "docs",
 ], no-default-feature = true, solve-group = "default" }
