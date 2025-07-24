@@ -1,7 +1,9 @@
 use std::{hash::Hash, path::PathBuf};
 
+use indexmap::IndexMap;
 use indexmap::IndexSet;
 use pep508_rs::PackageName;
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use serde::{Serialize, Serializer, ser::SerializeSeq};
 use thiserror::Error;
 use url::Url;
@@ -133,6 +135,8 @@ pub struct PypiOptions {
     pub index_strategy: Option<IndexStrategy>,
     /// Don't build sdist for all or certain packages
     pub no_build: Option<NoBuild>,
+    /// Dependency overrides
+    pub dependency_overrides: Option<IndexMap<PypiPackageName, PixiPypiSpec>>,
     /// Don't use pre-built wheels all or certain packages
     pub no_binary: Option<NoBinary>,
 }
@@ -151,6 +155,7 @@ fn clone_and_deduplicate<'a, I: Iterator<Item = &'a T>, T: Clone + Eq + Hash + '
 }
 
 impl PypiOptions {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         index: Option<Url>,
         extra_indexes: Option<Vec<Url>>,
@@ -158,6 +163,7 @@ impl PypiOptions {
         no_build_isolation: NoBuildIsolation,
         index_strategy: Option<IndexStrategy>,
         no_build: Option<NoBuild>,
+        dependency_overrides: Option<IndexMap<PypiPackageName, PixiPypiSpec>>,
         no_binary: Option<NoBinary>,
     ) -> Self {
         Self {
@@ -167,6 +173,7 @@ impl PypiOptions {
             no_build_isolation,
             index_strategy,
             no_build,
+            dependency_overrides,
             no_binary,
         }
     }
@@ -271,6 +278,21 @@ impl PypiOptions {
             (None, Some(b)) => Some(b.clone()),
             (None, None) => None,
         };
+        // Set the dependency overrides
+        // notice that default feature comes last in the feature_ext
+        // so we want self overwriting the other
+        // i.e. if same key exists in both, we want the value from `self` to be used
+        // so we extend b with a (a overrides b)
+        let dependency_overrides = match (&self.dependency_overrides, &other.dependency_overrides) {
+            (Some(a), Some(b)) => {
+                let mut overrides = b.clone();
+                overrides.extend(a.into_iter().map(|(k, v)| (k.clone(), v.clone())));
+                Some(overrides)
+            }
+            (Some(a), None) => Some(a.clone()),
+            (None, Some(b)) => Some(b.clone()),
+            (None, None) => None,
+        };
 
         // Set the no-binary option
         let no_binary = match (self.no_binary.as_ref(), other.no_binary.as_ref()) {
@@ -287,6 +309,7 @@ impl PypiOptions {
             no_build_isolation,
             index_strategy,
             no_build,
+            dependency_overrides,
             no_binary,
         })
     }
@@ -441,6 +464,16 @@ mod tests {
             ]),
             index_strategy: None,
             no_build: None,
+            dependency_overrides:Some(IndexMap::from_iter([
+                (
+                    "pkg1".parse().unwrap(),
+                    PixiPypiSpec::RawVersion("==1.0.0".parse().unwrap()),
+                ),
+                (
+                    "pkg2".parse().unwrap(),
+                    PixiPypiSpec::RawVersion("==2.0.0".parse().unwrap()),
+                ),
+            ])),
             no_binary: Default::default(),
         };
 
@@ -455,6 +488,17 @@ mod tests {
             no_build_isolation: NoBuildIsolation::from_iter(["foo".parse().unwrap()]),
             index_strategy: None,
             no_build: Some(NoBuild::All),
+            dependency_overrides: Some(IndexMap::from_iter([
+                (
+                    "pkg1".parse().unwrap(),
+                    PixiPypiSpec::RawVersion("==1.2.0".parse().unwrap()),
+                ),
+                (
+                    "pkg3".parse().unwrap(),
+                    PixiPypiSpec::RawVersion("==3.2.0".parse().unwrap()),
+                ),
+            ])),
+
             no_binary: Default::default(),
         };
 
@@ -550,6 +594,7 @@ mod tests {
             no_build_isolation: NoBuildIsolation::default(),
             index_strategy: None,
             no_build: Default::default(),
+            dependency_overrides: None,
             no_binary: Default::default(),
         };
 
@@ -561,6 +606,7 @@ mod tests {
             no_build_isolation: NoBuildIsolation::default(),
             index_strategy: None,
             no_build: Default::default(),
+            dependency_overrides: None,
             no_binary: Default::default(),
         };
 
@@ -580,6 +626,7 @@ mod tests {
             no_build_isolation: NoBuildIsolation::default(),
             index_strategy: Some(IndexStrategy::FirstIndex),
             no_build: Default::default(),
+            dependency_overrides: None,
             no_binary: Default::default(),
         };
 
@@ -591,6 +638,7 @@ mod tests {
             no_build_isolation: NoBuildIsolation::default(),
             index_strategy: Some(IndexStrategy::UnsafeBestMatch),
             no_build: Default::default(),
+            dependency_overrides: None,
             no_binary: Default::default(),
         };
 
