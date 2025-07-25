@@ -1,5 +1,6 @@
 ---
 source: crates/pixi_command_dispatcher/tests/integration/main.rs
+assertion_line: 54
 expression: event_tree.to_string()
 ---
 Pixi solve (foobar-desktop)
