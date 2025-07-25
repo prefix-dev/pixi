@@ -11,7 +11,8 @@ use pixi_consts::consts;
 use pixi_manifest::{SystemRequirements, pypi::pypi_options::NoBuildIsolation};
 use pixi_record::PixiRecord;
 use pixi_uv_conversions::{
-    BuildIsolation, locked_indexes_to_index_locations, pypi_options_to_build_options,
+    BuildIsolation, configure_insecure_hosts_for_tls_bypass, locked_indexes_to_index_locations,
+    pypi_options_to_build_options,
 };
 use plan::{InstallPlanner, InstallReason, NeedReinstall, PyPIInstallationPlan};
 use pypi_modifiers::{
@@ -101,8 +102,15 @@ impl<'a> PyPIPrefixUpdaterBuilder<'a> {
             .into_diagnostic()?;
         let build_options = pypi_options_to_build_options(no_build, no_binary).into_diagnostic()?;
 
+        // Configure insecure hosts for TLS verification bypass
+        let allow_insecure_hosts = configure_insecure_hosts_for_tls_bypass(
+            uv_context.allow_insecure_host.clone(),
+            uv_context.tls_no_verify,
+            &index_locations,
+        );
+
         let mut uv_client_builder = RegistryClientBuilder::new(uv_context.cache.clone())
-            .allow_insecure_host(uv_context.allow_insecure_host.clone())
+            .allow_insecure_host(allow_insecure_hosts)
             .keyring(uv_context.keyring_provider)
             .connectivity(Connectivity::Online)
             .extra_middleware(uv_context.extra_middleware.clone())
