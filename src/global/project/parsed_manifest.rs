@@ -6,17 +6,17 @@ use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Report};
 use pixi_consts::consts;
-use pixi_manifest::{toml::TomlPlatform, utils::package_map::UniquePackageMap, PrioritizedChannel};
+use pixi_manifest::{PrioritizedChannel, toml::TomlPlatform, utils::package_map::UniquePackageMap};
 use pixi_spec::PixiSpec;
-use pixi_toml::{TomlIndexMap, TomlIndexSet};
+use pixi_toml::{TomlFromStr, TomlIndexMap, TomlIndexSet, TomlWith};
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
-use serde::{ser::SerializeMap, Serialize, Serializer};
+use serde::{Serialize, Serializer, ser::SerializeMap};
 use serde_with::serde_derive::Deserialize;
 use thiserror::Error;
-use toml_span::{de_helpers::TableHelper, DeserError, Deserialize, Value};
+use toml_span::{DeserError, Deserialize, Value, de_helpers::TableHelper};
 
-use super::{environment::EnvironmentName, ExposedData};
-use crate::global::{project::manifest::TomlMapping, Mapping};
+use super::{ExposedData, environment::EnvironmentName};
+use crate::global::{Mapping, project::manifest::TomlMapping};
 
 pub const GLOBAL_MANIFEST_VERSION: i64 = 1;
 
@@ -41,10 +41,12 @@ pub enum ManifestParsingError {
     Error(#[from] toml_edit::TomlError),
     #[error(transparent)]
     TomlError(#[from] toml_span::Error),
-    #[error("The 'version' of the manifest is too low: '{0}', the supported version is '{GLOBAL_MANIFEST_VERSION}', please update the manifest"
+    #[error(
+        "The 'version' of the manifest is too low: '{0}', the supported version is '{GLOBAL_MANIFEST_VERSION}', please update the manifest"
     )]
     VersionTooLow(i64, #[source] toml_span::Error),
-    #[error("The 'version' of the manifest is too high: '{0}', the supported version is '{GLOBAL_MANIFEST_VERSION}', please update `pixi` to support the new manifest version"
+    #[error(
+        "The 'version' of the manifest is too high: '{0}', the supported version is '{GLOBAL_MANIFEST_VERSION}', please update `pixi` to support the new manifest version"
     )]
     VersionTooHigh(i64, #[source] toml_span::Error),
 }
@@ -129,39 +131,78 @@ impl<'de> toml_span::Deserialize<'de> for ParsedManifest {
             .map(TomlIndexMap::into_inner)
             .unwrap_or_default();
 
-        // Check for duplicate keys in the exposed fields
-        let mut exposed_names = IndexSet::new();
-        let mut duplicates = IndexMap::new();
-        for key in envs
-            .values()
-            .flat_map(|env| env.exposed.iter().map(|m| m.exposed_name()))
-        {
-            if !exposed_names.insert(key) {
-                duplicates.entry(key).or_insert_with(Vec::new).push(key);
-            }
-        }
-        if !duplicates.is_empty() {
-            return Err(DeserError::from(toml_span::Error {
-                kind: toml_span::ErrorKind::Custom(
-                    format!(
-                        "Duplicated exposed names found: {}",
-                        duplicates
-                            .keys()
-                            .sorted()
-                            .map(|exposed_name| exposed_name.fancy_display())
-                            .join(", ")
-                    )
-                    .into(),
-                ),
-                span: value.span,
-                line_info: None,
-            }));
-        }
+        ensure_unique_exposed_names(value, &envs)?;
+        ensure_unique_shortcut_names(value, &envs)?;
 
         th.finalize(None)?;
 
         Ok(Self { version, envs })
     }
+}
+
+fn ensure_unique_exposed_names(
+    value: &mut Value<'_>,
+    envs: &IndexMap<EnvironmentName, ParsedEnvironment>,
+) -> Result<(), DeserError> {
+    let mut exposed_names = IndexSet::new();
+    let mut duplicates = IndexMap::new();
+    for key in envs
+        .values()
+        .flat_map(|env| env.exposed.iter().map(|m| m.exposed_name()))
+    {
+        if !exposed_names.insert(key) {
+            duplicates.entry(key).or_insert_with(Vec::new).push(key);
+        }
+    }
+    if !duplicates.is_empty() {
+        return Err(DeserError::from(toml_span::Error {
+            kind: toml_span::ErrorKind::Custom(
+                format!(
+                    "Duplicated exposed names found: {}",
+                    duplicates
+                        .keys()
+                        .sorted()
+                        .map(|exposed_name| exposed_name.fancy_display())
+                        .join(", ")
+                )
+                .into(),
+            ),
+            span: value.span,
+            line_info: None,
+        }));
+    }
+    Ok(())
+}
+
+fn ensure_unique_shortcut_names(
+    value: &mut Value<'_>,
+    envs: &IndexMap<EnvironmentName, ParsedEnvironment>,
+) -> Result<(), DeserError> {
+    let mut shortcut_names = IndexSet::new();
+    let mut duplicates = IndexMap::new();
+    for key in envs.values().flat_map(|env| env.shortcuts.iter().flatten()) {
+        if !shortcut_names.insert(key) {
+            duplicates.entry(key).or_insert_with(Vec::new).push(key);
+        }
+    }
+    if !duplicates.is_empty() {
+        return Err(DeserError::from(toml_span::Error {
+            kind: toml_span::ErrorKind::Custom(
+                format!(
+                    "Duplicated shortcut names found: {}",
+                    duplicates
+                        .keys()
+                        .sorted()
+                        .map(|shortcut_name| console::style(shortcut_name.as_normalized()).green())
+                        .join(", ")
+                )
+                .into(),
+            ),
+            span: value.span,
+            line_info: None,
+        }));
+    }
+    Ok(())
 }
 
 impl ParsedManifest {
@@ -252,12 +293,13 @@ where
 #[derive(Serialize, Debug, Clone, Default)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub(crate) struct ParsedEnvironment {
-    pub channels: IndexSet<PrioritizedChannel>,
+    pub(crate) channels: IndexSet<PrioritizedChannel>,
     /// Platform used by the environment.
-    pub platform: Option<Platform>,
+    pub(crate) platform: Option<Platform>,
     pub(crate) dependencies: UniquePackageMap,
     #[serde(default, serialize_with = "serialize_expose_mappings")]
     pub(crate) exposed: IndexSet<Mapping>,
+    pub(crate) shortcuts: Option<IndexSet<PackageName>>,
 }
 
 impl<'de> toml_span::Deserialize<'de> for ParsedEnvironment {
@@ -274,6 +316,9 @@ impl<'de> toml_span::Deserialize<'de> for ParsedEnvironment {
             .optional::<TomlMapping>("exposed")
             .map(TomlMapping::into_inner)
             .unwrap_or_default();
+        let shortcuts = th
+            .optional_s::<TomlWith<_, TomlIndexSet<TomlFromStr<PackageName>>>>("shortcuts")
+            .map(|s| s.value.into_inner());
 
         th.finalize(None)?;
 
@@ -282,6 +327,7 @@ impl<'de> toml_span::Deserialize<'de> for ParsedEnvironment {
             platform,
             dependencies,
             exposed,
+            shortcuts,
         })
     }
 }
@@ -294,25 +340,10 @@ impl ParsedEnvironment {
             ..Default::default()
         }
     }
-    /// Returns the platform associated with this platform, `None` means current
-    /// platform
-    pub(crate) fn platform(&self) -> Option<Platform> {
-        self.platform
-    }
 
     /// Returns the channels associated with this environment.
     pub(crate) fn channels(&self) -> IndexSet<&NamedChannelOrUrl> {
         PrioritizedChannel::sort_channels_by_priority(&self.channels).collect()
-    }
-
-    /// Returns the dependencies associated with this environment.
-    pub(crate) fn dependencies(&self) -> &IndexMap<PackageName, PixiSpec> {
-        &self.dependencies.specs
-    }
-
-    /// Returns the exposed name mappings associated with this environment.
-    pub(crate) fn exposed(&self) -> &IndexSet<Mapping> {
-        &self.exposed
     }
 }
 
@@ -358,6 +389,12 @@ impl<'de> toml_span::Deserialize<'de> for ExposedName {
     }
 }
 
+impl AsRef<str> for ExposedName {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
 /// Represents an error that occurs when parsing an binary exposed name.
 ///
 /// This error is returned when a string fails to be parsed as an environment
@@ -379,13 +416,15 @@ mod tests {
             "[envs.ipython.invalid]",
             r#"[envs."python;3".dependencies]"#,
         ];
-        assert_snapshot!(examples
-            .into_iter()
-            .map(|example| ParsedManifest::from_toml_str(example)
-                .unwrap_err()
-                .to_string())
-            .collect::<Vec<_>>()
-            .join("\n"))
+        assert_snapshot!(
+            examples
+                .into_iter()
+                .map(|example| ParsedManifest::from_toml_str(example)
+                    .unwrap_err()
+                    .to_string())
+                .collect::<Vec<_>>()
+                .join("\n")
+        )
     }
 
     #[test]
@@ -458,10 +497,12 @@ mod tests {
 
         assert!(manifest.is_err());
         // Replace back the executable name with "pixi" to satisfy the snapshot
-        assert_snapshot!(manifest
-            .unwrap_err()
-            .to_string()
-            .replace(pixi_utils::executable_name(), "pixi"));
+        assert_snapshot!(
+            manifest
+                .unwrap_err()
+                .to_string()
+                .replace(pixi_utils::executable_name(), "pixi")
+        );
     }
 
     #[test]

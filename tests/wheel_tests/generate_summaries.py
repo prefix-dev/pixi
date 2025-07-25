@@ -112,5 +112,5 @@ pixi r test-common-wheels-dev -k "jax[cuda12]"
                     else '<span style="color: red">Failed</span>'
                 )
                 error_details = result["longrepr"] if result["outcome"] == "failed" else ""
-                f.write(f"|{result["name"]}|{outcome}|{result['duration']:.2f}|{error_details}|\n")
+                f.write(f"|{result['name']}|{outcome}|{result['duration']:.2f}|{error_details}|\n")
         f.write("\n")

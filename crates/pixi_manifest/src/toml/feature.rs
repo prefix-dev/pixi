@@ -3,19 +3,21 @@ use std::collections::HashMap;
 use indexmap::{IndexMap, IndexSet};
 use pixi_toml::{TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
 use rattler_conda_types::Platform;
-use toml_span::{de_helpers::TableHelper, DeserError, Spanned, Value};
+use toml_span::{DeserError, Spanned, Value, de_helpers::TableHelper};
 
 use crate::{
-    pypi::{pypi_options::PypiOptions, PyPiPackageName},
+    Activation, Feature, FeatureName, SystemRequirements, TargetSelector, Targets, Task, TaskName,
+    TomlError, Warning, WithWarnings,
+    pypi::pypi_options::PypiOptions,
     toml::{
-        create_unsupported_selector_error, platform::TomlPlatform, preview::TomlPreview,
-        task::TomlTask, PlatformSpan, TomlPrioritizedChannel, TomlTarget, TomlWorkspace,
+        PlatformSpan, TomlPrioritizedChannel, TomlTarget, TomlWorkspace,
+        create_unsupported_selector_warning, platform::TomlPlatform, preview::TomlPreview,
+        task::TomlTask,
     },
-    utils::{package_map::UniquePackageMap, PixiSpanned},
+    utils::{PixiSpanned, package_map::UniquePackageMap},
     workspace::ChannelPriority,
-    Activation, Feature, FeatureName, PyPiRequirement, SystemRequirements, TargetSelector, Targets,
-    Task, TaskName, TomlError, Warning, WithWarnings,
 };
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 
 #[derive(Debug)]
 pub struct TomlFeature {
@@ -27,7 +29,7 @@ pub struct TomlFeature {
     pub dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub pypi_dependencies: Option<IndexMap<PyPiPackageName, PyPiRequirement>>,
+    pub pypi_dependencies: Option<IndexMap<PypiPackageName, PixiPypiSpec>>,
 
     /// Additional information to activate an environment.
     pub activation: Option<Activation>,
@@ -76,23 +78,25 @@ impl TomlFeature {
                     .iter()
                     .any(|p| feature_platforms.value.contains(p))
                 {
-                    return Err(create_unsupported_selector_error(
+                    // Print the warning if the selector does not match any of the feature platforms
+                    let warning = create_unsupported_selector_warning(
                         PlatformSpan::Feature(name.to_string(), feature_platforms.span),
                         &selector,
                         &matching_platforms,
-                    )
-                    .into());
+                    );
+                    warnings.push(warning.into());
                 }
             } else if !matching_platforms
                 .iter()
                 .any(|p| workspace.platforms.value.contains(p))
             {
-                return Err(create_unsupported_selector_error(
+                // Print the warning if the selector does not match any of the feature platforms
+                let warning = create_unsupported_selector_warning(
                     PlatformSpan::Workspace(workspace.platforms.span),
                     &selector,
                     &matching_platforms,
-                )
-                .into());
+                );
+                warnings.push(warning.into());
             }
 
             let WithWarnings {
@@ -180,13 +184,14 @@ impl<'de> toml_span::Deserialize<'de> for TomlFeature {
 mod test {
     use insta::assert_snapshot;
 
-    use crate::utils::test_utils::expect_parse_failure;
+    use crate::utils::test_utils::expect_parse_warnings;
 
     #[test]
     fn test_mismatching_target_selector() {
-        assert_snapshot!(expect_parse_failure(
+        assert_snapshot!(expect_parse_warnings(
             r#"
         [workspace]
+        name = "test"
         channels = []
         platforms = ['win-64']
 
@@ -197,9 +202,10 @@ mod test {
 
     #[test]
     fn test_mismatching_excluded_target_selector() {
-        assert_snapshot!(expect_parse_failure(
+        assert_snapshot!(expect_parse_warnings(
             r#"
         [workspace]
+        name = "test"
         channels = []
         platforms = ['win-64', 'osx-arm64']
 

@@ -1,12 +1,10 @@
-# Tutorial: Integrating multiple packages in a workspace
-
-In this tutorial, we will show you how to integrate multiple pixi packages into a single workspace.
+In this tutorial, we will show you how to integrate multiple Pixi packages into a single workspace.
 
 !!! warning
     `pixi-build` is a preview feature, and will change until it is stabilized.
     Please keep that in mind when you use it for your projects.
 
-## Why is this useful?
+## Why is This Useful?
 
 The packages coming from conda channels are already built and ready to use.
 If you want to depend on a package you therefore typically get that package from such a channel.
@@ -14,41 +12,41 @@ However, there are situations where you want to depend on the source of a packag
 This is the case for example if you want to develop on multiple packages within the same repository.
 Or if you need the changes of an unreleased version of one of your dependencies.
 
-## Let's get started
+## Let's Get Started
 
 In this tutorial we will showcase how to develop two packages in one workspace.
-For that we will use the `rich_example` Python package developed in chapter [Building a Python package](python.md) and let it depend on the `python_binding` C++ package developed in chapter [Building a C++ package](cpp.md).
+For that we will use the `python_rich` Python package developed in chapter [Building a Python package](python.md) and let it depend on the `python_binding` C++ package developed in chapter [Building a C++ package](cpp.md).
 
-We will start with the original setup of `rich_example` and copy `python_binding` into a folder called `packages`.
+We will start with the original setup of `python_rich` and copy `python_binding` into a folder called `packages`.
 The source directory structure now looks like this:
 
 ```shell
 .
 ├── packages
-│   └── python_bindings
+│   └── cpp_math
 │       ├── CMakeLists.txt
 │       ├── pixi.toml
 │       └── src
-│           └── bindings.cpp
+│           └── math.cpp
 ├── pixi.lock
 ├── pixi.toml
 ├── pyproject.toml
 └── src
-    └── rich_example
+    └── python_rich
         └── __init__.py
 ```
 
-Within a pixi manifest, you can manage a workspace and/or describe a package.
-In the case of `rich_example` we choose to do both, so the only thing we have to add is the dependency on the `python_bindings`.
+Within a Pixi manifest, you can manage a workspace and/or describe a package.
+In the case of `python_rich` we choose to do both, so the only thing we have to add `cpp_math` as a [run dependency](../reference/pixi_manifest.md#run-dependencies) of `python_rich`.
 
 ```py title="pixi.toml"
---8<-- "docs/source_files/pixi_projects/pixi_build_workspace/pixi.toml:workspace"
+--8<-- "docs/source_files/pixi_workspaces/pixi_build/workspace/pixi.toml:run-dependencies"
 ```
 
 We only want to use the `workspace` table of the top-level manifest.
-Therefore, we can remove the workspace section in the manifest of `python_bindings`.
+Therefore, we can remove the workspace section in the manifest of `cpp_math`.
 
-```diff title="packages/python_bindings/pixi.toml"
+```diff title="packages/cpp_math/pixi.toml"
 -[workspace]
 -channels = [
 -  "https://prefix.dev/pixi-build-backends",
@@ -58,14 +56,14 @@ Therefore, we can remove the workspace section in the manifest of `python_bindin
 -preview = ["pixi-build"]
 -
 -[dependencies]
--python_bindings = { path = "." }
+-cpp_math = { path = "." }
 -
 -[tasks]
--start = "python -c 'import python_bindings as b; print(b.add(1, 2))'"
+-start = "python -c 'import cpp_math as b; print(b.add(1, 2))'"
 ```
 
 
-There is actually one problem with `rich_example`.
+There is actually one problem with `python_rich`.
 The age of every person is off by one year!
 
 ```
@@ -79,11 +77,11 @@ The age of every person is off by one year!
 ```
 
 We need to add one year to the age of every person.
-Luckily `python_bindings` exposes a function `add` which allows us to do exactly that.
+Luckily `cpp_math` exposes a function `add` which allows us to do exactly that.
 
 
-```py title="src/rich_example/__init__.py"
---8<-- "docs/source_files/pixi_projects/pixi_build_workspace/src/rich_example/__init__.py"
+```py title="src/python_rich/__init__.py"
+--8<-- "docs/source_files/pixi_workspaces/pixi_build/workspace/src/python_rich/__init__.py"
 ```
 
 If you run `pixi run start`, the age of each person should now be accurate:
@@ -100,8 +98,8 @@ If you run `pixi run start`, the age of each person should now be accurate:
 
 ## Conclusion
 
-In this tutorial, we created a pixi workspace containing two packages.
-The manifest of `rich_example` describes the workspace as well as the package, with `python_bindings` only the `package` section is used.
+In this tutorial, we created a Pixi workspace containing two packages.
+The manifest of `python_rich` describes the workspace as well as the package, with `cpp_math` only the `package` section is used.
 Feel free to add more packages, written in different languages to this workspace!
 
 Thanks for reading! Happy Coding 🚀

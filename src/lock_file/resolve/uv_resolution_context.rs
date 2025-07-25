@@ -1,5 +1,6 @@
 use miette::{Context, IntoDiagnostic};
 use uv_cache::Cache;
+use uv_client::ExtraMiddleware;
 use uv_configuration::{Concurrency, SourceStrategy, TrustedHost};
 use uv_dispatch::SharedState;
 use uv_distribution_types::IndexCapabilities;
@@ -8,7 +9,8 @@ use uv_types::{HashStrategy, InFlight};
 use crate::Workspace;
 use pixi_config::{self, get_cache_dir};
 use pixi_consts::consts;
-use pixi_uv_conversions::{to_uv_trusted_host, ConversionError};
+use pixi_utils::reqwest::uv_middlewares;
+use pixi_uv_conversions::{ConversionError, to_uv_trusted_host};
 
 /// Objects that are needed for resolutions which can be shared between different resolutions.
 #[derive(Clone)]
@@ -16,13 +18,14 @@ pub struct UvResolutionContext {
     pub cache: Cache,
     pub in_flight: InFlight,
     pub hash_strategy: HashStrategy,
-    pub client: reqwest::Client,
     pub keyring_provider: uv_configuration::KeyringProviderType,
     pub concurrency: Concurrency,
     pub source_strategy: SourceStrategy,
     pub capabilities: IndexCapabilities,
     pub allow_insecure_host: Vec<TrustedHost>,
     pub shared_state: SharedState,
+    pub extra_middleware: ExtraMiddleware,
+    pub proxies: Vec<reqwest::Proxy>,
 }
 
 impl UvResolutionContext {
@@ -38,11 +41,11 @@ impl UvResolutionContext {
 
         let keyring_provider = match project.config().pypi_config().use_keyring() {
             pixi_config::KeyringProvider::Subprocess => {
-                tracing::info!("using uv keyring (subprocess) provider");
+                tracing::debug!("using uv keyring (subprocess) provider");
                 uv_configuration::KeyringProviderType::Subprocess
             }
             pixi_config::KeyringProvider::Disabled => {
-                tracing::info!("uv keyring provider is disabled");
+                tracing::debug!("uv keyring provider is disabled");
                 uv_configuration::KeyringProviderType::Disabled
             }
         };
@@ -66,13 +69,25 @@ impl UvResolutionContext {
             cache,
             in_flight: InFlight::default(),
             hash_strategy: HashStrategy::None,
-            client: project.client()?.clone(),
             keyring_provider,
             concurrency: Concurrency::default(),
-            source_strategy: SourceStrategy::Disabled,
+            source_strategy: SourceStrategy::Enabled,
             capabilities: IndexCapabilities::default(),
             allow_insecure_host,
             shared_state: SharedState::default(),
+            extra_middleware: ExtraMiddleware(uv_middlewares(project.config())),
+            proxies: project.config().get_proxies().into_diagnostic()?,
         })
+    }
+
+    /// Set the cache refresh strategy.
+    pub fn set_cache_refresh(
+        mut self,
+        all: Option<bool>,
+        specific_packages: Option<Vec<uv_pep508::PackageName>>,
+    ) -> Self {
+        let policy = uv_cache::Refresh::from_args(all, specific_packages.unwrap_or_default());
+        self.cache = self.cache.with_refresh(policy);
+        self
     }
 }

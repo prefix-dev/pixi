@@ -10,17 +10,17 @@ use indexmap::IndexSet;
 use miette::IntoDiagnostic;
 use pixi_config::Config;
 use pixi_consts::consts;
-use pixi_manifest::{toml::TomlDocument, PrioritizedChannel};
-use pixi_spec::PixiSpec;
+use pixi_manifest::{PrioritizedChannel, toml::TomlDocument};
 use pixi_toml::TomlIndexMap;
 use pixi_utils::{executable_from_path, strip_executable_extension};
-use rattler_conda_types::{ChannelConfig, MatchSpec, NamedChannelOrUrl, PackageName, Platform};
+use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
 use toml_edit::{DocumentMut, Item};
 use toml_span::{DeserError, Value};
 
 use super::{
-    parsed_manifest::{ManifestParsingError, ManifestVersion, ParsedManifest},
     EnvironmentName, ExposedName,
+    global_spec::NamedGlobalSpec,
+    parsed_manifest::{ManifestParsingError, ManifestVersion, ParsedManifest},
 };
 use crate::global::project::ParsedEnvironment;
 
@@ -138,14 +138,10 @@ impl Manifest {
     pub fn add_dependency(
         &mut self,
         env_name: &EnvironmentName,
-        spec: &MatchSpec,
-        channel_config: &ChannelConfig,
+        named_spec: &NamedGlobalSpec,
     ) -> miette::Result<()> {
-        // Determine the name of the package to add
-        let (Some(name), spec) = spec.clone().into_nameless() else {
-            miette::bail!("pixi doesn't support wildcard dependencies")
-        };
-        let spec = PixiSpec::from_nameless_matchspec(spec, channel_config);
+        let name = named_spec.name();
+        let spec = named_spec.spec();
 
         // Update self.parsed
         self.parsed
@@ -161,8 +157,8 @@ impl Manifest {
         // Update self.document
         self.document.insert_into_inline_table(
             &format!("envs.{env_name}.dependencies"),
-            name.clone().as_normalized(),
-            spec.clone().to_toml_value(),
+            name.as_normalized(),
+            spec.to_toml_value(),
         )?;
 
         tracing::debug!(
@@ -178,13 +174,8 @@ impl Manifest {
     pub fn remove_dependency(
         &mut self,
         env_name: &EnvironmentName,
-        spec: &MatchSpec,
+        name: &PackageName,
     ) -> miette::Result<PackageName> {
-        // Determine the name of the package to add
-        let (Some(name), _spec) = spec.clone().into_nameless() else {
-            miette::bail!("pixi does not support wildcard dependencies")
-        };
-
         // Update self.parsed
         self.parsed
             .envs
@@ -194,7 +185,7 @@ impl Manifest {
             })?
             .dependencies
             .specs
-            .swap_remove(&name)
+            .swap_remove(name)
             .ok_or(miette::miette!(
                 "Dependency {} not found in {}",
                 console::style(name.as_normalized()).green(),
@@ -211,7 +202,7 @@ impl Manifest {
             console::style(name.as_normalized()).green(),
             env_name.fancy_display()
         );
-        Ok(name)
+        Ok(name.clone())
     }
 
     /// Sets the platform of a specific environment in the manifest
@@ -318,8 +309,8 @@ impl Manifest {
     /// Checks if an exposed name already exists in other environments
     pub fn exposed_name_already_exists_in_other_envs(
         &self,
-        exposed_name: &ExposedName,
         env_name: &EnvironmentName,
+        exposed_name: &ExposedName,
     ) -> bool {
         self.parsed
             .envs
@@ -341,7 +332,7 @@ impl Manifest {
         }
 
         // Ensure exposed name is unique
-        if self.exposed_name_already_exists_in_other_envs(&mapping.exposed_name, env_name) {
+        if self.exposed_name_already_exists_in_other_envs(env_name, &mapping.exposed_name) {
             miette::bail!(
                 "Exposed name {} already exists",
                 mapping.exposed_name.fancy_display()
@@ -359,7 +350,7 @@ impl Manifest {
         // Update self.document
         self.document.insert_into_inline_table(
             &format!("envs.{env_name}.exposed"),
-            &mapping.exposed_name.to_string(),
+            mapping.exposed_name.as_ref(),
             toml_edit::Value::from(mapping.executable_relname.clone()),
         )?;
 
@@ -391,7 +382,7 @@ impl Manifest {
         // Remove from the document
         self.document
             .get_or_insert_nested_table(&format!("envs.{env_name}.exposed"))?
-            .remove(&exposed_name.to_string())
+            .remove(exposed_name.as_ref())
             .ok_or_else(|| miette::miette!("The exposed name {exposed_name} doesn't exist"))?;
 
         tracing::debug!("Removed exposed mapping {exposed_name} from toml document");
@@ -420,6 +411,133 @@ impl Manifest {
             "Removed all exposed mappings for environment {} in toml document",
             env_name.fancy_display()
         );
+        Ok(())
+    }
+
+    /// Checks if an exposed name already exists in other environments
+    pub fn shortcut_already_exists_in_other_envs(
+        &self,
+        env_name: &EnvironmentName,
+        shortcut: &PackageName,
+    ) -> bool {
+        self.parsed
+            .envs
+            .iter()
+            .filter_map(|(name, env)| if name != env_name { Some(env) } else { None })
+            .flat_map(|env| env.shortcuts.iter().flat_map(|s| s.iter()))
+            .any(|s| s == shortcut)
+    }
+
+    /// Adds shortcut to the manifest
+    pub fn add_shortcut(
+        &mut self,
+        env_name: &EnvironmentName,
+        shortcut: &PackageName,
+    ) -> miette::Result<()> {
+        // Ensure the environment exists
+        if !self.parsed.envs.contains_key(env_name) {
+            miette::bail!("Environment {} doesn't exist", env_name.fancy_display());
+        }
+
+        // Ensure shortcut is unique
+        if self.shortcut_already_exists_in_other_envs(env_name, shortcut) {
+            miette::bail!(
+                "Shortcut {} already exists",
+                console::style(shortcut.as_normalized()).green()
+            );
+        }
+
+        // Update self.parsed
+        let env = self
+            .parsed
+            .envs
+            .get_mut(env_name)
+            .ok_or_else(|| miette::miette!("This should be impossible"))?;
+        env.shortcuts
+            .get_or_insert_default()
+            .insert(shortcut.clone());
+
+        // Update self.document
+        let shortcuts_array = self
+            .document
+            .get_or_insert_nested_table(&format!("envs.{env_name}"))?
+            .entry("shortcuts")
+            .or_insert_with(|| toml_edit::Item::Value(toml_edit::Value::Array(Default::default())))
+            .as_array_mut()
+            .ok_or_else(|| miette::miette!("Expected an array for shortcuts"))?;
+
+        // Convert existing TOML array to a IndexSet to ensure uniqueness
+        let mut existing_shortcuts: IndexSet<String> = shortcuts_array
+            .iter()
+            .filter_map(|item| item.as_str().map(|s| s.to_string()))
+            .collect();
+
+        // Add the new shortcut to the HashSet
+        existing_shortcuts.insert(shortcut.as_normalized().to_string());
+
+        // Reinsert unique shortcuts
+        *shortcuts_array = existing_shortcuts.iter().collect();
+
+        tracing::debug!(
+            "Added shortcut {} for environment {} in toml document",
+            console::style(shortcut.as_normalized()).green(),
+            env_name.fancy_display()
+        );
+        Ok(())
+    }
+
+    /// Removes shortcut from the manifest of any environment
+    pub fn remove_shortcut(
+        &mut self,
+        shortcut: &PackageName,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<()> {
+        // Ensure the environment exists
+        if !self.parsed.envs.contains_key(env_name) {
+            miette::bail!("Environment {} doesn't exist", env_name.fancy_display());
+        }
+        let environment = self
+            .parsed
+            .envs
+            .get_mut(env_name)
+            .ok_or_else(|| miette::miette!("[envs.{env_name}] needs to exist"))?;
+
+        // Remove shortcut from parsed environment
+        if let Some(shortcuts) = environment.shortcuts.as_mut() {
+            if !shortcuts.contains(shortcut) {
+                miette::bail!("The shortcut {} doesn't exist", shortcut.as_normalized());
+            }
+
+            shortcuts.swap_remove(shortcut);
+            tracing::debug!(
+                "Removed shortcut '{}' from toml document",
+                shortcut.as_normalized()
+            );
+        }
+
+        // Remove from the document
+        let env_key = format!("envs.{env_name}");
+        let shortcuts_array = self
+            .document
+            .get_mut_toml_array(&env_key, "shortcuts")?
+            .ok_or_else(|| miette::miette!("No shortcuts found for environment {}", env_name))?;
+
+        let shortcut_str = shortcut.as_normalized();
+        // First find the index without holding onto the iterator
+        let maybe_index = shortcuts_array
+            .iter()
+            .position(|item| item.as_str() == Some(shortcut_str));
+
+        if let Some(index) = maybe_index {
+            shortcuts_array.remove(index);
+            tracing::debug!("Removed shortcut '{}' from toml document", shortcut_str);
+        } else {
+            return Err(miette::miette!(
+                "The shortcut '{}' doesn't exist",
+                shortcut_str
+            ));
+        }
+
         Ok(())
     }
 
@@ -534,7 +652,7 @@ mod tests {
     use insta::assert_snapshot;
     use itertools::Itertools;
     use pixi_consts::consts::DEFAULT_CHANNELS;
-    use rattler_conda_types::ParseStrictness;
+    use rattler_conda_types::ChannelConfig;
 
     use super::*;
 
@@ -587,7 +705,7 @@ mod tests {
             .document
             .get_or_insert_nested_table(&format!("envs.{}.exposed", env_name))
             .unwrap()
-            .get(&exposed_name.to_string())
+            .get(exposed_name.as_ref())
             .unwrap()
             .as_str()
             .unwrap();
@@ -630,7 +748,7 @@ mod tests {
             .document
             .get_or_insert_nested_table(&format!("envs.{env_name}.exposed"))
             .unwrap()
-            .get(&exposed_name1.to_string())
+            .get(exposed_name1.as_ref())
             .unwrap()
             .as_str()
             .unwrap();
@@ -655,7 +773,7 @@ mod tests {
             .document
             .get_or_insert_nested_table(&format!("envs.{env_name}.exposed"))
             .unwrap()
-            .get(&exposed_name2.to_string())
+            .get(exposed_name2.as_ref())
             .unwrap()
             .as_str()
             .unwrap();
@@ -697,18 +815,20 @@ mod tests {
             .document
             .get_or_insert_nested_table(&format!("envs.{env_name}.exposed"))
             .unwrap()
-            .get(&exposed_name.to_string());
+            .get(exposed_name.as_ref());
         assert!(actual_value.is_none());
 
         // Check parsed
-        assert!(!manifest
-            .parsed
-            .envs
-            .get(&env_name)
-            .unwrap()
-            .exposed
-            .iter()
-            .any(|map| map.exposed_name() == &exposed_name));
+        assert!(
+            !manifest
+                .parsed
+                .envs
+                .get(&env_name)
+                .unwrap()
+                .exposed
+                .iter()
+                .any(|map| map.exposed_name() == &exposed_name)
+        );
     }
 
     #[test]
@@ -828,8 +948,8 @@ mod tests {
         let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
         let env_name = EnvironmentName::from_str("test-env").unwrap();
 
-        let version_match_spec =
-            MatchSpec::from_str("pythonic ==3.15.0", ParseStrictness::Strict).unwrap();
+        let named_global_spec =
+            NamedGlobalSpec::try_from_str("pythonic ==3.15.0", &channel_config).unwrap();
 
         // Add environment
         manifest
@@ -846,7 +966,7 @@ mod tests {
 
         // Add dependency
         manifest
-            .add_dependency(&env_name, &version_match_spec, &channel_config)
+            .add_dependency(&env_name, &named_global_spec)
             .unwrap();
 
         // Check document
@@ -854,11 +974,15 @@ mod tests {
             .document
             .get_or_insert_nested_table(&format!("envs.{env_name}.dependencies"))
             .unwrap()
-            .get(version_match_spec.name.clone().unwrap().as_normalized());
+            .get(named_global_spec.name().as_normalized());
         assert!(actual_value.is_some());
         assert_eq!(
             actual_value.unwrap().to_string().replace('"', ""),
-            version_match_spec.clone().version.unwrap().to_string()
+            named_global_spec
+                .spec()
+                .as_version_spec()
+                .unwrap()
+                .to_string()
         );
 
         // Check parsed
@@ -869,30 +993,22 @@ mod tests {
             .unwrap()
             .dependencies
             .specs
-            .get(&version_match_spec.clone().name.unwrap())
+            .get(named_global_spec.name().as_normalized())
             .unwrap()
             .clone();
-        assert_eq!(
-            actual_value,
-            PixiSpec::from_nameless_matchspec(
-                version_match_spec.into_nameless().1,
-                &channel_config
-            )
-        );
+        assert_eq!(actual_value, *named_global_spec.spec());
 
         // Add another dependency
-        let build_match_spec = MatchSpec::from_str(
+        let build_match_spec = NamedGlobalSpec::try_from_str(
             "python [version='==3.11.0', build=he550d4f_1_cpython]",
-            ParseStrictness::Strict,
+            &channel_config,
         )
         .unwrap();
         manifest
-            .add_dependency(&env_name, &build_match_spec, &channel_config)
+            .add_dependency(&env_name, &build_match_spec)
             .unwrap();
-        let any_spec = MatchSpec::from_str("any-spec", ParseStrictness::Strict).unwrap();
-        manifest
-            .add_dependency(&env_name, &any_spec, &channel_config)
-            .unwrap();
+        let any_spec = NamedGlobalSpec::try_from_str("any-spec", &channel_config).unwrap();
+        manifest.add_dependency(&env_name, &any_spec).unwrap();
 
         assert_snapshot!(manifest.document.to_string());
     }
@@ -902,31 +1018,26 @@ mod tests {
         let mut manifest = Manifest::default();
         let env_name = EnvironmentName::from_str("test-env").unwrap();
 
-        let match_spec = MatchSpec::from_str("pythonic ==3.15.0", ParseStrictness::Strict).unwrap();
         let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
+        let spec = NamedGlobalSpec::try_from_str("pythonic ==3.15.0", &channel_config).unwrap();
 
         // Add environment
         manifest.add_environment(&env_name, None).unwrap();
 
         // Add dependency
-        manifest
-            .add_dependency(&env_name, &match_spec, &channel_config)
-            .unwrap();
+        manifest.add_dependency(&env_name, &spec).unwrap();
 
         // Add the same dependency again, with a new match_spec
-        let new_match_spec =
-            MatchSpec::from_str("pythonic==3.18.0", ParseStrictness::Strict).unwrap();
-        manifest
-            .add_dependency(&env_name, &new_match_spec, &channel_config)
-            .unwrap();
+        let new_spec = NamedGlobalSpec::try_from_str("pythonic==3.18.0", &channel_config).unwrap();
+        manifest.add_dependency(&env_name, &new_spec).unwrap();
 
         // Check document
-        let name = match_spec.name.clone().unwrap();
+        let name = spec.name();
         let actual_value = manifest
             .document
             .get_or_insert_nested_table(&format!("envs.{env_name}.dependencies"))
             .unwrap()
-            .get(name.clone().as_normalized());
+            .get(name.as_normalized());
         assert!(actual_value.is_some());
         assert_eq!(
             actual_value.unwrap().to_string().replace('"', ""),
@@ -941,7 +1052,7 @@ mod tests {
             .unwrap()
             .dependencies
             .specs
-            .get(&name)
+            .get(name)
             .unwrap()
             .clone();
         assert_eq!(
@@ -1027,7 +1138,7 @@ mod tests {
     #[test]
     fn test_remove_dependency() {
         let env_name = EnvironmentName::from_str("test-env").unwrap();
-        let match_spec = MatchSpec::from_str("pytest", ParseStrictness::Strict).unwrap();
+        let name = PackageName::from_str("pytest").unwrap();
 
         let mut manifest = Manifest::from_str(
             Path::new("global.toml"),
@@ -1040,13 +1151,15 @@ dependencies = { "python" = "*", pytest = "*"}
         .unwrap();
 
         // Remove dependency
-        manifest.remove_dependency(&env_name, &match_spec).unwrap();
+        manifest.remove_dependency(&env_name, &name).unwrap();
 
         // Check document
-        assert!(!manifest
-            .document
-            .to_string()
-            .contains(match_spec.name.clone().unwrap().as_normalized()));
+        assert!(
+            !manifest
+                .document
+                .to_string()
+                .contains(name.clone().as_normalized())
+        );
 
         // Check parsed
         let actual_value = manifest
@@ -1056,7 +1169,7 @@ dependencies = { "python" = "*", pytest = "*"}
             .unwrap()
             .dependencies
             .specs
-            .get(&match_spec.name.unwrap());
+            .get(&name);
         assert!(actual_value.is_none());
 
         assert_snapshot!(manifest.document.to_string());

@@ -1,0 +1,16 @@
+# serializer version: 1
+# name: test_sync_shortcuts[Linux-desktop-file]
+  '''
+  [Desktop Entry]
+  Type=Application
+  Encoding=UTF-8
+  Name=pixi-editor
+  Exec=bash -c 'gedit %F'
+  Terminal=false
+  Icon=/var/home/julian/Projekte/github.com/prefix-dev/pixi-1/pytest-temp/test_sync_shortcuts0/pixi_home/envs/test/Menu/pixi-icon.png
+  Comment=Scientific Python Development Environment
+  Categories=Development;Science;
+  MimeType=text/x-pixi;
+  
+  '''
+# ---

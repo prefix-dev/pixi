@@ -1,17 +1,17 @@
-use std::{any::Any, path::PathBuf, sync::Arc, time::Duration};
+use std::{any::Any, path::PathBuf, sync::Arc, sync::LazyLock, time::Duration};
 
 use miette::IntoDiagnostic;
 use pixi_consts::consts;
 use rattler_networking::{
+    AuthenticationMiddleware, AuthenticationStorage, GCSMiddleware, MirrorMiddleware,
+    OciMiddleware, S3Middleware,
     authentication_storage::{self, AuthenticationStorageError},
     mirror_middleware::Mirror,
     retry_policies::ExponentialBackoff,
-    AuthenticationMiddleware, AuthenticationStorage, GCSMiddleware, MirrorMiddleware,
-    OciMiddleware, S3Middleware,
 };
 
 use reqwest::Client;
-use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
+use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, Middleware};
 use reqwest_retry::RetryTransientMiddleware;
 use std::collections::HashMap;
 use tracing::debug;
@@ -99,12 +99,36 @@ pub fn oci_middleware() -> OciMiddleware {
     OciMiddleware
 }
 
+static DEFAULT_REQWEST_USER_AGENT: LazyLock<String> =
+    LazyLock::new(|| format!("pixi/{}", consts::PIXI_VERSION));
+static DEFAULT_REQWEST_TIMEOUT_SEC: Duration = Duration::from_secs(5 * 60);
+static DEFAULT_REQWEST_IDLE_PER_HOST: usize = 20;
+
+pub fn reqwest_client_builder(config: Option<&Config>) -> miette::Result<reqwest::ClientBuilder> {
+    let mut builder = Client::builder()
+        .pool_max_idle_per_host(DEFAULT_REQWEST_IDLE_PER_HOST)
+        .user_agent(DEFAULT_REQWEST_USER_AGENT.as_str())
+        .read_timeout(DEFAULT_REQWEST_TIMEOUT_SEC)
+        .use_rustls_tls();
+
+    let proxies = if let Some(config) = config {
+        config.get_proxies()
+    } else {
+        Config::load_global().get_proxies()
+    }
+    .into_diagnostic()?;
+
+    for p in proxies {
+        builder = builder.proxy(p);
+    }
+
+    Ok(builder)
+}
+
 pub fn build_reqwest_clients(
     config: Option<&Config>,
     s3_config_project: Option<HashMap<String, rattler_networking::s3_middleware::S3Config>>,
 ) -> miette::Result<(Client, ClientWithMiddleware)> {
-    let app_user_agent = format!("pixi/{}", consts::PIXI_VERSION);
-
     // If we do not have a config, we will just load the global default.
     let config = if let Some(config) = config {
         config.clone()
@@ -113,16 +137,13 @@ pub fn build_reqwest_clients(
     };
 
     if config.tls_no_verify() {
-        tracing::warn!("TLS verification is disabled. This is insecure and should only be used for testing or internal networks.");
+        tracing::warn!(
+            "TLS verification is disabled. This is insecure and should only be used for testing or internal networks."
+        );
     }
 
-    let timeout = 5 * 60;
-    let client = Client::builder()
-        .pool_max_idle_per_host(20)
-        .user_agent(app_user_agent)
+    let client = reqwest_client_builder(Some(&config))?
         .danger_accept_invalid_certs(config.tls_no_verify())
-        .read_timeout(Duration::from_secs(timeout))
-        .use_rustls_tls()
         .build()
         .expect("failed to create reqwest Client");
 
@@ -159,4 +180,15 @@ pub fn build_reqwest_clients(
     let authenticated_client = client_builder.build();
 
     Ok((client, authenticated_client))
+}
+
+pub fn uv_middlewares(config: &Config) -> Vec<Arc<dyn Middleware>> {
+    if config.mirror_map().is_empty() {
+        vec![]
+    } else {
+        vec![
+            Arc::new(mirror_middleware(config)),
+            Arc::new(oci_middleware()),
+        ]
+    }
 }

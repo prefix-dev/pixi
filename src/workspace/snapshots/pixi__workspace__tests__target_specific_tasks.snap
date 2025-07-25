@@ -1,11 +1,13 @@
 ---
 source: src/workspace/mod.rs
-expression: "workspace.workspace.value.tasks(Some(Platform::Osx64),\n&FeatureName::Default).unwrap()"
+expression: "workspace.workspace.value.tasks(Some(Platform::Osx64),\n&FeatureName::DEFAULT).unwrap()"
 ---
 {
     TaskName(
         "test",
     ): Plain(
-        "test multi",
+        TemplateString(
+            "test multi",
+        ),
     ),
 }

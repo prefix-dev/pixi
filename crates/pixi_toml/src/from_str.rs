@@ -11,6 +11,7 @@ use crate::DeserializeAs;
 /// additional parsing beyond checking if the value is a string. If a type
 /// provides a [`FromStr`] implementation, this type can be used to deserialize
 /// the value and return the parsed value.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TomlFromStr<T>(T);
 
 impl<T> TomlFromStr<T> {

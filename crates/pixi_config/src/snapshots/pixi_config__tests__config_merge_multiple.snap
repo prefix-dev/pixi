@@ -1,6 +1,5 @@
 ---
 source: crates/pixi_config/src/lib.rs
-assertion_line: 1698
 expression: debug
 ---
 Config {
@@ -15,9 +14,6 @@ Config {
             "defaults",
         ),
     ],
-    change_ps1: Some(
-        true,
-    ),
     authentication_override_file: None,
     tls_no_verify: Some(
         false,
@@ -123,7 +119,13 @@ Config {
             true,
         ),
     ),
-    force_activate: None,
+    shell: ShellConfig {
+        force_activate: None,
+        source_completion_scripts: None,
+        change_ps1: Some(
+            true,
+        ),
+    },
     experimental: ExperimentalConfig {
         use_environment_activation_cache: None,
     },
@@ -131,4 +133,21 @@ Config {
         solves: 1,
         downloads: 50,
     },
+    run_post_link_scripts: None,
+    proxy_config: ProxyConfig {
+        https: None,
+        http: None,
+        non_proxy_hosts: [],
+    },
+    build: BuildConfig {
+        package_format: Some(
+            PackageFormatAndCompression {
+                archive_type: Conda,
+                compression_level: Highest,
+            },
+        ),
+    },
+    tool_platform: None,
+    change_ps1: None,
+    force_activate: None,
 }

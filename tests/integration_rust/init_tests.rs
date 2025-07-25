@@ -16,9 +16,9 @@ async fn init_creates_project_manifest() {
     let workspace = pixi.workspace().unwrap();
 
     // Default configuration should be present in the file
-    assert!(!workspace.name().is_empty());
+    assert!(!workspace.display_name().is_empty());
     assert_eq!(
-        workspace.name(),
+        workspace.display_name(),
         &pixi.workspace_path().file_stem().unwrap().to_string_lossy(),
         "project name should match the directory name"
     );
@@ -79,17 +79,20 @@ async fn init_from_existing_pyproject_toml() {
         .unwrap();
 
     // Check if the new manifest still contains all the same data as before
-    assert!(pixi
-        .manifest_contents()
-        .unwrap()
-        .contains(pyproject_toml_contents));
+    assert!(
+        pixi.manifest_contents()
+            .unwrap()
+            .contains(pyproject_toml_contents)
+    );
 
     // Check if the new manifest is readable by pixi and contains the default values
     let workspace = pixi.workspace().unwrap();
-    assert!(workspace
-        .default_environment()
-        .platforms()
-        .contains(&Platform::current()));
+    assert!(
+        workspace
+            .default_environment()
+            .platforms()
+            .contains(&Platform::current())
+    );
 }
 
 // TODO: enable and fix this test when we fix the global config loading

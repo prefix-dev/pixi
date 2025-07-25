@@ -1,11 +1,42 @@
 # serializer version: 1
-# name: test_doc_pixi_projects[pixi_build_cpp]
+# name: test_doc_pixi_workspaces_minijinja_task_args
+  dict({
+    'task1': '''
+      HOI RUBEN
+  
+    ''',
+    'task2': '''
+      hoi ruben
+  
+    ''',
+    'task3': '''
+      hoi Ruben!
+  
+    ''',
+    'task4': '''
+      unix
+  
+    ''',
+    'task5': '''
+      hoi
+      Ruben
+  
+    ''',
+  })
+# ---
+# name: test_doc_pixi_workspaces_pixi_build[advanced_cpp]
   '''
   3
   
   '''
 # ---
-# name: test_doc_pixi_projects[pixi_build_python]
+# name: test_doc_pixi_workspaces_pixi_build[cpp]
+  '''
+  3
+  
+  '''
+# ---
+# name: test_doc_pixi_workspaces_pixi_build[getting_started]
   '''
   ┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
   ┃ name         ┃ age ┃ city        ┃
@@ -17,7 +48,19 @@
   
   '''
 # ---
-# name: test_doc_pixi_projects[pixi_build_workspace]
+# name: test_doc_pixi_workspaces_pixi_build[python]
+  '''
+  ┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
+  ┃ name         ┃ age ┃ city        ┃
+  ┡━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━━━━┩
+  │ John Doe     │ 30  │ New York    │
+  │ Jane Smith   │ 25  │ Los Angeles │
+  │ Tim de Jager │ 35  │ Utrecht     │
+  └──────────────┴─────┴─────────────┘
+  
+  '''
+# ---
+# name: test_doc_pixi_workspaces_pixi_build[workspace]
   '''
   ┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
   ┃ name         ┃ age ┃ city        ┃
@@ -29,7 +72,7 @@
   
   '''
 # ---
-# name: test_doc_pixi_projects[pixi_build_workspace_variants]
+# name: test_doc_pixi_workspaces_pixi_build[workspace_variants]
   '''
   ┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
   ┃ name         ┃ age ┃ city        ┃

@@ -6,29 +6,30 @@ use std::{
 
 use indexmap::IndexMap;
 use miette::LabeledSpan;
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_toml::{Same, TomlHashMap, TomlIndexMap, TomlWith};
 use rattler_conda_types::{Platform, Version};
 use toml_span::{
-    de_helpers::{expected, TableHelper},
-    value::ValueInner,
     DeserError, Spanned, Value,
+    de_helpers::{TableHelper, expected},
+    value::ValueInner,
 };
 use url::Url;
 
 use crate::{
+    Activation, Environment, EnvironmentName, Environments, Feature, FeatureName,
+    KnownPreviewFeature, SolveGroups, SystemRequirements, TargetSelector, Targets, Task, TaskName,
+    TomlError, Warning, WithWarnings, WorkspaceManifest,
     environment::EnvironmentIdx,
     error::{FeatureNotEnabled, GenericError},
     manifests::PackageManifest,
-    pypi::{pypi_options::PypiOptions, PyPiPackageName},
+    pypi::pypi_options::PypiOptions,
     toml::{
-        create_unsupported_selector_error, environment::TomlEnvironmentList, task::TomlTask,
-        ExternalPackageProperties, PlatformSpan, TomlFeature, TomlPackage, TomlTarget,
-        TomlWorkspace,
+        PackageDefaults, PlatformSpan, TomlFeature, TomlPackage, TomlTarget, TomlWorkspace,
+        WorkspacePackageProperties, create_unsupported_selector_warning,
+        environment::TomlEnvironmentList, task::TomlTask,
     },
-    utils::{package_map::UniquePackageMap, PixiSpanned},
-    Activation, Environment, EnvironmentName, Environments, Feature, FeatureName,
-    KnownPreviewFeature, PyPiRequirement, SolveGroups, SystemRequirements, TargetSelector, Targets,
-    Task, TaskName, TomlError, Warning, WithWarnings, WorkspaceManifest,
+    utils::{PixiSpanned, package_map::UniquePackageMap},
 };
 
 /// Raw representation of a pixi manifest. This is the deserialized form of the
@@ -43,7 +44,7 @@ pub struct TomlManifest {
     pub dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub pypi_dependencies: Option<PixiSpanned<IndexMap<PyPiPackageName, PyPiRequirement>>>,
+    pub pypi_dependencies: Option<PixiSpanned<IndexMap<PypiPackageName, PixiPypiSpec>>>,
 
     /// Additional information to activate an environment.
     pub activation: Option<PixiSpanned<Activation>>,
@@ -70,6 +71,11 @@ impl TomlManifest {
         self.workspace.is_some()
     }
 
+    /// Returns true if the manifest contains a package.
+    pub fn has_package(&self) -> bool {
+        self.package.is_some()
+    }
+
     /// Assume that the manifest is a workspace manifest and convert it as such.
     ///
     /// If the manifest also contains a package section that will be converted
@@ -79,7 +85,8 @@ impl TomlManifest {
     /// paths are not checked.
     pub fn into_package_manifest(
         self,
-        external: ExternalPackageProperties,
+        external: WorkspacePackageProperties,
+        package_defaults: PackageDefaults,
         workspace: &WorkspaceManifest,
         root_directory: Option<&Path>,
     ) -> Result<(PackageManifest, Vec<Warning>), TomlError> {
@@ -110,7 +117,12 @@ impl TomlManifest {
         let WithWarnings {
             value: package,
             warnings,
-        } = package.into_manifest(external, workspace.preview(), root_directory)?;
+        } = package.into_manifest(
+            external,
+            package_defaults,
+            workspace.preview(),
+            root_directory,
+        )?;
         Ok((package, warnings))
     }
 
@@ -124,6 +136,7 @@ impl TomlManifest {
     pub fn into_workspace_manifest(
         self,
         mut external: ExternalWorkspaceProperties,
+        package_defaults: PackageDefaults,
         root_directory: Option<&Path>,
     ) -> Result<(WorkspaceManifest, Option<PackageManifest>, Vec<Warning>), TomlError> {
         let workspace = self
@@ -158,12 +171,12 @@ impl TomlManifest {
                 .iter()
                 .any(|p| workspace.value.platforms.value.contains(p))
             {
-                return Err(create_unsupported_selector_error(
+                let warning = create_unsupported_selector_warning(
                     PlatformSpan::Workspace(workspace.value.platforms.span),
                     &selector,
                     &matching_platforms,
-                )
-                .into());
+                );
+                warnings.push(warning.into());
             }
 
             let WithWarnings {
@@ -176,7 +189,7 @@ impl TomlManifest {
 
         // Construct a default feature
         let default_feature = Feature {
-            name: FeatureName::Default,
+            name: FeatureName::default(),
 
             // The default feature does not overwrite the platforms or channels from the project
             // metadata.
@@ -204,13 +217,20 @@ impl TomlManifest {
         // Construct the features including the default feature
         let mut feature_name_to_span = IndexMap::new();
         let features: IndexMap<FeatureName, Feature> =
-            IndexMap::from_iter([(FeatureName::Default, default_feature)]);
+            IndexMap::from_iter([(FeatureName::default(), default_feature)]);
         let named_features = self
             .feature
             .map(PixiSpanned::into_inner)
             .unwrap_or_default()
             .into_iter()
             .map(|(name, feature)| {
+                if name.value.is_default() {
+                    return Err(TomlError::from(
+                        GenericError::new("The feature 'default' is reserved and cannot be redefined")
+                            .with_opt_span(name.span)
+                            .with_help("All tables at the root of the document are implicitly added to the 'default' feature, use those instead."),
+                    ));
+                }
                 let WithWarnings {
                     value: feature,
                     warnings: mut feature_warnings,
@@ -312,7 +332,7 @@ impl TomlManifest {
             if !no_default_feature {
                 used_features.push(
                     features
-                        .get(&FeatureName::Default)
+                        .get(&FeatureName::DEFAULT)
                         .expect("default feature must exist"),
                 );
             };
@@ -383,7 +403,7 @@ impl TomlManifest {
             .package
             .as_ref()
             .and_then(|p| p.value.name.as_ref())
-            .cloned();
+            .and_then(|field| field.clone().value());
 
         let WithWarnings {
             warnings: mut workspace_warnings,
@@ -421,23 +441,12 @@ impl TomlManifest {
                 .into());
             }
 
-            let workspace = &workspace_manifest.workspace;
             let WithWarnings {
                 value: package_manifest,
                 warnings: mut package_warnings,
             } = package.into_manifest(
-                ExternalPackageProperties {
-                    name: Some(workspace.name.clone()),
-                    version: workspace.version.clone(),
-                    description: workspace.description.clone(),
-                    authors: workspace.authors.clone(),
-                    license: workspace.license.clone(),
-                    license_file: workspace.license_file.clone(),
-                    readme: workspace.readme.clone(),
-                    homepage: workspace.homepage.clone(),
-                    repository: workspace.repository.clone(),
-                    documentation: workspace.documentation.clone(),
-                },
+                workspace_manifest.workspace_package_properties(),
+                package_defaults,
                 &workspace_manifest.workspace.preview,
                 root_directory,
             )?;
@@ -547,13 +556,32 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
     }
 }
 
+/// Defines some of the properties that might be defined in other parts of the
+/// manifest but we do require to be set in the workspace section.
+///
+/// This can be used to inject these properties.
+#[derive(Debug, Clone, Default)]
+pub struct ExternalWorkspaceProperties {
+    pub name: Option<String>,
+    pub version: Option<Version>,
+    pub description: Option<String>,
+    pub authors: Option<Vec<String>>,
+    pub license: Option<String>,
+    pub license_file: Option<PathBuf>,
+    pub readme: Option<PathBuf>,
+    pub homepage: Option<Url>,
+    pub repository: Option<Url>,
+    pub documentation: Option<Url>,
+    pub features: IndexMap<FeatureName, Feature>,
+}
+
 #[cfg(test)]
 mod test {
     use insta::assert_snapshot;
-    use itertools::Itertools;
+    use pixi_test_utils::format_parse_error;
 
     use super::*;
-    use crate::{toml::FromTomlStr, utils::test_utils::format_parse_error};
+    use crate::{toml::FromTomlStr, utils::test_utils::expect_parse_warnings};
 
     /// A helper function that generates a snapshot of the error message when
     /// parsing a manifest TOML. The error is returned.
@@ -561,26 +589,15 @@ mod test {
     pub(crate) fn expect_parse_failure(pixi_toml: &str) -> String {
         let parse_error = <TomlManifest as FromTomlStr>::from_toml_str(pixi_toml)
             .and_then(|manifest| {
-                manifest.into_workspace_manifest(ExternalWorkspaceProperties::default(), None)
+                manifest.into_workspace_manifest(
+                    ExternalWorkspaceProperties::default(),
+                    PackageDefaults::default(),
+                    None,
+                )
             })
             .expect_err("parsing should fail");
 
         format_parse_error(pixi_toml, parse_error)
-    }
-
-    /// A helper function that generates a snapshot of the warnings message when
-    /// parsing a manifest TOML. The error is returned.
-    #[must_use]
-    pub(crate) fn expect_parse_warnings(pixi_toml: &str) -> String {
-        match <TomlManifest as FromTomlStr>::from_toml_str(pixi_toml).and_then(|manifest| {
-            manifest.into_workspace_manifest(ExternalWorkspaceProperties::default(), None)
-        }) {
-            Ok((_, _, warnings)) => warnings
-                .into_iter()
-                .map(|warning| format_parse_error(pixi_toml, warning))
-                .join("\n\n"),
-            Err(err) => format_parse_error(pixi_toml, err),
-        }
     }
 
     #[test]
@@ -611,6 +628,7 @@ mod test {
         preview = ["pixi-build"]
 
         [package]
+        name = { workspace = true }
 
         [package.build]
         backend = { name = "foobar", version = "*" }
@@ -619,19 +637,34 @@ mod test {
     }
 
     #[test]
-    fn test_workspace_name_required() {
+    fn test_missing_package_name() {
         assert_snapshot!(expect_parse_failure(
             r#"
         [workspace]
         channels = []
         platforms = []
         preview = ["pixi-build"]
+
+        [package]
+        # Since workspace doesnt define a name we expect an error here.
+
+        [package.build]
+        backend = { name = "foobar", version = "*" }
         "#,
-        ));
+        ), @r###"
+         × missing field 'name' in table
+          ╭─[pixi.toml:7:9]
+        6 │
+        7 │         [package]
+          ·         ──────────
+        8 │         # Since workspace doesnt define a name we expect an error here.
+        9 │
+          ╰────
+        "###);
     }
 
     #[test]
-    fn test_workspace_name_from_workspace() {
+    fn test_workspace_name_from_package() {
         let workspace_manifest = WorkspaceManifest::from_toml_str(
             r#"
         [workspace]
@@ -649,7 +682,7 @@ mod test {
         )
         .unwrap();
 
-        assert_eq!(workspace_manifest.workspace.name, "foo");
+        assert_eq!(workspace_manifest.workspace.name.as_deref(), Some("foo"));
     }
 
     #[test]
@@ -749,9 +782,10 @@ mod test {
 
     #[test]
     fn test_target_workspace_dependencies() {
-        assert_snapshot!(expect_parse_failure(
+        assert_snapshot!(expect_parse_warnings(
             r#"
         [workspace]
+        name = "test"
         channels = []
         platforms = ['osx-64']
         preview = ["pixi-build"]
@@ -768,9 +802,10 @@ mod test {
 
     #[test]
     fn test_mismatching_target_selector() {
-        assert_snapshot!(expect_parse_failure(
+        assert_snapshot!(expect_parse_warnings(
             r#"
         [workspace]
+        name = "test"
         channels = []
         platforms = ['win-64']
 
@@ -781,9 +816,10 @@ mod test {
 
     #[test]
     fn test_mismatching_multi_target_selector() {
-        assert_snapshot!(expect_parse_failure(
+        assert_snapshot!(expect_parse_warnings(
             r#"
         [workspace]
+        name = "test"
         channels = []
         platforms = ['win-64']
 
@@ -897,23 +933,18 @@ mod test {
         "#,
         ));
     }
-}
 
-/// Defines some of the properties that might be defined in other parts of the
-/// manifest but we do require to be set in the workspace section.
-///
-/// This can be used to inject these properties.
-#[derive(Debug, Clone, Default)]
-pub struct ExternalWorkspaceProperties {
-    pub name: Option<String>,
-    pub version: Option<Version>,
-    pub description: Option<String>,
-    pub authors: Option<Vec<String>>,
-    pub license: Option<String>,
-    pub license_file: Option<PathBuf>,
-    pub readme: Option<PathBuf>,
-    pub homepage: Option<Url>,
-    pub repository: Option<Url>,
-    pub documentation: Option<Url>,
-    pub features: IndexMap<FeatureName, Feature>,
+    #[test]
+    fn test_redefine_default_feature() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = []
+
+        [feature.default.dependencies]
+        "#,
+        ));
+    }
 }

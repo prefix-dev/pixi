@@ -13,11 +13,11 @@ pub(crate) mod repodata;
 pub mod task;
 pub mod workspace;
 
-mod uv_reporter;
+mod reporters;
 
-pub mod build;
 mod rlimit;
-mod utils;
+mod uv_reporter;
+pub mod variants;
 
 pub use lock_file::UpdateLockFileOptions;
 pub use workspace::{DependencyType, Workspace, WorkspaceLocator};

@@ -1,7 +1,7 @@
 github_url = "https://github.com/prefix-dev/pixi"
 
 [version]
-current = "0.41.3"
+current = "0.50.0"
 
 # Example of a semver regexp.
 # Make sure this matches current_version before
@@ -31,15 +31,11 @@ src = "Cargo.toml"
 
 [[file]]
 search = "pixi-version: v{current_version}"
-src = "docs/advanced/github_actions.md"
-
-[[file]]
-search = "FROM ghcr.io/prefix-dev/pixi:{current_version} AS build"
-src = "docs/advanced/production_deployment.md"
+src = "docs/integration/ci/github_actions.md"
 
 [[file]]
 search = "ARG PIXI_VERSION=v{current_version}"
-src = "docs/ide_integration/devcontainer.md"
+src = "docs/integration/editor/vscode.md"
 
 [[file]]
 search = "/pixi.sh/v{current_version}/"

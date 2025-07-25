@@ -1,22 +1,24 @@
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
+use std::{
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
-use pixi_git::sha::GitSha as PixiGitSha;
-use pixi_git::url::RepositoryUrl;
-use pixi_manifest::pypi::pypi_options::FindLinksUrlOrPath;
-use pixi_manifest::pypi::pypi_options::{IndexStrategy, NoBuild, PypiOptions};
+use crate::GitUrlWithPrefix;
+use miette::IntoDiagnostic;
+use pep440_rs::VersionSpecifiers;
+use pixi_git::{git::GitReference as PixiGitReference, sha::GitSha as PixiGitSha};
+use pixi_manifest::pypi::pypi_options::{
+    FindLinksUrlOrPath, IndexStrategy, NoBinary, NoBuild, NoBuildIsolation, PypiOptions,
+};
 use pixi_record::{LockedGitUrl, PinnedGitCheckout, PinnedGitSpec};
 use pixi_spec::GitReference as PixiReference;
-
-use pixi_git::git::GitReference as PixiGitReference;
-
-use pep440_rs::VersionSpecifiers;
 use uv_configuration::BuildOptions;
 use uv_distribution_types::{GitSourceDist, Index, IndexLocations, IndexUrl};
 use uv_pep508::{InvalidNameError, PackageName, VerbatimUrl, VerbatimUrlError};
 use uv_python::PythonEnvironment;
+use uv_redacted::DisplaySafeUrl;
 
-use crate::VersionError;
+use crate::{ConversionError, VersionError};
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConvertFlatIndexLocationError {
@@ -27,20 +29,30 @@ pub enum ConvertFlatIndexLocationError {
 }
 
 /// Convert PyPI options to build options
-pub fn no_build_to_build_options(no_build: &NoBuild) -> Result<BuildOptions, InvalidNameError> {
+pub fn pypi_options_to_build_options(
+    no_build: &NoBuild,
+    no_binary: &NoBinary,
+) -> Result<BuildOptions, InvalidNameError> {
     let uv_no_build = match no_build {
         NoBuild::None => uv_configuration::NoBuild::None,
         NoBuild::All => uv_configuration::NoBuild::All,
-        NoBuild::Packages(ref vec) => uv_configuration::NoBuild::Packages(
+        NoBuild::Packages(vec) => uv_configuration::NoBuild::Packages(
             vec.iter()
-                .map(|s| PackageName::new(s.to_string()))
+                .map(|s| PackageName::from_str(s.as_ref()))
                 .collect::<Result<Vec<_>, _>>()?,
         ),
     };
-    Ok(BuildOptions::new(
-        uv_configuration::NoBinary::default(),
-        uv_no_build,
-    ))
+    let uv_no_binary = match no_binary {
+        NoBinary::None => uv_configuration::NoBinary::None,
+        NoBinary::All => uv_configuration::NoBinary::All,
+        NoBinary::Packages(vec) => uv_configuration::NoBinary::Packages(
+            vec.iter()
+                .map(|s| PackageName::from_str(s.as_ref()))
+                .collect::<Result<Vec<_>, _>>()?,
+        ),
+    };
+
+    Ok(BuildOptions::new(uv_no_binary, uv_no_build))
 }
 
 /// Convert the subset of pypi-options to index locations
@@ -60,6 +72,7 @@ pub fn pypi_options_to_index_locations(
     let index = options
         .index_url
         .clone()
+        .map(DisplaySafeUrl::from)
         .map(VerbatimUrl::from_url)
         .map(IndexUrl::from)
         .map(Index::from_index_url)
@@ -72,6 +85,7 @@ pub fn pypi_options_to_index_locations(
         .into_iter()
         .flat_map(|urls| {
             urls.into_iter()
+                .map(DisplaySafeUrl::from)
                 .map(VerbatimUrl::from_url)
                 .map(IndexUrl::from)
                 .map(Index::from_extra_index_url)
@@ -84,7 +98,7 @@ pub fn pypi_options_to_index_locations(
             .map(|url| match url {
                 FindLinksUrlOrPath::Path(relative) => VerbatimUrl::from_path(&relative, base_path)
                     .map_err(|e| ConvertFlatIndexLocationError::VerbatimUrlError(e, relative)),
-                FindLinksUrlOrPath::Url(url) => Ok(VerbatimUrl::from_url(url.clone())),
+                FindLinksUrlOrPath::Url(url) => Ok(VerbatimUrl::from_url(url.clone().into())),
             })
             .collect::<Result<Vec<_>, _>>()?
             .into_iter()
@@ -120,6 +134,7 @@ pub fn locked_indexes_to_index_locations(
         .indexes
         .first()
         .cloned()
+        .map(DisplaySafeUrl::from)
         .map(VerbatimUrl::from_url)
         .map(IndexUrl::from)
         .map(Index::from_index_url)
@@ -129,6 +144,7 @@ pub fn locked_indexes_to_index_locations(
         .iter()
         .skip(1)
         .cloned()
+        .map(DisplaySafeUrl::from)
         .map(VerbatimUrl::from_url)
         .map(IndexUrl::from)
         .map(Index::from_extra_index_url);
@@ -141,7 +157,9 @@ pub fn locked_indexes_to_index_locations(
                     ConvertFlatIndexLocationError::VerbatimUrlError(e, relative.clone())
                 })
             }
-            rattler_lock::FindLinksUrlOrPath::Url(url) => Ok(VerbatimUrl::from_url(url.clone())),
+            rattler_lock::FindLinksUrlOrPath::Url(url) => {
+                Ok(VerbatimUrl::from_url(url.clone().into()))
+            }
         })
         .collect::<Result<Vec<_>, _>>()?
         .into_iter()
@@ -157,38 +175,56 @@ pub fn locked_indexes_to_index_locations(
     Ok(IndexLocations::new(indexes, flat_index, no_index))
 }
 
-fn packages_to_build_isolation<'a>(
-    names: Option<&'a [PackageName]>,
-    python_environment: &'a PythonEnvironment,
-) -> uv_types::BuildIsolation<'a> {
-    if let Some(package_names) = names {
-        uv_types::BuildIsolation::SharedPackage(python_environment, package_names)
-    } else {
-        uv_types::BuildIsolation::default()
+#[derive(Clone)]
+pub enum BuildIsolation {
+    /// No build isolation
+    Isolated,
+    /// Build isolation with a shared environment
+    Shared,
+    /// Build isolation with a shared environment and a list of package names
+    SharedPackage(Vec<PackageName>),
+}
+
+impl BuildIsolation {
+    pub fn to_uv<'a>(&'a self, python_env: &'a PythonEnvironment) -> uv_types::BuildIsolation<'a> {
+        match self {
+            BuildIsolation::Isolated => uv_types::BuildIsolation::Isolated,
+            BuildIsolation::Shared => uv_types::BuildIsolation::Shared(python_env),
+            BuildIsolation::SharedPackage(packages) => {
+                uv_types::BuildIsolation::SharedPackage(python_env, packages)
+            }
+        }
+    }
+
+    pub fn to_uv_with<'a, F: FnOnce() -> &'a PythonEnvironment>(
+        &'a self,
+        get_env: F,
+    ) -> uv_types::BuildIsolation<'a> {
+        match self {
+            BuildIsolation::Isolated => uv_types::BuildIsolation::Isolated,
+            BuildIsolation::Shared => uv_types::BuildIsolation::Shared(get_env()),
+            BuildIsolation::SharedPackage(packages) => {
+                uv_types::BuildIsolation::SharedPackage(get_env(), packages)
+            }
+        }
     }
 }
 
-/// Convert optional list of strings to package names
-pub fn isolated_names_to_packages(
-    names: Option<&[String]>,
-) -> Result<Option<Vec<PackageName>>, InvalidNameError> {
-    if let Some(names) = names {
-        let names = names
-            .iter()
-            .map(|n| n.parse())
-            .collect::<Result<Vec<PackageName>, _>>()?;
-        Ok(Some(names))
-    } else {
-        Ok(None)
-    }
-}
+impl TryFrom<NoBuildIsolation> for BuildIsolation {
+    type Error = ConversionError;
 
-/// Convert optional list of package names to build isolation
-pub fn names_to_build_isolation<'a>(
-    names: Option<&'a [PackageName]>,
-    env: &'a PythonEnvironment,
-) -> uv_types::BuildIsolation<'a> {
-    packages_to_build_isolation(names, env)
+    fn try_from(no_build: NoBuildIsolation) -> Result<Self, Self::Error> {
+        Ok(match no_build {
+            NoBuildIsolation::All => BuildIsolation::Shared,
+            NoBuildIsolation::Packages(packages) if packages.is_empty() => BuildIsolation::Isolated,
+            NoBuildIsolation::Packages(packages) => BuildIsolation::SharedPackage(
+                packages
+                    .into_iter()
+                    .map(|pkg| to_uv_normalize(&pkg))
+                    .collect::<Result<_, _>>()?,
+            ),
+        })
+    }
 }
 
 /// Convert pixi `IndexStrategy` to `uv_types::IndexStrategy`
@@ -206,34 +242,35 @@ pub fn to_index_strategy(
     }
 }
 
-pub fn into_uv_git_reference(git_ref: PixiGitReference) -> uv_git::GitReference {
+pub fn into_uv_git_reference(git_ref: PixiGitReference) -> uv_git_types::GitReference {
     match git_ref {
-        PixiGitReference::Branch(branch) => uv_git::GitReference::Branch(branch),
-        PixiGitReference::Tag(tag) => uv_git::GitReference::Tag(tag),
+        PixiGitReference::Branch(branch) => uv_git_types::GitReference::Branch(branch),
+        PixiGitReference::Tag(tag) => uv_git_types::GitReference::Tag(tag),
         PixiGitReference::ShortCommit(rev) | PixiGitReference::FullCommit(rev) => {
-            uv_git::GitReference::BranchOrTagOrCommit(rev)
+            uv_git_types::GitReference::BranchOrTagOrCommit(rev)
         }
-        PixiGitReference::BranchOrTag(rev) => uv_git::GitReference::BranchOrTag(rev),
+        PixiGitReference::BranchOrTag(rev) => uv_git_types::GitReference::BranchOrTag(rev),
         PixiGitReference::BranchOrTagOrCommit(rev) => {
-            uv_git::GitReference::BranchOrTagOrCommit(rev)
+            uv_git_types::GitReference::BranchOrTagOrCommit(rev)
         }
-        PixiGitReference::NamedRef(rev) => uv_git::GitReference::NamedRef(rev),
-        PixiGitReference::DefaultBranch => uv_git::GitReference::DefaultBranch,
+        PixiGitReference::NamedRef(rev) => uv_git_types::GitReference::NamedRef(rev),
+        PixiGitReference::DefaultBranch => uv_git_types::GitReference::DefaultBranch,
     }
 }
 
-pub fn into_uv_git_sha(git_sha: PixiGitSha) -> uv_git::GitOid {
-    uv_git::GitOid::from_str(&git_sha.to_string()).expect("we expect it to be the same git sha")
+pub fn into_uv_git_sha(git_sha: PixiGitSha) -> uv_git_types::GitOid {
+    uv_git_types::GitOid::from_str(&git_sha.to_string())
+        .expect("we expect it to be the same git sha")
 }
 
-pub fn into_pixi_reference(git_reference: uv_git::GitReference) -> PixiReference {
+pub fn into_pixi_reference(git_reference: uv_git_types::GitReference) -> PixiReference {
     match git_reference {
-        uv_git::GitReference::Branch(branch) => PixiReference::Branch(branch.to_string()),
-        uv_git::GitReference::Tag(tag) => PixiReference::Tag(tag.to_string()),
-        uv_git::GitReference::BranchOrTag(rev) => PixiReference::Rev(rev.to_string()),
-        uv_git::GitReference::BranchOrTagOrCommit(rev) => PixiReference::Rev(rev.to_string()),
-        uv_git::GitReference::NamedRef(rev) => PixiReference::Rev(rev.to_string()),
-        uv_git::GitReference::DefaultBranch => PixiReference::DefaultBranch,
+        uv_git_types::GitReference::Branch(branch) => PixiReference::Branch(branch.to_string()),
+        uv_git_types::GitReference::Tag(tag) => PixiReference::Tag(tag.to_string()),
+        uv_git_types::GitReference::BranchOrTag(rev) => PixiReference::Rev(rev.to_string()),
+        uv_git_types::GitReference::BranchOrTagOrCommit(rev) => PixiReference::Rev(rev.to_string()),
+        uv_git_types::GitReference::NamedRef(rev) => PixiReference::Rev(rev.to_string()),
+        uv_git_types::GitReference::DefaultBranch => PixiReference::DefaultBranch,
     }
 }
 
@@ -257,7 +294,7 @@ pub fn into_pinned_git_spec(dist: GitSourceDist) -> PinnedGitSpec {
         reference,
     );
 
-    PinnedGitSpec::new(dist.git.repository().clone(), pinned_checkout)
+    PinnedGitSpec::new(dist.git.repository().clone().into(), pinned_checkout)
 }
 
 /// Convert a locked git url into a parsed git url
@@ -275,10 +312,24 @@ pub fn to_parsed_git_url(
     let git_source = PinnedGitCheckout::from_locked_url(locked_git_url)?;
     // Construct manually [`ParsedGitUrl`] from locked url.
     let parsed_git_url = uv_pypi_types::ParsedGitUrl::from_source(
-        RepositoryUrl::new(&locked_git_url.to_url()).into(),
-        into_uv_git_reference(git_source.reference.into()),
-        Some(into_uv_git_sha(git_source.commit)),
-        git_source.subdirectory.map(|s| PathBuf::from(s.as_str())),
+        uv_git_types::GitUrl::from_fields(
+            {
+                let mut url = locked_git_url.to_url();
+                // Locked git url contains query parameters and fragments
+                // so we need to clean it to a base repository URL
+                url.set_fragment(None);
+                url.set_query(None);
+
+                let git_url = GitUrlWithPrefix::from(&url);
+                git_url.to_display_safe_url()
+            },
+            into_uv_git_reference(git_source.reference.into()),
+            Some(into_uv_git_sha(git_source.commit)),
+        )
+        .into_diagnostic()?,
+        git_source
+            .subdirectory
+            .map(|s| PathBuf::from(s.as_str()).into_boxed_path()),
     );
 
     Ok(parsed_git_url)
@@ -293,12 +344,10 @@ pub fn to_uv_specifiers(
 }
 
 pub fn to_requirements<'req>(
-    requirements: impl Iterator<Item = &'req uv_pypi_types::Requirement>,
+    requirements: impl Iterator<Item = &'req uv_distribution_types::Requirement>,
 ) -> Result<Vec<pep508_rs::Requirement>, crate::ConversionError> {
     let requirements: Result<Vec<pep508_rs::Requirement>, _> = requirements
         .map(|requirement| {
-            let requirement: uv_pep508::Requirement<uv_pypi_types::VerbatimParsedUrl> =
-                uv_pep508::Requirement::from(requirement.clone());
             pep508_rs::Requirement::from_str(&requirement.to_string())
                 .map_err(crate::Pep508Error::Pep508Error)
         })
@@ -418,4 +467,18 @@ pub fn to_uv_trusted_host(
     trusted_host: &str,
 ) -> Result<uv_configuration::TrustedHost, crate::ConversionError> {
     Ok(uv_configuration::TrustedHost::from_str(trusted_host)?)
+}
+
+/// Converts a date to a `uv_resolver::ExcludeNewer`
+pub fn to_exclude_newer(exclude_newer: chrono::DateTime<chrono::Utc>) -> uv_resolver::ExcludeNewer {
+    let seconds_since_epoch = exclude_newer.timestamp();
+    let nanoseconds = exclude_newer.timestamp_subsec_nanos();
+    let timestamp = jiff::Timestamp::new(seconds_since_epoch, nanoseconds as _).unwrap_or(
+        if seconds_since_epoch < 0 {
+            jiff::Timestamp::MIN
+        } else {
+            jiff::Timestamp::MAX
+        },
+    );
+    uv_resolver::ExcludeNewer::from(timestamp)
 }

@@ -2,23 +2,26 @@ use std::{collections::HashMap, default::Default};
 
 use clap::Parser;
 use miette::IntoDiagnostic;
-use pixi_config::{ConfigCliActivation, ConfigCliPrompt};
+use pixi_config::{ConfigCli, ConfigCliActivation, ConfigCliPrompt};
 use rattler_lock::LockFile;
 use rattler_shell::{
     activation::{ActivationVariables, PathModificationBehavior},
-    shell::ShellEnum,
+    shell::{Shell, ShellEnum},
 };
 use serde::Serialize;
 use serde_json;
 
 use crate::{
-    activation::{get_activator, CurrentEnvVarBehavior},
+    UpdateLockFileOptions, Workspace, WorkspaceLocator,
+    activation::{CurrentEnvVarBehavior, get_activator},
     cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
     environment::get_update_lock_file_and_prefix,
+    lock_file::ReinstallPackages,
     prompt,
-    workspace::{get_activated_environment_variables, Environment, HasWorkspaceRef},
-    UpdateLockFileOptions, Workspace, WorkspaceLocator,
+    workspace::{Environment, HasWorkspaceRef, get_activated_environment_variables},
 };
+
+use super::cli_config::LockFileUpdateConfig;
 
 /// Print the pixi environment activation script.
 ///
@@ -36,6 +39,12 @@ pub struct Args {
 
     #[clap(flatten)]
     pub prefix_update_config: PrefixUpdateConfig,
+
+    #[clap(flatten)]
+    pub lock_file_update_config: LockFileUpdateConfig,
+
+    #[clap(flatten)]
+    config: ConfigCli,
 
     #[clap(flatten)]
     activation_config: ConfigCliActivation,
@@ -79,19 +88,31 @@ async fn generate_activation_script(
     // If we are in a conda environment, we need to deactivate it before activating
     // the host / build prefix
     let conda_prefix = std::env::var("CONDA_PREFIX").ok().map(|p| p.into());
-    let result = activator
+    let current_env = std::env::vars().collect::<HashMap<_, _>>();
+
+    let mut result = activator
         .activation(ActivationVariables {
             conda_prefix,
             path,
             path_modification_behavior: PathModificationBehavior::default(),
+            current_env,
         })
         .into_diagnostic()?;
+
+    if project.config().shell.source_completion_scripts() {
+        if let Some(completions_dir) = shell.completion_script_location() {
+            result
+                .script
+                .source_completions(&environment.dir().join(completions_dir))
+                .into_diagnostic()?;
+        }
+    }
 
     let script = result.script.contents().into_diagnostic()?;
     let hook = prompt::shell_hook(&shell).unwrap_or_default().to_owned();
 
     if project.config().change_ps1() {
-        let prompt_name = prompt::prompt_name(project.name(), environment.name());
+        let prompt_name = prompt::prompt_name(project.display_name(), environment.name());
         let shell_prompt = prompt::shell_prompt(&shell, prompt_name.as_str());
         Ok([script, hook, shell_prompt].join("\n"))
     } else {
@@ -127,9 +148,9 @@ async fn generate_environment_json(
 /// Prints the activation script to the stdout.
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = args
-        .prompt_config
-        .merge_config(args.activation_config.into())
-        .merge_config(args.prefix_update_config.config.clone().into());
+        .activation_config
+        .merge_config(args.prompt_config.merge_config(args.config.clone().into()));
+
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.project_config.workspace_locator_start())
         .locate()?
@@ -141,10 +162,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         &environment,
         args.prefix_update_config.update_mode(),
         UpdateLockFileOptions {
-            lock_file_usage: args.prefix_update_config.lock_file_usage(),
-            no_install: args.prefix_update_config.no_install(),
+            lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
+            no_install: args.prefix_update_config.no_install
+                && args.lock_file_update_config.no_lockfile_update,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         },
+        ReinstallPackages::default(),
         false,
     )
     .await?;
@@ -153,7 +176,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         true => {
             generate_environment_json(
                 &environment,
-                &lock_file_data.lock_file,
+                &lock_file_data.into_lock_file(),
                 workspace.config().force_activate(),
                 workspace.config().experimental_activation_cache_usage(),
             )
@@ -173,32 +196,28 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 #[cfg(test)]
 mod tests {
     use rattler_conda_types::Platform;
-    use rattler_shell::shell::{Bash, CmdExe, Fish, NuShell, PowerShell, Shell, Xonsh, Zsh};
+    #[cfg(target_family = "windows")]
+    use rattler_shell::shell::CmdExe;
+    #[cfg(not(target_family = "windows"))]
+    use rattler_shell::shell::{Bash, Fish, Shell, Xonsh, Zsh};
+    use rattler_shell::shell::{NuShell, PowerShell};
 
     use super::*;
 
+    #[cfg(not(target_family = "windows"))]
     #[tokio::test]
-    async fn test_shell_hook() {
+    async fn test_shell_hook_unix() {
         let default_shell = rattler_shell::shell::ShellEnum::default();
         let path_var_name = default_shell.path_var(&Platform::current());
         let project = WorkspaceLocator::default().locate().unwrap();
         let environment = project.default_environment();
+
         let script =
             generate_activation_script(Some(ShellEnum::Bash(Bash)), &environment, &project)
                 .await
                 .unwrap();
         assert!(script.contains(&format!("export {path_var_name}=")));
         assert!(script.contains("export CONDA_PREFIX="));
-
-        let script = generate_activation_script(
-            Some(ShellEnum::PowerShell(PowerShell::default())),
-            &environment,
-            &project,
-        )
-        .await
-        .unwrap();
-        assert!(script.contains(&format!("${{Env:{path_var_name}}}")));
-        assert!(script.contains("${Env:CONDA_PREFIX}"));
 
         let script = generate_activation_script(Some(ShellEnum::Zsh(Zsh)), &environment, &project)
             .await
@@ -219,6 +238,43 @@ mod tests {
                 .unwrap();
         assert!(script.contains(&format!("${path_var_name} = ")));
         assert!(script.contains("$CONDA_PREFIX = "));
+
+        // Powershell is universal so we go with that on UNIX too
+        let script = generate_activation_script(
+            Some(ShellEnum::PowerShell(PowerShell::default())),
+            &environment,
+            &project,
+        )
+        .await
+        .unwrap();
+        assert!(script.contains(&format!("${{Env:{path_var_name}}}")));
+        assert!(script.contains("${Env:CONDA_PREFIX}"));
+
+        let script =
+            generate_activation_script(Some(ShellEnum::NuShell(NuShell)), &environment, &project)
+                .await
+                .unwrap();
+        assert!(script.contains(&format!("$env.{path_var_name} = ")));
+        assert!(script.contains("$env.CONDA_PREFIX = "));
+    }
+
+    #[cfg(target_family = "windows")]
+    #[tokio::test]
+    async fn test_shell_hook_windows() {
+        let default_shell = rattler_shell::shell::ShellEnum::default();
+        let path_var_name = default_shell.path_var(&Platform::current());
+        let project = WorkspaceLocator::default().locate().unwrap();
+        let environment = project.default_environment();
+
+        let script = generate_activation_script(
+            Some(ShellEnum::PowerShell(PowerShell::default())),
+            &environment,
+            &project,
+        )
+        .await
+        .unwrap();
+        assert!(script.contains(&format!("${{Env:{path_var_name}}}")));
+        assert!(script.contains("${Env:CONDA_PREFIX}"));
 
         let script =
             generate_activation_script(Some(ShellEnum::CmdExe(CmdExe)), &environment, &project)

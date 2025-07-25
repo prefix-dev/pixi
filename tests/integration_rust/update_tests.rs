@@ -3,8 +3,8 @@ use rattler_conda_types::Platform;
 use tempfile::TempDir;
 
 use crate::common::{
-    package_database::{Package, PackageDatabase},
     LockFileExt, PixiControl,
+    package_database::{Package, PackageDatabase},
 };
 
 #[tokio::test]

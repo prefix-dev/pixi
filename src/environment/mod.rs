@@ -1,39 +1,39 @@
 pub(crate) mod conda_metadata;
 mod conda_prefix;
+pub mod list;
 mod pypi_prefix;
 mod python_status;
-mod reporters;
-
+pub use conda_prefix::{CondaPrefixUpdated, CondaPrefixUpdater, CondaPrefixUpdaterBuilder};
+use dialoguer::theme::ColorfulTheme;
+use futures::{FutureExt, StreamExt, TryStreamExt, stream};
+use miette::{Context, IntoDiagnostic};
+use pixi_consts::consts;
+use pixi_git::credentials::store_credentials_from_url;
+use pixi_manifest::FeaturesExt;
+use pixi_progress::await_in_progress;
+use pixi_pypi_spec::PixiPypiSpec;
+use pixi_spec::{GitSpec, PixiSpec};
+pub use pypi_prefix::update_prefix_pypi;
+pub use python_status::PythonStatus;
+use rattler_conda_types::Platform;
+use rattler_lock::{LockedPackageRef, UrlOrPath};
+use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::{
     collections::HashMap,
     hash::{Hash, Hasher},
     io::ErrorKind,
     path::{Path, PathBuf},
 };
-
-use dialoguer::theme::ColorfulTheme;
-use miette::{Context, IntoDiagnostic};
-use pixi_consts::consts;
-use pixi_git::credentials::store_credentials_from_url;
-use pixi_manifest::{FeaturesExt, PyPiRequirement};
-use pixi_progress::await_in_progress;
-use pixi_spec::{GitSpec, PixiSpec};
-use rattler_conda_types::Platform;
-use rattler_lock::{LockedPackageRef, UrlOrPath};
-use serde::{Deserialize, Serialize};
 use xxhash_rust::xxh3::Xxh3;
 
 use crate::{
-    lock_file::{LockFileDerivedData, UpdateLockFileOptions, UpdateMode},
+    Workspace,
+    lock_file::{LockFileDerivedData, ReinstallPackages, UpdateLockFileOptions, UpdateMode},
     prefix::Prefix,
     rlimit::try_increase_rlimit_to_sensible,
-    workspace::{grouped_environment::GroupedEnvironment, Environment, HasWorkspaceRef},
-    Workspace,
+    workspace::{Environment, HasWorkspaceRef, grouped_environment::GroupedEnvironment},
 };
-
-pub use conda_prefix::{CondaPrefixUpdated, CondaPrefixUpdater, CondaPrefixUpdaterBuilder};
-pub use pypi_prefix::update_prefix_pypi;
-pub use python_status::PythonStatus;
 
 /// Verify the location of the prefix folder is not changed so the applied
 /// prefix path is still valid. Errors when there is a file system error or the
@@ -44,7 +44,7 @@ pub async fn verify_prefix_location_unchanged(environment_dir: &Path) -> miette:
         .join(consts::CONDA_META_DIR)
         .join(consts::PREFIX_FILE_NAME);
 
-    tracing::info!(
+    tracing::debug!(
         "verifying prefix location is unchanged, with prefix file: {}",
         prefix_file.display()
     );
@@ -101,7 +101,7 @@ async fn prefix_location_changed(
             help = "Remove the environment directory, pixi will recreate it on the next run.",
             "The environment directory has moved from `{}` to `{}`. Environments are non-relocatable, moving them can cause issues.", previous_dir.display(), environment_dir.display()
         )
-        .into())
+            .into())
     }
 }
 
@@ -244,7 +244,7 @@ pub(crate) fn read_environment_file(
 ///     2. It verifies that the system requirements are met.
 ///     3. It verifies the absence of the `env` folder.
 ///     4. It verifies that the prefix contains a `.gitignore` file.
-pub async fn sanity_check_project(project: &Workspace) -> miette::Result<()> {
+pub async fn sanity_check_workspace(project: &Workspace) -> miette::Result<()> {
     // Sanity check of prefix location
     verify_prefix_location_unchanged(project.environments_dir().as_path()).await?;
 
@@ -265,7 +265,7 @@ pub async fn sanity_check_project(project: &Workspace) -> miette::Result<()> {
 }
 
 /// Extract [`GitSpec`] requirements from the project dependencies.
-pub fn extract_git_requirements_from_project(project: &Workspace) -> Vec<GitSpec> {
+pub fn extract_git_requirements_from_workspace(project: &Workspace) -> Vec<GitSpec> {
     let mut requirements = Vec::new();
 
     for env in project.environments() {
@@ -283,7 +283,7 @@ pub fn extract_git_requirements_from_project(project: &Workspace) -> Vec<GitSpec
 
             for (_, pypi_spec) in pypi_dependencies {
                 for spec in pypi_spec {
-                    if let PyPiRequirement::Git { url, .. } = spec {
+                    if let PixiPypiSpec::Git { url, .. } = spec {
                         requirements.push(url);
                     }
                 }
@@ -323,11 +323,38 @@ pub async fn store_credentials_from_project(project: &Workspace) -> miette::Resu
     Ok(())
 }
 
+/// Create a file at the given path with the given contents if it does not exist.
+/// If the file already exists, it does nothing.
+/// If the file cannot be created due to a read-only filesystem,
+/// we'll ignore the error as it's not that important to the function of pixi.
+async fn best_effort_write_file_if_missing(
+    path: &Path,
+    contents: &str,
+    error_message: &str,
+) -> miette::Result<()> {
+    if !path.exists() {
+        match tokio::fs::write(path, contents).await {
+            Ok(_) => Ok(()),
+            Err(e) if e.kind() == ErrorKind::ReadOnlyFilesystem => {
+                tracing::debug!("Failed to create file at: {}, error: {}", path.display(), e);
+                Ok(())
+            }
+            Err(e) => Err(e)
+                .into_diagnostic()
+                .wrap_err(format!("{error_message} {}", path.display())),
+        }?;
+    }
+    Ok(())
+}
+
 /// Ensure that the `.pixi/` directory exists and contains a `.gitignore` file.
 /// If the directory doesn't exist, create it.
 /// If the `.gitignore` file doesn't exist, create it with a '*' pattern.
+/// Also creates a `.condapackageignore` file to exclude the `.pixi` directory
+/// from builds.
 async fn ensure_pixi_directory_and_gitignore(pixi_dir: &Path) -> miette::Result<()> {
     let gitignore_path = pixi_dir.join(".gitignore");
+    let condapackageignore_path = pixi_dir.join(".condapackageignore");
 
     // Create the `.pixi/` directory if it doesn't exist
     if !pixi_dir.exists() {
@@ -340,16 +367,19 @@ async fn ensure_pixi_directory_and_gitignore(pixi_dir: &Path) -> miette::Result<
             ))?;
     }
 
-    // Create or check the .gitignore file
-    if !gitignore_path.exists() {
-        tokio::fs::write(&gitignore_path, "*\n")
-            .await
-            .into_diagnostic()
-            .wrap_err(format!(
-                "Failed to create .gitignore file at {}",
-                gitignore_path.display()
-            ))?;
-    }
+    best_effort_write_file_if_missing(
+        &gitignore_path,
+        "*\n!config.toml\n",
+        "Failed to create .gitignore file at",
+    )
+    .await?;
+
+    best_effort_write_file_if_missing(
+        &condapackageignore_path,
+        ".pixi\n!.pixi/config.toml\n",
+        "Failed to create .condapackageignore file at",
+    )
+    .await?;
 
     Ok(())
 }
@@ -386,36 +416,66 @@ impl LockFileUsage {
 
 /// Update the prefix if it doesn't exist or if it is not up-to-date.
 ///
-/// The `sparse_repo_data` is used when the lock-file is update. We pass it into
-/// this function to make sure the data is not loaded twice since the repodata
-/// takes up a lot of memory and takes a while to load. If `sparse_repo_data` is
-/// `None` it will be downloaded. If the lock-file is not updated, the
-/// `sparse_repo_data` is ignored.
+/// To updated multiple prefixes at once, use [`get_update_lock_file_and_prefixes`].
 pub async fn get_update_lock_file_and_prefix<'env>(
     environment: &Environment<'env>,
     update_mode: UpdateMode,
     update_lock_file_options: UpdateLockFileOptions,
+    reinstall_packages: ReinstallPackages,
     skip_local_sources: bool,
 ) -> miette::Result<(LockFileDerivedData<'env>, Prefix)> {
-    let current_platform = environment.best_platform();
-    let project = environment.workspace();
+    let (lock_file, prefixes) = get_update_lock_file_and_prefixes(
+        &[environment.clone()],
+        update_mode,
+        update_lock_file_options,
+        reinstall_packages,
+    )
+    .await?;
+    Ok((
+        lock_file,
+        prefixes
+            .into_iter()
+            .next()
+            .expect("must be at least one prefix"),
+    ))
+}
 
-    // Do not install if the platform is not supported
-    let mut no_install = update_lock_file_options.no_install;
-    if !no_install && !environment.platforms().contains(&current_platform) {
-        tracing::warn!("Not installing dependency on current platform: ({current_platform}) as it is not part of this project's supported platforms.");
-        no_install = true;
+/// Update all the specified prefixes if it doesn't exist or if it is not
+/// up-to-date.
+pub async fn get_update_lock_file_and_prefixes<'env>(
+    environments: &[Environment<'env>],
+    update_mode: UpdateMode,
+    update_lock_file_options: UpdateLockFileOptions,
+    reinstall_packages: ReinstallPackages,
+) -> miette::Result<(LockFileDerivedData<'env>, Vec<Prefix>)> {
+    if environments.is_empty() {
+        return Err(miette::miette!("No environments provided to install."));
+    }
+
+    let workspace = environments[0].workspace();
+
+    let no_install = update_lock_file_options.no_install;
+    let mut no_install_envs = HashSet::new();
+    for env in environments {
+        let current_platform = env.best_platform();
+        if !no_install && !env.platforms().contains(&current_platform) {
+            tracing::warn!(
+                "Not installing dependency for ({}) on current platform: ({current_platform}) as it is not part of this project's supported platforms.",
+                env.name()
+            );
+            no_install_envs.insert(env);
+        }
     }
 
     // Make sure the project is in a sane state
-    sanity_check_project(project).await?;
+    sanity_check_workspace(workspace).await?;
 
     // Store the git credentials from the git requirements
-    let requirements = extract_git_requirements_from_project(project);
+    let requirements = extract_git_requirements_from_workspace(workspace);
     store_credentials_from_requirements(requirements);
 
     // Ensure that the lock-file is up-to-date
-    let mut lock_file = project
+    let lock_file = workspace
         .update_lock_file(UpdateLockFileOptions {
             lock_file_usage: update_lock_file_options.lock_file_usage,
             no_install,
@@ -424,15 +484,23 @@ pub async fn get_update_lock_file_and_prefix<'env>(
         .await?;
 
     // Get the prefix from the lock-file.
-    let prefix = if no_install {
-        Prefix::new(environment.dir())
-    } else {
-        lock_file
-            .prefix(environment, update_mode, skip_local_sources)
-            .await?
-    };
+    let lock_file_ref = &lock_file;
+    let reinstall_packages = &reinstall_packages;
+    let prefixes = stream::iter(environments.iter())
+        .map(move |env| {
+            if no_install || no_install_envs.contains(env) {
+                std::future::ready(Ok(Prefix::new(env.dir()))).left_future()
+            } else {
+                lock_file_ref
+                    .prefix(env, update_mode, reinstall_packages, skip_local_sources)
+                    .right_future()
+            }
+        })
+        .buffer_unordered(environments.len())
+        .try_collect()
+        .await?;
 
-    Ok((lock_file, prefix))
+    Ok((lock_file, prefixes))
 }
 
 pub type PerEnvironment<'p, T> = HashMap<Environment<'p>, T>;

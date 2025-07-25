@@ -1,5 +1,5 @@
 use itertools::Itertools;
-use miette::{Context, IntoDiagnostic};
+use miette::{Context, Diagnostic, IntoDiagnostic};
 use pixi_utils::{is_binary_folder, strip_executable_extension};
 use rattler_conda_types::{PackageName, Platform, PrefixRecord};
 use rattler_shell::{
@@ -12,7 +12,22 @@ use std::{
     ffi::OsStr,
     path::{Path, PathBuf},
 };
+use thiserror::Error;
 use uv_configuration::RAYON_INITIALIZE;
+
+#[derive(Error, Debug, Diagnostic)]
+pub enum PrefixError {
+    #[error("failed to collect prefix records from '{1}'")]
+    #[diagnostic(help("try `pixi clean` to reset the environment and run the command again"))]
+    PrefixRecordCollectionError(#[source] std::io::Error, PathBuf),
+
+    #[error("failed to find the designated package '{0}' in the prefix: '{1}'")]
+    DesignatedPackageNotFound(String, PathBuf),
+
+    #[error("executing prefix related task failed")]
+    #[diagnostic(help("try running the command again, or `pixi clean` to reset the environment"))]
+    JoinError,
+}
 
 /// Points to a directory that serves as a Conda prefix.
 #[derive(Debug, Clone)]
@@ -48,13 +63,16 @@ impl Prefix {
 
     /// Scans the `conda-meta` directory of an environment and returns all the
     /// [`PrefixRecord`]s found in there.
-    pub fn find_installed_packages(&self) -> miette::Result<Vec<PrefixRecord>> {
+    pub fn find_installed_packages(&self) -> Result<Vec<PrefixRecord>, PrefixError> {
         // Initialize rayon explicitly to avoid implicit initialization.
         LazyLock::force(&RAYON_INITIALIZE);
 
-        PrefixRecord::collect_from_prefix(&self.root).into_diagnostic()
+        PrefixRecord::collect_from_prefix(&self.root)
+            .map_err(|err| PrefixError::PrefixRecordCollectionError(err, self.root.clone()))
     }
 
+    /// Processes prefix records (that you can get by using `find_installed_packages`)
+    /// to filter and collect executable files.
     /// Processes prefix records (that you can get by using
     /// `find_installed_packages`) to filter and collect executable files.
     pub fn find_executables(&self, prefix_packages: &[PrefixRecord]) -> Vec<Executable> {
@@ -66,7 +84,7 @@ impl Prefix {
                     .iter()
                     .filter(|relative_path| self.is_executable(relative_path))
                     .filter_map(|path| {
-                        path.iter().last().and_then(OsStr::to_str).map(|name| {
+                        path.iter().next_back().and_then(OsStr::to_str).map(|name| {
                             Executable::new(
                                 strip_executable_extension(name.to_string()),
                                 path.clone(),
@@ -110,12 +128,15 @@ impl Prefix {
     pub async fn find_designated_package(
         &self,
         package_name: &PackageName,
-    ) -> miette::Result<PrefixRecord> {
+    ) -> Result<PrefixRecord, PrefixError> {
         let prefix_records = self.find_installed_packages()?;
         prefix_records
             .into_iter()
             .find(|r| r.repodata_record.package_record.name == *package_name)
-            .ok_or_else(|| miette::miette!("could not find {} in prefix", package_name.as_source()))
+            .ok_or(PrefixError::DesignatedPackageNotFound(
+                package_name.as_normalized().to_string(),
+                self.root.clone(),
+            ))
     }
 }
 

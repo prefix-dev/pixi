@@ -1,16 +1,18 @@
-from pathlib import Path
+import platform
+import shutil
 import tomllib
+from pathlib import Path
 
 import pytest
 import tomli_w
-from ..common import verify_cli_command, ExitCode, exec_extension, bat_extension
-import platform
+
+from ..common import ExitCode, bat_extension, exec_extension, verify_cli_command
 
 MANIFEST_VERSION = 1
 
 
 @pytest.mark.slow
-def test_sync_dependencies(pixi: Path, tmp_pixi_workspace: Path) -> None:
+def test_sync_injected_python_lib_is_found(pixi: Path, tmp_pixi_workspace: Path) -> None:
     env = {"PIXI_HOME": str(tmp_pixi_workspace)}
     manifests = tmp_pixi_workspace.joinpath("manifests")
     manifests.mkdir()
@@ -29,25 +31,29 @@ def test_sync_dependencies(pixi: Path, tmp_pixi_workspace: Path) -> None:
     verify_cli_command([pixi, "global", "sync"], env=env)
     verify_cli_command([python_injected, "--version"], env=env, stdout_contains="3.13.0")
     verify_cli_command(
-        [python_injected, "-c", "import numpy; print(numpy.__version__)"], ExitCode.FAILURE, env=env
-    )
-
-    # Add numpy
-    parsed_toml["envs"]["test"]["dependencies"]["numpy"] = "2.1.3"
-    manifest.write_text(tomli_w.dumps(parsed_toml))
-    verify_cli_command([pixi, "global", "sync"], env=env)
-    verify_cli_command(
-        [python_injected, "-c", "import numpy; print(numpy.__version__)"],
+        [python_injected, "-c", "import narwhals; print(narwhals.__version__)"],
+        ExitCode.FAILURE,
         env=env,
-        stdout_contains="2.1.3",
     )
 
-    # Remove numpy again
-    del parsed_toml["envs"]["test"]["dependencies"]["numpy"]
+    # Add narwhals
+    parsed_toml["envs"]["test"]["dependencies"]["narwhals"] = "1.29.0"
     manifest.write_text(tomli_w.dumps(parsed_toml))
     verify_cli_command([pixi, "global", "sync"], env=env)
     verify_cli_command(
-        [python_injected, "-c", "import numpy; print(numpy.__version__)"], ExitCode.FAILURE, env=env
+        [python_injected, "-c", "import narwhals; print(narwhals.__version__)"],
+        env=env,
+        stdout_contains="1.29.0",
+    )
+
+    # Remove narwhals again
+    del parsed_toml["envs"]["test"]["dependencies"]["narwhals"]
+    manifest.write_text(tomli_w.dumps(parsed_toml))
+    verify_cli_command([pixi, "global", "sync"], env=env)
+    verify_cli_command(
+        [python_injected, "-c", "import narwhals; print(narwhals.__version__)"],
+        ExitCode.FAILURE,
+        env=env,
     )
 
     # Remove python
@@ -312,11 +318,7 @@ def test_expose_basic(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
     nested_dummy = tmp_pixi_workspace / "bin" / exec_extension("dummy")
 
     # Add dummy-a with simple syntax
-    verify_cli_command(
-        [pixi, "global", "expose", "add", "--environment=test", "dummy-a"],
-        ExitCode.SUCCESS,
-        env=env,
-    )
+    verify_cli_command([pixi, "global", "expose", "add", "--environment=test", "dummy-a"], env=env)
     assert dummy_a.is_file()
 
     # Add dummy1 and dummy3 and nested/dummy
@@ -401,10 +403,8 @@ dummy-a = "dummy-a"
 
     verify_cli_command(
         [pixi, "global", "expose", "add", "--environment=test", "dummy-aa=dummy-a"],
-        ExitCode.SUCCESS,
         env=env,
     )
-    print(manifest.read_text())
     # The tables in the manifest have been preserved
     assert manifest.read_text() == original_toml + 'dummy-aa = "dummy-a"\n'
 
@@ -813,7 +813,71 @@ def test_install_twice_with_same_env_name_as_expose(
     assert dummy_b.is_file()
 
 
-def test_install_twice_with_force_reinstall(
+def test_install_force_reinstall_removes_original_environment(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+
+    dummy_b = tmp_pixi_workspace / "bin" / exec_extension("dummy-b")
+    dummy_c = tmp_pixi_workspace / "bin" / exec_extension("dummy-c")
+
+    env_name = "test_env"
+
+    # Install dummy-b
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "--environment",
+            env_name,
+            "dummy-b",
+        ],
+        env=env,
+    )
+    assert dummy_b.is_file()
+    assert not dummy_c.is_file()
+
+    # Install dummy-c, it should be added to the environment
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "--environment",
+            env_name,
+            "dummy-c",
+        ],
+        env=env,
+    )
+    assert dummy_b.is_file()
+    assert dummy_c.is_file()
+
+    # Install dummy-c with `--force-reinstall
+    # It should create a fresh environment
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "--environment",
+            env_name,
+            "dummy-c",
+            "--force-reinstall",
+        ],
+        env=env,
+    )
+    assert not dummy_b.is_file()
+    assert dummy_c.is_file()
+
+
+def test_install_with_different_channel_and_force_reinstall(
     pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str, dummy_channel_2: str
 ) -> None:
     env = {"PIXI_HOME": str(tmp_pixi_workspace)}
@@ -1890,3 +1954,124 @@ def test_remove_dependency(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1
         env=env,
         stderr_contains="Environment dummy-a doesn't exist",
     )
+
+
+def test_update_env_not_installed(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+    manifests = tmp_pixi_workspace.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    original_toml = f"""
+    version = {MANIFEST_VERSION}
+    [envs.test]
+    channels = ["{dummy_channel_1}"]
+    [envs.test.dependencies]
+    dummy-a = "*"
+    [envs.test.exposed]
+    dummy-a = "bin/dummy-a"
+    """
+    manifest.write_text(original_toml)
+    dummy_a = tmp_pixi_workspace / "bin" / exec_extension("dummy-a")
+
+    # If the environment isn't installed already,
+    # `pixi global update` will install it first
+    verify_cli_command(
+        [pixi, "global", "update"],
+        env=env,
+    )
+    assert dummy_a.is_file()
+    # The tables in the manifest have been preserved
+    assert manifest.read_text() == original_toml
+
+
+@pytest.mark.parametrize(
+    ("delete_exposed_on_second", "delete_env_on_second"),
+    [(True, False), (False, True), (False, False)],
+)
+def test_update_custom_exposed_twice(
+    pixi: Path,
+    tmp_pixi_workspace: Path,
+    dummy_channel_1: str,
+    delete_exposed_on_second: bool,
+    delete_env_on_second: bool,
+) -> None:
+    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+    manifests = tmp_pixi_workspace.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    original_toml = f"""
+    version = {MANIFEST_VERSION}
+    [envs.test]
+    channels = ["{dummy_channel_1}"]
+    [envs.test.dependencies]
+    dummy-a = "*"
+    [envs.test.exposed]
+    dummy-a = "bin/dummy-a"
+    """
+    manifest.write_text(original_toml)
+    dummy_a = tmp_pixi_workspace / "bin" / exec_extension("dummy-a")
+
+    # Test first update
+    verify_cli_command(
+        [pixi, "global", "update"],
+        env=env,
+    )
+    assert dummy_a.is_file()
+    assert manifest.read_text() == original_toml
+
+    # Test second update
+    if delete_exposed_on_second:
+        dummy_a.unlink()
+    if delete_env_on_second:
+        shutil.rmtree(tmp_pixi_workspace / "envs")
+
+    verify_cli_command(
+        [pixi, "global", "update"],
+        env=env,
+    )
+    assert dummy_a.is_file()
+    assert manifest.read_text() == original_toml
+
+
+def test_update_remove_old_env(
+    pixi: Path,
+    tmp_pixi_workspace: Path,
+    dummy_channel_1: str,
+) -> None:
+    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+    manifests = tmp_pixi_workspace.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    original_toml = f"""
+    version = {MANIFEST_VERSION}
+    [envs.test]
+    channels = ["{dummy_channel_1}"]
+    [envs.test.dependencies]
+    dummy-a = "*"
+    [envs.test.exposed]
+    dummy-a = "bin/dummy-a"
+    """
+    manifest.write_text(original_toml)
+    dummy_a = tmp_pixi_workspace / "bin" / exec_extension("dummy-a")
+
+    # Test first update
+    verify_cli_command(
+        [pixi, "global", "update"],
+        env=env,
+    )
+    assert dummy_a.is_file()
+    assert manifest.read_text() == original_toml
+
+    # Test remove env from manifest and then update
+    original_toml = f"""
+    version = {MANIFEST_VERSION}
+    """
+    manifest.write_text(original_toml)
+    verify_cli_command(
+        [pixi, "global", "update"],
+        env=env,
+    )
+    assert not dummy_a.is_file()
+    assert manifest.read_text() == original_toml

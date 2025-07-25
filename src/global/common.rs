@@ -251,7 +251,7 @@ impl FancyDisplay for EnvState {
     fn fancy_display(&self) -> StyledObject<&str> {
         match self {
             EnvState::Installed => console::style(self.as_str()).green(),
-            EnvState::NotChanged(ref reason) => reason.fancy_display(),
+            EnvState::NotChanged(reason) => reason.fancy_display(),
         }
     }
 }
@@ -266,7 +266,7 @@ pub enum InstallChange {
     Installed(Version),
     Upgraded(Version, Version),
     TransitiveUpgraded(Version, Version),
-    Reinstalled(Version),
+    Reinstalled(Version, Version),
     Removed,
 }
 
@@ -294,9 +294,11 @@ impl InstallChange {
                 version_style.apply_to(old.to_string()),
                 version_style.apply_to(new.to_string())
             ))),
-            InstallChange::Reinstalled(version) => {
-                Some(version_style.apply_to(version.to_string()))
-            }
+            InstallChange::Reinstalled(old, new) => Some(default_style.apply_to(format!(
+                "{} -> {}",
+                version_style.apply_to(old.to_string()),
+                version_style.apply_to(new.to_string())
+            ))),
             InstallChange::Removed => None,
         }
     }
@@ -350,6 +352,12 @@ pub(crate) enum StateChange {
     AddedEnvironment,
     RemovedEnvironment,
     UpdatedEnvironment(EnvironmentUpdate),
+    InstalledShortcut(String),
+    UninstalledShortcut(String),
+    #[allow(dead_code)] // This variant is not used on Windows
+    AddedCompletion(String),
+    #[allow(dead_code)] // This variant is not used on Windows
+    RemovedCompletion(String),
 }
 
 #[must_use]
@@ -460,20 +468,20 @@ impl StateChanges {
                         exposed_names.sort();
 
                         if exposed_names.len() == 1 {
-                            eprintln!(
+                            pixi_progress::println!(
                                 "{}Exposed executable {} from environment {}.",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 exposed_names[0].fancy_display(),
                                 env_name.fancy_display()
                             );
                         } else {
-                            eprintln!(
+                            pixi_progress::println!(
                                 "{}Exposed executables from environment {}:",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 env_name.fancy_display()
                             );
                             for exposed_name in exposed_names {
-                                eprintln!("   - {}", exposed_name.fancy_display());
+                                pixi_progress::println!("   - {}", exposed_name.fancy_display());
                             }
                         }
                     }
@@ -488,20 +496,20 @@ impl StateChanges {
                         );
                         exposed_names.sort();
                         if exposed_names.len() == 1 {
-                            eprintln!(
+                            pixi_progress::println!(
                                 "{}Removed exposed executable {} from environment {}.",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 exposed_names[0].fancy_display(),
                                 env_name.fancy_display()
                             );
                         } else {
-                            eprintln!(
+                            pixi_progress::println!(
                                 "{}Removed exposed executables from environment {}:",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 env_name.fancy_display()
                             );
                             for exposed_name in exposed_names {
-                                eprintln!("   - {}", exposed_name.fancy_display());
+                                pixi_progress::println!("   - {}", exposed_name.fancy_display());
                             }
                         }
                     }
@@ -516,20 +524,20 @@ impl StateChanges {
                         );
                         exposed_names.sort();
                         if exposed_names.len() == 1 {
-                            eprintln!(
+                            pixi_progress::println!(
                                 "{}Updated executable {} of environment {}.",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 exposed_names[0].fancy_display(),
                                 env_name.fancy_display()
                             );
                         } else {
-                            eprintln!(
+                            pixi_progress::println!(
                                 "{}Updated executables of environment {}:",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 env_name.fancy_display()
                             );
                             for exposed_name in exposed_names {
-                                eprintln!("   - {}", exposed_name.fancy_display());
+                                pixi_progress::println!("   - {}", exposed_name.fancy_display());
                             }
                         }
                     }
@@ -546,7 +554,7 @@ impl StateChanges {
                         added_pkgs.sort_by(|pkg1, pkg2| pkg1.name.cmp(&pkg2.name));
 
                         if added_pkgs.len() == 1 {
-                            eprintln!(
+                            pixi_progress::println!(
                                 "{}Added package {}={} to environment {}.",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 console::style(pkg.name.as_normalized()).green(),
@@ -554,13 +562,13 @@ impl StateChanges {
                                 env_name.fancy_display()
                             );
                         } else {
-                            eprintln!(
+                            pixi_progress::println!(
                                 "{}Added packages of environment {}:",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 env_name.fancy_display()
                             );
                             for pkg in added_pkgs {
-                                eprintln!(
+                                pixi_progress::println!(
                                     "   - {}={}",
                                     console::style(pkg.name.as_normalized()).green(),
                                     console::style(&pkg.version).blue(),
@@ -569,14 +577,14 @@ impl StateChanges {
                         }
                     }
                     StateChange::AddedEnvironment => {
-                        eprintln!(
+                        pixi_progress::println!(
                             "{}Added environment {}.",
                             console::style(console::Emoji("✔ ", "")).green(),
                             env_name.fancy_display()
                         );
                     }
                     StateChange::RemovedEnvironment => {
-                        eprintln!(
+                        pixi_progress::println!(
                             "{}Removed environment {}.",
                             console::style(console::Emoji("✔ ", "")).green(),
                             env_name.fancy_display()
@@ -584,6 +592,126 @@ impl StateChanges {
                     }
                     StateChange::UpdatedEnvironment(update_change) => {
                         StateChanges::report_update_changes(&env_name, update_change);
+                    }
+                    StateChange::InstalledShortcut(name) => {
+                        let mut installed_items = StateChanges::accumulate_changes(
+                            &mut iter,
+                            |next| match next {
+                                Some(StateChange::InstalledShortcut(name)) => Some(name.clone()),
+                                _ => None,
+                            },
+                            Some(name.clone()),
+                        );
+
+                        installed_items.sort();
+
+                        if installed_items.len() == 1 {
+                            pixi_progress::println!(
+                                "{}Installed shortcut {} of environment {}.",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                installed_items[0],
+                                env_name.fancy_display()
+                            );
+                        } else {
+                            pixi_progress::println!(
+                                "{}Installed shortcuts of environment {}:",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                env_name.fancy_display()
+                            );
+                            for installed_item in installed_items {
+                                pixi_progress::println!("   - {}", installed_item);
+                            }
+                        }
+                    }
+                    StateChange::UninstalledShortcut(name) => {
+                        let mut uninstalled_items = StateChanges::accumulate_changes(
+                            &mut iter,
+                            |next| match next {
+                                Some(StateChange::UninstalledShortcut(name)) => Some(name.clone()),
+                                _ => None,
+                            },
+                            Some(name.clone()),
+                        );
+
+                        uninstalled_items.sort();
+
+                        if uninstalled_items.len() == 1 {
+                            pixi_progress::println!(
+                                "{}Uninstalled shortcut {} of environment {}.",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                uninstalled_items[0],
+                                env_name.fancy_display()
+                            );
+                        } else {
+                            pixi_progress::println!(
+                                "{}Uninstalled shortcuts of environment {}:",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                env_name.fancy_display()
+                            );
+                            for uninstalled_item in uninstalled_items {
+                                pixi_progress::println!("   - {}", uninstalled_item);
+                            }
+                        }
+                    }
+                    StateChange::AddedCompletion(name) => {
+                        let mut installed_items = StateChanges::accumulate_changes(
+                            &mut iter,
+                            |next| match next {
+                                Some(StateChange::AddedCompletion(name)) => Some(name.clone()),
+                                _ => None,
+                            },
+                            Some(name.clone()),
+                        );
+
+                        installed_items.sort();
+
+                        if installed_items.len() == 1 {
+                            pixi_progress::println!(
+                                "{}Exposed completion {} of environment {}.",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                installed_items[0],
+                                env_name.fancy_display()
+                            );
+                        } else {
+                            pixi_progress::println!(
+                                "{}Exposed completions of environment {}:",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                env_name.fancy_display()
+                            );
+                            for installed_item in installed_items {
+                                pixi_progress::println!("   - {}", installed_item);
+                            }
+                        }
+                    }
+                    StateChange::RemovedCompletion(name) => {
+                        let mut uninstalled_items = StateChanges::accumulate_changes(
+                            &mut iter,
+                            |next| match next {
+                                Some(StateChange::RemovedCompletion(name)) => Some(name.clone()),
+                                _ => None,
+                            },
+                            Some(name.clone()),
+                        );
+
+                        uninstalled_items.sort();
+
+                        if uninstalled_items.len() == 1 {
+                            pixi_progress::println!(
+                                "{}Removed completion {} of environment {}.",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                uninstalled_items[0],
+                                env_name.fancy_display()
+                            );
+                        } else {
+                            pixi_progress::println!(
+                                "{}Removed completions of environment {}:",
+                                console::style(console::Emoji("✔ ", "")).green(),
+                                env_name.fancy_display()
+                            );
+                            for uninstalled_item in uninstalled_items {
+                                pixi_progress::println!("   - {}", uninstalled_item);
+                            }
+                        }
                     }
                 }
             }
@@ -596,7 +724,7 @@ impl StateChanges {
     ) {
         // Check if there are any changes
         if environment_update.is_empty() {
-            eprintln!(
+            pixi_progress::println!(
                 "{}Environment {} was already up-to-date.",
                 console::style(console::Emoji("✔ ", "")).green(),
                 env_name.fancy_display(),
@@ -631,9 +759,9 @@ impl StateChanges {
 
         // Output messages based on the type of changes
         if top_level_changes.is_empty() && !transitive_changes.is_empty() {
-            eprintln!("{check_mark}Updated environment {env_fancy}.",);
+            pixi_progress::println!("{check_mark}Updated environment {env_fancy}.",);
         } else if top_level_changes.is_empty() && transitive_changes.is_empty() {
-            eprintln!("{check_mark}Environment {env_fancy} was already up-to-date.");
+            pixi_progress::println!("{check_mark}Environment {env_fancy} was already up-to-date.");
         } else if top_level_changes.len() == 1 {
             let changes = console::style(top_level_changes[0].0.as_normalized()).green();
             let version_string = top_level_changes[0]
@@ -642,10 +770,11 @@ impl StateChanges {
                 .map(|version| format!("={version}"))
                 .unwrap_or_default();
 
-            eprintln!(                "{check_mark}{message} package {changes}{version_string} in environment {env_fancy}."
+            pixi_progress::println!(
+                "{check_mark}{message} package {changes}{version_string} in environment {env_fancy}."
             );
         } else if top_level_changes.len() > 1 {
-            eprintln!(
+            pixi_progress::println!(
                 "{}{} packages in environment {}.",
                 console::style(console::Emoji("✔ ", "")).green(),
                 message,
@@ -657,7 +786,7 @@ impl StateChanges {
                     .version_fancy_display()
                     .map(|version| format!(" {version}"))
                     .unwrap_or_default();
-                eprintln!("    - {package_fancy}{change_fancy}");
+                pixi_progress::println!("    - {package_fancy}{change_fancy}");
             }
         }
     }
@@ -695,10 +824,90 @@ pub(crate) fn channel_url_to_prioritized_channel(
         .into())
 }
 
+/// Determines which shortcuts need to be installed or removed by comparing the requested shortcuts
+/// with the installed package records.
+///
+/// This function filters the provided `prefix_records` to find those that contain menuinst JSON files.
+/// It then compares these records with the requested `shortcuts` to
+/// determine which records need to be installed and which need to be uninstalled.
+pub(crate) fn shortcuts_sync_status(
+    shortcuts: IndexSet<PackageName>,
+    prefix_records: Vec<PrefixRecord>,
+    prefix_root: &Path,
+) -> miette::Result<(Vec<PrefixRecord>, Vec<PrefixRecord>)> {
+    let mut remaining_shortcuts = shortcuts;
+    let mut records_to_install = Vec::new();
+    let mut records_to_uninstall = Vec::new();
+
+    let records_with_menuinst = prefix_records
+        .into_iter()
+        .filter(|record| contains_menuinst_document(record, prefix_root));
+
+    for record in records_with_menuinst {
+        let has_installed_system_menus = record.installed_system_menus.is_empty().not();
+        if remaining_shortcuts
+            .swap_take(&record.repodata_record.package_record.name)
+            .is_some()
+        {
+            if !has_installed_system_menus {
+                // The package record isn't installed, but it is requested
+                records_to_install.push(record);
+            }
+        } else if has_installed_system_menus {
+            // The package record is installed, but not requested
+            records_to_uninstall.push(record);
+        }
+    }
+
+    if remaining_shortcuts.is_empty().not() {
+        miette::bail!(
+            "the following shortcuts are requested but not available: {}",
+            remaining_shortcuts
+                .iter()
+                .map(|n| n.as_normalized())
+                .join(", ")
+        );
+    }
+    Ok((records_to_install, records_to_uninstall))
+}
+
+pub(crate) fn contains_menuinst_document(prefix_record: &PrefixRecord, prefix_root: &Path) -> bool {
+    for file in &prefix_record.files {
+        if file.extension().is_some_and(|ext| ext == "json") {
+            if let Some(parent) = file.parent() {
+                if parent.file_name().is_some_and(|f| f == "Menu") {
+                    if let Ok(content) = fs::read_to_string(prefix_root.join(file)) {
+                        if let Err(err) = serde_json::from_str::<
+                            rattler_menuinst::schema::MenuInstSchema,
+                        >(&content)
+                        {
+                            tracing::warn!(
+                                "{} contains shortcuts, but they couldn't be parsed: {}",
+                                console::style(
+                                    prefix_record
+                                        .repodata_record
+                                        .package_record
+                                        .name
+                                        .as_normalized()
+                                )
+                                .green(),
+                                err
+                            )
+                        } else {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
 /// Figures out what the status is of the exposed binaries of the environment.
 ///
 /// Returns a tuple of the exposed binaries to remove and the exposed binaries to add.
-pub(crate) async fn get_expose_scripts_sync_status(
+pub(crate) async fn expose_scripts_sync_status(
     bin_dir: &BinDir,
     env_dir: &EnvDir,
     mappings: &IndexSet<Mapping>,
@@ -824,17 +1033,13 @@ pub(crate) fn get_install_changes(
 
                 (pkg_name, change)
             }
-            TransactionOperation::Reinstall(package) => {
-                let pkg_name = package.repodata_record.package_record.name;
+            TransactionOperation::Reinstall { old, new } => {
+                let pkg_name = new.package_record.name;
                 (
                     pkg_name,
                     InstallChange::Reinstalled(
-                        package
-                            .repodata_record
-                            .package_record
-                            .version
-                            .version()
-                            .clone(),
+                        old.repodata_record.package_record.version.version().clone(),
+                        new.package_record.version.version().clone(),
                     ),
                 )
             }
@@ -888,9 +1093,11 @@ mod tests {
         let records = find_package_records(&dummy_conda_meta_path).await.unwrap();
 
         // Verify that the package record was found
-        assert!(records
-            .iter()
-            .any(|rec| rec.repodata_record.package_record.name.as_normalized() == "python"));
+        assert!(
+            records
+                .iter()
+                .any(|rec| rec.repodata_record.package_record.name.as_normalized() == "python")
+        );
     }
 
     #[test]
@@ -961,7 +1168,7 @@ mod tests {
 
         // Test empty
         let exposed = IndexSet::new();
-        let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
+        let (to_remove, to_add) = expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
             .await
             .unwrap();
         assert!(to_remove.is_empty());
@@ -981,7 +1188,7 @@ mod tests {
                 .unwrap()
                 .to_string(),
         ));
-        let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
+        let (to_remove, to_add) = expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
             .await
             .unwrap();
         assert!(to_remove.is_empty());
@@ -1038,7 +1245,7 @@ mod tests {
         };
 
         // Test to_remove and to_add to see if the legacy scripts are removed and trampolines are added
-        let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
+        let (to_remove, to_add) = expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
             .await
             .unwrap();
         assert!(to_remove.iter().all(|bin| !bin.is_trampoline()));
@@ -1047,10 +1254,9 @@ mod tests {
 
         // Test to_remove when nothing should be exposed
         // it should remove all the legacy scripts and add nothing
-        let (to_remove, to_add) =
-            get_expose_scripts_sync_status(&bin_dir, &env_dir, &IndexSet::new())
-                .await
-                .unwrap();
+        let (to_remove, to_add) = expose_scripts_sync_status(&bin_dir, &env_dir, &IndexSet::new())
+            .await
+            .unwrap();
 
         assert!(to_remove.iter().all(|bin| !bin.is_trampoline()));
         assert_eq!(to_remove.len(), 2);
@@ -1068,7 +1274,7 @@ mod tests {
 
         // Test empty
         let exposed = IndexSet::new();
-        let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
+        let (to_remove, to_add) = expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
             .await
             .unwrap();
         assert!(to_remove.is_empty());
@@ -1081,7 +1287,7 @@ mod tests {
             "test".to_string(),
         ));
 
-        let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
+        let (to_remove, to_add) = expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
             .await
             .unwrap();
         assert!(to_remove.is_empty());
@@ -1094,7 +1300,7 @@ mod tests {
             env_dir.path().join("bin/test")
         };
 
-        let manifest = Configuration::new(original_exe, bin_dir.path().join("bin"), None);
+        let manifest = Configuration::new(original_exe, String::new(), HashMap::new());
         let trampoline = Trampoline::new(
             ExposedName::from_str("test").unwrap(),
             bin_dir.path().to_path_buf(),
@@ -1103,7 +1309,7 @@ mod tests {
 
         trampoline.save().await.unwrap();
 
-        let (to_remove, to_add) = get_expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
+        let (to_remove, to_add) = expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
             .await
             .unwrap();
 
@@ -1112,7 +1318,7 @@ mod tests {
 
         // Test to_remove when nothing should be exposed
         let (mut to_remove, to_add) =
-            get_expose_scripts_sync_status(&bin_dir, &env_dir, &IndexSet::new())
+            expose_scripts_sync_status(&bin_dir, &env_dir, &IndexSet::new())
                 .await
                 .unwrap();
         assert_eq!(to_remove.len(), 1);

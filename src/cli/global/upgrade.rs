@@ -6,12 +6,8 @@ use crate::cli::{cli_config::ChannelsConfig, has_specs::HasSpecs};
 /// Upgrade specific package which is installed globally.
 /// This command has been removed, please use `pixi global update` instead
 #[derive(Parser, Debug)]
-// TODO: Uncomment as soon we implement this
-//#[clap(arg_required_else_help = true)]
 pub struct Args {
     /// Specifies the packages to upgrade.
-    // TODO: Uncomment as soon we implement this
-    //#[arg(required = true)]
     pub specs: Vec<String>,
 
     #[clap(flatten)]

@@ -10,15 +10,18 @@ name = "pixi"
 # Using faster repodata fetching from our experimental fast channel, which implements https://github.com/conda/ceps/pull/75
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["linux-64", "win-64", "osx-64", "osx-arm64", "linux-aarch64"]
+requires-pixi = ">=0.45"
 
 [dependencies]
-python = "3.12.*"
+git = "==2.49.0"
+python = "3.13.*"
 
 [tasks]
 build-debug = "cargo build"
 build-release = "cargo build --release"
 bump = "tbump --only-patch $RELEASE_VERSION"
-install = "cargo install --path . --locked"
+generate-cli-docs = "cargo run --locked --manifest-path crates/pixi_docs/Cargo.toml"
+install = { cmd = "cargo install --path . --locked", description = "Install pixi itself locally using cargo" }
 install-as = { cmd = "python scripts/install.py", depends-on = [
   "build-release",
 ] }
@@ -27,25 +30,32 @@ release = "python scripts/release.py"
 run-all-examples = { cmd = "python tests/scripts/run-all-examples.py --pixi-exec $CARGO_TARGET_DIR/release/pixi", depends-on = [
   "build-release",
 ] }
-test = { depends-on = ["test-all-fast"] }
+test = { depends-on = ["test-all-fast"], description = "Run all fast tests" }
+test-all-extra-slow = { depends-on = [
+  "test-slow",
+  "test-integration-extra-slow",
+] }
 test-all-fast = { depends-on = ["test-fast", "test-integration-fast"] }
 test-all-slow = { depends-on = ["test-slow", "test-integration-slow"] }
 test-fast = "cargo nextest run --workspace --all-targets"
-test-slow = """cargo nextest run --workspace --all-targets --retries 2 --features slow_integration_tests
+test-slow = """cargo nextest run --workspace --all-targets --features slow_integration_tests
               --status-level skip --failure-output immediate-final --no-fail-fast --final-status-level slow"""
 
-
 [feature.pytest.dependencies]
+dirty-equals = ">=0.9.0,<0.10"
 filelock = ">=3.16.0,<4"
-mypy = ">=1.11,<1.12"
-py-rattler = ">=0.6.3,<0.10"
+inline-snapshot = ">=0.24.0,<0.25"
+mypy = ">=1.16,<1.17"
+py-rattler = ">=0.14,<0.15"
 pytest = "*"
-pytest-rerunfailures = ">=14.0,<15"
+pytest-rerunfailures = ">=15,<16"
 pytest-timeout = ">=2.3.1,<3"
 pytest-xdist = ">=3.6.1,<4"
-rich = ">=13.7.1,<14"
+pyyaml = ">=6.0.2,<7"
+rich = ">=14,<15"
 syrupy = ">=4.8.0,<5"
 tomli-w = ">=1.0,<2"
+types-pyyaml = ">=6.0.12.20241230,<7"
 
 [feature.pytest.tasks]
 test-common-wheels = { cmd = "pytest -s --numprocesses=auto tests/wheel_tests/", depends-on = [
@@ -53,10 +63,10 @@ test-common-wheels = { cmd = "pytest -s --numprocesses=auto tests/wheel_tests/",
 ] }
 test-common-wheels-ci = { cmd = "pytest --numprocesses=auto --verbose tests/wheel_tests/" }
 test-integration-ci = "pytest --numprocesses=auto --durations=0 --timeout=100 --verbose -m 'not extra_slow' tests/integration_python"
-test-integration-extra-slow = { cmd = "pytest --numprocesses=auto --durations=0 --timeout=300 tests/integration_python", depends-on = [
+test-integration-extra-slow = { cmd = "pytest --numprocesses=auto --durations=0 --timeout=600 tests/integration_python", depends-on = [
   "build-release",
 ] }
-test-integration-extra-slow-ci = "pytest --numprocesses=auto --durations=0 --timeout=300 tests/integration_python"
+test-integration-extra-slow-ci = "pytest --numprocesses=auto --durations=0 --timeout=600 tests/integration_python"
 test-integration-fast = { cmd = "pytest --pixi-build=debug --numprocesses=auto --durations=0 --timeout=100 -m 'not slow and not extra_slow' tests/integration_python", depends-on = [
   "build-debug",
 ] }
@@ -66,43 +76,83 @@ test-integration-slow = { cmd = "pytest --numprocesses=auto --durations=0 --time
 # pass the file to run as an argument to the task
 # you can also pass a specific test function, like this:
 # /path/to/test.py::test_function
-test-specific-test = { cmd = "pytest", depends-on = ["build-release"] }
+test-specific-test = { cmd = "pytest -k '{{ test_substring }}'", args = [
+  "test_substring",
+], depends-on = [
+  "build-release",
+] }
 # Update one test channel by passing on value of `mappings.toml`
 # e.g. "multiple_versions_channel_1"
-update-test-channel = { cmd = "python update-channels.py", cwd = "tests/data/channels" }
-
+update-test-channel = { cmd = "python update-channels.py {{ channel }}", args = [
+  "channel",
+], cwd = "tests/data/channels" }
 
 [feature.dev.dependencies]
 # Needed for the citation
+cargo-edit = ">=0.13.4,<0.14"
 cargo-nextest = ">=0.9.78,<0.10"
 cffconvert = ">=2.0.0,<2.1"
 tbump = ">=6.9.0,<6.10"
 
+[feature.dev.tasks]
+insta-review = "cargo insta review --workspace"
+syrupy-update = "pytest --snapshot-update"
+update-rattler = "cargo upgrade -p rattler -p file_url -p rattler_cache -p rattler_conda_types -p rattler_digest -p rattler_lock -p rattler_networking -p rattler_repodata_gateway -p rattler_shell -p rattler_solve -p rattler_virtual_packages"
+
+# UV dependency management
+switch-to-remote-uv = { cmd = "python scripts/local_patch.py uv remote", description = "Switch back to remote uv dependencies" }
+
+[feature.dev.tasks.switch-to-local-uv]
+args = [{ arg = "uv_path", default = "../uv" }]
+cmd = "python scripts/local_patch.py uv local {{ uv_path }}"
+description = "Switch to local uv development dependencies"
+
+# Rattler dependency management
+[feature.dev.tasks.switch-to-local-rattler]
+args = [{ arg = "rattler_path", default = "../rattler" }]
+cmd = "python scripts/local_patch.py rattler local {{ rattler_path }}"
+description = "Switch to local rattler development dependencies"
+
+[feature.dev.tasks.switch-to-remote-rattler]
+cmd = "python scripts/local_patch.py rattler remote"
+description = "Switch back to remote rattler dependencies"
+
 [feature.lint.dependencies]
-actionlint = ">=1.7.4,<2"
-pre-commit = ">=3.7.1,<4"
-pre-commit-hooks = ">=4.6.0,<5"
-prettier = ">=3.4.2,<4"
-ruff = ">=0.4.8,<0.5"
+actionlint = ">=1.7.7,<2"
+dprint = ">=0.49.1,<0.51"
+go-shfmt = ">=3.11.0,<4"
+lefthook = ">=1.11.14,<2"
+ruff = ">=0.12,<0.13"
 shellcheck = ">=0.10.0,<0.11"
-taplo = ">=0.9.1,<0.10"
-typos = ">=1.23.1,<2"
+taplo = ">=0.10.0,<0.11"
+typos = ">=1.29.10,<2"
 
 [feature.lint.tasks]
 actionlint = { cmd = "actionlint", env = { SHELLCHECK_OPTS = "-e SC2086" } }
 cargo-clippy = "cargo clippy --all-targets --workspace -- -D warnings"
 cargo-fmt = "cargo fmt --all"
 check-openssl = "python tests/scripts/check-openssl.py"
-lint = "pre-commit run --all-files --hook-stage=manual"
-pre-commit-install = "pre-commit install --install-hooks"
-pre-commit-run = "pre-commit run --all-files"
-prettier-fmt = { cmd = "prettier --write" }
+dprint-check = { cmd = "dprint check --log-level=silent", description = "Check formatting with dprint" }
+dprint-fmt = { cmd = "dprint fmt --incremental=false", description = "Format with dprint" }
+lefthook = { cmd = "lefthook", description = "Run lefthook" }
+lint = { depends-on = [
+  "lint-fast",
+  "lint-slow",
+], description = "Run all linters and formatters on all code" }
+lint-fast = { cmd = "lefthook run pre-commit --all-files --force", description = "Run all fast linters and formatters on all code (no clippy)" }
+lint-slow = { cmd = "lefthook run pre-push --all-files --force", description = "Run all slow linters and formatters on all code" }
+pre-commit-install = "lefthook install"
+pre-commit-install-minimal = "lefthook install pre-commit"
 ruff-format = "ruff format --force-exclude"
 ruff-lint = "ruff check --fix --exit-non-zero-on-fix --force-exclude"
+shell-format = "shfmt --write --indent=4 --simplify --binary-next-line"
 toml-format = { cmd = "taplo fmt", env = { RUST_LOG = "warn" } }
 toml-lint = "taplo lint --verbose **/pixi.toml"
 typecheck-python = "mypy"
 typos = "typos --write-changes --force-exclude"
+
+[feature.rust.dependencies]
+rust = ">=1.86.0,<1.87"
 
 [feature.build.dependencies]
 # Needed for building
@@ -110,13 +160,16 @@ compilers = ">=1.9.0,<2"
 git = ">=2.46.0,<3"
 openssl = "3.*"
 pkg-config = "0.29.*"
-rust = "==1.84.0"
+rust-src = ">=1.84.0,<2"
 
 [feature.build.target.linux-64.dependencies]
-clang = ">=18.1.8,<19.0"
+clang = ">=20.1.2,<20.2"
 compilers = ">=1.6.0"
 make = ">=4.3,<5"
 mold = ">=2.33.0,<3.0"
+
+[feature.build.target.win-64.dependencies]
+vs2017_win-64 = ">=19.16.27033"
 
 [feature.build.activation]
 env.CARGO_TARGET_DIR = "target/pixi"
@@ -125,11 +178,11 @@ env.CARGO_TARGET_DIR = "target/pixi"
 scripts = ["scripts/activate.sh"]
 
 [feature.docs.dependencies]
-cairosvg = "2.7.1.*"
-git-cliff = ">=2.4.0,<3"
+cairosvg = "2.8.2.*"
+git-cliff = ">=2.8.0,<3"
 mdx_truly_sane_lists = ">=1.3,<2"
-mike = "2.0.0.*"
-mkdocs-material = ">=9.5.49,<10"
+mike = "2.1.3.*"
+mkdocs-material = ">=9.6.14,<10"
 mkdocs-redirects = ">=1.2.1,<2"
 pillow = ">=9.4.0"
 
@@ -138,16 +191,16 @@ build-docs = "mkdocs build --strict"
 bump-changelog = "git-cliff --unreleased --prepend CHANGELOG.md --tag $RELEASE_VERSION"
 deploy-dev = "mike deploy --push dev devel"
 deploy-latest = "mike deploy --push --update-aliases $RELEASE_VERSION latest"
-docs = "mkdocs serve"
+docs = { cmd = "mkdocs serve", description = "Serve the docs locally" }
 mike-serve = "mike serve"
 
 [feature.schema.tasks]
 generate-schema = { cmd = "python model.py > schema.json", cwd = "schema" }
-test-schema = { cmd = "pytest -s", depends-on = "generate-schema", cwd = "schema" }
+test-schema = { cmd = "pytest -s", depends-on = "generate-schema", cwd = "schema", description = "Test the manifest json schema" }
 
 [feature.schema.dependencies]
 jsonschema = "*"
-pydantic = ">=2.6.3,<2.7"
+pydantic = ">=2.11.3,<2.12"
 pyyaml = ">=6.0.1,<6.1"
 
 [feature.pypi-gen.dependencies]
@@ -165,8 +218,27 @@ tasks = { test-export = "bash tests/scripts/test-export.sh" }
 python = ">=3.13.1,<3.14"
 zstd = ">=1.5.6,<2"
 
-[feature.trampoline.tasks]
-build-trampoline = "python trampoline/build-trampoline.py"
+[feature.trampoline.tasks.build-trampoline]
+cmd = "python trampoline/build-trampoline.py"
+description = "Build the trampolines"
+
+#
+# Feature to build recipes
+#
+[feature.recipes.dependencies]
+rattler-build = ">=0.44,<0.45"
+
+[feature.recipes.tasks.build-backends]
+cmd = "rattler-build build --recipe-dir empty --output-dir ."
+cwd = "tests/build-backends"
+description = "Build build-backends used for testing purposes"
+
+[feature.dist.dependencies]
+zig = ">=0.14.0,<0.15"
+
+#
+# Environment descriptions
+#
 
 [environments]
 default = { features = [
@@ -174,16 +246,20 @@ default = { features = [
   "dev",
   "schema",
   "pytest",
+  "rust",
 ], solve-group = "default" }
+dist = { features = ["dist"], no-default-feature = true }
 docs = { features = [
   "docs",
 ], no-default-feature = true, solve-group = "default" }
 lint = { features = [
   "lint",
+  "rust",
   "pytest",
   "build",
 ], no-default-feature = true, solve-group = "default" }
 pypi-gen = { features = ["pypi-gen"] }
+recipes = { features = ["recipes"], no-default-feature = true }
 schema = { features = [
   "schema",
   "pytest",

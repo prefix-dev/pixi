@@ -1,0 +1,17 @@
+version: 6
+environments:
+  default:
+    channels:
+    - url: https://prefix.dev/conda-forge/
+    packages:
+      linux-64:
+      - conda: https://prefix.dev/conda-forge/noarch/cuda-version-12.6-h7480c83_3.conda
+packages:
+- conda: https://prefix.dev/conda-forge/noarch/cuda-version-12.6-h7480c83_3.conda
+  sha256: fd9104d73199040285b6a6ad56322b38af04828fabbac1f5a268a83509358425
+  md5: 1c8b99e65a4423b1e4ac2e4c76fb0978
+  depends:
+  - __cuda >=12
+  license: LicenseRef-NVIDIA-End-User-License-Agreement
+  size: 20940
+  timestamp: 1722603990914

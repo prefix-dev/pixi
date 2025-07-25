@@ -1,17 +1,18 @@
 ---
 source: crates/pixi_manifest/src/toml/manifest.rs
-expression: "expect_parse_failure(r#\"\n        [workspace]\n        channels = []\n        platforms = ['win-64']\n\n        [target.osx-64.dependencies]\n        \"#,)"
+expression: "expect_parse_warnings(r#\"\n        [workspace]\n        name = \"test\"\n        channels = []\n        platforms = ['win-64']\n\n        [target.osx-64.dependencies]\n        \"#,)"
+snapshot_kind: text
 ---
-  × The target selector 'osx-64' does not match any of the platforms supported by the workspace
-   ╭─[pixi.toml:6:17]
- 3 │         channels = []
- 4 │         platforms = ['win-64']
+  ⚠ The target selector 'osx-64' does not match any of the platforms supported by the workspace
+   ╭─[pixi.toml:7:17]
+ 4 │         channels = []
+ 5 │         platforms = ['win-64']
    ·                     ─────┬────
    ·                          ╰── the platforms supported by the workspace are defined here
- 5 │
- 6 │         [target.osx-64.dependencies]
+ 6 │
+ 7 │         [target.osx-64.dependencies]
    ·                 ───┬──
    ·                    ╰── target selector specified here
- 7 │
+ 8 │
    ╰────
-  help: Add osx-64 to the supported platforms
+  help: Add osx-64 to the supported platforms, using `pixi project platform add osx-64`

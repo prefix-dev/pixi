@@ -1,5 +1,11 @@
+//! This API was introduced in Pixi Build API version 0.
+
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::PathBuf,
+};
+
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, path::PathBuf};
 use url::Url;
 
 use crate::{ChannelConfiguration, CondaPackageMetadata, PlatformAndVirtualPackages};
@@ -28,7 +34,7 @@ pub struct CondaMetadataParams {
     pub channel_configuration: ChannelConfiguration,
 
     /// The variants that we want to build
-    pub variant_configuration: Option<HashMap<String, Vec<String>>>,
+    pub variant_configuration: Option<BTreeMap<String, Vec<String>>>,
 
     /// A directory that can be used by the backend to store files for
     /// subsequent requests. This directory is unique for each separate source
@@ -51,5 +57,5 @@ pub struct CondaMetadataResult {
     ///
     /// If this field is not present, the input manifest will be used.
     #[serde(default)]
-    pub input_globs: Option<Vec<String>>,
+    pub input_globs: Option<BTreeSet<String>>,
 }

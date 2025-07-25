@@ -13,7 +13,6 @@ version = "0.0.1"
 dashmap = { workspace = true }
 dunce = { workspace = true }
 fs-err = { workspace = true, features = ["tokio"] }
-miette = { workspace = true }
 pixi_utils = { workspace = true, features = ["rustls-tls"] }
 reqwest = { workspace = true, features = ["blocking"] }
 reqwest-middleware = { workspace = true }

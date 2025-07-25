@@ -23,7 +23,7 @@
 
 </h1>
 
-# pixi: Package Management Made Easy
+# Pixi: Package Management Made Easy
 
 ## Overview
 
@@ -54,7 +54,7 @@ Developed with ❤️ at [prefix.dev](https://prefix.dev).
 
 Pixi is ready for production!
 We are working hard to keep file-format changes compatible with the previous
-versions so that you can rely on pixi with peace of mind.
+versions so that you can rely on Pixi with peace of mind.
 
 Some notable features we envision for upcoming releases are:
 
@@ -71,12 +71,12 @@ Some notable features we envision for upcoming releases are:
 To install Pixi on macOS and Linux, open a terminal and run the following command:
 
 ```bash
-curl -fsSL https://pixi.sh/install.sh | bash
+curl -fsSL https://pixi.sh/install.sh | sh
 # or with brew
 brew install pixi
 ```
 
-The script will also update your ~/.bash_profile to include ~/.pixi/bin in your PATH, allowing you to invoke the pixi command from anywhere.
+The script will also update your `~/.bashrc` to include `~/.pixi/bin` in your `PATH`, allowing you to invoke the `pixi` command from anywhere.
 You might need to restart your terminal or source your shell for the changes to take effect.
 
 Starting with macOS Catalina [zsh is the default login shell and interactive shell](https://support.apple.com/en-us/102360). Therefore, you might want to use `zsh` instead of `bash` in the install command:
@@ -85,7 +85,7 @@ Starting with macOS Catalina [zsh is the default login shell and interactive she
 curl -fsSL https://pixi.sh/install.sh | zsh
 ```
 
-The script will also update your ~/.zshrc to include ~/.pixi/bin in your PATH, allowing you to invoke the pixi command from anywhere.
+The script will also update your `~/.zshrc` to include `~/.pixi/bin` in your `PATH`, allowing you to invoke the `pixi` command from anywhere.
 
 ### Windows
 
@@ -100,7 +100,7 @@ Check the script you would be running with:
 powershell -c "irm -useb https://pixi.sh/install.ps1 | more"
 ```
 
-The script will inform you once the installation is successful and add the ~/.pixi/bin directory to your PATH, which will allow you to run the pixi command from any location.
+The script will inform you once the installation is successful and add the `~/.pixi/bin` directory to your `PATH`, which will allow you to run the `pixi` command from any location.
 Or with `winget`
 
 ```shell
@@ -216,7 +216,7 @@ it's [compile steps](https://github.com/conda/rattler/tree/main#give-it-a-try)
 
 ## Uninstall
 
-To uninstall the pixi binary should be removed.
+To uninstall, the Pixi binary should be removed.
 Delete `pixi` from the `$PIXI_DIR` which is default to `~/.pixi/bin/pixi`
 
 So on Linux its:
@@ -269,7 +269,7 @@ Options:
 
 ```
 
-## Creating a pixi project
+## Creating a Pixi project
 
 Initialize a new project and navigate to the project directory
 
@@ -309,7 +309,7 @@ pixi global install cowpy
 
 ## Use in GitHub Actions
 
-You can use pixi in GitHub Actions to install dependencies and run commands.
+You can use Pixi in GitHub Actions to install dependencies and run commands.
 It supports automatic caching of your environments.
 
 ```yml
@@ -323,7 +323,7 @@ See the [documentation](https://pixi.sh/latest/advanced/github_actions) for more
 
 ## Contributing 😍
 
-We would absolutely love for you to contribute to `pixi`!
+We would absolutely love for you to contribute to Pixi!
 Whether you want to start an issue, fix a bug you encountered, or suggest an
 improvement, every contribution is greatly appreciated.
 
@@ -341,6 +341,6 @@ community. [Join our discord server today!][chat-url]
 
 <a name="pixibuilt"></a>
 
-## Built using pixi
+## Built using Pixi
 
-To see what's being built with `pixi` check out the [Community](/docs/Community.md) page.
+To see what's being built with `pixi` check out the [Community](/docs/misc/Community.md) page.

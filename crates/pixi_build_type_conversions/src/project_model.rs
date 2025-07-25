@@ -1,17 +1,22 @@
 //! Conversion functions from `pixi_spec` types to `pixi_build_types` types.
-//! these are used to convert the `pixi_spec` types to the `pixi_build_types` types
-//! we want to keep the conversion here, as we do not want `pixi_build_types` to depend on `pixi_spec`
+//! these are used to convert the `pixi_spec` types to the `pixi_build_types`
+//! types we want to keep the conversion here, as we do not want
+//! `pixi_build_types` to depend on `pixi_spec`
 //!
-//! This will mostly be boilerplate conversions but some of these are a bit more interesting
+//! This will mostly be boilerplate conversions but some of these are a bit more
+//! interesting
 
-use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 
-// Namespace to pbt, *please use* exclusively so we do not get confused between the two different types
-use indexmap::IndexMap;
-use pixi_build_types as pbt;
+use ordermap::OrderMap;
+// Namespace to pbt, *please use* exclusively so we do not get confused between the two
+// different types
+use pixi_build_types::{self as pbt, ProjectModelV1};
+
 use pixi_manifest::{PackageManifest, PackageTarget, TargetSelector, Targets};
 use pixi_spec::{GitReference, PixiSpec, SpecConversionError};
-use rattler_conda_types::{ChannelConfig, PackageName};
+use rattler_conda_types::{ChannelConfig, NamelessMatchSpec, PackageName};
+use xxhash_rust::xxh3::Xxh3;
 
 /// Conversion from a `PixiSpec` to a `pbt::PixiSpecV1`.
 fn to_pixi_spec_v1(
@@ -26,11 +31,7 @@ fn to_pixi_spec_v1(
             let source = match source {
                 pixi_spec::SourceSpec::Url(url_source_spec) => {
                     let pixi_spec::UrlSourceSpec { url, md5, sha256 } = url_source_spec;
-                    pbt::SourcePackageSpecV1::Url(pbt::UrlSpecV1 {
-                        url,
-                        md5: md5.map(Into::into),
-                        sha256: sha256.map(Into::into),
-                    })
+                    pbt::SourcePackageSpecV1::Url(pbt::UrlSpecV1 { url, md5, sha256 })
                 }
                 pixi_spec::SourceSpec::Git(git_spec) => {
                     let pixi_spec::GitSpec {
@@ -58,32 +59,49 @@ fn to_pixi_spec_v1(
             pbt::PackageSpecV1::Source(source)
         }
         itertools::Either::Right(binary) => {
-            let nameless = binary.try_into_nameless_match_spec(channel_config)?;
+            let NamelessMatchSpec {
+                version,
+                build,
+                build_number,
+                file_name,
+                channel,
+                subdir,
+                md5,
+                sha256,
+                url,
+                license,
+                // These are currently explicitly ignored in the conversion
+                namespace: _,
+                extras: _,
+            } = binary.try_into_nameless_match_spec(channel_config)?;
             pbt::PackageSpecV1::Binary(Box::new(pbt::BinaryPackageSpecV1 {
-                version: nameless.version,
-                build: nameless.build,
-                build_number: nameless.build_number,
-                file_name: nameless.file_name,
-                channel: nameless.channel.map(|c| c.base_url.url().clone().into()),
-                subdir: nameless.subdir,
-                md5: nameless.md5.map(Into::into),
-                sha256: nameless.sha256.map(Into::into),
+                version,
+                build,
+                build_number,
+                file_name,
+                channel: channel.map(|c| c.base_url.url().clone().into()),
+                subdir,
+                md5,
+                sha256,
+                url,
+                license,
             }))
         }
     };
     Ok(pbt_spec)
 }
 
-/// Converts an iterator of `PackageName` and `PixiSpec` to a `IndexMap<String, pbt::PixiSpecV1>`.
+/// Converts an iterator of `PackageName` and `PixiSpec` to a `IndexMap<String,
+/// pbt::PixiSpecV1>`.
 fn to_pbt_dependencies<'a>(
     iter: impl Iterator<Item = (&'a PackageName, &'a PixiSpec)>,
     channel_config: &ChannelConfig,
-) -> Result<IndexMap<pbt::SourcePackageName, pbt::PackageSpecV1>, SpecConversionError> {
+) -> Result<OrderMap<pbt::SourcePackageName, pbt::PackageSpecV1>, SpecConversionError> {
     iter.map(|(name, spec)| {
         let converted = to_pixi_spec_v1(spec, channel_config)?;
         Ok((name.as_normalized().to_string(), converted))
     })
-    .collect::<Result<IndexMap<_, _>, _>>()
+    .collect()
 }
 
 /// Converts a [`PackageTarget`] to a [`pbt::TargetV1`].
@@ -91,8 +109,8 @@ fn to_target_v1(
     target: &PackageTarget,
     channel_config: &ChannelConfig,
 ) -> Result<pbt::TargetV1, SpecConversionError> {
-    // Difference for us is that [`pbt::TargetV1`] has split the host, run and build dependencies
-    // into separate fields, so we need to split them up here
+    // Difference for us is that [`pbt::TargetV1`] has split the host, run and build
+    // dependencies into separate fields, so we need to split them up here
     Ok(pbt::TargetV1 {
         host_dependencies: Some(
             target
@@ -140,7 +158,7 @@ fn to_targets_v1(
                     .map(|target| (to_target_selector_v1(selector), target))
             })
         })
-        .collect::<Result<HashMap<pbt::TargetSelectorV1, pbt::TargetV1>, _>>()?;
+        .collect::<Result<OrderMap<pbt::TargetSelectorV1, pbt::TargetV1>, _>>()?;
 
     Ok(pbt::TargetsV1 {
         default_target: Some(to_target_v1(targets.default(), channel_config)?),
@@ -169,12 +187,21 @@ pub fn to_project_model_v1(
     Ok(project)
 }
 
+/// This function is used to calculate a stable hash for the project model
+/// This is used to trigger cache invalidation if the project model changes
+pub fn compute_project_model_hash(project_model: &ProjectModelV1) -> Vec<u8> {
+    let mut hasher = Xxh3::new();
+    project_model.hash(&mut hasher);
+    hasher.finish().to_ne_bytes().to_vec()
+}
+
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use pixi_build_types::VersionedProjectModel;
     use rattler_conda_types::ChannelConfig;
     use rstest::rstest;
-    use std::path::PathBuf;
 
     fn some_channel_config() -> ChannelConfig {
         ChannelConfig {
@@ -229,7 +256,7 @@ mod tests {
     #[rstest]
     #[test]
     fn test_conversions_v1_docs(
-        #[files("../../docs/source_files/pixi_projects/pixi_build_*/pixi.toml")]
+        #[files("../../docs/source_files/pixi_workspaces/pixi_build/*/pixi.toml")]
         manifest_path: PathBuf,
     ) {
         snapshot_test!(manifest_path);

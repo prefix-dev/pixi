@@ -1,12 +1,12 @@
 site_name: "Pixi by prefix.dev"
 site_url: https://prefix-dev.github.io/pixi
+site_description: Pixi Documentation — Next-gen package manager for reproducible development setups
 
 theme:
   name: material
   custom_dir: docs/overrides
   favicon: assets/pixi.png
   logo: assets/pixi.png
-  site_url: https://prefix.dev
   font:
     text: Red Hat Text
     code: JetBrains Mono
@@ -45,7 +45,8 @@ theme:
     - content.code.copy
     - content.action.edit
     - content.code.annotate
-    # - content.code.select Sponsor only
+    - content.tooltips
+    - content.code.select
     - navigation.instant
     - navigation.instant.progress
     - navigation.tracking
@@ -55,14 +56,19 @@ theme:
 
 extra_css:
   - stylesheets/extra.css
+extra_javascript:
+  - javascripts/extra.js
 
 repo_url: https://github.com/prefix-dev/pixi/
 edit_uri: edit/main/docs/
 
 markdown_extensions:
   - admonition
+  - abbr
   - def_list
   - footnotes
+  - attr_list
+  - pymdownx.extra
   - pymdownx.tasklist:
       custom_checkbox: true
   - pymdownx.highlight:
@@ -84,92 +90,154 @@ markdown_extensions:
   - mdx_truly_sane_lists
 
 extra:
-  homepage: https://prefix.dev
   social:
-    - icon: fontawesome/brands/twitter
-      link: https://twitter.com/prefix_dev
-    - icon: fontawesome/brands/linkedin
-      link: https://www.linkedin.com/company/prefix-dev
     - icon: fontawesome/brands/github
       link: https://github.com/prefix-dev
+    - icon: fontawesome/brands/mastodon
+      link: https://hachyderm.io/@prefix
+    - icon: fontawesome/brands/bluesky
+      link: https://bsky.app/profile/prefix.dev
+    - icon: fontawesome/brands/linkedin
+      link: https://www.linkedin.com/company/prefix-dev
+    - icon: fontawesome/brands/twitter
+      link: https://twitter.com/prefix_dev
   version:
     provider: mike
 
 nav:
-  - Installation: index.md
-  - Basic Usage: basic_usage.md
+  - Home: index.md
+  - Getting Started:
+      - Installation: installation.md
+      - First Project: first_project.md
+      - Basic Usage: getting_started.md
   - Tutorials:
-      - Python: tutorials/python.md
+      - Python:
+          - Basic Usage: python/tutorial.md
+          - pyproject.toml: python/pyproject_toml.md
+          - Pytorch Installation: python/pytorch.md
       - ROS 2: tutorials/ros2.md
       - Rust: tutorials/rust.md
+      - Switching From...:
+          - Poetry: switching_from/poetry.md
+          - Conda/Mamba: switching_from/conda.md
       - Multi Environment: tutorials/multi_environment.md
-  - Features:
-      - Environments: features/environment.md
-      - Tasks: features/advanced_tasks.md
-      - Multi Platform: features/multi_platform_configuration.md
-      - Multi Environment: features/multi_environment.md
-      - Lockfile: features/lockfile.md
-      - System Requirements: features/system_requirements.md
-      - Global Tools: features/global_tools.md
-      - Pytorch Installation: features/pytorch.md
-  - Examples:
-      - C++/Cmake: examples/cpp-sdl.md
-      - OpenCV: examples/opencv.md
-      - ROS 2: examples/ros2-nav2.md
-  - Switching from:
-      - Poetry: switching_from/poetry.md
-      - Conda/Mamba: switching_from/conda.md
-  - IDE Integration:
-      - JupyterLab: ide_integration/jupyterlab.md
-      - PyCharm: ide_integration/pycharm.md
-      - RStudio: ide_integration/r_studio.md
-      - VSCode Devcontainer: ide_integration/devcontainer.md
-  - Building Packages:
-      - Getting started: build/getting_started.md
+      - Global Tools: global_tools/introduction.md
+  - Concepts:
+      - Environments: workspace/environment.md
+      - Tasks: workspace/advanced_tasks.md
+      - Multi Platform: workspace/multi_platform_configuration.md
+      - Multi Environment: workspace/multi_environment.md
+      - Lock File: workspace/lockfile.md
+      - System Requirements: workspace/system_requirements.md
+      - Conda & PyPI: concepts/conda_pypi.md
+      - Global Tools:
+          - Manifest: global_tools/manifest.md
+          - Trampolines: global_tools/trampolines.md
+  - Building:
+      - Getting Started: build/getting_started.md
       - Tutorials:
-          - Building a Python package: build/python.md
+          - Building a Python Package: build/python.md
           - Building a C++ Package: build/cpp.md
           - Multiple Packages in Workspace: build/workspace.md
           - Variants: build/variants.md
+          - Advanced Building Using rattler-build: build/advanced_cpp.md
       - Dependency Types: build/dependency_types.md
       - Build Backends: build/backends.md
+  - Distributing:
+      - Pixi Pack: deployment/pixi_pack.md
+      - Authentication: deployment/authentication.md
+      - Container: deployment/container.md
+      - S3: deployment/s3.md
+  - Integration:
+      - Editor:
+          - VSCode: integration/editor/vscode.md
+          - Jetbrains: integration/editor/jetbrains.md
+          - Zed: integration/editor/zed.md
+          - RStudio: integration/editor/r_studio.md
+          - JupyterLab: integration/editor/jupyterlab.md
+      - Continuous Integration:
+          - GitHub Actions: integration/ci/github_actions.md
+          - Pixi Diff-to-markdown: integration/ci/updates_github_actions.md
+      - Extensions:
+          - Introduction: integration/extensions/introduction.md
+          - Pixi Diff: integration/extensions/pixi_diff.md
+          - Pixi Diff-to-markdown: integration/ci/updates_github_actions.md
+          - Pixi Inject: integration/extensions/pixi_inject.md
+          - Pixi Install-to-prefix: integration/extensions/pixi_install_to_prefix.md
+          - Pixi Pack: deployment/pixi_pack.md
+      - Third Party:
+          - Conda Deny: integration/third_party/conda_deny.md
+          - Direnv: integration/third_party/direnv.md
+          - Starship: integration/third_party/starship.md
   - Advanced:
-      - Authentication: advanced/authentication.md
-      - Channel Logic: advanced/channel_priority.md
-      - GitHub Actions: advanced/github_actions.md
+      - Channel Logic: advanced/channel_logic.md
       - Info Command: advanced/explain_info_command.md
-      - Updates using GitHub Actions: advanced/updates_github_actions.md
-      - Lockfile diffs: advanced/lockfile_diffs.md
-      - Production Deployment: advanced/production_deployment.md
-      - Pyproject.toml: advanced/pyproject_toml.md
-      - S3: advanced/s3.md
+      - Dependency Overrides: overrides/override.md
+      - Shebang: advanced/shebang.md
+      - Shell: advanced/pixi_shell.md
   - Reference:
       - Pixi Manifest: reference/pixi_manifest.md
       - Pixi Configuration: reference/pixi_configuration.md
-      - CLI: reference/cli.md
+      - CLI: reference/cli/pixi.md
+      - Environment Variables: reference/environment_variables.md
   - Misc:
-      - Pixi vision: vision.md
-      - Packaging: packaging.md
-      - Community: Community.md
-      - FAQ: FAQ.md
       - Changelog: CHANGELOG.md
+      - Pixi Vision: misc/vision.md
+      - Packaging Pixi: misc/packaging.md
+      - Community: misc/Community.md
+      - FAQ: misc/FAQ.md
 
 hooks:
   - schema/docs_hooks.py
   - install/docs_hooks.py
   - docs/docs_hooks.py
 
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
+
+not_in_nav: |
+  reference/cli/
+  partials/
+
 plugins:
   - redirects:
       redirect_maps:
-        "advanced/advanced_tasks.md": "features/advanced_tasks.md"
-        "environment.md": "features/environment.md"
-        "design_proposals/multi_environment_proposal.md": "features/multi_environment.md"
-        "advanced/multi_platform_configuration.md": "features/multi_platform_configuration.md"
-        "cli.md": "reference/cli.md"
         "configuration.md": "reference/pixi_manifest.md"
         "reference/project_configuration.md": "reference/pixi_manifest.md"
-        "advanced/global_configuration.md": "reference/pixi_configuration.md"
+        "basic_usage.md": "getting_started.md"
+        "tutorials/python.md": "python/tutorial.md"
+        "features/environment.md": "workspace/environment.md"
+        "features/advanced_tasks.md": "workspace/advanced_tasks.md"
+        "features/multi_platform_configuration.md": "workspace/multi_platform_configuration.md"
+        "features/multi_environment.md": "workspace/multi_environment.md"
+        "features/lockfile.md": "workspace/lockfile.md"
+        "features/system_requirements.md": "workspace/system_requirements.md"
+        "features/global_tools.md": "global_tools/introduction.md"
+        "features/pytorch.md": "python/pytorch.md"
+        "ide_integration/jupyterlab.md": "integration/editor/jupyterlab.md"
+        "ide_integration/pycharm.md": "integration/editor/jetbrains.md"
+        "ide_integration/r_studio.md": "integration/editor/r_studio.md"
+        "ide_integration/devcontainer.md": "integration/editor/vscode.md"
+        "advanced/authentication.md": "deployment/authentication.md"
+        "advanced/channel_priority.md": "advanced/channel_logic.md"
+        "advanced/github_actions.md": "integration/ci/github_actions.md"
+        "advanced/updates_github_actions.md": "integration/ci/updates_github_actions.md"
+        "advanced/lockfile_diffs.md": "integration/extensions/pixi_diff.md"
+        "advanced/production_deployment.md": "deployment/container.md"
+        "advanced/pyproject_toml.md": "python/pyproject_toml.md"
+        "advanced/s3.md": "deployment/s3.md"
+        "advanced/third_party.md": "integration/third_party/starship.md"
+        "reference/cli.md": "reference/cli/pixi.md"
+        "vision.md": "misc/vision.md"
+        "packaging.md": "misc/packaging.md"
+        "Community.md": "misc/Community.md"
+        "FAQ.md": "misc/FAQ.md"
+        "integration/editor/devcontainer.md": "integration/editor/vscode.md"
+        "integration/editor/pycharm.md": "integration/editor/jetbrains.md"
+        "advanced/installation.md": "installation.md"
 
   - search
   - social

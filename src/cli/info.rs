@@ -14,22 +14,20 @@ use rattler_conda_types::{GenericVirtualPackage, Platform};
 use rattler_networking::authentication_storage;
 use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use serde::Serialize;
-use serde_with::{serde_as, DisplayFromStr};
+use serde_with::{DisplayFromStr, serde_as};
 use tokio::task::spawn_blocking;
 use toml_edit::ser::to_string;
 
 use crate::{
-    global,
+    WorkspaceLocator, global,
     global::{BinDir, EnvRoot},
     task::TaskName,
-    WorkspaceLocator,
 };
 use fancy_display::FancyDisplay;
 
 static WIDTH: usize = 19;
 
-/// Information about the system, project and environments for the current
-/// machine.
+/// Information about the system, workspace and environments for the current machine.
 #[derive(Parser, Debug)]
 pub struct Args {
     /// Show cache and environment size
@@ -91,10 +89,9 @@ impl Display for EnvironmentInfo {
                 f,
                 "{:>WIDTH$}: {}",
                 bold.apply_to("Solve group"),
-                solve_group
+                consts::SOLVE_GROUP_STYLE.apply_to(solve_group)
             )?;
         }
-        // TODO: add environment size when PR 674 is merged
         if let Some(size) = &self.environment_size {
             writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Environment size"), size)?;
         }
@@ -146,6 +143,13 @@ impl Display for EnvironmentInfo {
                 platform_list
             )?;
         }
+
+        writeln!(
+            f,
+            "{:>WIDTH$}: {}",
+            bold.apply_to("Prefix location"),
+            self.prefix.display()
+        )?;
 
         if !self.system_requirements.is_empty() {
             let serialized = to_string(&self.system_requirements)
@@ -298,9 +302,9 @@ impl Display for Info {
             write!(f, "{}", gi)?;
         }
 
-        // Project information
+        // Workspace information
         if let Some(pi) = self.project_info.as_ref() {
-            writeln!(f, "\n{}", bold.apply_to("Project\n------------").cyan())?;
+            writeln!(f, "\n{}", bold.apply_to("Workspace\n------------").cyan())?;
             writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Name"), pi.name)?;
             if let Some(version) = pi.version.clone() {
                 writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Version"), version)?;
@@ -392,7 +396,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     let project_info = workspace.clone().map(|p| WorkspaceInfo {
-        name: p.name().to_string(),
+        name: p.display_name().to_string(),
         manifest_path: p.workspace.provenance.path.clone(),
         last_updated: last_updated(p.lock_file_path()).ok(),
         pixi_folder_size,
@@ -412,10 +416,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .iter()
                 .map(|env| {
                     let tasks = env
-                        .tasks(None)
+                        .tasks(Some(env.best_platform()))
                         .ok()
                         .map(|t| t.into_keys().cloned().collect())
                         .unwrap_or_default();
+
+                    let environment_size =
+                        args.extended.then(|| dir_size(env.dir()).ok()).flatten();
 
                     EnvironmentInfo {
                         name: env.name().clone(),
@@ -423,7 +430,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         solve_group: env
                             .solve_group()
                             .map(|solve_group| solve_group.name().to_string()),
-                        environment_size: None,
+                        environment_size,
                         dependencies: env
                             .combined_dependencies(Some(env.best_platform()))
                             .names()

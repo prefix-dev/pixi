@@ -13,6 +13,13 @@ class Results:
     installed: list[str]
     failed: list[str]
 
+    def __iadd__(self, other: "Results") -> "Results":
+        self.succeeded += other.succeeded
+        self.skipped += other.skipped
+        self.installed += other.installed
+        self.failed += other.failed
+        return self
+
 
 def has_test_task(folder: Path, pixi_exec: Path) -> bool:
     command = [str(pixi_exec), "task", "--manifest-path", str(folder), "list"]
@@ -77,7 +84,7 @@ def run_test_in_subfolders(
             print(f"\033[92m ✅ {folder}\033[0m")
             results.succeeded.append(str(folder))
 
-        print(f"Done: {i+1}/{tests}")
+        print(f"Done: {i + 1}/{tests}")
         print("")
     return results
 
@@ -135,6 +142,10 @@ if __name__ == "__main__":
         pixi_exec = Path(args.pixi_exec) if args.pixi_exec else Path("pixi")
         results = run_test_in_subfolders(
             pixi_root / "examples", pixi_exec, args.clean, args.rm_lock
+        )
+
+        results += run_test_in_subfolders(
+            pixi_root / "examples" / "pixi-build", pixi_exec, args.clean, args.rm_lock
         )
 
         print_summary(results, pixi_exec)

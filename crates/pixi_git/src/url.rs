@@ -31,7 +31,12 @@ impl CanonicalUrl {
 
         // Strip credentials.
         let _ = url.set_password(None);
-        let _ = url.set_username("");
+
+        // Only stripping the username if the scheme is not `ssh`. This is because `ssh` URLs should
+        // have the `git` username.
+        if !url.scheme().contains("ssh") {
+            let _ = url.set_username("");
+        }
 
         // Strip a trailing slash.
         if url.path().ends_with('/') {
@@ -92,7 +97,8 @@ impl CanonicalUrl {
 /// `https://github.com/pypa/package.git#subdirectory=pkg_b` would map to different
 /// [`CanonicalUrl`] values, but the same [`RepositoryUrl`], since they map to the same
 /// resource.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Hash, serde::Serialize)]
+#[serde(transparent)]
 pub struct RepositoryUrl(Url);
 
 impl RepositoryUrl {
@@ -130,6 +136,10 @@ impl RepositoryUrl {
     /// Return the underlying [`Url`] of this repository.
     pub fn into_url(self) -> Url {
         self.into()
+    }
+
+    pub fn as_url(&self) -> &Url {
+        &self.0
     }
 }
 
@@ -209,9 +219,13 @@ mod tests {
 
         // Two URLs should _not_ be considered equal if they request different subdirectories.
         assert_ne!(
-             CanonicalUrl::parse("git+https://github.com/pypa/sample-namespace-packages.git#subdirectory=pkg_resources/pkg_a")?,
-             CanonicalUrl::parse("git+https://github.com/pypa/sample-namespace-packages.git#subdirectory=pkg_resources/pkg_b")?,
-         );
+            CanonicalUrl::parse(
+                "git+https://github.com/pypa/sample-namespace-packages.git#subdirectory=pkg_resources/pkg_a"
+            )?,
+            CanonicalUrl::parse(
+                "git+https://github.com/pypa/sample-namespace-packages.git#subdirectory=pkg_resources/pkg_b"
+            )?,
+        );
 
         // Two URLs should _not_ be considered equal if they request different commit tags.
         assert_ne!(
@@ -257,9 +271,13 @@ mod tests {
         // Two URLs should be considered equal if they map to the same repository, even if they
         // request different subdirectories.
         assert_eq!(
-             RepositoryUrl::parse("git+https://github.com/pypa/sample-namespace-packages.git#subdirectory=pkg_resources/pkg_a")?,
-             RepositoryUrl::parse("git+https://github.com/pypa/sample-namespace-packages.git#subdirectory=pkg_resources/pkg_b")?,
-         );
+            RepositoryUrl::parse(
+                "git+https://github.com/pypa/sample-namespace-packages.git#subdirectory=pkg_resources/pkg_a"
+            )?,
+            RepositoryUrl::parse(
+                "git+https://github.com/pypa/sample-namespace-packages.git#subdirectory=pkg_resources/pkg_b"
+            )?,
+        );
 
         // Two URLs should be considered equal if they map to the same repository, even if they
         // request different commit tags.

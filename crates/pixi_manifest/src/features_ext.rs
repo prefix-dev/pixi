@@ -1,19 +1,21 @@
 use std::collections::HashSet;
 
+use chrono::{DateTime, Utc};
 use indexmap::IndexSet;
+use miette::Diagnostic;
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, NamedChannelOrUrl, ParseChannelError, Platform,
 };
 
 use crate::{
+    CondaDependencies, PrioritizedChannel, PyPiDependencies, SpecType, SystemRequirements,
     has_features_iter::HasFeaturesIter, has_manifest_ref::HasWorkspaceManifest,
-    pypi::pypi_options::PypiOptions, workspace::ChannelPriority, CondaDependencies,
-    PrioritizedChannel, PyPiDependencies, SpecType, SystemRequirements,
+    pypi::pypi_options::PypiOptions, workspace::ChannelPriority,
 };
 
 /// ChannelPriorityCombination error, thrown when multiple channel priorities
 /// are set
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, Diagnostic)]
 #[error("Multiple channel priorities are not allowed in a single environment")]
 pub struct ChannelPriorityCombinationError;
 
@@ -79,6 +81,19 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
             }
         }
         Ok(channel_priority)
+    }
+
+    /// Returns whether packages should be excluded newer than a certain date.
+    fn exclude_newer(&self) -> Option<DateTime<Utc>> {
+        self.workspace_manifest()
+            .workspace
+            .exclude_newer
+            .map(Into::into)
+    }
+
+    /// Returns the strategy for solving packages.
+    fn solve_strategy(&self) -> rattler_solve::SolveStrategy {
+        rattler_solve::SolveStrategy::default()
     }
 
     /// Returns the platforms that this collection is compatible with.

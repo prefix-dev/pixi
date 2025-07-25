@@ -1,6 +1,5 @@
 ---
 source: crates/pixi_utils/src/conda_environment_file.rs
-assertion_line: 295
 expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\nparse_channels(env_info.channels().clone()), env_info.name())"
 ---
 (
@@ -34,6 +33,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 md5: None,
                 sha256: None,
                 url: None,
+                license: None,
             },
             MatchSpec {
                 name: Some(
@@ -63,6 +63,7 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
                 md5: None,
                 sha256: None,
                 url: None,
+                license: None,
             },
         ],
         [],

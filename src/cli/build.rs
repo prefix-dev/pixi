@@ -1,22 +1,18 @@
-use std::{path::PathBuf, sync::Arc, time::Duration};
+use std::path::PathBuf;
 
 use clap::Parser;
 use indicatif::ProgressBar;
 use miette::{Context, IntoDiagnostic};
-use pixi_build_frontend::{BackendOverride, CondaBuildReporter, SetupRequest};
-use pixi_build_types::{
-    procedures::conda_build::CondaBuildParams, ChannelConfiguration, PlatformAndVirtualPackages,
+use pixi_command_dispatcher::{
+    BuildBackendMetadataSpec, BuildEnvironment, CacheDirs, SourceBuildSpec,
 };
 use pixi_config::ConfigCli;
 use pixi_manifest::FeaturesExt;
+use pixi_progress::global_multi_progress;
+use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 
-use crate::{
-    cli::cli_config::WorkspaceConfig,
-    repodata::Repodata,
-    utils::{move_file, MoveError},
-    WorkspaceLocator,
-};
+use crate::{WorkspaceLocator, cli::cli_config::WorkspaceConfig, reporters::TopLevelProgress};
 
 #[derive(Parser, Debug)]
 #[clap(verbatim_doc_comment)]
@@ -31,109 +27,47 @@ pub struct Args {
     #[clap(long, short, default_value_t = Platform::current())]
     pub target_platform: Platform,
 
-    /// The output directory to place the build artifacts
+    /// The output directory to place the built artifacts
     #[clap(long, short, default_value = ".")]
     pub output_dir: PathBuf,
-}
 
-struct ProgressReporter {
-    progress_bar: indicatif::ProgressBar,
-}
+    /// The directory to use for incremental builds artifacts.
+    #[clap(long, short)]
+    pub build_dir: Option<PathBuf>,
 
-impl ProgressReporter {
-    fn new(source: &str) -> Self {
-        let style = indicatif::ProgressStyle::default_bar()
-            .template("{spinner:.dim} {elapsed} {prefix} {wide_msg:.dim}")
-            .expect("should be able to create a progress bar style");
-        let pb = ProgressBar::new(0);
-        pb.set_style(style);
-        let progress = pixi_progress::global_multi_progress().add(pb);
-        progress.set_prefix(format!("building package: {}", source));
-        progress.enable_steady_tick(Duration::from_millis(100));
-
-        Self {
-            progress_bar: progress,
-        }
-    }
-}
-
-impl CondaBuildReporter for ProgressReporter {
-    /// Starts a progress bar that should currently be
-    ///  [spinner] message
-    fn on_build_start(&self, _build_id: usize) -> usize {
-        // Create a new progress bar.
-        // Building the package
-        0
-    }
-
-    fn on_build_end(&self, _operation: usize) {
-        // Finish the progress bar.
-        self.progress_bar.finish_with_message("build completed");
-    }
-
-    fn on_build_output(&self, _operation: usize, line: String) {
-        self.progress_bar.suspend(|| eprintln!("{}", line))
-    }
+    /// Whether to clean the build directory before building.
+    #[clap(long, short)]
+    pub clean: bool,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
+    // Locate the workspace based on the provided configuration.
+    let workspace_locator = args.project_config.workspace_locator_start();
     let workspace = WorkspaceLocator::for_cli()
-        .with_search_start(args.project_config.workspace_locator_start())
+        .with_search_start(workspace_locator.clone())
+        .with_closest_package(false)
         .locate()?
         .with_cli_config(args.config_cli);
 
-    // TODO: Implement logic to take the source code from a VCS instead of from a
-    // local channel so that that information is also encoded in the manifest.
+    // Construct a command dispatcher based on the workspace.
+    let multi_progress = global_multi_progress();
+    let anchor_pb = multi_progress.add(ProgressBar::hidden());
+    let mut cache_dirs =
+        CacheDirs::new(pixi_config::get_cache_dir()?).with_workspace(workspace.pixi_dir());
+    if let Some(build_dir) = args.build_dir {
+        cache_dirs.set_working_dirs(build_dir);
+    }
+    let command_dispatcher = workspace
+        .command_dispatcher_builder()?
+        .with_cache_dirs(cache_dirs)
+        .with_reporter(TopLevelProgress::new(multi_progress, anchor_pb))
+        .finish();
 
-    // Instantiate a protocol for the source directory.
-    let channel_config = workspace.channel_config();
+    // Determine the variant configuration for the build.
+    let variant_configuration = workspace.variants(args.target_platform);
 
-    let tool_context = pixi_build_frontend::ToolContext::builder()
-        .with_gateway(workspace.repodata_gateway()?.clone())
-        .with_client(workspace.authenticated_client()?.clone())
-        .build();
-
-    let protocol = pixi_build_frontend::BuildFrontend::default()
-        .with_channel_config(channel_config.clone())
-        .with_tool_context(Arc::new(tool_context))
-        .setup_protocol(SetupRequest {
-            source_dir: workspace
-                .package
-                .as_ref()
-                .map(|pkg| &pkg.provenance.path)
-                .unwrap_or(&workspace.workspace.provenance.path)
-                .parent()
-                .expect("a manifest must have parent directory")
-                .to_path_buf(),
-            build_tool_override: BackendOverride::from_env(),
-            build_id: 0,
-        })
-        .await
-        .into_diagnostic()
-        .wrap_err("unable to setup the build-backend to build the workspace")?;
-
-    // Construct a temporary directory to build the package in. This path is also
-    // automatically removed after the build finishes.
-    let pixi_dir = &workspace.pixi_dir();
-    tokio::fs::create_dir_all(pixi_dir)
-        .await
-        .into_diagnostic()
-        .with_context(|| {
-            format!(
-                "failed to create the .pixi directory at '{}'",
-                pixi_dir.display()
-            )
-        })?;
-
-    let work_dir = tempfile::Builder::new()
-        .prefix("pixi-build-")
-        .tempdir_in(workspace.pixi_dir())
-        .into_diagnostic()
-        .context("failed to create temporary working directory in the .pixi directory")?;
-
-    let progress = Arc::new(ProgressReporter::new(workspace.name()));
     // Build platform virtual packages
-    let build_platform_virtual_packages: Vec<GenericVirtualPackage> = workspace
+    let build_virtual_packages: Vec<GenericVirtualPackage> = workspace
         .default_environment()
         .virtual_packages(Platform::current())
         .into_iter()
@@ -141,97 +75,101 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .collect();
 
     // Host platform virtual packages
-    let host_platform_virtual_packages: Vec<GenericVirtualPackage> = workspace
+    let host_virtual_packages: Vec<GenericVirtualPackage> = workspace
         .default_environment()
         .virtual_packages(args.target_platform)
         .into_iter()
         .map(GenericVirtualPackage::from)
         .collect();
 
-    // Build the individual packages.
-    let result = protocol
-        .conda_build(
-            &CondaBuildParams {
-                build_platform_virtual_packages: Some(build_platform_virtual_packages),
-                host_platform: Some(PlatformAndVirtualPackages {
-                    platform: args.target_platform,
-                    virtual_packages: Some(host_platform_virtual_packages),
-                }),
-                channel_base_urls: Some(
-                    workspace
-                        .default_environment()
-                        .channel_urls(&channel_config)
-                        .into_diagnostic()?
-                        .into_iter()
-                        .map(Into::into)
-                        .collect(),
-                ),
-                channel_configuration: ChannelConfiguration {
-                    base_url: channel_config.channel_alias,
-                },
-                outputs: None,
-                editable: false,
-                work_directory: work_dir.path().to_path_buf(),
-                variant_configuration: Some(Default::default()),
-            },
-            progress.clone(),
-        )
-        .await
-        .wrap_err("during the building of the project the following error occurred")?;
+    let build_environment = BuildEnvironment {
+        host_platform: args.target_platform,
+        build_platform: Platform::current(),
+        build_virtual_packages,
+        host_virtual_packages,
+    };
 
-    // Move the built packages to the output directory.
-    let output_dir = args.output_dir;
-    for package in result.packages {
-        fs_err::create_dir_all(&output_dir)
-            .into_diagnostic()
-            .with_context(|| {
-                format!(
-                    "failed to create output directory '{0}'",
-                    output_dir.display()
-                )
-            })?;
+    // Query any and all information we can acquire about the package we're
+    // attempting to build.
+    let Ok(search_start) = workspace_locator.path() else {
+        miette::bail!("could not determine the current working directory to locate the workspace");
+    };
+    let channel_config = workspace.channel_config();
+    let channels = workspace
+        .default_environment()
+        .channel_urls(&channel_config)
+        .into_diagnostic()?;
 
-        let file_name = package.output_file.file_name().ok_or_else(|| {
-            miette::miette!(
-                "output file '{0}' does not have a file name",
-                package.output_file.display()
+    // Determine the source of the package.
+    let source: PinnedSourceSpec = PinnedPathSpec {
+        path: search_start.to_string_lossy().into_owned().into(),
+    }
+    .into();
+
+    // Create the build backend metadata specification.
+    let backend_metadata_spec = BuildBackendMetadataSpec {
+        source: source.clone(),
+        channels: channels.clone(),
+        channel_config: channel_config.clone(),
+        build_environment: build_environment.clone(),
+        variants: Some(variant_configuration.clone()),
+        enabled_protocols: Default::default(),
+    };
+    let backend_metadata = command_dispatcher
+        .build_backend_metadata(backend_metadata_spec.clone())
+        .await?;
+
+    // Determine all the outputs available from the build backend.
+    let packages = backend_metadata.metadata.outputs();
+
+    // Ensure the output directory exists
+    fs_err::create_dir_all(&args.output_dir)
+        .into_diagnostic()
+        .with_context(|| {
+            format!(
+                "failed to create output directory '{0}'",
+                args.output_dir.display()
             )
         })?;
-        let dest = output_dir.join(file_name);
-        if let Err(err) = move_file(&package.output_file, &dest) {
-            match err {
-                MoveError::CopyFailed(err) => {
-                    return Err(err).into_diagnostic().with_context(|| {
-                        format!(
-                            "failed to copy {} to {}",
-                            package.output_file.display(),
-                            dest.display()
-                        )
-                    });
-                }
-                MoveError::FailedToRemove(e) => {
-                    tracing::warn!(
-                        "failed to remove {} after copying it to the output directory: {}",
-                        package.output_file.display(),
-                        e
-                    );
-                }
-                MoveError::MoveFailed(e) => {
-                    return Err(e).into_diagnostic().with_context(|| {
-                        format!(
-                            "failed to move {} to {}",
-                            package.output_file.display(),
-                            dest.display()
-                        )
-                    })
-                }
-            }
-        }
 
-        println!(
+    // Build the individual packages
+    for package in packages {
+        let built_package = command_dispatcher
+            .source_build(SourceBuildSpec {
+                package,
+                output_directory: Some(args.output_dir.clone()),
+                source: source.clone(),
+                channels: channels.clone(),
+                channel_config: channel_config.clone(),
+                build_environment: build_environment.clone(),
+                variants: Some(variant_configuration.clone()),
+                enabled_protocols: Default::default(),
+                work_directory: None,
+                clean: args.clean,
+            })
+            .await?;
+
+        // Clear the top level progress
+        command_dispatcher.clear_reporter().await;
+
+        // Canonicalize the output directory and package path.
+        let output_dir = dunce::canonicalize(&args.output_dir)
+            .expect("failed to canonicalize output directory which must now exist");
+        let package_path = dunce::canonicalize(&built_package.output_file)
+            .expect("failed to canonicalize output file which must now exist");
+
+        // Make the path relative to the output directory
+        let output_file = pathdiff::diff_paths(&package_path, &output_dir)
+            .map(|p| args.output_dir.join(p))
+            .unwrap_or_else(|| dunce::simplified(&built_package.output_file).to_path_buf());
+        let stripped_output_file = output_file
+            .strip_prefix(&args.output_dir)
+            .unwrap_or(&output_file);
+
+        pixi_progress::println!(
             "{}Successfully built '{}'",
             console::style(console::Emoji("✔ ", "")).green(),
-            dest.display()
+            stripped_output_file.display()
         );
     }
 

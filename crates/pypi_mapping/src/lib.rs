@@ -2,96 +2,46 @@ use std::{
     collections::{BTreeSet, HashMap},
     path::PathBuf,
     str::FromStr,
-    sync::Arc,
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
 };
 
-use async_once_cell::OnceCell as AsyncCell;
-use custom_pypi_mapping::fetch_mapping_from_path;
+use futures::{StreamExt, stream::FuturesUnordered};
 use http_cache_reqwest::{CACacheManager, Cache, CacheMode, HttpCache, HttpCacheOptions};
+use itertools::Itertools;
+use miette::IntoDiagnostic;
 use pixi_config::get_cache_dir;
-use rattler_conda_types::{PackageRecord, PackageUrl, RepoDataRecord};
+use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
-use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
+use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
+use thiserror::Error;
+use tokio::sync::Semaphore;
+use tracing::Instrument;
 use url::Url;
 
-use crate::custom_pypi_mapping::fetch_mapping_from_url;
+mod custom_mapping;
+pub mod prefix;
+mod reporter;
 
-pub mod custom_pypi_mapping;
-pub mod prefix_pypi_name_mapping;
+pub use custom_mapping::CustomMapping;
+pub use reporter::Reporter;
 
-pub trait Reporter: Send + Sync {
-    fn download_started(&self, package: &RepoDataRecord, total: usize);
-    fn download_finished(&self, package: &RepoDataRecord, total: usize);
-    fn download_failed(&self, package: &RepoDataRecord, total: usize);
-}
+use crate::custom_mapping::CustomMappingClient;
+
+/// A compressed mapping is a mapping of a package name to a potential pypi
+/// name.
+pub type CompressedMapping = HashMap<String, Option<String>>;
 
 pub type ChannelName = String;
 
 pub type MappingMap = HashMap<ChannelName, MappingLocation>;
-pub type MappingByChannel = HashMap<String, HashMap<String, Option<String>>>;
+pub type MappingByChannel = HashMap<ChannelName, CompressedMapping>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MappingLocation {
     Path(PathBuf),
     Url(Url),
-}
-
-#[derive(Debug)]
-/// Struct with a mapping of channel names to their respective mapping locations
-/// location could be a remote url or local file
-pub struct CustomMapping {
-    pub mapping: MappingMap,
-    mapping_value: AsyncCell<MappingByChannel>,
-}
-
-impl CustomMapping {
-    /// Create a new `CustomMapping` with the specified mapping.
-    pub fn new(mapping: MappingMap) -> Self {
-        Self {
-            mapping,
-            mapping_value: Default::default(),
-        }
-    }
-
-    /// Fetch the custom mapping from the server or load from the local
-    pub async fn fetch_custom_mapping(
-        &self,
-        client: &ClientWithMiddleware,
-    ) -> miette::Result<MappingByChannel> {
-        self.mapping_value
-            .get_or_try_init(async {
-                let mut mapping_url_to_name: MappingByChannel = Default::default();
-
-                for (name, url) in self.mapping.iter() {
-                    // Fetch the mapping from the server or from the local
-
-                    match url {
-                        MappingLocation::Url(url) => {
-                            let mapping_by_name = match url.scheme() {
-                                "file" => {
-                                    let file_path = url.to_file_path().map_err(|_| {
-                                        miette::miette!("{} is not a valid file url", url)
-                                    })?;
-                                    fetch_mapping_from_path(&file_path)?
-                                }
-                                _ => fetch_mapping_from_url(client, url).await?,
-                            };
-
-                            mapping_url_to_name.insert(name.to_string(), mapping_by_name);
-                        }
-                        MappingLocation::Path(path) => {
-                            let mapping_by_name = fetch_mapping_from_path(path)?;
-
-                            mapping_url_to_name.insert(name.to_string(), mapping_by_name);
-                        }
-                    }
-                }
-
-                Ok(mapping_url_to_name)
-            })
-            .await
-            .cloned()
-    }
+    Memory(CompressedMapping),
 }
 
 /// This enum represents the source of mapping
@@ -135,54 +85,6 @@ impl PurlSource {
     }
 }
 
-pub async fn amend_pypi_purls(
-    client: ClientWithMiddleware,
-    mapping_source: &MappingSource,
-    conda_packages: impl IntoIterator<Item = &mut RepoDataRecord>,
-    reporter: Option<Arc<dyn Reporter>>,
-) -> miette::Result<()> {
-    // Construct a client with a retry policy and local caching
-    let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
-    let retry_strategy = RetryTransientMiddleware::new_with_policy(retry_policy);
-    let cache_strategy = Cache(HttpCache {
-        mode: CacheMode::Default,
-        manager: CACacheManager {
-            path: get_cache_dir()
-                .expect("missing cache directory")
-                .join(pixi_consts::consts::CONDA_PYPI_MAPPING_CACHE_DIR),
-        },
-        options: HttpCacheOptions::default(),
-    });
-
-    let client = ClientBuilder::from_client(client)
-        .with(cache_strategy)
-        .with(retry_strategy)
-        .build();
-
-    match mapping_source {
-        MappingSource::Custom(mapping) => {
-            custom_pypi_mapping::amend_pypi_purls(&client, mapping, conda_packages, reporter)
-                .await?;
-        }
-        MappingSource::Prefix => {
-            prefix_pypi_name_mapping::amend_pypi_purls(&client, conda_packages, reporter).await?;
-        }
-        MappingSource::Disabled => {
-            for record in conda_packages {
-                if let Some(purl) = prefix_pypi_name_mapping::assume_conda_is_pypi(None, record) {
-                    record
-                        .package_record
-                        .purls
-                        .get_or_insert_with(BTreeSet::new)
-                        .insert(purl);
-                }
-            }
-        }
-    }
-
-    Ok(())
-}
-
 /// Returns `true` if the specified record refers to a conda-forge package.
 pub fn is_conda_forge_record(record: &RepoDataRecord) -> bool {
     record
@@ -197,17 +99,332 @@ pub fn is_conda_forge_url(url: &Url) -> bool {
     url.path().starts_with("/conda-forge")
 }
 
-/// Build a purl for a `PackageRecord`
-/// it will return a purl in this format
-/// `pkg:pypi/aiofiles`
-pub fn build_pypi_purl_from_package_record(package_record: &PackageRecord) -> Option<PackageUrl> {
-    let name = pep508_rs::PackageName::from_str(package_record.name.as_source()).ok();
-    let version = pep440_rs::Version::from_str(&package_record.version.as_str()).ok();
-    if let (Some(name), Some(_)) = (name, version) {
-        let purl = PackageUrl::builder(String::from("pypi"), name.to_string());
-        let built_purl = purl.build().expect("valid pypi package url");
-        return Some(built_purl);
+/// The mapping client implements the logic to derive purls for conda packages.
+/// Internally it uses a combination of sources and also allows overwriting the
+/// sources for particular channels.
+///
+/// For more information see:
+/// - [`prefix::CompressedMappingClient`]
+/// - [`prefix::HashMappingClient`]
+/// - [`CondaForgeVerbatim`]
+#[derive(Clone)]
+pub struct MappingClient {
+    client: ClientWithMiddleware,
+    compressed_mapping: prefix::CompressedMappingClient,
+    hash_mapping: prefix::HashMappingClient,
+}
+
+pub struct MappingClientBuilder {
+    client: ClientWithMiddleware,
+    compressed_mapping: prefix::CompressedMappingClientBuilder,
+    hash_mapping: prefix::HashMappingClientBuilder,
+}
+
+impl MappingClientBuilder {
+    /// Sets the concurrency limit for the client. This is useful to limit the
+    /// maximum number of concurrent requests.
+    pub fn with_concurrency_limit(self, limit: Arc<Semaphore>) -> Self {
+        Self {
+            compressed_mapping: self
+                .compressed_mapping
+                .with_concurrency_limit(limit.clone()),
+            hash_mapping: self.hash_mapping.with_concurrency_limit(limit),
+            ..self
+        }
     }
 
-    None
+    /// Sets the concurrency limit for the client. This is useful to limit the
+    /// maximum number of concurrent requests.
+    pub fn set_concurrency_limit(&mut self, limit: Arc<Semaphore>) -> &mut Self {
+        self.compressed_mapping.set_concurrency_limit(limit.clone());
+        self.hash_mapping.set_concurrency_limit(limit);
+        self
+    }
+
+    /// Finish the construction of the client and return it.
+    pub fn finish(self) -> MappingClient {
+        MappingClient {
+            client: self.client,
+            compressed_mapping: self.compressed_mapping.finish(),
+            hash_mapping: self.hash_mapping.finish(),
+        }
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum MappingError {
+    #[error(transparent)]
+    IoError(#[from] std::io::Error),
+    #[error(transparent)]
+    Reqwest(#[from] reqwest_middleware::Error),
+}
+
+impl MappingClient {
+    /// Construct a new `MappingClientBuilder` with the provided `Client`.
+    pub fn builder(client: ClientWithMiddleware) -> MappingClientBuilder {
+        // Construct a client with a retry policy and local caching
+        let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
+        let retry_strategy = RetryTransientMiddleware::new_with_policy(retry_policy);
+        let cache_strategy = Cache(HttpCache {
+            mode: CacheMode::Default,
+            manager: CACacheManager {
+                path: get_cache_dir()
+                    .expect("missing cache directory")
+                    .join(pixi_consts::consts::CONDA_PYPI_MAPPING_CACHE_DIR),
+                remove_opts: Default::default(),
+            },
+            options: HttpCacheOptions::default(),
+        });
+
+        let client = ClientBuilder::from_client(client)
+            .with(cache_strategy)
+            .with(retry_strategy)
+            .build();
+
+        MappingClientBuilder {
+            client: client.clone(),
+            compressed_mapping: prefix::CompressedMappingClient::builder(client.clone()),
+            hash_mapping: prefix::HashMappingClient::builder(client),
+        }
+    }
+
+    /// Given a set of `RepoDataRecord`s, amend the purls for each record.
+    pub async fn amend_purls(
+        &self,
+        mapping_source: &MappingSource,
+        conda_packages: impl IntoIterator<Item = &mut RepoDataRecord>,
+        reporter: Option<Arc<dyn Reporter>>,
+    ) -> miette::Result<()> {
+        let start = Instant::now();
+
+        // Collect the records into a vec so we can iterate multiple times.
+        let mut records = conda_packages.into_iter().collect_vec();
+
+        // Normalize the channel names by removing the trailing slash
+        for package in records.iter_mut() {
+            package.channel = package
+                .channel
+                .as_ref()
+                .map(|c| c.trim_end_matches('/').to_string());
+        }
+
+        // Discard all records for which we already have pypi purls.
+        records.retain(|record| !has_pypi_purl(record));
+
+        let metrics = CacheMetrics::default();
+
+        // Fetch custom mapped channels if any.
+        let custom_mappings = if let MappingSource::Custom(mapping_url) = mapping_source {
+            Some(CustomMappingClient::from(
+                mapping_url.fetch_custom_mapping(&self.client).await?,
+            ))
+        } else {
+            None
+        };
+
+        let mut amend_futures = FuturesUnordered::new();
+        let total_records = records.len();
+        for record in records.into_iter() {
+            let reporter = reporter.clone();
+            let custom_mappings = &custom_mappings;
+            let cache_metrics = &metrics;
+            let file_name = record.file_name.clone();
+            let derive_purls_future = async move {
+                if let Some(reporter) = reporter.as_deref() {
+                    reporter.download_started(record, total_records);
+                }
+
+                let derived_purls = if matches!(mapping_source, MappingSource::Disabled) {
+                    Ok(None)
+                } else if let Some(custom_mappings) = custom_mappings
+                    .as_ref()
+                    .filter(|mapping| mapping.is_mapping_for_record(record))
+                {
+                    custom_mappings.derive_purls(record, cache_metrics).await
+                } else {
+                    self.derive_purls_from_clients(record, cache_metrics).await
+                };
+
+                match derived_purls {
+                    Ok(derived_purls) => {
+                        if let Some(reporter) = reporter.as_deref() {
+                            reporter.download_finished(record, total_records);
+                        }
+                        Ok((record, derived_purls))
+                    }
+                    Err(err) => {
+                        if let Some(reporter) = reporter.as_deref() {
+                            reporter.download_failed(record, total_records);
+                        }
+                        Err(err)
+                    }
+                }
+            }
+            .instrument(tracing::info_span!("derive_purl", record = file_name));
+
+            // Add all futures to the futures queue to ensure all can run concurrently.
+            amend_futures.push(derive_purls_future);
+        }
+
+        let mut amended_records = 0;
+        let mut total_records = 0;
+        while let Some(next) = amend_futures.next().await {
+            let (record, mut derived_purls) = next.into_diagnostic()?;
+
+            // As a last resort use the verbatim conda-forge purls.
+            if derived_purls.is_none() {
+                derived_purls = CondaForgeVerbatim
+                    .derive_purls(record, &metrics)
+                    .await
+                    .into_diagnostic()?;
+            }
+
+            if let Some(derived_purls) = derived_purls {
+                amend_purls(record, derived_purls);
+                amended_records += 1;
+            }
+
+            total_records += 1;
+        }
+
+        drop(amend_futures);
+
+        let duration = start.elapsed();
+        let data = metrics
+            .data
+            .into_inner()
+            .expect("locking shouldnt fail in this case");
+        tracing::info!(
+            "Amended {} out of {} records with purls in {:?}. {} cache hits and {} cache misses ({}%).",
+            amended_records,
+            total_records,
+            Duration::from_millis(duration.as_millis() as u64),
+            data.cache_hits,
+            data.cache_misses,
+            if data.cache_hits == 0 && data.cache_misses == 0 {
+                100.0
+            } else {
+                ((data.cache_hits as f64) / ((data.cache_misses + data.cache_hits) as f64)
+                    * 10000.0)
+                    .round()
+                    / 100.0
+            },
+        );
+
+        Ok(())
+    }
+
+    async fn derive_purls_from_clients(
+        &self,
+        record: &RepoDataRecord,
+        cache_metrics: &CacheMetrics,
+    ) -> Result<Option<Vec<PackageUrl>>, MappingError> {
+        // Try to get the purls from the hash mapping.
+        let mut purls = self
+            .hash_mapping
+            .derive_purls(record, cache_metrics)
+            .await?;
+
+        // Otherwise try from the compressed mapping
+        if purls.is_none() {
+            purls = self
+                .compressed_mapping
+                .derive_purls(record, cache_metrics)
+                .await?;
+        }
+
+        Ok(purls)
+    }
+}
+
+/// Returns true if the record has a pypi purl.
+fn has_pypi_purl(record: &RepoDataRecord) -> bool {
+    record
+        .package_record
+        .purls
+        .as_ref()
+        .is_some_and(|vec| vec.iter().any(|p| p.package_type() == "pypi"))
+}
+
+/// Adds the specified purls to the `purls` field of the record.
+fn amend_purls(record: &mut RepoDataRecord, purls: impl IntoIterator<Item = PackageUrl>) {
+    let record_purls = record
+        .package_record
+        .purls
+        .get_or_insert_with(BTreeSet::new);
+    for purl in purls {
+        record_purls.insert(purl);
+    }
+}
+
+/// A trait that is implemented for clients that can derive a purl from a
+/// particular record.
+trait DerivePurls {
+    /// Derives purls from the given record.
+    ///
+    /// Returns `None` if no purls could be derived. Note that this is different
+    /// from `Some(vec[])` which would indicate that purls could be derived but
+    /// there were simply none.
+    async fn derive_purls(
+        &self,
+        record: &RepoDataRecord,
+        _cache_metrics: &CacheMetrics,
+    ) -> Result<Option<Vec<PackageUrl>>, MappingError>;
+}
+
+/// A struct that provides derived package urls for conda-forge records where
+/// the name of the package is just assumed to be the pypi name.
+///
+/// This is a fallback for when the mapping is not available.
+pub struct CondaForgeVerbatim;
+
+impl DerivePurls for CondaForgeVerbatim {
+    async fn derive_purls(
+        &self,
+        record: &RepoDataRecord,
+        _cache_metrics: &CacheMetrics,
+    ) -> Result<Option<Vec<PackageUrl>>, MappingError> {
+        if !is_conda_forge_record(record) {
+            return Ok(None);
+        }
+
+        // Try to convert the name and version into pep440/pep508 compliant versions.
+        let (Some(name), Some(_version)) = (
+            pep508_rs::PackageName::from_str(record.package_record.name.as_source()).ok(),
+            pep440_rs::Version::from_str(&record.package_record.version.as_str()).ok(),
+        ) else {
+            // If we cannot convert the name or version, we cannot build a purl.
+            return Ok(Some(vec![]));
+        };
+
+        // Build the purl
+        let purl = PackageUrl::builder(String::from("pypi"), name.to_string());
+        let built_purl = purl.build().expect("valid pypi package url");
+        Ok(Some(vec![built_purl]))
+    }
+}
+
+#[derive(Default)]
+pub struct CacheMetrics {
+    data: Mutex<CacheMetricsData>,
+}
+
+impl CacheMetrics {
+    pub fn record_request_response(&self, response: &reqwest::Response) {
+        let cache_header = response.headers().get("x-cache");
+        if cache_header.and_then(|h| h.to_str().ok()) == Some("HIT") {
+            let mut data = self.data.lock().unwrap();
+            data.cache_hits += 1;
+        } else {
+            let mut data = self.data.lock().unwrap();
+            data.cache_misses += 1;
+            tracing::debug!("Cache miss on '{}' ({})", response.url(), response.status());
+        }
+    }
+}
+
+#[derive(Default)]
+struct CacheMetricsData {
+    cache_hits: usize,
+    cache_misses: usize,
 }

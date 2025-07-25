@@ -6,20 +6,19 @@ mod resolve;
 mod satisfiability;
 mod update;
 mod utils;
+pub mod virtual_packages;
 
 pub use crate::environment::CondaPrefixUpdater;
 pub(crate) use package_identifier::PypiPackageIdentifier;
 use pixi_record::PixiRecord;
 use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};
 pub(crate) use records_by_name::{PixiRecordsByName, PypiRecordsByName};
-pub(crate) use resolve::{
-    conda::resolve_conda, pypi::resolve_pypi, uv_resolution_context::UvResolutionContext,
-};
+pub(crate) use resolve::{pypi::resolve_pypi, uv_resolution_context::UvResolutionContext};
 pub use satisfiability::{
-    verify_environment_satisfiability, verify_platform_satisfiability, EnvironmentUnsat,
-    PlatformUnsat,
+    EnvironmentUnsat, PlatformUnsat, verify_environment_satisfiability,
+    verify_platform_satisfiability,
 };
-pub(crate) use update::{LockFileDerivedData, UpdateContext};
+pub use update::{LockFileDerivedData, ReinstallPackages, UpdateContext};
 pub use update::{UpdateLockFileOptions, UpdateMode};
 pub(crate) use utils::filter_lock_file;
 
@@ -71,7 +70,9 @@ mod tests {
         let err = &workspace.load_lock_file().await.unwrap_err();
         let dbg_err = format!("{:?}", err);
         // Test that the error message contains the correct information.
-        assert!(dbg_err.contains("The lock file version is 9999, but only up to including version"));
+        assert!(
+            dbg_err.contains("The lock file version is 9999, but only up to including version")
+        );
         // Also test that we try to help user by suggesting to update pixi.
         assert!(dbg_err.contains("Please update pixi to the latest version and try again."));
     }

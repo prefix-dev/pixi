@@ -1,13 +1,13 @@
 use std::{cmp::Ordering, collections::HashSet};
 
 use crate::{
-    cli::cli_config::WorkspaceConfig,
-    diff::{LockFileDiff, LockFileJsonDiff},
-    WorkspaceLocator,
+    Workspace,
+    lock_file::{UpdateContext, filter_lock_file},
 };
 use crate::{
-    lock_file::{filter_lock_file, UpdateContext},
-    Workspace,
+    WorkspaceLocator,
+    cli::cli_config::WorkspaceConfig,
+    diff::{LockFileDiff, LockFileJsonDiff},
 };
 use clap::Parser;
 use fancy_display::FancyDisplay;
@@ -19,7 +19,9 @@ use pixi_manifest::EnvironmentName;
 use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, LockedPackageRef};
 
-/// Update dependencies as recorded in the local lock file
+/// The `update` command checks if there are newer versions of the dependencies and updates the `pixi.lock` file and environments accordingly.
+///
+/// It will only update the lock file if the dependencies in the manifest file are still compatible with the new versions.
 #[derive(Parser, Debug, Default)]
 pub struct Args {
     #[clap(flatten)]
@@ -47,7 +49,8 @@ pub struct Args {
 
 #[derive(Parser, Debug, Default)]
 pub struct UpdateSpecsArgs {
-    /// The packages to update
+    /// The packages to update, space separated.
+    /// If no packages are provided, all packages will be updated.
     pub packages: Option<Vec<String>>,
 
     /// The environments to update. If none is specified, all environments are
@@ -170,12 +173,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         updated_lock_file.write_to_disk()?;
     }
 
+    let lock_file = updated_lock_file.into_lock_file();
+
     // Determine the diff between the old and new lock-file.
-    let diff = LockFileDiff::from_lock_files(loaded_lock_file, &updated_lock_file.lock_file);
+    let diff = LockFileDiff::from_lock_files(loaded_lock_file, &lock_file);
 
     // Format as json?
     if args.json {
-        let diff = LockFileDiff::from_lock_files(loaded_lock_file, &updated_lock_file.lock_file);
+        let diff = LockFileDiff::from_lock_files(loaded_lock_file, &lock_file);
         let json_diff = LockFileJsonDiff::new(Some(&workspace), diff);
         let json = serde_json::to_string_pretty(&json_diff).expect("failed to convert to json");
         println!("{}", json);

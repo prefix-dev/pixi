@@ -1,17 +1,26 @@
 ---
 source: crates/pixi_manifest/src/toml/feature.rs
-expression: "expect_parse_failure(r#\"\n        [workspace]\n        channels = []\n        platforms = ['win-64']\n\n        [feature.foo.target.osx-64.dependencies]\n        \"#,)"
+expression: "expect_parse_warnings(r#\"\n        [workspace]\n        name = \"test\"\n        channels = []\n        platforms = ['win-64']\n\n        [feature.foo.target.osx-64.dependencies]\n        \"#,)"
 ---
-  × The target selector 'osx-64' does not match any of the platforms supported by the workspace
-   ╭─[pixi.toml:6:29]
- 3 │         channels = []
- 4 │         platforms = ['win-64']
+  ⚠ The target selector 'osx-64' does not match any of the platforms supported by the workspace
+   ╭─[pixi.toml:7:29]
+ 4 │         channels = []
+ 5 │         platforms = ['win-64']
    ·                     ─────┬────
    ·                          ╰── the platforms supported by the workspace are defined here
- 5 │
- 6 │         [feature.foo.target.osx-64.dependencies]
+ 6 │
+ 7 │         [feature.foo.target.osx-64.dependencies]
    ·                             ───┬──
    ·                                ╰── target selector specified here
- 7 │
+ 8 │
    ╰────
-  help: Add osx-64 to the supported platforms
+  help: Add osx-64 to the supported platforms, using `pixi project platform add osx-64`
+
+  ⚠ The feature 'foo' is defined but not used in any environment
+   ╭─[pixi.toml:7:18]
+ 6 │
+ 7 │         [feature.foo.target.osx-64.dependencies]
+   ·                  ───
+ 8 │
+   ╰────
+  help: Remove the feature from the manifest or add it to an environment

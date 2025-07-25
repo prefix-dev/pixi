@@ -1,9 +1,7 @@
-# Tutorial: Develop a ROS 2 package with `pixi`
-
 In this tutorial, we will show you how to develop a ROS 2 package using `pixi`.
 The tutorial is written to be executed from top to bottom, missing steps might result in errors.
 
-The audience for this tutorial is developers who are familiar with ROS 2 and how are interested to try pixi for their development workflow.
+The audience for this tutorial is developers who are familiar with ROS 2 and how are interested to try Pixi for their development workflow.
 
 ## Prerequisites
 
@@ -11,14 +9,11 @@ The audience for this tutorial is developers who are familiar with ROS 2 and how
   The crux of this tutorial is to show you only need pixi!
 - On Windows, it's advised to enable Developer mode. Go to Settings -> Update & Security -> For developers -> Developer mode.
 
-!!! note ""
-    If you're new to pixi, you can check out the [basic usage](../basic_usage.md) guide.
-    This will teach you the basics of pixi project within 3 minutes.
 
-## Create a pixi project.
+## Create a Pixi workspace
 
 ```shell
-pixi init my_ros2_project -c robostack-staging -c conda-forge
+pixi init my_ros2_project -c robostack-humble -c conda-forge
 cd my_ros2_project
 ```
 
@@ -34,12 +29,12 @@ my_ros2_project
 The `pixi.toml` file is the manifest file for your project. It should look like this:
 
 ```toml title="pixi.toml"
-[project]
+[workspace]
 name = "my_ros2_project"
 version = "0.1.0"
 description = "Add a short description here"
 authors = ["User Name <user.name@email.url>"]
-channels = ["robostack-staging", "conda-forge"]
+channels = ["robostack-humble", "conda-forge"]
 # Your project can support multiple platforms, the current platform will be automatically added.
 platforms = ["linux-64"]
 
@@ -49,12 +44,12 @@ platforms = ["linux-64"]
 ```
 
 The `channels` you added to the `init` command are repositories of packages, you can search in these repositories through our [prefix.dev](https://prefix.dev/channels) website.
-The `platforms` are the systems you want to support, in pixi you can support multiple platforms, but you have to define which platforms, so pixi can test if those are supported for your dependencies.
+The `platforms` are the systems you want to support, in Pixi you can support multiple platforms, but you have to define which platforms, so Pixi can test if those are supported for your dependencies.
 For the rest of the fields, you can fill them in as you see fit.
 
 ## Add ROS 2 dependencies
 
-To use a pixi project you don't need any dependencies on your system, all the dependencies you need should be added through pixi, so other users can use your project without any issues.
+To use a Pixi project you don't need any dependencies on your system, all the dependencies you need should be added through pixi, so other users can use your project without any issues.
 
 Let's start with the `turtlesim` example
 
@@ -113,7 +108,7 @@ pixi run colcon build
 ```
 
 This will create a sourceable script in the `install` folder, you can source this script through an activation script to use your custom node.
-Normally this would be the script you add to your `.bashrc` but instead you tell pixi to use it by adding the following to `pixi.toml`:
+Normally this would be the script you add to your `.bashrc` but instead you tell Pixi to use it by adding the following to `pixi.toml`:
 
 === "Linux & macOS"
     ```toml title="pixi.toml"
@@ -129,10 +124,10 @@ Normally this would be the script you add to your `.bashrc` but instead you tell
 
 ??? tip "Multi platform support"
     You can add multiple activation scripts for different platforms, so you can support multiple platforms with one project.
-    Use the following example to add support for both Linux and Windows, using the [target](../features/multi_platform_configuration.md#activation) syntax.
+    Use the following example to add support for both Linux and Windows, using the [target](../workspace/multi_platform_configuration.md#activation) syntax.
 
     ```toml
-    [project]
+    [workspace]
     platforms = ["linux-64", "win-64"]
 
     [activation]
@@ -169,9 +164,9 @@ pixi run hello
 ???+ tip "Advanced task usage"
     Tasks are a powerful feature in pixi.
 
-    - You can add [`depends-on`](../features/advanced_tasks.md#depends-on) to the tasks to create a task chain.
-    - You can add [`cwd`](../features/advanced_tasks.md#working-directory) to the tasks to run the task in a different directory from the root of the project.
-    - You can add [`inputs` and `outputs`](../features/advanced_tasks.md#caching) to the tasks to create a task that only runs when the inputs are changed.
+    - You can add [`depends-on`](../workspace/advanced_tasks.md#depends-on) to the tasks to create a task chain.
+    - You can add [`cwd`](../workspace/advanced_tasks.md#working-directory) to the tasks to run the task in a different directory from the root of the project.
+    - You can add [`inputs` and `outputs`](../workspace/advanced_tasks.md#caching) to the tasks to create a task that only runs when the inputs are changed.
     - You can use the [`target`](../reference/pixi_manifest.md#the-target-table) syntax to run specific tasks on specific machines.
 
 ```toml
@@ -211,11 +206,13 @@ pixi run ros2 run my_cpp_package my_cpp_node
     ```
 
 ## Conclusion
+
 In this tutorial, we showed you how to create a Python & CMake ROS2 project using `pixi`.
 We also showed you how to **add dependencies** to your project using `pixi`, and how to **run your project** using `pixi run`.
 This way you can make sure that your project is **reproducible** on all your machines that have `pixi` installed.
 
 ## Show Off Your Work!
+
 Finished with your project?
 We'd love to see what you've created!
 Share your work on social media using the hashtag #pixi and tag us @prefix_dev.
@@ -225,9 +222,13 @@ Let's inspire the community together!
 
 ### What happens with `rosdep`?
 
-Currently, we don't support `rosdep` in a pixi environment, so you'll have to add the packages using `pixi add`.
-`rosdep` will call `conda install` which isn't supported in a pixi environment.
+Currently, we don't support `rosdep` in a Pixi environment, so you'll have to add the packages using `pixi add`.
+`rosdep` will call `conda install` which isn't supported in a Pixi environment.
 
+### Where can I find more documentation on the `robostack-*` channels?
+
+You can find more documentation on RoboStack channels in the [RoboStack documentation](https://robostack.github.io/).
 
 ### Community examples
+
 ROS 2 Humble on macOS,[Simulating differential drive using Gazebo](https://medium.com/@davisogunsina/ros-2-macos-support-installing-and-running-ros-2-on-macos-79039d1d3655).

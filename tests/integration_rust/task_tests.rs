@@ -4,7 +4,10 @@ use pixi::{
     cli::{cli_config::WorkspaceConfig, run::Args},
     task::TaskName,
 };
-use pixi_manifest::{task::CmdArgs, FeatureName, Task};
+use pixi_manifest::{
+    FeatureName, Task,
+    task::{CmdArgs, TemplateString},
+};
 use rattler_conda_types::Platform;
 
 use crate::common::PixiControl;
@@ -16,7 +19,7 @@ pub async fn add_remove_task() {
 
     // Simple task
     pixi.tasks()
-        .add("test".into(), None, FeatureName::Default)
+        .add("test".into(), None, FeatureName::default())
         .with_commands(["echo hello"])
         .execute()
         .await
@@ -25,7 +28,7 @@ pub async fn add_remove_task() {
     let project = pixi.workspace().unwrap();
     let tasks = project.default_environment().tasks(None).unwrap();
     let task = tasks.get(&<TaskName>::from("test")).unwrap();
-    assert!(matches!(task, Task::Plain(s) if s == "echo hello"));
+    assert!(matches!(task, Task::Plain(s) if *s == TemplateString::from("echo hello")));
 
     // Remove the task
     pixi.tasks()
@@ -50,13 +53,13 @@ pub async fn add_command_types() {
 
     // Add a command with dependencies
     pixi.tasks()
-        .add("test".into(), None, FeatureName::Default)
+        .add("test".into(), None, FeatureName::default())
         .with_commands(["echo hello"])
         .execute()
         .await
         .unwrap();
     pixi.tasks()
-        .add("test2".into(), None, FeatureName::Default)
+        .add("test2".into(), None, FeatureName::default())
         .with_commands(["echo hello", "echo bonjour"])
         .with_depends_on(vec!["test".into()])
         .execute()
@@ -70,10 +73,13 @@ pub async fn add_command_types() {
     assert!(matches!(task2, Task::Execute(cmd) if matches!(cmd.cmd, CmdArgs::Single(_))));
     assert!(matches!(task2, Task::Execute(cmd) if !cmd.depends_on.is_empty()));
 
-    assert_eq!(task.as_single_command().as_deref(), Some("echo hello"));
     assert_eq!(
-        task2.as_single_command().as_deref(),
-        Some("\"echo hello\" \"echo bonjour\"")
+        task.as_single_command(None).unwrap().unwrap().to_string(),
+        "echo hello"
+    );
+    assert_eq!(
+        task2.as_single_command(None).unwrap().unwrap().to_string(),
+        "\"echo hello\" \"echo bonjour\""
     );
 
     // Create an alias
@@ -86,7 +92,9 @@ pub async fn add_command_types() {
     let project = pixi.workspace().unwrap();
     let tasks = project.default_environment().tasks(None).unwrap();
     let task = tasks.get(&<TaskName>::from("testing")).unwrap();
-    assert!(matches!(task, Task::Alias(a) if a.depends_on.first().unwrap().as_str() == "test"));
+    assert!(
+        matches!(task, Task::Alias(a) if a.depends_on.first().unwrap().task_name.as_str() == "test")
+    );
 }
 
 #[tokio::test]
@@ -95,21 +103,21 @@ async fn test_alias() {
     pixi.init().without_channels().await.unwrap();
 
     pixi.tasks()
-        .add("hello".into(), None, FeatureName::Default)
+        .add("hello".into(), None, FeatureName::default())
         .with_commands(["echo hello"])
         .execute()
         .await
         .unwrap();
 
     pixi.tasks()
-        .add("world".into(), None, FeatureName::Default)
+        .add("world".into(), None, FeatureName::default())
         .with_commands(["echo world"])
         .execute()
         .await
         .unwrap();
 
     pixi.tasks()
-        .add("helloworld".into(), None, FeatureName::Default)
+        .add("helloworld".into(), None, FeatureName::default())
         .with_depends_on(vec!["hello".into(), "world".into()])
         .execute()
         .await
@@ -139,7 +147,7 @@ pub async fn add_remove_target_specific_task() {
 
     // Simple task
     pixi.tasks()
-        .add("test".into(), Some(Platform::Win64), FeatureName::Default)
+        .add("test".into(), Some(Platform::Win64), FeatureName::default())
         .with_commands(["echo only_on_windows"])
         .execute()
         .await
@@ -152,11 +160,11 @@ pub async fn add_remove_target_specific_task() {
         .unwrap()
         .get(&<TaskName>::from("test"))
         .unwrap();
-    assert!(matches!(task, Task::Plain(s) if s == "echo only_on_windows"));
+    assert!(matches!(task, Task::Plain(s) if *s == TemplateString::from("echo only_on_windows")));
 
     // Simple task
     pixi.tasks()
-        .add("test".into(), None, FeatureName::Default)
+        .add("test".into(), None, FeatureName::default())
         .with_commands(["echo hello"])
         .execute()
         .await
@@ -187,7 +195,7 @@ async fn test_cwd() {
     fs_err::create_dir(pixi.workspace_path().join("test")).unwrap();
 
     pixi.tasks()
-        .add("pwd-test".into(), None, FeatureName::Default)
+        .add("pwd-test".into(), None, FeatureName::default())
         .with_commands(["pwd"])
         .with_cwd(PathBuf::from("test"))
         .execute()
@@ -210,15 +218,15 @@ async fn test_cwd() {
 
     // Test that an unknown cwd gives an error
     pixi.tasks()
-        .add("unknown-cwd".into(), None, FeatureName::Default)
+        .add("unknown-cwd".into(), None, FeatureName::default())
         .with_commands(["pwd"])
         .with_cwd(PathBuf::from("tests"))
         .execute()
         .await
         .unwrap();
 
-    assert!(pixi
-        .run(Args {
+    assert!(
+        pixi.run(Args {
             task: vec!["unknown-cwd".to_string()],
             workspace_config: WorkspaceConfig {
                 manifest_path: None
@@ -226,7 +234,8 @@ async fn test_cwd() {
             ..Default::default()
         })
         .await
-        .is_err());
+        .is_err()
+    );
 }
 
 #[tokio::test]
@@ -235,7 +244,7 @@ async fn test_task_with_env() {
     pixi.init().without_channels().await.unwrap();
 
     pixi.tasks()
-        .add("env-test".into(), None, FeatureName::Default)
+        .add("env-test".into(), None, FeatureName::default())
         .with_commands(["echo From a $HELLO_WORLD"])
         .with_env(vec![(
             String::from("HELLO_WORLD"),
@@ -260,14 +269,19 @@ async fn test_task_with_env() {
     assert_eq!(result.stdout, "From a world with spaces\n");
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "current_thread")]
 async fn test_clean_env() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().without_channels().await.unwrap();
 
-    std::env::set_var("HELLO", "world from env");
+    // SAFETY: `set_var` is only unsafe in a multi-threaded context
+    // We enforce that this test runs on the current thread
+    unsafe {
+        std::env::set_var("HELLO", "world from env");
+    }
+
     pixi.tasks()
-        .add("env-test".into(), None, FeatureName::Default)
+        .add("env-test".into(), None, FeatureName::default())
         .with_commands(["echo Hello is: $HELLO"])
         .execute()
         .await

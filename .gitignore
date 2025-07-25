@@ -9,3 +9,6 @@ __pycache__
 site/
 .cache
 pytest-temp
+/vendor
+*.conda
+*.local.*

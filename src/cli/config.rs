@@ -1,6 +1,6 @@
+use crate::WorkspaceLocator;
 use crate::cli::cli_config::WorkspaceConfig;
 use crate::workspace::WorkspaceLocatorError;
-use crate::WorkspaceLocator;
 use clap::Parser;
 use miette::{IntoDiagnostic, WrapErr};
 use pixi_config;
@@ -17,48 +17,43 @@ enum Subcommand {
 
     /// List configuration values
     ///
-    /// Example:
-    ///     pixi config list default-channels
+    /// Example: `pixi config list default-channels`
     #[clap(visible_alias = "ls", alias = "l")]
     List(ListArgs),
 
     /// Prepend a value to a list configuration key
     ///
-    /// Example:
-    ///     pixi config prepend default-channels bioconda
+    /// Example: `pixi config prepend default-channels bioconda`
     Prepend(PendArgs),
 
     /// Append a value to a list configuration key
     ///
-    /// Example:
-    ///     pixi config append default-channels bioconda
+    /// Example: `pixi config append default-channels bioconda`
     Append(PendArgs),
 
     /// Set a configuration value
     ///
-    /// Example:
-    ///     pixi config set default-channels '["conda-forge", "bioconda"]'
+    /// Example: `pixi config set default-channels '["conda-forge", "bioconda"]'`
     Set(SetArgs),
 
     /// Unset a configuration value
     ///
-    /// Example:
-    ///     pixi config unset default-channels
+    /// Example: `pixi config unset default-channels`
     Unset(UnsetArgs),
 }
 
 #[derive(Parser, Debug, Clone)]
 struct CommonArgs {
     /// Operation on project-local configuration
-    #[arg(long, short, conflicts_with_all = &["global", "system"])]
+    #[arg(long, short, conflicts_with_all = &["global", "system"], help_heading = consts::CLAP_CONFIG_OPTIONS)]
     local: bool,
 
     /// Operation on global configuration
-    #[arg(long, short, conflicts_with_all = &["local", "system"])]
+    #[arg(long, short, conflicts_with_all = &["local", "system"], help_heading = consts::CLAP_CONFIG_OPTIONS)]
     global: bool,
 
     /// Operation on system configuration
-    #[arg(long, short, conflicts_with_all = &["local", "global"])]
+    #[arg(long, short, conflicts_with_all = &["local", "global"], help_heading = consts::CLAP_CONFIG_OPTIONS)]
     system: bool,
 
     #[clap(flatten)]
@@ -203,6 +198,7 @@ fn determine_project_root(common_args: &CommonArgs) -> miette::Result<Option<Pat
         .with_emit_warnings(false) // No reason to emit warnings
         .with_consider_environment(true)
         .with_search_start(common_args.workspace_config.workspace_locator_start())
+        .with_ignore_pixi_version_check(true)
         .locate();
     match workspace {
         Err(WorkspaceLocatorError::WorkspaceNotFound(_)) => {
@@ -328,7 +324,7 @@ fn partial_config(config: &mut Config, key: &str) -> miette::Result<()> {
 
     match key {
         "default-channels" => new.default_channels = config.default_channels.clone(),
-        "change-ps1" => new.change_ps1 = config.change_ps1,
+        "shell" => new.shell = config.shell.clone(),
         "tls-no-verify" => new.tls_no_verify = config.tls_no_verify,
         "authentication-override-file" => {
             new.authentication_override_file = config.authentication_override_file.clone()
@@ -336,15 +332,16 @@ fn partial_config(config: &mut Config, key: &str) -> miette::Result<()> {
         "mirrors" => new.mirrors = config.mirrors.clone(),
         "repodata-config" => new.repodata_config = config.repodata_config.clone(),
         "pypi-config" => new.pypi_config = config.pypi_config.clone(),
+        "proxy-config" => new.proxy_config = config.proxy_config.clone(),
         _ => {
             let keys = [
                 "default-channels",
-                "change-ps1",
                 "tls-no-verify",
                 "authentication-override-file",
                 "mirrors",
                 "repodata-config",
                 "pypi-config",
+                "proxy-config",
             ];
             return Err(miette::miette!("key must be one of: {}", keys.join(", ")));
         }

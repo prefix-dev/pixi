@@ -1,6 +1,6 @@
 ---
 source: crates/pixi_manifest/src/manifests/workspace.rs
-expression: "WorkspaceManifest::from_toml_str(&contents).expect(\"parsing should succeed!\").workspace.pypi_options.clone().unwrap()"
+expression: manifest.workspace.pypi_options.clone().unwrap()
 ---
 index-url: "https://pypi.org/simple"
 extra-index-urls:
@@ -8,6 +8,8 @@ extra-index-urls:
 find-links:
   - path: "../foo"
   - url: "https://example.com/bar"
-no-build-isolation: ~
+no-build-isolation: []
 index-strategy: ~
 no-build: ~
+dependency-overrides: ~
+no-binary: ~

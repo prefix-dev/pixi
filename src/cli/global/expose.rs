@@ -11,18 +11,19 @@ use crate::{
 /// Add exposed binaries from an environment to your global environment
 ///
 /// Example:
-/// - pixi global expose add python310=python3.10 python3=python3 --environment myenv
-/// - pixi global add --environment my_env pytest pytest-cov --expose pytest=pytest
+///
+/// - `pixi global expose add python310=python3.10 python3=python3 --environment myenv`
+/// - `pixi global add --environment my_env pytest pytest-cov --expose pytest=pytest`
 #[derive(Parser, Debug)]
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct AddArgs {
-    /// Add one or more mapping which describe which executables are exposed.
+    /// Add mapping which describe which executables are exposed.
     /// The syntax is `exposed_name=executable_name`, so for example `python3.10=python`.
     /// Alternatively, you can input only an executable_name and `executable_name=executable_name` is assumed.
-    #[arg(num_args = 1..)]
+    #[arg(num_args = 1.., value_name = "MAPPING")]
     mappings: Vec<Mapping>,
 
-    /// The environment to which the binaries should be exposed
+    /// The environment to which the binaries should be exposed.
     #[clap(short, long)]
     environment: EnvironmentName,
 
@@ -37,7 +38,8 @@ pub struct AddArgs {
 #[derive(Parser, Debug)]
 pub struct RemoveArgs {
     /// The exposed names that should be removed
-    #[arg(num_args = 1..)]
+    /// Can be specified multiple times.
+    #[arg(num_args = 1.., id = "EXPOSED_NAME")]
     exposed_names: Vec<ExposedName>,
 
     #[clap(flatten)]
@@ -97,9 +99,12 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
             Ok(())
         }
         Err(err) => {
-            revert_environment_after_error(&args.environment, &project_original)
-                .await
-                .wrap_err("Couldn't add exposed mappings. Reverting also failed.")?;
+            if let Err(revert_err) =
+                revert_environment_after_error(&args.environment, &project_original).await
+            {
+                tracing::warn!("Reverting of the operation failed");
+                tracing::info!("Reversion error: {:?}", revert_err);
+            }
             Err(err)
         }
     }
@@ -148,14 +153,12 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
                 state_changes.report();
             }
             Err(err) => {
-                revert_environment_after_error(&env_name, &last_updated_project)
-                    .await
-                    .wrap_err_with(|| {
-                        format!(
-                            "Couldn't remove exposed name {exposed_name}. Reverting also failed."
-                        )
-                    })?;
-
+                if let Err(revert_err) =
+                    revert_environment_after_error(&env_name, &last_updated_project).await
+                {
+                    tracing::warn!("Reverting of the operation failed");
+                    tracing::info!("Reversion error: {:?}", revert_err);
+                }
                 return Err(err);
             }
         }

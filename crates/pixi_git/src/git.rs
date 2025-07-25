@@ -13,20 +13,22 @@ use std::{
     sync::LazyLock,
 };
 
-use miette::{Context, IntoDiagnostic};
 use reqwest::StatusCode;
 use reqwest_middleware::ClientWithMiddleware;
 use url::Url;
 
-use crate::sha::{GitOid, GitSha};
+use crate::{
+    GitError,
+    sha::{GitOid, GitSha},
+};
 
 /// A file indicates that if present, `git reset` has been done and a repo
 /// checkout is ready to go. See [`GitCheckout::reset`] for why we need this.
 const CHECKOUT_READY_LOCK: &str = ".ok";
 pub const GIT_DIR: &str = "GIT_DIR";
 
-#[derive(Debug, thiserror::Error)]
-pub enum GitError {
+#[derive(Debug, thiserror::Error, Clone)]
+pub enum GitBinaryError {
     #[error("Git executable not found. Ensure that Git is installed and available.")]
     GitNotFound,
     #[error(transparent)]
@@ -34,10 +36,10 @@ pub enum GitError {
 }
 
 /// A global cache of the result of `which git`.
-pub static GIT: LazyLock<Result<PathBuf, GitError>> = LazyLock::new(|| {
+pub static GIT: LazyLock<Result<PathBuf, GitBinaryError>> = LazyLock::new(|| {
     which::which("git").map_err(|e| match e {
-        which::Error::CannotFindBinaryPath => GitError::GitNotFound,
-        e => GitError::Other(e),
+        which::Error::CannotFindBinaryPath => GitBinaryError::GitNotFound,
+        e => GitBinaryError::Other(e),
     })
 });
 
@@ -51,8 +53,18 @@ enum RefspecStrategy {
 
 /// A reference to commit or commit-ish.
 #[derive(
-    Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    serde::Serialize,
+    serde::Deserialize,
+    Default,
 )]
+#[serde(rename_all = "kebab-case")]
 pub enum GitReference {
     /// A specific branch.
     Branch(String),
@@ -69,6 +81,7 @@ pub enum GitReference {
     /// From a specific revision, using a full 40-character commit hash.
     FullCommit(String),
     /// The default branch of the repository, the reference named `HEAD`.
+    #[default]
     DefaultBranch,
 }
 
@@ -117,20 +130,6 @@ impl GitReference {
         }
     }
 
-    /// Returns the kind of this reference.
-    pub(crate) fn kind_str(&self) -> &str {
-        match self {
-            Self::Branch(_) => "branch",
-            Self::Tag(_) => "tag",
-            Self::ShortCommit(_) => "short commit",
-            Self::BranchOrTag(_) => "branch or tag",
-            Self::FullCommit(_) => "commit",
-            Self::BranchOrTagOrCommit(_) => "branch, tag, or commit",
-            Self::NamedRef(_) => "ref",
-            Self::DefaultBranch => "default branch",
-        }
-    }
-
     /// Returns the precise [`GitSha`] of this reference, if it's a full commit.
     pub(crate) fn as_sha(&self) -> Option<GitSha> {
         if let Self::FullCommit(rev) = self {
@@ -140,9 +139,8 @@ impl GitReference {
         }
     }
     /// Resolves self to an object ID with objects the `repo` currently has.
-    pub(crate) fn resolve(&self, repo: &GitRepository) -> miette::Result<GitOid> {
-        let refkind = self.kind_str();
-        let result = match self {
+    pub(crate) fn resolve(&self, repo: &GitRepository) -> Result<GitOid, GitError> {
+        match self {
             // Resolve the commit pointed to by the tag.
             //
             // `^0` recursively peels away from the revision to the underlying commit object.
@@ -170,9 +168,7 @@ impl GitReference {
             Self::FullCommit(s) | Self::ShortCommit(s) | Self::NamedRef(s) => {
                 repo.rev_parse(&format!("{s}^0"))
             }
-        };
-
-        result.with_context(|| miette::miette!("failed to find {refkind} `{self}`"))
+        }
     }
 
     /// Whether a `rev` looks like a commit hash (ASCII hex digits).
@@ -183,6 +179,10 @@ impl GitReference {
     /// Whether a `rev` looks like a commit hash (ASCII hex digits).
     pub fn looks_like_full_commit_hash(rev: &str) -> bool {
         rev.len() == 40 && rev.chars().all(|ch| ch.is_ascii_hexdigit())
+    }
+
+    pub fn is_default(&self) -> bool {
+        matches!(self, Self::DefaultBranch)
     }
 }
 
@@ -224,12 +224,11 @@ impl GitRemote {
         reference: &GitReference,
         locked_rev: Option<GitOid>,
         client: &ClientWithMiddleware,
-    ) -> miette::Result<(GitDatabase, GitOid)> {
+    ) -> Result<(GitDatabase, GitOid), GitError> {
         let locked_ref = locked_rev.map(|oid| GitReference::FullCommit(oid.to_string()));
         let reference = locked_ref.as_ref().unwrap_or(reference);
         if let Some(mut db) = db {
-            fetch(&mut db.repo, self.url.as_str(), reference, client)
-                .with_context(|| format!("failed to fetch into: {}", into.display()))?;
+            fetch(&mut db.repo, self.url.as_str(), reference, client)?;
 
             let resolved_commit_hash = match locked_rev {
                 Some(rev) => db.contains(rev).then_some(rev),
@@ -245,13 +244,12 @@ impl GitRemote {
         // After our fetch (which is interpreted as a clone now) we do the same
         // resolution to figure out what we cloned.
         if into.exists() {
-            fs_err::remove_dir_all(into).into_diagnostic()?;
+            fs_err::remove_dir_all(into)?;
         }
 
-        fs_err::create_dir_all(into).into_diagnostic()?;
+        fs_err::create_dir_all(into)?;
         let mut repo = GitRepository::init(into)?;
-        fetch(&mut repo, self.url.as_str(), reference, client)
-            .with_context(|| format!("failed to clone into: {}", into.display()))?;
+        fetch(&mut repo, self.url.as_str(), reference, client)?;
         let rev = match locked_rev {
             Some(rev) => rev,
             None => reference.resolve(&repo)?,
@@ -262,7 +260,7 @@ impl GitRemote {
 
     /// Creates a [`GitDatabase`] of this remote at `db_path`.
     #[allow(clippy::unused_self)]
-    pub(crate) fn db_at(&self, db_path: &Path) -> miette::Result<GitDatabase> {
+    pub(crate) fn db_at(&self, db_path: &Path) -> Result<GitDatabase, GitError> {
         let repo = GitRepository::open(db_path)?;
         Ok(GitDatabase { repo })
     }
@@ -281,7 +279,7 @@ pub(crate) struct GitDatabase {
 
 impl GitDatabase {
     /// Checkouts to a revision at `destination` from this database.
-    pub(crate) fn copy_to(&self, rev: GitOid, destination: &Path) -> miette::Result<GitCheckout> {
+    pub(crate) fn copy_to(&self, rev: GitOid, destination: &Path) -> Result<GitCheckout, GitError> {
         // If the existing checkout exists, and it is fresh, use it.
         // A non-fresh checkout can happen if the checkout operation was
         // interrupted. In that case, the checkout gets deleted and a new
@@ -298,16 +296,15 @@ impl GitDatabase {
     }
 
     /// Get a short OID for a `revision`, usually 7 chars or more if ambiguous.
-    pub(crate) fn to_short_id(&self, revision: GitOid) -> miette::Result<String> {
-        let output = Command::new(GIT.as_ref().into_diagnostic()?)
+    pub(crate) fn to_short_id(&self, revision: GitOid) -> Result<String, GitError> {
+        let output = Command::new(GIT.as_ref().map_err(|e| e.clone())?)
             .arg("rev-parse")
             .arg("--short")
             .arg(revision.as_str())
             .current_dir(&self.repo.path)
-            .output()
-            .into_diagnostic()?;
+            .output()?;
 
-        let mut result = String::from_utf8(output.stdout).into_diagnostic()?;
+        let mut result = String::from_utf8(output.stdout)?;
 
         result.truncate(result.trim_end().len());
         tracing::debug!("result of short id is  {:?}", result);
@@ -328,13 +325,12 @@ pub(crate) struct GitRepository {
 
 impl GitRepository {
     /// Opens an existing Git repository at `path`.
-    pub(crate) fn open(path: &Path) -> miette::Result<GitRepository> {
+    pub(crate) fn open(path: &Path) -> Result<GitRepository, GitError> {
         // Make sure there is a Git repository at the specified path.
-        Command::new(GIT.as_ref().into_diagnostic()?)
+        Command::new(GIT.as_ref().map_err(|e| e.clone())?)
             .arg("rev-parse")
             .current_dir(path)
-            .output()
-            .into_diagnostic()?;
+            .output()?;
 
         Ok(GitRepository {
             path: path.to_path_buf(),
@@ -342,13 +338,12 @@ impl GitRepository {
     }
 
     /// Initializes a Git repository at `path`.
-    fn init(path: &Path) -> miette::Result<GitRepository> {
+    fn init(path: &Path) -> Result<GitRepository, GitError> {
         // Initialize the repository.
-        Command::new(GIT.as_ref().into_diagnostic()?)
+        Command::new(GIT.as_ref().map_err(|e| e.clone())?)
             .arg("init")
             .current_dir(path)
-            .output()
-            .into_diagnostic()?;
+            .output()?;
 
         Ok(GitRepository {
             path: path.to_path_buf(),
@@ -356,18 +351,17 @@ impl GitRepository {
     }
 
     /// Parses the object ID of the given `refname`.
-    fn rev_parse(&self, refname: &str) -> miette::Result<GitOid> {
-        let result = Command::new(GIT.as_ref().into_diagnostic()?)
+    fn rev_parse(&self, refname: &str) -> Result<GitOid, GitError> {
+        let result = Command::new(GIT.as_ref().map_err(|e| e.clone())?)
             .arg("rev-parse")
             .arg(refname)
             .current_dir(&self.path)
-            .output()
-            .into_diagnostic()?;
+            .output()?;
 
-        let mut result = String::from_utf8(result.stdout).into_diagnostic()?;
+        let mut result = String::from_utf8(result.stdout)?;
 
         result.truncate(result.trim_end().len());
-        result.parse().into_diagnostic()
+        result.parse().map_err(GitError::OidParse)
     }
 }
 
@@ -390,18 +384,18 @@ impl GitCheckout {
 
     /// Clone a repo for a `revision` into a local path from a `database`.
     /// This is a filesystem-to-filesystem clone.
-    fn clone_into(into: &Path, database: &GitDatabase, revision: GitOid) -> miette::Result<Self> {
+    fn clone_into(into: &Path, database: &GitDatabase, revision: GitOid) -> Result<Self, GitError> {
         tracing::debug!("cloning into {:?} from {:?}", database.repo.path, into);
         let dirname = into.parent().expect("into path must have a parent");
-        fs_err::create_dir_all(dirname).into_diagnostic()?;
+        fs_err::create_dir_all(dirname)?;
         if into.exists() {
-            fs_err::remove_dir_all(into).into_diagnostic()?;
+            fs_err::remove_dir_all(into)?;
         }
 
         // Perform a local clone of the repository, which will attempt to use
         // hardlinks to set up the repository. This should speed up the clone operation
         // quite a bit if it works.
-        let output = Command::new(GIT.as_ref().into_diagnostic()?)
+        let output = Command::new(GIT.as_ref().map_err(|e| e.clone())?)
             .arg("clone")
             .arg("--local")
             // Make sure to pass the local file path and not a file://... url. If given a url,
@@ -409,8 +403,7 @@ impl GitCheckout {
             // have a HEAD checked out.
             .arg(dunce::simplified(&database.repo.path).display().to_string())
             .arg(dunce::simplified(into).display().to_string())
-            .output()
-            .into_diagnostic();
+            .output()?;
 
         tracing::debug!("output after cloning {:?}", output);
 
@@ -444,34 +437,31 @@ impl GitCheckout {
     /// *doesn't* exist, and then once we're done we create the file.
     ///
     /// [`.ok`]: CHECKOUT_READY_LOCK
-    fn reset(&self) -> miette::Result<()> {
+    fn reset(&self) -> Result<(), GitError> {
         let ok_file = self.repo.path.join(CHECKOUT_READY_LOCK);
         let _ = fs_err::remove_file(&ok_file);
 
         tracing::debug!("reset {} to {}", self.repo.path.display(), self.revision);
 
         // Perform the hard reset.
-        let output = Command::new(GIT.as_ref().into_diagnostic()?)
+        Command::new(GIT.as_ref().map_err(|e| e.clone())?)
             .arg("reset")
             .arg("--hard")
             .arg(self.revision.as_str())
             .current_dir(&self.repo.path)
-            .output();
-
-        output.into_diagnostic()?;
+            .output()?;
 
         // Update submodules (`git submodule update --recursive`).
-        Command::new(GIT.as_ref().into_diagnostic()?)
+        Command::new(GIT.as_ref().map_err(|e| e.clone())?)
             .arg("submodule")
             .arg("update")
             .arg("--recursive")
             .arg("--init")
             .current_dir(&self.repo.path)
             .output()
-            .map(drop)
-            .into_diagnostic()?;
+            .map(drop)?;
 
-        fs_err::File::create(ok_file).into_diagnostic()?;
+        fs_err::File::create(ok_file)?;
         Ok(())
     }
 }
@@ -489,7 +479,7 @@ pub(crate) fn fetch(
     remote_url: &str,
     reference: &GitReference,
     client: &ClientWithMiddleware,
-) -> miette::Result<()> {
+) -> Result<(), GitError> {
     let oid_to_fetch = match github_fast_path(repo, remote_url, reference, client) {
         Ok(FastPathRev::UpToDate) => return Ok(()),
         Ok(FastPathRev::NeedsFetch(rev)) => Some(rev),
@@ -612,17 +602,7 @@ pub(crate) fn fetch(
         }
     };
     tracing::debug!("fetched with cli {:?}", result);
-    match reference {
-        // With the default branch, adding context is confusing
-        GitReference::DefaultBranch => result,
-        _ => result.with_context(|| {
-            format!(
-                "failed to fetch {} `{}`",
-                reference.kind_str(),
-                reference.as_rev()
-            )
-        }),
-    }
+    result
 }
 
 /// Attempts to use `git` CLI installed on the system to fetch a repository.
@@ -631,8 +611,8 @@ fn fetch_with_cli(
     url: &str,
     refspecs: &[String],
     tags: bool,
-) -> miette::Result<()> {
-    let mut cmd = Command::new(GIT.as_ref().into_diagnostic()?);
+) -> Result<(), GitError> {
+    let mut cmd = Command::new(GIT.as_ref().map_err(|err| err.clone())?);
     cmd.arg("fetch");
     if tags {
         cmd.arg("--tags");
@@ -651,10 +631,10 @@ fn fetch_with_cli(
     // // We capture the output to avoid streaming it to the user's console during clones.
     // // The required `on...line` callbacks currently do nothing.
     // // The output appears to be included in error messages by default.
-    let output = cmd.output().into_diagnostic()?;
+    let output = cmd.output()?;
     if !output.status.success() {
-        let stderr = String::from_utf8(output.stderr).into_diagnostic()?;
-        miette::bail!("failed to fetch into `{}`: {}", repo.path.display(), stderr);
+        let stderr = String::from_utf8(output.stderr)?;
+        return Err(GitError::Fetch(url.to_string(), stderr));
     }
     tracing::debug!("git fetch output: {:?}", output);
     Ok(())
@@ -691,8 +671,8 @@ fn github_fast_path(
     url: &str,
     reference: &GitReference,
     client: &ClientWithMiddleware,
-) -> miette::Result<FastPathRev> {
-    let url = Url::parse(url).into_diagnostic()?;
+) -> Result<FastPathRev, GitError> {
+    let url = Url::parse(url)?;
     if !is_github(&url) {
         return Ok(FastPathRev::Indeterminate);
     }
@@ -735,17 +715,29 @@ fn github_fast_path(
 
     // This expects GitHub urls in the form `github.com/user/repo` and nothing
     // else
-    let mut pieces = url
-        .path_segments()
-        .ok_or_else(|| miette::miette!("no path segments on url"))?;
-    let username = pieces
-        .next()
-        .ok_or_else(|| miette::miette!("couldn't find username"))?;
-    let repository = pieces
-        .next()
-        .ok_or_else(|| miette::miette!("couldn't find repository name"))?;
+    let mut pieces = url.path_segments().ok_or_else(|| {
+        GitError::GitUrlFormat(
+            url.as_str().to_string(),
+            "no path segments on url".to_string(),
+        )
+    })?;
+    let username = pieces.next().ok_or_else(|| {
+        GitError::GitUrlFormat(
+            url.as_str().to_string(),
+            "couldn't find username or organisation name".to_string(),
+        )
+    })?;
+    let repository = pieces.next().ok_or_else(|| {
+        GitError::GitUrlFormat(
+            url.as_str().to_string(),
+            "couldn't find repository name".to_string(),
+        )
+    })?;
     if pieces.next().is_some() {
-        miette::bail!("too many segments on URL");
+        return Err(GitError::GitUrlFormat(
+            url.as_str().to_string(),
+            "too many segments in the url".to_string(),
+        ));
     }
 
     // Trim off the `.git` from the repository, if present, since that's
@@ -758,8 +750,7 @@ fn github_fast_path(
 
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
-        .build()
-        .into_diagnostic()?;
+        .build()?;
 
     runtime.block_on(async move {
         tracing::debug!("Attempting GitHub fast path for: {url}");
@@ -770,18 +761,13 @@ fn github_fast_path(
             request = request.header("If-None-Match", local_object.to_string());
         }
 
-        let response = request.send().await.into_diagnostic()?;
-        response.error_for_status_ref().into_diagnostic()?;
+        let response = request.send().await?;
+        response.error_for_status_ref()?;
         let response_code = response.status();
         if response_code == StatusCode::NOT_MODIFIED {
             Ok(FastPathRev::UpToDate)
         } else if response_code == StatusCode::OK {
-            let oid_to_fetch = response
-                .text()
-                .await
-                .into_diagnostic()?
-                .parse()
-                .into_diagnostic()?;
+            let oid_to_fetch = response.text().await?.parse()?;
             Ok(FastPathRev::NeedsFetch(oid_to_fetch))
         } else {
             // Usually response_code == 404 if the repository does not exist, and

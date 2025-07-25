@@ -1,34 +1,31 @@
 use std::{
     borrow::Cow,
     collections::HashMap,
+    ffi::OsString,
     fmt::{Display, Formatter},
     path::PathBuf,
 };
 
 use deno_task_shell::{
-    execute_with_pipes, parser::SequentialList, pipe, ShellPipeWriter, ShellState,
+    ShellPipeWriter, ShellState, execute_with_pipes, parser::SequentialList, pipe,
 };
 use fs_err::tokio as tokio_fs;
 use itertools::Itertools;
-use miette::{Context, Diagnostic, IntoDiagnostic};
+use miette::{Context, Diagnostic};
 use pixi_consts::consts;
-use pixi_manifest::{Task, TaskName};
+use pixi_manifest::{Task, TaskName, task::ArgValues, task::TemplateStringError};
 use pixi_progress::await_in_progress;
 use rattler_lock::LockFile;
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
-use super::task_hash::{InputHashesError, TaskCache, TaskHash};
+use super::task_hash::{InputHashesError, NameHash, TaskCache, TaskHash};
 use crate::{
+    Workspace,
     activation::CurrentEnvVarBehavior,
-    lock_file::LockFileDerivedData,
     task::task_graph::{TaskGraph, TaskId},
     workspace::get_activated_environment_variables,
-    workspace::{
-        virtual_packages::verify_current_platform_has_required_virtual_packages, Environment,
-        HasWorkspaceRef,
-    },
-    Workspace,
+    workspace::{Environment, HasWorkspaceRef},
 };
 
 /// Runs task in project.
@@ -40,10 +37,18 @@ pub struct RunOutput {
 }
 
 #[derive(Debug, Error, Diagnostic)]
-#[error("The task failed to parse. task: '{script}' error: '{error}'")]
-pub struct FailedToParseShellScript {
-    pub script: String,
-    pub error: String,
+#[error("The task failed to parse")]
+pub enum FailedToParseShellScript {
+    #[error("failed to parse shell script. Task: '{task}'")]
+    ParseError {
+        #[source]
+        source: anyhow::Error,
+        task: String,
+    },
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ArgumentReplacement(#[from] TemplateStringError),
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -81,25 +86,26 @@ pub enum CanSkip {
 /// A task that contains enough information to be able to execute it. The
 /// lifetime [`'p`] refers to the lifetime of the project that contains the
 /// tasks.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ExecutableTask<'p> {
     pub workspace: &'p Workspace,
     pub name: Option<TaskName>,
     pub task: Cow<'p, Task>,
     pub run_environment: Environment<'p>,
-    pub additional_args: Vec<String>,
+    pub args: ArgValues,
 }
 
 impl<'p> ExecutableTask<'p> {
     /// Constructs a new executable task from a task graph node.
     pub fn from_task_graph(task_graph: &TaskGraph<'p>, task_id: TaskId) -> Self {
         let node = &task_graph[task_id];
+
         Self {
             workspace: task_graph.project(),
             name: node.name.clone(),
             task: node.task.clone(),
             run_environment: node.run_environment.clone(),
-            additional_args: node.additional_args.clone(),
+            args: node.args.clone().unwrap_or_default(),
         }
     }
 
@@ -118,28 +124,42 @@ impl<'p> ExecutableTask<'p> {
         self.workspace
     }
 
+    pub(crate) fn args(&self) -> &ArgValues {
+        &self.args
+    }
+
     /// Returns the task as script
-    fn as_script(&self) -> Option<String> {
+    fn as_script(&self) -> Result<Option<String>, FailedToParseShellScript> {
         // Convert the task into an executable string
-        let task = self.task.as_single_command()?;
+        let task = self
+            .task
+            .as_single_command(Some(&self.args))
+            .map_err(FailedToParseShellScript::ArgumentReplacement)?;
+        if let Some(task) = task {
+            // Get the export specific environment variables
+            let export = get_export_specific_task_env(self.task.as_ref());
 
-        // Get the export specific environment variables
-        let export = get_export_specific_task_env(self.task.as_ref());
+            // Append the command line arguments verbatim
+            let cli_args = if let ArgValues::FreeFormArgs(additional_args) = &self.args {
+                additional_args
+                    .iter()
+                    .format_with(" ", |arg, f| f(&format_args!("'{}'", arg)))
+                    .to_string()
+            } else {
+                String::new()
+            };
 
-        // Append the command line arguments verbatim
-        let cli_args = self
-            .additional_args
-            .iter()
-            .format_with(" ", |arg, f| f(&format_args!("'{}'", arg)));
+            // Skip the export if it's empty, to avoid newlines
+            let full_script = if export.is_empty() {
+                format!("{} {}", task, cli_args)
+            } else {
+                format!("{}\n{} {}", export, task, cli_args)
+            };
 
-        // Skip the export if it's empty, to avoid newlines
-        let full_script = if export.is_empty() {
-            format!("{task} {cli_args}")
+            Ok(Some(full_script))
         } else {
-            format!("{export}\n{task} {cli_args}")
-        };
-
-        Some(full_script)
+            Ok(None)
+        }
     }
 
     /// Returns a [`SequentialList`] which can be executed by deno task shell.
@@ -148,14 +168,16 @@ impl<'p> ExecutableTask<'p> {
     pub(crate) fn as_deno_script(
         &self,
     ) -> Result<Option<SequentialList>, FailedToParseShellScript> {
-        if let Some(full_script) = self.as_script() {
+        let full_script = self.as_script()?;
+
+        if let Some(full_script) = full_script {
             tracing::debug!("Parsing shell script: {}", full_script);
 
             // Parse the shell command
             deno_task_shell::parser::parse(full_script.trim())
-                .map_err(|e| FailedToParseShellScript {
-                    script: full_script,
-                    error: e.to_string(),
+                .map_err(|e| FailedToParseShellScript::ParseError {
+                    source: e,
+                    task: full_script.to_string(),
                 })
                 .map(Some)
         } else {
@@ -186,15 +208,23 @@ impl<'p> ExecutableTask<'p> {
     ///
     /// This function returns `None` if the task does not define a command to
     /// execute. This is the case for alias only commands.
-    pub(crate) fn full_command(&self) -> Option<String> {
-        let mut cmd = self.task.as_single_command()?.to_string();
+    pub(crate) fn full_command(&self) -> Result<Option<String>, TemplateStringError> {
+        let original_cmd = self
+            .task
+            .as_single_command(Some(&self.args))?
+            .map(|c| c.into_owned());
 
-        if !self.additional_args.is_empty() {
-            cmd.push(' ');
-            cmd.push_str(&self.additional_args.join(" "));
+        if let Some(mut cmd) = original_cmd {
+            if let ArgValues::FreeFormArgs(additional_args) = &self.args {
+                if !additional_args.is_empty() {
+                    cmd.push(' ');
+                    cmd.push_str(&additional_args.join(" "));
+                }
+            }
+            Ok(Some(cmd))
+        } else {
+            Ok(None)
         }
-
-        Some(cmd)
     }
 
     /// Returns an object that implements [`Display`] which outputs the command
@@ -206,7 +236,7 @@ impl<'p> ExecutableTask<'p> {
     /// Executes the task and capture its output.
     pub async fn execute_with_pipes(
         &self,
-        command_env: &HashMap<String, String>,
+        command_env: &HashMap<OsString, OsString>,
         input: Option<&[u8]>,
     ) -> Result<RunOutput, TaskExecutionError> {
         let Some(script) = self.as_deno_script()? else {
@@ -228,7 +258,7 @@ impl<'p> ExecutableTask<'p> {
         let (stderr, stderr_handle) = get_output_writer_and_handle();
         let state = ShellState::new(
             command_env.clone(),
-            &cwd,
+            cwd,
             Default::default(),
             Default::default(),
         );
@@ -243,11 +273,14 @@ impl<'p> ExecutableTask<'p> {
     /// We store the hashes of the inputs and the outputs of the task in a file
     /// in the cache. The current name is something like
     /// `run_environment-task_name.json`.
-    pub(crate) fn cache_name(&self) -> String {
+    pub(crate) fn cache_name(&self, args_cache: Option<NameHash>) -> String {
         format!(
-            "{}-{}.json",
+            "{}-{}-{}.json",
             self.run_environment.name(),
-            self.name().unwrap_or("default")
+            self.name().unwrap_or("default"),
+            args_cache
+                .map(|hash| hash.to_string())
+                .unwrap_or("".to_string())
         )
     }
 
@@ -258,7 +291,8 @@ impl<'p> ExecutableTask<'p> {
     /// quickly.
     pub(crate) async fn can_skip(&self, lock_file: &LockFile) -> Result<CanSkip, std::io::Error> {
         tracing::info!("Checking if task can be skipped");
-        let cache_name = self.cache_name();
+        let args_hash = TaskHash::task_args_hash(self).unwrap_or_default();
+        let cache_name = self.cache_name(args_hash);
         let cache_file = self.project().task_cache_folder().join(cache_name);
         if cache_file.exists() {
             let cache = tokio_fs::read_to_string(&cache_file).await?;
@@ -280,15 +314,16 @@ impl<'p> ExecutableTask<'p> {
     /// no hash, it will not save the cache.
     pub(crate) async fn save_cache(
         &self,
-        lock_file: &LockFileDerivedData<'_>,
+        lock_file: &LockFile,
         previous_hash: Option<TaskHash>,
     ) -> Result<(), CacheUpdateError> {
         let task_cache_folder = self.project().task_cache_folder();
-        let cache_file = task_cache_folder.join(self.cache_name());
+        let args_cache = TaskHash::task_args_hash(self)?;
+        let cache_file = task_cache_folder.join(self.cache_name(args_cache));
         let new_hash = if let Some(mut previous_hash) = previous_hash {
             previous_hash.update_output(self).await?;
             previous_hash
-        } else if let Some(hash) = TaskHash::from_task(self, &lock_file.lock_file).await? {
+        } else if let Some(hash) = TaskHash::from_task(self, lock_file).await? {
             hash
         } else {
             return Ok(());
@@ -312,22 +347,34 @@ struct ExecutableTaskConsoleDisplay<'p, 't> {
 
 impl Display for ExecutableTaskConsoleDisplay<'_, '_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let command = self.task.task.as_single_command();
-        write!(
-            f,
-            "{}",
-            consts::TASK_STYLE
-                .apply_to(command.as_deref().unwrap_or("<alias>"))
-                .bold()
-        )?;
-        if !self.task.additional_args.is_empty() {
-            write!(
-                f,
-                " {}",
-                consts::TASK_STYLE.apply_to(self.task.additional_args.iter().format(" "))
-            )?;
+        match self.task.task.as_single_command(Some(&self.task.args)) {
+            Ok(command) => {
+                write!(
+                    f,
+                    "{}",
+                    consts::TASK_STYLE
+                        .apply_to(command.as_deref().unwrap_or("<alias>"))
+                        .bold()
+                )?;
+                if let ArgValues::FreeFormArgs(additional_args) = &self.task.args {
+                    if !additional_args.is_empty() {
+                        write!(
+                            f,
+                            " {}",
+                            consts::TASK_STYLE.apply_to(additional_args.iter().format(" "))
+                        )?;
+                    }
+                }
+                Ok(())
+            }
+            Err(err) => {
+                write!(
+                    f,
+                    "{}",
+                    consts::TASK_ERROR_STYLE.apply_to(err.get_source()).bold()
+                )
+            }
         }
-        Ok(())
     }
 }
 /// Helper function to create a pipe that we can get the output from.
@@ -365,9 +412,6 @@ pub async fn get_task_env(
     force_activate: bool,
     experimental_cache: bool,
 ) -> miette::Result<HashMap<String, String>> {
-    // Make sure the system requirements are met
-    verify_current_platform_has_required_virtual_packages(environment).into_diagnostic()?;
-
     // Get environment variables from the activation
     let env_var_behavior = if clean_env {
         CurrentEnvVarBehavior::Clean
@@ -461,10 +505,10 @@ mod tests {
             name: Some("test".into()),
             task: Cow::Borrowed(task),
             run_environment: workspace.default_environment(),
-            additional_args: vec![],
+            args: ArgValues::default(),
         };
 
-        let script = executable_task.as_script().unwrap();
+        let script = executable_task.as_script().unwrap().unwrap();
         assert_eq!(script, "export \"FOO=bar\";\n\ntest ");
     }
 

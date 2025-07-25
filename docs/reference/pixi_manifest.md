@@ -1,19 +1,13 @@
----
-part: pixi
-title: Manifest
-description: Learn what you can do in the pixi manifest.
----
 
-The `pixi.toml` is the project manifest, also known as the pixi project configuration file.
+The `pixi.toml` is the workspace manifest, also known as the Pixi workspace configuration file.
 
 A `toml` file is structured in different tables.
 This document will explain the usage of the different tables.
-For more technical documentation check pixi on [docs.rs](https://docs.rs/pixi/latest/pixi/project/manifest/struct.ProjectManifest.html).
 
 !!! tip
     We also support the `pyproject.toml` file. It has the same structure as the `pixi.toml` file. except that you need to prepend the tables with `tool.pixi` instead of just the table name.
-    For example, the `[project]` table becomes `[tool.pixi.project]`.
-    There are also some small extras that are available in the `pyproject.toml` file, checkout the [pyproject.toml](../advanced/pyproject_toml.md) documentation for more information.
+    For example, the `[workspace]` table becomes `[tool.pixi.workspace]`.
+    There are also some small extras that are available in the `pyproject.toml` file, checkout the [pyproject.toml](../python/pyproject_toml.md) documentation for more information.
 
 ## Manifest discovery
 
@@ -33,20 +27,12 @@ The manifest can be found at the following locations.
     If multiple locations exist, the manifest with the highest priority will be used.
 
 
-## The `project` table
+## The `workspace` table
 
-The minimally required information in the `project` table is:
+The minimally required information in the `workspace` table is:
 
 ```toml
 --8<-- "docs/source_files/pixi_tomls/simple_pixi.toml:project"
-```
-
-### `name`
-
-The name of the project.
-
-```toml
---8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_name"
 ```
 
 ### `channels`
@@ -72,7 +58,7 @@ To access private or public channels on [prefix.dev](https://prefix.dev/channels
 
 ### `platforms`
 
-Defines the list of platforms that the project supports.
+Defines the list of platforms that the workspace supports.
 Pixi solves the dependencies for all these platforms and puts them in the lock file (`pixi.lock`).
 
 ```toml
@@ -87,9 +73,18 @@ The available platforms are listed here: [link](https://docs.rs/rattler_conda_ty
     Fallback: If `osx-arm64` can't resolve, use `osx-64`.
     Running `osx-64` on Apple Silicon uses [Rosetta](https://developer.apple.com/documentation/apple-silicon/about-the-rosetta-translation-environment) for Intel binaries.
 
+### `name` (optional)
+
+The name of the workspace.
+If the name is not specified, the name of the directory that contains the workspace is used.
+
+```toml
+--8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_name"
+```
+
 ### `version` (optional)
 
-The version of the project.
+The version of the workspace.
 This should be a valid version based on the conda Version Spec.
 See the [version documentation](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/struct.Version.html), for an explanation of what is allowed in a Version Spec.
 
@@ -99,7 +94,7 @@ See the [version documentation](https://docs.rs/rattler_conda_types/latest/rattl
 
 ### `authors` (optional)
 
-This is a list of authors of the project.
+This is a list of authors of the workspace.
 
 ```toml
 --8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_authors"
@@ -107,7 +102,7 @@ This is a list of authors of the project.
 
 ### `description` (optional)
 
-This should contain a short description of the project.
+This should contain a short description of the workspace.
 
 ```toml
 --8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_description"
@@ -139,7 +134,7 @@ readme = "README.md"
 
 ### `homepage` (optional)
 
-URL of the project homepage.
+URL of the workspace homepage.
 
 ```toml
 --8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_homepage"
@@ -147,7 +142,7 @@ URL of the project homepage.
 
 ### `repository` (optional)
 
-URL of the project source repository.
+URL of the workspace source repository.
 
 ```toml
 --8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_repository"
@@ -155,7 +150,7 @@ URL of the project source repository.
 
 ### `documentation` (optional)
 
-URL of the project documentation.
+URL of the workspace documentation.
 
 ```toml
 --8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_documentation"
@@ -209,20 +204,62 @@ channel-priority = "disabled"
     It's advisable to maintain the default strict setting and order channels thoughtfully.
     If necessary, specify a channel directly for a dependency.
     ```toml
-    [project]
+    [workspace]
     # Putting conda-forge first solves most issues
     channels = ["conda-forge", "channel-name"]
     [dependencies]
     package = {version = "*", channel = "channel-name"}
     ```
 
+### `requires-pixi` (optional)
+
+The required version spec for `pixi` itself to resolve and build the workspace. If unset (**Default**),
+any version is ok. If set, it must be a string to a valid conda version spec, and the version of
+a running `pixi` must match the required spec before resolving or building the workspace, or exit with
+an error when not match.
+
+For example, with the following manifest, `pixi shell` will fail on `pixi 0.39.0`, but success after
+upgrading to `pixi 0.40.0`:
+
+```toml
+[workspace]
+requires-pixi = ">=0.40"
+```
+
+The upper bound can also be limit like this:
+
+```toml
+[workspace]
+requires-pixi = ">=0.40,<1.0"
+```
+
+!!! note
+    This option should be used to improve the reproducibility of building the workspace. A complicated
+    requirement spec may be an obstacle to setup the building environment.
+
+
+### `exclude-newer` (optional)
+
+When specified this will exclude any package from consideration that is newer than the specified date.
+This is useful to reproduce installations regardless of new package releases.
+
+The date may be specified in the following formats:
+
+* As an [RFC 3339](https://www.rfc-editor.org/rfc/rfc3339.html) timestamp (e.g. `2023-10-01T00:00:00Z`)
+* As a date in the format `YYYY-MM-DD` (e.g. `2023-10-01`) in the systems time zone.
+
+Both PyPi and conda packages are considered.
+
+!! note Note that for Pypi package indexes the package index must support the `upload-time` field as specified in [`PEP 700`](https://peps.python.org/pep-0700/).
+If the field is not present for a given distribution, the distribution will be treated as unavailable. PyPI provides `upload-time` for all packages.
+
 ## The `tasks` table
 
-Tasks are a way to automate certain custom commands in your project.
+Tasks are a way to automate certain custom commands in your workspace.
 For example, a `lint` or `format` step.
-Tasks in a pixi project are essentially cross-platform shell commands, with a unified syntax across platforms.
-For more in-depth information, check the [Advanced tasks documentation](../features/advanced_tasks.md).
-Pixi's tasks are run in a pixi environment using `pixi run` and are executed using the [`deno_task_shell`](../features/advanced_tasks.md#our-task-runner-deno_task_shell).
+Tasks in a Pixi workspace are essentially cross-platform shell commands, with a unified syntax across platforms.
+For more in-depth information, check the [Advanced tasks documentation](../workspace/advanced_tasks.md).
+Pixi's tasks are run in a Pixi environment using `pixi run` and are executed using the [`deno_task_shell`](../workspace/advanced_tasks.md#our-task-runner-deno_task_shell).
 
 ```toml
 [tasks]
@@ -237,7 +274,7 @@ format = { cmd="black $INIT_CWD" } # runs black where you run pixi run format
 clean-env = { cmd = "python isolated.py", clean-env = true} # Only on Unix!
 ```
 
-You can modify this table using [`pixi task`](cli.md#task).
+You can modify this table using [`pixi task`](cli/pixi/task.md).
 !!! note
     Specify different tasks for different platforms using the [target](#the-target-table) table
 
@@ -254,7 +291,7 @@ For example, we can define a unix system with a specific minimal libc version.
 [system-requirements]
 libc = "2.28"
 ```
-or make the project depend on a specific version of `cuda`:
+or make the workspace depend on a specific version of `cuda`:
 ```toml
 [system-requirements]
 cuda = "12"
@@ -268,7 +305,7 @@ e.g. `libc = { family="glibc", version="2.28" }`
 - `macos`: The minimal version of the macOS operating system.
 - `cuda`: The minimal version of the CUDA library.
 
-More information in the [system requirements documentation](../features/system_requirements.md).
+More information in the [system requirements documentation](../workspace/system_requirements.md).
 
 ## The `pypi-options` table
 
@@ -282,6 +319,7 @@ The options that can be defined are:
 - `find-links`: similar to `--find-links` option in `pip`.
 - `no-build-isolation`: disables build isolation, can only be set per package.
 - `no-build`: don't build source distributions.
+- `no-binary`: don't use pre-build wheels.
 - `index-strategy`: allows for specifying the index strategy to use.
 
 These options are explained in the sections below. Most of these options are taken directly or with slight modifications from the [uv settings](https://docs.astral.sh/uv/reference/settings/). If any are missing that you need feel free to create an issue [requesting](https://github.com/prefix-dev/pixi/issues) them.
@@ -293,7 +331,7 @@ These options are explained in the sections below. Most of these options are tak
     Unlike pip, because we make use of uv, we have a strict index priority. This means that the first index is used where a package can be found.
     The order is determined by the order in the toml file. Where the `extra-index-urls` are preferred over the `index-url`. Read more about this on the [uv docs](https://docs.astral.sh/uv/pip/compatibility/#packages-that-exist-on-multiple-indexes)
 
-Often you might want to use an alternative or extra index for your project. This can be done by adding the `pypi-options` table to your `pixi.toml` file, the following options are available:
+Often you might want to use an alternative or extra index for your workspace. This can be done by adding the `pypi-options` table to your `pixi.toml` file, the following options are available:
 
 - `index-url`: replaces the main index url. If this is not set the default index used is `https://pypi.org/simple`.
    **Only one** `index-url` can be defined per environment.
@@ -310,10 +348,10 @@ extra-index-urls = ["https://example.com/simple"]
 find-links = [{path = './links'}]
 ```
 
-There are some [examples](https://github.com/prefix-dev/pixi/tree/main/examples/pypi-custom-registry) in the pixi repository, that make use of this feature.
+There are some [examples](https://github.com/prefix-dev/pixi/tree/main/examples/pypi-custom-registry) in the Pixi repository, that make use of this feature.
 
 !!! tip "Authentication Methods"
-    To read about existing authentication methods for private registries, please check the [PyPI Authentication](../advanced/authentication.md#pypi-authentication) section.
+    To read about existing authentication methods for private registries, please check the [PyPI Authentication](../deployment/authentication.md#pypi-authentication) section.
 
 
 ### No Build Isolation
@@ -331,6 +369,13 @@ no-build-isolation = ["detectron2"]
 
 [pypi-dependencies]
 detectron2 = { git = "https://github.com/facebookresearch/detectron2.git", rev = "5b72c27ae39f99db75d43f18fd1312e1ea934e60"}
+```
+
+It is also possible to remove all packages from build isolation by setting the `no-build-isolation` to `true`.
+
+```toml
+[pypi-options]
+no-build-isolation = true
 ```
 
 !!! tip "Conda dependencies define the build environment"
@@ -356,6 +401,29 @@ When features are merged, the following priority is adhered:
 So, to expand: if `no-build = true` is set for *any* feature in the environment, this will be used as the setting for the environment.
 
 
+### No Binary
+Don't install pre-built wheels.
+
+The given packages will be built and installed from source. The resolver will still use pre-built wheels to extract package metadata, if available.
+
+Can be either set per package or globally.
+
+```toml
+[pypi-options]
+# Never use pre-build wheels
+no-binary = true # default is false
+```
+or:
+```toml
+[pypi-options]
+no-binary = ["package1", "package2"]
+```
+
+When features are merged, the following priority is adhered:
+`no-binary = true` > `no-binary = ["package1", "package2"]` > `no-binary = false`
+So, to expand: if `no-binary = true` is set for *any* feature in the environment, this will be used as the setting for the environment.
+
+
 ### Index Strategy
 
 The strategy to use when resolving against multiple index URLs. Description modified from the [uv](https://docs.astral.sh/uv/reference/settings/#index-strategy) documentation:
@@ -378,7 +446,7 @@ By default, `uv` and thus `pixi`, will stop at the first index on which a given 
 ??? info "Details regarding the dependencies"
     For more detail regarding the dependency types, make sure to check the [Run, Host, Build](../build/dependency_types.md) dependency documentation.
 
-This section defines what dependencies you would like to use for your project.
+This section defines what dependencies you would like to use for your workspace.
 
 There are multiple dependencies tables.
 The default is `[dependencies]`, which are dependencies that are shared across platforms.
@@ -417,8 +485,8 @@ package1 = { version = ">=1.2.3", build="py34_0" }
 ### `dependencies`
 
 Add any conda package dependency that you want to install into the environment.
-Don't forget to add the channel to the project table should you use anything different than `conda-forge`.
-Even if the dependency defines a channel that channel should be added to the `project.channels` list.
+Don't forget to add the channel to the `workspace` table should you use anything different than `conda-forge`.
+Even if the dependency defines a channel that channel should be added to the `workspace.channels` list.
 
 ```toml
 [dependencies]
@@ -437,11 +505,11 @@ python = "~=3.10.3"
 Typical examples of host dependencies are:
 
 - Base interpreters: a Python package would list `python` here and an R package would list `mro-base` or `r-base`.
-- Libraries your project links against during compilation like `openssl`, `rapidjson`, or `xtensor`.
+- Libraries your workspace links against during compilation like `openssl`, `rapidjson`, or `xtensor`.
 
 ### `build-dependencies`
 
-This table contains dependencies that are needed to build the project.
+This table contains dependencies that are needed to build the workspace.
 Different from `dependencies` and `host-dependencies` these packages are installed for the architecture of the _build_ machine.
 This enables cross-compiling from one machine architecture to another.
 
@@ -494,10 +562,18 @@ pandas = { version = ">=1.0.0", extras = ["dataframe", "sql"]}
 # With ssh
 flask = { git = "ssh://git@github.com/pallets/flask" }
 # With https and a specific revision
-requests = { git = "https://github.com/psf/requests.git", rev = "0106aced5faa299e6ede89d1230bd6784f2c3660" }
-# TODO: will support later -> branch = '' or tag = '' to specify a branch or tag
+httpx = { git = "https://github.com/encode/httpx.git", rev = "c7c13f18a5af4c64c649881b2fe8dbd72a519c32"}
 
-# You can also directly add a source dependency from a path, tip keep this relative to the root of the project.
+# With https and a specific branch
+boltons = { git = "https://github.com/mahmoud/boltons.git", branch = "master" }
+
+# With https and a specific tag
+boltons = { git = "https://github.com/mahmoud/boltons.git", tag = "25.0.0" }
+
+# With https, specific tag and some subdirectory
+boltons = { git = "https://github.com/mahmoud/boltons.git", tag = "25.0.0", subdirectory = "some-subdir" }
+
+# You can also directly add a source dependency from a path, tip keep this relative to the root of the workspace.
 minimal-project = { path = "./minimal-project", editable = true}
 
 # You can also use a direct url, to either a `.tar.gz` or `.zip`, or a `.whl` file
@@ -507,9 +583,13 @@ click = { url = "https://github.com/pallets/click/releases/download/8.1.7/click-
 pytest = { git = "https://github.com/pytest-dev/pytest.git"}
 ```
 
+!!! warning "Using git SSH URLs"
+    When using SSH URLs in git dependencies, make sure to have your SSH key added to your SSH agent.
+    You can do this by running `ssh-add` which will prompt you for your SSH key passphrase. Make sure that the `ssh-add` agent or service is running and you have a generated public/private SSH key. For more details on how to do this, check the [Github SSH documentation](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent).
+
 #### Full specification
 
-The full specification of a PyPI dependencies that pixi supports can be split into the following fields:
+The full specification of a PyPI dependencies that Pixi supports can be split into the following fields:
 
 ##### `extras`
 
@@ -525,7 +605,7 @@ minimal-project = { path = "./minimal-project", editable = true, extras = ["dev"
 
 ##### `version`
 
-The version of the package to install. e.g. `">=1.0.0"` or `*` which stands for any version, this is pixi specific.
+The version of the package to install. e.g. `">=1.0.0"` or `*` which stands for any version, this is Pixi specific.
 Version is our default field so using no inline table (`{}`) will default to this field.
 
 ```toml
@@ -546,7 +626,7 @@ torch = { version = "*", index = "https://download.pytorch.org/whl/cu118" }
 ```
 
 This is useful for PyTorch specifically, as the registries are pinned to different CUDA versions.
-Learn more about installing PyTorch [here](../features/pytorch.md).
+Learn more about installing PyTorch [here](../python/pytorch.md).
 
 ##### `git`
 
@@ -561,14 +641,14 @@ Use `git` in combination with `rev` or `subdirectory`:
 ```toml
 # Note don't forget the `ssh://` or `https://` prefix!
 pytest = { git = "https://github.com/pytest-dev/pytest.git"}
-requests = { git = "https://github.com/psf/requests.git", rev = "0106aced5faa299e6ede89d1230bd6784f2c3660" }
+httpx = { git = "https://github.com/encode/httpx.git", rev = "c7c13f18a5af4c64c649881b2fe8dbd72a519c32"}
 py-rattler = { git = "ssh://git@github.com/conda/rattler.git", subdirectory = "py-rattler" }
 ```
 
 ##### `path`
 
 A local path to install from. e.g. `path = "./path/to/package"`
-We would advise to keep your path projects in the project, and to use a relative path.
+We would advise to keep your path projects in the workspace, and to use a relative path.
 
 Set `editable` to `true` to install in editable mode, this is highly recommended as it is hard to reinstall if you're not using editable mode. e.g. `editable = true`
 
@@ -609,6 +689,11 @@ There are two types of activation operations a user can modify in the manifest:
 - `env`: A mapping of environment variables that are set when the environment is activated.
 
 These activation operations will be run before the `pixi run` and `pixi shell` commands.
+
+!!! note
+    The script specified in the `scripts` section are not directly sourced in the `pixi shell`, but rather they are called,
+    and the environment variables they set are then set in the `pixi shell`, so any defined function or other non-environment variable
+    modification to the environment will be ignored.
 
 !!! note
     The activation operations are run by the system shell interpreter as they run before an environment is available.
@@ -662,7 +747,7 @@ The platform can be any of:
 The sub-table can be any of the specified above.
 
 To make it a bit more clear, let's look at an example below.
-Currently, pixi combines the top level tables like `dependencies` with the target-specific ones into a single set.
+Currently, Pixi combines the top level tables like `dependencies` with the target-specific ones into a single set.
 Which, in the case of dependencies, can both add or overwrite dependencies.
 In the example below, we have `cmake` being used for all targets but on `osx-64` or `osx-arm64` a different version of python will be selected.
 
@@ -697,7 +782,7 @@ clang = ">=16.0.6"
 ## The `feature` and `environments` tables
 
 The `feature` table allows you to define features that can be used to create different `[environments]`.
-The `[environments]` table allows you to define different environments. The design is explained in the [this design document](../features/multi_environment.md).
+The `[environments]` table allows you to define different environments. The design is explained in the [this design document](../workspace/multi_environment.md).
 
 ```toml title="Simplest example"
 [feature.test.dependencies]
@@ -718,8 +803,8 @@ The `feature` table allows you to define the following fields per feature.
 - `pypi-options`: Same as the [pypi-options](#the-pypi-options-table).
 - `system-requirements`: Same as the [system-requirements](#the-system-requirements-table).
 - `activation`: Same as the [activation](#the-activation-table).
-- `platforms`: Same as the [platforms](#platforms). Unless overridden, the `platforms` of the feature will be those defined at project level.
-- `channels`: Same as the [channels](#channels). Unless overridden, the `channels` of the feature will be those defined at project level.
+- `platforms`: Same as the [platforms](#platforms). Unless overridden, the `platforms` of the feature will be those defined at workspace level.
+- `channels`: Same as the [channels](#channels). Unless overridden, the `channels` of the feature will be those defined at workspace level.
 - `channel-priority`: Same as the [channel-priority](#channel-priority-optional).
 - `target`: Same as the [target](#the-target-table).
 - `tasks`: Same as the [tasks](#the-tasks-table).
@@ -806,7 +891,7 @@ When an environment comprises several features (including the default feature):
 - The `dependencies` and `pypi-dependencies` of the environment are the union of the `dependencies` and `pypi-dependencies` of all its features. This means that if several features define a requirement for the same package, both requirements will be combined. Beware of conflicting requirements across features added to the same environment.
 - The `system-requirements` of the environment is the union of the `system-requirements` of all its features. If multiple features specify a requirement for the same system package, the highest version is chosen.
 - The `channels` of the environment is the union of the `channels` of all its features. Channel priorities can be specified in each feature, to ensure channels are considered in the right order in the environment.
-- The `platforms` of the environment is the intersection of the `platforms` of all its features. Be aware that the platforms supported by a feature (including the default feature) will be considered as the `platforms` defined at project level (unless overridden in the feature). This means that it is usually a good idea to set the project `platforms` to all platforms it can support across its environments.
+- The `platforms` of the environment is the intersection of the `platforms` of all its features. Be aware that the platforms supported by a feature (including the default feature) will be considered as the `platforms` defined at workspace level (unless overridden in the feature). This means that it is usually a good idea to set the workspace `platforms` to all platforms it can support across its environments.
 
 ## Global configuration
 
@@ -814,9 +899,9 @@ The global configuration options are documented in the [global configuration](..
 
 
 ## Preview features
-Pixi sometimes introduces new features that are not yet stable, but that we would like for users to test out. These features are called preview features. Preview features are disabled by default and can be enabled by setting the `preview` field in the project manifest. The preview field is an array of strings that specify the preview features to enable, or the boolean value `true` to enable all preview features.
+Pixi sometimes introduces new features that are not yet stable, but that we would like for users to test out. These features are called preview features. Preview features are disabled by default and can be enabled by setting the `preview` field in the workspace manifest. The preview field is an array of strings that specify the preview features to enable, or the boolean value `true` to enable all preview features.
 
-An example of a preview feature in the project manifest:
+An example of a preview feature in the manifest:
 
 ```toml
 --8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:preview"

@@ -1,9 +1,13 @@
 use std::path::Path;
 
 use miette::IntoDiagnostic;
+use rattler::install::PythonInfo;
 
+use crate::install_pypi::PyPIPrefixUpdaterBuilder;
+use crate::{lock_file::UvResolutionContext, prefix::Prefix};
 use fancy_display::FancyDisplay;
 use pixi_consts::consts;
+use pixi_manifest::pypi::pypi_options::NoBuildIsolation;
 use pixi_manifest::{EnvironmentName, SystemRequirements};
 use pixi_progress::await_in_progress;
 use pixi_record::PixiRecord;
@@ -12,14 +16,10 @@ use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use std::collections::HashMap;
 use uv_distribution_types::{InstalledDist, Name};
 
-use crate::{install_pypi, lock_file::UvResolutionContext, prefix::Prefix};
-
 use super::PythonStatus;
 
 /// If the python interpreter is outdated, we need to uninstall all outdated
 /// site packages. from the old interpreter.
-/// TODO: optimize this by recording the installation of the site-packages to
-/// check if this is needed.
 async fn uninstall_outdated_site_packages(site_packages: &Path) -> miette::Result<()> {
     // Check if the old interpreter is outdated
     let mut installed = vec![];
@@ -66,6 +66,65 @@ async fn uninstall_outdated_site_packages(site_packages: &Path) -> miette::Resul
     Ok(())
 }
 
+/// Continue or skip the PyPI prefix update.
+pub enum ContinuePyPIPrefixUpdate<'a> {
+    /// Continue with the PyPI prefix update.
+    Continue(&'a PythonInfo),
+    /// Skip the PyPI prefix update. Because the python interpreter is removed.
+    Skip,
+}
+
+/// React on changes to the Python interpreter.
+/// Namely we should decide if we want to remove the old site-packages directory.
+pub async fn on_python_interpreter_change<'a>(
+    status: &'a PythonStatus,
+    prefix: &Prefix,
+    pypi_records: &[(PypiPackageData, PypiPackageEnvironmentData)],
+) -> miette::Result<ContinuePyPIPrefixUpdate<'a>> {
+    // If we have changed interpreter, we need to uninstall all site-packages from
+    // the old interpreter We need to do this before the pypi prefix update,
+    // because that requires a python interpreter.
+    match status {
+        // If the python interpreter is removed, we need to uninstall all `pixi-uv` site-packages.
+        // And we don't need to continue with the rest of the pypi prefix update.
+        PythonStatus::Removed { old } => {
+            let site_packages_path = prefix.root().join(&old.site_packages_path);
+            if site_packages_path.exists() {
+                uninstall_outdated_site_packages(&site_packages_path).await?;
+            }
+            Ok(ContinuePyPIPrefixUpdate::Skip)
+        }
+        // If the python interpreter is changed, we need to uninstall all site-packages from the old
+        // interpreter. And we continue the function to update the pypi packages.
+        PythonStatus::Changed { old, new } => {
+            // In windows the site-packages path stays the same, so we don't need to
+            // uninstall the site-packages ourselves.
+            if old.site_packages_path != new.site_packages_path {
+                let site_packages_path = prefix.root().join(&old.site_packages_path);
+                if site_packages_path.exists() {
+                    uninstall_outdated_site_packages(&site_packages_path).await?;
+                }
+            }
+            Ok(ContinuePyPIPrefixUpdate::Continue(new))
+        }
+        // If the python interpreter is unchanged, and there are no pypi packages to install, we
+        // need to remove the site-packages. And we don't need to continue with the rest of
+        // the pypi prefix update.
+        PythonStatus::Unchanged(info) | PythonStatus::Added { new: info } => {
+            if pypi_records.is_empty() {
+                let site_packages_path = prefix.root().join(&info.site_packages_path);
+                if site_packages_path.exists() {
+                    uninstall_outdated_site_packages(&site_packages_path).await?;
+                }
+                return Ok(ContinuePyPIPrefixUpdate::Skip);
+            }
+            Ok(ContinuePyPIPrefixUpdate::Continue(info))
+        }
+        // We can skip the pypi prefix update if there is not python interpreter in the environment.
+        PythonStatus::DoesNotExist => Ok(ContinuePyPIPrefixUpdate::Skip),
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 // TODO: refactor args into struct
 pub async fn update_prefix_pypi(
@@ -81,52 +140,14 @@ pub async fn update_prefix_pypi(
     environment_variables: &HashMap<String, String>,
     lock_file_dir: &Path,
     platform: Platform,
-    non_isolated_packages: Option<Vec<String>>,
+    non_isolated_packages: &NoBuildIsolation,
     no_build: &pixi_manifest::pypi::pypi_options::NoBuild,
+    no_binary: &pixi_manifest::pypi::pypi_options::NoBinary,
 ) -> miette::Result<()> {
-    // If we have changed interpreter, we need to uninstall all site-packages from
-    // the old interpreter We need to do this before the pypi prefix update,
-    // because that requires a python interpreter.
-    let python_info = match status {
-        // If the python interpreter is removed, we need to uninstall all `pixi-uv` site-packages.
-        // And we don't need to continue with the rest of the pypi prefix update.
-        PythonStatus::Removed { old } => {
-            let site_packages_path = prefix.root().join(&old.site_packages_path);
-            if site_packages_path.exists() {
-                uninstall_outdated_site_packages(&site_packages_path).await?;
-            }
-            return Ok(());
-        }
-        // If the python interpreter is changed, we need to uninstall all site-packages from the old
-        // interpreter. And we continue the function to update the pypi packages.
-        PythonStatus::Changed { old, new } => {
-            // In windows the site-packages path stays the same, so we don't need to
-            // uninstall the site-packages ourselves.
-            if old.site_packages_path != new.site_packages_path {
-                let site_packages_path = prefix.root().join(&old.site_packages_path);
-                if site_packages_path.exists() {
-                    uninstall_outdated_site_packages(&site_packages_path).await?;
-                }
-            }
-            new
-        }
-        // If the python interpreter is unchanged, and there are no pypi packages to install, we
-        // need to remove the site-packages. And we don't need to continue with the rest of
-        // the pypi prefix update.
-        PythonStatus::Unchanged(info) | PythonStatus::Added { new: info } => {
-            if pypi_records.is_empty() {
-                let site_packages_path = prefix.root().join(&info.site_packages_path);
-                if site_packages_path.exists() {
-                    uninstall_outdated_site_packages(&site_packages_path).await?;
-                }
-                return Ok(());
-            }
-            info
-        }
-        // We can skip the pypi prefix update if there is not python interpreter in the environment.
-        PythonStatus::DoesNotExist => {
-            return Ok(());
-        }
+    // Determine global site-packages status
+    let python_info = match on_python_interpreter_change(status, prefix, pypi_records).await? {
+        ContinuePyPIPrefixUpdate::Continue(python_info) => python_info,
+        ContinuePyPIPrefixUpdate::Skip => return Ok(()),
     };
 
     // Install and/or remove python packages
@@ -135,12 +156,11 @@ pub async fn update_prefix_pypi(
             "updating pypi packages in '{}'",
             environment_name.fancy_display()
         ),
-        |_| {
-            install_pypi::update_python_distributions(
+        |_| async {
+            PyPIPrefixUpdaterBuilder::new(
                 lock_file_dir,
                 prefix,
                 pixi_records,
-                pypi_records,
                 &python_info.path,
                 system_requirements,
                 uv_context,
@@ -149,7 +169,12 @@ pub async fn update_prefix_pypi(
                 platform,
                 non_isolated_packages,
                 no_build,
+                no_binary,
             )
+            .await?
+            .build(pypi_records)?
+            .update()
+            .await
         },
     )
     .await

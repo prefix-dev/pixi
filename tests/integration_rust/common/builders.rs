@@ -23,7 +23,10 @@
 //! }
 //! ```
 
-use pixi::cli::cli_config::{GitRev, PrefixUpdateConfig, WorkspaceConfig};
+use pixi::cli::{
+    cli_config::{GitRev, LockFileUpdateConfig, PrefixUpdateConfig, WorkspaceConfig},
+    lock,
+};
 use std::{
     future::{Future, IntoFuture},
     io,
@@ -34,13 +37,12 @@ use std::{
 
 use futures::FutureExt;
 use pixi::{
-    cli::{
-        add, cli_config::DependencyConfig, init, install, project, remove, search, task, update,
-    },
-    task::TaskName,
     DependencyType,
+    cli::{
+        add, cli_config::DependencyConfig, init, install, remove, search, task, update, workspace,
+    },
 };
-use pixi_manifest::{EnvironmentName, FeatureName, SpecType};
+use pixi_manifest::{EnvironmentName, FeatureName, SpecType, task::Dependency};
 use rattler_conda_types::{NamedChannelOrUrl, Platform, RepoDataRecord};
 use url::Url;
 
@@ -97,10 +99,9 @@ impl IntoFuture for InitBuilder {
         init::execute(init::Args {
             channels: if !self.no_fast_prefix {
                 self.args.channels.or_else(|| {
-                    Some(vec![NamedChannelOrUrl::from_str(
-                        "https://prefix.dev/conda-forge",
-                    )
-                    .unwrap()])
+                    Some(vec![
+                        NamedChannelOrUrl::from_str("https://prefix.dev/conda-forge").unwrap(),
+                    ])
                 })
             } else {
                 self.args.channels
@@ -120,12 +121,18 @@ pub trait HasPrefixUpdateConfig: Sized {
         self.prefix_update_config().no_install = !install;
         self
     }
+}
+
+/// A trait used by AddBuilder and RemoveBuilder to set their inner
+/// DependencyConfig
+pub trait HasLockFileUpdateConfig: Sized {
+    fn lock_file_update_config(&mut self) -> &mut LockFileUpdateConfig;
 
     /// Skip updating lockfile, this will only check if it can add a
     /// dependencies. If it can add it will only add it to the manifest.
     /// Install will be skipped by default.
     fn without_lockfile_update(mut self) -> Self {
-        self.prefix_update_config().no_lockfile_update = true;
+        self.lock_file_update_config().no_lockfile_update = true;
         self
     }
 }
@@ -204,7 +211,7 @@ impl AddBuilder {
     }
 
     pub fn with_feature(mut self, feature: impl ToString) -> Self {
-        self.args.dependency_config.feature = FeatureName::Named(feature.to_string());
+        self.args.dependency_config.feature = FeatureName::from(feature.to_string());
         self
     }
 
@@ -229,7 +236,7 @@ impl AddBuilder {
     }
 
     pub fn with_no_lockfile_update(mut self, no_lockfile_update: bool) -> Self {
-        self.args.prefix_update_config.no_lockfile_update = no_lockfile_update;
+        self.args.lock_file_update_config.no_lockfile_update = no_lockfile_update;
         self
     }
 }
@@ -243,6 +250,12 @@ impl HasDependencyConfig for AddBuilder {
 impl HasPrefixUpdateConfig for AddBuilder {
     fn prefix_update_config(&mut self) -> &mut PrefixUpdateConfig {
         &mut self.args.prefix_update_config
+    }
+}
+
+impl HasLockFileUpdateConfig for AddBuilder {
+    fn lock_file_update_config(&mut self) -> &mut LockFileUpdateConfig {
+        &mut self.args.lock_file_update_config
     }
 }
 
@@ -312,7 +325,7 @@ impl TaskAddBuilder {
     }
 
     /// Depends on these commands
-    pub fn with_depends_on(mut self, depends: Vec<TaskName>) -> Self {
+    pub fn with_depends_on(mut self, depends: Vec<Dependency>) -> Self {
         self.args.depends_on = Some(depends);
         self
     }
@@ -348,7 +361,7 @@ pub struct TaskAliasBuilder {
 
 impl TaskAliasBuilder {
     /// Depends on these commands
-    pub fn with_depends_on(mut self, depends: Vec<TaskName>) -> Self {
+    pub fn with_depends_on(mut self, depends: Vec<Dependency>) -> Self {
         self.args.depends_on = depends;
         self
     }
@@ -366,7 +379,7 @@ impl TaskAliasBuilder {
 }
 
 pub struct ProjectChannelAddBuilder {
-    pub args: project::channel::AddRemoveArgs,
+    pub args: workspace::channel::AddRemoveArgs,
 }
 
 impl ProjectChannelAddBuilder {
@@ -394,8 +407,8 @@ impl IntoFuture for ProjectChannelAddBuilder {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        project::channel::execute(project::channel::Args {
-            command: project::channel::Command::Add(self.args),
+        workspace::channel::execute(workspace::channel::Args {
+            command: workspace::channel::Command::Add(self.args),
         })
         .boxed_local()
     }
@@ -403,7 +416,7 @@ impl IntoFuture for ProjectChannelAddBuilder {
 
 pub struct ProjectChannelRemoveBuilder {
     pub manifest_path: Option<PathBuf>,
-    pub args: project::channel::AddRemoveArgs,
+    pub args: workspace::channel::AddRemoveArgs,
 }
 
 impl ProjectChannelRemoveBuilder {
@@ -426,8 +439,8 @@ impl IntoFuture for ProjectChannelRemoveBuilder {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        project::channel::execute(project::channel::Args {
-            command: project::channel::Command::Remove(self.args),
+        workspace::channel::execute(workspace::channel::Args {
+            command: workspace::channel::Command::Remove(self.args),
         })
         .boxed_local()
     }
@@ -463,7 +476,7 @@ impl IntoFuture for InstallBuilder {
 }
 
 pub struct ProjectEnvironmentAddBuilder {
-    pub args: project::environment::add::Args,
+    pub args: workspace::environment::add::Args,
     pub manifest_path: Option<PathBuf>,
 }
 
@@ -496,11 +509,11 @@ impl IntoFuture for ProjectEnvironmentAddBuilder {
     type Output = miette::Result<()>;
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
     fn into_future(self) -> Self::IntoFuture {
-        project::environment::execute(project::environment::Args {
+        workspace::environment::execute(workspace::environment::Args {
             workspace_config: WorkspaceConfig {
                 manifest_path: self.manifest_path,
             },
-            command: project::environment::Command::Add(self.args),
+            command: workspace::environment::Command::Add(self.args),
         })
         .boxed_local()
     }
@@ -556,5 +569,20 @@ impl IntoFuture for UpdateBuilder {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
     fn into_future(self) -> Self::IntoFuture {
         update::execute(self.args).boxed_local()
+    }
+}
+
+/// Contains the arguments to pass to [`lock::execute()`]. Call `.await` to call
+/// the CLI execute method and await the result at the same time.
+pub struct LockBuilder {
+    pub args: lock::Args,
+}
+
+impl IntoFuture for LockBuilder {
+    type Output = miette::Result<()>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        lock::execute(self.args).boxed_local()
     }
 }

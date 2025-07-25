@@ -1,13 +1,11 @@
 use crate::global::install::local_environment_matches_spec;
-use crate::global::EnvDir;
-use crate::prefix::Prefix;
 use console::StyledObject;
 use fancy_display::FancyDisplay;
 use indexmap::IndexSet;
 use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_consts::consts;
-use rattler_conda_types::{MatchSpec, Platform};
+use rattler_conda_types::{MatchSpec, Platform, PrefixRecord};
 use regex::Regex;
 use serde::{self, Deserialize, Deserializer, Serialize};
 use std::{fmt, str::FromStr};
@@ -73,7 +71,9 @@ impl FromStr for EnvironmentName {
 ///
 /// This error is returned when a string fails to be parsed as an environment name.
 #[derive(Debug, Clone, Error, Diagnostic, PartialEq)]
-#[error("Failed to parse environment name '{attempted_parse}', please use only lowercase letters, numbers, dashes and underscores")]
+#[error(
+    "Failed to parse environment name '{attempted_parse}', please use only lowercase letters, numbers, dashes and underscores"
+)]
 pub struct ParseEnvironmentNameError {
     /// The string that was attempted to be parsed.
     pub attempted_parse: String,
@@ -82,16 +82,13 @@ pub struct ParseEnvironmentNameError {
 /// Checks if the manifest is in sync with the locally installed environment and binaries.
 /// Returns `true` if the environment is in sync, `false` otherwise.
 pub(crate) async fn environment_specs_in_sync(
-    env_dir: &EnvDir,
+    prefix_records: &[PrefixRecord],
     specs: &IndexSet<MatchSpec>,
     platform: Option<Platform>,
 ) -> miette::Result<bool> {
-    let prefix = Prefix::new(env_dir.path());
-
-    let repodata_records = prefix
-        .find_installed_packages()?
-        .into_iter()
-        .map(|r| r.repodata_record)
+    let repodata_records = prefix_records
+        .iter()
+        .map(|r| r.repodata_record.clone())
         .collect_vec();
 
     if !local_environment_matches_spec(repodata_records, specs, platform) {
@@ -104,7 +101,10 @@ pub(crate) async fn environment_specs_in_sync(
 mod tests {
 
     use super::*;
-    use crate::global::EnvRoot;
+    use crate::{
+        global::{EnvDir, EnvRoot},
+        prefix::Prefix,
+    };
     use fs_err::tokio as tokio_fs;
     use rattler_conda_types::ParseStrictness;
     use std::path::PathBuf;
@@ -112,13 +112,15 @@ mod tests {
     #[tokio::test]
     async fn test_environment_specs_in_sync() {
         let home = tempfile::tempdir().unwrap();
-        let env_root = EnvRoot::new(home.into_path()).unwrap();
+        let env_root = EnvRoot::new(home.keep()).unwrap();
         let env_name = EnvironmentName::from_str("test").unwrap();
         let env_dir = EnvDir::from_env_root(env_root, &env_name).await.unwrap();
 
         // Test empty
         let specs = IndexSet::new();
-        let result = environment_specs_in_sync(&env_dir, &specs, None)
+        let prefix = Prefix::new(env_dir.path());
+        let prefix_records = prefix.find_installed_packages().unwrap();
+        let result = environment_specs_in_sync(&prefix_records, &specs, None)
             .await
             .unwrap();
         assert!(result);
@@ -138,7 +140,8 @@ mod tests {
             .await
             .unwrap();
 
-        let result = environment_specs_in_sync(&env_dir, &specs, None)
+        let prefix_records = prefix.find_installed_packages().unwrap();
+        let result = environment_specs_in_sync(&prefix_records, &specs, None)
             .await
             .unwrap();
         assert!(result);

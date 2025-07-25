@@ -56,6 +56,7 @@ impl ManifestProvenance {
         match self.kind {
             ManifestKind::Pixi => Ok(ManifestSource::PixiToml(contents)),
             ManifestKind::Pyproject => Ok(ManifestSource::PyProjectToml(contents)),
+            ManifestKind::MojoProject => Ok(ManifestSource::MojoProjectToml(contents)),
         }
     }
 
@@ -75,14 +76,16 @@ impl From<ManifestKind> for ManifestProvenance {
 pub enum ManifestKind {
     Pixi,
     Pyproject,
+    MojoProject,
 }
 
 impl ManifestKind {
     /// Try to determine the type of manifest from a path
     pub fn try_from_path(path: &Path) -> Option<Self> {
         match path.file_name().and_then(OsStr::to_str)? {
-            consts::PROJECT_MANIFEST => Some(Self::Pixi),
+            consts::WORKSPACE_MANIFEST => Some(Self::Pixi),
             consts::PYPROJECT_MANIFEST => Some(Self::Pyproject),
+            consts::MOJOPROJECT_MANIFEST => Some(Self::MojoProject),
             _ => None,
         }
     }
@@ -90,8 +93,9 @@ impl ManifestKind {
     /// Returns the default file name for a manifest of a certain kind.
     pub fn file_name(self) -> &'static str {
         match self {
-            ManifestKind::Pixi => consts::PROJECT_MANIFEST,
+            ManifestKind::Pixi => consts::WORKSPACE_MANIFEST,
             ManifestKind::Pyproject => consts::PYPROJECT_MANIFEST,
+            ManifestKind::MojoProject => consts::MOJOPROJECT_MANIFEST,
         }
     }
 

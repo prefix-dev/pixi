@@ -9,24 +9,23 @@ use miette::{Diagnostic, IntoDiagnostic, Report, WrapErr};
 use pep440_rs::{Version, VersionSpecifiers};
 use pep508_rs::Requirement;
 use pixi_spec::PixiSpec;
-use pyproject_toml::{self, pep735_resolve::Pep735Error, Contact};
+use pyproject_toml::{self, Contact, pep735_resolve::Pep735Error};
 use rattler_conda_types::{PackageName, ParseStrictness::Lenient, VersionSpec};
 use thiserror::Error;
 use toml_span::Spanned;
 
 use super::{
-    error::{RequirementConversionError, TomlError},
     DependencyOverwriteBehavior, Feature, SpecType, WorkspaceManifest,
+    error::{RequirementConversionError, TomlError},
 };
 use crate::{
+    FeatureName, ManifestKind, Warning,
     error::{DependencyError, GenericError},
     manifests::PackageManifest,
     toml::{
+        ExternalWorkspaceProperties, FromTomlStr, PackageDefaults, PyProjectToml, TomlManifest,
         pyproject::{TomlContact, TomlDependencyGroups, TomlProject},
-        ExternalPackageProperties, ExternalWorkspaceProperties, FromTomlStr, PyProjectToml,
-        TomlManifest,
     },
-    FeatureName, Warning,
 };
 
 #[derive(Debug)]
@@ -63,7 +62,7 @@ impl PyProjectManifest {
     pub fn ensure_pixi(self) -> Result<Self, TomlError> {
         // Make sure the `[tool.pixi]` table exist
         if !self.has_pixi_table() {
-            return Err(TomlError::NoPixiTable);
+            return Err(TomlError::NoPixiTable(ManifestKind::Pyproject, None));
         }
 
         // Make sure a 'name' is defined
@@ -225,6 +224,13 @@ impl PyProjectManifest {
             .is_some_and(TomlManifest::has_workspace)
     }
 
+    /// Returns true if the pyproject.toml file also contains a pixi workspace.
+    pub fn has_pixi_package(&self) -> bool {
+        self.tool()
+            .and_then(|t| t.pixi.as_ref())
+            .is_some_and(TomlManifest::has_package)
+    }
+
     /// Assume that the manifest is a workspace manifest and convert it as such.
     ///
     /// If the manifest also contains a package section that will be converted
@@ -253,30 +259,29 @@ impl PyProjectManifest {
             .map(PyProjectFields::from)
             .unwrap_or_default();
 
-        // TODO:  would be nice to add license, license-file, readme, homepage,
-        // repository, documentation, regarding the above, the types are a bit
-        // different than we expect, so the conversion is not straightforward we
-        // could change these types or we can convert. Let's decide when we make it.
-        // etc.
+        // Extract package defaults from [project] section
+        let package_defaults = PackageDefaults {
+            name: project.name.map(Spanned::take),
+            version: project
+                .version
+                .and_then(|v| v.take().to_string().parse().ok())
+                .or(poetry.version.and_then(|v| v.parse().ok())),
+            description: project
+                .description
+                .map(Spanned::take)
+                .or(poetry.description),
+            authors: project.authors.map(contacts_to_authors).or(poetry.authors),
+            license: None,
+            license_file: None,
+            readme: None,
+            homepage: None,
+            repository: None,
+            documentation: None,
+        };
+
         pixi.into_package_manifest(
-            ExternalPackageProperties {
-                name: project.name.map(Spanned::take),
-                version: project
-                    .version
-                    .and_then(|v| v.take().to_string().parse().ok())
-                    .or(poetry.version.and_then(|v| v.parse().ok())),
-                description: project
-                    .description
-                    .map(Spanned::take)
-                    .or(poetry.description),
-                authors: project.authors.map(contacts_to_authors).or(poetry.authors),
-                license: None,
-                license_file: None,
-                readme: None,
-                homepage: None,
-                repository: None,
-                documentation: None,
-            },
+            workspace.workspace_package_properties(),
+            package_defaults,
             workspace,
             root_directory,
         )
@@ -322,11 +327,39 @@ impl PyProjectManifest {
             .iter()
             .map(|(name, _)| {
                 (
-                    FeatureName::Named(name.clone()),
-                    Feature::new(FeatureName::Named(name.clone())),
+                    FeatureName::from(name.clone()),
+                    Feature::new(FeatureName::from(name.clone())),
                 )
             })
             .collect();
+        // Extract and convert project authors to Vec<String> format for reuse
+        let project_authors = project
+            .authors
+            .map(contacts_to_authors)
+            .or(poetry.authors.clone());
+
+        // Extract package defaults from [project] section
+        let package_defaults = PackageDefaults {
+            name: project.name.as_ref().map(|name| name.value.clone()),
+            version: project
+                .version
+                .as_ref()
+                .and_then(|v| v.value.to_string().parse().ok())
+                .or(poetry.version.as_ref().and_then(|v| v.parse().ok())),
+            description: project
+                .description
+                .as_ref()
+                .map(|desc| desc.value.clone())
+                .or(poetry.description.clone()),
+            authors: project_authors.clone(),
+            license: None,
+            license_file: None,
+            readme: None,
+            homepage: None,
+            repository: None,
+            documentation: None,
+        };
+
         let (mut workspace_manifest, package_manifest, warnings) = pixi.into_workspace_manifest(
             ExternalWorkspaceProperties {
                 name: project.name.map(Spanned::take),
@@ -338,7 +371,7 @@ impl PyProjectManifest {
                     .description
                     .map(Spanned::take)
                     .or(poetry.description),
-                authors: project.authors.map(contacts_to_authors).or(poetry.authors),
+                authors: project_authors,
                 license: None,
                 license_file: None,
                 readme: None,
@@ -347,6 +380,7 @@ impl PyProjectManifest {
                 documentation: None,
                 features: implicit_pypi_features,
             },
+            package_defaults,
             root_directory,
         )?;
 
@@ -392,10 +426,13 @@ impl PyProjectManifest {
 
         // For each group of optional dependency or dependency group, add pypi
         // dependencies, filtering out self-references in optional dependencies
-        let project_name =
-            pep508_rs::PackageName::new(workspace_manifest.workspace.name.clone()).ok();
+        let project_name = workspace_manifest
+            .workspace
+            .name
+            .clone()
+            .and_then(|name| pep508_rs::PackageName::new(name).ok());
         for (group, reqs) in pypi_dependency_groups {
-            let feature_name = FeatureName::Named(group.to_string());
+            let feature_name = FeatureName::from(group.to_string());
             let target = workspace_manifest
                 .features
                 .entry(feature_name.clone())

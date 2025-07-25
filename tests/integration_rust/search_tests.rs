@@ -5,8 +5,8 @@ use tempfile::TempDir;
 use url::Url;
 
 use crate::common::{
-    package_database::{Package, PackageDatabase},
     PixiControl,
+    package_database::{Package, PackageDatabase},
 };
 
 #[tokio::test]
@@ -66,6 +66,76 @@ async fn search_return_latest_across_everything() {
     let found_package = binding.last().unwrap();
 
     assert_eq!(found_package.package_record.version.as_str(), "4");
+}
+
+#[tokio::test]
+async fn search_using_match_spec() {
+    let mut package_database = PackageDatabase::default();
+
+    // Add a package `foo` with different versions and different builds
+    package_database.add_package(
+        Package::build("foo", "0.1.0")
+            .with_build("h60d57d3_0")
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("foo", "0.1.0")
+            .with_build("h60d57d3_1")
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("foo", "0.2.0")
+            .with_build("h60d57d3_0")
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("foo", "0.2.0")
+            .with_build("h60d57d3_1")
+            .finish(),
+    );
+
+    // Write the repodata to disk
+    let temp_dir = TempDir::new().unwrap();
+    let channel_dir = temp_dir.path().join("channel");
+    package_database.write_repodata(&channel_dir).await.unwrap();
+    let channel = Url::from_file_path(channel_dir).unwrap();
+    let platform = Platform::current();
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [project]
+    name = "test-search-using-match-spec"
+    channels = ["{channel}"]
+    platforms = ["{platform}"]
+
+    "#
+    ))
+    .unwrap();
+
+    // Without match spec the latest version is returned
+    let binding = pixi.search("foo".to_string()).await.unwrap().unwrap();
+    let found_package = binding.last().unwrap();
+    assert_eq!(found_package.package_record.version.as_str(), "0.2.0");
+    assert_eq!(found_package.package_record.build.as_str(), "h60d57d3_1");
+
+    // Search for a specific version
+    let binding = pixi
+        .search("foo<=0.1.0".to_string())
+        .await
+        .unwrap()
+        .unwrap();
+    let found_package = binding.last().unwrap();
+    assert_eq!(found_package.package_record.version.as_str(), "0.1.0");
+    assert_eq!(found_package.package_record.build.as_str(), "h60d57d3_1");
+
+    // Search for a specific build
+    let binding = pixi
+        .search("foo[build=h60d57d3_0]".to_string())
+        .await
+        .unwrap()
+        .unwrap();
+    let found_package = binding.last().unwrap();
+    assert_eq!(found_package.package_record.version.as_str(), "0.2.0");
+    assert_eq!(found_package.package_record.build.as_str(), "h60d57d3_0");
 }
 
 #[tokio::test]

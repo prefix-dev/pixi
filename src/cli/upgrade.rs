@@ -1,25 +1,27 @@
 use std::cmp::Ordering;
 
+use super::cli_config::{LockFileUpdateConfig, PrefixUpdateConfig};
+use crate::{
+    WorkspaceLocator,
+    cli::cli_config::WorkspaceConfig,
+    diff::LockFileJsonDiff,
+    workspace::{MatchSpecs, PypiDeps, WorkspaceMut},
+};
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic, MietteDiagnostic};
 use pep508_rs::{MarkerTree, Requirement};
-use pixi_manifest::{FeatureName, PyPiRequirement, SpecType};
+use pixi_config::ConfigCli;
+use pixi_manifest::{FeatureName, SpecType};
+use pixi_pypi_spec::PixiPypiSpec;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{MatchSpec, StringMatcher};
 
-use super::cli_config::PrefixUpdateConfig;
-use crate::{
-    cli::cli_config::WorkspaceConfig,
-    diff::LockFileJsonDiff,
-    workspace::{MatchSpecs, PypiDeps, WorkspaceMut},
-    WorkspaceLocator,
-};
-
-/// Update the version of packages to the latest possible version, disregarding
-/// the manifest version constraints
+/// Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file.
+///
+/// `pixi upgrade` loosens the requirements for the given packages, updates the lock file and the adapts the manifest accordingly.
 #[derive(Parser, Debug, Default)]
 pub struct Args {
     #[clap(flatten)]
@@ -27,6 +29,12 @@ pub struct Args {
 
     #[clap(flatten)]
     pub prefix_update_config: PrefixUpdateConfig,
+
+    #[clap(flatten)]
+    pub lock_file_update_config: LockFileUpdateConfig,
+
+    #[clap(flatten)]
+    config: ConfigCli,
 
     #[clap(flatten)]
     pub specs: UpgradeSpecsArgs,
@@ -59,7 +67,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?
-        .with_cli_config(args.prefix_update_config.config.clone());
+        .with_cli_config(args.config.clone());
 
     let mut workspace = workspace.modify()?;
 
@@ -84,6 +92,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             pypi_deps,
             IndexMap::default(),
             &args.prefix_update_config,
+            &args.lock_file_update_config,
             &args.specs.feature,
             &[],
             false,
@@ -133,7 +142,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 /// This function processes the dependencies and PyPi dependencies specified in
 /// the feature, filters them based on the provided arguments, and returns the
 /// resulting match specifications and PyPi dependencies.
-fn parse_specs(
+pub fn parse_specs(
     feature: &pixi_manifest::Feature,
     args: &Args,
     workspace: &WorkspaceMut,
@@ -252,19 +261,20 @@ fn parse_specs(
             _ => false,
         })
         // Only upgrade version specs
-        .filter_map(|(name, req)| match req {
-            PyPiRequirement::Version { extras, .. } => Some((
+        .filter_map(|(name, req)| match &req {
+            PixiPypiSpec::Version { extras, .. } => Some((
                 name.clone(),
                 Requirement {
                     name: name.as_normalized().clone(),
-                    extras,
+                    extras: extras.clone(),
                     // TODO: Add marker support here to avoid overwriting existing markers
                     marker: MarkerTree::default(),
                     origin: None,
                     version_or_url: None,
                 },
+                req,
             )),
-            PyPiRequirement::RawVersion(_) => Some((
+            PixiPypiSpec::RawVersion(_) => Some((
                 name.clone(),
                 Requirement {
                     name: name.as_normalized().clone(),
@@ -273,16 +283,17 @@ fn parse_specs(
                     origin: None,
                     version_or_url: None,
                 },
+                req,
             )),
             _ => None,
         })
-        .map(|(name, req)| {
+        .map(|(name, req, pixi_req)| {
             let location = workspace.document().pypi_dependency_location(
                 &name,
                 None, // TODO: add support for platforms
                 &args.specs.feature,
             );
-            (name, (req, location))
+            (name, (req, Some(pixi_req), location))
         })
         .collect();
 

@@ -8,20 +8,26 @@ use rattler_shell::{
     shell::{CmdExe, PowerShell, Shell, ShellEnum, ShellScript},
 };
 
-use crate::cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig};
 use crate::lock_file::UpdateMode;
 use crate::workspace::get_activated_environment_variables;
 use crate::{
-    activation::CurrentEnvVarBehavior, environment::get_update_lock_file_and_prefix, prompt,
-    workspace::virtual_packages::verify_current_platform_has_required_virtual_packages,
-    UpdateLockFileOptions, WorkspaceLocator,
+    UpdateLockFileOptions, WorkspaceLocator, activation::CurrentEnvVarBehavior,
+    environment::get_update_lock_file_and_prefix, prompt,
 };
-use pixi_config::{ConfigCliActivation, ConfigCliPrompt};
-
+use crate::{
+    cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
+    lock_file::ReinstallPackages,
+};
+use pixi_config::{ConfigCli, ConfigCliActivation, ConfigCliPrompt};
 #[cfg(target_family = "unix")]
 use pixi_pty::unix::PtySession;
 
-/// Start a shell in the pixi environment of the project
+#[cfg(target_family = "unix")]
+use crate::prefix::Prefix;
+
+use super::cli_config::LockFileUpdateConfig;
+
+/// Start a shell in a pixi environment, run `exit` to leave the shell.
 #[derive(Parser, Debug)]
 pub struct Args {
     #[clap(flatten)]
@@ -29,6 +35,12 @@ pub struct Args {
 
     #[clap(flatten)]
     pub prefix_update_config: PrefixUpdateConfig,
+
+    #[clap(flatten)]
+    pub lock_file_update_config: LockFileUpdateConfig,
+
+    #[clap(flatten)]
+    config: ConfigCli,
 
     /// The environment to activate in the shell
     #[arg(long, short)]
@@ -73,7 +85,8 @@ fn start_powershell(
         .into_diagnostic()?;
 
     // Write custom prompt to the env file
-    temp_file.write(prompt.as_bytes()).into_diagnostic()?;
+    temp_file.write_all(prompt.as_bytes()).into_diagnostic()?;
+    temp_file.flush().into_diagnostic()?;
 
     // close the file handle, but keep the path (needed for Windows)
     let temp_path = temp_file.into_temp_path();
@@ -113,11 +126,15 @@ fn start_cmdexe(
         .into_diagnostic()?;
 
     // Write custom prompt to the env file
-    temp_file.write(prompt.as_bytes()).into_diagnostic()?;
+    temp_file.write_all(prompt.as_bytes()).into_diagnostic()?;
+    temp_file.flush().into_diagnostic()?;
+
+    // close the file handle, but keep the path (needed for Windows)
+    let temp_path = temp_file.into_temp_path();
 
     let mut command = std::process::Command::new(cmdexe.executable());
     command.arg("/K");
-    command.arg(temp_file.path());
+    command.arg(&temp_path);
 
     ignore_ctrl_c();
 
@@ -136,6 +153,8 @@ async fn start_unix_shell<T: Shell + Copy + 'static>(
     args: Vec<&str>,
     env: &HashMap<String, String>,
     prompt: String,
+    prefix: &Prefix,
+    source_shell_completions: bool,
 ) -> miette::Result<Option<i32>> {
     // create a tempfile for activation
     let mut temp_file = tempfile::Builder::new()
@@ -150,7 +169,14 @@ async fn start_unix_shell<T: Shell + Copy + 'static>(
         shell_script.set_env_var(key, value).into_diagnostic()?;
     }
 
-    const DONE_STR: &str = "=== DONE ===";
+    if source_shell_completions {
+        if let Some(completions_dir) = shell.completion_script_location() {
+            shell_script
+                .source_completions(&prefix.root().join(completions_dir))
+                .into_diagnostic()?;
+        }
+    }
+    const DONE_STR: &str = "PIXI_SHELL_ACTIVATION_DONE";
     shell_script.echo(DONE_STR).into_diagnostic()?;
 
     temp_file
@@ -158,21 +184,31 @@ async fn start_unix_shell<T: Shell + Copy + 'static>(
         .into_diagnostic()?;
 
     // Write custom prompt to the env file
-    temp_file.write(prompt.as_bytes()).into_diagnostic()?;
+    temp_file.write_all(prompt.as_bytes()).into_diagnostic()?;
+    temp_file.flush().into_diagnostic()?;
+
+    let temp_path = temp_file.into_temp_path();
 
     let mut command = std::process::Command::new(shell.executable());
-    command.args(args);
+    command.args(&args);
 
     // Space added before `source` to automatically ignore it in history.
     let mut source_command = " ".to_string();
     shell
-        .run_script(&mut source_command, temp_file.path())
+        .run_script(&mut source_command, temp_path.as_ref())
         .into_diagnostic()?;
 
     // Remove automatically added `\n`, if for some reason this fails, just ignore.
     let source_command = source_command
         .strip_suffix('\n')
         .unwrap_or(source_command.as_str());
+
+    tracing::debug!(
+        "Starting shell '{} {}' with source command: '{}'",
+        shell.executable(),
+        args.join(" "),
+        source_command
+    );
 
     // Start process and send env activation to the shell.
     let mut process = PtySession::new(command).into_diagnostic()?;
@@ -216,7 +252,8 @@ async fn start_nu_shell(
         .into_diagnostic()?;
 
     // Write custom prompt to the env file
-    temp_file.write(prompt.as_bytes()).into_diagnostic()?;
+    temp_file.write_all(prompt.as_bytes()).into_diagnostic()?;
+    temp_file.flush().into_diagnostic()?;
 
     let mut command = std::process::Command::new(shell.executable());
     command.arg("--execute");
@@ -230,7 +267,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let config = args
         .activation_config
         .merge_config(args.prompt_config.into())
-        .merge_config(args.prefix_update_config.config.clone().into());
+        .merge_config(args.config.clone().into());
 
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.workspace_config.workspace_locator_start())
@@ -239,27 +276,29 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let environment = workspace.environment_from_name_or_env_var(args.environment)?;
 
-    verify_current_platform_has_required_virtual_packages(&environment).into_diagnostic()?;
-
     // Make sure environment is up-to-date, default to install, users can avoid this with frozen or locked.
-    let (lock_file_data, _prefix) = get_update_lock_file_and_prefix(
+    #[allow(unused_variables)]
+    let (lock_file_data, prefix) = get_update_lock_file_and_prefix(
         &environment,
         UpdateMode::QuickValidate,
         UpdateLockFileOptions {
-            lock_file_usage: args.prefix_update_config.lock_file_usage(),
-            no_install: args.prefix_update_config.no_install(),
+            lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
+            no_install: args.prefix_update_config.no_install
+                && args.lock_file_update_config.no_lockfile_update,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         },
+        ReinstallPackages::default(),
         false,
     )
     .await?;
+    let lock_file = lock_file_data.into_lock_file();
 
     // Get the environment variables we need to set activate the environment in the shell.
     let env = get_activated_environment_variables(
         workspace.env_vars(),
         &environment,
         CurrentEnvVarBehavior::Exclude,
-        Some(&lock_file_data.lock_file),
+        Some(&lock_file),
         workspace.config().force_activate(),
         workspace.config().experimental_activation_cache_usage(),
     )
@@ -275,7 +314,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     tracing::info!("Starting shell: {:?}", interactive_shell);
 
     let prompt_hook = if workspace.config().change_ps1() {
-        let prompt_name = prompt::prompt_name(workspace.name(), environment.name());
+        let prompt_name = prompt::prompt_name(workspace.display_name(), environment.name());
         [
             prompt::shell_prompt(&interactive_shell, prompt_name.as_str()),
             prompt::shell_hook(&interactive_shell)
@@ -298,15 +337,58 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     #[cfg(target_family = "unix")]
-    let res = match interactive_shell {
-        ShellEnum::NuShell(nushell) => start_nu_shell(nushell, env, prompt_hook).await,
-        ShellEnum::PowerShell(pwsh) => start_powershell(pwsh, env, prompt_hook),
-        ShellEnum::Bash(bash) => start_unix_shell(bash, vec!["-l", "-i"], env, prompt_hook).await,
-        ShellEnum::Zsh(zsh) => start_unix_shell(zsh, vec!["-l", "-i"], env, prompt_hook).await,
-        ShellEnum::Fish(fish) => start_unix_shell(fish, vec![], env, prompt_hook).await,
-        ShellEnum::Xonsh(xonsh) => start_unix_shell(xonsh, vec![], env, prompt_hook).await,
-        _ => {
-            miette::bail!("Unsupported shell: {:?}", interactive_shell)
+    let res = {
+        let source_shell_completions = workspace.config().shell.source_completion_scripts();
+        match interactive_shell {
+            ShellEnum::NuShell(nushell) => start_nu_shell(nushell, env, prompt_hook).await,
+            ShellEnum::PowerShell(pwsh) => start_powershell(pwsh, env, prompt_hook),
+            ShellEnum::Bash(bash) => {
+                start_unix_shell(
+                    bash,
+                    vec!["-i"],
+                    env,
+                    prompt_hook,
+                    &prefix,
+                    source_shell_completions,
+                )
+                .await
+            }
+            ShellEnum::Zsh(zsh) => {
+                start_unix_shell(
+                    zsh,
+                    vec!["-i"],
+                    env,
+                    prompt_hook,
+                    &prefix,
+                    source_shell_completions,
+                )
+                .await
+            }
+            ShellEnum::Fish(fish) => {
+                start_unix_shell(
+                    fish,
+                    vec![],
+                    env,
+                    prompt_hook,
+                    &prefix,
+                    source_shell_completions,
+                )
+                .await
+            }
+            ShellEnum::Xonsh(xonsh) => {
+                start_unix_shell(
+                    xonsh,
+                    vec![],
+                    env,
+                    prompt_hook,
+                    &prefix,
+                    source_shell_completions,
+                )
+                .await
+            }
+            _ => {
+                miette::bail!("Unsupported shell: {:?}", interactive_shell)
+            }
         }
     };
 

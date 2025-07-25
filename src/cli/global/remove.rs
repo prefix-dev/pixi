@@ -12,13 +12,12 @@ use std::str::FromStr;
 ///
 /// Use `pixi global uninstall` to remove the whole environment
 ///
-/// Example:
-/// - pixi global remove --environment python numpy
+/// Example: `pixi global remove --environment python numpy`
 #[derive(Parser, Debug)]
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
-    /// Specifies the packages that are to be removed.
-    #[arg(num_args = 1.., required = true)]
+    /// Specifies the package that should be removed.
+    #[arg(num_args = 1.., required = true, value_name = "PACKAGE")]
     packages: Vec<String>,
 
     /// Specifies the environment that the dependencies need to be removed from.
@@ -37,7 +36,10 @@ impl HasSpecs for Args {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let Some(env_name) = &args.environment else {
-        miette::bail!("`--environment` is required. Try `pixi global uninstall {}` if you want to delete whole environments", args.packages.join(" "));
+        miette::bail!(
+            "`--environment` is required. Try `pixi global uninstall {}` if you want to delete whole environments",
+            args.packages.join(" ")
+        );
     };
     let config = Config::with_cli_config(&args.config);
     let project_original = Project::discover_or_create()
@@ -45,7 +47,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_cli_config(config.clone());
 
     if project_original.environment(env_name).is_none() {
-        miette::bail!("Environment {} doesn't exist. You can create a new environment with `pixi global install`.", env_name);
+        miette::bail!(
+            "Environment {} doesn't exist. You can create a new environment with `pixi global install`.",
+            env_name
+        );
     }
 
     async fn apply_changes(
@@ -56,9 +61,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // Remove specs from the manifest
         let mut removed_dependencies = vec![];
         for spec in specs {
+            let package_name = spec.name.as_ref().expect("package name should be present");
             project
                 .manifest
-                .remove_dependency(env_name, spec)
+                .remove_dependency(env_name, package_name)
                 .map(|removed_name| removed_dependencies.push(removed_name))?;
         }
 
@@ -109,12 +115,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             state_changes.report();
         }
         Err(err) => {
-            revert_environment_after_error(env_name, &project_original)
-                .await
-                .wrap_err(format!(
-                    "Could not remove {:?}. Reverting also failed.",
-                    args.packages
-                ))?;
+            if let Err(revert_err) =
+                revert_environment_after_error(env_name, &project_original).await
+            {
+                tracing::warn!("Reverting of the operation failed");
+                tracing::info!("Reversion error: {:?}", revert_err);
+            }
             return Err(err);
         }
     }

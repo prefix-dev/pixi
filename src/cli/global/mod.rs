@@ -5,9 +5,11 @@ use crate::global::{self, EnvironmentName};
 mod add;
 mod edit;
 mod expose;
+mod global_specs;
 mod install;
 mod list;
 mod remove;
+mod shortcut;
 mod sync;
 mod uninstall;
 mod update;
@@ -31,6 +33,8 @@ pub enum Command {
     #[clap(visible_alias = "e")]
     #[command(subcommand)]
     Expose(expose::SubCommand),
+    #[command(subcommand)]
+    Shortcut(shortcut::SubCommand),
     Update(update::Args),
     #[command(hide = true)]
     Upgrade(upgrade::Args),
@@ -39,12 +43,10 @@ pub enum Command {
     UpgradeAll(upgrade_all::Args),
 }
 
-/// Subcommand for global package management actions
+/// Subcommand for global package management actions.
 ///
 /// Install packages on the user level.
-/// Example:
-///    pixi global install my_package
-///    pixi global remove my_package
+/// Into to the [`$PIXI_HOME`] directory, which defaults to `~/.pixi`.
 #[derive(Debug, Parser)]
 pub struct Args {
     #[command(subcommand)]
@@ -61,6 +63,7 @@ pub async fn execute(cmd: Args) -> miette::Result<()> {
         Command::List(args) => list::execute(args).await?,
         Command::Sync(args) => sync::execute(args).await?,
         Command::Expose(subcommand) => expose::execute(subcommand).await?,
+        Command::Shortcut(subcommand) => shortcut::execute(subcommand).await?,
         Command::Update(args) => update::execute(args).await?,
         Command::Upgrade(args) => upgrade::execute(args).await?,
         Command::UpgradeAll(args) => upgrade_all::execute(args).await?,

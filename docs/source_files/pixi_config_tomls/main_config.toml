@@ -3,9 +3,6 @@
 default-channels = ["conda-forge"]
 # --8<-- [end:default-channels]
 
-# --8<-- [start:change-ps1]
-change-ps1 = true
-# --8<-- [end:change-ps1]
 
 # --8<-- [start:tls-no-verify]
 tls-no-verify = false
@@ -22,6 +19,14 @@ detached-environments = true
 #  --8<-- [start:pinning-strategy]
 pinning-strategy = "no-pin"
 #  --8<-- [end:pinning-strategy]
+
+#  --8<-- [start:run-post-link-scripts]
+run-post-link-scripts = "false" # set to "insecure" to allow running post-link scripts
+#  --8<-- [end:run-post-link-scripts]
+
+#  --8<-- [start:tool-platform]
+tool-platform = "win-64" # force tools like build backends to be installed for a specific platform
+#  --8<-- [end:tool-platform]
 
 #  --8<-- [start:repodata-config]
 [repodata-config]
@@ -90,3 +95,10 @@ use-environment-activation-cache = true
   "https://prefix.dev/bioconda",
 ]
 #  --8<-- [end:mirrors]
+
+# --8<-- [start:shell]
+[shell]
+change-ps1 = false
+force-activate = true
+source-completion-scripts = false
+# --8<-- [end:shell]

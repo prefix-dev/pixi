@@ -33,6 +33,10 @@ UnsignedInt = Annotated[int, Field(strict=True, ge=0)]
 GitUrl = Annotated[
     str, StringConstraints(pattern=r"((git|ssh|http(s)?)|(git@[\w\.]+))(:(\/\/)?)([\w\.@:\/\\-~]+)")
 ]
+ExcludeNewer = Annotated[
+    str,
+    StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2}))?$"),
+]
 
 
 def hyphenize(field: str):
@@ -68,6 +72,12 @@ class StrictBaseModel(BaseModel):
     class Config:
         extra = "forbid"
         alias_generator = hyphenize
+
+
+class WorkspaceInheritance(StrictBaseModel):
+    """Indicates that a field should inherit its value from the workspace."""
+
+    workspace: Literal[True] = Field(description="Must be true to inherit from workspace")
 
 
 ###################
@@ -120,7 +130,6 @@ class Workspace(StrictBaseModel):
         None, description="The authors of the project", examples=["John Doe <j.doe@prefix.dev>"]
     )
     channels: list[Channel] = Field(
-        None,
         description="The `conda` channels that can be used in the project. Unless overridden by `priority`, the first channel listed will be preferred.",
     )
     channel_priority: ChannelPriority | None = Field(
@@ -130,7 +139,14 @@ class Workspace(StrictBaseModel):
         "- 'strict': only take the package from the channel it exist in first."
         "- 'disabled': group all dependencies together as if there is no channel difference.",
     )
-    platforms: list[Platform] = Field(description="The platforms that the project supports")
+    exclude_newer: ExcludeNewer | None = Field(
+        None,
+        examples=["2023-11-03", "2023-11-03T03:33:12Z"],
+        description="Exclude any package newer than this date",
+    )
+    platforms: list[Platform] | None = Field(
+        None, description="The platforms that the project supports"
+    )
     license: NonEmptyStr | None = Field(
         None,
         description="The license of the project; we advise using an [SPDX](https://spdx.org/licenses/) identifier.",
@@ -163,6 +179,11 @@ class Workspace(StrictBaseModel):
     build_variants: dict[NonEmptyStr, list[str]] | None = Field(
         None, description="The build variants of the project"
     )
+    requires_pixi: NonEmptyStr | None = Field(
+        None,
+        description="The required version spec for pixi itself to resolve and build the project.",
+        examples=[">=0.40"],
+    )
 
 
 ########################
@@ -191,6 +212,7 @@ class MatchspecTable(StrictBaseModel):
     subdir: NonEmptyStr | None = Field(
         None, description="The subdir of the package, also known as platform"
     )
+    license: NonEmptyStr | None = Field(None, description="The license of the package")
 
     path: NonEmptyStr | None = Field(None, description="The path to the package")
 
@@ -305,12 +327,29 @@ Dependencies = dict[CondaPackageName, MatchSpec] | None
 TaskName = Annotated[str, Field(pattern=r"^[^\s\$]+$", description="A valid task name.")]
 
 
+class TaskArgs(StrictBaseModel):
+    """The arguments of a task."""
+
+    arg: NonEmptyStr
+    default: str | None = Field(None, description="The default value of the argument")
+
+
+class DependsOn(StrictBaseModel):
+    """The dependencies of a task."""
+
+    task: TaskName
+    args: list[NonEmptyStr] | None = Field(None, description="The arguments to pass to the task")
+    environment: EnvironmentName | None = Field(
+        None, description="The environment to use for the task"
+    )
+
+
 class TaskInlineTable(StrictBaseModel):
     """A precise definition of a task."""
 
     cmd: list[NonEmptyStr] | NonEmptyStr | None = Field(
         None,
-        description="A shell command to run the task in the limited, but cross-platform `bash`-like `deno_task_shell`. See the documentation for [supported syntax](https://pixi.sh/latest/features/advanced_tasks/#syntax)",
+        description="A shell command to run the task in the limited, but cross-platform `bash`-like `deno_task_shell`. See the documentation for [supported syntax](https://pixi.sh/latest/environments/advanced_tasks/#syntax)",
     )
     cwd: PathNoBackslash | None = Field(None, description="The working directory to run the task")
     # BREAK: `depends_on` is deprecated, use `depends-on`
@@ -319,7 +358,7 @@ class TaskInlineTable(StrictBaseModel):
         alias="depends_on",
         description="The tasks that this task depends on. Environment variables will **not** be expanded. Deprecated in favor of `depends-on` from v0.21.0 onward.",
     )
-    depends_on: list[TaskName] | TaskName | None = Field(
+    depends_on: list[DependsOn | TaskName] | DependsOn | TaskName | None = Field(
         None,
         description="The tasks that this task depends on. Environment variables will **not** be expanded.",
     )
@@ -344,6 +383,11 @@ class TaskInlineTable(StrictBaseModel):
     clean_env: bool | None = Field(
         None,
         description="Whether to run in a clean environment, removing all environment variables except those defined in `env` and by pixi itself.",
+    )
+    args: list[TaskArgs | NonEmptyStr] | None = Field(
+        None,
+        description="The arguments to pass to the task",
+        examples=["arg1", "arg2"],
     )
 
 
@@ -433,7 +477,7 @@ class Target(StrictBaseModel):
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies for this target"
     )
-    tasks: dict[TaskName, TaskInlineTable | NonEmptyStr] | None = Field(
+    tasks: dict[TaskName, TaskInlineTable | list[DependsOn] | NonEmptyStr] | None = Field(
         None, description="The tasks of the target"
     )
     activation: Activation | None = Field(
@@ -468,7 +512,7 @@ class Feature(StrictBaseModel):
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies of this feature"
     )
-    tasks: dict[TaskName, TaskInlineTable | NonEmptyStr] | None = Field(
+    tasks: dict[TaskName, TaskInlineTable | list[DependsOn] | NonEmptyStr] | None = Field(
         None, description="The tasks provided by this feature"
     )
     activation: Activation | None = Field(
@@ -544,10 +588,10 @@ class PyPIOptions(StrictBaseModel):
         description="Paths to directory containing",
         examples=[["https://pypi.org/simple"]],
     )
-    no_build_isolation: list[PyPIPackageName] = Field(
+    no_build_isolation: bool | list[PyPIPackageName] | None = Field(
         None,
         description="Packages that should NOT be isolated during the build process",
-        examples=[["numpy"]],
+        examples=[["numpy"], True],
     )
     index_strategy: (
         Literal["first-index"] | Literal["unsafe-first-match"] | Literal["unsafe-best-match"] | None
@@ -561,6 +605,18 @@ class PyPIOptions(StrictBaseModel):
         description="Packages that should NOT be built",
         examples=["true", "false"],
     )
+    dependency_overrides: dict[PyPIPackageName, PyPIRequirement] | None = Field(
+        None,
+        description="A list of PyPI dependencies that override the resolved dependencies",
+        examples=[
+            {"numpy": ">=1.21.0"},
+        ],
+    )
+    no_binary: bool | list[PyPIPackageName] | None = Field(
+        None,
+        description="Don't use pre-built wheels for these packages",
+        examples=["true", "false"],
+    )
 
 
 #######################
@@ -571,32 +627,47 @@ class PyPIOptions(StrictBaseModel):
 class Package(StrictBaseModel):
     """The package's metadata information."""
 
-    name: NonEmptyStr | None = Field(None, description="The name of the package")
-    version: NonEmptyStr | None = Field(
+    name: NonEmptyStr | WorkspaceInheritance | None = Field(
         None,
-        description="The version of the project; we advise use of [SemVer](https://semver.org)",
-        examples=["1.2.3"],
+        description="The name of the package. Can be a string or { workspace = true } to inherit from workspace",
     )
-    description: NonEmptyStr | None = Field(None, description="A short description of the project")
-    authors: list[NonEmptyStr] | None = Field(
-        None, description="The authors of the project", examples=["John Doe <j.doe@prefix.dev>"]
-    )
-    license: NonEmptyStr | None = Field(
+    version: NonEmptyStr | WorkspaceInheritance | None = Field(
         None,
-        description="The license of the project; we advise using an [SPDX](https://spdx.org/licenses/) identifier.",
+        description="The version of the project; we advise use of [SemVer](https://semver.org). Can be a string or { workspace = true } to inherit from workspace",
+        examples=["1.2.3", {"workspace": True}],
     )
-    license_file: PathNoBackslash | None = Field(
-        None, description="The path to the license file of the project"
+    description: NonEmptyStr | WorkspaceInheritance | None = Field(
+        None,
+        description="A short description of the project. Can be a string or { workspace = true } to inherit from workspace",
     )
-    readme: PathNoBackslash | None = Field(
-        None, description="The path to the readme file of the project"
+    authors: list[NonEmptyStr] | WorkspaceInheritance | None = Field(
+        None,
+        description="The authors of the project. Can be a list of strings or { workspace = true } to inherit from workspace",
+        examples=[["John Doe <j.doe@prefix.dev>"], {"workspace": True}],
     )
-    homepage: AnyHttpUrl | None = Field(None, description="The URL of the homepage of the project")
-    repository: AnyHttpUrl | None = Field(
-        None, description="The URL of the repository of the project"
+    license: NonEmptyStr | WorkspaceInheritance | None = Field(
+        None,
+        description="The license of the project; we advise using an [SPDX](https://spdx.org/licenses/) identifier. Can be a string or { workspace = true } to inherit from workspace",
     )
-    documentation: AnyHttpUrl | None = Field(
-        None, description="The URL of the documentation of the project"
+    license_file: PathNoBackslash | WorkspaceInheritance | None = Field(
+        None,
+        description="The path to the license file of the project. Can be a path or { workspace = true } to inherit from workspace",
+    )
+    readme: PathNoBackslash | WorkspaceInheritance | None = Field(
+        None,
+        description="The path to the readme file of the project. Can be a path or { workspace = true } to inherit from workspace",
+    )
+    homepage: AnyHttpUrl | WorkspaceInheritance | None = Field(
+        None,
+        description="The URL of the homepage of the project. Can be a URL or { workspace = true } to inherit from workspace",
+    )
+    repository: AnyHttpUrl | WorkspaceInheritance | None = Field(
+        None,
+        description="The URL of the repository of the project. Can be a URL or { workspace = true } to inherit from workspace",
+    )
+    documentation: AnyHttpUrl | WorkspaceInheritance | None = Field(
+        None,
+        description="The URL of the documentation of the project. Can be a URL or { workspace = true } to inherit from workspace",
     )
 
     build: Build = Field(..., description="The build configuration of the package")
@@ -673,7 +744,7 @@ class BaseManifest(StrictBaseModel):
         None, description="The PyPI dependencies"
     )
     pypi_options: PyPIOptions | None = Field(None, description="Options related to PyPI indexes")
-    tasks: dict[TaskName, TaskInlineTable | NonEmptyStr] | None = Field(
+    tasks: dict[TaskName, TaskInlineTable | list[DependsOn] | NonEmptyStr] | None = Field(
         None, description="The tasks of the project"
     )
     system_requirements: SystemRequirements | None = Field(

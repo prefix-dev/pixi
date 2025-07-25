@@ -1,20 +1,19 @@
-use std::io::stdout;
-
 use fancy_display::FancyDisplay;
-use human_bytes::human_bytes;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use pixi_consts::consts;
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{PackageName, PackageRecord, PrefixRecord, Version};
+use rattler_conda_types::{PackageName, PrefixRecord, Version};
 use serde::Serialize;
-use std::io::Write;
 
-use miette::{miette, IntoDiagnostic};
+use miette::{IntoDiagnostic, miette};
 
-use crate::global::common::find_package_records;
+use crate::{
+    environment::list::{PackageToOutput, print_package_table},
+    global::common::find_package_records,
+};
 
-use super::{project::ParsedEnvironment, EnvChanges, EnvState, EnvironmentName, Mapping, Project};
+use super::{EnvChanges, EnvState, EnvironmentName, Mapping, Project, project::ParsedEnvironment};
 
 /// Sorting strategy for the package table
 #[derive(clap::ValueEnum, Clone, Debug, Serialize, Default)]
@@ -31,13 +30,13 @@ pub fn format_asciiart_section(label: &str, content: String, last: bool, more: b
     format!("\n{}   {}─ {}: {}", prefix, symbol, label, content)
 }
 
-pub fn format_exposed(exposed: &IndexSet<Mapping>, last: bool) -> Option<String> {
+pub fn format_exposed(exposed: &IndexSet<Mapping>, last: bool, more: bool) -> Option<String> {
     if exposed.is_empty() {
         Some(format_asciiart_section(
             "exposes",
             console::style("Nothing").dim().red().to_string(),
             last,
-            false,
+            more,
         ))
     } else {
         let formatted_exposed = exposed.iter().map(format_mapping).join(", ");
@@ -45,7 +44,7 @@ pub fn format_exposed(exposed: &IndexSet<Mapping>, last: bool) -> Option<String>
             "exposes",
             formatted_exposed,
             last,
-            false,
+            more,
         ))
     }
 }
@@ -86,58 +85,13 @@ fn print_meta_info(environment: &ParsedEnvironment) {
     }
 
     // Print platform
-    if let Some(platform) = environment.platform() {
+    if let Some(platform) = environment.platform {
         println!("{} {}", console::style("Platform:").bold().cyan(), platform);
     }
 }
 
-/// Create a human-readable representation of the global environment.
-/// Using a tabwriter to align the columns.
-fn print_package_table(packages: Vec<PackageToOutput>) -> Result<(), std::io::Error> {
-    let mut writer = tabwriter::TabWriter::new(stdout());
-    let header_style = console::Style::new().bold().cyan();
-    let header = format!(
-        "{}\t{}\t{}\t{}",
-        header_style.apply_to("Package"),
-        header_style.apply_to("Version"),
-        header_style.apply_to("Build"),
-        header_style.apply_to("Size"),
-    );
-    writeln!(writer, "{}", &header)?;
-
-    for package in packages {
-        // Convert size to human-readable format
-        let size_human = package
-            .size_bytes
-            .map(|size| human_bytes(size as f64))
-            .unwrap_or_default();
-
-        let package_info = format!(
-            "{}\t{}\t{}\t{}",
-            package.name.as_normalized(),
-            &package.version,
-            package.build.as_deref().unwrap_or(""),
-            size_human
-        );
-
-        writeln!(
-            writer,
-            "{}",
-            if package.is_explicit {
-                console::style(package_info).green().to_string()
-            } else {
-                package_info
-            }
-        )?;
-    }
-
-    writeln!(writer, "{}", header)?;
-
-    writer.flush()
-}
-
-/// List package and binaries in environment
-pub async fn list_environment(
+/// List package and binaries in global environment
+pub async fn list_specific_global_environment(
     project: &Project,
     environment_name: &EnvironmentName,
     sort_by: GlobalSortBy,
@@ -157,16 +111,17 @@ pub async fn list_environment(
     )
     .await?;
 
-    let mut packages_to_output: Vec<PackageToOutput> = records
+    let mut packages_to_output = records
         .iter()
         .map(|record| {
             PackageToOutput::new(
                 &record.repodata_record.package_record,
-                env.dependencies()
+                env.dependencies
+                    .specs
                     .contains_key(&record.repodata_record.package_record.name),
             )
         })
-        .collect();
+        .collect_vec();
 
     // Filter according to the regex
     if let Some(ref regex) = regex {
@@ -201,18 +156,18 @@ pub async fn list_environment(
     }
     println!("{}", output_message);
     print_package_table(packages_to_output).into_diagnostic()?;
-    println!();
     print_meta_info(env);
 
     Ok(())
 }
 
 /// List all environments in the global environment
-pub async fn list_global_environments(
+pub async fn list_all_global_environments(
     project: &Project,
     envs: Option<Vec<EnvironmentName>>,
     envs_changes: Option<&EnvChanges>,
     regex: Option<String>,
+    show_header: bool,
 ) -> miette::Result<()> {
     let mut project_envs = project.environments().clone();
     project_envs.sort_by(|a, _, b, _| a.to_string().cmp(&b.to_string()));
@@ -262,14 +217,15 @@ pub async fn list_global_environments(
                 EnvState::Installed => {
                     format!("({})", console::style("installed".to_string()).green())
                 }
-                EnvState::NotChanged(ref reason) => {
+                EnvState::NotChanged(reason) => {
                     format!("({})", reason.fancy_display())
                 }
             })
-            .unwrap_or("".to_string());
+            .unwrap_or_default();
 
         if !env
-            .dependencies()
+            .dependencies
+            .specs
             .iter()
             .any(|(pkg_name, _spec)| pkg_name.as_normalized() != env_name.as_str())
         {
@@ -302,9 +258,22 @@ pub async fn list_global_environments(
             message.push_str(&dep_message);
         }
 
+        // Check for shortcuts
+        let shortcuts = env.shortcuts.clone().unwrap_or_else(IndexSet::new);
+
         // Write exposed binaries
-        if let Some(exp_message) = format_exposed(env.exposed(), last) {
+        if let Some(exp_message) = format_exposed(&env.exposed, last, !shortcuts.is_empty()) {
             message.push_str(&exp_message);
+        }
+
+        // Write shortcuts
+        if !shortcuts.is_empty() {
+            message.push_str(&format_asciiart_section(
+                "shortcuts",
+                shortcuts.iter().map(PackageName::as_normalized).join(", "),
+                last,
+                false,
+            ));
         }
 
         if !last {
@@ -314,11 +283,14 @@ pub async fn list_global_environments(
     if message.is_empty() {
         println!("No global environments found.");
     } else {
-        println!(
-            "Global environments as specified in '{}'\n{}",
-            console::style(project.manifest.path.display()).bold(),
-            message
+        let header = format!(
+            "Global environments as specified in '{}'",
+            project.manifest.path.display()
         );
+        if show_header {
+            println!("{}", header);
+        }
+        println!("{}", message);
     }
 
     Ok(())
@@ -364,26 +336,5 @@ fn format_dependencies(
         Some(format_asciiart_section("dependencies", content, last, more))
     } else {
         None
-    }
-}
-
-#[derive(Serialize, Hash, Eq, PartialEq)]
-struct PackageToOutput {
-    name: PackageName,
-    version: Version,
-    build: Option<String>,
-    size_bytes: Option<u64>,
-    is_explicit: bool,
-}
-
-impl PackageToOutput {
-    fn new(record: &PackageRecord, is_explicit: bool) -> Self {
-        Self {
-            name: record.name.clone(),
-            version: record.version.version().clone(),
-            build: Some(record.build.clone()),
-            size_bytes: record.size,
-            is_explicit,
-        }
     }
 }

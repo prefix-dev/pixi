@@ -15,6 +15,7 @@ use std::{
     fmt::{Debug, Formatter},
     hash::Hash,
     path::{Path, PathBuf},
+    str::FromStr,
     sync::Arc,
 };
 
@@ -24,33 +25,40 @@ pub use environment::Environment;
 pub use has_project_ref::HasWorkspaceRef;
 use indexmap::Equivalent;
 use itertools::Itertools;
-use miette::IntoDiagnostic;
+use miette::{Context, IntoDiagnostic};
 use once_cell::sync::OnceCell;
 use pep508_rs::Requirement;
-use pixi_config::Config;
+use pixi_build_frontend::BackendOverride;
+use pixi_command_dispatcher::{CacheDirs, CommandDispatcher, CommandDispatcherBuilder, Limits};
+use pixi_config::{Config, RunPostLinkScripts};
 use pixi_consts::consts;
 use pixi_manifest::{
-    pypi::PyPiPackageName, AssociateProvenance, EnvironmentName, Environments,
+    AssociateProvenance, EnvironmentName, Environments, ExplicitManifestError,
     HasWorkspaceManifest, LoadManifestsError, ManifestProvenance, Manifests, PackageManifest,
     SpecType, WithProvenance, WithWarnings, WorkspaceManifest,
 };
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::SourceSpec;
 use pixi_utils::reqwest::build_reqwest_clients;
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
-use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform};
+use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform, Version};
 use rattler_lock::{LockFile, LockedPackageRef};
 use rattler_networking::s3_middleware;
 use rattler_repodata_gateway::Gateway;
+use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use reqwest_middleware::ClientWithMiddleware;
 pub use solve_group::SolveGroup;
-use url::{ParseError, Url};
+use tokio::sync::Semaphore;
+use url::Url;
 pub use workspace_mut::WorkspaceMut;
 use xxhash_rust::xxh3::xxh3_64;
 
 use crate::{
-    activation::{initialize_env_variables, CurrentEnvVarBehavior},
+    activation::{CurrentEnvVarBehavior, initialize_env_variables},
     diff::LockFileDiff,
     lock_file::filter_lock_file,
+    repodata::Repodata,
+    variants::VariantConfig,
 };
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
@@ -126,6 +134,11 @@ pub struct Workspace {
     /// Root folder of the workspace
     root: PathBuf,
 
+    /// The name of the workspace based on the location of the workspace.
+    /// This is used to determine the name of the workspace when no name is
+    /// specified.
+    manifest_location_name: Option<String>,
+
     /// Reqwest client shared for this workspace.
     /// This is wrapped in a `OnceLock` to allow for lazy initialization.
     // TODO: once https://github.com/rust-lang/rust/issues/109737 is stabilized, switch to OnceLock
@@ -153,8 +166,12 @@ pub struct Workspace {
 
     /// The global configuration as loaded from the config file(s)
     config: Config,
+
     /// The S3 configuration
     s3_config: HashMap<String, s3_middleware::S3Config>,
+
+    /// The concurrent request semaphore
+    concurrent_downloads_semaphore: OnceCell<Arc<Semaphore>>,
 }
 
 impl Debug for Workspace {
@@ -168,8 +185,12 @@ impl Debug for Workspace {
 }
 
 pub type PypiDeps = indexmap::IndexMap<
-    PyPiPackageName,
-    (Requirement, Option<pixi_manifest::PypiDependencyLocation>),
+    PypiPackageName,
+    (
+        Requirement,
+        Option<PixiPypiSpec>,
+        Option<pixi_manifest::PypiDependencyLocation>,
+    ),
 >;
 
 pub type MatchSpecs = indexmap::IndexMap<PackageName, (MatchSpec, SpecType)>;
@@ -182,11 +203,15 @@ impl Workspace {
         // Canonicalize the root path
         let root = &manifest.workspace.provenance.path;
         let root = dunce::canonicalize(root).unwrap_or(root.to_path_buf());
-        // Take the parent after canonicalizing to ensure this works even when the manifest
+        // Take the parent after canonicalizing to ensure this works even when the
+        // manifest
         let root = root
             .parent()
             .expect("manifest path should always have a parent")
             .to_owned();
+
+        // Determine the name of the workspace based on the location of the manifest.
+        let manifest_location_name = root.file_name().map(|p| p.to_string_lossy().into_owned());
 
         let s3_options = manifest.workspace.value.workspace.s3_options.clone();
         let s3_config = s3_options
@@ -207,6 +232,7 @@ impl Workspace {
         let config = Config::load(&root);
         Self {
             root,
+            manifest_location_name,
             client: Default::default(),
             workspace: manifest.workspace,
             package: manifest.package,
@@ -215,6 +241,7 @@ impl Workspace {
             config,
             s3_config,
             repodata_gateway: Default::default(),
+            concurrent_downloads_semaphore: OnceCell::default(),
         }
     }
 
@@ -261,9 +288,22 @@ impl Workspace {
         WorkspaceMut::new(self)
     }
 
-    /// Returns the name of the workspace
-    pub fn name(&self) -> &str {
-        &self.workspace.value.workspace.name
+    /// Returns the display name of the workspace. This name should be used to
+    /// provide context to a user.
+    ///
+    /// This is the name of the workspace as defined in the manifest, or if no
+    /// name is specified the name of the root directory of the workspace.
+    ///
+    /// If the name of the root directory could not be determined, "workspace"
+    /// is used as a fallback.
+    pub fn display_name(&self) -> &str {
+        self.workspace
+            .value
+            .workspace
+            .name
+            .as_deref()
+            .or(self.manifest_location_name.as_deref())
+            .unwrap_or("workspace")
     }
 
     /// Returns the root directory of the workspace
@@ -282,7 +322,7 @@ impl Workspace {
         if let Ok(Some(detached_environments_path)) = self.config().detached_environments().path() {
             Some(detached_environments_path.join(format!(
                 "{}-{}",
-                self.name(),
+                self.display_name(),
                 xxh3_64(self.root.to_string_lossy().as_bytes())
             )))
         } else {
@@ -311,7 +351,7 @@ impl Workspace {
             let detached_environments_path =
                 detached_environments_path.join(consts::ENVIRONMENTS_DIR);
             let _ = CUSTOM_TARGET_DIR_WARN.get_or_init(|| {
-                if default_envs_dir.exists() && !default_envs_dir.is_symlink() {
+                if !default_envs_dir.is_symlink() && self.environments().iter().any(|env| default_envs_dir.join(env.name().as_str()).exists()) {
                     tracing::warn!(
                         "Environments found in '{}', this will be ignored and the environment will be installed in the 'detached-environments' directory: '{}'. It's advised to remove the {} folder from the default directory to avoid confusion{}.",
                         default_envs_dir.display(),
@@ -425,15 +465,87 @@ impl Workspace {
             })
     }
 
-    /// Returns the reqwest client used for http networking
-    pub(crate) fn client(&self) -> miette::Result<&reqwest::Client> {
-        Ok(&self.client_and_authenticated_client()?.0)
+    /// Returns the resolved variant configuration for a given platform.
+    pub fn variants(&self, platform: Platform) -> VariantConfig {
+        let mut result = VariantConfig::new();
+
+        // Resolves from most specific to least specific.
+        for variants in self
+            .workspace
+            .value
+            .workspace
+            .build_variants
+            .resolve(Some(platform))
+            .flatten()
+        {
+            // Update the hash map, but only items that are not already in the map.
+            for (key, value) in variants {
+                result.entry(key.clone()).or_insert_with(|| value.clone());
+            }
+        }
+
+        result
     }
+
+    // /// Returns the reqwest client used for http networking
+    // /// this api is not used now, uncomment when use in the future
+    // pub(crate) fn client(&self) -> miette::Result<&reqwest::Client> {
+    //     Ok(&self.client_and_authenticated_client()?.0)
+    // }
 
     /// Create an authenticated reqwest client for this project
     /// use authentication from `rattler_networking`
     pub fn authenticated_client(&self) -> miette::Result<&ClientWithMiddleware> {
         Ok(&self.client_and_authenticated_client()?.1)
+    }
+
+    /// Returns a semaphore than can be used to limit the number of concurrent
+    /// according to the user configuration.
+    pub fn concurrent_downloads_semaphore(&self) -> Arc<Semaphore> {
+        self.concurrent_downloads_semaphore
+            .get_or_init(|| {
+                let max_concurrent_downloads = self.config().max_concurrent_downloads();
+                Arc::new(Semaphore::new(max_concurrent_downloads))
+            })
+            .clone()
+    }
+
+    /// Returns a pre-filled command dispatcher builder that can be used to
+    /// construct a [`pixi_command_dispatcher::CommandDispatcher`].
+    pub fn command_dispatcher_builder(&self) -> miette::Result<CommandDispatcherBuilder> {
+        let cache_dirs =
+            CacheDirs::new(pixi_config::get_cache_dir()?).with_workspace(self.pixi_dir());
+
+        // Determine the tool platform to use
+        let tool_platform = self.config().tool_platform();
+        let tool_virtual_packages =
+            if tool_platform.only_platform() == Platform::current().only_platform() {
+                // If the tool platform is the same as the current platform, we just assume the
+                // same virtual packages apply.
+                VirtualPackages::detect(&VirtualPackageOverrides::from_env())
+                    .unwrap_or_default()
+                    .into_generic_virtual_packages()
+                    .collect()
+            } else {
+                vec![]
+            };
+
+        Ok(CommandDispatcher::builder()
+            .with_gateway(self.repodata_gateway()?.clone())
+            .with_cache_dirs(cache_dirs)
+            .with_root_dir(self.root().to_path_buf())
+            .with_download_client(self.authenticated_client()?.clone())
+            .with_max_download_concurrency(self.concurrent_downloads_semaphore())
+            .with_limits(Limits {
+                max_concurrent_solves: self.config().max_concurrent_solves().into(),
+                ..Limits::default()
+            })
+            .with_backend_overrides(BackendOverride::from_env()?.unwrap_or_default())
+            .execute_link_scripts(match self.config.run_post_link_scripts() {
+                RunPostLinkScripts::Insecure => true,
+                RunPostLinkScripts::False => false,
+            })
+            .with_tool_platform(tool_platform, tool_virtual_packages))
     }
 
     fn client_and_authenticated_client(
@@ -533,18 +645,32 @@ impl Workspace {
                     let mapping = channel_to_location_map
                         .iter()
                         .map(|(channel, mapping_location)| {
-                            let url_or_path = match Url::parse(mapping_location) {
-                                Ok(url) => MappingLocation::Url(url),
-                                Err(err) => {
-                                    if let ParseError::RelativeUrlWithoutBase = err {
-                                        MappingLocation::Path(PathBuf::from(mapping_location))
-                                    } else {
-                                        miette::bail!("Could not convert {mapping_location} to neither URL or Path")
+                            let url_or_path = if mapping_location.starts_with("https://")
+                                || mapping_location.starts_with("http://")
+                                || mapping_location.starts_with("file://")
+                            {
+                                match Url::parse(mapping_location) {
+                                    Ok(url) => MappingLocation::Url(url),
+                                    Err(err) => {
+                                        return Err(err).into_diagnostic().context(format!(
+                                            "Could not convert {mapping_location} to URL"
+                                        ));
                                     }
                                 }
+                            } else {
+                                let path = PathBuf::from(mapping_location);
+                                let abs_path = if path.is_relative() {
+                                    channel_config.root_dir.join(path)
+                                } else {
+                                    path
+                                };
+                                MappingLocation::Path(abs_path)
                             };
 
-                            Ok((channel.canonical_name().trim_end_matches('/').into(), url_or_path))
+                            Ok((
+                                channel.canonical_name().trim_end_matches('/').into(),
+                                url_or_path,
+                            ))
                         })
                         .collect::<miette::Result<HashMap<ChannelName, MappingLocation>>>()?;
 
@@ -579,6 +705,18 @@ impl Workspace {
                 true
             }
         })
+    }
+
+    /// Verify the pixi version requirement.
+    pub fn verify_current_pixi_meets_requirement(&self) -> Result<(), ExplicitManifestError> {
+        if let Some(ref requires_pixi) = self.workspace.value.workspace.requires_pixi {
+            if !requires_pixi.matches(&Version::from_str(consts::PIXI_VERSION)?) {
+                return Err(ExplicitManifestError::SelfVersionMatchError {
+                    requires_pixi: requires_pixi.clone(),
+                });
+            }
+        }
+        Ok(())
     }
 }
 
@@ -788,6 +926,57 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_workspace_name_when_specified() {
+        const WORKSPACE_STR: &str = r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        "#;
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let workspace = Workspace::from_str(
+            &temp_dir.path().join(consts::WORKSPACE_MANIFEST),
+            WORKSPACE_STR,
+        )
+        .unwrap();
+        assert_eq!(workspace.display_name(), "foo");
+    }
+
+    #[test]
+    fn test_workspace_name_when_unspecified() {
+        const WORKSPACE_STR: &str = r#"
+        [workspace]
+        channels = []
+        "#;
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let workspace = Workspace::from_str(
+            &temp_dir
+                .path()
+                .join("foobar")
+                .join(consts::WORKSPACE_MANIFEST),
+            WORKSPACE_STR,
+        )
+        .unwrap();
+        assert_eq!(workspace.display_name(), "foobar");
+    }
+
+    #[test]
+    fn test_workspace_name_when_undefined() {
+        const WORKSPACE_STR: &str = r#"
+        [workspace]
+        channels = []
+        "#;
+
+        let workspace = Workspace::from_str(
+            &Path::new("/").join(consts::WORKSPACE_MANIFEST),
+            WORKSPACE_STR,
+        )
+        .unwrap();
+        assert_eq!(workspace.display_name(), "workspace");
+    }
+
     fn format_dependencies(deps: pixi_manifest::CondaDependencies) -> String {
         deps.iter_specs()
             .map(|(name, spec)| format!("{} = {}", name.as_source(), spec.to_toml_value()))
@@ -958,21 +1147,27 @@ mod tests {
         )
         .unwrap();
 
-        assert_debug_snapshot!(workspace
-            .workspace
-            .value
-            .tasks(Some(Platform::Osx64), &FeatureName::Default)
-            .unwrap());
-        assert_debug_snapshot!(workspace
-            .workspace
-            .value
-            .tasks(Some(Platform::Win64), &FeatureName::Default)
-            .unwrap());
-        assert_debug_snapshot!(workspace
-            .workspace
-            .value
-            .tasks(Some(Platform::Linux64), &FeatureName::Default)
-            .unwrap());
+        assert_debug_snapshot!(
+            workspace
+                .workspace
+                .value
+                .tasks(Some(Platform::Osx64), &FeatureName::DEFAULT)
+                .unwrap()
+        );
+        assert_debug_snapshot!(
+            workspace
+                .workspace
+                .value
+                .tasks(Some(Platform::Win64), &FeatureName::DEFAULT)
+                .unwrap()
+        );
+        assert_debug_snapshot!(
+            workspace
+                .workspace
+                .value
+                .tasks(Some(Platform::Linux64), &FeatureName::DEFAULT)
+                .unwrap()
+        );
     }
 
     #[test]
@@ -1020,7 +1215,12 @@ mod tests {
                     .trim_end_matches('/')
                 )
                 .unwrap(),
-            &MappingLocation::Path(PathBuf::from("mapping.json"))
+            &MappingLocation::Path(
+                workspace
+                    .channel_config()
+                    .root_dir
+                    .join(PathBuf::from("mapping.json"))
+            )
         );
     }
 

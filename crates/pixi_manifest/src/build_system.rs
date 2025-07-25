@@ -5,7 +5,7 @@ use pixi_spec::BinarySpec;
 use rattler_conda_types::NamedChannelOrUrl;
 
 use crate::toml::FromTomlStr;
-use crate::{toml::TomlPackageBuild, TomlError};
+use crate::{TomlError, toml::TomlPackageBuild};
 
 /// A build section in the pixi manifest.
 /// that defines what backend is used to build the project.
@@ -23,6 +23,18 @@ pub struct PackageBuild {
 
     /// Additional configuration for the build backend.
     pub configuration: Option<serde_value::Value>,
+}
+
+impl PackageBuild {
+    /// Constructs a new instance from just a backend and channels.
+    pub fn new(backend: BuildBackend, channels: Vec<NamedChannelOrUrl>) -> Self {
+        Self {
+            backend,
+            channels: Some(channels),
+            additional_dependencies: IndexMap::default(),
+            configuration: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

@@ -1,9 +1,0 @@
-[workspace]
-channels = ["https://prefix.dev/conda-forge"]
-name = "test-example"
-platforms = ["win-64", "linux-64", "osx-arm64", "osx-64"]
-preview = ["pixi-build"]
-
-
-[dependencies]
-boltons = { path = "pkgs/with_recipe" }

@@ -15,6 +15,11 @@ rustflags = [
 [env]
 # Required for `dist` to work with linux arm targets: https://github.com/axodotdev/cargo-dist/issues/74#issuecomment-2053680080
 CC_aarch64_unknown_linux_musl = "aarch64-linux-gnu-gcc"
+# Necessary to let `deno_task_shell` know that our executable is called `pixi` instead of `deno`
+DENO_EXECUTABLE_NAME = "pixi"
+# A little hack to make the CARGO_WORKSPACE_DIR available in tests.
+# See: https://github.com/rust-lang/cargo/issues/3946#issuecomment-973132993
+CARGO_WORKSPACE_DIR = { value = "", relative = true }
 
 [target.aarch64-unknown-linux-musl]
 linker = "aarch64-linux-gnu-gcc"

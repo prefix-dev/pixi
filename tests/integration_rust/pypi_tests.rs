@@ -237,13 +237,15 @@ async fn pin_torch() {
     // So the check is as follows:
     // 1. The PyPI index is the main index-url, so normally torch would be taken from there.
     // 2. We manually check if it is taken from the whl/cu124 index instead.
-    assert!(lock_file
-        .get_pypi_package_url("default", Platform::Linux64, "torch")
-        .unwrap()
-        .as_url()
-        .unwrap()
-        .path()
-        .contains("/whl/cu124"));
+    assert!(
+        lock_file
+            .get_pypi_package_url("default", Platform::Linux64, "torch")
+            .unwrap()
+            .as_url()
+            .unwrap()
+            .path()
+            .contains("/whl/cu124")
+    );
 }
 
 #[tokio::test]
@@ -286,4 +288,171 @@ async fn test_allow_insecure_host() {
     )
     .unwrap();
     pixi.update_lock_file().await.unwrap();
+}
+
+#[tokio::test]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn test_indexes_are_passed_when_solving_build_pypi_dependencies() {
+    let pypi_indexes = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/pypi-indexes");
+    let pypi_indexes_url = Url::from_directory_path(pypi_indexes.clone()).unwrap();
+
+    let pixi = PixiControl::from_pyproject_manifest(&format!(
+        r#"
+        [project]
+        name = "pypi-build-index"
+        requires-python = ">=3.10"
+        version = "0.1.0"
+
+        [build-system]
+        requires = [
+        "foo",
+        "hatchling",
+        ]
+        build-backend = "hatchling.build"
+
+        [tool.hatch.build]
+        include = ["src"]
+        targets.wheel.strict-naming = false
+        targets.wheel.packages = ["src/pypi_build_index"]
+        targets.sdist.strict-naming = false
+        targets.sdist.packages = ["src/pypi_build_index"]
+
+
+
+        [tool.pixi.project]
+        channels = ["https://prefix.dev/conda-forge"]
+        platforms = ["{platform}"]
+
+        [tool.pixi.dependencies]
+        hatchling = "*"
+
+        [tool.pixi.pypi-options]
+        index-url = "{pypi_indexes}multiple-indexes-a/index"
+        no-build-isolation = ["pypi-build-index"]
+
+        [tool.pixi.pypi-dependencies]
+        pypi-build-index = {{ path = ".", editable = true }}
+        "#,
+        platform = Platform::current(),
+        pypi_indexes = pypi_indexes_url,
+    ))
+    .unwrap();
+
+    let project_path = pixi.workspace_path();
+    let src_dir = project_path.join("src").join("pypi_build_index");
+    fs_err::create_dir_all(&src_dir).unwrap();
+    fs_err::write(src_dir.join("__init__.py"), "").unwrap();
+
+    let lock_file = pixi.update_lock_file().await.unwrap();
+
+    // verify that the pypi-build-index can be installed when solved the build dependencies
+    pixi.install().await.unwrap();
+
+    let mut local_pypi_index = pypi_indexes
+        .join("multiple-indexes-a")
+        .join("index")
+        .display()
+        .to_string();
+
+    let mut lock_file_index = lock_file
+        .default_environment()
+        .unwrap()
+        .pypi_indexes()
+        .unwrap()
+        .indexes
+        .first()
+        .unwrap()
+        .path()
+        .to_string();
+
+    if cfg!(windows) {
+        // Replace backslashes with forward slashes for consistency in snapshots as well
+        // as ; with :
+        local_pypi_index = local_pypi_index.replace("\\\\", "\\");
+        local_pypi_index = local_pypi_index.replace("\\", "/");
+
+        // pop the first / that is present in the path
+        lock_file_index.remove(0);
+    }
+
+    // verify that
+    assert_eq!(local_pypi_index, lock_file_index,);
+}
+
+#[tokio::test]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn test_cross_platform_resolve_with_no_build() {
+    // non-current platform
+    let resolve_platform = if Platform::current().is_osx() {
+        Platform::Linux64
+    } else {
+        Platform::OsxArm64
+    };
+
+    let pypi_indexes = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/pypi-indexes");
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+        [project]
+        name = "pypi-extra-index-url"
+        platforms = ["{platform}"]
+        channels = ["https://prefix.dev/conda-forge"]
+
+        [dependencies]
+        python = "~=3.12.0"
+
+        [pypi-dependencies]
+        foo = "*"
+
+        [pypi-options]
+        no-build = true
+        find-links = [{{ path = "{pypi_indexes}/multiple-indexes-a/flat"}}]"#,
+        platform = resolve_platform,
+        pypi_indexes = pypi_indexes.display().to_string().replace("\\", "/"),
+    ));
+    let lock_file = pixi.unwrap().update_lock_file().await.unwrap();
+
+    assert_eq!(
+        lock_file
+            .get_pypi_package_url("default", resolve_platform, "foo")
+            .unwrap()
+            .as_path()
+            .unwrap(),
+        Utf8TypedPath::from(&*pypi_indexes.as_os_str().to_string_lossy())
+            .join("multiple-indexes-a")
+            .join("flat")
+            .join("foo-1.0.0-py2.py3-none-any.whl")
+    );
+}
+
+/// This test checks that the help message is correctly generated when a PyPI package is pinned
+/// by the conda solve, which may cause a conflict with the PyPI dependencies.
+///
+/// We expect there to be a help message that informs the user about the pinned package
+#[tokio::test]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn test_pinned_help_message() {
+    let pixi = PixiControl::from_manifest(
+        r#"
+        [workspace]
+        channels = ["https://prefix.dev/conda-forge"]
+        name = "deleteme"
+        platforms = ["linux-64"]
+        version = "0.1.0"
+
+        [dependencies]
+        python = "3.12.*"
+        pandas = "*"
+
+        [pypi-dependencies]
+        databricks-sql-connector = ">=4.0.0"
+        "#,
+    );
+    // First, it should fail
+    let result = pixi.unwrap().update_lock_file().await;
+    let err = result.err().unwrap();
+    // Second, it should contain a help message
+    assert_eq!(
+        format!("{}", err.help().unwrap()),
+        "The following PyPI packages have been pinned by the conda solve, and this version may be causing a conflict:\npandas==2.3.1"
+    );
 }

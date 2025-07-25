@@ -1,7 +1,7 @@
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 
-use crate::common::{package_database::PackageDatabase, PixiControl};
+use crate::common::{PixiControl, package_database::PackageDatabase};
 use insta::assert_debug_snapshot;
 use pixi::Workspace;
 use pixi_config::Config;
@@ -157,7 +157,7 @@ fn parse_valid_docs_configs() {
         let path = entry.path();
         if path.extension().map(|ext| ext == "toml").unwrap_or(false) {
             let toml = fs_err::read_to_string(&path).unwrap();
-            let (_config, unused_keys) = Config::from_toml(&toml).unwrap();
+            let (_config, unused_keys) = Config::from_toml(&toml, None).unwrap();
             assert_eq!(
                 unused_keys,
                 BTreeSet::<String>::new(),
