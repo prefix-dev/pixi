@@ -3,17 +3,9 @@ use std::path::Path;
 use miette::IntoDiagnostic;
 use rattler::install::PythonInfo;
 
-use crate::install_pypi::PyPIPrefixUpdaterBuilder;
-use crate::{lock_file::UvResolutionContext, prefix::Prefix};
-use fancy_display::FancyDisplay;
+use crate::prefix::Prefix;
 use pixi_consts::consts;
-use pixi_manifest::pypi::pypi_options::NoBuildIsolation;
-use pixi_manifest::{EnvironmentName, SystemRequirements};
-use pixi_progress::await_in_progress;
-use pixi_record::PixiRecord;
-use rattler_conda_types::Platform;
-use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
-use std::collections::HashMap;
+use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};
 use uv_distribution_types::{InstalledDist, Name};
 
 use super::PythonStatus;
@@ -123,59 +115,4 @@ pub async fn on_python_interpreter_change<'a>(
         // We can skip the pypi prefix update if there is not python interpreter in the environment.
         PythonStatus::DoesNotExist => Ok(ContinuePyPIPrefixUpdate::Skip),
     }
-}
-
-#[allow(clippy::too_many_arguments)]
-// TODO: refactor args into struct
-pub async fn update_prefix_pypi(
-    environment_name: &EnvironmentName,
-    prefix: &Prefix,
-    _platform: Platform,
-    pixi_records: &[PixiRecord],
-    pypi_records: &[(PypiPackageData, PypiPackageEnvironmentData)],
-    status: &PythonStatus,
-    system_requirements: &SystemRequirements,
-    uv_context: &UvResolutionContext,
-    pypi_indexes: Option<&PypiIndexes>,
-    environment_variables: &HashMap<String, String>,
-    lock_file_dir: &Path,
-    platform: Platform,
-    non_isolated_packages: &NoBuildIsolation,
-    no_build: &pixi_manifest::pypi::pypi_options::NoBuild,
-    no_binary: &pixi_manifest::pypi::pypi_options::NoBinary,
-) -> miette::Result<()> {
-    // Determine global site-packages status
-    let python_info = match on_python_interpreter_change(status, prefix, pypi_records).await? {
-        ContinuePyPIPrefixUpdate::Continue(python_info) => python_info,
-        ContinuePyPIPrefixUpdate::Skip => return Ok(()),
-    };
-
-    // Install and/or remove python packages
-    await_in_progress(
-        format!(
-            "updating pypi packages in '{}'",
-            environment_name.fancy_display()
-        ),
-        |_| async {
-            PyPIPrefixUpdaterBuilder::new(
-                lock_file_dir,
-                prefix,
-                pixi_records,
-                &python_info.path,
-                system_requirements,
-                uv_context,
-                pypi_indexes,
-                environment_variables,
-                platform,
-                non_isolated_packages,
-                no_build,
-                no_binary,
-            )
-            .await?
-            .build(pypi_records)?
-            .update()
-            .await
-        },
-    )
-    .await
 }
