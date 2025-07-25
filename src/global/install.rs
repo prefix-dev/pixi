@@ -16,6 +16,7 @@ use rattler_conda_types::{
     MatchSpec, Matches, PackageName, PackageRecord, ParseStrictness, Platform,
 };
 use rattler_shell::activation::prefix_path_entries;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::{env, path::PathBuf, str::FromStr};
 
@@ -235,13 +236,14 @@ pub(crate) fn local_environment_matches_spec(
         .iter()
         .all(|spec| prefix_records.iter().any(|record| spec.matches(record)));
 
-    let source_specs_in_manifest_are_present = source_metadata.iter().all(|metadata| {
-        metadata.records.iter().all(|source| {
-            prefix_records
-                .iter()
-                .any(|record| &source.package_record == record)
-        })
-    });
+    let prefix_record_set: HashSet<_> = prefix_records.iter().collect();
+    let source_specs_in_manifest_are_present = source_metadata
+        .iter()
+        .flat_map(|metadata| &metadata.records)
+        .all(|source| prefix_record_set.contains(&source.package_record));
+
+    tracing::error!("{prefix_record_set:?}");
+    tracing::error!("{source_metadata:?} {source_specs_in_manifest_are_present}");
 
     if !specs_in_manifest_are_present || !source_specs_in_manifest_are_present {
         tracing::debug!("Not all specs in the manifest are present in the environment");
