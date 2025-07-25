@@ -19,7 +19,6 @@ def test_no_build_option(pixi: Path, tmp_pixi_workspace: Path, tmp_path: Path) -
     verify_cli_command(
         [pixi, "install", "--manifest-path", manifest],
         ExitCode.FAILURE,
-        env={"PIXI_CACHE_DIR": str(tmp_path)},
     )
 
 
