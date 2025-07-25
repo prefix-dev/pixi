@@ -21,7 +21,7 @@ pub struct GlobalSpecs {
 
     /// The git revisions to use when adding a git dependency
     /// TODO: replace with #[clap(flatten)], skip instead of hide as that doesn't work with flatten
-    #[clap(skip)]
+    #[clap(flatten)]
     pub rev: Option<crate::cli::cli_config::GitRev>,
 
     /// The subdirectory of the git repository to use

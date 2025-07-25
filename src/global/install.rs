@@ -242,9 +242,6 @@ pub(crate) fn local_environment_matches_spec(
         .flat_map(|metadata| &metadata.records)
         .all(|source| prefix_record_set.contains(&source.package_record));
 
-    tracing::error!("{prefix_record_set:?}");
-    tracing::error!("{source_metadata:?} {source_specs_in_manifest_are_present}");
-
     if !specs_in_manifest_are_present || !source_specs_in_manifest_are_present {
         tracing::debug!("Not all specs in the manifest are present in the environment");
         return false;
