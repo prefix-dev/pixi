@@ -96,6 +96,8 @@ impl CommandDispatcherProcessor {
             .remove(id)
             .expect("got a result for a source build that was not pending");
 
+        let result = result.into_ok_or_failed();
+
         // Notify the reporter that the solve finished.
         if let Some((reporter, id)) = self
             .reporter
@@ -103,11 +105,12 @@ impl CommandDispatcherProcessor {
             .and_then(Reporter::as_backend_source_build_reporter)
             .zip(env.reporter_id)
         {
-            reporter.on_finished(id)
+            let failed = matches!(result, Some(Err(_)));
+            reporter.on_finished(id, failed)
         }
 
         // Notify the command dispatcher that the result is available.
-        if let Some(result) = result.into_ok_or_failed() {
+        if let Some(result) = result {
             // We can silently ignore the result if the task was cancelled.
             let _ = env.tx.send(result);
         };
