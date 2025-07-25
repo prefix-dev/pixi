@@ -1,15 +1,15 @@
 from pathlib import Path
 
-from .common import verify_cli_command
+from .common import verify_cli_command, ALL_PLATFORMS
 
 
 def test_variable_expansion(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
-    toml = """
+    toml = f"""
         [workspace]
         channels = ["conda-forge"]
         name = "expansion-test"
-        platforms = ["linux-64"]
+        platforms = {ALL_PLATFORMS}
         version = "0.1.0"
 
         [activation.env]
