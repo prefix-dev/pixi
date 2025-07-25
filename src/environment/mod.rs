@@ -3,7 +3,9 @@ mod conda_prefix;
 pub mod list;
 mod pypi_prefix;
 mod python_status;
-pub use conda_prefix::{CondaPrefixUpdated, CondaPrefixUpdater, CondaPrefixUpdaterBuilder};
+pub use conda_prefix::{
+    CondaPrefixUpdated, CondaPrefixUpdater, CondaPrefixUpdaterBuilder, update_prefix_conda,
+};
 use dialoguer::theme::ColorfulTheme;
 use futures::{FutureExt, StreamExt, TryStreamExt, stream};
 use miette::{Context, IntoDiagnostic};
