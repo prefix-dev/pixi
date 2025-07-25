@@ -739,6 +739,7 @@ impl Project {
                 .source_metadata(source_metadata_spec)
                 .await
                 .into_diagnostic()?;
+            dispatch.clear_reporter().await;
 
             metadata_results.insert(name, metadata_result);
         }

@@ -168,6 +168,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     )
     .await?;
 
+    tracing::error!("IK BEN HIER");
     Ok(())
 }
 
@@ -191,6 +192,7 @@ async fn setup_environment(
 
     // Modify the project to include the new environment
     if !project.manifest.parsed.envs.contains_key(env_name) {
+        tracing::error!("Contains {env_name}");
         project.manifest.add_environment(env_name, Some(channels))?;
         state_changes.insert_change(env_name, StateChange::AddedEnvironment);
     }
@@ -217,6 +219,7 @@ async fn setup_environment(
         .collect_vec();
 
     for spec in &packages_to_add {
+        tracing::error!("ADDING: {env_name} {spec:?}");
         project.manifest.add_dependency(env_name, spec)?;
     }
 
@@ -229,6 +232,7 @@ async fn setup_environment(
     }
 
     if project.environment_in_sync(env_name).await? {
+        tracing::error!("in sync");
         return Ok(StateChanges::new_with_env(env_name.clone()));
     }
 
@@ -271,6 +275,7 @@ async fn setup_environment(
     // Sync completions
     state_changes |= project.sync_completions(env_name).await?;
 
+    tracing::error!("Saving manifest");
     project.manifest.save().await?;
     Ok(state_changes)
 }
