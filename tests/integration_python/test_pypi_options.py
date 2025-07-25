@@ -23,7 +23,7 @@ def test_no_build_option(pixi: Path, tmp_pixi_workspace: Path, tmp_path: Path) -
     )
 
 
-def test_pypi_overrides(pixi: Path, tmp_pixi_workspace: Path, tmp_path: Path) -> None:
+def test_pypi_overrides(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """
     Tests the behavior of pixi install command with dependency overrides specified in pixi.toml.
     This test verifies that the installation succeeds when the overrides are correctly defined.
@@ -37,11 +37,7 @@ def test_pypi_overrides(pixi: Path, tmp_pixi_workspace: Path, tmp_path: Path) ->
     manifest.write_text(toml)
 
     # Run the installation
-    verify_cli_command(
-        [pixi, "install", "--manifest-path", manifest],
-        ExitCode.SUCCESS,
-        env={"PIXI_CACHE_DIR": str(tmp_path)},
-    )
+    verify_cli_command([pixi, "install", "--manifest-path", manifest])
     lock_file_content = lock_file_path.read_text()
 
     # numpy 2.0.0 is overriding the dev env
