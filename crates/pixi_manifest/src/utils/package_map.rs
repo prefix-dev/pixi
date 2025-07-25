@@ -2,7 +2,7 @@ use std::{fmt, marker::PhantomData, ops::Range, str::FromStr};
 
 use indexmap::IndexMap;
 use itertools::Itertools;
-use pixi_spec::PixiSpec;
+use pixi_spec::{BinarySpec, PixiSpec, SourceSpec};
 use rattler_conda_types::PackageName;
 use serde::{
     Deserialize, Deserializer, Serialize,
@@ -53,6 +53,42 @@ impl IntoIterator for UniquePackageMap {
 
     fn into_iter(self) -> Self::IntoIter {
         self.specs.into_iter()
+    }
+}
+
+impl Extend<(rattler_conda_types::PackageName, PixiSpec)> for UniquePackageMap {
+    fn extend<T: IntoIterator<Item = (rattler_conda_types::PackageName, PixiSpec)>>(
+        &mut self,
+        iter: T,
+    ) {
+        for (name, spec) in iter {
+            self.specs.insert(name, spec);
+            // Note: We don't set spans here as they're primarily used for TOML parsing
+        }
+    }
+}
+
+impl Extend<(rattler_conda_types::PackageName, SourceSpec)> for UniquePackageMap {
+    fn extend<T: IntoIterator<Item = (rattler_conda_types::PackageName, SourceSpec)>>(
+        &mut self,
+        iter: T,
+    ) {
+        for (name, spec) in iter {
+            self.specs.insert(name, spec.into());
+            // Note: We don't set spans here as they're primarily used for TOML parsing
+        }
+    }
+}
+
+impl Extend<(rattler_conda_types::PackageName, BinarySpec)> for UniquePackageMap {
+    fn extend<T: IntoIterator<Item = (rattler_conda_types::PackageName, BinarySpec)>>(
+        &mut self,
+        iter: T,
+    ) {
+        for (name, spec) in iter {
+            self.specs.insert(name, spec.into());
+            // Note: We don't set spans here as they're primarily used for TOML parsing
+        }
     }
 }
 

@@ -21,7 +21,7 @@ pub struct GlobalSpecs {
 
     /// The git revisions to use when adding a git dependency
     /// TODO: replace with #[clap(flatten)], skip instead of hide as that doesn't work with flatten
-    #[clap(skip)]
+    #[clap(flatten)]
     pub rev: Option<crate::cli::cli_config::GitRev>,
 
     /// The subdirectory of the git repository to use
@@ -187,5 +187,48 @@ mod tests {
             global_specs.first().unwrap().spec(),
             &PixiSpec::Path(..)
         ))
+    }
+
+    #[test]
+    fn test_parse_from_command_args() {
+        // Test parsing simple package name
+        let args = vec!["foo", "numpy"];
+        let specs = GlobalSpecs::try_parse_from(args).unwrap();
+        assert_eq!(specs.specs, vec!["numpy"]);
+        assert!(specs.git.is_none());
+        assert!(specs.path.is_none());
+
+        // Test parsing multiple packages
+        let args = vec!["foo", "numpy", "scipy>=1.7", "matplotlib==3.5.0"];
+        let specs = GlobalSpecs::try_parse_from(args).unwrap();
+        assert_eq!(
+            specs.specs,
+            vec!["numpy", "scipy>=1.7", "matplotlib==3.5.0"]
+        );
+
+        // Test parsing with git option
+        let args = vec![
+            "foo",
+            "--git",
+            "https://github.com/user/repo.git",
+            "mypackage",
+        ];
+        let specs = GlobalSpecs::try_parse_from(args).unwrap();
+        assert_eq!(specs.specs, vec!["mypackage"]);
+        assert_eq!(
+            specs.git.unwrap().as_str(),
+            "https://github.com/user/repo.git"
+        );
+
+        // Test parsing with path option
+        let args = vec!["foo", "--path", "../local_package", "mypackage"];
+        let specs = GlobalSpecs::try_parse_from(args).unwrap();
+        assert_eq!(specs.specs, vec!["mypackage"]);
+        assert_eq!(specs.path.unwrap().as_str(), "../local_package");
+
+        // Test error when no packages specified
+        let args = vec!["foo"];
+        let result = GlobalSpecs::try_parse_from(args);
+        assert!(result.is_err());
     }
 }
