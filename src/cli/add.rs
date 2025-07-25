@@ -4,13 +4,14 @@ use miette::IntoDiagnostic;
 use pixi_config::ConfigCli;
 use pixi_manifest::{FeatureName, SpecType};
 use pixi_spec::{GitSpec, SourceSpec};
-use rattler_conda_types::{MatchSpec, PackageName};
+use rattler_conda_types::{MatchSpec, PackageName, Platform};
 
-use super::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs};
+use super::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs, package_suggestions};
 use crate::{
     WorkspaceLocator,
     cli::cli_config::{DependencyConfig, PrefixUpdateConfig, WorkspaceConfig},
     environment::sanity_check_workspace,
+    repodata::Repodata,
     workspace::DependencyType,
 };
 
@@ -191,8 +192,44 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             update_deps
         }
         Err(e) => {
+            let enhanced_error = if let Some(failed_package) =
+                package_suggestions::extract_failed_package_name(&e)
+            {
+                use crate::cli::cli_config::ChannelsConfig;
+                let default_channels = ChannelsConfig::default();
+                let channels =
+                    default_channels.resolve_from_project(Some(workspace.workspace()))?;
+                let platform = dependency_config
+                    .platforms
+                    .first()
+                    .copied()
+                    .unwrap_or(Platform::current());
+                let gateway = workspace.workspace().repodata_gateway()?.clone();
+
+                let suggester =
+                    package_suggestions::PackageSuggester::new(channels, platform, gateway);
+
+                // Use CEP-0016 fast gateway.names() approach
+                match suggester.suggest_similar(&failed_package).await {
+                    Ok(suggestions) if !suggestions.is_empty() => {
+                        Some(package_suggestions::create_enhanced_package_error(
+                            &failed_package,
+                            &suggestions,
+                        ))
+                    }
+                    _ => None, // Fall back to original error if suggestions fail
+                }
+            } else {
+                None
+            };
+
             workspace.revert().await.into_diagnostic()?;
-            return Err(e);
+
+            // Return enhanced error with suggestions or original error
+            return match enhanced_error {
+                Some(enhanced) => Err(enhanced),
+                None => Err(e),
+            };
         }
     };
 
