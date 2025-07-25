@@ -53,6 +53,7 @@ def test_install_git_repository_basic(
     main = tmp_pixi_workspace / "bin" / exec_extension("rich-example-main")
     assert main.exists(), "`rich-example-main` executable was not created"
 
+
 @pytest.mark.slow
 def test_install_directory_cpp_project(
     pixi: Path,
