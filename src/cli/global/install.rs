@@ -85,8 +85,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_cli_config(config.clone());
 
     // Capture the current working directory for proper relative path resolution
-    let current_dir = std::env::current_dir()
-        .expect("Could not retrieve the current directory");
+    let current_dir = std::env::current_dir().expect("Could not retrieve the current directory");
     let channel_config = rattler_conda_types::ChannelConfig {
         root_dir: current_dir,
         ..project_original.global_channel_config().clone()
