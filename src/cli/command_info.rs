@@ -1,10 +1,94 @@
 use clap::CommandFactory;
 use is_executable::IsExecutable;
 use miette::{Context, IntoDiagnostic};
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::path::PathBuf;
 
-use super::{Command, get_styles};
+use super::{Args, Command, get_styles};
+
+/// Get all built-in command names including aliases (discovered dynamically from clap)
+fn get_builtin_commands_with_aliases() -> Vec<String> {
+    let mut commands = Vec::new();
+
+    for subcommand in Args::command().get_subcommands() {
+        // Add main command name
+        commands.push(subcommand.get_name().to_string());
+
+        // Add all aliases
+        commands.extend(subcommand.get_all_aliases().map(|alias| alias.to_string()));
+    }
+
+    commands
+}
+
+/// All available commands (built-in + external)
+fn get_all_available_commands() -> Vec<String> {
+    let mut all_commands = HashSet::new();
+
+    all_commands.extend(get_builtin_commands_with_aliases());
+
+    all_commands.extend(find_external_commands().into_keys());
+
+    all_commands.into_iter().collect()
+}
+
+/// Find similar commands using Jaro similarity
+fn find_similar_commands(input: &str) -> Vec<String> {
+    let available_commands = get_all_available_commands();
+    let mut suggestions: Vec<(f64, String)> = Vec::new();
+    let threshold = 0.6;
+
+    for command in available_commands {
+        let similarity = strsim::jaro(input, &command);
+        if similarity > threshold {
+            suggestions.push((similarity, command));
+        }
+    }
+
+    // Sort by similarity (ascending), (most similar at the end)
+    suggestions.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    suggestions.into_iter().map(|(_, cmd)| cmd).collect()
+}
+
+/// Find all external commands available in PATH
+fn find_external_commands() -> HashMap<String, PathBuf> {
+    let mut commands = HashMap::new();
+
+    if let Some(dirs) = search_directories() {
+        for dir in dirs {
+            if let Ok(entries) = fs_err::read_dir(&dir) {
+                for entry in entries.flatten() {
+                    if let Some(name) = entry.file_name().to_str() {
+                        // Check if it's a pixi extension
+                        if let Some(cmd_name) = name.strip_prefix("pixi-") {
+                            // Remove .exe suffix on Windows
+                            let cmd_name = {
+                                #[cfg(target_family = "windows")]
+                                {
+                                    cmd_name
+                                        .strip_suffix(env::consts::EXE_SUFFIX)
+                                        .unwrap_or(cmd_name)
+                                }
+                                #[cfg(not(target_family = "windows"))]
+                                {
+                                    cmd_name
+                                }
+                            };
+
+                            let path = entry.path();
+                            if path.is_executable() {
+                                commands.insert(cmd_name.to_string(), path);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    commands
+}
 
 /// Find a specific external subcommand by name
 /// Based on cargo's find_external_subcommand function
@@ -42,15 +126,26 @@ pub fn execute_external_command(args: Vec<String>) -> miette::Result<()> {
 
         Ok(())
     } else {
-        // build the error message
-        // using the same style as clap's derived error messages
+        // Generate suggestions for similar commands
+        let mut suggestions = find_similar_commands(cmd);
+
         let styles = get_styles();
+
+        // get the styles for invalid and valid commands
+        let invalid = styles.get_invalid();
+        let tip = styles.get_valid();
+
+        let mut error_msg = format!("unrecognized subcommand '{invalid}{cmd}{invalid:#}'");
+
+        if let Some(most_similar) = suggestions.pop() {
+            error_msg.push_str(&format!(
+                "\n\n  {tip}tip{tip:#}: a similar subcommand exists: '{tip}{most_similar}{tip:#}'",
+            ));
+        }
+
         Command::command()
             .styles(styles)
-            .error(
-                clap::error::ErrorKind::InvalidSubcommand,
-                format!("No such command: `pixi {}`", cmd),
-            )
+            .error(clap::error::ErrorKind::InvalidSubcommand, error_msg)
             .exit();
     }
 }
@@ -100,5 +195,16 @@ mod imp {
 
         // Exit with the same status code as the child process
         std::process::exit(status.code().unwrap_or(1));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tee_suggests_tree() {
+        let suggestions = find_similar_commands("tee");
+        assert!(suggestions.contains(&"tree".to_string()));
     }
 }
