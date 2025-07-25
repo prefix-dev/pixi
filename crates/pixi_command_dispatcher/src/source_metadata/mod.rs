@@ -302,7 +302,7 @@ impl SourceMetadataSpec {
                 legacy_bz2_size: None,
 
                 // These are not important at this point.
-                extra_depends: Default::default(),
+                experimental_extra_depends: Default::default(),
             },
             source,
             input_hash,
