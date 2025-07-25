@@ -1,4 +1,5 @@
 use pep508_rs::{InvalidNameError, PackageName};
+use serde::{Serialize, Serializer};
 use std::{borrow::Borrow, str::FromStr};
 
 /// A package name for Pypi that also stores the source version of the name.
@@ -36,6 +37,15 @@ impl FromStr for PypiPackageName {
             source: name.to_string(),
             normalized: PackageName::from_str(name)?,
         })
+    }
+}
+
+impl Serialize for PypiPackageName {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.as_source().serialize(serializer)
     }
 }
 

@@ -589,6 +589,8 @@ impl Project {
             })
             .await?;
 
+        command_dispatcher.clear_reporter().await;
+
         let install_changes = get_install_changes(result.transaction);
         Ok(EnvironmentUpdate::new(install_changes, dependencies_names))
     }

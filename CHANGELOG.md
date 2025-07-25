@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.50.1] - 2025-07-25
+#### ✨ Highlights
+
+Use `pixi import` to import `environment.yml` files into your Pixi manifest.
+
+#### Added
+
+- Add build profiles to not build in editable mode in `pixi build` by @baszalmstra in [#4202](https://github.com/prefix-dev/pixi/pull/4202)
+
+#### Changed
+
+- Implement `pixi import` for `environment.yml` by @lucascolley in [#4096](https://github.com/prefix-dev/pixi/pull/4096)
+
+#### Fixed
+
+- Global progress by @tdejager in [#4190](https://github.com/prefix-dev/pixi/pull/4190)
+- Update rattler and add test for variable expansion by @Hofer-Julian in [#4199](https://github.com/prefix-dev/pixi/pull/4199)
+
 ### [0.50.0] - 2025-07-22
 #### ✨ Highlights
 This release contains loads of bug fixes and refactors, primarily to make `pixi build` more stable and feature rich in the near future.
@@ -15,6 +33,8 @@ This release contains loads of bug fixes and refactors, primarily to make `pixi 
 - Add explicit workspace inheritance syntax by @baszalmstra in [#4078](https://github.com/prefix-dev/pixi/pull/4078)
 - Add `conda/outputs` and `conda/build_v2` backend protocol by @baszalmstra in [#4118](https://github.com/prefix-dev/pixi/pull/4118)
 - Add cyclic dependency support by @baszalmstra in [#4143](https://github.com/prefix-dev/pixi/pull/4143)
+- Rebuild source package if a build dependency changed by @baszalmstra in [#4171](https://github.com/prefix-dev/pixi/pull/4171)
+- Add `pypi-options.dependency-overrides` to override pypi dependencies by @HernandoR  in [#3948](https://github.com/prefix-dev/pixi/pull/3948)
 
 #### Changed
 
@@ -35,8 +55,10 @@ This release contains loads of bug fixes and refactors, primarily to make `pixi 
 - Improve the `system-requirements` documentation by @ruben-arts in [#4068](https://github.com/prefix-dev/pixi/pull/4068)
 - Enable `content.code.select` by @lucascolley in [#4092](https://github.com/prefix-dev/pixi/pull/4092)
 - Add `conda-deny` documentation by @PaulKMueller in [#4090](https://github.com/prefix-dev/pixi/pull/4090) [#4124](https://github.com/prefix-dev/pixi/pull/4124)
-- Update setup-pixi docs for pixi-url-bearer-token by @ytausch in [#4127](https://github.com/prefix-dev/pixi/pull/4127)
+- Update `setup-pixi` docs for pixi-url-bearer-token by @ytausch in [#4127](https://github.com/prefix-dev/pixi/pull/4127)
 - Update the python tutorial to use the workspace command by @rongou in [#4128](https://github.com/prefix-dev/pixi/pull/4128)
+- Update `setup-pixi` docs for 0.8.13 by @ytausch in [#4175](https://github.com/prefix-dev/pixi/pull/4175)
+- Add `geovista` to community.md by @bjlittle in [#4183](https://github.com/prefix-dev/pixi/pull/4183)
 
 #### Fixed
 
@@ -50,6 +72,7 @@ This release contains loads of bug fixes and refactors, primarily to make `pixi 
 * @PaulKMueller made their first contribution in [#4124](https://github.com/prefix-dev/pixi/pull/4124)
 * @gshiba made their first contribution in [#4044](https://github.com/prefix-dev/pixi/pull/4044)
 * @thomas-maschler made their first contribution in [#4008](https://github.com/prefix-dev/pixi/pull/4008)
+* @bjlittle made their first contribution in [#4183](https://github.com/prefix-dev/pixi/pull/4183)
 
 ### [0.49.0] - 2025-06-30
 #### ✨ Highlights
