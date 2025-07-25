@@ -17,6 +17,8 @@ def test_install_git_repository_basic(
     git_test_repo: Callable[[Path, str], GitTestRepo],
 ) -> None:
     """Test installing a pixi project from a git repository."""
+    # Make it one level deeper so that we do no pollute git with the global
+    tmp_pixi_workspace = tmp_pixi_workspace / "global-env"
     env = {"PIXI_HOME": str(tmp_pixi_workspace)}
 
     # Use the test-project-export as our source
@@ -49,7 +51,7 @@ def test_install_git_repository_basic(
     )
 
     # Check that the package was installed
-    main = tmp_pixi_workspace / "bin" / exec_extension("dummy-x")
+    main = tmp_pixi_workspace / "bin" / exec_extension("main")
     assert main.exists(), "Main executable was not created"
 
 

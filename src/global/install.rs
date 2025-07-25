@@ -243,7 +243,7 @@ pub(crate) fn local_environment_matches_spec(
         })
     });
 
-    if !specs_in_manifest_are_present && source_specs_in_manifest_are_present {
+    if !specs_in_manifest_are_present || !source_specs_in_manifest_are_present {
         tracing::debug!("Not all specs in the manifest are present in the environment");
         return false;
     }
@@ -306,6 +306,23 @@ pub(crate) fn local_environment_matches_spec(
         let matched_record = acc.swap_remove(index);
         prune_dependencies(acc, &matched_record)
     });
+
+    // Do the same for source metadata
+    let remaining_prefix_records =
+        source_metadata
+            .iter()
+            .fold(remaining_prefix_records, |mut acc, metadata| {
+                let Some(index) = acc.iter().position(|record| {
+                    metadata
+                        .records
+                        .iter()
+                        .any(|source_record| &source_record.package_record == record)
+                }) else {
+                    return acc;
+                };
+                let matched_record = acc.swap_remove(index);
+                prune_dependencies(acc, &matched_record)
+            });
 
     // If there are no remaining prefix records, then this means that
     // the environment doesn't contain records that don't match the manifest

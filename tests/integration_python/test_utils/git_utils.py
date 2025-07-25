@@ -13,7 +13,7 @@ class GitTestRepo:
         self.temp_dir = temp_dir
         self.repo_path: Path = temp_dir / repo_name
 
-    def create_bare_repo(self) -> None:
+    def setup(self) -> None:
         """Create a git repository from the source directory in a temp directory."""
         # Copy source directory to temp
         shutil.copytree(self.source_dir, self.repo_path)
@@ -46,7 +46,7 @@ class GitTestRepo:
 
     def cleanup(self) -> None:
         """Clean up temporary files if they exist and we're not using pytest temp_dir."""
-        if self.repo_path.exists() and not str(self.temp_dir).startswith("/tmp/pytest-"):
+        if self.repo_path.exists() and "pytest-" not in str(self.temp_dir):
             self.repo_path.unlink(missing_ok=True)
 
     def __enter__(self) -> "GitTestRepo":

@@ -180,8 +180,20 @@ pub(crate) fn is_binary(file_path: impl AsRef<Path>) -> miette::Result<bool> {
 
 /// Finds the package record from the `conda-meta` directory.
 pub(crate) async fn find_package_records(conda_meta: &Path) -> miette::Result<Vec<PrefixRecord>> {
-    let mut read_dir = tokio_fs::read_dir(conda_meta).await.into_diagnostic()?;
+    let read_dir = tokio_fs::read_dir(conda_meta).await;
     let mut records = Vec::new();
+
+    let mut read_dir = match read_dir {
+        Ok(dir) => dir,
+        Err(e) => match e.kind() {
+            std::io::ErrorKind::NotFound => return Ok(records),
+            _ => miette::bail!(
+                "Failed to read conda-meta directory {}: {}",
+                conda_meta.display(),
+                e
+            ),
+        },
+    };
 
     while let Some(entry) = read_dir.next_entry().await.into_diagnostic()? {
         let path = entry.path();
@@ -193,10 +205,6 @@ pub(crate) async fn find_package_records(conda_meta: &Path) -> miette::Result<Ve
 
             records.push(prefix_record);
         }
-    }
-
-    if records.is_empty() {
-        miette::bail!("No package records found in {}", conda_meta.display());
     }
 
     Ok(records)
