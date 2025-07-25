@@ -74,6 +74,11 @@ impl<'p> Environment<'p> {
         self.environment.name == EnvironmentName::Default
     }
 
+    /// Returns true if the environment has no_default_feature set to true
+    pub fn no_default_feature(&self) -> bool {
+        self.environment.no_default_feature
+    }
+
     /// Returns the name of this environment.
     pub fn name(&self) -> &'p EnvironmentName {
         &self.environment.name

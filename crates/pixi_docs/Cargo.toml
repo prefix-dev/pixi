@@ -9,6 +9,8 @@ readme = "README.md"
 repository = "https://github.com/prefix-dev/pixi"
 version = "0.1.0"
 
+[package.metadata.dist]
+dist = false
 
 [dependencies]
 clap = { workspace = true }

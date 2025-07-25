@@ -42,7 +42,9 @@ test-slow = """cargo nextest run --workspace --all-targets --features slow_integ
               --status-level skip --failure-output immediate-final --no-fail-fast --final-status-level slow"""
 
 [feature.pytest.dependencies]
+dirty-equals = ">=0.9.0,<0.10"
 filelock = ">=3.16.0,<4"
+inline-snapshot = ">=0.24.0,<0.25"
 mypy = ">=1.16,<1.17"
 py-rattler = ">=0.14,<0.15"
 pytest = "*"
@@ -231,6 +233,9 @@ cmd = "rattler-build build --recipe-dir empty --output-dir ."
 cwd = "tests/build-backends"
 description = "Build build-backends used for testing purposes"
 
+[feature.dist.dependencies]
+zig = ">=0.14.0,<0.15"
+
 #
 # Environment descriptions
 #
@@ -243,6 +248,7 @@ default = { features = [
   "pytest",
   "rust",
 ], solve-group = "default" }
+dist = { features = ["dist"], no-default-feature = true }
 docs = { features = [
   "docs",
 ], no-default-feature = true, solve-group = "default" }

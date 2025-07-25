@@ -1,7 +1,6 @@
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
-    str::FromStr,
     sync::Arc,
 };
 
@@ -26,7 +25,7 @@ use uv_auth::store_credentials_from_url;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
 use uv_configuration::{BuildOptions, ConfigSettings, Constraints, IndexStrategy, PreviewMode};
 use uv_dispatch::{BuildDispatch, SharedState};
-use uv_distribution::{DistributionDatabase, RegistryWheelIndex};
+use uv_distribution::{BuiltWheelIndex, DistributionDatabase, RegistryWheelIndex};
 use uv_distribution_types::{
     CachedDist, DependencyMetadata, Dist, IndexLocations, IndexUrl, InstalledDist, Name, Resolution,
 };
@@ -38,6 +37,7 @@ use uv_types::HashStrategy;
 use uv_workspace::WorkspaceCache;
 
 use crate::{
+    install_pypi::plan::{CachedWheels, RequiredDists},
     lock_file::UvResolutionContext,
     prefix::Prefix,
     uv_reporter::{UvReporter, UvReporterOptions},
@@ -175,16 +175,12 @@ impl<'a> PyPIPrefixUpdaterBuilder<'a> {
         self,
         python_packages: &[CombinedPypiPackageData],
     ) -> miette::Result<PyPIPrefixUpdater> {
-        // Create a map of the required packages
-        let required_map: std::collections::HashMap<uv_normalize::PackageName, &PypiPackageData> =
-            python_packages
-                .iter()
-                .map(|(pkg, _)| {
-                    let uv_name = uv_normalize::PackageName::from_str(pkg.name.as_ref())
-                        .expect("should be correct");
-                    (uv_name, pkg)
-                })
-                .collect();
+        // Create required distributions with pre-created Dist objects
+        let required_packages: Vec<_> =
+            python_packages.iter().map(|(pkg, _)| pkg.clone()).collect();
+        let required_dists = RequiredDists::from_packages(&required_packages, &self.lock_file_dir)
+            .into_diagnostic()
+            .context("Failed to create required distributions")?;
 
         // Find out what packages are already installed
         let site_packages =
@@ -203,18 +199,28 @@ impl<'a> PyPIPrefixUpdaterBuilder<'a> {
             &HashStrategy::None,
             &self.config_settings,
         );
+        let built_wheel_index = BuiltWheelIndex::new(
+            &self.uv_context.cache,
+            &self.tags,
+            &HashStrategy::None,
+            &self.config_settings,
+        );
 
-        // Partition into those that should be linked from the cache (`local`), those
+        // Partition into those that should be linked from the cache (`cached`), those
         // that need to be downloaded (`remote`)
         let installation_plan =
             InstallPlanner::new(self.uv_context.cache.clone(), &self.lock_file_dir)
-                .plan(&site_packages, registry_index, &required_map)
+                .plan(
+                    &site_packages,
+                    CachedWheels::new(registry_index, built_wheel_index),
+                    &required_dists,
+                )
                 .into_diagnostic()
                 .context("error while determining PyPI installation plan")?;
 
         // Show totals
-        let total_to_install = installation_plan.local.len() + installation_plan.remote.len();
-        let total_required = required_map.len();
+        let total_to_install = installation_plan.cached.len() + installation_plan.remote.len();
+        let total_required = required_dists.len();
         tracing::debug!(
             "{} of {} required packages are considered installed and up-to-date",
             total_required - total_to_install,
@@ -348,7 +354,7 @@ impl PyPIPrefixUpdater {
 
         let start = std::time::Instant::now();
         let PyPIInstallationPlan {
-            local,
+            cached,
             remote,
             reinstalls,
             extraneous,
@@ -357,7 +363,7 @@ impl PyPIPrefixUpdater {
 
         // Nothing to do.
         if remote.is_empty()
-            && local.is_empty()
+            && cached.is_empty()
             && reinstalls.is_empty()
             && extraneous.is_empty()
             && duplicates.is_empty()
@@ -370,7 +376,7 @@ impl PyPIPrefixUpdater {
         }
 
         // Log installation details for debugging
-        self.log_installation_details(local, remote, reinstalls, extraneous, duplicates);
+        self.log_installation_details(cached, remote, reinstalls, extraneous, duplicates);
 
         // Download, build, and unzip any missing distributions.
         let remote_dists = if remote.is_empty() {
@@ -389,10 +395,10 @@ impl PyPIPrefixUpdater {
 
         // Install the resolved distributions.
         // At this point we have all the wheels we need to install available to link locally
-        let local_dists = local.iter().map(|(d, _)| d.clone());
+        let cached_dists = cached.iter().map(|(d, _)| d.clone());
         let all_dists = remote_dists
             .into_iter()
-            .chain(local_dists)
+            .chain(cached_dists)
             .collect::<Vec<_>>();
 
         self.check_and_warn_about_conflicts(&all_dists, reinstalls)
@@ -407,7 +413,7 @@ impl PyPIPrefixUpdater {
     /// Log any interesting installation details.
     fn log_installation_details(
         &self,
-        local: &[(CachedDist, InstallReason)],
+        cached: &[(CachedDist, InstallReason)],
         remote: &[(Dist, InstallReason)],
         reinstalls: &[(InstalledDist, NeedReinstall)],
         extraneous: &[InstalledDist],
@@ -421,9 +427,9 @@ impl PyPIPrefixUpdater {
 
         // Filter out the re-installs, mostly these are less interesting than the actual
         // re-install reasons do show the installs
-        for (dist, reason) in local.iter() {
+        for (dist, reason) in cached.iter() {
             match reason {
-                InstallReason::InstallStaleLocal => install_stale.push(dist.name().to_string()),
+                InstallReason::InstallStaleCached => install_stale.push(dist.name().to_string()),
                 InstallReason::InstallMissing => install_missing.push(dist.name().to_string()),
                 InstallReason::InstallCached => install_cached.push(dist.name().to_string()),
                 _ => {}
@@ -438,7 +444,7 @@ impl PyPIPrefixUpdater {
         }
         for (dist, reason) in remote.iter() {
             match reason {
-                InstallReason::InstallStaleLocal => install_stale.push(name_and_version(dist)),
+                InstallReason::InstallStaleCached => install_stale.push(name_and_version(dist)),
                 InstallReason::InstallMissing => install_missing.push(name_and_version(dist)),
                 InstallReason::InstallCached => install_cached.push(name_and_version(dist)),
                 _ => {}
@@ -453,7 +459,7 @@ impl PyPIPrefixUpdater {
         }
         if !install_stale.is_empty() {
             tracing::debug!(
-                "*installing* from remote because local version is stale: {}",
+                "*installing* from remote because cached version is stale: {}",
                 install_stale.iter().join(", ")
             );
         }

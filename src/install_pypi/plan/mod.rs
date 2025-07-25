@@ -34,16 +34,21 @@
 //!
 //! This module builds on UV's distribution handling while applying Pixi-specific
 //! customizations for managing Python packages in Conda environments.
+mod cache;
+mod installation_source;
+mod installed_dists;
 mod models;
 mod planner;
-mod providers;
 mod reasons;
+mod required_dists;
 mod validation;
 
+pub use cache::CachedWheels;
 pub(crate) use models::NeedReinstall;
 pub use models::PyPIInstallationPlan;
 pub use planner::InstallPlanner;
 pub use reasons::InstallReason;
+pub use required_dists::RequiredDists;
 
 #[cfg(test)]
 mod test;
