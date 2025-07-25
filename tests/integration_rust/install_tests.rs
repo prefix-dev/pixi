@@ -378,7 +378,7 @@ async fn install_frozen_skip_local_sources() {
     let cache = uv_cache::Cache::temp().unwrap();
     let env = create_uv_environment(&prefix, &cache);
     let packages = uv_installer::SitePackages::from_environment(&env).unwrap();
-    packages.get_packages(&PackageName::new("no-build-editable".to_string()).unwrap());
+    packages.get_packages(&PackageName::from_str("no-build-editable").unwrap());
     assert!(packages.iter().count() == 0);
 
     let conda_prefix = pixi::prefix::Prefix::new(prefix);
@@ -390,7 +390,7 @@ async fn install_frozen_skip_local_sources() {
     // Check that 'no-build-editable' and 'smokey' are installed after a followup normal install
     pixi.install().with_frozen().await.unwrap();
     let packages = uv_installer::SitePackages::from_environment(&env).unwrap();
-    packages.get_packages(&PackageName::new("no-build-editable".to_string()).unwrap());
+    packages.get_packages(&PackageName::from_str("no-build-editable").unwrap());
     assert!(packages.iter().count() > 0);
 
     let smokey = conda_prefix

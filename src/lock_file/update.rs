@@ -408,6 +408,7 @@ impl<'p> LockFileDerivedData<'p> {
         &self,
         environment: &Environment<'p>,
         reinstall_packages: &ReinstallPackages,
+        skip_local_sources: bool,
     ) -> miette::Result<Prefix> {
         let prefix_once_cell = self
             .updated_pypi_prefixes
@@ -450,11 +451,11 @@ impl<'p> LockFileDerivedData<'p> {
 
                 // Get the prefix with the conda packages installed.
                 let (prefix, python_status) = self
-                    .conda_prefix(environment, conda_reinstall_packages)
+                    .conda_prefix(environment, conda_reinstall_packages, skip_local_sources)
                     .await?;
 
                 let pypi_records = self
-                    .pypi_records(environment, platform)?
+                    .pypi_records(environment, platform, skip_local_sources)?
                     .unwrap_or_default();
 
                 // No `uv` support for WASM right now

@@ -429,6 +429,7 @@ pub async fn get_update_lock_file_and_prefix<'env>(
         update_mode,
         update_lock_file_options,
         reinstall_packages,
+        skip_local_sources,
     )
     .await?;
     Ok((
@@ -447,6 +448,7 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
     update_mode: UpdateMode,
     update_lock_file_options: UpdateLockFileOptions,
     reinstall_packages: ReinstallPackages,
+    skip_local_sources: bool,
 ) -> miette::Result<(LockFileDerivedData<'env>, Vec<Prefix>)> {
     if environments.is_empty() {
         return Err(miette::miette!("No environments provided to install."));
