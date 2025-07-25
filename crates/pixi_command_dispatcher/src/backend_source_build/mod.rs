@@ -20,7 +20,7 @@ use pixi_build_types::{
         },
     },
 };
-use pixi_record::PinnedSourceSpec;
+use pixi_record::{PinnedSourceSpec, PixiRecord};
 use rattler_conda_types::{ChannelConfig, ChannelUrl, Platform, Version};
 use serde::Serialize;
 use thiserror::Error;
@@ -76,6 +76,9 @@ pub struct BackendSourceBuildV0Method {
     /// The directory where to place the built package. This is used as a hint
     /// for the backend, it may still place the package elsewhere.
     pub output_directory: Option<PathBuf>,
+
+    /// Whether to build the package in editable mode.
+    pub editable: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -95,6 +98,9 @@ pub struct BackendSourceBuildV1Method {
     /// The directory where to place the built package. This is used as a hint
     /// for the backend, it may still place the package elsewhere.
     pub output_directory: Option<PathBuf>,
+
+    /// Whether to build the package in editable mode.
+    pub editable: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -105,6 +111,9 @@ pub struct BackendSourceBuildPrefix {
     /// The location of the prefix on disk.
     #[serde(skip)]
     pub prefix: PathBuf,
+
+    /// The records that are installed in the prefix.
+    pub records: Vec<PixiRecord>,
 }
 
 #[derive(Debug, Serialize)]
@@ -139,7 +148,6 @@ impl BackendSourceBuildSpec {
                 Self::build_v1(
                     self.backend,
                     self.package,
-                    self.source,
                     params,
                     self.work_directory,
                     log_sink,
@@ -184,7 +192,7 @@ impl BackendSourceBuildSpec {
                             params.build_environment.host_virtual_packages.clone(),
                         ),
                     }),
-                    editable: source.is_mutable(),
+                    editable: params.editable,
                 },
                 move |line| {
                     let _err = futures::executor::block_on(log_sink.send(line));
@@ -252,7 +260,6 @@ impl BackendSourceBuildSpec {
     async fn build_v1(
         backend: Backend,
         record: PackageIdentifier,
-        source: PinnedSourceSpec,
         params: BackendSourceBuildV1Method,
         work_directory: PathBuf,
         mut log_sink: UnboundedSender<String>,
@@ -280,7 +287,7 @@ impl BackendSourceBuildSpec {
                     },
                     work_directory,
                     output_directory: params.output_directory,
-                    editable: Some(source.is_mutable()),
+                    editable: Some(params.editable),
                 },
                 move |line| {
                     let _err = futures::executor::block_on(log_sink.send(line));

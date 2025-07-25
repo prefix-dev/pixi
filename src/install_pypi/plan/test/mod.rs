@@ -2,7 +2,7 @@ use self::harness::{InstalledDistOptions, MockedSitePackages, NoCache, RequiredP
 use crate::install_pypi::NeedReinstall;
 use crate::install_pypi::plan::test::harness::AllCached;
 use assert_matches::assert_matches;
-use harness::fake_wheel;
+use harness::empty_wheel;
 use std::path::PathBuf;
 use std::str::FromStr;
 use url::Url;
@@ -19,8 +19,9 @@ fn test_no_installed_require_one() {
     let required = RequiredPackages::new().add_registry("aiofiles", "0.6.0");
 
     let plan = harness::install_planner();
+    let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required.to_borrowed())
+        .plan(&site_packages, NoCache, &required_dists)
         .expect("should install");
 
     // We should install a single package
@@ -37,14 +38,15 @@ fn test_no_installed_require_one_cached() {
     let required = RequiredPackages::new().add_registry("aiofiles", "0.6.0");
 
     let plan = harness::install_planner();
+    let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, AllCached, &required.to_borrowed())
+        .plan(&site_packages, AllCached, &required_dists)
         .expect("should install");
 
     // We should install a single package
     // from the remote because we do not cache
     assert!(installs.remote.is_empty());
-    assert_eq!(installs.local.len(), 1);
+    assert_eq!(installs.cached.len(), 1);
 }
 
 /// When we have a site-packages with the requested package, and the version matches we expect
@@ -61,8 +63,9 @@ fn test_install_required_equivalent() {
     let required = RequiredPackages::new().add_registry("aiofiles", "0.6.0");
 
     let plan = harness::install_planner();
+    let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required.to_borrowed())
+        .plan(&site_packages, NoCache, &required_dists)
         .expect("should install");
 
     // Should not install package
@@ -71,7 +74,7 @@ fn test_install_required_equivalent() {
         "found reinstalls: {:?}",
         installs.reinstalls
     );
-    assert!(installs.local.is_empty());
+    assert!(installs.cached.is_empty());
     assert!(installs.remote.is_empty());
 }
 
@@ -89,8 +92,9 @@ fn test_install_required_mismatch() {
     let required = RequiredPackages::new().add_registry("aiofiles", "0.7.0");
 
     let plan = harness::install_planner();
+    let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required.to_borrowed())
+        .plan(&site_packages, NoCache, &required_dists)
         .expect("should install");
 
     // We should install a single package
@@ -100,7 +104,7 @@ fn test_install_required_mismatch() {
         NeedReinstall::VersionMismatch { ref installed_version, ref locked_version }
         if installed_version.to_string() == "0.6.0" && locked_version.to_string() == "0.7.0"
     );
-    assert!(installs.local.is_empty());
+    assert!(installs.cached.is_empty());
     // Not cached we get it from the remote
     assert_eq!(installs.remote.len(), 1);
 }
@@ -119,8 +123,9 @@ fn test_install_required_mismatch_cached() {
     let required = RequiredPackages::new().add_registry("aiofiles", "0.7.0");
 
     let plan = harness::install_planner();
+    let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, AllCached, &required.to_borrowed())
+        .plan(&site_packages, AllCached, &required_dists)
         .expect("should install");
 
     // We should install a single package
@@ -132,7 +137,7 @@ fn test_install_required_mismatch_cached() {
     );
     assert!(installs.remote.is_empty());
     // Not cached we get it from the remote
-    assert_eq!(installs.local.len(), 1);
+    assert_eq!(installs.cached.len(), 1);
 }
 
 /// When requiring a package that has a different INSTALLER but we *do require* it
@@ -148,15 +153,16 @@ fn test_install_required_installer_mismatch() {
     let required = RequiredPackages::new().add_registry("aiofiles", "0.6.0");
 
     let plan = harness::install_planner();
+    let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required.to_borrowed())
+        .plan(&site_packages, NoCache, &required_dists)
         .expect("should install");
 
     assert_matches!(
         installs.reinstalls[0].1,
         NeedReinstall::InstallerMismatch { ref previous_installer } if previous_installer == "i-am-not-pixi"
     );
-    assert!(installs.local.is_empty());
+    assert!(installs.cached.is_empty());
     // Not cached we get it from the remote
     assert_eq!(installs.remote.len(), 1);
 }
@@ -174,12 +180,13 @@ fn test_installed_one_other_installer() {
     let required = RequiredPackages::new();
 
     let plan = harness::install_planner();
+    let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required.to_borrowed())
+        .plan(&site_packages, NoCache, &required_dists)
         .expect("should install");
 
     // We should not do anything
-    assert!(installs.local.is_empty());
+    assert!(installs.cached.is_empty());
     assert!(installs.remote.is_empty());
     assert!(installs.extraneous.is_empty());
 }
@@ -197,8 +204,9 @@ fn test_install_required_python_mismatch() {
     let required = RequiredPackages::new().add_registry("aiofiles", "0.6.0");
 
     let plan = harness::install_planner();
+    let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required.to_borrowed())
+        .plan(&site_packages, NoCache, &required_dists)
         .expect("should install");
 
     assert_matches!(
@@ -209,7 +217,7 @@ fn test_install_required_python_mismatch() {
         } if installed_python_require == "<3.12"
         && locked_python_version == "None"
     );
-    assert!(installs.local.is_empty());
+    assert!(installs.cached.is_empty());
     // Not cached we get it from the remote
     assert_eq!(installs.remote.len(), 1);
 }
@@ -226,8 +234,9 @@ fn test_installed_one_none_required() {
     let required = RequiredPackages::new();
 
     let plan = harness::install_planner();
+    let required_dists = required.to_required_dists();
     let install_plan = plan
-        .plan(&site_packages, NoCache, &required.to_borrowed())
+        .plan(&site_packages, NoCache, &required_dists)
         .expect("should install");
     assert_eq!(install_plan.extraneous.len(), 1);
 }
@@ -250,8 +259,9 @@ fn test_installed_registry_required_local_source() {
     );
 
     let plan = harness::install_planner();
+    let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required.to_borrowed())
+        .plan(&site_packages, NoCache, &required_dists)
         .expect("should install");
 
     assert_matches!(
@@ -276,8 +286,9 @@ fn test_installed_local_required_registry() {
     let required = RequiredPackages::new().add_registry("aiofiles", "0.6.0");
 
     let plan = harness::install_planner();
+    let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required.to_borrowed())
+        .plan(&site_packages, NoCache, &required_dists)
         .expect("should install");
 
     assert_matches!(
@@ -310,8 +321,9 @@ fn test_installed_local_required_local() {
     // pyproject.toml file is older than the cache, all else is the same
     // so we do not expect a re-installation
     let plan = harness::install_planner();
+    let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required.to_borrowed())
+        .plan(&site_packages, NoCache, &required_dists)
         .expect("should install");
 
     assert_eq!(
@@ -321,7 +333,7 @@ fn test_installed_local_required_local() {
         installs.reinstalls
     );
     assert!(installs.remote.is_empty());
-    assert!(installs.local.is_empty());
+    assert!(installs.cached.is_empty());
 }
 /// When requiring a local package and that same local package is installed, we should not reinstall it
 /// except if the pyproject.toml file, or some other source files we won't check here is newer than the cache
@@ -360,8 +372,9 @@ fn test_local_source_newer_than_local_metadata() {
 
     // We expect a reinstall, because the pyproject.toml file is newer than the cache
     let plan = harness::install_planner();
+    let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required.to_borrowed())
+        .plan(&site_packages, NoCache, &required_dists)
         .expect("should install");
     assert_matches!(
         installs.reinstalls[0].1,
@@ -402,11 +415,12 @@ fn test_local_source_older_than_local_metadata() {
 
     // Install plan should not reinstall anything
     let plan = harness::install_planner();
+    let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required.to_borrowed())
+        .plan(&site_packages, NoCache, &required_dists)
         .expect("should install");
     assert_eq!(installs.reinstalls.len(), 0);
-    assert_eq!(installs.local.len(), 0);
+    assert_eq!(installs.cached.len(), 0);
     assert_eq!(installs.remote.len(), 0);
 }
 
@@ -432,8 +446,9 @@ fn test_installed_editable_required_non_editable() {
     );
 
     let plan = harness::install_planner();
+    let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required.to_borrowed())
+        .plan(&site_packages, NoCache, &required_dists)
         .expect("should install");
 
     assert_matches!(
@@ -461,18 +476,20 @@ fn test_installed_archive_require_registry() {
     // Requires following package
     let required = RequiredPackages::new().add_registry("aiofiles", "0.6.0");
     let plan = harness::install_planner();
+    let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required.to_borrowed())
+        .plan(&site_packages, NoCache, &required_dists)
         .expect("should install");
 
     assert_matches!(installs.reinstalls[0].1, NeedReinstall::UrlMismatch { .. });
 
     // If we have the correct archive installed it should not reinstall
     let required = RequiredPackages::new().add_archive("aiofiles", "0.6.0", remote_url.clone());
+    let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required.to_borrowed())
+        .plan(&site_packages, NoCache, &required_dists)
         .expect("should install");
-    assert!(installs.local.is_empty());
+    assert!(installs.cached.is_empty());
     assert!(installs.remote.is_empty());
 }
 
@@ -495,8 +512,9 @@ fn test_installed_git_require_registry() {
     let required = RequiredPackages::new().add_registry("pip", "1.0.0");
 
     let plan = harness::install_planner();
+    let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required.to_borrowed())
+        .plan(&site_packages, NoCache, &required_dists)
         .expect("should install");
 
     assert_matches!(installs.reinstalls[0].1, NeedReinstall::UrlMismatch { .. });
@@ -507,8 +525,9 @@ fn test_installed_git_require_registry() {
 
     // Okay now we require the same git package, it should not reinstall
     let required = RequiredPackages::new().add_git("pip", "1.0.0", locked_git_url.clone());
+    let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required.to_borrowed())
+        .plan(&site_packages, NoCache, &required_dists)
         .expect("should install");
 
     assert!(
@@ -539,8 +558,9 @@ fn test_installed_git_require_git_commit_mismatch() {
     let required = RequiredPackages::new().add_git("pip", "1.0.0", git_url_2);
 
     let plan = harness::install_planner();
+    let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required.to_borrowed())
+        .plan(&site_packages, NoCache, &required_dists)
         .expect("should install");
 
     assert_matches!(
@@ -574,8 +594,9 @@ fn test_installed_git_the_same() {
 
     // Okay now we require the same git package, it should not reinstall
     let required = RequiredPackages::new().add_git("pip", "1.0.0", locked_git_url.clone());
+    let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required.to_borrowed())
+        .plan(&site_packages, NoCache, &required_dists)
         .expect("should install");
 
     assert!(
@@ -601,8 +622,9 @@ fn test_uv_refresh() {
         Some(true),
         vec![uv_pep508::PackageName::from_str("aiofiles").unwrap()],
     ));
+    let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, AllCached, &required.to_borrowed())
+        .plan(&site_packages, AllCached, &required_dists)
         .expect("should install");
 
     // Should not install package
@@ -610,7 +632,7 @@ fn test_uv_refresh() {
         installs.reinstalls[0].1,
         NeedReinstall::ReinstallationRequested
     );
-    assert!(installs.local.is_empty());
+    assert!(installs.cached.is_empty());
     assert_eq!(installs.remote.len(), 1);
 }
 
@@ -624,7 +646,7 @@ fn test_uv_refresh() {
 /// we would keep reinstalling foobar
 #[test]
 fn test_archive_is_path() {
-    let (tmp, _file, wheel_path) = fake_wheel("foobar");
+    let (tmp, _file, wheel_path) = empty_wheel("foobar-0.1.0-py3-none-any");
     // This needs to be absolute otherwise we cannot parse it into a file url
     let site_packages = MockedSitePackages::new().add_archive(
         "foobar",
@@ -637,15 +659,16 @@ fn test_archive_is_path() {
     let required = RequiredPackages::new().add_local_wheel(
         "foobar",
         "0.1.0",
-        PathBuf::from("./some-dir/../foobar.whl"),
+        PathBuf::from("./some-dir/../foobar-0.1.0-py3-none-any.whl"),
     );
     let plan = harness::install_planner_with_lock_dir(tmp.path().to_path_buf());
+    let required_dists = required.to_required_dists_with_lock_dir(tmp.path());
     let installs = plan
-        .plan(&site_packages, AllCached, &required.to_borrowed())
+        .plan(&site_packages, AllCached, &required_dists)
         .expect("should install");
     // Should not install package
     assert!(installs.reinstalls.is_empty());
-    assert!(installs.local.is_empty());
+    assert!(installs.cached.is_empty());
     assert!(installs.remote.is_empty());
 }
 
@@ -665,8 +688,9 @@ fn duplicates_are_not_extraneous() {
     let required = RequiredPackages::new();
 
     let plan = harness::install_planner();
+    let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required.to_borrowed())
+        .plan(&site_packages, NoCache, &required_dists)
         .expect("should install");
 
     assert!(installs.extraneous.is_empty());

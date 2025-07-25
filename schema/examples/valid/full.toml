@@ -19,6 +19,8 @@ version = "0.1.0"
 
 [project.pypi-options]
 no-build = false
+[project.pypi-options.dependency-overrides]
+numpy = { version = ">=1.21.0" }
 
 [package]
 # Inherit the name and version the workspace
@@ -125,6 +127,7 @@ test = "*"
 test = "*"
 
 [feature.yes-build.pypi-options]
+dependency-overrides = { numpy = ">=2.0.0" }
 no-build = true
 
 [feature.prod]

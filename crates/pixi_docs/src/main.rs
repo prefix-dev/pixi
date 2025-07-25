@@ -142,18 +142,28 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
             })
             .into_group_map();
 
-        let sorted_header_options = header_option_map.iter().sorted_by(|a, b| {
-            match (a.0.as_str(), b.0.as_str()) {
-                // "Options" comes first
-                ("Options", _) => Ordering::Less,
-                (_, "Options") => Ordering::Greater,
-                // "Global Options" comes last
-                ("Global Options", _) => Ordering::Greater,
-                (_, "Global Options") => Ordering::Less,
-                // Alphabetical for others
-                _ => a.0.cmp(b.0),
-            }
-        });
+        let sorted_header_options = header_option_map
+            .iter()
+            .sorted_by(|a, b| {
+                match (a.0.as_str(), b.0.as_str()) {
+                    // "Options" comes first
+                    ("Options", _) => Ordering::Less,
+                    (_, "Options") => Ordering::Greater,
+                    // "Global Options" comes last
+                    ("Global Options", _) => Ordering::Greater,
+                    (_, "Global Options") => Ordering::Less,
+                    // Alphabetical for others
+                    _ => a.0.cmp(b.0),
+                }
+            })
+            .filter_map(|(header, opts)| {
+                // If all options are hidden, skip this header
+                if opts.iter().all(|o| o.is_hide_set()) {
+                    None
+                } else {
+                    Some((header, opts))
+                }
+            });
 
         for (header, opts) in sorted_header_options {
             writeln!(buffer, "\n## {}", header).unwrap();
