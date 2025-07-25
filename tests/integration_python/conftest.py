@@ -149,7 +149,7 @@ def git_test_repo(tmp_path: Path) -> Generator[Callable[[Path, str], GitTestRepo
 
     def _create_git_repo(source_dir: Path, repo_name: str) -> GitTestRepo:
         repo = GitTestRepo(source_dir, repo_name, tmp_path)
-        repo.create_bare_repo()
+        repo.setup()
         repos.append(repo)
         return repo
 
