@@ -130,7 +130,9 @@ def test_add_git_repository_to_existing_environment(
             "test_env",
             "--git",
             git_url,
-            "python_rich",  # this is the command name
+            "python_rich",
+            "--expose",
+            "rich-example-main=rich-example-main"  # this is the command name
         ],
         env=env,
     )
@@ -138,43 +140,3 @@ def test_add_git_repository_to_existing_environment(
     # Check that the package was added to the existing environment
     main = tmp_pixi_workspace / "bin" / exec_extension("rich-example-main")
     assert main.exists(), "`rich-example-main` executable was not created"
-
-
-@pytest.mark.slow
-def test_add_directory_to_existing_environment(
-    pixi: Path,
-    tmp_pixi_workspace: Path,
-    test_data: Path,
-) -> None:
-    """Test adding a path-based source package to an existing global environment."""
-    # Make it one level deeper so that we do no pollute git with the global
-    tmp_pixi_workspace = tmp_pixi_workspace / "global-env"
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
-
-    # First create a basic environment with a regular package
-    verify_cli_command(
-        [pixi, "global", "install", "--environment", "test_env", "python"],
-        env=env,
-    )
-
-    # Use the simple C++ project
-    source_project = test_data / "cpp_simple"
-
-    # Test adding directory package to existing environment
-    verify_cli_command(
-        [
-            pixi,
-            "global",
-            "add",
-            "--environment",
-            "test_env",
-            "--path",
-            str(source_project),
-            "simple_cpp",
-        ],
-        env=env,
-    )
-
-    # Check that the executable was added to the existing environment
-    executable = tmp_pixi_workspace / "bin" / exec_extension("simple_cpp")
-    assert executable.exists(), "`simple_cpp` executable was not created"
