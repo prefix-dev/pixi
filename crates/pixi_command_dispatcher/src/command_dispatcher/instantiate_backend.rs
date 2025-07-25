@@ -8,7 +8,6 @@ use pixi_build_frontend::{
     tool::{IsolatedTool, SystemTool, Tool},
 };
 use pixi_build_types::{PixiBuildApiVersion, procedures::initialize::InitializeParams};
-use pixi_spec::PixiSpec;
 use rattler_conda_types::ChannelConfig;
 use rattler_shell::{
     activation::{ActivationError, ActivationVariables, Activator},
@@ -81,15 +80,8 @@ impl CommandDispatcher {
                 let (tool_platform, tool_platform_virtual_packages) = self.tool_platform();
                 let InstantiateToolEnvironmentResult { prefix, api } = self
                     .instantiate_tool_environment(InstantiateToolEnvironmentSpec {
-                        requirement: (
-                            env_spec.requirement.0,
-                            PixiSpec::from(env_spec.requirement.1),
-                        ),
-                        additional_requirements: env_spec
-                            .additional_requirements
-                            .into_specs()
-                            .map(|(name, spec)| (name, PixiSpec::from(spec)))
-                            .collect(),
+                        requirement: env_spec.requirement,
+                        additional_requirements: env_spec.additional_requirements,
                         constraints: env_spec.constraints,
                         build_environment: BuildEnvironment {
                             host_platform: tool_platform,
