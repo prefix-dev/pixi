@@ -582,8 +582,12 @@ mod tests {
         let result = get_export_specific_task_env(task, my_map);
 
         let expected_prefix = "export \"FOO=bar\"";
+        let path_prefix = "export \"PATH=myPath\"";
+        let home_prefix = "export \"HOME=myHome\"";
 
         assert!(result.contains(expected_prefix));
+        assert!(!result.contains(path_prefix));
+        assert!(!result.contains(home_prefix));
     }
 
     #[test]
@@ -611,7 +615,9 @@ mod tests {
         let result = get_export_specific_task_env(task, my_map);
         // task specific env overrides outside environment variables
         let expected_prefix = "export \"FOO=bar\"";
+        let home_prefix = "export \"HOME=myHome\"";
         assert!(result.contains(expected_prefix));
+        assert!(!result.contains(home_prefix));
     }
 
     #[test]
@@ -651,7 +657,12 @@ mod tests {
         let expected_prefix = "export \"FOO=bar\"";
 
         let script = result.unwrap().expect("Script should not be None");
+        let path_prefix = "export \"PATH=myPath\"";
+        let home_prefix = "export \"HOME=myHome\"";
+
         assert!(script.contains(expected_prefix));
+        assert!(!script.contains(path_prefix));
+        assert!(!script.contains(home_prefix));
     }
 
     #[tokio::test]
