@@ -1,8 +1,4 @@
-use std::{
-    collections::HashMap,
-    path::Path,
-    sync::Arc,
-};
+use std::{collections::HashMap, path::Path, sync::Arc};
 
 use crate::environment::{ContinuePyPIPrefixUpdate, on_python_interpreter_change};
 use conda_pypi_clobber::PypiCondaClobberRegistry;
@@ -274,11 +270,11 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         setup: &UvInstallerConfig,
     ) -> miette::Result<PyPIInstallationPlan> {
         // Create required distributions with pre-created Dist objects
-        let required_packages: Vec<_> =
-            pypi_records.iter().map(|(pkg, _)| pkg.clone()).collect();
-        let required_dists = RequiredDists::from_packages(&required_packages, self.config.lock_file_dir)
-            .into_diagnostic()
-            .context("Failed to create required distributions")?;
+        let required_packages: Vec<_> = pypi_records.iter().map(|(pkg, _)| pkg.clone()).collect();
+        let required_dists =
+            RequiredDists::from_packages(&required_packages, self.config.lock_file_dir)
+                .into_diagnostic()
+                .context("Failed to create required distributions")?;
 
         // Find out what packages are already installed
         let site_packages =
@@ -306,15 +302,17 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
 
         // Partition into those that should be linked from the cache (`cached`), those
         // that need to be downloaded (`remote`)
-        let installation_plan =
-            InstallPlanner::new(self.context_config.uv_context.cache.clone(), self.config.lock_file_dir)
-                .plan(
-                    &site_packages,
-                    CachedWheels::new(registry_index, built_wheel_index),
-                    &required_dists,
-                )
-                .into_diagnostic()
-                .context("error while determining PyPI installation plan")?;
+        let installation_plan = InstallPlanner::new(
+            self.context_config.uv_context.cache.clone(),
+            self.config.lock_file_dir,
+        )
+        .plan(
+            &site_packages,
+            CachedWheels::new(registry_index, built_wheel_index),
+            &required_dists,
+        )
+        .into_diagnostic()
+        .context("error while determining PyPI installation plan")?;
 
         // Show totals
         let total_to_install = installation_plan.cached.len() + installation_plan.remote.len();
