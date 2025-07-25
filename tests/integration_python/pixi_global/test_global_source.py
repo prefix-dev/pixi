@@ -132,7 +132,7 @@ def test_add_git_repository_to_existing_environment(
             git_url,
             "python_rich",
             "--expose",
-            "rich-example-main=rich-example-main"  # this is the command name
+            "rich-example-main=rich-example-main",  # this is the command name
         ],
         env=env,
     )
