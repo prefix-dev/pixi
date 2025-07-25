@@ -104,21 +104,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let mut project_modified = project_original.clone();
 
-    let (specs, source): (Vec<_>, Vec<_>) = args
+    let specs = args
         .packages
         .to_global_specs(project_original.global_channel_config())?
         .into_iter()
         // TODO: will allow nameless specs later
         .filter_map(|s| s.into_named())
-        // TODO: Filter out non-binary specs, we are adding support for them later
-        .partition(|s| s.spec().is_binary());
-
-    if !source.is_empty() {
-        tracing::warn!(
-            "Ignoring found source packages {}. Implementation will be added soon.",
-            source.iter().map(|s| s.name().as_source()).join(", ")
-        );
-    }
+        .collect_vec();
 
     match apply_changes(
         &args.environment,
