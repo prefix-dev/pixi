@@ -286,7 +286,7 @@ pub async fn run_activation(
         let current_env = std::env::vars().collect::<HashMap<_, _>>();
 
         // Run and cache the activation script
-        activator.run_activation(
+        let new_activator = activator.run_activation(
             ActivationVariables {
                 // Get the current PATH variable
                 path: Default::default(),
@@ -301,7 +301,15 @@ pub async fn run_activation(
                 current_env,
             },
             None,
-        )
+        );
+
+        // `activator.env_vars` should override `activator_result` for duplicate keys
+        new_activator.map(|mut map| {
+            for (k, v) in &activator.env_vars {
+                map.insert(k.clone(), v.clone());
+            }
+            map
+        })
     })
     .await
     .into_diagnostic()?
