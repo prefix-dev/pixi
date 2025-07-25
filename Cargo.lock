@@ -4345,6 +4345,7 @@ dependencies = [
  "reqwest-middleware",
  "rlimit",
  "rstest",
+ "same-file",
  "self-replace",
  "serde",
  "serde_json",
