@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from .common import verify_cli_command, ALL_PLATFORMS
+from .common import ALL_PLATFORMS, verify_cli_command
 
 
 def test_variable_expansion(pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -14,6 +14,9 @@ def test_variable_expansion(pixi: Path, tmp_pixi_workspace: Path) -> None:
 
         [activation.env]
         TEST_VAR = "$PIXI_PROJECT_NAME"
+
+        [target.win-64.activation.env]
+        TEST_VAR = "%PIXI_PROJECT_NAME%"
 
         [tasks]
         start = "echo The project name is $TEST_VAR"
