@@ -429,6 +429,7 @@ impl WorkspaceMut {
                     &self.workspace().default_environment(),
                     UpdateMode::Revalidate,
                     &ReinstallPackages::default(),
+                    &[],
                 )
                 .await?;
         }

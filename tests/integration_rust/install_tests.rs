@@ -28,6 +28,7 @@ use tempfile::{TempDir, tempdir};
 use tokio::{fs, task::JoinSet};
 use url::Url;
 use uv_configuration::RAYON_INITIALIZE;
+use uv_pep508::PackageName;
 use uv_python::PythonEnvironment;
 
 use crate::common::{
@@ -322,6 +323,63 @@ fn create_uv_environment(prefix: &Path, cache: &uv_cache::Cache) -> PythonEnviro
     uv_python::PythonEnvironment::from_interpreter(interpreter)
 }
 
+/// Test `pixi install --frozen --skip` functionality
+#[tokio::test]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn install_frozen_skip() {
+    // Create a project with a local python dependency 'no-build-editable'
+    // and a local conda dependency 'simple'
+    let current_platform = Platform::current();
+    let manifest = format!(
+        r#"
+        [workspace]
+        channels = ["conda-forge"]
+        description = "Add a short description here"
+        name = "pyproject"
+        platforms = ["{platform}"]
+        preview = ["pixi-build"]
+        version = "0.1.0"
+
+        [dependencies]
+        python = "*"
+
+        [pypi-dependencies]
+        no-build-editable = {{path = "./no-build-editable"}}
+        "#,
+        platform = current_platform,
+    );
+
+    let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
+
+    fs_extra::dir::copy(
+        "tests/data/satisfiability/no-build-editable",
+        pixi.workspace_path(),
+        &fs_extra::dir::CopyOptions::new(),
+    )
+    .unwrap();
+
+    pixi.update_lock_file().await.unwrap();
+
+    // Check that 'no-build-editable' is not installed when --skip
+    pixi.install()
+        .with_frozen()
+        .with_skipped(vec!["no-build-editable".into()])
+        .await
+        .unwrap();
+    let prefix = pixi.default_env_path().unwrap();
+    let cache = uv_cache::Cache::temp().unwrap();
+    let env = create_uv_environment(&prefix, &cache);
+    let packages = uv_installer::SitePackages::from_environment(&env).unwrap();
+    packages.get_packages(&PackageName::from_str("no-build-editable").unwrap());
+    assert!(packages.iter().count() == 0);
+
+    // Check that 'no-build-editable' is installed after a followup normal install
+    pixi.install().with_frozen().await.unwrap();
+    let packages = uv_installer::SitePackages::from_environment(&env).unwrap();
+    packages.get_packages(&PackageName::from_str("no-build-editable").unwrap());
+    assert!(packages.iter().count() > 0);
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn pypi_reinstall_python() {
@@ -601,6 +659,7 @@ async fn test_old_lock_install() {
             ..Default::default()
         },
         ReinstallPackages::default(),
+        &[],
     )
     .await
     .unwrap();

@@ -17,6 +17,9 @@ pixi install [OPTIONS]
 <br>May be provided more than once.
 - <a id="arg---all" href="#arg---all">`--all (-a)`</a>
 :  Install all environments
+- <a id="arg---skip" href="#arg---skip">`--skip <SKIP>`</a>
+:  Skip installation of specific packages present in the lockfile. Requires --frozen This can be useful in particular for skipping local source dependencies
+<br>May be provided more than once.
 
 ## Config Options
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
