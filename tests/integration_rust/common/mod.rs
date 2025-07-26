@@ -531,7 +531,7 @@ impl PixiControl {
                             &task.run_environment,
                             UpdateMode::Revalidate,
                             &ReinstallPackages::default(),
-                            false
+                            &[],
                         )
                         .await?;
                     let env =
@@ -574,7 +574,7 @@ impl PixiControl {
                 },
                 config: Default::default(),
                 all: false,
-                skip_local_sources: false,
+                skip: None,
             },
         }
     }

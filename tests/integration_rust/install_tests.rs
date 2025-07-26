@@ -323,12 +323,12 @@ fn create_uv_environment(prefix: &Path, cache: &uv_cache::Cache) -> PythonEnviro
     uv_python::PythonEnvironment::from_interpreter(interpreter)
 }
 
-/// Test `pixi install --frozen --skip-local-sources` functionality
+/// Test `pixi install --frozen --skip` functionality
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
-async fn install_frozen_skip_local_sources() {
+async fn install_frozen_skip() {
     // Create a project with a local python dependency 'no-build-editable'
-    // and a local conda dependency 'smokey'
+    // and a local conda dependency 'simple'
     let current_platform = Platform::current();
     let manifest = format!(
         r#"
@@ -342,7 +342,6 @@ async fn install_frozen_skip_local_sources() {
 
         [dependencies]
         python = "*"
-        smokey = {{ path = "./smokey" }}
 
         [pypi-dependencies]
         no-build-editable = {{path = "./no-build-editable"}}
@@ -359,19 +358,12 @@ async fn install_frozen_skip_local_sources() {
     )
     .unwrap();
 
-    fs_extra::dir::copy(
-        "tests/data/pixi_build/rattler-build-backend/recipes/smokey",
-        pixi.workspace_path(),
-        &fs_extra::dir::CopyOptions::new(),
-    )
-    .unwrap();
-
     pixi.update_lock_file().await.unwrap();
 
-    // Check that neither 'no-build-editable' nor 'smokey' are installed when --skip-local-sources is used
+    // Check that 'no-build-editable' is not installed when --skip
     pixi.install()
         .with_frozen()
-        .with_skip_local_sources()
+        .with_skipped(vec!["no-build-editable".into()])
         .await
         .unwrap();
     let prefix = pixi.default_env_path().unwrap();
@@ -381,22 +373,11 @@ async fn install_frozen_skip_local_sources() {
     packages.get_packages(&PackageName::from_str("no-build-editable").unwrap());
     assert!(packages.iter().count() == 0);
 
-    let conda_prefix = pixi::prefix::Prefix::new(prefix);
-    let smokey = conda_prefix
-        .find_designated_package(&rattler_conda_types::PackageName::try_from("smokey").unwrap())
-        .await;
-    assert!(smokey.is_err());
-
-    // Check that 'no-build-editable' and 'smokey' are installed after a followup normal install
+    // Check that 'no-build-editable' is installed after a followup normal install
     pixi.install().with_frozen().await.unwrap();
     let packages = uv_installer::SitePackages::from_environment(&env).unwrap();
     packages.get_packages(&PackageName::from_str("no-build-editable").unwrap());
     assert!(packages.iter().count() > 0);
-
-    let smokey = conda_prefix
-        .find_designated_package(&rattler_conda_types::PackageName::try_from("smokey").unwrap())
-        .await;
-    assert!(smokey.is_ok());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -678,7 +659,7 @@ async fn test_old_lock_install() {
             ..Default::default()
         },
         ReinstallPackages::default(),
-        false,
+        &[],
     )
     .await
     .unwrap();

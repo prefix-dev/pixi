@@ -16,7 +16,7 @@ use pixi_spec::{GitSpec, PixiSpec};
 pub use pypi_prefix::update_prefix_pypi;
 pub use python_status::PythonStatus;
 use rattler_conda_types::Platform;
-use rattler_lock::{LockedPackageRef, UrlOrPath};
+use rattler_lock::LockedPackageRef;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::{
@@ -111,14 +111,14 @@ impl LockedEnvironmentHash {
     pub(crate) fn from_environment(
         environment: rattler_lock::Environment,
         platform: Platform,
-        skip_local_sources: bool,
+        skipped: &[String],
     ) -> Self {
         let mut hasher = Xxh3::new();
 
         if let Some(packages) = environment.packages(platform) {
             for package in packages
-                // exclude packages with a path from hash if skip_local_sources is true
-                .filter(|p| !skip_local_sources || matches!(p.location(), UrlOrPath::Url(_)))
+                // exclude skipped packages
+                .filter(|p| !skipped.iter().any(|s| s == p.name()))
             {
                 // Always has the url or path
                 package.location().to_owned().to_string().hash(&mut hasher);
@@ -422,14 +422,14 @@ pub async fn get_update_lock_file_and_prefix<'env>(
     update_mode: UpdateMode,
     update_lock_file_options: UpdateLockFileOptions,
     reinstall_packages: ReinstallPackages,
-    skip_local_sources: bool,
+    skipped: &[String],
 ) -> miette::Result<(LockFileDerivedData<'env>, Prefix)> {
     let (lock_file, prefixes) = get_update_lock_file_and_prefixes(
         &[environment.clone()],
         update_mode,
         update_lock_file_options,
         reinstall_packages,
-        skip_local_sources,
+        skipped,
     )
     .await?;
     Ok((
@@ -448,7 +448,7 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
     update_mode: UpdateMode,
     update_lock_file_options: UpdateLockFileOptions,
     reinstall_packages: ReinstallPackages,
-    skip_local_sources: bool,
+    skipped: &[String],
 ) -> miette::Result<(LockFileDerivedData<'env>, Vec<Prefix>)> {
     if environments.is_empty() {
         return Err(miette::miette!("No environments provided to install."));
@@ -494,7 +494,7 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
                 std::future::ready(Ok(Prefix::new(env.dir()))).left_future()
             } else {
                 lock_file_ref
-                    .prefix(env, update_mode, reinstall_packages, skip_local_sources)
+                    .prefix(env, update_mode, reinstall_packages, skipped)
                     .right_future()
             }
         })

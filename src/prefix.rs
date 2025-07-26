@@ -37,7 +37,7 @@ pub struct Prefix {
 
 impl Prefix {
     /// Constructs a new instance.
-    pub fn new(path: impl Into<PathBuf>) -> Self {
+    pub(crate) fn new(path: impl Into<PathBuf>) -> Self {
         let root = path.into();
         Self { root }
     }

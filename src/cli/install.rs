@@ -49,9 +49,10 @@ pub struct Args {
     #[arg(long, short, conflicts_with = "environment")]
     pub all: bool,
 
-    /// Do not install local source dependencies. Requires --frozen
+    /// Skip installation of specific packages present in the lockfile. Requires --frozen
+    /// This can be useful in particular for skipping local source dependencies.
     #[arg(long, requires = "frozen")]
-    pub skip_local_sources: bool,
+    pub skip: Option<Vec<String>>,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -93,7 +94,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         },
         ReinstallPackages::default(),
-        args.skip_local_sources,
+        &args.skip.clone().unwrap_or_default(),
     )
     .await?;
 
@@ -130,8 +131,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .unwrap()
     }
 
-    if args.skip_local_sources {
-        write!(&mut message, " without local source dependencies").unwrap()
+    if let Some(skip) = args.skip {
+        if !skip.is_empty() {
+            write!(&mut message, " excluding {}", skip.join(", ")).unwrap()
+        }
     }
 
     eprintln!("{}.", message);
