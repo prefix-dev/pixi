@@ -255,6 +255,7 @@ Commands:
   install     Install all dependencies
   task        Command management in project
   info        Information about the system and project
+  list        List installed dependencies
   upload      Upload a package to a prefix.dev channel
   search      Search a package, output will list the latest version of package
   project
