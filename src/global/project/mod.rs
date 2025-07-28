@@ -23,9 +23,9 @@ use parsed_manifest::ParsedManifest;
 pub(crate) use parsed_manifest::{ExposedName, ParsedEnvironment};
 use pixi_build_discovery::EnabledProtocols;
 use pixi_command_dispatcher::{
-    BuildEnvironment, CommandDispatcher, InstallPixiEnvironmentSpec, PixiEnvironmentSpec,
+    BuildEnvironment, CommandDispatcher, InstallPixiEnvironmentSpec, Limits, PixiEnvironmentSpec,
 };
-use pixi_config::{Config, default_channel_config, pixi_home};
+use pixi_config::{Config, RunPostLinkScripts, default_channel_config, pixi_home};
 use pixi_consts::consts::{self};
 use pixi_manifest::PrioritizedChannel;
 use pixi_progress::global_multi_progress;
@@ -71,6 +71,7 @@ mod global_spec;
 mod manifest;
 mod parsed_manifest;
 pub use global_spec::{FromMatchSpecError, GlobalSpec, NamedGlobalSpec};
+use pixi_build_frontend::BackendOverride;
 
 pub(crate) const MANIFESTS_DIR: &str = "manifests";
 
@@ -1285,8 +1286,19 @@ impl Project {
             Ok(pixi_command_dispatcher::CommandDispatcher::builder()
                 .with_gateway(self.repodata_gateway()?.clone())
                 .with_cache_dirs(cache_dirs)
-                .with_reporter(TopLevelProgress::new(multi_progress, anchor_pb))
                 .with_root_dir(self.root.clone())
+                .with_download_client(self.authenticated_client()?.clone())
+                .with_max_download_concurrency(self.concurrent_downloads_semaphore())
+                .with_limits(Limits {
+                    max_concurrent_solves: self.config().max_concurrent_solves().into(),
+                    ..Limits::default()
+                })
+                .with_backend_overrides(BackendOverride::from_env()?.unwrap_or_default())
+                .execute_link_scripts(match self.config.run_post_link_scripts() {
+                    RunPostLinkScripts::Insecure => true,
+                    RunPostLinkScripts::False => false,
+                })
+                .with_reporter(TopLevelProgress::new(multi_progress, anchor_pb))
                 .finish())
         })
     }
