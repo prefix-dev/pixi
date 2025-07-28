@@ -18,10 +18,10 @@ pixi build [OPTIONS]
 - <a id="arg---output-dir" href="#arg---output-dir">`--output-dir (-o) <OUTPUT_DIR>`</a>
 :  The output directory to place the built artifacts
 <br>**default**: `.`
-- <a id="arg---no-incremental" href="#arg---no-incremental">`--no-incremental (-n)`</a>
-:  Whether to build incrementally if possible
 - <a id="arg---build-dir" href="#arg---build-dir">`--build-dir (-b) <BUILD_DIR>`</a>
 :  The directory to use for incremental builds artifacts
+- <a id="arg---clean" href="#arg---clean">`--clean (-c)`</a>
+:  Whether to clean the build directory before building
 
 ## Config Options
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>

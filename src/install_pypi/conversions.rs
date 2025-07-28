@@ -88,6 +88,8 @@ pub enum ConvertToUvDistError {
     LockedUrl(String, String),
     #[error("Hash verification failed: {0}")]
     InvalidHash(String),
+    #[error("invalid package name: {0}")]
+    InvalidPackageName(String),
 
     #[error(transparent)]
     UvPepTypes(#[from] ConversionError),

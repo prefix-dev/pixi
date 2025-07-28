@@ -149,6 +149,7 @@ Config {
             },
         ),
     },
+    tool_platform: None,
     change_ps1: None,
     force_activate: None,
 }

@@ -3,23 +3,21 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use super::{reasons, validation::NeedsReinstallError};
+use super::{
+    installation_source::{self, Operation},
+    validation::NeedsReinstallError,
+};
 use itertools::{Either, Itertools};
 use pixi_consts::consts;
-use pixi_uv_conversions::to_uv_version;
-use rattler_lock::PypiPackageData;
 use std::collections::HashSet;
 use uv_cache::Cache;
-use uv_distribution_types::{CachedDist, Dist, InstalledDist, Name};
+use uv_distribution_types::{InstalledDist, Name};
 
-use crate::install_pypi::conversions::{ConvertToUvDistError, convert_to_dist};
+use crate::install_pypi::conversions::ConvertToUvDistError;
 
 use super::{
-    InstallReason, NeedReinstall, PyPIInstallationPlan,
-    models::ValidateCurrentInstall,
-    providers::{CachedDistProvider, InstalledDistProvider},
-    reasons::OperationToReason,
-    validation::need_reinstall,
+    NeedReinstall, PyPIInstallationPlan, RequiredDists, cache::DistCache,
+    installed_dists::InstalledDists, models::ValidateCurrentInstall, validation::need_reinstall,
 };
 
 /// Struct that handles the planning of the installation
@@ -46,6 +44,8 @@ pub enum InstallPlannerError {
     ConvertToUvDist(#[from] ConvertToUvDistError),
     #[error(transparent)]
     UvConversion(#[from] pixi_uv_conversions::ConversionError),
+    #[error(transparent)]
+    RetrieveDistFromCache(#[from] uv_distribution::Error),
 }
 
 impl InstallPlanner {
@@ -65,60 +65,23 @@ impl InstallPlanner {
         }
     }
 
-    /// Decide if we need to get the distribution from the local cache or the registry
-    /// this method will add the distribution to the local or remote vector,
-    /// depending on whether the version is stale, available locally or not
-    fn decide_installation_source<'a, Op: OperationToReason>(
-        &self,
-        name: &'a uv_normalize::PackageName,
-        required_pkg: &PypiPackageData,
-        local: &mut Vec<(CachedDist, InstallReason)>,
-        remote: &mut Vec<(Dist, InstallReason)>,
-        dist_cache: &mut impl CachedDistProvider<'a>,
-        op_to_reason: Op,
-    ) -> Result<(), InstallPlannerError> {
-        // Okay so we need to re-install the package
-        // let's see if we need the remote or local version
-
-        // First, check if we need to revalidate the package
-        // then we should get it from the remote
-        if self.uv_cache.must_revalidate_package(name) {
-            remote.push((
-                convert_to_dist(required_pkg, &self.lock_file_dir)?,
-                op_to_reason.stale(),
-            ));
-            return Ok(());
-        }
-        let uv_version = to_uv_version(&required_pkg.version)?;
-        // If it is not stale its either in the registry cache or not
-        let cached = dist_cache.get_cached_dist(name, uv_version, required_pkg.hash.as_ref());
-        // If we have it in the cache we can use that
-        if let Some(distribution) = cached {
-            local.push((CachedDist::Registry(distribution), op_to_reason.cached()));
-        // If we don't have it in the cache we need to download it
-        } else {
-            remote.push((
-                convert_to_dist(required_pkg, &self.lock_file_dir)?,
-                op_to_reason.missing(),
-            ));
-        }
-
-        Ok(())
-    }
 
     /// Figure out what we can link from the cache locally
     /// and what we need to download from the registry.
     ///
     /// All the 'a lifetimes are to to make sure that the names provided to the CachedDistProvider
     /// are valid for the lifetime of the CachedDistProvider and what is passed to the method
-    pub fn plan<'a, Installed: InstalledDistProvider<'a>, Cached: CachedDistProvider<'a> + 'a>(
+    pub fn plan<'a, Installed: InstalledDists<'a>, Cached: DistCache<'a> + 'a>(
         &self,
         site_packages: &'a Installed,
         mut dist_cache: Cached,
-        required_pkgs: &'a HashMap<uv_normalize::PackageName, &PypiPackageData>,
+        required_dists: &'a RequiredDists,
     ) -> Result<PyPIInstallationPlan, InstallPlannerError> {
+        // Convert RequiredDists to the reference map for internal processing
+        let required_dists_map = required_dists.as_ref_map();
+
         // Packages to be installed directly from the cache
-        let mut local = vec![];
+        let mut cached = vec![];
         // Try to install from the registry or direct url or w/e
         let mut remote = vec![];
         // Packages that need to be reinstalled
@@ -132,14 +95,14 @@ impl InstallPlanner {
         // Walk over all installed packages and check if they are required
         for dist in site_packages.iter() {
             // Check if we require the package to be installed
-            let pkg = required_pkgs.get(dist.name());
+            let pkg_and_dist = required_dists_map.get(dist.name());
             // Get the installer name
             let installer = dist
                 .installer()
                 // Empty string if no installer or any other error
                 .map_or(String::new(), |f| f.unwrap_or_default());
 
-            if let Some(required_pkg) = pkg {
+            if let Some((required_pkg, required_dist)) = pkg_and_dist {
                 // Add to the list of previously installed packages
                 prev_installed_packages.insert(dist.name());
                 // Check if we need this package installed but it is not currently installed by us
@@ -170,34 +133,41 @@ impl InstallPlanner {
                         }
                     }
                 }
+                // Use pre-created dist for cache resolution
                 // Okay so we need to re-install the package
                 // let's see if we need the remote or local version
-                self.decide_installation_source(
-                    dist.name(),
-                    required_pkg,
-                    &mut local,
-                    &mut remote,
+                let installation_sources = installation_source::decide_installation_source(
+                    &self.uv_cache,
+                    required_dist,
                     &mut dist_cache,
-                    reasons::Reinstall,
-                )?;
+                    Operation::Reinstall,
+                )
+                .map_err(InstallPlannerError::from)?;
+
+                cached.extend(installation_sources.cached);
+                remote.extend(installation_sources.remote);
             }
         }
 
         // Now we need to check if we have any packages left in the required_map
-        for (name, pkg) in required_pkgs
+        for (_name, (_pkg, dist)) in required_dists_map
             .iter()
             // Only check the packages that have not been previously installed
             .filter(|(name, _)| !prev_installed_packages.contains(name))
         {
-            // Decide if we need to get the distribution from the local cache or the registry
-            self.decide_installation_source(
-                name,
-                pkg,
-                &mut local,
-                &mut remote,
+            // Use pre-created dist for cache resolution
+            // Okay so we need to re-install the package
+            // let's see if we need the remote or local version
+            let installation_sources = installation_source::decide_installation_source(
+                &self.uv_cache,
+                dist,
                 &mut dist_cache,
-                reasons::Install,
-            )?;
+                Operation::Install,
+            )
+            .map_err(InstallPlannerError::from)?;
+
+            cached.extend(installation_sources.cached);
+            remote.extend(installation_sources.remote);
         }
 
         #[derive(Debug)]
@@ -209,7 +179,8 @@ impl InstallPlanner {
         // Walk over all installed packages and check if they are required
         let mut extraneous = HashMap::new();
         for dist in site_packages.iter() {
-            let pkg = required_pkgs.get(dist.name());
+            let pkg_and_dist = required_dists_map.get(dist.name());
+            let pkg = pkg_and_dist.map(|(pkg, _dist)| *pkg);
             let installer = dist
                 .installer()
                 .map_or(String::new(), |f| f.unwrap_or_default());
@@ -275,7 +246,7 @@ impl InstallPlanner {
             });
 
         Ok(PyPIInstallationPlan {
-            local,
+            cached,
             remote,
             reinstalls,
             extraneous: extraneous.into_iter().flatten().collect(),

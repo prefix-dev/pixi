@@ -32,6 +32,17 @@ pub enum DiscoveryStart {
     ExplicitManifest(PathBuf),
 }
 
+impl DiscoveryStart {
+    /// Returns the path where the search should start.
+    pub fn path(&self) -> std::io::Result<PathBuf> {
+        match self {
+            DiscoveryStart::CurrentDir => std::env::current_dir(),
+            DiscoveryStart::SearchRoot(path) => Ok(path.clone()),
+            DiscoveryStart::ExplicitManifest(path) => Ok(path.clone()),
+        }
+    }
+}
+
 /// A helper struct that helps discover the workspace root and potentially the
 /// "current" package.
 #[derive(Default)]
@@ -274,8 +285,9 @@ impl WorkspaceLocator {
 
 #[cfg(test)]
 mod test {
-    use super::*;
     use std::path::{Path, PathBuf};
+
+    use super::*;
 
     #[test]
     fn test_workspace_locator() {

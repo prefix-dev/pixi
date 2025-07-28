@@ -1,7 +1,8 @@
 use std::str::FromStr;
 
+use pixi_spec::BinarySpec;
 use pixi_spec_containers::DependencyMap;
-use rattler_conda_types::{Channel, ChannelConfig, ChannelUrl, NamelessMatchSpec};
+use rattler_conda_types::{Channel, ChannelConfig, ChannelUrl};
 use url::Url;
 
 /// Describes how a backend should be instantiated.
@@ -54,21 +55,21 @@ pub struct SystemCommandSpec {
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub struct EnvironmentSpec {
     /// The main requirement
-    pub requirement: (rattler_conda_types::PackageName, NamelessMatchSpec),
+    pub requirement: (rattler_conda_types::PackageName, BinarySpec),
 
     /// The requirements for the environment.
     #[cfg_attr(
         feature = "serde",
         serde(skip_serializing_if = "DependencyMap::is_empty")
     )]
-    pub additional_requirements: DependencyMap<rattler_conda_types::PackageName, NamelessMatchSpec>,
+    pub additional_requirements: DependencyMap<rattler_conda_types::PackageName, BinarySpec>,
 
     /// Additional constraints to apply to the environment
     #[cfg_attr(
         feature = "serde",
         serde(skip_serializing_if = "DependencyMap::is_empty")
     )]
-    pub constraints: DependencyMap<rattler_conda_types::PackageName, NamelessMatchSpec>,
+    pub constraints: DependencyMap<rattler_conda_types::PackageName, BinarySpec>,
 
     /// The channels to use for solving
     pub channels: Vec<ChannelUrl>,
@@ -92,10 +93,7 @@ impl JsonRpcBackendSpec {
         Self {
             name: DEFAULT_BUILD_TOOL.to_string(),
             command: CommandSpec::EnvironmentSpec(Box::new(EnvironmentSpec {
-                requirement: (
-                    DEFAULT_BUILD_TOOL.parse().unwrap(),
-                    NamelessMatchSpec::default(),
-                ),
+                requirement: (DEFAULT_BUILD_TOOL.parse().unwrap(), BinarySpec::any()),
                 additional_requirements: Default::default(),
                 constraints: Default::default(),
                 channels: vec![conda_forge_channel, backends_channel],

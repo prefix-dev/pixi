@@ -438,7 +438,7 @@ packages:
   - libgcc >=15
   - python_abi 3.11.* *_cp311
   input:
-    hash: 7e70cb22029453824857bc6f17a3e3b4fac8a6e1a070133ed207bc5dbee904e0
+    hash: 4fbee37587da7082f043da95d7ff73402ffe968386b69f5bb6879bc0c7703cd2
     globs: []
 - conda: packages/cpp_math
   name: cpp_math
@@ -449,7 +449,7 @@ packages:
   - libcxx >=20
   - python_abi 3.11.* *_cp311
   input:
-    hash: 7e70cb22029453824857bc6f17a3e3b4fac8a6e1a070133ed207bc5dbee904e0
+    hash: 4fbee37587da7082f043da95d7ff73402ffe968386b69f5bb6879bc0c7703cd2
     globs: []
 - conda: packages/cpp_math
   name: cpp_math
@@ -460,7 +460,7 @@ packages:
   - libcxx >=20
   - python_abi 3.11.* *_cp311
   input:
-    hash: 7e70cb22029453824857bc6f17a3e3b4fac8a6e1a070133ed207bc5dbee904e0
+    hash: 4fbee37587da7082f043da95d7ff73402ffe968386b69f5bb6879bc0c7703cd2
     globs: []
 - conda: packages/cpp_math
   name: cpp_math
@@ -473,7 +473,7 @@ packages:
   - ucrt >=10.0.20348.0
   - python_abi 3.11.* *_cp311
   input:
-    hash: 7e70cb22029453824857bc6f17a3e3b4fac8a6e1a070133ed207bc5dbee904e0
+    hash: 4fbee37587da7082f043da95d7ff73402ffe968386b69f5bb6879bc0c7703cd2
     globs: []
 - conda: packages/cpp_math
   name: cpp_math
@@ -485,7 +485,7 @@ packages:
   - libgcc >=15
   - python_abi 3.12.* *_cp312
   input:
-    hash: 7e70cb22029453824857bc6f17a3e3b4fac8a6e1a070133ed207bc5dbee904e0
+    hash: 4fbee37587da7082f043da95d7ff73402ffe968386b69f5bb6879bc0c7703cd2
     globs: []
 - conda: packages/cpp_math
   name: cpp_math
@@ -496,7 +496,7 @@ packages:
   - libcxx >=20
   - python_abi 3.12.* *_cp312
   input:
-    hash: 7e70cb22029453824857bc6f17a3e3b4fac8a6e1a070133ed207bc5dbee904e0
+    hash: 4fbee37587da7082f043da95d7ff73402ffe968386b69f5bb6879bc0c7703cd2
     globs: []
 - conda: packages/cpp_math
   name: cpp_math
@@ -507,7 +507,7 @@ packages:
   - libcxx >=20
   - python_abi 3.12.* *_cp312
   input:
-    hash: 7e70cb22029453824857bc6f17a3e3b4fac8a6e1a070133ed207bc5dbee904e0
+    hash: 4fbee37587da7082f043da95d7ff73402ffe968386b69f5bb6879bc0c7703cd2
     globs: []
 - conda: packages/cpp_math
   name: cpp_math
@@ -520,7 +520,7 @@ packages:
   - ucrt >=10.0.20348.0
   - python_abi 3.12.* *_cp312
   input:
-    hash: 7e70cb22029453824857bc6f17a3e3b4fac8a6e1a070133ed207bc5dbee904e0
+    hash: 4fbee37587da7082f043da95d7ff73402ffe968386b69f5bb6879bc0c7703cd2
     globs: []
 - conda: https://prefix.dev/conda-forge/linux-64/ld_impl_linux-64-2.43-h712a8e2_2.conda
   sha256: 7c91cea91b13f4314d125d1bedb9d03a29ebbd5080ccdea70260363424646dbe
@@ -1186,7 +1186,7 @@ packages:
   - rich >=13.9.4,<14
   - python
   input:
-    hash: 192af99f337859c9745cb4586ef1441f85b40aa81f2d1e5f743704a5c7ebde4c
+    hash: a8cfb006938cd10f70d3617f813084adcf8525b92dcc18830b1fb355ad4d672d
     globs: []
   sources:
     cpp_math:
