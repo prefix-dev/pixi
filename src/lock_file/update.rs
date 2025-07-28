@@ -6,10 +6,11 @@ use crate::{
     Workspace,
     activation::CurrentEnvVarBehavior,
     environment::{
-        self, CondaPrefixUpdated, EnvironmentFile, LockFileUsage, LockedEnvironmentHash,
+        CondaPrefixUpdated, EnvironmentFile, LockFileUsage, LockedEnvironmentHash,
         PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PythonStatus,
         read_environment_file, write_environment_file,
     },
+    install_pypi::{PyPIBuildConfig, PyPIContextConfig, PyPIEnvironmentUpdater, PyPIUpdateConfig},
     lock_file::{
         self, PypiRecord, reporter::SolveProgressBar,
         virtual_packages::validate_system_meets_environment_requirements,
@@ -506,24 +507,33 @@ impl<'p> LockFileDerivedData<'p> {
                     .unwrap_or_default();
 
                 // Update the prefix with Pypi records
-                environment::update_prefix_pypi(
-                    environment.name(),
-                    &prefix,
-                    platform,
-                    &pixi_records,
-                    &pypi_records,
-                    &python_status,
-                    &environment.system_requirements(),
-                    &uv_context,
-                    self.pypi_indexes(environment)?.as_ref(),
-                    env_variables,
-                    self.workspace.root(),
-                    environment.best_platform(),
-                    &non_isolated_packages,
-                    &no_build,
-                    &no_binary,
-                )
-                .await
+                {
+                    let pypi_indexes = self.pypi_indexes(environment)?;
+
+                    let config = PyPIUpdateConfig {
+                        environment_name: environment.name(),
+                        prefix: &prefix,
+                        platform: environment.best_platform(),
+                        lock_file_dir: self.workspace.root(),
+                        system_requirements: &environment.system_requirements(),
+                    };
+
+                    let build_config = PyPIBuildConfig {
+                        no_build_isolation: &non_isolated_packages,
+                        no_build: &no_build,
+                        no_binary: &no_binary,
+                    };
+
+                    let context_config = PyPIContextConfig {
+                        uv_context: &uv_context,
+                        pypi_indexes: pypi_indexes.as_ref(),
+                        environment_variables: env_variables,
+                    };
+
+                    PyPIEnvironmentUpdater::new(config, build_config, context_config)
+                        .update(&pixi_records, &pypi_records, &python_status)
+                        .await
+                }
                 .with_context(|| {
                     format!(
                         "Failed to update PyPI packages for environment '{}'",
