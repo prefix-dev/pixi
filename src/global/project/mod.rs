@@ -6,7 +6,6 @@ use std::{
     sync::Arc,
 };
 
-use ahash::HashSet;
 pub(crate) use environment::EnvironmentName;
 use fancy_display::FancyDisplay;
 use fs::tokio as tokio_fs;
@@ -38,6 +37,7 @@ use rattler_conda_types::{
     menuinst::MenuMode,
 };
 use rattler_repodata_gateway::Gateway;
+use std::collections::HashSet;
 // Removed unused rattler_solve imports
 use rattler_virtual_packages::{
     DetectVirtualPackageError, VirtualPackage, VirtualPackageOverrides,
@@ -693,7 +693,7 @@ impl Project {
     pub async fn source_metadata(
         &self,
         env_name: &EnvironmentName,
-        source_records: UniquePackageMap,
+        source_records: &UniquePackageMap,
     ) -> miette::Result<IndexMap<PackageName, Arc<SourceMetadata>>> {
         let environment = self
             .environment(env_name)
@@ -714,8 +714,9 @@ impl Project {
 
         let mut metadata_results = IndexMap::new();
 
-        for (name, spec) in source_records.into_iter() {
+        for (name, spec) in source_records.specs.iter() {
             let source = spec
+                .clone()
                 .try_into_source_spec()
                 .expect("at this point this cannot be a binary spec");
             let source = dispatch.pin_and_checkout(source).await.into_diagnostic()?;
@@ -741,7 +742,7 @@ impl Project {
                 .into_diagnostic()?;
             dispatch.clear_reporter().await;
 
-            metadata_results.insert(name, metadata_result);
+            metadata_results.insert(name.clone(), metadata_result);
         }
 
         Ok(metadata_results)
@@ -887,6 +888,15 @@ impl Project {
     /// Validated the specs in the installed environment.
     /// And verifies only and all required exposed binaries are in the bin dir.
     pub async fn environment_in_sync(&self, env_name: &EnvironmentName) -> miette::Result<bool> {
+        self.environment_in_sync_internal(env_name, false).await
+    }
+
+    /// Internal method to check environment sync with update operation control
+    pub(crate) async fn environment_in_sync_internal(
+        &self,
+        env_name: &EnvironmentName,
+        is_update_operation: bool,
+    ) -> miette::Result<bool> {
         let environment = self.environment(env_name).ok_or(miette::miette!(
             "Environment {} not found in manifest.",
             env_name.fancy_display()
@@ -911,12 +921,16 @@ impl Project {
             })
             .collect::<Result<IndexSet<MatchSpec>, miette::Report>>()?;
 
-        // Get source metadata for the environment, these can also be matched against the prefix
-        let source_metadata = self
-            .source_metadata(env_name, source_specs)
-            .await?
-            .into_values()
-            .collect::<Vec<_>>();
+        let source_package_names = source_specs.specs.keys().cloned().collect::<HashSet<_>>();
+
+        // For update operations, always consider environments with source dependencies as out of sync
+        if is_update_operation && !source_package_names.is_empty() {
+            tracing::debug!(
+                "Update operation: Environment {} has source dependencies, considering out of sync",
+                env_name.fancy_display()
+            );
+            return Ok(false);
+        }
 
         let env_dir =
             EnvDir::from_path(self.env_root.clone().path().join(env_name.clone().as_str()));
@@ -926,7 +940,7 @@ impl Project {
         let specs_in_sync = environment_specs_in_sync(
             &prefix_records,
             &specs,
-            &source_metadata,
+            &source_package_names,
             environment.platform,
         )
         .await?;
