@@ -134,7 +134,7 @@ rattler_networking = { version = "0.25.8", default-features = false, features = 
   "google-cloud-auth",
   "dirs",
 ] }
-rattler_package_streaming = { version = "0.22.47", default-features = false }
+rattler_package_streaming = { version = "0.22.48", default-features = false }
 rattler_repodata_gateway = { version = "0.23.9", default-features = false }
 rattler_shell = { version = "0.24.7", default-features = false }
 rattler_solve = { version = "2.1.8", default-features = false }
@@ -282,7 +282,7 @@ rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true }
 rattler_lock = { workspace = true }
 rattler_menuinst = { workspace = true }
-rattler_networking = { workspace = true }
+rattler_networking = { workspace = true, default-features = false }
 rattler_repodata_gateway = { workspace = true, features = [
   "sparse",
   "gateway",
