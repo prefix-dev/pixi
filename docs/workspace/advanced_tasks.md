@@ -314,44 +314,44 @@ You can set environment variables directly for a task, as well as by other means
 The following priority rule applies for environment variables: `task.env` > `activation.env` > `activation.scripts` > activation scripts of dependencies > outside environment variables.
 Variables defined at a higher priority will override those defined at a lower priority.
 
-````{warning}
-In older versions of Pixi, this priority was not well-defined, and there are a number of known
-deviations from the current priority which exist in some older versions:
-- `activation.scripts` used to take priority over `activation.env`
-- activation scripts of dependencies used to take priority over `activation.env`
-- outside environment variables used to override variables set in `task.env`
+!!! warning
 
-If you previously relied on a certain priority which no longer applies, you may need to change your
-task definitions.
+    In older versions of Pixi, this priority was not well-defined, and there are a number of known
+    deviations from the current priority which exist in some older versions:
+    - `activation.scripts` used to take priority over `activation.env`
+    - activation scripts of dependencies used to take priority over `activation.env`
+    - outside environment variables used to override variables set in `task.env`
 
-For the specific case of overriding `task.env` with outside environment variables, this behaviour can
-now be recreated using [task arguments](#task-arguments). For example, if you were previously using
-a setup like:
+    If you previously relied on a certain priority which no longer applies, you may need to change your
+    task definitions.
 
-```toml title="pixi.toml"
-[tasks]
-echo = { cmd = "echo $ARGUMENT", env = { ARGUMENT = "hello" } }
-```
+    For the specific case of overriding `task.env` with outside environment variables, this behaviour can
+    now be recreated using [task arguments](#task-arguments). For example, if you were previously using
+    a setup like:
 
-```shell
-ARGUMENT=world pixi run echo
-✨ Pixi task (echo in default): echo $ARGUMENT
-world
-```
+    ```toml title="pixi.toml"
+    [tasks]
+    echo = { cmd = "echo $ARGUMENT", env = { ARGUMENT = "hello" } }
+    ```
 
-you can now recreate this behaviour like:
+    ```shell
+    ARGUMENT=world pixi run echo
+    ✨ Pixi task (echo in default): echo $ARGUMENT
+    world
+    ```
 
-```toml title="pixi.toml"
-[tasks]
-echo = { cmd = "echo {{ ARGUMENT }}", args = { "arg" = "ARGUMENT", "default" = "hello" } }
-```
+    you can now recreate this behaviour like:
 
-```shell
-pixi run echo world
-✨ Pixi task (echo in default): echo $ARGUMENT
-world
-```
-````
+    ```toml title="pixi.toml"
+    [tasks]
+    echo = { cmd = "echo {{ ARGUMENT }}", args = { "arg" = "ARGUMENT", "default" = "hello" } }
+    ```
+
+    ```shell
+    pixi run echo world
+    ✨ Pixi task (echo in default): echo $ARGUMENT
+    world
+    ```
 
 ##### Example 1:  `task.env` > `activation.env`
 
