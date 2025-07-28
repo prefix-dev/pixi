@@ -1,7 +1,9 @@
 mod event_reporter;
 mod event_tree;
+mod source_backend;
 
 use std::{
+    env::current_dir,
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -20,9 +22,10 @@ use rattler_conda_types::{
     GenericVirtualPackage, PackageName, Platform, VersionSpec, prefix::Prefix,
 };
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
+use typed_path::Utf8TypedPathBuf;
 use url::Url;
 
-use crate::event_tree::EventTree;
+use crate::{event_tree::EventTree, source_backend::SourceBackendBuilder};
 
 /// Returns a default set of cache directories for the test.
 fn default_cache_dirs() -> CacheDirs {
@@ -236,4 +239,37 @@ pub async fn test_cycle() {
         format_diagnostic(&error),
         event_tree.to_string()
     ));
+}
+
+#[tokio::test]
+pub async fn instantiate_backend_with_from_source() {
+    let backend_name = PackageName::new_unchecked("some-source-backend");
+
+    // Create a temporary directory and build the fake backend package
+    let tempdir = tempfile::tempdir().unwrap();
+    let package_dir = SourceBackendBuilder::new(
+        "some-source-backend",
+        source_backend::BackendType::PixiBuildPython,
+    )
+    .build(tempdir.path())
+    .unwrap();
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_cache_dirs(default_cache_dirs())
+        .with_executor(Executor::Serial)
+        .finish();
+
+    // Use PixiSpec::Path to test path-based resolution and installation
+    dispatcher
+        .instantiate_tool_environment(InstantiateToolEnvironmentSpec::new(
+            backend_name,
+            PixiSpec::Path(PathSpec {
+                path: Utf8TypedPathBuf::from(package_dir.to_str().unwrap()),
+            }),
+            Vec::from([Url::from_str("https://prefix.dev/conda-forge")
+                .unwrap()
+                .into()]),
+        ))
+        .await
+        .unwrap();
 }
