@@ -689,6 +689,7 @@ impl Project {
         Ok(all_executables)
     }
 
+    #[allow(dead_code)]
     pub async fn source_metadata(
         &self,
         env_name: &EnvironmentName,
