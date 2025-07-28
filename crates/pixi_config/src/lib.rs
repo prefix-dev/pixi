@@ -2551,9 +2551,7 @@ UNUSED = "unused"
         config
             .set(
                 "mirrors",
-                Some(
-                    r#"[{"url": "https://mirror.example.com", "host": "conda-forge"}]"#.to_string(),
-                ),
+                Some(r#"{"https://conda.anaconda.org/conda-forge": ["https://prefix.dev/conda-forge"]}"#.to_string()),
             )
             .unwrap();
         assert_eq!(config.mirrors.len(), 1);
