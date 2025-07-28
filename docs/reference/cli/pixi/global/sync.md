@@ -20,7 +20,7 @@ pixi global sync [OPTIONS]
 :  Specifies whether to use the keyring to look up credentials for PyPI
 <br>**options**: `disabled`, `subprocess`
 - <a id="arg---pypi-verify-direct-url-hashes" href="#arg---pypi-verify-direct-url-hashes">`--pypi-verify-direct-url-hashes`</a>
-:  Verify hashes from URL fragments for PyPI direct URLs (may cause double downloads)
+:  Verify hashes from URL fragments for PyPI direct URLs (may cause double downloads). Double downloads occur because files must be downloaded once for hash verification and again during installation, as UV's hash verification doesn't currently work correctly with direct URLs containing hash fragments
 - <a id="arg---concurrent-solves" href="#arg---concurrent-solves">`--concurrent-solves <CONCURRENT_SOLVES>`</a>
 :  Max concurrent solves, default is the number of CPUs
 - <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>

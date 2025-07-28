@@ -132,7 +132,10 @@ pub struct ConfigCli {
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
     pypi_keyring_provider: Option<KeyringProvider>,
 
-    /// Verify hashes from URL fragments for PyPI direct URLs (may cause double downloads)
+    /// Verify hashes from URL fragments for PyPI direct URLs (may cause double downloads).
+    /// Double downloads occur because files must be downloaded once for hash verification
+    /// and again during installation, as UV's hash verification doesn't currently work
+    /// correctly with direct URLs containing hash fragments.
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
     pypi_verify_direct_url_hashes: bool,
 
