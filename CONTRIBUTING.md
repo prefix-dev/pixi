@@ -129,10 +129,13 @@ To run all tests, use:
 ```bash
 pixi run test
 ```
-But if you have modified recipe data under the tests/data directory, you need to update the test channel before running tests:
+But if you have modified recipe data under the tests/data/channels directory, you need to update the test channel before running tests:
 ```bash
 pixi run update-test-channel <channel_name>
 ```
+> [!NOTE]
+> This task currently only works on unix systems. If you are on Windows, it is recommended to use [WSL](https://learn.microsoft.com/en-us/windows/wsl/install).
+
 For example, if you modified data for dummy_channel_1:
 ```bash
 pixi run update-test-channel dummy_channel_1

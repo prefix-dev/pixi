@@ -586,6 +586,7 @@ mod tests {
         let home_prefix = "export \"HOME=myHome\"";
 
         assert!(result.contains(expected_prefix));
+        // keys not defined in the task are not exported
         assert!(!result.contains(path_prefix));
         assert!(!result.contains(home_prefix));
     }
@@ -617,6 +618,7 @@ mod tests {
         let expected_prefix = "export \"FOO=bar\"";
         let home_prefix = "export \"HOME=myHome\"";
         assert!(result.contains(expected_prefix));
+        // keys not defined in the task are not exported
         assert!(!result.contains(home_prefix));
     }
 
@@ -661,6 +663,7 @@ mod tests {
         let home_prefix = "export \"HOME=myHome\"";
 
         assert!(script.contains(expected_prefix));
+        // keys not defined in the task are not included
         assert!(!script.contains(path_prefix));
         assert!(!script.contains(home_prefix));
     }
