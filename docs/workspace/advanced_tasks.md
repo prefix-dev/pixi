@@ -311,6 +311,7 @@ pixi run -v start
 ## Environment Variables
 
 You can set environment variables directly for a task, as well as by other means.
+
 The following priority rule applies for environment variables: `task.env` > `activation.env` > `activation.scripts` > activation scripts of dependencies > outside environment variables.
 Variables defined at a higher priority will override those defined at a lower priority.
 
