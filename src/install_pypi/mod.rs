@@ -26,7 +26,7 @@ use utils::elapsed;
 use uv_auth::store_credentials_from_url;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
 use uv_configuration::{BuildOptions, ConfigSettings, Constraints, IndexStrategy, PreviewMode};
-use uv_dispatch::{BuildDispatch, SharedState};
+use uv_dispatch::BuildDispatch;
 use uv_distribution::{BuiltWheelIndex, DistributionDatabase, RegistryWheelIndex};
 use uv_distribution_types::{
     CachedDist, DependencyMetadata, Dist, IndexLocations, IndexUrl, InstalledDist, Name, Resolution,
@@ -582,7 +582,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             &setup.index_locations,
             &setup.flat_index,
             dependency_metadata,
-            SharedState::default(),
+            self.context_config.uv_context.shared_state.clone(),
             IndexStrategy::default(),
             &setup.config_settings,
             setup.build_isolation.to_uv(&setup.venv),
