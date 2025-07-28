@@ -10,7 +10,7 @@ repository.workspace = true
 version = "0.1.0"
 
 [features]
-default = ["rustls-tls"]
+default = []
 native-tls = [
   "reqwest/native-tls",
   "reqwest/native-tls-alpn",
@@ -33,7 +33,12 @@ pep508_rs = { workspace = true }
 pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
 rattler_conda_types = { workspace = true }
-rattler_networking = { workspace = true, features = ["gcs", "s3"] }
+rattler_networking = { workspace = true, features = [
+  "gcs",
+  "s3",
+  "netrc-rs",
+  "system-integration",
+] }
 reqwest = { workspace = true }
 reqwest-middleware = { workspace = true }
 reqwest-retry = { workspace = true }
