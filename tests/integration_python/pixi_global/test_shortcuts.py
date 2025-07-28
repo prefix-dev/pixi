@@ -112,7 +112,7 @@ def test_sync_creation_and_removal(
     manifest.write_text(toml)
 
     # Verify no shortcuts exist after sync
-    verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=setup_data.env)
+    verify_cli_command([pixi, "global", "sync"], env=setup_data.env)
     verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=False)
 
     parsed_toml = tomllib.loads(toml)
@@ -120,13 +120,13 @@ def test_sync_creation_and_removal(
     manifest.write_text(tomli_w.dumps(parsed_toml))
 
     # # Run sync and verify
-    verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=setup_data.env)
+    verify_cli_command([pixi, "global", "sync"], env=setup_data.env)
     verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=True)
 
     # test removal of shortcuts
     del parsed_toml["envs"]["test"]["shortcuts"]
     manifest.write_text(tomli_w.dumps(parsed_toml))
-    verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=setup_data.env)
+    verify_cli_command([pixi, "global", "sync"], env=setup_data.env)
     verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=False)
 
 
@@ -148,14 +148,14 @@ def test_sync_empty_shortcut_list(
     manifest.write_text(toml)
 
     # Run sync and verify
-    verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=setup_data.env)
+    verify_cli_command([pixi, "global", "sync"], env=setup_data.env)
     verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=True)
 
     # Set shortcuts to empty list
     parsed_toml = tomllib.loads(toml)
     parsed_toml["envs"]["test"]["shortcuts"] = []
     manifest.write_text(tomli_w.dumps(parsed_toml))
-    verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=setup_data.env)
+    verify_cli_command([pixi, "global", "sync"], env=setup_data.env)
     verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=False)
 
 
@@ -177,14 +177,14 @@ def test_sync_removing_environment(
     manifest.write_text(toml)
 
     # Run sync and verify
-    verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=setup_data.env)
+    verify_cli_command([pixi, "global", "sync"], env=setup_data.env)
     verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=True)
 
     # Remove environment
     parsed_toml = tomllib.loads(toml)
     del parsed_toml["envs"]["test"]
     manifest.write_text(tomli_w.dumps(parsed_toml))
-    verify_cli_command([pixi, "global", "sync"], ExitCode.SUCCESS, env=setup_data.env)
+    verify_cli_command([pixi, "global", "sync"], env=setup_data.env)
     verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=False)
 
 
@@ -259,7 +259,6 @@ def test_install_simple(
     # Verify no shortcuts exist after sync
     verify_cli_command(
         [pixi, "global", "install", "--channel", shortcuts_channel_1, "pixi-editor"],
-        ExitCode.SUCCESS,
         env=setup_data.env,
     )
 
@@ -290,7 +289,6 @@ def test_install_no_shortcut(
             "--no-shortcut",
             "pixi-editor",
         ],
-        ExitCode.SUCCESS,
         env=setup_data.env,
     )
 
@@ -311,7 +309,6 @@ def test_remove_shortcut(
     # Verify no shortcuts exist after sync
     verify_cli_command(
         [pixi, "global", "install", "--channel", shortcuts_channel_1, "pixi-editor"],
-        ExitCode.SUCCESS,
         env=setup_data.env,
     )
 
@@ -326,7 +323,6 @@ def test_remove_shortcut(
     # Remove shortcut
     verify_cli_command(
         [pixi, "global", "shortcut", "remove", "pixi-editor"],
-        ExitCode.SUCCESS,
         env=setup_data.env,
     )
 
@@ -353,7 +349,6 @@ def test_add_shortcut(
             shortcuts_channel_1,
             "pixi-editor",
         ],
-        ExitCode.SUCCESS,
         env=setup_data.env,
     )
 
@@ -368,7 +363,6 @@ def test_add_shortcut(
     # Add shortcut
     verify_cli_command(
         [pixi, "global", "shortcut", "add", "pixi-editor", "--environment", "pixi-editor"],
-        ExitCode.SUCCESS,
         env=setup_data.env,
     )
 

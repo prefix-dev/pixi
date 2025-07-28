@@ -866,7 +866,6 @@ def test_undefined_arguments_in_command(pixi: Path, tmp_pixi_workspace: Path) ->
     # Even though we don't like this behaviour we want to make sure that it stays that way
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest_path, "mixed_args", "test.py"],
-        ExitCode.SUCCESS,
     )
 
 

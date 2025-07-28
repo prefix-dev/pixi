@@ -149,7 +149,7 @@ pub(crate) fn package_metadata_to_source_records(
 
                     // These are not important at this point.
                     run_exports: None,
-                    extra_depends: Default::default(),
+                    experimental_extra_depends: Default::default(),
                 },
             }
         })

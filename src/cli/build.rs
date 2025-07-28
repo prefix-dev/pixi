@@ -4,7 +4,7 @@ use clap::Parser;
 use indicatif::ProgressBar;
 use miette::{Context, IntoDiagnostic};
 use pixi_command_dispatcher::{
-    BuildBackendMetadataSpec, BuildEnvironment, CacheDirs, SourceBuildSpec,
+    BuildBackendMetadataSpec, BuildEnvironment, BuildProfile, CacheDirs, SourceBuildSpec,
 };
 use pixi_config::ConfigCli;
 use pixi_manifest::FeaturesExt;
@@ -146,6 +146,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 enabled_protocols: Default::default(),
                 work_directory: None,
                 clean: args.clean,
+                build_profile: BuildProfile::Release,
             })
             .await?;
 
