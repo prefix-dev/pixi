@@ -291,7 +291,7 @@ jobs:
         with:
           name: pixi-linux-x86_64-${{ github.sha }}
           path: ./target/x86_64-unknown-linux-musl/${{ env.CARGO_BUILD_PROFILE }}/pixi
-          retention-days: 1
+          retention-days: 14
 
   build-binary-macos-aarch64:
     needs: determine_changes
@@ -313,7 +313,7 @@ jobs:
         with:
           name: pixi-macos-aarch64-${{ github.sha }}
           path: ./target/${{ env.CARGO_BUILD_PROFILE }}/pixi
-          retention-days: 1
+          retention-days: 14
 
   build-binary-macos-x86_64:
     needs: determine_changes
@@ -335,7 +335,7 @@ jobs:
         with:
           name: pixi-macos-x86_64-${{ github.sha }}
           path: ./target/${{ env.CARGO_BUILD_PROFILE }}/pixi
-          retention-days: 1
+          retention-days: 14
 
   build-binary-windows-x86_64:
     needs: determine_changes
@@ -364,7 +364,7 @@ jobs:
         with:
           name: pixi-windows-x86_64-${{ github.sha }}
           path: ${{ env.PIXI_WORKSPACE }}/target/${{ env.CARGO_BUILD_PROFILE }}/pixi.exe
-          retention-days: 1
+          retention-days: 14
 
   build-binary-windows-aarch64:
     needs: determine_changes
@@ -397,7 +397,7 @@ jobs:
         with:
           name: pixi-windows-aarch64-${{ github.sha }}
           path: ${{ env.PIXI_WORKSPACE }}/target/aarch64-pc-windows-msvc/${{ env.CARGO_BUILD_PROFILE }}/pixi.exe
-          retention-days: 1
+          retention-days: 14
 
   #
   # Run integration tests on important platforms

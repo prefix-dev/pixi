@@ -465,7 +465,7 @@ impl BackendSourceBuildReporter for EventReporter {
         });
     }
 
-    fn on_finished(&mut self, id: BackendSourceBuildId) {
+    fn on_finished(&mut self, id: BackendSourceBuildId, _failed: bool) {
         let event = Event::BackendSourceBuildFinished { id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
         self.events.lock().unwrap().push(event);

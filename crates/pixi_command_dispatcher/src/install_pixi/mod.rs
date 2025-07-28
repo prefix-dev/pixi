@@ -22,8 +22,8 @@ use rattler_conda_types::{
 use thiserror::Error;
 
 use crate::{
-    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    SourceBuildError, SourceBuildSpec, executor::ExecutorFutures,
+    BuildEnvironment, BuildProfile, CommandDispatcher, CommandDispatcherError,
+    CommandDispatcherErrorResultExt, SourceBuildError, SourceBuildSpec, executor::ExecutorFutures,
     install_pixi::reporter::WrappingInstallReporter,
 };
 
@@ -205,6 +205,8 @@ impl InstallPixiEnvironmentSpec {
                 output_directory: None,
                 work_directory: None,
                 clean: false,
+                // When we install a pixi environment we always build in development mode.
+                build_profile: BuildProfile::Development,
             })
             .await?;
 

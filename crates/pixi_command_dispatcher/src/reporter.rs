@@ -209,7 +209,7 @@ pub trait BackendSourceBuildReporter {
     );
 
     /// Called when the operation has finished.
-    fn on_finished(&mut self, id: BackendSourceBuildId);
+    fn on_finished(&mut self, id: BackendSourceBuildId, failed: bool);
 }
 
 /// A trait that is used to report the progress of the

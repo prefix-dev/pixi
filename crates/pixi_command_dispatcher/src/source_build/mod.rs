@@ -22,7 +22,7 @@ use url::Url;
 use crate::{
     BackendSourceBuildError, BackendSourceBuildMethod, BackendSourceBuildPrefix,
     BackendSourceBuildSpec, BackendSourceBuildV0Method, BackendSourceBuildV1Method,
-    BuildEnvironment, CachedBuildStatus, CommandDispatcher, CommandDispatcherError,
+    BuildEnvironment, BuildProfile, CachedBuildStatus, CommandDispatcher, CommandDispatcherError,
     CommandDispatcherErrorResultExt, InstallPixiEnvironmentError, InstallPixiEnvironmentResult,
     InstallPixiEnvironmentSpec, InstantiateBackendError, InstantiateBackendSpec,
     PixiEnvironmentSpec, SolvePixiEnvironmentError, SourceBuildCacheStatusError,
@@ -65,6 +65,9 @@ pub struct SourceBuildSpec {
     /// If this field is omitted the build backend will use the current
     /// platform.
     pub build_environment: BuildEnvironment,
+
+    /// The build profile to use for the build.
+    pub build_profile: BuildProfile,
 
     /// Variant configuration
     pub variants: Option<BTreeMap<String, Vec<String>>>,
@@ -287,6 +290,11 @@ impl SourceBuildSpec {
         })
     }
 
+    /// Returns whether the package should be built in an editable mode.
+    fn editable(&self) -> bool {
+        self.build_profile == BuildProfile::Development && self.source.is_mutable()
+    }
+
     async fn build_v0(
         self,
         command_dispatcher: CommandDispatcher,
@@ -295,17 +303,18 @@ impl SourceBuildSpec {
     ) -> Result<BuiltPackage, CommandDispatcherError<SourceBuildError>> {
         let result = command_dispatcher
             .backend_source_build(BackendSourceBuildSpec {
-                backend,
-                package: self.package,
-                source: self.source,
-                work_directory,
                 method: BackendSourceBuildMethod::BuildV0(BackendSourceBuildV0Method {
+                    editable: self.editable(),
                     channel_config: self.channel_config,
                     channels: self.channels,
                     build_environment: self.build_environment,
                     variants: self.variants,
                     output_directory: self.output_directory,
                 }),
+                backend,
+                package: self.package,
+                source: self.source,
+                work_directory,
             })
             .await
             .map_err_with(SourceBuildError::from)?;
@@ -469,11 +478,8 @@ impl SourceBuildSpec {
 
         let built_source = command_dispatcher
             .backend_source_build(BackendSourceBuildSpec {
-                backend,
-                package: self.package,
-                source: self.source,
-                work_directory,
                 method: BackendSourceBuildMethod::BuildV1(BackendSourceBuildV1Method {
+                    editable: self.editable(),
                     build_prefix: BackendSourceBuildPrefix {
                         platform: self.build_environment.build_platform,
                         prefix: directories.build_prefix,
@@ -487,6 +493,10 @@ impl SourceBuildSpec {
                     variant: output.metadata.variant,
                     output_directory: self.output_directory,
                 }),
+                backend,
+                package: self.package,
+                source: self.source,
+                work_directory,
             })
             .await
             .map_err_with(SourceBuildError::from)?;
