@@ -10,7 +10,7 @@ repository.workspace = true
 version = "0.1.0"
 
 [features]
-default = []
+default = ["rustls-tls]
 native-tls = [
   "reqwest/native-tls",
   "reqwest/native-tls-alpn",
