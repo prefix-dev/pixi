@@ -65,6 +65,7 @@ impl InstallPlanner {
         }
     }
 
+
     /// Figure out what we can link from the cache locally
     /// and what we need to download from the registry.
     ///
