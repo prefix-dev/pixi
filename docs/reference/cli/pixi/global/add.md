@@ -37,6 +37,16 @@ pixi global add [OPTIONS] --environment <ENVIRONMENT> <PACKAGE>...
 :  Max concurrent solves, default is the number of CPUs
 - <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
 :  Max concurrent network requests, default is `50`
+- <a id="arg---tool-platform" href="#arg---tool-platform">`--tool-platform <TOOL_PLATFORM>`</a>
+:  The platform to use to install tools
+- <a id="arg---run-post-link-scripts" href="#arg---run-post-link-scripts">`--run-post-link-scripts`</a>
+:  Run post-link scripts (insecure)
+- <a id="arg---use-environment-activation-cache" href="#arg---use-environment-activation-cache">`--use-environment-activation-cache`</a>
+:  Use environment activation cache (experimental)
+- <a id="arg---detached-environments" href="#arg---detached-environments">`--detached-environments <DETACHED_ENVIRONMENTS>`</a>
+:  Set detached environments path
+- <a id="arg---pinning-strategy" href="#arg---pinning-strategy">`--pinning-strategy <PINNING_STRATEGY>`</a>
+:  Set pinning strategy
 
 ## Description
 Adds dependencies to an environment
