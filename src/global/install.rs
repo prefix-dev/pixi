@@ -10,14 +10,12 @@ use crate::{
 use indexmap::IndexSet;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use pixi_command_dispatcher::SourceMetadata;
 use pixi_utils::{executable_from_path, is_binary_folder};
 use rattler_conda_types::{
     MatchSpec, Matches, PackageName, PackageRecord, ParseStrictness, Platform,
 };
 use rattler_shell::activation::prefix_path_entries;
 use std::collections::HashSet;
-use std::sync::Arc;
 use std::{env, path::PathBuf, str::FromStr};
 
 use fs_err::tokio as tokio_fs;
@@ -227,7 +225,7 @@ fn path_diff(path_before: &str, path_after: &str, prefix: &Prefix) -> miette::Re
 pub(crate) fn local_environment_matches_spec(
     prefix_records: Vec<PackageRecord>,
     binary_specs: &IndexSet<MatchSpec>,
-    source_metadata: &[Arc<SourceMetadata>],
+    source_package_names: &HashSet<PackageName>,
     platform: Option<Platform>,
 ) -> bool {
     // Check whether all specs in the manifest are present in the installed
@@ -236,11 +234,13 @@ pub(crate) fn local_environment_matches_spec(
         .iter()
         .all(|spec| prefix_records.iter().any(|record| spec.matches(record)));
 
-    let prefix_record_set: HashSet<_> = prefix_records.iter().collect();
-    let source_specs_in_manifest_are_present = source_metadata
+    let prefix_record_set: HashSet<_> = prefix_records
         .iter()
-        .flat_map(|metadata| &metadata.records)
-        .all(|source| prefix_record_set.contains(&source.package_record));
+        .map(|record| record.name.clone())
+        .collect();
+    let source_specs_in_manifest_are_present = source_package_names
+        .iter()
+        .all(|name| prefix_record_set.contains(name));
 
     if !specs_in_manifest_are_present || !source_specs_in_manifest_are_present {
         tracing::debug!("Not all specs in the manifest are present in the environment");
@@ -306,17 +306,12 @@ pub(crate) fn local_environment_matches_spec(
         prune_dependencies(acc, &matched_record)
     });
 
-    // Do the same for source metadata
+    // Do the same for source package names
     let remaining_prefix_records =
-        source_metadata
+        source_package_names
             .iter()
-            .fold(remaining_prefix_records, |mut acc, metadata| {
-                let Some(index) = acc.iter().position(|record| {
-                    metadata
-                        .records
-                        .iter()
-                        .any(|source_record| &source_record.package_record == record)
-                }) else {
+            .fold(remaining_prefix_records, |mut acc, package_name| {
+                let Some(index) = acc.iter().position(|record| &record.name == package_name) else {
                     return acc;
                 };
                 let matched_record = acc.swap_remove(index);
@@ -417,7 +412,7 @@ mod tests {
         assert!(local_environment_matches_spec(
             ripgrep_records,
             &ripgrep_specs,
-            &[],
+            &HashSet::new(),
             None
         ));
     }
@@ -433,7 +428,7 @@ mod tests {
         assert!(!local_environment_matches_spec(
             ripgrep_records,
             &ripgrep_specs,
-            &[],
+            &HashSet::new(),
             None
         ));
     }
@@ -445,12 +440,22 @@ mod tests {
         ripgrep_bat_specs: IndexSet<MatchSpec>,
     ) {
         assert!(
-            !local_environment_matches_spec(ripgrep_bat_records.clone(), &ripgrep_specs, &[], None),
+            !local_environment_matches_spec(
+                ripgrep_bat_records.clone(),
+                &ripgrep_specs,
+                &HashSet::new(),
+                None
+            ),
             "The function needs to detect that records coming from ripgrep and bat don't match ripgrep alone."
         );
 
         assert!(
-            local_environment_matches_spec(ripgrep_bat_records, &ripgrep_bat_specs, &[], None),
+            local_environment_matches_spec(
+                ripgrep_bat_records,
+                &ripgrep_bat_specs,
+                &HashSet::new(),
+                None
+            ),
             "The records and specs match and the function should return `true`."
         );
     }
@@ -464,7 +469,7 @@ mod tests {
             local_environment_matches_spec(
                 ripgrep_records,
                 &ripgrep_specs,
-                &[],
+                &HashSet::new(),
                 Some(Platform::Linux64)
             ),
             "The records contains only linux-64 entries"
@@ -480,7 +485,7 @@ mod tests {
             !local_environment_matches_spec(
                 ripgrep_records,
                 &ripgrep_specs,
-                &[],
+                &HashSet::new(),
                 Some(Platform::Win64)
             ),
             "The record contains linux-64 entries, so the function should always return `false`"
