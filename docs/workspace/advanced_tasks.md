@@ -336,6 +336,160 @@ These variables are not shared over tasks, so you need to define these for every
     ```
     This will output `/tmp/path:/usr/bin:/bin` instead of the original `/usr/bin:/bin`.
 
+## Environment Variables
+
+You can set environment variables directly for a task, as well as by other means.
+The following priority rule applies for environment variables: `task.env` > `activation.env` > `activation.scripts` > activation scripts of dependencies > outside environment variables.
+Variables defined at a higher priority will override those defined at a lower priority.
+
+```{warning}
+In older versions of Pixi, this priority was not well-defined, and there are a number of known
+deviations from the current priority which exist in some older versions:
+- `activation.scripts` used to take priority over `activation.env`
+- activation scripts of dependencies used to take priority over `activation.env`
+- outside environment variables used to override variables set in `task.env`
+
+If you previously relied on a certain priority which no longer applies, you may need to change your
+task definitions.
+
+For the specific case of overriding `task.env` with outside environment variables, this behaviour can
+now be recreated using [task arguments](#task-arguments). For example, if you were previously using
+a setup like:
+
+```toml title="pixi.toml"
+[tasks]
+echo = { cmd = "echo $ARGUMENT", env = { ARGUMENT = "hello" } }
+```
+
+```shell
+ARGUMENT=world pixi run echo
+✨ Pixi task (echo in default): echo $ARGUMENT
+world
+```
+
+you can now recreate this behaviour like:
+
+```toml title="pixi.toml"
+[tasks]
+echo = { cmd = "echo {{ ARGUMENT }}", args = { "arg" = "ARGUMENT", "default" = "hello" } }
+```
+
+```shell
+pixi run echo world
+✨ Pixi task (echo in default): echo $ARGUMENT
+world
+```
+```
+
+##### Example 1:  `task.env` > `activation.env`
+
+In `pixi.toml`, we defined an environment variable `HELLO_WORLD` in both `tasks.hello` and `activation.env`. 
+
+When we run `echo $HELLO_WORLD`, it will output:
+```
+Hello world!
+```
+
+```toml
+# pixi.toml
+[tasks.hello]
+cmd = "echo $HELLO_WORLD"
+env = { HELLO_WORLD = "Hello world!" }
+[activation.env]
+HELLO_WORLD = "Activate!"
+```
+
+##### Example 2: `activation.env` > `activation.scripts`
+
+In `pixi.toml`, we defined the same environment variable `DEBUG_MODE` in both `activation.env` and in the activation script file `setup.sh`.
+When we run `echo Debug mode: $DEBUG_MODE`, it will output:
+```bash
+Debug mode: enabled
+```
+
+```toml
+# pixi.toml
+[activation.env]
+DEBUG_MODE = "enabled"
+
+[activation]
+scripts = ["setup.sh"]
+```
+
+```bash
+# setup.sh
+export DEBUG_MODE="disabled"
+```
+
+##### Example 3: `activation.scripts` > activation scripts of dependencies
+
+In `pixi.toml`, we have our local activation script and a dependency `my-package` that also sets environment variables through its activation scripts.
+When we run `echo Library path: $LIB_PATH`, it will output:
+```
+Library path: /my/lib
+```
+
+```toml
+# pixi.toml
+[activation]
+scripts = ["local_setup.sh"]
+
+[dependencies]
+my-package = "*"  # This package has its own activation scripts that set LIB_PATH="/dep/lib"
+```
+```bash
+# local_setup.sh
+export LIB_PATH="/my/lib"
+```
+
+##### Example 4: activation scripts of dependencies > outside environment variable
+
+If we have a dependency that sets `PYTHON_PATH` and the same variable is already set in the outside environment.
+When we run `echo Python path: $PYTHON_PATH`, it will output:
+```bash
+Python path: /pixi/python
+```
+```
+# Outside environment
+export PYTHON_PATH="/system/python"
+```
+```toml
+# pixi.toml
+[dependencies]
+python-utils = "*"  # This package sets PYTHON_PATH="/pixi/python" in its activation scripts
+```
+
+##### Example 5: Complex Example - All priorities combined
+In `pixi.toml`, we define the same variable `APP_CONFIG` across multiple levels:
+```toml
+[tasks.start]
+cmd = "echo Config: $APP_CONFIG"
+env = { APP_CONFIG = "task-specific" }
+
+[activation.env]
+APP_CONFIG = "activation-env"
+
+[activation]
+scripts = ["app_setup.sh"]
+
+[dependencies]
+config-loader = "*"  # Sets APP_CONFIG="dependency-config"
+```
+```bash
+# app_setup.sh
+export APP_CONFIG="activation-script"
+```
+```bash
+# Outside environment
+export APP_CONFIG="system-config"
+```
+
+Since `task.env` has the highest priority, when we run `pixi run start` it will output:
+
+```
+Config: task-specific
+```
+
 ## Clean environment
 You can make sure the environment of a task is "Pixi only".
 Here Pixi will only include the minimal required environment variables for your platform to run the command in.
