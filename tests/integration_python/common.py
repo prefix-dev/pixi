@@ -22,6 +22,8 @@ channels = []
 platforms = ["{CURRENT_PLATFORM}"]
 """
 
+CONDA_FORGE_CHANNEL = "https://prefix.dev/conda-forge"
+
 
 class ExitCode(IntEnum):
     SUCCESS = 0
