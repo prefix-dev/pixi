@@ -1,0 +1,104 @@
+
+# --8<-- [start:default-channels]
+default-channels = ["conda-forge"]
+# --8<-- [end:default-channels]
+
+
+# --8<-- [start:tls-no-verify]
+tls-no-verify = false
+# --8<-- [end:tls-no-verify]
+
+# --8<-- [start:authentication-override-file]
+authentication-override-file = "/path/to/your/override.json"
+# --8<-- [end:authentication-override-file]
+
+# --8<-- [start:detached-environments]
+detached-environments = true
+# --8<-- [end:detached-environments]
+
+#  --8<-- [start:pinning-strategy]
+pinning-strategy = "no-pin"
+#  --8<-- [end:pinning-strategy]
+
+#  --8<-- [start:run-post-link-scripts]
+run-post-link-scripts = "false" # set to "insecure" to allow running post-link scripts
+#  --8<-- [end:run-post-link-scripts]
+
+#  --8<-- [start:tool-platform]
+tool-platform = "win-64" # force tools like build backends to be installed for a specific platform
+#  --8<-- [end:tool-platform]
+
+#  --8<-- [start:repodata-config]
+[repodata-config]
+# disable fetching of jlap, bz2 or zstd repodata files.
+# This should only be used for specific old versions of artifactory and other non-compliant
+# servers.
+disable-bzip2 = true   # don't try to download repodata.json.bz2
+disable-jlap = true    # don't try to download repodata.jlap
+disable-sharded = true # don't try to download sharded repodata
+disable-zstd = true    # don't try to download repodata.json.zst
+# --8<-- [end:repodata-config]
+# --8<-- [start:prefix-repodata-config]
+[repodata-config."https://prefix.dev"]
+disable-sharded = false
+# --8<-- [end:prefix-repodata-config]
+
+#  --8<-- [start:pypi-config]
+[pypi-config]
+# Main index url
+index-url = "https://pypi.org/simple"
+# list of additional urls
+extra-index-urls = ["https://pypi.org/simple2"]
+# can be "subprocess" or "disabled"
+keyring-provider = "subprocess"
+# allow insecure connections to host
+allow-insecure-host = ["localhost:8080"]
+#  --8<-- [end:pypi-config]
+
+#  --8<-- [start:s3-options]
+[s3-options.my-bucket]
+endpoint-url = "https://my-s3-compatible-host.com"
+force-path-style = true
+region = "us-east-1"
+#  --8<-- [end:s3-options]
+
+#  --8<-- [start:concurrency]
+[concurrency]
+# The maximum number of concurrent downloads
+# Defaults to 50 as that was found to be a good balance between speed and stability
+downloads = 5
+
+# The maximum number of concurrent dependency resolves
+# Defaults to a heuristic based on the number of cores on the system
+solves = 2
+# --8<-- [end:concurrency]
+
+#  --8<-- [start:experimental]
+[experimental]
+# Enable the use of the environment activation cache
+use-environment-activation-cache = true
+#  --8<-- [end:experimental]
+
+#  --8<-- [start:mirrors]
+[mirrors]
+# redirect all requests for conda-forge to the prefix.dev mirror
+"https://conda.anaconda.org/conda-forge" = ["https://prefix.dev/conda-forge"]
+
+# redirect all requests for bioconda to one of the three listed mirrors
+# Note: for repodata we try the first mirror first.
+"https://conda.anaconda.org/bioconda" = [
+  "https://conda.anaconda.org/bioconda",
+  # OCI registries are also supported
+  "oci://ghcr.io/channel-mirrors/bioconda",
+  # S3-compatible storage is also supported
+  "s3://my-s3-bucket/bioconda",
+  "https://prefix.dev/bioconda",
+]
+#  --8<-- [end:mirrors]
+
+# --8<-- [start:shell]
+[shell]
+change-ps1 = false
+force-activate = true
+source-completion-scripts = false
+# --8<-- [end:shell]
