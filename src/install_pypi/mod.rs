@@ -62,7 +62,7 @@ pub struct PyPIUpdateConfig<'a> {
 
 /// Configuration for PyPI build options, grouping all build-related settings
 pub struct PyPIBuildConfig<'a> {
-    pub non_isolated_packages: &'a NoBuildIsolation,
+    pub no_build_isolation: &'a NoBuildIsolation,
     pub no_build: &'a NoBuild,
     pub no_binary: &'a NoBinary,
 }
@@ -94,6 +94,8 @@ pub struct PyPIEnvironmentUpdater<'a> {
     context_config: PyPIContextConfig<'a>,
 }
 
+type PyPIRecords = (PypiPackageData, PypiPackageEnvironmentData);
+
 impl<'a> PyPIEnvironmentUpdater<'a> {
     /// Create a new PyPI environment updater with the given configurations
     pub fn new(
@@ -109,10 +111,10 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
     }
 
     /// Update PyPI packages in the environment, handling all setup, planning, and execution
-    pub async fn update_packages(
+    pub async fn update(
         &self,
         pixi_records: &[PixiRecord],
-        pypi_records: &[(PypiPackageData, PypiPackageEnvironmentData)],
+        pypi_records: &[PyPIRecords],
         python_status: &crate::environment::PythonStatus,
     ) -> miette::Result<()> {
         // Determine global site-packages status
@@ -142,7 +144,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
     async fn execute_update(
         &self,
         pixi_records: &[PixiRecord],
-        pypi_records: &[(PypiPackageData, PypiPackageEnvironmentData)],
+        pypi_records: &[PyPIRecords],
         python_info: &rattler::install::PythonInfo,
     ) -> miette::Result<()> {
         // Setup UV environment and configuration
@@ -246,7 +248,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         // Determine isolated packages based on input, converting names.
         let build_isolation = self
             .build_config
-            .non_isolated_packages
+            .no_build_isolation
             .clone()
             .try_into()
             .into_diagnostic()?;

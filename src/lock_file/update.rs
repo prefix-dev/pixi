@@ -519,7 +519,7 @@ impl<'p> LockFileDerivedData<'p> {
                     };
 
                     let build_config = PyPIBuildConfig {
-                        non_isolated_packages: &non_isolated_packages,
+                        no_build_isolation: &non_isolated_packages,
                         no_build: &no_build,
                         no_binary: &no_binary,
                     };
@@ -531,7 +531,7 @@ impl<'p> LockFileDerivedData<'p> {
                     };
 
                     PyPIEnvironmentUpdater::new(config, build_config, context_config)
-                        .update_packages(&pixi_records, &pypi_records, &python_status)
+                        .update(&pixi_records, &pypi_records, &python_status)
                         .await
                 }
                 .with_context(|| {
