@@ -1262,10 +1262,13 @@ impl Config {
     pub fn get_keys(&self) -> &[&str] {
         &[
             "authentication-override-file",
+            "concurrency",
+            "concurrency.downloads",
+            "concurrency.solves",
             "default-channels",
             "detached-environments",
+            "experimental",
             "experimental.use-environment-activation-cache",
-            "max-concurrent-solves",
             "mirrors",
             "pinning-strategy",
             "proxy-config",
@@ -1282,6 +1285,7 @@ impl Config {
             "repodata-config.disable-jlap",
             "repodata-config.disable-sharded",
             "repodata-config.disable-zstd",
+            "run-post-link-scripts",
             "s3-options",
             "s3-options.<bucket>",
             "s3-options.<bucket>.endpoint-url",
@@ -2403,6 +2407,171 @@ UNUSED = "unused"
         );
         assert!(s3_options.force_path_style);
         assert_eq!(s3_options.region, "auto");
+
+        // Test tool-platform
+        config
+            .set("tool-platform", Some("linux-64".to_string()))
+            .unwrap();
+        assert_eq!(config.tool_platform, Some(Platform::Linux64));
+
+        // Test run-post-link-scripts
+        config
+            .set("run-post-link-scripts", Some("insecure".to_string()))
+            .unwrap();
+        assert_eq!(
+            config.run_post_link_scripts,
+            Some(RunPostLinkScripts::Insecure)
+        );
+
+        // Test shell.force-activate
+        config
+            .set("shell.force-activate", Some("true".to_string()))
+            .unwrap();
+        assert_eq!(config.shell.force_activate, Some(true));
+
+        // Test shell.source-completion-scripts
+        config
+            .set("shell.source-completion-scripts", Some("false".to_string()))
+            .unwrap();
+        assert_eq!(config.shell.source_completion_scripts, Some(false));
+
+        // Test experimental.use-environment-activation-cache
+        config
+            .set(
+                "experimental.use-environment-activation-cache",
+                Some("true".to_string()),
+            )
+            .unwrap();
+        assert_eq!(
+            config.experimental.use_environment_activation_cache,
+            Some(true)
+        );
+
+        // Test more repodata-config options
+        config
+            .set("repodata-config.disable-bzip2", Some("true".to_string()))
+            .unwrap();
+        let repodata_config = config.repodata_config();
+        assert_eq!(repodata_config.default.disable_bzip2, Some(true));
+
+        config
+            .set("repodata-config.disable-zstd", Some("false".to_string()))
+            .unwrap();
+        let repodata_config = config.repodata_config();
+        assert_eq!(repodata_config.default.disable_zstd, Some(false));
+
+        config
+            .set("repodata-config.disable-sharded", Some("true".to_string()))
+            .unwrap();
+        let repodata_config = config.repodata_config();
+        assert_eq!(repodata_config.default.disable_sharded, Some(true));
+
+        // Test pypi-config.allow-insecure-host
+        config
+            .set(
+                "pypi-config.allow-insecure-host",
+                Some(r#"["pypi.example.com"]"#.to_string()),
+            )
+            .unwrap();
+        assert_eq!(config.pypi_config().allow_insecure_host.len(), 1);
+
+        // Test proxy-config
+        config
+            .set(
+                "proxy-config.http",
+                Some("http://proxy.example.com:8080".to_string()),
+            )
+            .unwrap();
+        assert_eq!(
+            config.proxy_config.http,
+            Some(Url::parse("http://proxy.example.com:8080").unwrap())
+        );
+
+        config
+            .set(
+                "proxy-config.https",
+                Some("https://proxy.example.com:8080".to_string()),
+            )
+            .unwrap();
+        assert_eq!(
+            config.proxy_config.https,
+            Some(Url::parse("https://proxy.example.com:8080").unwrap())
+        );
+
+        config
+            .set(
+                "proxy-config.non-proxy-hosts",
+                Some(r#"["localhost", "127.0.0.1"]"#.to_string()),
+            )
+            .unwrap();
+        assert_eq!(config.proxy_config.non_proxy_hosts.len(), 2);
+
+        // Test s3-options with individual keys
+        config
+            .set(
+                "s3-options.test-bucket.endpoint-url",
+                Some("http://localhost:9000".to_string()),
+            )
+            .unwrap();
+        config
+            .set(
+                "s3-options.test-bucket.region",
+                Some("us-east-1".to_string()),
+            )
+            .unwrap();
+        config
+            .set(
+                "s3-options.test-bucket.force-path-style",
+                Some("false".to_string()),
+            )
+            .unwrap();
+
+        // Test concurrency configuration
+        config
+            .set("concurrency.solves", Some("5".to_string()))
+            .unwrap();
+        assert_eq!(config.concurrency.solves, 5);
+
+        config
+            .set("concurrency.downloads", Some("25".to_string()))
+            .unwrap();
+        assert_eq!(config.concurrency.downloads, 25);
+
+        // Test max-concurrent-solves (legacy accessor)
+        assert_eq!(config.max_concurrent_solves(), 5);
+        assert_eq!(config.max_concurrent_downloads(), 25);
+
+        // Test tls-no-verify
+        config
+            .set("tls-no-verify", Some("true".to_string()))
+            .unwrap();
+        assert_eq!(config.tls_no_verify, Some(true));
+
+        // Test mirrors
+        config
+            .set(
+                "mirrors",
+                Some(
+                    r#"[{"url": "https://mirror.example.com", "host": "conda-forge"}]"#.to_string(),
+                ),
+            )
+            .unwrap();
+        assert_eq!(config.mirrors.len(), 1);
+
+        // Test detached-environments
+        config
+            .set("detached-environments", Some("/custom/path".to_string()))
+            .unwrap();
+        assert!(matches!(
+            config.detached_environments,
+            Some(DetachedEnvironments::Path(_))
+        ));
+
+        // Test pinning-strategy
+        config
+            .set("pinning-strategy", Some("semver".to_string()))
+            .unwrap();
+        assert_eq!(config.pinning_strategy, Some(PinningStrategy::Semver));
 
         config.set("unknown-key", None).unwrap_err();
     }
