@@ -1,346 +1,414 @@
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    hash::Hash,
-};
+mod cycle;
 
+use std::collections::HashMap;
+
+pub use cycle::{Cycle, CycleEnvironment};
+use futures::TryStreamExt;
+use itertools::Either;
 use miette::Diagnostic;
-use pixi_build_discovery::{DiscoveredBackend, EnabledProtocols};
-use pixi_build_frontend::types::{
-    ChannelConfiguration, CondaPackageMetadata, PlatformAndVirtualPackages, SourcePackageSpecV1,
-    procedures::conda_metadata::CondaMetadataParams,
+use pixi_build_types::procedures::conda_outputs::CondaOutput;
+use pixi_record::{InputHash, PinnedSourceSpec, PixiRecord, SourceRecord};
+use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceSpec, SpecConversionError};
+use pixi_spec_containers::DependencyMap;
+use rattler_conda_types::{
+    ChannelConfig, InvalidPackageNameError, MatchSpec, PackageName, PackageRecord,
+    package::RunExportsJson,
 };
-use pixi_build_type_conversions::compute_project_model_hash;
-use pixi_glob::GlobHashKey;
-use pixi_record::{InputHash, SourceRecord};
-use rattler_conda_types::{ChannelConfig, ChannelUrl, PackageRecord};
 use thiserror::Error;
+use tracing::instrument;
 
 use crate::{
-    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    InstantiateBackendError, InstantiateBackendSpec, SourceCheckout, build::WorkDirKey,
+    BuildBackendMetadataError, BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher,
+    CommandDispatcherError, CommandDispatcherErrorResultExt, PixiEnvironmentSpec,
+    SolvePixiEnvironmentError,
+    build::{
+        Dependencies, DependenciesError, PixiRunExports, conversion,
+        source_metadata_cache::MetadataKind,
+    },
+    executor::ExecutorFutures,
 };
 
-mod source_metadata_cache;
-
-use source_metadata_cache::SourceMetadataKey;
-pub use source_metadata_cache::{SourceMetadataCache, SourceMetadataCacheError};
-
-use crate::source_metadata::source_metadata_cache::CachedCondaMetadata;
-
-/// Represents a request for source metadata.
 #[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize)]
 pub struct SourceMetadataSpec {
-    /// The source specification
-    pub source: SourceCheckout,
+    /// The name of the package to retrieve metadata from.
+    pub package: PackageName,
 
-    /// The channel configuration to use when resolving metadata
-    pub channel_config: ChannelConfig,
-
-    /// The channels to use for solving.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub channels: Vec<ChannelUrl>,
-
-    /// Information about the build environment.
-    pub build_environment: BuildEnvironment,
-
-    /// Variant configuration
-    pub variants: Option<BTreeMap<String, Vec<String>>>,
-
-    /// The protocols that are enabled for this source
-    #[serde(skip_serializing_if = "crate::is_default")]
-    pub enabled_protocols: EnabledProtocols,
+    /// Information about the build backend to request the information from.
+    pub backend_metadata: BuildBackendMetadataSpec,
 }
 
-/// The metadata of a source checkout.
-#[derive(Debug, Clone, serde::Serialize)]
+/// The result of building a particular source record.
+#[derive(Debug, Clone)]
 pub struct SourceMetadata {
-    /// The source checkout that the manifest was extracted from.
-    pub source: SourceCheckout,
+    /// Information about the source checkout that was used to build the
+    /// package.
+    pub source: PinnedSourceSpec,
 
-    /// All the records that can be extracted from the source.
+    /// All the source records for this particular package.
     pub records: Vec<SourceRecord>,
 }
 
 impl SourceMetadataSpec {
+    #[instrument(skip_all, fields(name = %self.package.as_source(), platform = %self.backend_metadata.build_environment.host_platform))]
     pub(crate) async fn request(
         self,
         command_dispatcher: CommandDispatcher,
     ) -> Result<SourceMetadata, CommandDispatcherError<SourceMetadataError>> {
         tracing::debug!(
-            "Requesting source metadata for source spec: {}",
-            self.source.pinned
+            "Requesting source metadata from '{}'",
+            &self.backend_metadata.source
         );
 
-        // Discover information about the build backend from the source code.
-        let discovered_backend = DiscoveredBackend::discover(
-            &self.source.path,
-            &self.channel_config,
-            &self.enabled_protocols,
-        )
-        .map_err(SourceMetadataError::Discovery)
-        .map_err(CommandDispatcherError::Failed)?;
-
-        // Check the source metadata cache, short circuit if we have it.
-        let cache_key = self.cache_key();
-        let (metadata, entry) = command_dispatcher
-            .source_metadata_cache()
-            .entry(&self.source.pinned, &cache_key)
+        // Get the metadata from the build backend.
+        let build_backend_metadata = command_dispatcher
+            .build_backend_metadata(self.backend_metadata.clone())
             .await
-            .map_err(SourceMetadataError::Cache)
-            .map_err(CommandDispatcherError::Failed)?;
+            .map_err_with(SourceMetadataError::BuildBackendMetadata)?;
 
-        // Calculate the hash of the project model
-        let project_model_hash = discovered_backend
-            .init_params
-            .project_model
+        match &build_backend_metadata.metadata.metadata {
+            MetadataKind::GetMetadata { packages } => {
+                // Convert the metadata to source records.
+                let records = conversion::package_metadata_to_source_records(
+                    &build_backend_metadata.source,
+                    packages,
+                    &self.package,
+                    &build_backend_metadata.metadata.input_hash,
+                );
+
+                Ok(SourceMetadata {
+                    source: build_backend_metadata.source.clone(),
+                    records,
+                })
+            }
+            MetadataKind::Outputs { outputs } => {
+                let mut futures = ExecutorFutures::new(command_dispatcher.executor());
+                for output in outputs {
+                    if output.metadata.name != self.package {
+                        continue;
+                    }
+                    futures.push(self.resolve_output(
+                        &command_dispatcher,
+                        output,
+                        build_backend_metadata.metadata.input_hash.clone(),
+                        build_backend_metadata.source.clone(),
+                    ));
+                }
+
+                Ok(SourceMetadata {
+                    source: build_backend_metadata.source.clone(),
+                    records: futures.try_collect().await?,
+                })
+            }
+        }
+    }
+
+    async fn resolve_output(
+        &self,
+        command_dispatcher: &CommandDispatcher,
+        output: &CondaOutput,
+        input_hash: Option<InputHash>,
+        source: PinnedSourceSpec,
+    ) -> Result<SourceRecord, CommandDispatcherError<SourceMetadataError>> {
+        let source_anchor = SourceAnchor::from(SourceSpec::from(source.clone()));
+
+        // Solve the build environment for the output.
+        let build_dependencies = output
+            .build_dependencies
             .as_ref()
-            .map(compute_project_model_hash);
+            .map(|deps| Dependencies::new(deps, Some(source_anchor.clone())))
+            .transpose()
+            .map_err(SourceMetadataError::from)
+            .map_err(CommandDispatcherError::Failed)?
+            .unwrap_or_default();
+        let build_records = self
+            .solve_dependencies(
+                self.package.clone(),
+                CycleEnvironment::Build,
+                command_dispatcher,
+                build_dependencies.clone(),
+                self.backend_metadata
+                    .build_environment
+                    .to_build_from_build(),
+            )
+            .await?;
+        let build_run_exports =
+            build_dependencies.extract_run_exports(&build_records, &output.ignore_run_exports);
 
-        if let Some(metadata) = metadata {
-            tracing::debug!(
-                "Found source metadata in cache for source spec: {}",
-                self.source.pinned
+        // Solve the host environment for the output.
+        let host_dependencies = output
+            .host_dependencies
+            .as_ref()
+            .map(|deps| Dependencies::new(deps, Some(source_anchor.clone())))
+            .transpose()
+            .map_err(SourceMetadataError::from)
+            .map_err(CommandDispatcherError::Failed)?
+            .unwrap_or_default()
+            // Extend with the run exports from the build environment.
+            .extend_with_run_exports_from_build(&build_run_exports);
+        let host_records = self
+            .solve_dependencies(
+                self.package.clone(),
+                CycleEnvironment::Host,
+                command_dispatcher,
+                host_dependencies.clone(),
+                self.backend_metadata.build_environment.clone(),
+            )
+            .await?;
+        let host_run_exports =
+            host_dependencies.extract_run_exports(&host_records, &output.ignore_run_exports);
+
+        // Gather the dependencies for the output.
+        let run_dependencies = Dependencies::new(&output.run_dependencies, None)
+            .map_err(SourceMetadataError::from)
+            .map_err(CommandDispatcherError::Failed)?
+            .extend_with_run_exports_from_build_and_host(
+                host_run_exports,
+                build_run_exports,
+                output.metadata.subdir,
             );
 
-            // Check if the input hash is still valid.
-            if let Some(input_globs) = &metadata.input_hash {
-                let new_hash = command_dispatcher
-                    .glob_hash_cache()
-                    .compute_hash(GlobHashKey::new(
-                        self.source.path.clone(),
-                        input_globs.globs.clone(),
-                        project_model_hash.clone(),
+        let PackageRecordDependencies {
+            depends,
+            constrains,
+            mut sources,
+        } = PackageRecordDependencies::new(run_dependencies, &self.backend_metadata.channel_config)
+            .map_err(SourceMetadataError::SpecConversionError)
+            .map_err(CommandDispatcherError::Failed)?;
+
+        // Convert the run exports
+        let run_exports = PixiRunExports::try_from_protocol(&output.run_exports)
+            .map_err(CommandDispatcherError::Failed)?;
+
+        let pixi_spec_to_match_spec = |name: &PackageName,
+                                       spec: &PixiSpec,
+                                       sources: &mut HashMap<PackageName, SourceSpec>|
+         -> Result<MatchSpec, SourceMetadataError> {
+            match spec.clone().into_source_or_binary() {
+                Either::Left(source) => {
+                    let source = match sources.entry(name.clone()) {
+                        std::collections::hash_map::Entry::Occupied(entry) => {
+                            // If the entry already exists, check if it points to the same source.
+                            if entry.get() == &source {
+                                return Err(SourceMetadataError::DuplicateSourceDependency {
+                                    package: name.clone(),
+                                    source1: Box::new(entry.get().clone()),
+                                    source2: Box::new(source.clone()),
+                                });
+                            }
+                            entry.into_mut()
+                        }
+                        std::collections::hash_map::Entry::Vacant(entry) => entry.insert(source),
+                    };
+                    Ok(MatchSpec::from_nameless(
+                        source.to_nameless_match_spec(),
+                        Some(name.clone()),
                     ))
-                    .await
-                    .map_err(SourceMetadataError::GlobHash)
-                    .map_err(CommandDispatcherError::Failed)?;
-                if new_hash.hash == input_globs.hash {
-                    tracing::debug!("found up-to-date cached metadata.");
-                    return Ok(SourceMetadata {
-                        records: source_metadata_to_records(
-                            &self.source,
-                            metadata.packages,
-                            metadata.input_hash,
-                        ),
-                        source: self.source,
-                    });
-                } else {
-                    tracing::debug!("found stale cached metadata.");
                 }
-            } else {
-                tracing::debug!("found cached metadata.");
-                // No input hash so just assume it is still valid.
-                return Ok(SourceMetadata {
-                    records: source_metadata_to_records(
-                        &self.source,
-                        metadata.packages,
-                        metadata.input_hash,
-                    ),
-                    source: self.source,
-                });
+                Either::Right(binary) => {
+                    let spec = binary
+                        .try_into_nameless_match_spec(&self.backend_metadata.channel_config)
+                        .map_err(SourceMetadataError::SpecConversionError)?;
+                    Ok(MatchSpec::from_nameless(spec, Some(name.clone())))
+                }
             }
-        }
+        };
 
-        // Instantiate the backend with the discovered information.
-        let backend = command_dispatcher
-            .instantiate_backend(InstantiateBackendSpec {
-                backend_spec: discovered_backend.backend_spec,
-                init_params: discovered_backend.init_params,
-                channel_config: self.channel_config.clone(),
-                enabled_protocols: self.enabled_protocols,
-            })
-            .await
-            .map_err_with(SourceMetadataError::Initialize)?;
+        let pixi_specs_to_match_spec = |specs: DependencyMap<PackageName, PixiSpec>,
+                                        sources: &mut HashMap<PackageName, SourceSpec>|
+         -> Result<
+            Vec<String>,
+            CommandDispatcherError<SourceMetadataError>,
+        > {
+            specs
+                .into_specs()
+                .map(|(name, spec)| Ok(pixi_spec_to_match_spec(&name, &spec, sources)?.to_string()))
+                .collect::<Result<Vec<_>, SourceMetadataError>>()
+                .map_err(CommandDispatcherError::Failed)
+        };
 
-        // Query the backend for metadata.
-        let params = CondaMetadataParams {
-            build_platform: Some(PlatformAndVirtualPackages {
-                platform: self.build_environment.build_platform,
-                virtual_packages: Some(self.build_environment.build_virtual_packages),
-            }),
-            host_platform: Some(PlatformAndVirtualPackages {
-                platform: self.build_environment.host_platform,
-                virtual_packages: Some(self.build_environment.host_virtual_packages),
-            }),
-            channel_base_urls: Some(self.channels.into_iter().map(Into::into).collect()),
-            channel_configuration: ChannelConfiguration {
-                base_url: self.channel_config.channel_alias.clone(),
+        let binary_specs_to_match_spec = |specs: DependencyMap<PackageName, BinarySpec>| -> Result<
+            Vec<String>,
+            CommandDispatcherError<SourceMetadataError>,
+        > {
+            specs
+                .into_specs()
+                .map(|(name, spec)| {
+                    let nameless_spec = spec
+                        .try_into_nameless_match_spec(&self.backend_metadata.channel_config)
+                        .map_err(SourceMetadataError::SpecConversionError)?;
+                    Ok(MatchSpec::from_nameless(nameless_spec, Some(name)).to_string())
+                })
+                .collect::<Result<Vec<_>, SourceMetadataError>>()
+                .map_err(CommandDispatcherError::Failed)
+        };
+
+        // Gather the run exports for the output.
+        let run_exports = RunExportsJson {
+            weak: pixi_specs_to_match_spec(run_exports.weak, &mut sources)?,
+            strong: pixi_specs_to_match_spec(run_exports.strong, &mut sources)?,
+            noarch: pixi_specs_to_match_spec(run_exports.noarch, &mut sources)?,
+            weak_constrains: binary_specs_to_match_spec(run_exports.weak_constrains)?,
+            strong_constrains: binary_specs_to_match_spec(run_exports.strong_constrains)?,
+        };
+
+        Ok(SourceRecord {
+            package_record: PackageRecord {
+                // We cannot now these values from the metadata because no actual package
+                // was built yet.
+                size: None,
+                sha256: None,
+                md5: None,
+
+                // TODO(baszalmstra): Decide if it makes sense to include the current
+                //  timestamp here.
+                timestamp: None,
+
+                // These values are derived from the build backend values.
+                platform: output
+                    .metadata
+                    .subdir
+                    .only_platform()
+                    .map(ToString::to_string),
+                arch: output
+                    .metadata
+                    .subdir
+                    .arch()
+                    .as_ref()
+                    .map(ToString::to_string),
+
+                // These values are passed by the build backend
+                name: output.metadata.name.clone(),
+                build: output.metadata.build.clone(),
+                version: output.metadata.version.clone(),
+                build_number: output.metadata.build_number,
+                license: output.metadata.license.clone(),
+                subdir: output.metadata.subdir.to_string(),
+                license_family: output.metadata.license_family.clone(),
+                noarch: output.metadata.noarch,
+                constrains,
+                depends,
+                run_exports: Some(run_exports),
+                purls: output
+                    .metadata
+                    .purls
+                    .as_ref()
+                    .map(|purls| purls.iter().cloned().collect()),
+                python_site_packages_path: output.metadata.python_site_packages_path.clone(),
+
+                // These are deprecated and no longer used.
+                features: None,
+                track_features: vec![],
+                legacy_bz2_md5: None,
+                legacy_bz2_size: None,
+
+                // These are not important at this point.
+                experimental_extra_depends: Default::default(),
             },
-            variant_configuration: self.variants.map(|variants| variants.into_iter().collect()),
-            work_directory: command_dispatcher.cache_dirs().working_dirs().join(
-                WorkDirKey {
-                    source: Box::new(self.source.clone()).into(),
-                    host_platform: self.build_environment.host_platform,
-                    build_backend: backend.identifier().to_string(),
-                }
-                .key(),
-            ),
-        };
-        let metadata = backend
-            .conda_get_metadata(params)
-            .await
-            .map_err(SourceMetadataError::Communication)
-            .map_err(CommandDispatcherError::Failed)?;
-
-        // Compute the input globs for the mutable source checkouts.
-        let input_hash = Self::compute_input_hash(
-            command_dispatcher,
-            &self.source,
-            project_model_hash,
-            metadata.input_globs,
-        )
-        .await?;
-
-        // Store the metadata in the cache for later retrieval
-        entry
-            .insert(CachedCondaMetadata {
-                input_hash: input_hash.clone(),
-                packages: metadata.packages.clone(),
-            })
-            .await
-            .map_err(SourceMetadataError::Cache)
-            .map_err(CommandDispatcherError::Failed)?;
-
-        Ok(SourceMetadata {
-            records: source_metadata_to_records(&self.source, metadata.packages, input_hash),
-            source: self.source,
+            source,
+            input_hash,
+            sources: sources
+                .into_iter()
+                .map(|(name, source)| (name.as_source().to_string(), source))
+                .collect(),
         })
     }
 
-    /// Computes the input hash for metadata returned by the backend.
-    async fn compute_input_hash(
-        command_queue: CommandDispatcher,
-        source: &SourceCheckout,
-        project_model_hash: Option<Vec<u8>>,
-        input_globs: Option<BTreeSet<String>>,
-    ) -> Result<Option<InputHash>, CommandDispatcherError<SourceMetadataError>> {
-        let input_hash = if source.pinned.is_immutable() {
-            None
-        } else {
-            // Compute the input hash based on the project model and the input globs.
-            let input_globs = input_globs.unwrap_or_default();
-            let input_hash = command_queue
-                .glob_hash_cache()
-                .compute_hash(GlobHashKey::new(
-                    &source.path,
-                    input_globs.clone(),
-                    project_model_hash,
-                ))
-                .await
-                .map_err(SourceMetadataError::GlobHash)
-                .map_err(CommandDispatcherError::Failed)?;
-
-            Some(InputHash {
-                hash: input_hash.hash,
-                globs: input_globs,
+    async fn solve_dependencies(
+        &self,
+        pkg_name: PackageName,
+        env_type: CycleEnvironment,
+        command_dispatcher: &CommandDispatcher,
+        dependencies: Dependencies,
+        build_environment: BuildEnvironment,
+    ) -> Result<Vec<PixiRecord>, CommandDispatcherError<SourceMetadataError>> {
+        if dependencies.dependencies.is_empty() {
+            return Ok(vec![]);
+        }
+        match command_dispatcher
+            .solve_pixi_environment(PixiEnvironmentSpec {
+                name: Some(format!("{} ({})", pkg_name.as_source(), env_type)),
+                dependencies: dependencies.dependencies,
+                constraints: dependencies.constraints,
+                installed: vec![], // TODO: To lock build environments, fill this.
+                build_environment,
+                channels: self.backend_metadata.channels.clone(),
+                strategy: Default::default(),
+                channel_priority: Default::default(),
+                exclude_newer: None,
+                channel_config: self.backend_metadata.channel_config.clone(),
+                variants: self.backend_metadata.variants.clone(),
+                enabled_protocols: self.backend_metadata.enabled_protocols.clone(),
             })
-        };
-        Ok(input_hash)
-    }
-
-    /// Computes the cache key for this instance
-    pub(crate) fn cache_key(&self) -> SourceMetadataKey {
-        SourceMetadataKey {
-            channel_urls: self.channels.clone(),
-            build_environment: self.build_environment.clone(),
-            build_variants: self.variants.clone().unwrap_or_default(),
-            enabled_protocols: self.enabled_protocols.clone(),
+            .await
+        {
+            Err(CommandDispatcherError::Failed(SolvePixiEnvironmentError::Cycle(mut cycle))) => {
+                // If a cycle was detected, add the current environment to the cycle.
+                cycle.stack.push((pkg_name, env_type));
+                Err(CommandDispatcherError::Failed(SourceMetadataError::Cycle(
+                    cycle,
+                )))
+            }
+            Err(CommandDispatcherError::Failed(e)) => {
+                // If solving failed, we return an error based on the environment type that we
+                // tried to solve.
+                match env_type {
+                    CycleEnvironment::Build => Err(CommandDispatcherError::Failed(
+                        SourceMetadataError::SolveBuildEnvironment(Box::new(e)),
+                    )),
+                    _ => Err(CommandDispatcherError::Failed(
+                        SourceMetadataError::SolveHostEnvironment(Box::new(e)),
+                    )),
+                }
+            }
+            Err(CommandDispatcherError::Cancelled) => Err(CommandDispatcherError::Cancelled),
+            Ok(records) => Ok(records),
         }
     }
 }
 
-pub(crate) fn source_metadata_to_records(
-    source: &SourceCheckout,
-    packages: Vec<CondaPackageMetadata>,
-    input_hash: Option<InputHash>,
-) -> Vec<SourceRecord> {
-    // Convert the metadata to repodata
-    let packages = packages
-        .into_iter()
-        .map(|p| {
-            SourceRecord {
-                input_hash: input_hash.clone(),
-                source: source.pinned.clone(),
-                sources: p
-                    .sources
-                    .into_iter()
-                    .map(|(name, source)| (name, from_pixi_source_spec_v1(source)))
-                    .collect(),
-                package_record: PackageRecord {
-                    // We cannot now these values from the metadata because no actual package
-                    // was built yet.
-                    size: None,
-                    sha256: None,
-                    md5: None,
-
-                    // TODO(baszalmstra): Decide if it makes sense to include the current
-                    // timestamp here.
-                    timestamp: None,
-
-                    // These values are derived from the build backend values.
-                    platform: p.subdir.only_platform().map(ToString::to_string),
-                    arch: p.subdir.arch().as_ref().map(ToString::to_string),
-
-                    // These values are passed by the build backend
-                    name: p.name,
-                    build: p.build,
-                    version: p.version,
-                    build_number: p.build_number,
-                    license: p.license,
-                    subdir: p.subdir.to_string(),
-                    license_family: p.license_family,
-                    noarch: p.noarch,
-                    constrains: p.constraints.into_iter().map(|c| c.to_string()).collect(),
-                    depends: p.depends.into_iter().map(|c| c.to_string()).collect(),
-
-                    // These are deprecated and no longer used.
-                    features: None,
-                    track_features: vec![],
-                    legacy_bz2_md5: None,
-                    legacy_bz2_size: None,
-                    python_site_packages_path: None,
-
-                    // TODO(baszalmstra): Add support for these.
-                    purls: None,
-
-                    // These are not important at this point.
-                    run_exports: None,
-                    extra_depends: Default::default(),
-                },
-            }
-        })
-        .collect();
-    packages
+struct PackageRecordDependencies {
+    pub depends: Vec<String>,
+    pub constrains: Vec<String>,
+    pub sources: HashMap<rattler_conda_types::PackageName, SourceSpec>,
 }
 
-pub fn from_pixi_source_spec_v1(source: SourcePackageSpecV1) -> pixi_spec::SourceSpec {
-    match source {
-        SourcePackageSpecV1::Url(url) => pixi_spec::SourceSpec::Url(pixi_spec::UrlSourceSpec {
-            url: url.url,
-            md5: url.md5,
-            sha256: url.sha256,
-        }),
-        SourcePackageSpecV1::Git(git) => pixi_spec::SourceSpec::Git(pixi_spec::GitSpec {
-            git: git.git,
-            rev: git.rev.map(|r| match r {
-                pixi_build_frontend::types::GitReferenceV1::Branch(b) => {
-                    pixi_spec::GitReference::Branch(b)
+impl PackageRecordDependencies {
+    pub fn new(
+        dependencies: Dependencies,
+        channel_config: &ChannelConfig,
+    ) -> Result<PackageRecordDependencies, SpecConversionError> {
+        let constrains = dependencies
+            .constraints
+            .into_match_specs(channel_config)?
+            .into_iter()
+            .map(|spec| spec.to_string())
+            .collect();
+        let mut depends = Vec::new();
+        let mut sources = HashMap::new();
+        for (name, spec) in dependencies.dependencies.into_specs() {
+            match spec.into_source_or_binary() {
+                Either::Left(source) => {
+                    depends.push(
+                        MatchSpec {
+                            name: Some(name.clone()),
+                            ..MatchSpec::default()
+                        }
+                        .to_string(),
+                    );
+                    sources.insert(name, source);
                 }
-                pixi_build_frontend::types::GitReferenceV1::Tag(t) => {
-                    pixi_spec::GitReference::Tag(t)
+                Either::Right(binary) => {
+                    if let Ok(spec) = binary.try_into_nameless_match_spec(channel_config) {
+                        depends.push(MatchSpec::from_nameless(spec, Some(name)).to_string());
+                    }
                 }
-                pixi_build_frontend::types::GitReferenceV1::Rev(rev) => {
-                    pixi_spec::GitReference::Rev(rev)
-                }
-                pixi_build_frontend::types::GitReferenceV1::DefaultBranch => {
-                    pixi_spec::GitReference::DefaultBranch
-                }
-            }),
-            subdirectory: git.subdirectory,
-        }),
-        SourcePackageSpecV1::Path(path) => pixi_spec::SourceSpec::Path(pixi_spec::PathSourceSpec {
-            path: path.path.into(),
-        }),
+            }
+        }
+        Ok(PackageRecordDependencies {
+            depends,
+            constrains,
+            sources,
+        })
     }
 }
 
@@ -348,19 +416,46 @@ pub fn from_pixi_source_spec_v1(source: SourcePackageSpecV1) -> pixi_spec::Sourc
 pub enum SourceMetadataError {
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Discovery(#[from] pixi_build_discovery::DiscoveryError),
+    BuildBackendMetadata(#[from] BuildBackendMetadataError),
+
+    #[error("while trying to solve the build environment for the package")]
+    SolveBuildEnvironment(
+        #[diagnostic_source]
+        #[source]
+        Box<SolvePixiEnvironmentError>,
+    ),
+
+    #[error("while trying to solve the host environment for the package")]
+    SolveHostEnvironment(
+        #[diagnostic_source]
+        #[source]
+        Box<SolvePixiEnvironmentError>,
+    ),
 
     #[error(transparent)]
-    #[diagnostic(transparent)]
-    Initialize(#[from] InstantiateBackendError),
+    SpecConversionError(#[from] SpecConversionError),
 
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    Communication(#[from] pixi_build_frontend::json_rpc::CommunicationError),
+    #[error("backend returned a dependency on an invalid package name: {0}")]
+    InvalidPackageName(String, #[source] InvalidPackageNameError),
 
-    #[error("could not compute hash of input files")]
-    GlobHash(#[from] pixi_glob::GlobHashError),
+    #[error("found two source dependencies for {} but for different sources ({source1} and {source2})", package.as_source()
+    )]
+    DuplicateSourceDependency {
+        package: PackageName,
+        source1: Box<SourceSpec>,
+        source2: Box<SourceSpec>,
+    },
 
-    #[error(transparent)]
-    Cache(#[from] SourceMetadataCacheError),
+    #[error("the dependencies of some packages in the environment form a cycle")]
+    Cycle(Cycle),
+}
+
+impl From<DependenciesError> for SourceMetadataError {
+    fn from(value: DependenciesError) -> Self {
+        match value {
+            DependenciesError::InvalidPackageName(name, error) => {
+                SourceMetadataError::InvalidPackageName(name, error)
+            }
+        }
+    }
 }

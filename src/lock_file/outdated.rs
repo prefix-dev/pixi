@@ -1,19 +1,18 @@
 use std::collections::{HashMap, HashSet};
 
-use fancy_display::FancyDisplay;
-use itertools::Itertools;
-use pixi_consts::consts;
-use pixi_manifest::FeaturesExt;
-use rattler_conda_types::Platform;
-use rattler_lock::{LockFile, LockedPackageRef};
-
 use super::{verify_environment_satisfiability, verify_platform_satisfiability};
 use crate::{
     Workspace,
-    build::GlobHashCache,
     lock_file::satisfiability::{EnvironmentUnsat, verify_solve_group_satisfiability},
     workspace::{Environment, SolveGroup},
 };
+use fancy_display::FancyDisplay;
+use itertools::Itertools;
+use pixi_consts::consts;
+use pixi_glob::GlobHashCache;
+use pixi_manifest::FeaturesExt;
+use rattler_conda_types::Platform;
+use rattler_lock::{LockFile, LockedPackageRef};
 
 /// A struct that contains information about specific outdated environments.
 ///

@@ -18,7 +18,7 @@ use pixi_manifest::{
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{NamelessMatchSpec, PackageName, Platform, Version};
+use rattler_conda_types::{MatchSpec, NamelessMatchSpec, PackageName, Platform, Version};
 use rattler_lock::LockFile;
 use toml_edit::DocumentMut;
 
@@ -357,7 +357,7 @@ impl WorkspaceMut {
             uv_context,
             updated_conda_prefixes,
             updated_pypi_prefixes,
-            build_context,
+            command_dispatcher,
             glob_hash_cache,
             io_concurrency_limit,
             was_outdated: _,
@@ -411,7 +411,7 @@ impl WorkspaceMut {
             updated_pypi_prefixes,
             uv_context,
             io_concurrency_limit,
-            build_context,
+            command_dispatcher,
             glob_hash_cache,
             was_outdated: true,
         };
@@ -440,6 +440,48 @@ impl WorkspaceMut {
             implicit_constraints,
             lock_file_diff,
         }))
+    }
+
+    // Take some conda and PyPI deps as Vecs of MatchSpecs and Requirements, and add them
+    // for given platforms and a given feature
+    pub fn add_specs(
+        &mut self,
+        conda_deps: Vec<MatchSpec>,
+        pypi_deps: Vec<Requirement>,
+        platforms: &[Platform],
+        feature_name: &FeatureName,
+    ) -> Result<(), miette::Error> {
+        for spec in conda_deps {
+            // Determine the name of the package to add
+            let (Some(name), spec) = spec.clone().into_nameless() else {
+                miette::bail!(
+                    "{} does not support wildcard dependencies",
+                    pixi_utils::executable_name()
+                );
+            };
+            let spec = PixiSpec::from_nameless_matchspec(spec, &self.workspace().channel_config());
+            self.manifest().add_dependency(
+                &name,
+                &spec,
+                SpecType::Run,
+                // No platforms required as you can't define them in the yaml
+                platforms,
+                feature_name,
+                DependencyOverwriteBehavior::Overwrite,
+            )?;
+        }
+        for requirement in pypi_deps {
+            self.manifest().add_pep508_dependency(
+                (&requirement, None),
+                // No platforms required as you can't define them in the yaml
+                platforms,
+                feature_name,
+                None,
+                DependencyOverwriteBehavior::Overwrite,
+                None,
+            )?;
+        }
+        Ok(())
     }
 
     /// Update the conda specs of newly added packages based on the contents of

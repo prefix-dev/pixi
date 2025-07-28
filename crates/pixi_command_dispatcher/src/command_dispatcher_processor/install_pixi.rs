@@ -1,11 +1,13 @@
 use futures::FutureExt;
 
 use super::{CommandDispatcherProcessor, PendingInstallPixiEnvironment, TaskResult};
-use crate::command_dispatcher::{InstallPixiEnvironmentId, InstallPixiEnvironmentTask};
-use crate::install_pixi::InstallPixiEnvironmentError;
 use crate::{
     CommandDispatcherError, CommandDispatcherErrorResultExt, InstallPixiEnvironmentResult,
-    Reporter, command_dispatcher::CommandDispatcherContext,
+    Reporter,
+    command_dispatcher::{
+        CommandDispatcherContext, InstallPixiEnvironmentId, InstallPixiEnvironmentTask,
+    },
+    install_pixi::InstallPixiEnvironmentError,
 };
 
 impl CommandDispatcherProcessor {
@@ -27,6 +29,11 @@ impl CommandDispatcherProcessor {
                 tx: task.tx,
                 reporter_id,
             });
+
+        if let Some(parent_context) = task.parent {
+            self.parent_contexts
+                .insert(pending_env_id.into(), parent_context);
+        }
 
         // Notify the reporter that the solve has started.
         if let Some((reporter, id)) = self
@@ -69,6 +76,7 @@ impl CommandDispatcherProcessor {
             CommandDispatcherError<InstallPixiEnvironmentError>,
         >,
     ) {
+        self.parent_contexts.remove(&id.into());
         let env = self
             .install_pixi_environment
             .remove(id)

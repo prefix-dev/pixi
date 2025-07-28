@@ -9,7 +9,6 @@ use std::{
 use fs_err::tokio as tokio_fs;
 use pixi::{
     UpdateLockFileOptions, Workspace,
-    build::BuildContext,
     cli::{
         LockFileUsageConfig,
         cli_config::{LockFileUpdateConfig, WorkspaceConfig},
@@ -23,7 +22,8 @@ use pixi_config::{Config, DetachedEnvironments};
 use pixi_consts::consts;
 use pixi_manifest::{FeatureName, FeaturesExt};
 use pixi_record::PixiRecord;
-use rattler_conda_types::{ChannelConfig, Platform, RepoDataRecord};
+use rattler_conda_types::{Platform, RepoDataRecord};
+use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use tempfile::{TempDir, tempdir};
 use tokio::{fs, task::JoinSet};
 use url::Url;
@@ -757,7 +757,7 @@ async fn test_ensure_gitignore_file_creation() {
     );
     let contents = tokio_fs::read_to_string(&gitignore_path).await.unwrap();
     assert_eq!(
-        contents, "*\n",
+        contents, "*\n!config.toml\n",
         ".pixi/.gitignore file does not contain the expected content"
     );
 
@@ -785,7 +785,7 @@ async fn test_ensure_gitignore_file_creation() {
     );
     let contents = tokio_fs::read_to_string(&gitignore_path).await.unwrap();
     assert_eq!(
-        contents, "*\n",
+        contents, "*\n!config.toml\n",
         ".pixi/.gitignore file does not contain the expected content"
     );
 }
@@ -888,6 +888,10 @@ async fn conda_pypi_override_correct_per_platform() {
 
 async fn test_multiple_prefix_update() {
     let current_platform = Platform::current();
+    let virtual_packages = VirtualPackages::detect(&VirtualPackageOverrides::default())
+        .unwrap()
+        .into_generic_virtual_packages()
+        .collect();
 
     let pixi = PixiControl::from_manifest(
         format!(
@@ -953,8 +957,6 @@ async fn test_multiple_prefix_update() {
         channel: Some("https://repo.prefix.dev/conda-forge/".to_owned()),
     };
 
-    let tmp_dir = tempfile::tempdir().unwrap();
-
     let group = GroupedEnvironment::from(project.default_environment().clone());
 
     // Normally in pixi, the RAYON_INITIALIZE is lazily initialized by the reporter
@@ -971,15 +973,13 @@ async fn test_multiple_prefix_update() {
 
     let conda_prefix_updater = CondaPrefixUpdater::new(
         channels,
+        group.workspace().channel_config(),
         name,
         prefix,
         current_platform,
-        BuildContext::new(
-            ChannelConfig::default_with_root_dir(tmp_dir.path().to_path_buf()),
-            Default::default(),
-            command_dispatcher,
-        )
-        .unwrap(),
+        virtual_packages,
+        group.workspace().variants(current_platform),
+        command_dispatcher,
     );
 
     let pixi_records = Vec::from([

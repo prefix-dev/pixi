@@ -2,7 +2,7 @@
 !!!tip "`conda-deny` in one command:"
     In your favorite `pixi` project, run:
     ```bash
-    pixi exec conda-deny --osi
+    pixi exec conda-deny check --osi
     ```
 
     This will check your project for license compliance against the list of [OSI approved licenses](https://opensource.org/licenses).
@@ -57,12 +57,11 @@ If a Bearer Token is needed to access your allowlist, you can provide it using `
 An example use case would be a private repository containing your allowlist.
 
 
+### Output Formats
 
 `conda-deny` supports different output formats via the `--output` (or `-o`) flag.
 Output formatting works for both, the `list` and the `check` command.
 
-
-### Output Formats
 === "CSV"
     ```bash
     $ conda-deny list --output csv

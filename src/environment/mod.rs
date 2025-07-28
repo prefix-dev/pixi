@@ -13,7 +13,7 @@ use pixi_manifest::FeaturesExt;
 use pixi_progress::await_in_progress;
 use pixi_pypi_spec::PixiPypiSpec;
 use pixi_spec::{GitSpec, PixiSpec};
-pub use pypi_prefix::update_prefix_pypi;
+pub use pypi_prefix::{ContinuePyPIPrefixUpdate, on_python_interpreter_change};
 pub use python_status::PythonStatus;
 use rattler_conda_types::Platform;
 use rattler_lock::LockedPackageRef;
@@ -365,14 +365,14 @@ async fn ensure_pixi_directory_and_gitignore(pixi_dir: &Path) -> miette::Result<
 
     best_effort_write_file_if_missing(
         &gitignore_path,
-        "*\n",
+        "*\n!config.toml\n",
         "Failed to create .gitignore file at",
     )
     .await?;
 
     best_effort_write_file_if_missing(
         &condapackageignore_path,
-        ".pixi\n",
+        ".pixi\n!.pixi/config.toml\n",
         "Failed to create .condapackageignore file at",
     )
     .await?;

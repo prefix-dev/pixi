@@ -1,6 +1,6 @@
 use std::{
     cell::RefCell,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     iter::once,
     ops::Deref,
     path::{Path, PathBuf},
@@ -46,7 +46,7 @@ use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigests};
 use uv_requirements::LookaheadResolver;
 use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
-    PreferenceError, Preferences, PythonRequirement, Resolver, ResolverEnvironment,
+    PreferenceError, Preferences, PythonRequirement, ResolveError, Resolver, ResolverEnvironment,
 };
 use uv_types::EmptyInstalledPackages;
 
@@ -202,6 +202,60 @@ fn print_overridden_requests(package_requests: &HashMap<uv_normalize::PackageNam
     }
 }
 
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum SolveError {
+    #[error("failed to resolve pypi dependencies")]
+    NoSolution {
+        source: Box<uv_resolver::NoSolutionError>,
+        #[help]
+        advice: Option<String>,
+    },
+    #[error("failed to resolve pypi dependencies")]
+    Other(#[from] ResolveError),
+}
+
+/// Creates a custom `SolveError` from a `ResolveError`.
+/// to add some extra information about locked conda packages
+fn create_solve_error(
+    error: ResolveError,
+    conda_python_packages: &CondaPythonPackages,
+) -> SolveError {
+    match error {
+        ResolveError::NoSolution(no_solution) => {
+            let packages: HashSet<_> = no_solution.packages().collect();
+            let conflicting_packages: Vec<String> = conda_python_packages
+                .iter()
+                .filter_map(|(pypi_name, (_, pypi_identifier))| {
+                    if packages.contains(pypi_name) {
+                        Some(format!(
+                            "{}=={}",
+                            pypi_identifier.name.as_source(),
+                            pypi_identifier.version
+                        ))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            let advice = if conflicting_packages.is_empty() {
+                None
+            } else {
+                Some(format!(
+                    "The following PyPI packages have been pinned by the conda solve, and this version may be causing a conflict:\n{}",
+                    conflicting_packages.join("\n")
+                ))
+            };
+
+            SolveError::NoSolution {
+                source: no_solution,
+                advice,
+            }
+        }
+        _ => SolveError::Other(error),
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn resolve_pypi(
     context: UvResolutionContext,
@@ -351,6 +405,25 @@ pub async fn resolve_pypi(
         &pypi_options.no_binary.clone().unwrap_or_default(),
     )
     .into_diagnostic()?;
+    let dependency_overrides =
+        pypi_options.dependency_overrides.as_ref().map(|overrides|->Result<Vec<_>, _> {
+            overrides
+                .iter()
+                .map(|(name, spec)| {
+                    as_uv_req(spec,name.as_normalized().as_ref(), project_root)
+                    .into_diagnostic()
+                    .with_context(||{
+                        format!(
+                            "dependency override {name}:{spec:?} should able to convert to uv requirement",
+                            name = name.as_source(),
+                            spec = spec.to_string()
+                        )
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()
+        }).transpose()?.unwrap_or_default();
+
+    let overrides = Overrides::from_requirements(dependency_overrides);
 
     // Resolve the flat indexes from `--find-links`.
     // In UV 0.7.8, we need to fetch flat index entries from the index locations
@@ -498,7 +571,7 @@ pub async fn resolve_pypi(
     let lookaheads = LookaheadResolver::new(
         &requirements,
         &constraints,
-        &Overrides::default(),
+        &overrides,
         &context.hash_strategy,
         &lookahead_index,
         DistributionDatabase::new(
@@ -517,7 +590,7 @@ pub async fn resolve_pypi(
     let manifest = Manifest::new(
         requirements,
         constraints,
-        Overrides::default(),
+        overrides,
         Preferences::from_iter(preferences, &resolver_env),
         None,
         Default::default(),
@@ -574,8 +647,7 @@ pub async fn resolve_pypi(
     ))
     .resolve()
     .await
-    .into_diagnostic()
-    .context("failed to resolve pypi dependencies")?;
+    .map_err(|e| create_solve_error(e, &conda_python_packages))?;
     let resolution = Resolution::from(resolution);
 
     // Print the overridden package requests

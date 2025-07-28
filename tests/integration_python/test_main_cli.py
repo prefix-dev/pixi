@@ -23,7 +23,7 @@ def test_pixi(pixi: Path) -> None:
     verify_cli_command(
         [pixi], ExitCode.INCORRECT_USAGE, stdout_excludes=f"[version {PIXI_VERSION}]"
     )
-    verify_cli_command([pixi, "--version"], ExitCode.SUCCESS, stdout_contains=PIXI_VERSION)
+    verify_cli_command([pixi, "--version"], stdout_contains=PIXI_VERSION)
 
 
 @pytest.mark.slow
@@ -43,11 +43,9 @@ def test_project_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
             "add",
             "https://prefix.dev/bioconda",
         ],
-        ExitCode.SUCCESS,
     )
     verify_cli_command(
         [pixi, "project", "--manifest-path", manifest_path, "channel", "list"],
-        ExitCode.SUCCESS,
         stdout_contains="bioconda",
     )
     verify_cli_command(
@@ -60,7 +58,6 @@ def test_project_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
             "remove",
             "https://prefix.dev/bioconda",
         ],
-        ExitCode.SUCCESS,
     )
 
     # Description commands
@@ -74,11 +71,9 @@ def test_project_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
             "set",
             "blabla",
         ],
-        ExitCode.SUCCESS,
     )
     verify_cli_command(
         [pixi, "project", "--manifest-path", manifest_path, "description", "get"],
-        ExitCode.SUCCESS,
         stdout_contains="blabla",
     )
 
@@ -93,11 +88,9 @@ def test_project_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
             "add",
             "test",
         ],
-        ExitCode.SUCCESS,
     )
     verify_cli_command(
         [pixi, "project", "--manifest-path", manifest_path, "environment", "list"],
-        ExitCode.SUCCESS,
         stdout_contains="test",
     )
     verify_cli_command(
@@ -110,11 +103,9 @@ def test_project_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
             "remove",
             "test",
         ],
-        ExitCode.SUCCESS,
     )
     verify_cli_command(
         [pixi, "project", "--manifest-path", manifest_path, "environment", "list"],
-        ExitCode.SUCCESS,
         stdout_excludes="test",
     )
 
@@ -130,11 +121,9 @@ def test_project_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
             "linux-64",
             "osx-arm64",
         ],
-        ExitCode.SUCCESS,
     )
     verify_cli_command(
         [pixi, "project", "--manifest-path", manifest_path, "platform", "list"],
-        ExitCode.SUCCESS,
         stdout_contains=["linux-64", "osx-arm64"],
     )
     verify_cli_command(
@@ -147,7 +136,6 @@ def test_project_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
             "remove",
             "linux-64",
         ],
-        ExitCode.SUCCESS,
     )
     verify_cli_command(
         [
@@ -164,7 +152,6 @@ def test_project_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
     )
     verify_cli_command(
         [pixi, "project", "--manifest-path", manifest_path, "platform", "list"],
-        ExitCode.SUCCESS,
         stdout_contains="osx-arm64",
         stdout_excludes="linux-64",
     )
@@ -172,36 +159,29 @@ def test_project_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
     # Version commands
     verify_cli_command(
         [pixi, "project", "--manifest-path", manifest_path, "version", "set", "1.2.3"],
-        ExitCode.SUCCESS,
     )
     verify_cli_command(
         [pixi, "project", "--manifest-path", manifest_path, "version", "get"],
-        ExitCode.SUCCESS,
         stdout_contains="1.2.3",
     )
     verify_cli_command(
         [pixi, "project", "--manifest-path", manifest_path, "version", "major"],
-        ExitCode.SUCCESS,
         stderr_contains="2.0.0",
     )
     verify_cli_command(
         [pixi, "project", "--manifest-path", manifest_path, "version", "minor"],
-        ExitCode.SUCCESS,
         stderr_contains="2.1.0",
     )
     verify_cli_command(
         [pixi, "project", "--manifest-path", manifest_path, "version", "patch"],
-        ExitCode.SUCCESS,
         stderr_contains="2.1.1",
     )
     verify_cli_command(
         [pixi, "project", "--manifest-path", manifest_path, "name", "get"],
-        ExitCode.SUCCESS,
         stdout_contains="test_project_commands",
     )
     verify_cli_command(
         [pixi, "project", "--manifest-path", manifest_path, "name", "set", "new-name"],
-        ExitCode.SUCCESS,
         stderr_contains="new-name",
     )
 
@@ -231,7 +211,6 @@ def test_broken_config(pixi: Path, tmp_pixi_workspace: Path) -> None:
 def test_search(pixi: Path) -> None:
     verify_cli_command(
         [pixi, "search", "rattler-build", "-c", "https://prefix.dev/conda-forge"],
-        ExitCode.SUCCESS,
         stdout_contains="rattler-build",
     )
 
@@ -245,7 +224,6 @@ def test_search_wildcard(pixi: Path, dummy_channel_1: str) -> None:
 
     verify_cli_command(
         [pixi, "search", "d*", "-c", dummy_channel_1],
-        ExitCode.SUCCESS,
         stdout_contains=["dummy-a"],
     )
 
@@ -253,13 +231,11 @@ def test_search_wildcard(pixi: Path, dummy_channel_1: str) -> None:
 def test_search_matchspec(pixi: Path, multiple_versions_channel_1: str) -> None:
     verify_cli_command(
         [pixi, "search", "package", "--channel", multiple_versions_channel_1],
-        ExitCode.SUCCESS,
         stdout_contains=["package"],
     )
 
     verify_cli_command(
         [pixi, "search", "package[build_number=0]", "--channel", multiple_versions_channel_1],
-        ExitCode.SUCCESS,
         stdout_contains=["package"],
     )
 
@@ -279,7 +255,6 @@ def test_simple_project_setup(pixi: Path, tmp_pixi_workspace: Path) -> None:
     # Add package
     verify_cli_command(
         [pixi, "add", "--manifest-path", manifest_path, "_r-mutex"],
-        ExitCode.SUCCESS,
         stderr_contains="Added",
     )
     verify_cli_command(
@@ -292,7 +267,6 @@ def test_simple_project_setup(pixi: Path, tmp_pixi_workspace: Path) -> None:
             "test",
             "_r-mutex==1.0.1",
         ],
-        ExitCode.SUCCESS,
         stderr_contains=["test", "==1.0.1"],
     )
     verify_cli_command(
@@ -305,7 +279,6 @@ def test_simple_project_setup(pixi: Path, tmp_pixi_workspace: Path) -> None:
             "linux-64",
             f"{conda_forge}::_r-mutex",
         ],
-        ExitCode.SUCCESS,
         stderr_contains=["linux-64", "conda-forge"],
     )
     verify_cli_command(
@@ -320,14 +293,12 @@ def test_simple_project_setup(pixi: Path, tmp_pixi_workspace: Path) -> None:
             "osx-arm64",
             "_r-mutex",
         ],
-        ExitCode.SUCCESS,
         stderr_contains=["osx-arm64", "test"],
     )
 
     # Remove package
     verify_cli_command(
         [pixi, "remove", "--manifest-path", manifest_path, "_r-mutex"],
-        ExitCode.SUCCESS,
         stderr_contains="Removed",
     )
     verify_cli_command(
@@ -340,7 +311,6 @@ def test_simple_project_setup(pixi: Path, tmp_pixi_workspace: Path) -> None:
             "test",
             "_r-mutex",
         ],
-        ExitCode.SUCCESS,
         stderr_contains=["test", "Removed"],
     )
     verify_cli_command(
@@ -353,7 +323,6 @@ def test_simple_project_setup(pixi: Path, tmp_pixi_workspace: Path) -> None:
             "linux-64",
             f"{conda_forge}::_r-mutex",
         ],
-        ExitCode.SUCCESS,
         stderr_contains=["linux-64", "conda-forge", "Removed"],
     )
     verify_cli_command(
@@ -368,7 +337,6 @@ def test_simple_project_setup(pixi: Path, tmp_pixi_workspace: Path) -> None:
             "osx-arm64",
             "_r-mutex",
         ],
-        ExitCode.SUCCESS,
         stderr_contains=["osx-arm64", "test", "Removed"],
     )
 
@@ -853,21 +821,18 @@ def test_pixi_manifest_path(pixi: Path, tmp_pixi_workspace: Path) -> None:
             "set",
             "blabla",
         ],
-        ExitCode.SUCCESS,
         cwd=tmp_pixi_workspace,
     )
 
     # Verify project by manifest path to 'pixi.toml'
     verify_cli_command(
         [pixi, "project", "--manifest-path", manifest_path, "description", "get"],
-        ExitCode.SUCCESS,
         stdout_contains="blabla",
     )
 
     # Verify project by manifest path to workspace
     verify_cli_command(
         [pixi, "project", "--manifest-path", tmp_pixi_workspace, "description", "get"],
-        ExitCode.SUCCESS,
         stdout_contains="blabla",
     )
 
@@ -887,7 +852,6 @@ def test_project_system_requirements(pixi: Path, tmp_pixi_workspace: Path) -> No
             "cuda",
             "11.8",
         ],
-        ExitCode.SUCCESS,
     )
     verify_cli_command(
         [
@@ -900,7 +864,6 @@ def test_project_system_requirements(pixi: Path, tmp_pixi_workspace: Path) -> No
             "glibc",
             "2.27",
         ],
-        ExitCode.SUCCESS,
     )
     verify_cli_command(
         [
@@ -913,7 +876,6 @@ def test_project_system_requirements(pixi: Path, tmp_pixi_workspace: Path) -> No
             "macos",
             "15.4",
         ],
-        ExitCode.SUCCESS,
     )
     verify_cli_command(
         [
@@ -926,7 +888,6 @@ def test_project_system_requirements(pixi: Path, tmp_pixi_workspace: Path) -> No
             "linux",
             "6.5",
         ],
-        ExitCode.SUCCESS,
     )
     verify_cli_command(
         [
@@ -955,7 +916,6 @@ def test_project_system_requirements(pixi: Path, tmp_pixi_workspace: Path) -> No
             "--family",
             "musl",
         ],
-        ExitCode.SUCCESS,
     )
 
     # List system requirements
@@ -968,7 +928,6 @@ def test_project_system_requirements(pixi: Path, tmp_pixi_workspace: Path) -> No
             "system-requirements",
             "list",
         ],
-        ExitCode.SUCCESS,
         stdout_contains=["CUDA", "macOS", "Linux", "LibC", "musl"],
     )
 
@@ -986,7 +945,6 @@ def test_project_system_requirements(pixi: Path, tmp_pixi_workspace: Path) -> No
             "linux",
             "10.1",
         ],
-        ExitCode.SUCCESS,
     )
     verify_cli_command(
         [
@@ -1000,7 +958,6 @@ def test_project_system_requirements(pixi: Path, tmp_pixi_workspace: Path) -> No
             "--feature",
             "test",
         ],
-        ExitCode.SUCCESS,
     )
 
     # List system requirements of environment
@@ -1015,7 +972,6 @@ def test_project_system_requirements(pixi: Path, tmp_pixi_workspace: Path) -> No
             "--environment",
             "test",
         ],
-        ExitCode.SUCCESS,
         stdout_contains=["Linux: 10.1"],
     )
 
@@ -1050,7 +1006,6 @@ def test_pixi_lock(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -
     # Run pixi lock again to validate that the return code with --check is 0
     verify_cli_command(
         [pixi, "lock", "--manifest-path", manifest_path, "--check"],
-        expected_exit_code=ExitCode.SUCCESS,
     )
 
     # Read the recreated lock file content

@@ -198,21 +198,12 @@ impl DiscoveredBackend {
         let build_system = package_manifest.build.clone();
         let requirement = (
             build_system.backend.name.clone(),
-            build_system
-                .backend
-                .spec
-                .clone()
-                .try_into_nameless_match_spec(channel_config)?,
+            build_system.backend.spec.clone(),
         );
         let additional_requirements = build_system
             .additional_dependencies
             .iter()
-            .map(|(name, spec)| {
-                Ok((
-                    name.clone(),
-                    spec.clone().try_into_nameless_match_spec(channel_config)?,
-                ))
-            })
+            .map(|(name, spec)| Ok((name.clone(), spec.clone())))
             .collect::<Result<_, SpecConversionError>>()?;
 
         // Figure out the channels to use
