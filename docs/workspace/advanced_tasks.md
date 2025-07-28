@@ -318,6 +318,7 @@ Variables defined at a higher priority will override those defined at a lower pr
 
     In older versions of Pixi, this priority was not well-defined, and there are a number of known
     deviations from the current priority which exist in some older versions:
+
     - `activation.scripts` used to take priority over `activation.env`
     - activation scripts of dependencies used to take priority over `activation.env`
     - outside environment variables used to override variables set in `task.env`
@@ -362,8 +363,7 @@ When we run `echo $HELLO_WORLD`, it will output:
 Hello world!
 ```
 
-```toml
-# pixi.toml
+```toml title="pixi.toml"
 [tasks.hello]
 cmd = "echo $HELLO_WORLD"
 env = { HELLO_WORLD = "Hello world!" }
@@ -379,8 +379,7 @@ When we run `echo Debug mode: $DEBUG_MODE`, it will output:
 Debug mode: enabled
 ```
 
-```toml
-# pixi.toml
+```toml title="pixi.toml"
 [activation.env]
 DEBUG_MODE = "enabled"
 
@@ -388,8 +387,7 @@ DEBUG_MODE = "enabled"
 scripts = ["setup.sh"]
 ```
 
-```bash
-# setup.sh
+```bash title="setup.sh"
 export DEBUG_MODE="disabled"
 ```
 
@@ -401,16 +399,14 @@ When we run `echo Library path: $LIB_PATH`, it will output:
 Library path: /my/lib
 ```
 
-```toml
-# pixi.toml
+```toml title="pixi.toml"
 [activation]
 scripts = ["local_setup.sh"]
 
 [dependencies]
 my-package = "*"  # This package has its own activation scripts that set LIB_PATH="/dep/lib"
 ```
-```bash
-# local_setup.sh
+```bash title="local_setup.sh"
 export LIB_PATH="/my/lib"
 ```
 
@@ -425,15 +421,14 @@ Python path: /pixi/python
 # Outside environment
 export PYTHON_PATH="/system/python"
 ```
-```toml
-# pixi.toml
+```toml title="pixi.toml"
 [dependencies]
 python-utils = "*"  # This package sets PYTHON_PATH="/pixi/python" in its activation scripts
 ```
 
 ##### Example 5: Complex Example - All priorities combined
 In `pixi.toml`, we define the same variable `APP_CONFIG` across multiple levels:
-```toml
+```toml title="pixi.toml"
 [tasks.start]
 cmd = "echo Config: $APP_CONFIG"
 env = { APP_CONFIG = "task-specific" }
@@ -447,8 +442,7 @@ scripts = ["app_setup.sh"]
 [dependencies]
 config-loader = "*"  # Sets APP_CONFIG="dependency-config"
 ```
-```bash
-# app_setup.sh
+```bash title="app_setup.sh"
 export APP_CONFIG="activation-script"
 ```
 ```bash
