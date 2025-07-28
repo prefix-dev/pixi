@@ -64,3 +64,4 @@ Masked versions of Python array API standard compatible arrays.
 - [metrology-apis](https://github.com/quantity-dev/metrology-apis): Standardised Metrology APIs in Python.
 - [xsf](https://github.com/scipy/xsf): Special function implementations.
 - [pyfixest](https://github.com/py-econometrics/pyfixest):  Fast High-Dimensional Fixed Effects Regression in Python following fixest-syntax.
+- [geovista](https://github.com/bjlittle/geovista): Cartographic rendering and mesh analytics powered by [PyVista](https://github.com/pyvista/pyvista) 🌍

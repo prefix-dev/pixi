@@ -2,7 +2,7 @@ use std::{collections::HashSet, sync::Arc};
 
 use async_once_cell::OnceCell as AsyncOnceCell;
 use miette::IntoDiagnostic;
-use pixi_command_dispatcher::{BuildEnvironment, InstallPixiEnvironmentSpec};
+use pixi_command_dispatcher::{BuildEnvironment, CommandDispatcher, InstallPixiEnvironmentSpec};
 use pixi_manifest::FeaturesExt;
 use pixi_record::PixiRecord;
 use rattler::install::link_script::LinkScriptType;
@@ -15,9 +15,9 @@ use super::{
     try_increase_rlimit_to_sensible,
 };
 use crate::{
-    build::BuildContext,
     environment::PythonStatus,
     prefix::Prefix,
+    variants::VariantConfig,
     workspace::{
         HasWorkspaceRef,
         grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
@@ -39,11 +39,13 @@ pub struct CondaPrefixUpdated {
 /// A task that updates the prefix for a given environment.
 pub struct CondaPrefixUpdaterInner {
     pub channels: Vec<ChannelUrl>,
+    pub channel_config: ChannelConfig,
     pub name: GroupedEnvironmentName,
     pub prefix: Prefix,
     pub platform: Platform,
     pub virtual_packages: Vec<GenericVirtualPackage>,
-    pub build_context: BuildContext,
+    pub variant_config: VariantConfig,
+    pub command_dispatcher: CommandDispatcher,
 
     /// A flag that indicates if the prefix was created.
     created: AsyncOnceCell<CondaPrefixUpdated>,
@@ -54,7 +56,7 @@ pub struct CondaPrefixUpdaterBuilder<'a> {
     group: GroupedEnvironment<'a>,
     platform: Platform,
     virtual_packages: Vec<GenericVirtualPackage>,
-    build_context: BuildContext,
+    command_dispatcher: CommandDispatcher,
 }
 
 impl CondaPrefixUpdaterBuilder<'_> {
@@ -70,11 +72,13 @@ impl CondaPrefixUpdaterBuilder<'_> {
 
         Ok(CondaPrefixUpdater::new(
             channels,
+            self.group.channel_config(),
             name,
             prefix,
             self.platform,
             self.virtual_packages,
-            self.build_context,
+            self.group.workspace().variants(self.platform),
+            self.command_dispatcher,
         ))
     }
 }
@@ -91,32 +95,37 @@ impl CondaPrefixUpdater {
         group: GroupedEnvironment<'_>,
         platform: Platform,
         virtual_packages: Vec<GenericVirtualPackage>,
-        build_context: BuildContext,
+        command_dispatcher: CommandDispatcher,
     ) -> CondaPrefixUpdaterBuilder<'_> {
         CondaPrefixUpdaterBuilder {
             group,
             platform,
             virtual_packages,
-            build_context,
+            command_dispatcher,
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         channels: Vec<ChannelUrl>,
+        channel_config: ChannelConfig,
         name: GroupedEnvironmentName,
         prefix: Prefix,
         platform: Platform,
         virtual_packages: Vec<GenericVirtualPackage>,
-        build_context: BuildContext,
+        variant_config: VariantConfig,
+        command_dispatcher: CommandDispatcher,
     ) -> Self {
         Self {
             inner: Arc::new(CondaPrefixUpdaterInner {
                 channels,
+                channel_config,
                 name,
                 prefix,
                 platform,
-                build_context,
                 virtual_packages,
+                variant_config,
+                command_dispatcher,
                 created: Default::default(),
             }),
         }
@@ -142,10 +151,11 @@ impl CondaPrefixUpdater {
                     &self.inner.prefix,
                     pixi_records,
                     channels,
-                    self.inner.build_context.channel_config().clone(),
+                    self.inner.channel_config.clone(),
                     self.inner.platform,
                     self.inner.virtual_packages.clone(),
-                    self.inner.build_context.clone(),
+                    self.inner.variant_config.clone(),
+                    self.inner.command_dispatcher.clone(),
                     reinstall_packages,
                 )
                 .await?;
@@ -174,14 +184,14 @@ pub async fn update_prefix_conda(
     channel_config: ChannelConfig,
     host_platform: Platform,
     host_virtual_packages: Vec<GenericVirtualPackage>,
-    build_context: BuildContext,
+    variant_config: VariantConfig,
+    command_dispatcher: CommandDispatcher,
     reinstall_packages: Option<HashSet<PackageName>>,
 ) -> miette::Result<PythonStatus> {
     // Try to increase the rlimit to a sensible value for installation.
     try_increase_rlimit_to_sensible();
 
     // Run the installation through the command dispatcher.
-    let command_dispatcher = build_context.command_dispatcher();
     let build_environment = BuildEnvironment::simple(host_platform, host_virtual_packages);
     let result = command_dispatcher
         .install_pixi_environment(InstallPixiEnvironmentSpec {
@@ -193,12 +203,7 @@ pub async fn update_prefix_conda(
             build_environment,
             channels,
             channel_config,
-            variants: Some(
-                build_context
-                    .resolve_variant(host_platform)
-                    .into_iter()
-                    .collect(),
-            ),
+            variants: Some(variant_config),
 
             enabled_protocols: Default::default(),
         })

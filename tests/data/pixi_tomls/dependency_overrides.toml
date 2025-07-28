@@ -1,0 +1,25 @@
+[project]
+channels = ["conda-forge"]
+description = "Package management made easy!"
+name = "no_build"
+platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
+version = "0.1.0"
+
+[dependencies]
+python = "3.11.*"
+
+[pypi-options]
+dependency-overrides = { numpy = ">=2.1.0" }
+
+[pypi-dependencies]
+numpy = ">=1.25.0"
+
+[feature.dev.pypi-options.dependency-overrides]
+numpy = "==2.0.0"
+
+[feature.outdated.pypi-options.dependency-overrides]
+numpy = "==1.21.0"
+
+[environments]
+dev = ["dev"]
+outdated = ["outdated"]

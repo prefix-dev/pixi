@@ -20,12 +20,12 @@ use pixi_build_types::{
         },
     },
 };
-use pixi_record::SourceRecord;
+use pixi_record::{PinnedSourceSpec, PixiRecord};
 use rattler_conda_types::{ChannelConfig, ChannelUrl, Platform, Version};
 use serde::Serialize;
 use thiserror::Error;
 
-use crate::{BuildEnvironment, CommandDispatcher, CommandDispatcherError, build::WorkDirKey};
+use crate::{BuildEnvironment, CommandDispatcherError, PackageIdentifier};
 
 /// The `BackendSourceBuildSpec` struct is used to define the specifications for
 /// building a source package using a pre-instantiated backend. This task
@@ -40,10 +40,16 @@ pub struct BackendSourceBuildSpec {
     pub backend: Backend,
 
     /// The package that we are building.
-    pub record: SourceRecord,
+    pub package: PackageIdentifier,
+
+    /// The source location of the package that we are building.
+    pub source: PinnedSourceSpec,
 
     /// The method to use for building the source package.
     pub method: BackendSourceBuildMethod,
+
+    /// The working directory to use for the build.
+    pub work_directory: PathBuf,
 }
 
 #[derive(Debug, Serialize)]
@@ -70,6 +76,9 @@ pub struct BackendSourceBuildV0Method {
     /// The directory where to place the built package. This is used as a hint
     /// for the backend, it may still place the package elsewhere.
     pub output_directory: Option<PathBuf>,
+
+    /// Whether to build the package in editable mode.
+    pub editable: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -89,6 +98,9 @@ pub struct BackendSourceBuildV1Method {
     /// The directory where to place the built package. This is used as a hint
     /// for the backend, it may still place the package elsewhere.
     pub output_directory: Option<PathBuf>,
+
+    /// Whether to build the package in editable mode.
+    pub editable: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -99,6 +111,9 @@ pub struct BackendSourceBuildPrefix {
     /// The location of the prefix on disk.
     #[serde(skip)]
     pub prefix: PathBuf,
+
+    /// The records that are installed in the prefix.
+    pub records: Vec<PixiRecord>,
 }
 
 #[derive(Debug, Serialize)]
@@ -115,27 +130,27 @@ pub struct BackendBuiltSource {
 impl BackendSourceBuildSpec {
     pub async fn build(
         self,
-        command_dispatcher: CommandDispatcher,
         log_sink: UnboundedSender<String>,
     ) -> Result<BackendBuiltSource, CommandDispatcherError<BackendSourceBuildError>> {
         match self.method {
             BackendSourceBuildMethod::BuildV0(params) => {
                 Self::build_v0(
                     self.backend,
-                    self.record,
+                    self.package,
+                    self.source,
                     params,
+                    self.work_directory,
                     log_sink,
-                    command_dispatcher,
                 )
                 .await
             }
             BackendSourceBuildMethod::BuildV1(params) => {
                 Self::build_v1(
                     self.backend,
-                    self.record,
+                    self.package,
                     params,
+                    self.work_directory,
                     log_sink,
-                    command_dispatcher,
                 )
                 .await
             }
@@ -144,10 +159,11 @@ impl BackendSourceBuildSpec {
 
     async fn build_v0(
         backend: Backend,
-        record: SourceRecord,
+        record: PackageIdentifier,
+        source: PinnedSourceSpec,
         params: BackendSourceBuildV0Method,
+        work_directory: PathBuf,
         mut log_sink: UnboundedSender<String>,
-        command_dispatcher: CommandDispatcher,
     ) -> Result<BackendBuiltSource, CommandDispatcherError<BackendSourceBuildError>> {
         // Use the backend to build the source package.
         let mut build_result = backend
@@ -161,29 +177,22 @@ impl BackendSourceBuildSpec {
                         base_url: params.channel_config.channel_alias.clone(),
                     },
                     outputs: Some(BTreeSet::from_iter([CondaOutputIdentifier {
-                        name: Some(record.package_record.name.as_normalized().to_string()),
-                        version: Some(record.package_record.version.to_string()),
-                        build: Some(record.package_record.build.clone()),
-                        subdir: Some(record.package_record.subdir.clone()),
+                        name: Some(record.name.as_normalized().to_string()),
+                        version: Some(record.version.to_string()),
+                        build: Some(record.build.clone()),
+                        subdir: Some(record.subdir.clone()),
                     }])),
                     variant_configuration: params
                         .variants
                         .map(|variants| variants.into_iter().collect()),
-                    work_directory: command_dispatcher.cache_dirs().working_dirs().join(
-                        WorkDirKey {
-                            source: Box::new(record.clone()).into(),
-                            host_platform: params.build_environment.host_platform,
-                            build_backend: backend.identifier().to_string(),
-                        }
-                        .key(),
-                    ),
+                    work_directory,
                     host_platform: Some(PlatformAndVirtualPackages {
                         platform: params.build_environment.host_platform,
                         virtual_packages: Some(
                             params.build_environment.host_virtual_packages.clone(),
                         ),
                     }),
-                    editable: !record.source.is_immutable(),
+                    editable: params.editable,
                 },
                 move |line| {
                     let _err = futures::executor::block_on(log_sink.send(line));
@@ -206,8 +215,8 @@ impl BackendSourceBuildSpec {
             });
             tracing::warn!(
                 "While building {} for {}, the build backend returned more packages than expected: {pkgs}. Only the package matching the source record will be used.",
-                record.source,
-                record.package_record.subdir,
+                source,
+                record.subdir,
             );
         }
 
@@ -221,10 +230,10 @@ impl BackendSourceBuildSpec {
         } else {
             return Err(CommandDispatcherError::Failed(
                 BackendSourceBuildError::UnexpectedPackage(UnexpectedPackageError {
-                    subdir: record.package_record.subdir.clone(),
-                    name: record.package_record.name.as_normalized().to_string(),
-                    version: record.package_record.version.to_string(),
-                    build: record.package_record.build.clone(),
+                    subdir: record.subdir.clone(),
+                    name: record.name.as_normalized().to_string(),
+                    version: record.version.to_string(),
+                    build: record.build.clone(),
                     packages: build_result
                         .packages
                         .iter()
@@ -250,20 +259,11 @@ impl BackendSourceBuildSpec {
 
     async fn build_v1(
         backend: Backend,
-        record: SourceRecord,
+        record: PackageIdentifier,
         params: BackendSourceBuildV1Method,
+        work_directory: PathBuf,
         mut log_sink: UnboundedSender<String>,
-        command_dispatcher: CommandDispatcher,
     ) -> Result<BackendBuiltSource, CommandDispatcherError<BackendSourceBuildError>> {
-        let work_directory = command_dispatcher.cache_dirs().working_dirs().join(
-            WorkDirKey {
-                source: Box::new(record.clone()).into(),
-                host_platform: params.host_prefix.platform,
-                build_backend: backend.identifier().to_string(),
-            }
-            .key(),
-        );
-
         let built_package = backend
             .conda_build_v1(
                 CondaBuildV1Params {
@@ -276,11 +276,10 @@ impl BackendSourceBuildSpec {
                         platform: params.host_prefix.platform,
                     }),
                     output: CondaBuildV1Output {
-                        name: record.package_record.name.clone(),
-                        version: Some(record.package_record.version.clone()),
-                        build: Some(record.package_record.build.clone()),
+                        name: record.name.clone(),
+                        version: Some(record.version.clone()),
+                        build: Some(record.build.clone()),
                         subdir: record
-                            .package_record
                             .subdir
                             .parse()
                             .expect("found a package record with an unparsable subdir"),
@@ -288,7 +287,7 @@ impl BackendSourceBuildSpec {
                     },
                     work_directory,
                     output_directory: params.output_directory,
-                    editable: Some(!record.source.is_immutable()),
+                    editable: Some(params.editable),
                 },
                 move |line| {
                     let _err = futures::executor::block_on(log_sink.send(line));
@@ -302,10 +301,10 @@ impl BackendSourceBuildSpec {
         if v1_built_package_matches_requested(&built_package, &record) {
             return Err(CommandDispatcherError::Failed(
                 BackendSourceBuildError::UnexpectedPackage(UnexpectedPackageError {
-                    subdir: record.package_record.subdir.clone(),
-                    name: record.package_record.name.as_normalized().to_string(),
-                    version: record.package_record.version.to_string(),
-                    build: record.package_record.build.clone(),
+                    subdir: record.subdir.clone(),
+                    name: record.name.as_normalized().to_string(),
+                    version: record.version.to_string(),
+                    build: record.build.clone(),
                     packages: vec![format!(
                         "{}/{}={}={}",
                         built_package.subdir,
@@ -326,23 +325,23 @@ impl BackendSourceBuildSpec {
 
 /// Returns true if the requested package matches the one that was built by a
 /// backend.
-fn v0_built_package_matches_request(record: &SourceRecord, pkg: &&CondaBuiltPackage) -> bool {
-    pkg.name == record.package_record.name
-        && Version::from_str(&pkg.version).ok().as_ref() == Some(&record.package_record.version)
-        && pkg.build == record.package_record.build
-        && pkg.subdir == record.package_record.subdir
+fn v0_built_package_matches_request(record: &PackageIdentifier, pkg: &&CondaBuiltPackage) -> bool {
+    pkg.name == record.name
+        && Version::from_str(&pkg.version).ok().as_ref() == Some(&record.version)
+        && pkg.build == record.build
+        && pkg.subdir == record.subdir
 }
 
 /// Returns true if the requested package matches the one that was built by a
 /// backend.
 fn v1_built_package_matches_requested(
     built_package: &CondaBuildV1Result,
-    record: &SourceRecord,
+    record: &PackageIdentifier,
 ) -> bool {
-    built_package.name != record.package_record.name.as_normalized()
-        || built_package.version != record.package_record.version
-        || built_package.build != record.package_record.build
-        || built_package.subdir.as_str() != record.package_record.subdir
+    built_package.name != record.name.as_normalized()
+        || built_package.version != record.version
+        || built_package.build != record.build
+        || built_package.subdir.as_str() != record.subdir
 }
 
 #[derive(Debug, thiserror::Error, Diagnostic)]

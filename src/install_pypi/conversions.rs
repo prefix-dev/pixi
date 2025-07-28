@@ -84,6 +84,8 @@ pub enum ConvertToUvDistError {
     Extension(#[source] ExtensionError, String),
     #[error("error parsing locked git url {0} {1}")]
     LockedUrl(String, String),
+    #[error("invalid package name: {0}")]
+    InvalidPackageName(String),
 
     #[error(transparent)]
     UvPepTypes(#[from] ConversionError),

@@ -12,14 +12,15 @@ use std::hash::{Hash, Hasher};
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 pub use build_cache::{
-    BuildCache, BuildCacheEntry, BuildCacheError, BuildInput, CachedBuild, CachedBuildSourceInfo,
+    BuildCache, BuildCacheEntry, BuildCacheError, BuildHostEnvironment, BuildHostPackage,
+    BuildInput, CachedBuild, CachedBuildSourceInfo,
 };
 pub use build_environment::BuildEnvironment;
 pub use dependencies::{Dependencies, DependenciesError, PixiRunExports};
 pub(crate) use move_file::{MoveError, move_file};
 use pixi_record::PinnedSourceSpec;
 use url::Url;
-pub use work_dir_key::WorkDirKey;
+pub use work_dir_key::{SourceRecordOrCheckout, WorkDirKey};
 use xxhash_rust::xxh3::Xxh3;
 
 const KNOWN_SUFFIXES: [&str; 3] = [".git", ".tar.gz", ".zip"];

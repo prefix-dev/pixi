@@ -4,7 +4,7 @@ use super::{CommandDispatcherProcessor, PendingBackendSourceBuild, TaskResult};
 use crate::{
     BackendBuiltSource, CommandDispatcherError, CommandDispatcherErrorResultExt, Reporter,
     backend_source_build::BackendSourceBuildError,
-    command_dispatcher::{BackendSourceBuildId, BackendSourceBuildTask, CommandDispatcherContext},
+    command_dispatcher::{BackendSourceBuildId, BackendSourceBuildTask},
 };
 
 impl CommandDispatcherProcessor {
@@ -70,11 +70,8 @@ impl CommandDispatcherProcessor {
             }
 
             // Add the task to the list of pending futures.
-            let dispatcher = self.create_task_command_dispatcher(
-                CommandDispatcherContext::BackendSourceBuild(backend_source_build_id),
-            );
             self.pending_futures.push(
-                spec.build(dispatcher, tx)
+                spec.build(tx)
                     .map(move |result| {
                         TaskResult::BackendSourceBuild(backend_source_build_id, result)
                     })
@@ -99,6 +96,8 @@ impl CommandDispatcherProcessor {
             .remove(id)
             .expect("got a result for a source build that was not pending");
 
+        let result = result.into_ok_or_failed();
+
         // Notify the reporter that the solve finished.
         if let Some((reporter, id)) = self
             .reporter
@@ -106,11 +105,12 @@ impl CommandDispatcherProcessor {
             .and_then(Reporter::as_backend_source_build_reporter)
             .zip(env.reporter_id)
         {
-            reporter.on_finished(id)
+            let failed = matches!(result, Some(Err(_)));
+            reporter.on_finished(id, failed)
         }
 
         // Notify the command dispatcher that the result is available.
-        if let Some(result) = result.into_ok_or_failed() {
+        if let Some(result) = result {
             // We can silently ignore the result if the task was cancelled.
             let _ = env.tx.send(result);
         };

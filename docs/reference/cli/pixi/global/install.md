@@ -13,7 +13,7 @@ pixi global install [OPTIONS] <PACKAGE>...
 
 ## Arguments
 - <a id="arg-<PACKAGE>" href="#arg-<PACKAGE>">`<PACKAGE>`</a>
-:  Specifies the package that should be installed
+:  The dependency as names, conda MatchSpecs
 <br>May be provided more than once.
 <br>**required**: `true`
 

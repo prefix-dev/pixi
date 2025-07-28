@@ -3,12 +3,13 @@ mod event_tree;
 mod source_backend;
 
 use std::{
-    env::current_dir,
+    ops::DerefMut,
     path::{Path, PathBuf},
     str::FromStr,
 };
 
 use event_reporter::EventReporter;
+use itertools::Itertools;
 use pixi_build_frontend::{BackendOverride, in_memory::PassthroughBackend};
 use pixi_command_dispatcher::{
     BuildEnvironment, CacheDirs, CommandDispatcher, Executor, InstallPixiEnvironmentSpec,
@@ -239,6 +240,130 @@ pub async fn test_cycle() {
         format_diagnostic(&error),
         event_tree.to_string()
     ));
+}
+
+/// Tests that a stale host dependency triggers a rebuild of both the stale
+/// package and any package that specifies it as a host dependency.
+#[tokio::test]
+pub async fn test_stale_host_dependency_triggers_rebuild() {
+    // Construct a command dispatcher with:
+    // - a root directory located in the `cycle` workspace
+    // - the default cache directories but with a temporary workspace cache
+    //   directory
+    // - the default tool platform and virtual packages
+    // - a backend override that uses a passthrough backend to avoid any actual
+    //   backend calls
+    let root_dir = workspaces_dir().join("host-dependency");
+    let tempdir = tempfile::tempdir().unwrap();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
+    let build_command_dispatcher = || {
+        CommandDispatcher::builder()
+            .with_root_dir(root_dir.clone())
+            .with_cache_dirs(default_cache_dirs().with_workspace(tempdir.path().to_path_buf()))
+            .with_executor(Executor::Serial)
+            .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+            .with_backend_overrides(BackendOverride::from_memory(
+                PassthroughBackend::instantiator(),
+            ))
+    };
+
+    let (reporter, first_events) = EventReporter::new();
+    let dispatcher = build_command_dispatcher().with_reporter(reporter).finish();
+
+    // Solve an environment with package-a which will have a host dependency on
+    // package-b, and package-c which has a run dependency on package-b.
+    let records = dispatcher
+        .solve_pixi_environment(PixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([
+                (
+                    "package-a".parse().unwrap(),
+                    PathSpec::new("package-a").into(),
+                ),
+                (
+                    "package-c".parse().unwrap(),
+                    PathSpec::new("package-c").into(),
+                ),
+            ]),
+            build_environment: build_env.clone(),
+            ..PixiEnvironmentSpec::default()
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("expected solve to succeed");
+
+    // package-b should not be part of the solution, its only used as a host
+    // dependency.
+    let package_names = records
+        .iter()
+        .map(|r| r.name().as_normalized())
+        .sorted()
+        .collect::<Vec<_>>();
+    assert_eq!(
+        package_names,
+        vec!["package-a", "package-b", "package-c"],
+        "Expected package-a, package-b and package-c to be part of the solution"
+    );
+
+    // Install the environment to a temporary prefix.
+    let prefix = Prefix::create(tempdir.path().join("prefix")).unwrap();
+    let _ = dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env.clone(),
+            ..InstallPixiEnvironmentSpec::new(records.clone(), prefix.clone())
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .unwrap();
+
+    // Explicitly drop the dispatcher to ensure all caches are flushed.
+    let first_events = std::mem::take(first_events.lock().unwrap().deref_mut());
+    drop(dispatcher);
+
+    // TOUCH a file that triggers a rebuild of package-b. package-b defines a build
+    // glob that will include this file. Any new file that matches the glob should
+    // trigger a rebuild.
+    let _touch_temp_file = tempfile::Builder::new()
+        .prefix("TOUCH")
+        .tempfile_in(root_dir.join("package-b"))
+        .unwrap();
+
+    // Construct a new command dispatcher (as if the program is restarted).
+    let (reporter, second_events) = EventReporter::new();
+    let dispatcher = build_command_dispatcher().with_reporter(reporter).finish();
+
+    // Rerun the installation of the environment.
+    let _ = dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env.clone(),
+            ..InstallPixiEnvironmentSpec::new(records.clone(), prefix)
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .unwrap();
+
+    // Get all the events that happened.
+    let second_events = std::mem::take(second_events.lock().unwrap().deref_mut());
+    let event_tree = EventTree::new(first_events.iter().chain(second_events.iter())).to_string();
+    eprintln!("{event_tree}");
+
+    // Ensure that both package-a and package-b were rebuilt.
+    let rebuild_packages = second_events
+        .iter()
+        .filter_map(|event| match event {
+            event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
+                Some(package.name.as_normalized())
+            }
+            _ => None,
+        })
+        .sorted()
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        rebuild_packages,
+        vec!["package-a", "package-b"],
+        "Expected only package-a and package-b to be rebuilt"
+    );
 }
 
 #[tokio::test]
