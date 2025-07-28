@@ -2,7 +2,7 @@ use clap::Parser;
 use indexmap::IndexMap;
 use miette::IntoDiagnostic;
 use pixi_config::ConfigCli;
-use pixi_manifest::{FeatureName, SpecType};
+use pixi_manifest::{FeatureName, KnownPreviewFeature, SpecType};
 use pixi_spec::{GitSpec, SourceSpec};
 use rattler_conda_types::{MatchSpec, PackageName};
 
@@ -129,6 +129,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .collect();
 
             if let Some(git) = &dependency_config.git {
+                if !workspace
+                    .manifest()
+                    .workspace
+                    .preview()
+                    .is_enabled(KnownPreviewFeature::PixiBuild)
+                {
+                    return Err(miette::miette!(
+                        help = "Add `workspace.preview = [\"pixi-build\"]` to enable pixi build support",
+                        "source dependencies are not allowed without enabling pixi-build"
+                    ));
+                }
+
                 let source_specs = passed_specs
                     .iter()
                     .map(|(name, (_spec, spec_type))| {
