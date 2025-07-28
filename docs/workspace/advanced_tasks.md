@@ -342,7 +342,7 @@ You can set environment variables directly for a task, as well as by other means
 The following priority rule applies for environment variables: `task.env` > `activation.env` > `activation.scripts` > activation scripts of dependencies > outside environment variables.
 Variables defined at a higher priority will override those defined at a lower priority.
 
-```{warning}
+````{warning}
 In older versions of Pixi, this priority was not well-defined, and there are a number of known
 deviations from the current priority which exist in some older versions:
 - `activation.scripts` used to take priority over `activation.env`
@@ -379,7 +379,7 @@ pixi run echo world
 ✨ Pixi task (echo in default): echo $ARGUMENT
 world
 ```
-```
+````
 
 ##### Example 1:  `task.env` > `activation.env`
 
