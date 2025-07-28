@@ -31,12 +31,6 @@ impl SourceBackendBuilder {
         }
     }
 
-    /// Set the version (default is "0.1.0")
-    pub fn with_version(mut self, version: &str) -> Self {
-        self.version = version.to_string();
-        self
-    }
-
     fn build_python(&self, package_dir: &Path) -> miette::Result<()> {
         // Create pixi.toml
         let pixi_toml_content = format!(
@@ -64,11 +58,11 @@ pixi-build-api-version = "*"
             version = self.version,
             backend_type = self.backend_type.as_str()
         );
-        std::fs::write(package_dir.join("pixi.toml"), pixi_toml_content).into_diagnostic()?;
+        fs_err::write(package_dir.join("pixi.toml"), pixi_toml_content).into_diagnostic()?;
 
         // Create Python package structure
-        let python_package_dir = package_dir.join(&self.package_name.replace("-", "_"));
-        std::fs::create_dir_all(&python_package_dir).into_diagnostic()?;
+        let python_package_dir = package_dir.join(self.package_name.replace("-", "_"));
+        fs_err::create_dir_all(&python_package_dir).into_diagnostic()?;
 
         // Create pyproject.toml
         let pyproject_toml_content = format!(
@@ -88,7 +82,7 @@ requires-python = ">=3.8"
             package_name = self.package_name,
             version = self.version,
         );
-        std::fs::write(package_dir.join("pyproject.toml"), pyproject_toml_content)
+        fs_err::write(package_dir.join("pyproject.toml"), pyproject_toml_content)
             .into_diagnostic()?;
 
         // Create __init__.py
@@ -102,15 +96,14 @@ def build_backend():
 "#,
             package_name = self.package_name,
         );
-        std::fs::write(python_package_dir.join("__init__.py"), init_py_content)
-            .into_diagnostic()?;
+        fs_err::write(python_package_dir.join("__init__.py"), init_py_content).into_diagnostic()?;
         Ok(())
     }
 
     /// Build the package structure in the given base directory and return the package path
     pub fn build(&self, base_dir: &Path) -> miette::Result<PathBuf> {
         let package_dir = base_dir.join("test-backend");
-        std::fs::create_dir_all(&package_dir).into_diagnostic()?;
+        fs_err::create_dir_all(&package_dir).into_diagnostic()?;
 
         match self.backend_type {
             BackendType::PixiBuildPython => self.build_python(&package_dir)?,
