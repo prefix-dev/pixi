@@ -23,7 +23,7 @@ pub(crate) use parsed_manifest::{ExposedName, ParsedEnvironment};
 use pixi_build_discovery::EnabledProtocols;
 use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, InstallPixiEnvironmentSpec,
-   Limits, PixiEnvironmentSpec, SourceMetadata, SourceMetadataSpec,
+    Limits, PixiEnvironmentSpec, SourceMetadata, SourceMetadataSpec,
 };
 use pixi_config::{Config, RunPostLinkScripts, default_channel_config, pixi_home};
 use pixi_consts::consts::{self};
