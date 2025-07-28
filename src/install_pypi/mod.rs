@@ -30,11 +30,11 @@ use uv_distribution::{BuiltWheelIndex, DistributionDatabase, RegistryWheelIndex}
 use uv_distribution_types::{
     CachedDist, DependencyMetadata, Dist, IndexLocations, IndexUrl, InstalledDist, Name, Resolution,
 };
-use uv_types::HashStrategy;
 use uv_install_wheel::LinkMode;
 use uv_installer::{Preparer, SitePackages, UninstallError};
 use uv_python::{Interpreter, PythonEnvironment};
 use uv_resolver::FlatIndex;
+use uv_types::HashStrategy;
 use uv_workspace::WorkspaceCache;
 
 use crate::{

@@ -470,15 +470,14 @@ allow-direct-references = true
         pytest.fail("Failed to solve the pypi requirements. pytrace=False")
 
 
-def test_pypi_external_source_incorrect_hash(tmp_pixi_workspace: Path, pixi: Path) -> None:
-    """Test installing an external source with pyproject.toml with an incorrect hash"""
-    pyproject_content = """
-[project]
+def _create_pyproject_toml(tmp_pixi_workspace: Path, dependency: str) -> None:
+    """Helper function to create pyproject.toml with given dependency."""
+    pyproject_content = f"""[project]
 version = "0.1.0"
 name = "test"
 requires-python = "== 3.12"
 dependencies = [
-    "requests @ https://files.pythonhosted.org/packages/f9/9b/335f9764261e915ed497fcdeb11df5dfd6f7bf257d4a6a2a686d80da4d54/requests-2.32.3-py3-none-any.whl#sha256=8d29f97ed1541709b57caddb77bb20592411d7ca10ec4f03275f49ee8456e230"
+    "{dependency}"
 ]
 [tool.pixi.workspace]
 platforms = ["linux-64", "osx-arm64", "win-64"]
@@ -491,338 +490,127 @@ channels = ["https://prefix.dev/conda-forge"]
     src_dir.mkdir(parents=True, exist_ok=True)
     (src_dir / "__init__.py").touch()
 
-    # use verify_cli_command to check that the installation fails with the expected error
+
+@pytest.mark.parametrize(
+    "dependency,expected_exit_code,stderr_contains,install_args,test_id",
+    [
+        # Incorrect SHA256 hash
+        (
+            "requests @ https://files.pythonhosted.org/packages/f9/9b/335f9764261e915ed497fcdeb11df5dfd6f7bf257d4a6a2a686d80da4d54/requests-2.32.3-py3-none-any.whl#sha256=8d29f97ed1541709b57caddb77bb20592411d7ca10ec4f03275f49ee8456e230",
+            ExitCode.FAILURE,
+            ["Hash verification failed"],
+            ["-v", "--pypi-verify-direct-url-hashes"],
+            "incorrect_sha256_hash",
+        ),
+        # Correct SHA256 hash
+        (
+            "requests @ https://files.pythonhosted.org/packages/f9/9b/335f9764261e915ed497fcdeb11df5dfd6f7bf257d4a6a2a686d80da4d54/requests-2.32.3-py3-none-any.whl#sha256=70761cfe03c773ceb22aa2f671b4757976145175cdfca038c02654d061d6dcc6",
+            ExitCode.SUCCESS,
+            [],
+            ["-v"],
+            "correct_sha256_hash",
+        ),
+        # MD5 hash (correct)
+        (
+            "idna @ https://files.pythonhosted.org/packages/76/c6/c88e154df9c4e1a2a66ccf0005a88dfb2650c1dffb6f5ce603dfbd452ce3/idna-3.10-py3-none-any.whl#md5=ce22685f1b296fb33e5fda362870685d",
+            ExitCode.SUCCESS,
+            [],
+            ["-v"],
+            "correct_md5_hash",
+        ),
+        # Incorrect MD5 hash
+        (
+            "idna @ https://files.pythonhosted.org/packages/76/c6/c88e154df9c4e1a2a66ccf0005a88dfb2650c1dffb6f5ce603dfbd452ce3/idna-3.10-py3-none-any.whl#md5=00000000000000000000000000000000",
+            ExitCode.FAILURE,
+            ["Hash verification failed"],
+            ["-v", "--pypi-verify-direct-url-hashes"],
+            "incorrect_md5_hash",
+        ),
+        # No hash
+        (
+            "requests @ https://files.pythonhosted.org/packages/f9/9b/335f9764261e915ed497fcdeb11df5dfd6f7bf257d4a6a2a686d80da4d54/requests-2.32.3-py3-none-any.whl",
+            ExitCode.SUCCESS,
+            [],
+            ["-v"],
+            "no_hash",
+        ),
+        # Invalid hash format
+        (
+            "requests @ https://files.pythonhosted.org/packages/f9/9b/335f9764261e915ed497fcdeb11df5dfd6f7bf257d4a6a2a686d80da4d54/requests-2.32.3-py3-none-any.whl#sha256=notahexhash",
+            ExitCode.FAILURE,
+            ["Hash verification failed", "not a valid hex string"],
+            ["-v", "--pypi-verify-direct-url-hashes"],
+            "invalid_hash_format",
+        ),
+        # Empty hash
+        (
+            "requests @ https://files.pythonhosted.org/packages/f9/9b/335f9764261e915ed497fcdeb11df5dfd6f7bf257d4a6a2a686d80da4d54/requests-2.32.3-py3-none-any.whl#sha256=",
+            ExitCode.FAILURE,
+            ["Hash verification failed", "Empty"],
+            ["-v", "--pypi-verify-direct-url-hashes"],
+            "empty_hash",
+        ),
+        # Unknown hash algorithm
+        (
+            "requests @ https://files.pythonhosted.org/packages/f9/9b/335f9764261e915ed497fcdeb11df5dfd6f7bf257d4a6a2a686d80da4d54/requests-2.32.3-py3-none-any.whl#sha512=abcdef1234567890",
+            ExitCode.FAILURE,
+            ["Hash verification failed", "Unsupported hash algorithm"],
+            ["-v", "--pypi-verify-direct-url-hashes"],
+            "unknown_hash_algorithm",
+        ),
+        # Truncated hash
+        (
+            "requests @ https://files.pythonhosted.org/packages/f9/9b/335f9764261e915ed497fcdeb11df5dfd6f7bf257d4a6a2a686d80da4d54/requests-2.32.3-py3-none-any.whl#sha256=70761cfe03c773ceb22aa2f671b",
+            ExitCode.FAILURE,
+            ["Hash verification failed"],
+            ["-v", "--pypi-verify-direct-url-hashes"],
+            "truncated_hash",
+        ),
+        # Hash with additional URL parameters
+        (
+            "requests @ https://files.pythonhosted.org/packages/f9/9b/335f9764261e915ed497fcdeb11df5dfd6f7bf257d4a6a2a686d80da4d54/requests-2.32.3-py3-none-any.whl#sha256=70761cfe03c773ceb22aa2f671b4757976145175cdfca038c02654d061d6dcc6&egg=requests",
+            ExitCode.SUCCESS,
+            [],
+            ["-v"],
+            "hash_with_params",
+        ),
+        # Source distribution hash
+        (
+            "charset-normalizer @ https://files.pythonhosted.org/packages/f2/4f/e1808dc01273379acc506d18f1504eb2d299bd4131743b9fc54d7be4df1e/charset_normalizer-3.4.0.tar.gz#sha256=223217c3d4f82c3ac5e29032b3f1c2eb0fb591b72161f86d93f5719079dae93e",
+            ExitCode.SUCCESS,
+            [],
+            ["-v"],
+            "tarball_hash",
+        ),
+        # Case insensitive hash algorithm
+        (
+            "requests @ https://files.pythonhosted.org/packages/f9/9b/335f9764261e915ed497fcdeb11df5dfd6f7bf257d4a6a2a686d80da4d54/requests-2.32.3-py3-none-any.whl#SHA256=70761cfe03c773ceb22aa2f671b4757976145175cdfca038c02654d061d6dcc6",
+            ExitCode.SUCCESS,
+            [],
+            ["-v"],
+            "case_insensitive_hash",
+        ),
+    ],
+)
+def test_pypi_external_source_hash_validation(
+    tmp_pixi_workspace: Path,
+    pixi: Path,
+    dependency: str,
+    expected_exit_code: ExitCode,
+    stderr_contains: list[str],
+    install_args: list[str],
+    test_id: str,
+) -> None:
+    """Test various hash validation scenarios for PyPI external sources."""
+    _create_pyproject_toml(tmp_pixi_workspace, dependency)
+
+    cmd: list[Path | str] = [pixi, "install"]
+    cmd.extend(install_args)
     verify_cli_command(
-        [pixi, "install", "-v", "--pypi-verify-direct-url-hashes"],
+        cmd,
         cwd=tmp_pixi_workspace,
-        expected_exit_code=ExitCode.FAILURE,
-        stderr_contains=["Hash verification failed"],
-    )
-
-
-def test_pypi_external_source_correct_hash(tmp_pixi_workspace: Path, pixi: Path) -> None:
-    """Test installing an external source with correct hash succeeds"""
-    pyproject_content = """
-[project]
-version = "0.1.0"
-name = "test"
-requires-python = "== 3.12"
-dependencies = [
-    "requests @ https://files.pythonhosted.org/packages/f9/9b/335f9764261e915ed497fcdeb11df5dfd6f7bf257d4a6a2a686d80da4d54/requests-2.32.3-py3-none-any.whl#sha256=70761cfe03c773ceb22aa2f671b4757976145175cdfca038c02654d061d6dcc6"
-]
-[tool.pixi.workspace]
-platforms = ["linux-64", "osx-arm64", "win-64"]
-channels = ["https://prefix.dev/conda-forge"]
-"""
-    pyproject_path = tmp_pixi_workspace / "pyproject.toml"
-    pyproject_path.write_text(pyproject_content)
-
-    src_dir = tmp_pixi_workspace / "src" / "test"
-    src_dir.mkdir(parents=True, exist_ok=True)
-    (src_dir / "__init__.py").touch()
-
-    # Installation should succeed with correct hash
-    verify_cli_command(
-        [pixi, "install", "-v"],
-        cwd=tmp_pixi_workspace,
-        expected_exit_code=ExitCode.SUCCESS,
-    )
-
-
-def test_pypi_external_source_md5_hash(tmp_pixi_workspace: Path, pixi: Path) -> None:
-    """Test MD5 hash verification for external sources"""
-    # Note: idna 3.10 has MD5 hash: ce22685f1b296fb33e5fda362870685d
-    pyproject_content = """
-[project]
-version = "0.1.0"
-name = "test"
-requires-python = "== 3.12"
-dependencies = [
-    "idna @ https://files.pythonhosted.org/packages/76/c6/c88e154df9c4e1a2a66ccf0005a88dfb2650c1dffb6f5ce603dfbd452ce3/idna-3.10-py3-none-any.whl#md5=ce22685f1b296fb33e5fda362870685d"
-]
-[tool.pixi.workspace]
-platforms = ["linux-64", "osx-arm64", "win-64"]
-channels = ["https://prefix.dev/conda-forge"]
-"""
-    pyproject_path = tmp_pixi_workspace / "pyproject.toml"
-    pyproject_path.write_text(pyproject_content)
-
-    src_dir = tmp_pixi_workspace / "src" / "test"
-    src_dir.mkdir(parents=True, exist_ok=True)
-    (src_dir / "__init__.py").touch()
-
-    # Should succeed with correct MD5 hash
-    verify_cli_command(
-        [pixi, "install", "-v"],
-        cwd=tmp_pixi_workspace,
-        expected_exit_code=ExitCode.SUCCESS,
-    )
-
-
-def test_pypi_external_source_incorrect_md5_hash(tmp_pixi_workspace: Path, pixi: Path) -> None:
-    """Test MD5 hash verification fails with incorrect hash"""
-    pyproject_content = """
-[project]
-version = "0.1.0"
-name = "test"
-requires-python = "== 3.12"
-dependencies = [
-    "idna @ https://files.pythonhosted.org/packages/76/c6/c88e154df9c4e1a2a66ccf0005a88dfb2650c1dffb6f5ce603dfbd452ce3/idna-3.10-py3-none-any.whl#md5=00000000000000000000000000000000"
-]
-[tool.pixi.workspace]
-platforms = ["linux-64", "osx-arm64", "win-64"]
-channels = ["https://prefix.dev/conda-forge"]
-"""
-    pyproject_path = tmp_pixi_workspace / "pyproject.toml"
-    pyproject_path.write_text(pyproject_content)
-
-    src_dir = tmp_pixi_workspace / "src" / "test"
-    src_dir.mkdir(parents=True, exist_ok=True)
-    (src_dir / "__init__.py").touch()
-
-    # Should fail with incorrect MD5 hash
-    verify_cli_command(
-        [pixi, "install", "-v", "--pypi-verify-direct-url-hashes"],
-        cwd=tmp_pixi_workspace,
-        expected_exit_code=ExitCode.FAILURE,
-        stderr_contains=["Hash verification failed"],
-    )
-
-
-def test_pypi_external_source_no_hash(tmp_pixi_workspace: Path, pixi: Path) -> None:
-    """Test that direct URL without hash fragment works normally"""
-    pyproject_content = """
-[project]
-version = "0.1.0"
-name = "test"
-requires-python = "== 3.12"
-dependencies = [
-    "requests @ https://files.pythonhosted.org/packages/f9/9b/335f9764261e915ed497fcdeb11df5dfd6f7bf257d4a6a2a686d80da4d54/requests-2.32.3-py3-none-any.whl"
-]
-[tool.pixi.workspace]
-platforms = ["linux-64", "osx-arm64", "win-64"]
-channels = ["https://prefix.dev/conda-forge"]
-"""
-    pyproject_path = tmp_pixi_workspace / "pyproject.toml"
-    pyproject_path.write_text(pyproject_content)
-
-    src_dir = tmp_pixi_workspace / "src" / "test"
-    src_dir.mkdir(parents=True, exist_ok=True)
-    (src_dir / "__init__.py").touch()
-
-    # Should succeed without hash
-    verify_cli_command(
-        [pixi, "install", "-v"],
-        cwd=tmp_pixi_workspace,
-        expected_exit_code=ExitCode.SUCCESS,
-    )
-
-
-def test_pypi_external_source_invalid_hash_format(tmp_pixi_workspace: Path, pixi: Path) -> None:
-    """Test that invalid hash format in URL fragment is handled gracefully"""
-    pyproject_content = """
-[project]
-version = "0.1.0"
-name = "test"
-requires-python = "== 3.12"
-dependencies = [
-    "requests @ https://files.pythonhosted.org/packages/f9/9b/335f9764261e915ed497fcdeb11df5dfd6f7bf257d4a6a2a686d80da4d54/requests-2.32.3-py3-none-any.whl#sha256=notahexhash"
-]
-[tool.pixi.workspace]
-platforms = ["linux-64", "osx-arm64", "win-64"]
-channels = ["https://prefix.dev/conda-forge"]
-"""
-    pyproject_path = tmp_pixi_workspace / "pyproject.toml"
-    pyproject_path.write_text(pyproject_content)
-
-    src_dir = tmp_pixi_workspace / "src" / "test"
-    src_dir.mkdir(parents=True, exist_ok=True)
-    (src_dir / "__init__.py").touch()
-
-    # Should fail - invalid hash format
-    verify_cli_command(
-        [pixi, "install", "-v", "--pypi-verify-direct-url-hashes"],
-        cwd=tmp_pixi_workspace,
-        expected_exit_code=ExitCode.FAILURE,
-        stderr_contains=["Hash verification failed", "not a valid hex string"],
-    )
-
-
-def test_pypi_external_source_empty_hash(tmp_pixi_workspace: Path, pixi: Path) -> None:
-    """Test that empty hash value fails validation"""
-    pyproject_content = """
-[project]
-version = "0.1.0"
-name = "test"
-requires-python = "== 3.12"
-dependencies = [
-    "requests @ https://files.pythonhosted.org/packages/f9/9b/335f9764261e915ed497fcdeb11df5dfd6f7bf257d4a6a2a686d80da4d54/requests-2.32.3-py3-none-any.whl#sha256="
-]
-[tool.pixi.workspace]
-platforms = ["linux-64", "osx-arm64", "win-64"]
-channels = ["https://prefix.dev/conda-forge"]
-"""
-    pyproject_path = tmp_pixi_workspace / "pyproject.toml"
-    pyproject_path.write_text(pyproject_content)
-
-    src_dir = tmp_pixi_workspace / "src" / "test"
-    src_dir.mkdir(parents=True, exist_ok=True)
-    (src_dir / "__init__.py").touch()
-
-    # Should fail - empty hash value
-    verify_cli_command(
-        [pixi, "install", "-v", "--pypi-verify-direct-url-hashes"],
-        cwd=tmp_pixi_workspace,
-        expected_exit_code=ExitCode.FAILURE,
-        stderr_contains=["Hash verification failed", "Empty"],
-    )
-
-
-def test_pypi_external_source_unknown_hash_algorithm(tmp_pixi_workspace: Path, pixi: Path) -> None:
-    """Test that unknown hash algorithms fail validation"""
-    pyproject_content = """
-[project]
-version = "0.1.0"
-name = "test"
-requires-python = "== 3.12"
-dependencies = [
-    "requests @ https://files.pythonhosted.org/packages/f9/9b/335f9764261e915ed497fcdeb11df5dfd6f7bf257d4a6a2a686d80da4d54/requests-2.32.3-py3-none-any.whl#sha512=abcdef1234567890"
-]
-[tool.pixi.workspace]
-platforms = ["linux-64", "osx-arm64", "win-64"]
-channels = ["https://prefix.dev/conda-forge"]
-"""
-    pyproject_path = tmp_pixi_workspace / "pyproject.toml"
-    pyproject_path.write_text(pyproject_content)
-
-    src_dir = tmp_pixi_workspace / "src" / "test"
-    src_dir.mkdir(parents=True, exist_ok=True)
-    (src_dir / "__init__.py").touch()
-
-    # Should fail - unknown hash algorithm
-    verify_cli_command(
-        [pixi, "install", "-v", "--pypi-verify-direct-url-hashes"],
-        cwd=tmp_pixi_workspace,
-        expected_exit_code=ExitCode.FAILURE,
-        stderr_contains=["Hash verification failed", "Unsupported hash algorithm"],
-    )
-
-
-def test_pypi_external_source_truncated_hash(tmp_pixi_workspace: Path, pixi: Path) -> None:
-    """Test that truncated hash values fail verification"""
-    pyproject_content = """
-[project]
-version = "0.1.0"
-name = "test"
-requires-python = "== 3.12"
-dependencies = [
-    "requests @ https://files.pythonhosted.org/packages/f9/9b/335f9764261e915ed497fcdeb11df5dfd6f7bf257d4a6a2a686d80da4d54/requests-2.32.3-py3-none-any.whl#sha256=70761cfe03c773ceb22aa2f671b"
-]
-[tool.pixi.workspace]
-platforms = ["linux-64", "osx-arm64", "win-64"]
-channels = ["https://prefix.dev/conda-forge"]
-"""
-    pyproject_path = tmp_pixi_workspace / "pyproject.toml"
-    pyproject_path.write_text(pyproject_content)
-
-    src_dir = tmp_pixi_workspace / "src" / "test"
-    src_dir.mkdir(parents=True, exist_ok=True)
-    (src_dir / "__init__.py").touch()
-
-    # Should fail - truncated hash won't match
-    verify_cli_command(
-        [pixi, "install", "-v", "--pypi-verify-direct-url-hashes"],
-        cwd=tmp_pixi_workspace,
-        expected_exit_code=ExitCode.FAILURE,
-        stderr_contains=["Hash verification failed"],
-    )
-
-
-def test_pypi_external_source_hash_with_params(tmp_pixi_workspace: Path, pixi: Path) -> None:
-    """Test that hash with additional URL parameters works"""
-    pyproject_content = """
-[project]
-version = "0.1.0"
-name = "test"
-requires-python = "== 3.12"
-dependencies = [
-    "requests @ https://files.pythonhosted.org/packages/f9/9b/335f9764261e915ed497fcdeb11df5dfd6f7bf257d4a6a2a686d80da4d54/requests-2.32.3-py3-none-any.whl#sha256=70761cfe03c773ceb22aa2f671b4757976145175cdfca038c02654d061d6dcc6&egg=requests"
-]
-[tool.pixi.workspace]
-platforms = ["linux-64", "osx-arm64", "win-64"]
-channels = ["https://prefix.dev/conda-forge"]
-"""
-    pyproject_path = tmp_pixi_workspace / "pyproject.toml"
-    pyproject_path.write_text(pyproject_content)
-
-    src_dir = tmp_pixi_workspace / "src" / "test"
-    src_dir.mkdir(parents=True, exist_ok=True)
-    (src_dir / "__init__.py").touch()
-
-    # Should succeed - hash is still valid even with additional params
-    verify_cli_command(
-        [pixi, "install", "-v"],
-        cwd=tmp_pixi_workspace,
-        expected_exit_code=ExitCode.SUCCESS,
-    )
-
-
-def test_pypi_external_source_tarball_hash(tmp_pixi_workspace: Path, pixi: Path) -> None:
-    """Test hash verification for source distributions (.tar.gz)"""
-    # Use a real example: charset-normalizer 3.4.0 source distribution
-    pyproject_content = """
-[project]
-version = "0.1.0"
-name = "test"
-requires-python = "== 3.12"
-dependencies = [
-    "charset-normalizer @ https://files.pythonhosted.org/packages/f2/4f/e1808dc01273379acc506d18f1504eb2d299bd4131743b9fc54d7be4df1e/charset_normalizer-3.4.0.tar.gz#sha256=223217c3d4f82c3ac5e29032b3f1c2eb0fb591b72161f86d93f5719079dae93e"
-]
-[tool.pixi.workspace]
-platforms = ["linux-64", "osx-arm64", "win-64"]
-channels = ["https://prefix.dev/conda-forge"]
-"""
-    pyproject_path = tmp_pixi_workspace / "pyproject.toml"
-    pyproject_path.write_text(pyproject_content)
-
-    src_dir = tmp_pixi_workspace / "src" / "test"
-    src_dir.mkdir(parents=True, exist_ok=True)
-    (src_dir / "__init__.py").touch()
-
-    # Should succeed with correct hash for source distribution
-    verify_cli_command(
-        [pixi, "install", "-v"],
-        cwd=tmp_pixi_workspace,
-        expected_exit_code=ExitCode.SUCCESS,
-    )
-
-
-def test_pypi_external_source_case_insensitive_hash(tmp_pixi_workspace: Path, pixi: Path) -> None:
-    """Test that hash algorithm names are case-insensitive"""
-    pyproject_content = """
-[project]
-version = "0.1.0"
-name = "test"
-requires-python = "== 3.12"
-dependencies = [
-    "requests @ https://files.pythonhosted.org/packages/f9/9b/335f9764261e915ed497fcdeb11df5dfd6f7bf257d4a6a2a686d80da4d54/requests-2.32.3-py3-none-any.whl#SHA256=70761cfe03c773ceb22aa2f671b4757976145175cdfca038c02654d061d6dcc6"
-]
-[tool.pixi.workspace]
-platforms = ["linux-64", "osx-arm64", "win-64"]
-channels = ["https://prefix.dev/conda-forge"]
-"""
-    pyproject_path = tmp_pixi_workspace / "pyproject.toml"
-    pyproject_path.write_text(pyproject_content)
-
-    src_dir = tmp_pixi_workspace / "src" / "test"
-    src_dir.mkdir(parents=True, exist_ok=True)
-    (src_dir / "__init__.py").touch()
-
-    # Should succeed - SHA256 (uppercase) should be handled
-    verify_cli_command(
-        [pixi, "install", "-v"],
-        cwd=tmp_pixi_workspace,
-        expected_exit_code=ExitCode.SUCCESS,
+        expected_exit_code=expected_exit_code,
+        stderr_contains=stderr_contains if stderr_contains else None,
     )
 
 
