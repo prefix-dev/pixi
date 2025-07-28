@@ -344,12 +344,12 @@ Variables defined at a higher priority will override those defined at a lower pr
 
     ```toml title="pixi.toml"
     [tasks]
-    echo = { cmd = "echo {{ ARGUMENT }}", args = { "arg" = "ARGUMENT", "default" = "hello" } }
+    echo = { cmd = "echo {{ ARGUMENT }}", args = [{"arg" = "ARGUMENT", "default" = "hello" }]}
     ```
 
     ```shell
     pixi run echo world
-    ✨ Pixi task (echo in default): echo $ARGUMENT
+    ✨ Pixi task (echo): echo world
     world
     ```
 
