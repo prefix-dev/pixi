@@ -228,7 +228,7 @@ async fn setup_environment(
         }
     }
 
-    if project.environment_in_sync(env_name).await? {
+    if project.environment_in_sync_internal(env_name, true).await? {
         return Ok(StateChanges::new_with_env(env_name.clone()));
     }
 
