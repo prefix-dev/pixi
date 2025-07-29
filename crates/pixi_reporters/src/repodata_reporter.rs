@@ -10,6 +10,7 @@ use pixi_progress::ProgressBarPlacement;
 use rattler::package_cache::CacheReporter;
 use rattler_conda_types::RepoDataRecord;
 use rattler_repodata_gateway::RunExportsReporter;
+use tokio::sync::Mutex;
 use url::Url;
 
 #[derive(Clone)]
@@ -38,10 +39,12 @@ impl rattler_repodata_gateway::Reporter for RepodataReporter {
 }
 
 impl RunExportsReporter for RepodataReporter {
-    fn add(&self, _record: &RepoDataRecord) -> Arc<dyn CacheReporter> {
-        // Create a simple cache reporter that just delegates to the repodata reporter
+    fn add(&self, record: &RepoDataRecord) -> Arc<dyn CacheReporter> {
+        // Create a cache reporter that delegates to the repodata reporter with the actual URL
         Arc::new(RepodataCacheReporter {
             repodata_reporter: self.clone(),
+            url: record.url.clone(),
+            download_id: Mutex::new(None),
         })
     }
 }
@@ -263,32 +266,61 @@ impl ProgressTracker for DurationTracker {
     }
 }
 
-/// A simple adapter that wraps RepodataReporter to implement CacheReporter
+/// A cache reporter adapter that delegates to RepodataReporter for run exports tracking
 struct RepodataCacheReporter {
     repodata_reporter: RepodataReporter,
+    url: Url,
+    download_id: Mutex<Option<usize>>,
 }
 
 impl CacheReporter for RepodataCacheReporter {
     fn on_validate_start(&self) -> usize {
-        // For run exports, validation is typically not needed
+        // For run exports, validation happens before download
+        // Return 0 as we don't need specific tracking for validation
         0
     }
 
     fn on_validate_complete(&self, _index: usize) {
-        // No-op for repodata reporter
+        // Validation complete - no specific action needed for repodata reporter
     }
 
     fn on_download_start(&self) -> usize {
-        // We can't get the URL here since CacheReporter doesn't provide it,
-        // but the progress will still be tracked through the repodata reporter
-        0
+        // Start tracking download progress using the real URL from the RepoDataRecord
+        let download_id = self
+            .repodata_reporter
+            .inner
+            .write()
+            .on_download_start(&self.url);
+        // Use try_lock since CacheReporter methods are not async
+        if let Ok(mut guard) = self.download_id.try_lock() {
+            *guard = Some(download_id);
+        }
+        download_id
     }
 
-    fn on_download_progress(&self, _index: usize, _progress: u64, _total: Option<u64>) {
-        // Progress is already tracked by the underlying repodata reporter
+    fn on_download_progress(&self, _index: usize, progress: u64, total: Option<u64>) {
+        // Update progress in the repodata reporter using the real URL
+        if let Ok(guard) = self.download_id.try_lock() {
+            if let Some(download_id) = *guard {
+                self.repodata_reporter.inner.write().on_download_progress(
+                    &self.url,
+                    download_id,
+                    progress as usize,
+                    total.map(|t| t as usize),
+                );
+            }
+        }
     }
 
     fn on_download_completed(&self, _index: usize) {
-        // Completion is already tracked by the underlying repodata reporter
+        // Mark download as complete using the real URL
+        if let Ok(guard) = self.download_id.try_lock() {
+            if let Some(download_id) = *guard {
+                self.repodata_reporter
+                    .inner
+                    .write()
+                    .on_download_complete(&self.url, download_id);
+            }
+        }
     }
 }
