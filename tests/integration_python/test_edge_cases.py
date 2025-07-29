@@ -7,7 +7,7 @@ import sys
 import tomli
 import tomli_w
 
-from .common import CURRENT_PLATFORM, verify_cli_command, ExitCode
+from .common import CURRENT_PLATFORM, verify_cli_command, ExitCode, CONDA_FORGE_CHANNEL
 
 
 @pytest.mark.extra_slow
@@ -21,7 +21,6 @@ def test_pypi_git_deps(pixi: Path, tmp_pixi_workspace: Path) -> None:
     # Run the installation
     verify_cli_command(
         [pixi, "install", "--manifest-path", manifest],
-        ExitCode.SUCCESS,
     )
 
 
@@ -40,7 +39,6 @@ def test_python_mismatch(pixi: Path, tmp_pixi_workspace: Path) -> None:
     # Install
     verify_cli_command(
         [pixi, "install", "--manifest-path", manifest],
-        ExitCode.SUCCESS,
     )
 
 
@@ -57,7 +55,6 @@ def test_prefix_only_created_when_sdist(
     # Install
     verify_cli_command(
         [pixi, "install", "--manifest-path", manifest],
-        ExitCode.SUCCESS,
         # We need the an uncached version, otherwise it might skip prefix creation
         env={"PIXI_CACHE_DIR": str(tmp_path)},
     )
@@ -74,7 +71,7 @@ def test_error_on_conda_meta_file_error(
     pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
 ) -> None:
     """Break the meta file and check if the error is caught and printed to the user"""
-    verify_cli_command([pixi, "init", "-c", dummy_channel_1, tmp_pixi_workspace], ExitCode.SUCCESS)
+    verify_cli_command([pixi, "init", "-c", dummy_channel_1, tmp_pixi_workspace])
 
     # Install a package
     verify_cli_command([pixi, "add", "dummy-a", "--manifest-path", tmp_pixi_workspace])
@@ -112,7 +109,6 @@ def test_cuda_on_macos(pixi: Path, tmp_pixi_workspace: Path, virtual_packages_ch
             "osx-arm64",
             "win-64",
         ],
-        ExitCode.SUCCESS,
     )
 
     # Add system-requirement on cuda
@@ -168,7 +164,6 @@ def test_unused_strict_system_requirements(
             "cuda",
             "12.1",
         ],
-        ExitCode.SUCCESS,
     )
     # Add non existing glibc
     verify_cli_command(
@@ -182,7 +177,6 @@ def test_unused_strict_system_requirements(
             "glibc",
             "100.2.3",
         ],
-        ExitCode.SUCCESS,
     )
 
     # Add non existing macos
@@ -197,25 +191,21 @@ def test_unused_strict_system_requirements(
             "macos",
             "123.123.0",
         ],
-        ExitCode.SUCCESS,
     )
 
     # Add the dependency even though the system requirements can not be satisfied on the machine
     verify_cli_command(
         [pixi, "add", "--manifest-path", manifest, "no-deps", "--no-install"],
-        ExitCode.SUCCESS,
     )
 
     # Installing should succeed as there is no virtual package that requires the system requirements
     verify_cli_command(
         [pixi, "install", "--manifest-path", manifest],
-        ExitCode.SUCCESS,
     )
 
     # Activate the environment even though the machine doesn't have the system requirements
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "echo", "Hello World"],
-        ExitCode.SUCCESS,
     )
 
 
@@ -234,7 +224,6 @@ def test_post_link_scripts(
 
     verify_cli_command(
         [pixi, "add", "--manifest-path", manifest, "post-link-script-package"],
-        ExitCode.SUCCESS,
     )
 
     # Make sure script has not ran
@@ -258,13 +247,11 @@ def test_post_link_scripts(
     # Clean env
     verify_cli_command(
         [pixi, "clean", "--manifest-path", manifest],
-        ExitCode.SUCCESS,
     )
 
     # Install the package
     verify_cli_command(
         [pixi, "install", "--manifest-path", manifest, "-vvv"],
-        ExitCode.SUCCESS,
     )
 
     # Make sure script has ran
@@ -427,7 +414,7 @@ def test_installation_pypi_conda_mismatch(
 
 
 def test_pypi_url_fragment_in_project_deps(tmp_pixi_workspace: Path, pixi: Path) -> None:
-    pyproject_content = """
+    pyproject_content = f"""
 [project]
 version = "0.1.0"
 name = "test"
@@ -441,11 +428,11 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.pixi.workspace]
-platforms = ["linux-64", "osx-arm64", "win-64"]
-channels = ["https://prefix.dev/conda-forge"]
+platforms = ["{CURRENT_PLATFORM}"]
+channels = ["{CONDA_FORGE_CHANNEL}"]
 
 [tool.pixi.pypi-dependencies]
-test = { path = ".", editable = true }
+test = {{ path = ".", editable = true }}
 
 [tool.hatch.metadata]
 allow-direct-references = true
@@ -529,16 +516,14 @@ build-backend = "hatchling.build"
 
     (proj1 / "pixi.toml").write_text(f"""[project]
 name = "proj1"
-channels = ["conda-forge"]
+channels = ["{CONDA_FORGE_CHANNEL}"]
 platforms = ["{CURRENT_PLATFORM}"]
 [dependencies]
 python = "3.12.*"
 [pypi-dependencies]
 six = "==1.16.0"
 """)
-    verify_cli_command(
-        [pixi, "install", "--manifest-path", proj1 / "pixi.toml"], ExitCode.SUCCESS, env=cache_env
-    )
+    verify_cli_command([pixi, "install", "--manifest-path", proj1 / "pixi.toml"], env=cache_env)
 
     # Step 2: Install same name/version as editable from local source
     proj2 = tmp_pixi_workspace / "proj2"
@@ -546,7 +531,7 @@ six = "==1.16.0"
 
     (proj2 / "pixi.toml").write_text(f"""[project]
 name = "proj2"
-channels = ["conda-forge"]
+channels = ["{CONDA_FORGE_CHANNEL}"]
 platforms = ["{CURRENT_PLATFORM}"]
 [dependencies]
 python = "3.12.*"
@@ -554,9 +539,7 @@ python = "3.12.*"
 six = {{ path = "../local_project", editable = true }}
 """)
 
-    verify_cli_command(
-        [pixi, "install", "--manifest-path", proj2 / "pixi.toml"], ExitCode.SUCCESS, env=cache_env
-    )
+    verify_cli_command([pixi, "install", "--manifest-path", proj2 / "pixi.toml"], env=cache_env)
     # Step 3: Verify we get local version (has local_marker), not cached registry version
     verify_cli_command(
         [
@@ -568,7 +551,6 @@ six = {{ path = "../local_project", editable = true }}
             "-c",
             "import six; print(six.local_marker)",
         ],
-        ExitCode.SUCCESS,
         stdout_contains="LOCAL",
         env=cache_env,
     )
