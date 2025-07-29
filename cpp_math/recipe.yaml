@@ -1,0 +1,31 @@
+package:
+  name: cpp_math
+  version: 0.1.0
+
+source:
+  path: .
+  use_gitignore: true
+
+build:
+  number: 0
+  script: |
+    cmake $CMAKE_ARGS \
+      -GNinja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=$PREFIX \
+      -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+      -DBUILD_SHARED_LIBS=ON \
+      -B $SRC_DIR/../build \
+      -S .
+
+    cmake --build $SRC_DIR/../build --target install
+
+requirements:
+  build:
+    - ${{ compiler('cxx') }}
+    - cmake
+    - ninja
+
+  host:
+    - python 3.12.*
+    - nanobind

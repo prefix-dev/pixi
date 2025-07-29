@@ -65,7 +65,11 @@ impl SourceMetadataSpec {
         let build_backend_metadata = command_dispatcher
             .build_backend_metadata(self.backend_metadata.clone())
             .await
-            .map_err_with(SourceMetadataError::BuildBackendMetadata)?;
+            .map_err_with(SourceMetadataError::BuildBackendMetadata);
+
+        tracing::debug!("Build backend metadata is {:#?}", &build_backend_metadata);
+
+        let build_backend_metadata = build_backend_metadata?;
 
         match &build_backend_metadata.metadata.metadata {
             MetadataKind::GetMetadata { packages } => {
@@ -113,7 +117,6 @@ impl SourceMetadataSpec {
         source: PinnedSourceSpec,
         reporter: Option<Arc<(dyn RunExportsReporter + Send)>>,
     ) -> Result<SourceRecord, CommandDispatcherError<SourceMetadataError>> {
-        // let run_exports_reporter = self.reporter.clone();
         let source_anchor = SourceAnchor::from(SourceSpec::from(source.clone()));
 
         // Solve the build environment for the output.
@@ -137,6 +140,10 @@ impl SourceMetadataSpec {
             )
             .await?;
 
+        tracing::debug!(
+            "Make sure that run exports in pixi records for '{:#?}'",
+            &source
+        );
         ensure_run_exports_in_pixi_records(
             &command_dispatcher.data.gateway,
             &mut build_records,
@@ -388,6 +395,7 @@ async fn ensure_run_exports_in_pixi_records(
     records: &mut [PixiRecord],
     reporter: Option<Arc<(dyn RunExportsReporter + Send)>>,
 ) -> Result<(), RunExportExtractorError> {
+    dbg!(reporter.is_some());
     let mut repo_data_records_indices: Vec<usize> = Vec::with_capacity(records.len());
     let mut repo_data_records = records
         .iter()
