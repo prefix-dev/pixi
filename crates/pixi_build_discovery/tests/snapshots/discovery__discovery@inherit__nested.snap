@@ -34,3 +34,4 @@ init-params:
         runDependencies: {}
       targets: {}
   configuration: ~
+  target-configuration: ~
