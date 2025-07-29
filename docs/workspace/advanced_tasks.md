@@ -268,6 +268,18 @@ You can also use filters to transform argument values:
 
 For more information about available filters and template syntax, see the [MiniJinja documentation](https://docs.rs/minijinja/latest/minijinja/filters/index.html).
 
+## Task Names
+
+Task names must not contain spaces, but otherwise have no special requirements.
+
+If you wish to denote that a task is for internal use only, it can be hidden from the output of commands such as `pixi run` and `pixi task list` by prefixing the task name with an underscore (`_`). These tasks can still be run manually however.
+
+Hiding tasks can be useful if your project defines many tasks but your users only need to use a subset of them.
+
+```toml title="pixi.toml"
+--8<-- "docs/source_files/pixi_tomls/task_visibility:tasks"
+```
+
 ## Caching
 
 When you specify `inputs` and/or `outputs` to a task, Pixi will reuse the result of the task.
