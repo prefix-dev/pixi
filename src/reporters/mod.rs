@@ -23,7 +23,7 @@ use uv_configuration::RAYON_INITIALIZE;
 
 use crate::reporters::{
     install_reporter::SyncReporter, main_progress_bar::MainProgressBar,
-    package_cache_reporter::PackageCacheReporter, repodata_reporter::RepodataReporter,
+    repodata_reporter::RepodataReporter,
 };
 
 /// A top-level reporter that combines the different reporters into one. This
@@ -34,7 +34,6 @@ pub(crate) struct TopLevelProgress {
     conda_solve_reporter: MainProgressBar<String>,
     repodata_reporter: RepodataReporter,
     sync_reporter: SyncReporter,
-    package_cache_reporter: PackageCacheReporter,
 }
 
 impl TopLevelProgress {
@@ -57,16 +56,10 @@ impl TopLevelProgress {
         );
         let source_checkout_reporter =
             GitCheckoutProgress::new(multi_progress.clone(), anchor_pb.clone());
-        let package_cache_reporter = PackageCacheReporter::new(
-            multi_progress.clone(),
-            pixi_progress::ProgressBarPlacement::Before(anchor_pb.clone()),
-        )
-        .with_prefix("fetching run exports");
         Self {
             source_checkout_reporter,
             conda_solve_reporter,
             repodata_reporter,
-            package_cache_reporter,
             sync_reporter: install_reporter,
         }
     }
@@ -129,7 +122,7 @@ impl pixi_command_dispatcher::Reporter for TopLevelProgress {
         &mut self,
         _reason: Option<ReporterContext>,
     ) -> Option<Arc<dyn RunExportsReporter + Send>> {
-        Some(Arc::new(self.package_cache_reporter.clone()))
+        Some(Arc::new(self.repodata_reporter.clone()))
     }
 
     fn create_install_reporter(
