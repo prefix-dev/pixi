@@ -46,7 +46,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace_locator = args.project_config.workspace_locator_start();
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(workspace_locator.clone())
-        .with_closest_package(false)
+        .with_closest_package(true)
         .locate()?
         .with_cli_config(args.config_cli);
 
@@ -101,11 +101,36 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .channel_urls(&channel_config)
         .into_diagnostic()?;
 
-    // Determine the source of the package.
-    let source: PinnedSourceSpec = PinnedPathSpec {
-        path: search_start.to_string_lossy().into_owned().into(),
-    }
-    .into();
+    // Determine the source of the package - use src from build config if available,
+    // otherwise use current directory
+    let source: PinnedSourceSpec = if let Some(package) = &workspace.package {
+        if let Some(src_spec) = &package.value.build.src {
+            match src_spec {
+                pixi_spec::SourceSpec::Path(path_spec) => {
+                    let resolved_path = path_spec.resolve(search_start).into_diagnostic()?;
+                    PinnedPathSpec {
+                        path: resolved_path.to_string_lossy().into_owned().into(),
+                    }
+                    .into()
+                }
+                _ => {
+                    miette::bail!(
+                        "Url and git source roots are not yet supported. Use path-based source roots for now."
+                    )
+                }
+            }
+        } else {
+            PinnedPathSpec {
+                path: search_start.to_string_lossy().into_owned().into(),
+            }
+            .into()
+        }
+    } else {
+        PinnedPathSpec {
+            path: search_start.to_string_lossy().into_owned().into(),
+        }
+        .into()
+    };
 
     // Create the build backend metadata specification.
     let backend_metadata_spec = BuildBackendMetadataSpec {

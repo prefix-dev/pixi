@@ -1,10 +1,8 @@
-use std::collections::BTreeMap;
-
 use indexmap::IndexMap;
-use pixi_spec::TomlSpec;
-use pixi_toml::{Same, TomlFromStr, TomlIndexMap, TomlWith};
+use pixi_spec::{SourceSpec, TomlSpec};
+use pixi_toml::{Same, Serde, TomlFromStr, TomlIndexMap, TomlWith, convert_toml_to_serde};
 use rattler_conda_types::NamedChannelOrUrl;
-use toml_span::{DeserError, Spanned, Value, de_helpers::TableHelper, value::ValueInner};
+use toml_span::{DeserError, Spanned, Value, de_helpers::TableHelper};
 
 use crate::{
     PackageBuild, TargetSelector, TomlError,
@@ -19,6 +17,7 @@ pub struct TomlPackageBuild {
     pub backend: PixiSpanned<TomlBuildBackend>,
     pub channels: Option<PixiSpanned<Vec<NamedChannelOrUrl>>>,
     pub additional_dependencies: UniquePackageMap,
+    pub src: Option<SourceSpec>,
     pub configuration: Option<serde_value::Value>,
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlPackageBuildTarget>,
 }
@@ -69,6 +68,7 @@ impl TomlPackageBuild {
             },
             additional_dependencies,
             channels: self.channels.map(|channels| channels.value),
+            src: self.src,
             configuration: self.configuration,
             target_configuration: if target_configuration.is_empty() {
                 None
@@ -77,32 +77,6 @@ impl TomlPackageBuild {
             },
         })
     }
-}
-
-pub fn convert_toml_to_serde(value: &mut Value) -> Result<serde_value::Value, DeserError> {
-    Ok(match value.take() {
-        ValueInner::String(s) => serde_value::Value::String(s.to_string()),
-        ValueInner::Integer(i) => serde_value::Value::I64(i),
-        ValueInner::Float(f) => serde_value::Value::F64(f),
-        ValueInner::Boolean(b) => serde_value::Value::Bool(b),
-        ValueInner::Array(mut arr) => {
-            let mut json_arr = Vec::new();
-            for item in &mut arr {
-                json_arr.push(convert_toml_to_serde(item)?);
-            }
-            serde_value::Value::Seq(json_arr)
-        }
-        ValueInner::Table(table) => {
-            let mut map = BTreeMap::new();
-            for (key, mut val) in table {
-                map.insert(
-                    serde_value::Value::String(key.to_string()),
-                    convert_toml_to_serde(&mut val)?,
-                );
-            }
-            serde_value::Value::Map(map)
-        }
-    })
 }
 
 impl<'de> toml_span::Deserialize<'de> for TomlBuildBackend {
@@ -135,6 +109,10 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
             });
         let additional_dependencies = th.optional("additional-dependencies").unwrap_or_default();
 
+        let src = th
+            .optional::<TomlWith<_, Serde<_>>>("src")
+            .map(TomlWith::into_inner);
+
         let configuration = th
             .take("configuration")
             .map(|(_, mut value)| convert_toml_to_serde(&mut value))
@@ -150,6 +128,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
             backend: build_backend,
             channels,
             additional_dependencies,
+            src,
             configuration,
             target,
         })

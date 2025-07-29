@@ -2,7 +2,7 @@
 source: crates/pixi_manifest/src/toml/build_backend.rs
 expression: "expect_parse_failure(r#\"\n            backend = { name = \"foobar\", version = \"*\" }\n            additional = \"key\"\n        \"#)"
 ---
-  × Unexpected keys, expected only 'backend', 'channels', 'additional-dependencies', 'configuration', 'target'
+  × Unexpected keys, expected only 'backend', 'channels', 'additional-dependencies', 'src', 'configuration', 'target'
    ╭─[pixi.toml:3:13]
  2 │             backend = { name = "foobar", version = "*" }
  3 │             additional = "key"

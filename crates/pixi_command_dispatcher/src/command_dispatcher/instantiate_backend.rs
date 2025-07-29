@@ -61,6 +61,7 @@ impl CommandDispatcher {
                         .initialize(InitializeParams {
                             manifest_path: spec.init_params.manifest_path,
                             source_dir: Some(spec.init_params.source_dir),
+                            workspace_root: Some(spec.init_params.workspace_root),
                             cache_directory: Some(self.cache_dirs().root().clone()),
                             project_model: spec.init_params.project_model.map(Into::into),
                             configuration: spec.init_params.configuration,
@@ -138,6 +139,7 @@ impl CommandDispatcher {
         JsonRpcBackend::setup(
             source_dir,
             manifest_path,
+            spec.init_params.workspace_root,
             spec.init_params.project_model,
             spec.init_params.configuration,
             spec.init_params.target_configuration,
