@@ -2,19 +2,20 @@ use std::{
     collections::BTreeSet,
     hash::{Hash, Hasher},
     io::SeekFrom,
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
-use crate::build::{MoveError, move_file, source_checkout_cache_key};
 use async_fd_lock::{LockWrite, RwLockWriteGuard};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_record::PinnedSourceSpec;
 use rattler_conda_types::{ChannelUrl, GenericVirtualPackage, Platform, RepoDataRecord};
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use thiserror::Error;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, AsyncWriteExt};
-use url::Url;
 use xxhash_rust::xxh3::Xxh3;
+
+use crate::build::source_checkout_cache_key;
 
 /// A cache for caching build artifacts of a source checkout.
 #[derive(Clone)]
@@ -27,10 +28,6 @@ pub enum BuildCacheError {
     /// An I/O error occurred while reading or writing the cache.
     #[error("an IO error occurred while {0} {1}")]
     IoError(String, PathBuf, #[source] std::io::Error),
-
-    /// Failed to move the build artifact
-    #[error("failed to move build artifact from '{}' to cache '{}'", .0.display(), .1.display())]
-    MoveError(PathBuf, PathBuf, #[source] MoveError),
 }
 
 /// Defines additional input besides the source files that are used to compute
@@ -103,10 +100,10 @@ impl BuildCache {
     /// cache. If the cache doesn't contain an entry for this source and input,
     /// it returns `None`.
     ///
-    /// This function also returns a [`BuildCacheEntry`] which can be used to update
-    /// the cache. The [`BuildCacheEntry`] also holds an exclusive lock on the cache
-    /// which prevents other processes from accessing the cache entry. Drop
-    /// the entry as soon as possible to release the lock.
+    /// This function also returns a [`BuildCacheEntry`] which can be used to
+    /// update the cache. The [`BuildCacheEntry`] also holds an exclusive
+    /// lock on the cache which prevents other processes from accessing the
+    /// cache entry. Drop the entry as soon as possible to release the lock.
     pub async fn entry(
         &self,
         source: &PinnedSourceSpec,
@@ -189,7 +186,33 @@ pub struct CachedBuild {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CachedBuildSourceInfo {
+    /// The files that were used during the build process. If any of these
+    /// change, the build should be considered stale.
     pub globs: BTreeSet<String>,
+    /// The packages that were used during the build process.
+    #[serde(default)]
+    pub build: BuildHostEnvironment,
+    /// The packages that were installed in the host environment.
+    #[serde(default)]
+    pub host: BuildHostEnvironment,
+}
+
+#[serde_as]
+#[derive(Default, Debug, Serialize, Deserialize)]
+pub struct BuildHostEnvironment {
+    /// Describes the packages that were installed in the host environment.
+    pub packages: Vec<BuildHostPackage>,
+}
+
+#[serde_as]
+#[derive(Debug, Serialize, Deserialize)]
+pub struct BuildHostPackage {
+    /// The repodata record of the package.
+    #[serde(flatten)]
+    pub repodata_record: RepoDataRecord,
+
+    /// The source location from which the package was built.
+    pub source: Option<PinnedSourceSpec>,
 }
 
 /// A cache entry returned by [`BuildCache::entry`] which enables
@@ -203,25 +226,16 @@ pub struct BuildCacheEntry {
 }
 
 impl BuildCacheEntry {
-    /// Consumes this instance and writes the given metadata to the cache.
+    /// The directory where the cache is stored.
+    pub fn cache_dir(&self) -> &Path {
+        &self.cache_dir
+    }
+
+    /// Write the given metadata to the cache file.
     pub async fn insert(
-        mut self,
-        mut metadata: CachedBuild,
+        &mut self,
+        metadata: CachedBuild,
     ) -> Result<RepoDataRecord, BuildCacheError> {
-        // Move the file into the cache
-        if let Ok(file_path) = metadata.record.url.to_file_path() {
-            let file_name = file_path
-                .file_name()
-                .expect("the path cannot be empty because that wouldnt be a valid url");
-            let destination = self.cache_dir.join(file_name);
-            if let Err(err) = move_file(&file_path, &destination) {
-                return Err(BuildCacheError::MoveError(file_path, destination, err));
-            }
-
-            metadata.record.url = Url::from_file_path(&destination)
-                .expect("the cache directory path should be a valid url");
-        }
-
         self.file.seek(SeekFrom::Start(0)).await.map_err(|e| {
             BuildCacheError::IoError(
                 "seeking to start of cache file".to_string(),

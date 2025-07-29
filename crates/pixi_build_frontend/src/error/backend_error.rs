@@ -22,6 +22,16 @@ pub struct BackendError {
     url: Option<String>,
 }
 
+impl BackendError {
+    pub fn new(message: impl Display) -> Self {
+        Self {
+            message: message.to_string(),
+            severity: Severity::Error,
+            ..Default::default()
+        }
+    }
+}
+
 impl Display for BackendError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", &self.message)

@@ -1,9 +1,11 @@
+//! This API was introduced in Pixi Build API version 0.
+
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet},
     path::PathBuf,
 };
 
-use rattler_conda_types::GenericVirtualPackage;
+use rattler_conda_types::{GenericVirtualPackage, PackageName};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
@@ -38,7 +40,7 @@ pub struct CondaBuildParams {
     pub outputs: Option<BTreeSet<CondaOutputIdentifier>>,
 
     /// The variants that we want to build
-    pub variant_configuration: Option<HashMap<String, Vec<String>>>,
+    pub variant_configuration: Option<BTreeMap<String, Vec<String>>>,
 
     /// A directory that can be used by the backend to store files for
     /// subsequent requests. This directory is unique for each separate source
@@ -80,7 +82,7 @@ pub struct CondaBuiltPackage {
     pub input_globs: BTreeSet<String>,
 
     /// The name of the package.
-    pub name: String,
+    pub name: PackageName,
 
     /// The version of the package.
     pub version: String,

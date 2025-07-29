@@ -4,13 +4,10 @@ use indicatif::ProgressDrawTarget;
 use miette::{Diagnostic, IntoDiagnostic};
 use pixi_consts::consts;
 use pixi_progress::global_multi_progress;
-use pixi_utils::indicatif::IndicatifWriter;
+
 use std::{env, io::IsTerminal};
 use thiserror::Error;
-use tracing_subscriber::{
-    EnvFilter, filter::LevelFilter, prelude::__tracing_subscriber_SubscriberExt,
-    util::SubscriberInitExt,
-};
+use tracing::level_filters::LevelFilter;
 
 pub mod add;
 mod build;
@@ -22,6 +19,7 @@ pub mod config;
 pub mod exec;
 pub mod global;
 pub mod has_specs;
+pub mod import;
 pub mod info;
 pub mod init;
 pub mod install;
@@ -40,12 +38,6 @@ pub mod update;
 pub mod upgrade;
 pub mod upload;
 pub mod workspace;
-
-#[derive(Debug, Error, Diagnostic)]
-pub enum LockFileUsageError {
-    #[error("the argument '--locked' cannot be used together with '--frozen'")]
-    FrozenAndLocked,
-}
 
 #[derive(Parser, Debug)]
 #[command(
@@ -117,6 +109,7 @@ impl Args {
     }
 
     /// Determine the log level filter based on verbose and quiet counts.
+    #[allow(unused)]
     fn log_level_filter(&self) -> LevelFilter {
         match (self.global_options.quiet, self.global_options.verbose) {
             // Quiet mode overrides verbose
@@ -147,6 +140,7 @@ pub enum Command {
     Global(global::Args),
     Info(info::Args),
     Init(init::Args),
+    Import(import::Args),
     #[clap(visible_alias = "i")]
     Install(install::Args),
     #[clap(visible_alias = "ls")]
@@ -174,6 +168,12 @@ pub enum Command {
     Workspace(workspace::Args),
     #[command(external_subcommand)]
     External(Vec<String>),
+}
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum LockFileUsageError {
+    #[error("the argument '--locked' cannot be used together with '--frozen'")]
+    FrozenAndLocked,
 }
 
 #[derive(Debug, Default, Copy, Clone)]
@@ -316,6 +316,27 @@ pub async fn execute() -> miette::Result<()> {
         global_multi_progress().set_draw_target(ProgressDrawTarget::hidden());
     }
 
+    // Setup logging for the application.
+    setup_logging(&args, use_colors)?;
+
+    // Execute the command
+    execute_command(args.command, &args.global_options).await
+}
+
+#[cfg(feature = "console-subscriber")]
+fn setup_logging(_args: &Args, _use_colors: bool) -> miette::Result<()> {
+    console_subscriber::init();
+    Ok(())
+}
+
+#[cfg(not(feature = "console-subscriber"))]
+fn setup_logging(args: &Args, use_colors: bool) -> miette::Result<()> {
+    use pixi_utils::indicatif::IndicatifWriter;
+    use tracing_subscriber::{
+        EnvFilter, filter::LevelFilter, prelude::__tracing_subscriber_SubscriberExt,
+        util::SubscriberInitExt,
+    };
+
     let (low_level_filter, level_filter, pixi_level) = match args.log_level_filter() {
         LevelFilter::OFF => (LevelFilter::OFF, LevelFilter::OFF, LevelFilter::OFF),
         LevelFilter::ERROR => (LevelFilter::ERROR, LevelFilter::ERROR, LevelFilter::WARN),
@@ -354,9 +375,7 @@ pub async fn execute() -> miette::Result<()> {
         .with(env_filter)
         .with(fmt_layer)
         .init();
-
-    // Execute the command
-    execute_command(args.command, &args.global_options).await
+    Ok(())
 }
 
 /// Execute the actual command
@@ -379,6 +398,7 @@ pub async fn execute_command(
         Command::ShellHook(cmd) => shell_hook::execute(cmd).await,
         Command::Task(cmd) => task::execute(cmd).await,
         Command::Info(cmd) => info::execute(cmd).await,
+        Command::Import(cmd) => import::execute(cmd).await,
         Command::Upload(cmd) => upload::execute(cmd).await,
         Command::Search(cmd) => search::execute(cmd).await,
         Command::Workspace(cmd) => workspace::execute(cmd).await,
