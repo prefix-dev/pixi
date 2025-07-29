@@ -10,14 +10,12 @@ use std::{
 use clap::{Parser, ValueEnum};
 use miette::{Context, IntoDiagnostic};
 use minijinja::{Environment, context};
-use pixi_config::{Config, get_default_author};
+use pixi_config::{Config, get_default_author, pixi_home};
 use pixi_consts::consts;
-use pixi_manifest::{
-    DependencyOverwriteBehavior, FeatureName, SpecType, pyproject::PyProjectManifest,
-};
-use pixi_spec::PixiSpec;
+use pixi_manifest::{FeatureName, pyproject::PyProjectManifest};
 use pixi_utils::conda_environment_file::CondaEnvFile;
 use rattler_conda_types::{NamedChannelOrUrl, Platform};
+use same_file::is_same_file;
 use tokio::fs::OpenOptions;
 use url::Url;
 use uv_normalize::PackageName;
@@ -255,6 +253,14 @@ pixi.lock merge=binary gitlab-language=yaml gitlab-generated=true
     }
 }
 
+fn is_init_dir_equal_to_pixi_home_parent(init_dir: &Path) -> bool {
+    pixi_home()
+        .as_ref()
+        .and_then(|home_dir| home_dir.parent())
+        .and_then(|parent| is_same_file(parent, init_dir).ok())
+        .unwrap_or(false)
+}
+
 pub async fn execute(args: Args) -> miette::Result<()> {
     let env = Environment::new();
     // Fail silently if the directory already exists or cannot be created.
@@ -266,6 +272,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let gitignore_path = dir.join(".gitignore");
     let gitattributes_path = dir.join(".gitattributes");
     let config = Config::load_global();
+
+    if is_init_dir_equal_to_pixi_home_parent(&dir) {
+        miette::bail!(
+            "You cannot create a workspace in the parent of the pixi home directory.\n\
+            Please see https://pixi.sh/pixi/v{}/reference/environment_variables/ \
+            for more information about the pixi home directory.",
+            consts::PIXI_VERSION
+        );
+    }
 
     // Deprecation warning for the `pyproject` option
     if args.pyproject_toml {
@@ -398,36 +413,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             let mut workspace =
                 WorkspaceMut::from_template(pixi_manifest_path, rendered_workspace_template)?;
             let channel_config = workspace.workspace().channel_config();
-            for spec in conda_deps {
-                // Determine the name of the package to add
-                let (Some(name), spec) = spec.clone().into_nameless() else {
-                    miette::bail!(
-                        "{} does not support wildcard dependencies",
-                        pixi_utils::executable_name()
-                    );
-                };
-                let spec = PixiSpec::from_nameless_matchspec(spec, &channel_config);
-                workspace.manifest().add_dependency(
-                    &name,
-                    &spec,
-                    SpecType::Run,
-                    // No platforms required as you can't define them in the yaml
-                    &[],
-                    &FeatureName::default(),
-                    DependencyOverwriteBehavior::Overwrite,
-                )?;
-            }
-            for requirement in pypi_deps {
-                workspace.manifest().add_pep508_dependency(
-                    (&requirement, None),
-                    // No platforms required as you can't define them in the yaml
-                    &[],
-                    &FeatureName::default(),
-                    None,
-                    DependencyOverwriteBehavior::Overwrite,
-                    None,
-                )?;
-            }
+            workspace.add_specs(
+                conda_deps,
+                pypi_deps,
+                &[] as &[Platform],
+                &FeatureName::default(),
+            )?;
             let workspace = workspace.save().await.into_diagnostic()?;
 
             eprintln!(

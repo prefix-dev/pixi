@@ -207,7 +207,7 @@ class MatchspecTable(StrictBaseModel):
     channel: NonEmptyStr | None = Field(
         None,
         description="The channel the packages needs to be fetched from",
-        examples=["conda-forge", "pytorch", "https://repo.prefix.dev/conda-forge"],
+        examples=["conda-forge", "pytorch", "https://prefix.dev/conda-forge"],
     )
     subdir: NonEmptyStr | None = Field(
         None, description="The subdir of the package, also known as platform"
@@ -604,6 +604,13 @@ class PyPIOptions(StrictBaseModel):
         None,
         description="Packages that should NOT be built",
         examples=["true", "false"],
+    )
+    dependency_overrides: dict[PyPIPackageName, PyPIRequirement] | None = Field(
+        None,
+        description="A list of PyPI dependencies that override the resolved dependencies",
+        examples=[
+            {"numpy": ">=1.21.0"},
+        ],
     )
     no_binary: bool | list[PyPIPackageName] | None = Field(
         None,

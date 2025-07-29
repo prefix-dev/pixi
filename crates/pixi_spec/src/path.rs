@@ -16,6 +16,11 @@ pub struct PathSpec {
 }
 
 impl PathSpec {
+    /// Constructs a new [`PathSpec`] from the given path.
+    pub fn new(path: impl Into<Utf8TypedPathBuf>) -> Self {
+        Self { path: path.into() }
+    }
+
     /// Converts this instance into a [`NamelessMatchSpec`] if the path points
     /// to binary archive.
     pub fn try_into_nameless_match_spec(
@@ -108,9 +113,11 @@ impl PathSourceSpec {
 
 /// Path to a source package. Different from [`PathSpec`] in that this type only
 /// refers to source packages.
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[serde_as]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, ::serde::Serialize)]
 pub struct PathBinarySpec {
     /// The path to the package. Either a directory or an archive.
+    #[serde_as(as = "serde_with::DisplayFromStr")]
     pub path: Utf8TypedPathBuf,
 }
 
