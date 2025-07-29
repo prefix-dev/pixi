@@ -3,6 +3,7 @@ mod event_tree;
 mod source_backend;
 
 use std::{
+    collections::HashMap,
     ops::DerefMut,
     path::{Path, PathBuf},
     str::FromStr,
@@ -10,7 +11,9 @@ use std::{
 
 use event_reporter::EventReporter;
 use itertools::Itertools;
-use pixi_build_frontend::{BackendOverride, in_memory::PassthroughBackend};
+use pixi_build_frontend::{
+    BackendOverride, InMemoryOverriddenBackends, in_memory::PassthroughBackend,
+};
 use pixi_command_dispatcher::{
     BuildEnvironment, CacheDirs, CommandDispatcher, Executor, InstallPixiEnvironmentSpec,
     InstantiateToolEnvironmentSpec, PixiEnvironmentSpec,
@@ -382,6 +385,12 @@ pub async fn instantiate_backend_with_from_source() {
     let dispatcher = CommandDispatcher::builder()
         .with_cache_dirs(default_cache_dirs())
         .with_executor(Executor::Serial)
+        .with_backend_overrides(BackendOverride::InMemory(
+            InMemoryOverriddenBackends::Specified(HashMap::from_iter([(
+                backend_name.as_source().to_string(),
+                PassthroughBackend::instantiator().into(),
+            )])),
+        ))
         .finish();
 
     // Use PixiSpec::Path to test path-based resolution and installation

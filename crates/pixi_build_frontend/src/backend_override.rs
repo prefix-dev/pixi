@@ -1,4 +1,4 @@
-use std::{path::PathBuf, str::FromStr};
+use std::{collections::HashMap, fmt::Debug, path::PathBuf, str::FromStr};
 
 use pixi_build_discovery::{CommandSpec, SystemCommandSpec};
 
@@ -11,7 +11,7 @@ pub enum BackendOverride {
     System(OverriddenBackends),
 
     /// Use an in-memory backend instantiator to create the backend.
-    InMemory(BoxedInMemoryBackend),
+    InMemory(InMemoryOverriddenBackends),
 }
 
 /// Default implementation for the backend override were no tools are
@@ -31,7 +31,9 @@ impl BackendOverride {
     pub fn from_memory<T: InMemoryBackendInstantiator + Send + Sync + 'static>(
         instantiator: T,
     ) -> Self {
-        Self::InMemory(BoxedInMemoryBackend::from(instantiator))
+        Self::InMemory(InMemoryOverriddenBackends::All(BoxedInMemoryBackend::from(
+            instantiator,
+        )))
     }
 }
 
@@ -78,6 +80,25 @@ pub enum OverriddenBackends {
     All,
     /// Specific backend overrides.
     Specified(Vec<OverriddenTool>),
+}
+
+/// List of overridden backends using in memory backends.
+#[derive(Debug)]
+pub enum InMemoryOverriddenBackends {
+    /// Overrides all backends and assume they are available in the root.
+    All(BoxedInMemoryBackend),
+    /// Specific backend overrides.
+    Specified(HashMap<String, BoxedInMemoryBackend>),
+}
+
+impl InMemoryOverriddenBackends {
+    /// Returns the in-memory backend override for the given name.
+    pub fn backend_override(&self, name: &str) -> Option<&BoxedInMemoryBackend> {
+        match self {
+            InMemoryOverriddenBackends::Specified(overridden) => overridden.get(name),
+            InMemoryOverriddenBackends::All(backend) => Some(backend),
+        }
+    }
 }
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
