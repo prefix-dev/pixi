@@ -1900,7 +1900,7 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn test_good_satisfiability(
-        #[files("tests/data/satisfiability/*/pixi.toml")] manifest_path: PathBuf,
+        #[files("../../tests/data/satisfiability/*/pixi.toml")] manifest_path: PathBuf,
     ) {
         // TODO: skip this test on windows
         // Until we can figure out how to handle unix file paths with pep508_rs url
@@ -1927,7 +1927,9 @@ mod tests {
     #[rstest]
     #[tokio::test]
     #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
-    async fn test_example_satisfiability(#[files("examples/**/p*.toml")] manifest_path: PathBuf) {
+    async fn test_example_satisfiability(
+        #[files("../../examples/**/p*.toml")] manifest_path: PathBuf,
+    ) {
         // If a pyproject.toml is present check for `tool.pixi` in the file to avoid
         // testing of non-pixi files
         if manifest_path.file_name().unwrap() == "pyproject.toml" {
@@ -1960,7 +1962,7 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn test_failing_satisiability(
-        #[files("tests/data/non-satisfiability/*/pixi.toml")] manifest_path: PathBuf,
+        #[files("../../tests/data/non-satisfiability/*/pixi.toml")] manifest_path: PathBuf,
     ) {
         let report_handler = NarratableReportHandler::new().with_cause_chain();
 

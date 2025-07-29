@@ -4,8 +4,8 @@ use pixi_consts::consts;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
 
-use crate::cli::has_specs::HasSpecs;
 use crate::global::project::{FromMatchSpecError, GlobalSpec};
+use pixi_api::cli::has_specs::HasSpecs;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{ChannelConfig, MatchSpec, ParseMatchSpecError, ParseStrictness};
 
