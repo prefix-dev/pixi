@@ -80,7 +80,7 @@ pixi task add lint pylint
 --8<-- "docs/source_files/pixi_tomls/pixi_task_alias.toml:not-all"
 ```
 
-!!! hint "Hiding Tasks"
+!!! tip "Hiding Tasks"
     Tasks can be hidden from user facing commands by [naming them](#task-names) with an `_` prefix.
 
 ### Shorthand Syntax
