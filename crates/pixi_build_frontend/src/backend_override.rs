@@ -85,9 +85,9 @@ pub enum OverriddenBackends {
 /// List of overridden backends using in memory backends.
 #[derive(Debug)]
 pub enum InMemoryOverriddenBackends {
-    /// Overrides all backends and assume they are available in the root.
+    /// Overrides all backends and use the same in-memory backend for all
     All(BoxedInMemoryBackend),
-    /// Specific backend overrides.
+    /// Specific backend overrides using in-memory backends.
     Specified(HashMap<String, BoxedInMemoryBackend>),
 }
 
