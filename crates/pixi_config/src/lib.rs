@@ -120,45 +120,45 @@ pub fn get_cache_dir() -> miette::Result<PathBuf> {
 }
 #[derive(Parser, Debug, Default, Clone)]
 pub struct ConfigCli {
-    /// Do not verify the TLS certificate of the server.
-    #[arg(long, action = ArgAction::SetTrue, help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    tls_no_verify: bool,
-
     /// Path to the file containing the authentication token.
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
     auth_file: Option<PathBuf>,
+
+    /// Max concurrent network requests, default is `50`
+    #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    concurrent_downloads: Option<usize>,
+
+    /// Max concurrent solves, default is the number of CPUs
+    #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    concurrent_solves: Option<usize>,
+
+    /// Set detached environments path
+    #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    detached_environments: Option<PathBuf>,
+
+    /// Set pinning strategy
+    #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS, value_enum)]
+    pinning_strategy: Option<PinningStrategy>,
 
     /// Specifies whether to use the keyring to look up credentials for PyPI.
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
     pypi_keyring_provider: Option<KeyringProvider>,
 
-    /// Max concurrent solves, default is the number of CPUs
+    /// Run post-link scripts (insecure)
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    pub concurrent_solves: Option<usize>,
-
-    /// Max concurrent network requests, default is `50`
-    #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    pub concurrent_downloads: Option<usize>,
+    run_post_link_scripts: bool,
 
     /// The platform to use to install tools
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    pub tool_platform: Option<Platform>,
+    tool_platform: Option<Platform>,
 
-    /// Run post-link scripts (insecure)
-    #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    pub run_post_link_scripts: bool,
+    /// Do not verify the TLS certificate of the server.
+    #[arg(long, action = ArgAction::SetTrue, help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    tls_no_verify: bool,
 
     /// Use environment activation cache (experimental)
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    pub use_environment_activation_cache: bool,
-
-    /// Set detached environments path
-    #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    pub detached_environments: Option<PathBuf>,
-
-    /// Set pinning strategy
-    #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    pub pinning_strategy: Option<PinningStrategy>,
+    use_environment_activation_cache: bool,
 }
 
 #[derive(Parser, Debug, Clone, Default)]
@@ -503,7 +503,7 @@ impl PyPIConfig {
 }
 
 /// The strategy for that will be used for pinning a version of a package.
-#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq, Copy)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq, Copy, clap::ValueEnum)]
 #[serde(rename_all = "kebab-case")]
 pub enum PinningStrategy {
     /// Default semver strategy e.g. "1.2.3" becomes ">=1.2.3, <2" but "0.1.0"
