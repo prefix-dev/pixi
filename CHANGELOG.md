@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.50.2] - 2025-07-28
+#### Documentation
+
+- Update setup-pixi docs by @pavelzw in [#4207](https://github.com/prefix-dev/pixi/pull/4207)
+- Update cli welcome in README by @pauljurczak in [#4211](https://github.com/prefix-dev/pixi/pull/4211)
+
+
+#### Fixed
+
+- Print build log if build fails by @Hofer-Julian in [#4205](https://github.com/prefix-dev/pixi/pull/4205)
+- Increase retention of pixi artifacts by @Hofer-Julian in [#4215](https://github.com/prefix-dev/pixi/pull/4215)
+- Network authentication pixi global by @ruben-arts in [#4222](https://github.com/prefix-dev/pixi/pull/4222)
+- Netrc issue and hash mismatch by @baszalmstra in [#4218](https://github.com/prefix-dev/pixi/pull/4218)
+
+
+
+#### New Contributors
+* @pauljurczak made their first contribution in [#4211](https://github.com/prefix-dev/pixi/pull/4211)
+
 ### [0.50.1] - 2025-07-25
 #### ✨ Highlights
 

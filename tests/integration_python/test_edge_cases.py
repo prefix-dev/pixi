@@ -7,7 +7,7 @@ import sys
 import tomli
 import tomli_w
 
-from .common import CURRENT_PLATFORM, verify_cli_command, ExitCode
+from .common import CURRENT_PLATFORM, verify_cli_command, ExitCode, CONDA_FORGE_CHANNEL
 
 
 @pytest.mark.extra_slow
@@ -414,7 +414,7 @@ def test_installation_pypi_conda_mismatch(
 
 
 def test_pypi_url_fragment_in_project_deps(tmp_pixi_workspace: Path, pixi: Path) -> None:
-    pyproject_content = """
+    pyproject_content = f"""
 [project]
 version = "0.1.0"
 name = "test"
@@ -428,11 +428,11 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.pixi.workspace]
-platforms = ["linux-64", "osx-arm64", "win-64"]
-channels = ["https://prefix.dev/conda-forge"]
+platforms = ["{CURRENT_PLATFORM}"]
+channels = ["{CONDA_FORGE_CHANNEL}"]
 
 [tool.pixi.pypi-dependencies]
-test = { path = ".", editable = true }
+test = {{ path = ".", editable = true }}
 
 [tool.hatch.metadata]
 allow-direct-references = true
@@ -516,7 +516,7 @@ build-backend = "hatchling.build"
 
     (proj1 / "pixi.toml").write_text(f"""[project]
 name = "proj1"
-channels = ["conda-forge"]
+channels = ["{CONDA_FORGE_CHANNEL}"]
 platforms = ["{CURRENT_PLATFORM}"]
 [dependencies]
 python = "3.12.*"
@@ -531,7 +531,7 @@ six = "==1.16.0"
 
     (proj2 / "pixi.toml").write_text(f"""[project]
 name = "proj2"
-channels = ["conda-forge"]
+channels = ["{CONDA_FORGE_CHANNEL}"]
 platforms = ["{CURRENT_PLATFORM}"]
 [dependencies]
 python = "3.12.*"

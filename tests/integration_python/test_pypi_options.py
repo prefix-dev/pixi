@@ -1,6 +1,8 @@
 from pathlib import Path
 import pytest
-from .common import verify_cli_command, ExitCode
+import yaml
+
+from .common import verify_cli_command, ExitCode, CURRENT_PLATFORM, CONDA_FORGE_CHANNEL
 
 
 @pytest.mark.extra_slow
@@ -27,19 +29,52 @@ def test_pypi_overrides(pixi: Path, tmp_pixi_workspace: Path) -> None:
     Tests the behavior of pixi install command with dependency overrides specified in pixi.toml.
     This test verifies that the installation succeeds when the overrides are correctly defined.
     """
-    test_data = Path(__file__).parent.parent / "data/pixi_tomls/dependency_overrides.toml"
-    # prepare if we would like to assert exactly same lock file
-    # test_lock_data = Path(__file__).parent.parent / "data/lockfiles/dependency_overrides.lock"
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest_content = f"""
+    [workspace]
+    channels = ["{CONDA_FORGE_CHANNEL}"]
+    platforms = ["{CURRENT_PLATFORM}"]
+    
+    [dependencies]
+    python = "3.13.*"
+    
+    [pypi-options.dependency-overrides]
+    dummy_test = "==0.1.3"
+    
+    [pypi-dependencies]
+    dummy_test = "==0.1.1"
+    
+    [feature.dev.pypi-options.dependency-overrides]
+    dummy_test = "==0.1.2"
+    
+    [feature.outdated.pypi-options.dependency-overrides]
+    dummy_test = "==0.1.0"
+    
+    [environments]
+    dev = ["dev"]
+    outdated = ["outdated"]
+    """
+    manifest.write_text(manifest_content)
     lock_file_path = tmp_pixi_workspace.joinpath("pixi.lock")
-    toml = test_data.read_text()
-    manifest.write_text(toml)
 
     # Run the installation
-    verify_cli_command([pixi, "install", "--manifest-path", manifest])
-    lock_file_content = lock_file_path.read_text()
+    verify_cli_command([pixi, "lock", "--manifest-path", manifest])
 
-    # numpy 2.0.0 is overriding the dev env
-    assert "numpy-2.0.0" in lock_file_content
-    # numpy 1.21.0 is overriding the outdated env
-    assert "numpy-1.21.0" in lock_file_content
+    with open(lock_file_path, "r") as f:
+        lock = yaml.safe_load(f)
+
+    assert any(
+        "dummy_test-0.1.2" in v
+        for pkg in lock["environments"]["dev"]["packages"][CURRENT_PLATFORM]
+        for v in pkg.values()
+    )
+    assert any(
+        "dummy_test-0.1.3" in v
+        for pkg in lock["environments"]["default"]["packages"][CURRENT_PLATFORM]
+        for v in pkg.values()
+    )
+    assert any(
+        "dummy_test-0.1.0" in v
+        for pkg in lock["environments"]["outdated"]["packages"][CURRENT_PLATFORM]
+        for v in pkg.values()
+    )

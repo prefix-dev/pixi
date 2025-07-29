@@ -3,7 +3,7 @@ source: tests/integration_rust/upgrade_tests.rs
 expression: redacted_content
 ---
         [workspace]
-        channels = ["conda-forge"]
+        channels = ["https://prefix.dev/conda-forge"]
         platforms = ["[PLATFORM]"]
         exclude-newer = "2025-05-19"
 
