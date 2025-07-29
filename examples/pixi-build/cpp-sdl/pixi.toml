@@ -1,6 +1,6 @@
 [workspace]
 channels = ["https://prefix.dev/conda-forge"]
-platforms = ["win-64", "linux-64", "osx-arm64", "osx-64"]
+platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 preview = ["pixi-build"]
 
 [dependencies]
@@ -9,8 +9,11 @@ preview = ["pixi-build"]
 sdl_example = { path = "." }
 
 [tasks.start]
-# A tasks to run the executable that is build by the package section.
 cmd = "sdl_example"
+description = "A tasks to run the executable that is build by the package section."
+
+[tasks]
+test = "sdl_example -h"
 
 [package]
 authors = ["Bas Zalmstra <bas@prefix.dev>"]

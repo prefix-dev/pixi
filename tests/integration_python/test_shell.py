@@ -14,14 +14,12 @@ def test_shell_hook_completions(
 
     verify_cli_command(
         [pixi, "add", "--manifest-path", tmp_pixi_workspace, "ripgrep-completions"],
-        ExitCode.SUCCESS,
     )
 
     # Test PowerShell completions (available on all platforms)
     # PowerShell completions are handled via PowerShell profile, not shell hook
     verify_cli_command(
         [pixi, "shell-hook", "--manifest-path", tmp_pixi_workspace, "--shell", "powershell"],
-        ExitCode.SUCCESS,
         stdout_excludes=[
             "Scripts/_pixi.ps1"
         ],  # PowerShell doesn't source completions in shell hook
@@ -36,7 +34,6 @@ def test_shell_hook_completions(
 
         verify_cli_command(
             [pixi, "shell-hook", "--manifest-path", tmp_pixi_workspace, "--shell", "cmd"],
-            ExitCode.SUCCESS,
             stdout_contains=['@SET "Path=', "Scripts", "@PROMPT"],
         )
     else:
@@ -47,7 +44,6 @@ def test_shell_hook_completions(
 
         verify_cli_command(
             [pixi, "shell-hook", "--manifest-path", tmp_pixi_workspace, "--shell", "bash"],
-            ExitCode.SUCCESS,
             stdout_contains=["source", "share/bash-completion/completions"],
         )
 
@@ -58,7 +54,6 @@ def test_shell_hook_completions(
 
         verify_cli_command(
             [pixi, "shell-hook", "--manifest-path", tmp_pixi_workspace, "--shell", "zsh"],
-            ExitCode.SUCCESS,
             stdout_contains=["fpath+=", "share/zsh/site-functions", "autoload -Uz compinit"],
         )
 
@@ -69,6 +64,5 @@ def test_shell_hook_completions(
 
         verify_cli_command(
             [pixi, "shell-hook", "--manifest-path", tmp_pixi_workspace, "--shell", "fish"],
-            ExitCode.SUCCESS,
             stdout_contains=["for file in", "source", "share/fish/vendor_completions.d"],
         )

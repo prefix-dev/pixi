@@ -240,33 +240,69 @@ The cli looks as follows:
 
 ```bash
 ➜ pixi
-A package management and workflow tool
+Pixi [version 0.50.1] - Developer Workflow and Environment Management for Multi-Platform, Language-Agnostic Workspaces.
+
+Pixi is a versatile developer workflow tool designed to streamline the management of your workspace's dependencies, tasks, and environments.
+Built on top of the Conda ecosystem, Pixi offers seamless integration with the PyPI ecosystem.
+
+Basic Usage:
+    Initialize pixi for a workspace:
+    $ pixi init
+    $ pixi add python numpy pytest
+
+    Run a task:
+    $ pixi task add test 'pytest -s'
+    $ pixi run test
+
+Found a Bug or Have a Feature Request?
+Open an issue at: https://github.com/prefix-dev/pixi/issues
+
+Need Help?
+Ask a question on the Prefix Discord server: https://discord.gg/kKV8ZxyzY4
+
+For more information, see the documentation at: https://pixi.sh
 
 Usage: pixi [OPTIONS] <COMMAND>
 
 Commands:
-  completion  Generates a completion script for a shell
-  init        Creates a new project
-  add         Adds a dependency to the project
-  run         Runs task in project
-  shell       Start a shell in the pixi environment of the project
-  global      Global is the main entry point for the part of pixi that executes on the global(system) level
-  auth        Login to prefix.dev or anaconda.org servers to access private channels
-  install     Install all dependencies
-  task        Command management in project
-  info        Information about the system and project
-  upload      Upload a package to a prefix.dev channel
-  search      Search a package, output will list the latest version of package
-  project
-  help        Print this message or the help of the given subcommand(s)
+  add          Adds dependencies to the workspace [aliases: a]
+  auth         Login to prefix.dev or anaconda.org servers to access private channels
+  build        Workspace configuration
+  clean        Cleanup the environments
+  completion   Generates a completion script for a shell
+  config       Configuration management
+  exec         Run a command and install it in a temporary environment [aliases: x]
+  global       Subcommand for global package management actions [aliases: g]
+  info         Information about the system, workspace and environments for the current machine
+  init         Creates a new workspace
+  import       Imports a file into an environment in an existing workspace.
+  install      Install an environment, both updating the lockfile and installing the environment [aliases: i]
+  list         List workspace's packages [aliases: ls]
+  lock         Solve environment and update the lock file without installing the environments
+  reinstall    Re-install an environment, both updating the lockfile and re-installing the environment
+  remove       Removes dependencies from the workspace [aliases: rm]
+  run          Runs task in the pixi environment [aliases: r]
+  search       Search a conda package
+  self-update  Update pixi to the latest version or a specific version
+  shell        Start a shell in a pixi environment, run `exit` to leave the shell [aliases: s]
+  shell-hook   Print the pixi environment activation script
+  task         Interact with tasks in the workspace
+  tree         Show a tree of workspace dependencies [aliases: t]
+  update       The `update` command checks if there are newer versions of the dependencies and updates the `pixi.lock` file and environments accordingly
+  upgrade      Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file
+  upload       Upload a conda package
+  workspace    Modify the workspace configuration file through the command line
+  help         Print this message or the help of the given subcommand(s)
 
 Options:
-  -v, --verbose...     More output per occurrence
-  -q, --quiet...       Less output per occurrence
-      --color <COLOR>  Whether the log needs to be colored [default: auto] [possible values: always, never, auto]
-  -h, --help           Print help
-  -V, --version        Print version
+  -V, --version  Print version
 
+Global Options:
+  -h, --help           Display help information
+  -v, --verbose...     Increase logging verbosity (-v for warnings, -vv for info, -vvv for debug, -vvvv for trace)
+  -q, --quiet...       Decrease logging verbosity (quiet mode)
+      --color <COLOR>  Whether the log needs to be colored [env: PIXI_COLOR=] [default: auto] [possible values: always, never, auto]
+      --no-progress    Hide all progress bars, always turned on if stderr is not a terminal [env: PIXI_NO_PROGRESS=]
 ```
 
 ## Creating a Pixi project

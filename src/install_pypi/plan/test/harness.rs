@@ -1,6 +1,8 @@
 use crate::install_pypi::plan::InstallPlanner;
-use crate::install_pypi::plan::providers::{CachedDistProvider, InstalledDistProvider};
+use crate::install_pypi::plan::cache::DistCache;
+use crate::install_pypi::plan::installed_dists::InstalledDists;
 use pixi_consts::consts;
+use pixi_uv_conversions::GitUrlWithPrefix;
 use rattler_lock::{PypiPackageData, UrlOrPath};
 use std::collections::HashMap;
 use std::io::Write;
@@ -13,6 +15,9 @@ use uv_distribution_filename::WheelFilename;
 use uv_distribution_types::{InstalledDirectUrlDist, InstalledDist, InstalledRegistryDist};
 use uv_pypi_types::DirectUrl::VcsUrl;
 use uv_pypi_types::{ArchiveInfo, DirectUrl, ParsedGitUrl, VcsInfo, VcsKind};
+use uv_redacted::DisplaySafeUrl;
+
+use uv_distribution_types::{BuiltDist, CachedRegistryDist, SourceDist};
 
 #[derive(Default)]
 /// Builder to create installed dists
@@ -59,7 +64,7 @@ impl InstalledDistBuilder {
             name,
             version,
             direct_url: Box::new(direct_url.clone()),
-            url: directory_url,
+            url: directory_url.into(),
             editable,
             path: install_path.into(),
             cache_info: None,
@@ -91,7 +96,7 @@ impl InstalledDistBuilder {
             name,
             version,
             direct_url: Box::new(direct_url.clone()),
-            url,
+            url: url.into(),
             editable: false,
             path: install_path.into(),
             cache_info: None,
@@ -110,8 +115,13 @@ impl InstalledDistBuilder {
         let version =
             uv_pep440::Version::from_str(version.as_ref()).expect("cannot parse pep440 version");
 
+        // Handle git+ prefix using GitUrlWithPrefix
+        let git_url = GitUrlWithPrefix::from(&url);
+        let url = git_url.without_git_prefix().clone();
+
         // Parse git url and extract git commit, use this as the commit_id
-        let parsed_git_url = ParsedGitUrl::try_from(url.clone()).expect("should parse git url");
+        let parsed_git_url = ParsedGitUrl::try_from(DisplaySafeUrl::from(url.clone()))
+            .expect("should parse git url");
 
         let direct_url = VcsUrl {
             url: url.to_string(),
@@ -131,7 +141,7 @@ impl InstalledDistBuilder {
             name,
             version,
             direct_url: Box::new(direct_url.clone()),
-            url,
+            url: url.into(),
             path: install_path.into(),
             editable: false,
             cache_info: None,
@@ -320,7 +330,7 @@ impl MockedSitePackages {
     }
 }
 
-impl<'a> InstalledDistProvider<'a> for MockedSitePackages {
+impl<'a> InstalledDists<'a> for MockedSitePackages {
     fn iter(&'a self) -> impl Iterator<Item = &'a InstalledDist> {
         self.installed_dist.iter()
     }
@@ -388,37 +398,52 @@ impl PyPIPackageDataBuilder {
     }
 }
 
-/// Implementor of the [`CachedDistProvider`] that does not cache anything
+/// Implementor of the [`DistCache`] that does not cache anything
 pub struct NoCache;
 
-impl<'a> CachedDistProvider<'a> for NoCache {
-    fn get_cached_dist(
+impl<'a> DistCache<'a> for NoCache {
+    fn is_cached(
         &mut self,
-        _name: &'a uv_normalize::PackageName,
-        _version: uv_pep440::Version,
-    ) -> Option<uv_distribution_types::CachedRegistryDist> {
-        None
+        _dist: &'a uv_distribution_types::Dist,
+        _uv_cache: &uv_cache::Cache,
+    ) -> Result<Option<uv_distribution_types::CachedDist>, uv_distribution::Error> {
+        Ok(None)
     }
 }
 
-/// Implementor of the [`CachedDistProvider`] that assumes to have cached everything
+/// Implementor of the [`DistCache`] that assumes to have cached everything
 pub struct AllCached;
-impl<'a> CachedDistProvider<'a> for AllCached {
-    fn get_cached_dist(
+impl<'a> DistCache<'a> for AllCached {
+    fn is_cached(
         &mut self,
-        name: &'a uv_normalize::PackageName,
-        version: uv_pep440::Version,
-    ) -> Option<uv_distribution_types::CachedRegistryDist> {
-        let wheel_filename =
-            WheelFilename::from_str(format!("{}-{}-py3-none-any.whl", name, version).as_str())
+        dist: &'a uv_distribution_types::Dist,
+        _uv_cache: &uv_cache::Cache,
+    ) -> Result<Option<uv_distribution_types::CachedDist>, uv_distribution::Error> {
+        match dist {
+            uv_distribution_types::Dist::Built(BuiltDist::Registry(wheel)) => {
+                let dist = CachedRegistryDist {
+                    filename: wheel.best_wheel().filename.clone(),
+                    path: PathBuf::new().into(),
+                    hashes: vec![].into(),
+                    cache_info: Default::default(),
+                };
+                Ok(Some(uv_distribution_types::CachedDist::Registry(dist)))
+            }
+            uv_distribution_types::Dist::Source(SourceDist::Registry(sdist)) => {
+                let wheel_filename = WheelFilename::from_str(
+                    format!("{}-{}-py3-none-any.whl", sdist.name, sdist.version).as_str(),
+                )
                 .unwrap();
-        let dist = uv_distribution_types::CachedRegistryDist {
-            filename: wheel_filename,
-            path: PathBuf::new().into(),
-            hashes: vec![].into(),
-            cache_info: Default::default(),
-        };
-        Some(dist)
+                let dist = CachedRegistryDist {
+                    filename: wheel_filename,
+                    path: PathBuf::new().into(),
+                    hashes: vec![].into(),
+                    cache_info: Default::default(),
+                };
+                Ok(Some(uv_distribution_types::CachedDist::Registry(dist)))
+            }
+            _ => Ok(None), // Not implemented for other distribution types in tests
+        }
     }
 }
 
@@ -481,16 +506,33 @@ impl RequiredPackages {
         self
     }
 
-    /// Convert the required packages where the data is borrowed
-    /// this is needed to pass it into the [`InstallPlanner`]
-    pub fn to_borrowed(&self) -> HashMap<uv_normalize::PackageName, &PypiPackageData> {
-        self.required.iter().map(|(k, v)| (k.clone(), v)).collect()
+    /// Convert to RequiredDists for the new install planner API
+    /// Uses the default lock file directory from the test setup
+    pub fn to_required_dists(&self) -> super::super::RequiredDists {
+        let packages: Vec<_> = self.required.values().cloned().collect();
+        super::super::RequiredDists::from_packages(&packages, default_lock_file_dir())
+            .expect("Failed to create RequiredDists in test")
     }
+
+    /// Convert to RequiredDists with a specific lock file directory
+    pub fn to_required_dists_with_lock_dir(
+        &self,
+        lock_dir: impl AsRef<Path>,
+    ) -> super::super::RequiredDists {
+        let packages: Vec<_> = self.required.values().cloned().collect();
+        super::super::RequiredDists::from_packages(&packages, lock_dir)
+            .expect("Failed to create RequiredDists in test")
+    }
+}
+
+/// Default lock file directory for tests
+pub fn default_lock_file_dir() -> PathBuf {
+    PathBuf::new()
 }
 
 /// Simple function to create an installation planner
 pub fn install_planner() -> InstallPlanner {
-    InstallPlanner::new(uv_cache::Cache::temp().unwrap(), PathBuf::new())
+    InstallPlanner::new(uv_cache::Cache::temp().unwrap(), default_lock_file_dir())
 }
 
 pub fn install_planner_with_lock_dir(lock_dir: PathBuf) -> InstallPlanner {
@@ -523,7 +565,8 @@ pub fn fake_pyproject_toml(
     (temp_dir, pyproject_toml)
 }
 
-pub fn fake_wheel(name: &str) -> (TempDir, std::fs::File, PathBuf) {
+/// Generate an empty wheel file in a temp dir
+pub fn empty_wheel(name: &str) -> (TempDir, std::fs::File, PathBuf) {
     let temp_dir = tempfile::tempdir().unwrap();
     let wheel_path = temp_dir.path().join(format!("{}.whl", name));
     let wheel = std::fs::File::create(wheel_path.clone()).unwrap();

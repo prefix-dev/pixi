@@ -1,12 +1,16 @@
-use super::{CommandDispatcherProcessor, PendingDeduplicatingTask, TaskResult};
-use crate::command_dispatcher::{InstantiatedToolEnvId, Task};
-use crate::instantiate_tool_env::{
-    InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec,
-};
-use crate::{CommandDispatcherError, Reporter, command_dispatcher::CommandDispatcherContext};
-use futures::FutureExt;
-use rattler_conda_types::prefix::Prefix;
 use std::collections::hash_map::Entry;
+
+use futures::FutureExt;
+
+use super::{CommandDispatcherProcessor, PendingDeduplicatingTask, TaskResult};
+use crate::{
+    CommandDispatcherError, Reporter,
+    command_dispatcher::{CommandDispatcherContext, InstantiatedToolEnvId, Task},
+    instantiate_tool_env::{
+        InstantiateToolEnvironmentError, InstantiateToolEnvironmentResult,
+        InstantiateToolEnvironmentSpec,
+    },
+};
 
 impl CommandDispatcherProcessor {
     /// Called when a [`super::ForegroundMessage::InstallPixiEnvironment`]
@@ -21,6 +25,11 @@ impl CommandDispatcherProcessor {
             .instantiated_tool_cache_keys
             .entry(cache_key)
             .or_insert_with(|| InstantiatedToolEnvId(new_id));
+
+        if let Some(parent) = task.parent {
+            // Store the parent context for the task.
+            self.parent_contexts.insert(id.into(), parent);
+        }
 
         match self.instantiated_tool_envs.entry(id) {
             Entry::Occupied(mut entry) => match entry.get_mut() {
@@ -84,8 +93,12 @@ impl CommandDispatcherProcessor {
     pub(crate) fn on_instantiate_tool_environment_result(
         &mut self,
         id: InstantiatedToolEnvId,
-        result: Result<Prefix, CommandDispatcherError<InstantiateToolEnvironmentError>>,
+        result: Result<
+            InstantiateToolEnvironmentResult,
+            CommandDispatcherError<InstantiateToolEnvironmentError>,
+        >,
     ) {
+        self.parent_contexts.remove(&id.into());
         if let Some((reporter, reporter_id)) = self
             .reporter
             .as_deref_mut()

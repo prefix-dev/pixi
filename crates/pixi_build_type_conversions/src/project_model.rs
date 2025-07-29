@@ -15,7 +15,7 @@ use pixi_build_types::{self as pbt, ProjectModelV1};
 
 use pixi_manifest::{PackageManifest, PackageTarget, TargetSelector, Targets};
 use pixi_spec::{GitReference, PixiSpec, SpecConversionError};
-use rattler_conda_types::{ChannelConfig, PackageName};
+use rattler_conda_types::{ChannelConfig, NamelessMatchSpec, PackageName};
 use xxhash_rust::xxh3::Xxh3;
 
 /// Conversion from a `PixiSpec` to a `pbt::PixiSpecV1`.
@@ -59,16 +59,32 @@ fn to_pixi_spec_v1(
             pbt::PackageSpecV1::Source(source)
         }
         itertools::Either::Right(binary) => {
-            let nameless = binary.try_into_nameless_match_spec(channel_config)?;
+            let NamelessMatchSpec {
+                version,
+                build,
+                build_number,
+                file_name,
+                channel,
+                subdir,
+                md5,
+                sha256,
+                url,
+                license,
+                // These are currently explicitly ignored in the conversion
+                namespace: _,
+                extras: _,
+            } = binary.try_into_nameless_match_spec(channel_config)?;
             pbt::PackageSpecV1::Binary(Box::new(pbt::BinaryPackageSpecV1 {
-                version: nameless.version,
-                build: nameless.build,
-                build_number: nameless.build_number,
-                file_name: nameless.file_name,
-                channel: nameless.channel.map(|c| c.base_url.url().clone().into()),
-                subdir: nameless.subdir,
-                md5: nameless.md5,
-                sha256: nameless.sha256,
+                version,
+                build,
+                build_number,
+                file_name,
+                channel: channel.map(|c| c.base_url.url().clone().into()),
+                subdir,
+                md5,
+                sha256,
+                url,
+                license,
             }))
         }
     };

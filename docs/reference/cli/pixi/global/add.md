@@ -13,7 +13,7 @@ pixi global add [OPTIONS] --environment <ENVIRONMENT> <PACKAGE>...
 
 ## Arguments
 - <a id="arg-<PACKAGE>" href="#arg-<PACKAGE>">`<PACKAGE>`</a>
-:  Specifies the package that should be added to the environment
+:  The dependency as names, conda MatchSpecs
 <br>May be provided more than once.
 <br>**required**: `true`
 

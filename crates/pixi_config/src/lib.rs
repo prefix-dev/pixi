@@ -11,15 +11,18 @@ use itertools::Itertools;
 use miette::{Context, IntoDiagnostic, miette};
 use pixi_consts::consts;
 use rattler_conda_types::{
-    ChannelConfig, NamedChannelOrUrl, Version, VersionBumpType, VersionSpec,
+    ChannelConfig, NamedChannelOrUrl, Platform, Version, VersionBumpType, VersionSpec,
+    compression_level::CompressionLevel,
     package::ArchiveType,
     version_spec::{EqualityOperator, LogicalOperator, RangeOperator},
 };
 use rattler_networking::s3_middleware;
-use rattler_package_streaming::write::CompressionLevel;
 use rattler_repodata_gateway::{Gateway, GatewayBuilder, SourceConfig};
 use reqwest::{NoProxy, Proxy};
-use serde::{Deserialize, Serialize, de::Error, de::IntoDeserializer};
+use serde::{
+    Deserialize, Serialize,
+    de::{Error, IntoDeserializer},
+};
 use url::Url;
 
 const EXPERIMENTAL: &str = "experimental";
@@ -591,7 +594,8 @@ impl PinningStrategy {
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum RunPostLinkScripts {
-    /// Run the post link scripts, we call this insecure as it may run arbitrary code.
+    /// Run the post link scripts, we call this insecure as it may run arbitrary
+    /// code.
     Insecure,
     /// Do not run the post link scripts
     #[default]
@@ -693,6 +697,16 @@ pub struct Config {
     #[serde(skip_serializing_if = "BuildConfig::is_default")]
     pub build: BuildConfig,
 
+    /// The platform to use when installing tools.
+    ///
+    /// When running on certain platforms, you might want to install build
+    /// backends and other tools for a different platform than the current one.
+    /// Using this field, you can specify the platform that is used to install
+    /// these types of tools.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_platform: Option<Platform>,
+
     //////////////////////
     // Deprecated fields //
     //////////////////////
@@ -726,6 +740,7 @@ impl Default for Config {
             run_post_link_scripts: None,
             proxy_config: ProxyConfig::default(),
             build: BuildConfig::default(),
+            tool_platform: None,
 
             // Deprecated fields
             change_ps1: None,
@@ -1008,6 +1023,13 @@ impl Config {
         // Enable sharded repodata by default.
         config.repodata_config.default.disable_sharded = Some(false);
 
+        // HACK: Use win-64 as the default tool platform if currently running on
+        // win-arm64. This is a workaround for the fact that we don't have a
+        // good win-arm64 toolchain yet.
+        if Platform::current() == Platform::WinArm64 {
+            config.tool_platform = Some(Platform::Win64);
+        }
+
         config
     }
 
@@ -1239,36 +1261,38 @@ impl Config {
     // Get all possible keys of the configuration
     pub fn get_keys(&self) -> &[&str] {
         &[
-            "default-channels",
             "authentication-override-file",
-            "tls-no-verify",
-            "mirrors",
+            "default-channels",
             "detached-environments",
-            "pinning-strategy",
+            "experimental.use-environment-activation-cache",
             "max-concurrent-solves",
-            "repodata-config",
-            "repodata-config.disable-jlap",
-            "repodata-config.disable-bzip2",
-            "repodata-config.disable-zstd",
-            "repodata-config.disable-sharded",
+            "mirrors",
+            "pinning-strategy",
+            "proxy-config",
+            "proxy-config.http",
+            "proxy-config.https",
+            "proxy-config.non-proxy-hosts",
             "pypi-config",
-            "pypi-config.index-url",
+            "pypi-config.allow-insecure-host",
             "pypi-config.extra-index-urls",
+            "pypi-config.index-url",
             "pypi-config.keyring-provider",
-            "shell",
-            "shell.force-activate",
-            "shell.source-completion-scripts",
-            "shell.change-ps1",
+            "repodata-config",
+            "repodata-config.disable-bzip2",
+            "repodata-config.disable-jlap",
+            "repodata-config.disable-sharded",
+            "repodata-config.disable-zstd",
             "s3-options",
             "s3-options.<bucket>",
             "s3-options.<bucket>.endpoint-url",
-            "s3-options.<bucket>.region",
             "s3-options.<bucket>.force-path-style",
-            "experimental.use-environment-activation-cache",
-            "proxy-config",
-            "proxy-config.https",
-            "proxy-config.http",
-            "proxy-config.non-proxy-hosts",
+            "s3-options.<bucket>.region",
+            "shell",
+            "shell.change-ps1",
+            "shell.force-activate",
+            "shell.source-completion-scripts",
+            "tls-no-verify",
+            "tool-platform",
         ]
     }
 
@@ -1312,6 +1336,7 @@ impl Config {
 
             proxy_config: self.proxy_config.merge(other.proxy_config),
             build: self.build.merge(other.build),
+            tool_platform: self.tool_platform.or(other.tool_platform),
 
             // Deprecated fields that we can ignore as we handle them inside `shell.` field
             change_ps1: None,
@@ -1386,6 +1411,11 @@ impl Config {
     /// Retrieve the value for the network_requests field.
     pub fn max_concurrent_downloads(&self) -> usize {
         self.concurrency.downloads
+    }
+
+    /// The platform to use to install tools.
+    pub fn tool_platform(&self) -> Platform {
+        self.tool_platform.unwrap_or(Platform::current())
     }
 
     pub fn get_proxies(&self) -> reqwest::Result<Vec<Proxy>> {
@@ -1483,6 +1513,13 @@ impl Config {
                     "The `force-activate` field is deprecated. Please use the `shell.force-activate` field instead."
                 ));
             }
+            "tool-platform" => {
+                self.tool_platform = value
+                    .as_deref()
+                    .map(Platform::from_str)
+                    .transpose()
+                    .into_diagnostic()?;
+            }
             key if key.starts_with("repodata-config") => {
                 if key == "repodata-config" {
                     self.repodata_config = value
@@ -1551,6 +1588,13 @@ impl Config {
                                 _ => Err(miette::miette!("invalid keyring provider")),
                             })
                             .transpose()?;
+                    }
+                    "allow-insecure-host" => {
+                        self.pypi_config.allow_insecure_host = value
+                            .map(|v| serde_json::de::from_str(&v))
+                            .transpose()
+                            .into_diagnostic()?
+                            .unwrap_or_default();
                     }
                     _ => return Err(err),
                 }
@@ -1795,7 +1839,8 @@ impl Config {
             .collect()
     }
 
-    /// Retrieve the value for the run_post_link_scripts field or default to false.
+    /// Retrieve the value for the run_post_link_scripts field or default to
+    /// false.
     pub fn run_post_link_scripts(&self) -> RunPostLinkScripts {
         self.run_post_link_scripts.clone().unwrap_or_default()
     }
@@ -1816,7 +1861,8 @@ pub fn config_path_system() -> PathBuf {
 /// Returns the path(s) to the global pixi config file.
 pub fn config_path_global() -> Vec<PathBuf> {
     vec![
-        // On macos, add the XDG_CONFIG_HOME directory as well, although it's not a standard and not set by default.
+        // On macos, add the XDG_CONFIG_HOME directory as well, although it's not a standard and
+        // not set by default.
         #[cfg(target_os = "macos")]
         std::env::var("XDG_CONFIG_HOME").ok().map(|d| {
             PathBuf::from(d)
@@ -2059,6 +2105,7 @@ UNUSED = "unused"
             run_post_link_scripts: Some(RunPostLinkScripts::Insecure),
             proxy_config: ProxyConfig::default(),
             build: BuildConfig::default(),
+            tool_platform: None,
             // Deprecated keys
             change_ps1: None,
             force_activate: None,
@@ -2507,8 +2554,7 @@ UNUSED = "unused"
 
     use std::str::FromStr;
 
-    use rattler_conda_types::package::ArchiveType;
-    use rattler_package_streaming::write::CompressionLevel;
+    use rattler_conda_types::{compression_level::CompressionLevel, package::ArchiveType};
 
     use super::PackageFormatAndCompression;
 

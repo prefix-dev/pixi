@@ -16,6 +16,7 @@ use uv_distribution_types::{
     Dist, File, FileLocation, HashComparison, IndexUrl, PrioritizedDist, RegistrySourceDist,
     SourceDist, SourceDistCompatibility, UrlString,
 };
+use uv_redacted::DisplaySafeUrl;
 use uv_resolver::{
     DefaultResolverProvider, FlatDistributions, MetadataResponse, ResolverProvider, VersionMap,
     VersionsResponse, WheelMetadataResult,
@@ -64,9 +65,9 @@ impl<Context: BuildContext> ResolverProvider for CondaResolverProvider<'_, Conte
                 size: None,
                 upload_time_utc_ms: None,
                 url: match repodata_record {
-                    PixiRecord::Binary(repodata_record) => {
-                        FileLocation::AbsoluteUrl(UrlString::from(repodata_record.url.clone()))
-                    }
+                    PixiRecord::Binary(repodata_record) => FileLocation::AbsoluteUrl(
+                        UrlString::from(DisplaySafeUrl::from(repodata_record.url.clone())),
+                    ),
                     PixiRecord::Source(_source) => {
                         // TODO(baszalmstra): Does this matter??
                         FileLocation::RelativeUrl("foo".into(), "bar".into())
@@ -81,7 +82,7 @@ impl<Context: BuildContext> ResolverProvider for CondaResolverProvider<'_, Conte
                 version: version.parse().expect("could not convert to pypi version"),
                 file: Box::new(file),
                 index: IndexUrl::Pypi(Arc::new(uv_pep508::VerbatimUrl::from_url(
-                    consts::DEFAULT_PYPI_INDEX_URL.clone(),
+                    DisplaySafeUrl::from(consts::DEFAULT_PYPI_INDEX_URL.clone()),
                 ))),
                 wheels: vec![],
                 ext: SourceDistExtension::TarGz,

@@ -1,3 +1,5 @@
+//! This API was introduced in Pixi Build API version 0.
+
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};

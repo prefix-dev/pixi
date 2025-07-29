@@ -4,21 +4,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{
-    Activation, Environment, EnvironmentName, Environments, Feature, FeatureName,
-    KnownPreviewFeature, SolveGroups, SystemRequirements, TargetSelector, Targets, Task, TaskName,
-    TomlError, Warning, WithWarnings, WorkspaceManifest,
-    environment::EnvironmentIdx,
-    error::{FeatureNotEnabled, GenericError},
-    manifests::PackageManifest,
-    pypi::pypi_options::PypiOptions,
-    toml::{
-        ExternalPackageProperties, PlatformSpan, TomlFeature, TomlPackage, TomlTarget,
-        TomlWorkspace, create_unsupported_selector_warning, environment::TomlEnvironmentList,
-        task::TomlTask,
-    },
-    utils::{PixiSpanned, package_map::UniquePackageMap},
-};
 use indexmap::IndexMap;
 use miette::LabeledSpan;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
@@ -30,6 +15,22 @@ use toml_span::{
     value::ValueInner,
 };
 use url::Url;
+
+use crate::{
+    Activation, Environment, EnvironmentName, Environments, Feature, FeatureName,
+    KnownPreviewFeature, SolveGroups, SystemRequirements, TargetSelector, Targets, Task, TaskName,
+    TomlError, Warning, WithWarnings, WorkspaceManifest,
+    environment::EnvironmentIdx,
+    error::{FeatureNotEnabled, GenericError},
+    manifests::PackageManifest,
+    pypi::pypi_options::PypiOptions,
+    toml::{
+        PackageDefaults, PlatformSpan, TomlFeature, TomlPackage, TomlTarget, TomlWorkspace,
+        WorkspacePackageProperties, create_unsupported_selector_warning,
+        environment::TomlEnvironmentList, task::TomlTask,
+    },
+    utils::{PixiSpanned, package_map::UniquePackageMap},
+};
 
 /// Raw representation of a pixi manifest. This is the deserialized form of the
 /// manifest without any validation logic applied.
@@ -84,7 +85,8 @@ impl TomlManifest {
     /// paths are not checked.
     pub fn into_package_manifest(
         self,
-        external: ExternalPackageProperties,
+        external: WorkspacePackageProperties,
+        package_defaults: PackageDefaults,
         workspace: &WorkspaceManifest,
         root_directory: Option<&Path>,
     ) -> Result<(PackageManifest, Vec<Warning>), TomlError> {
@@ -115,7 +117,12 @@ impl TomlManifest {
         let WithWarnings {
             value: package,
             warnings,
-        } = package.into_manifest(external, workspace.preview(), root_directory)?;
+        } = package.into_manifest(
+            external,
+            package_defaults,
+            workspace.preview(),
+            root_directory,
+        )?;
         Ok((package, warnings))
     }
 
@@ -129,6 +136,7 @@ impl TomlManifest {
     pub fn into_workspace_manifest(
         self,
         mut external: ExternalWorkspaceProperties,
+        package_defaults: PackageDefaults,
         root_directory: Option<&Path>,
     ) -> Result<(WorkspaceManifest, Option<PackageManifest>, Vec<Warning>), TomlError> {
         let workspace = self
@@ -395,7 +403,7 @@ impl TomlManifest {
             .package
             .as_ref()
             .and_then(|p| p.value.name.as_ref())
-            .cloned();
+            .and_then(|field| field.clone().value());
 
         let WithWarnings {
             warnings: mut workspace_warnings,
@@ -437,7 +445,8 @@ impl TomlManifest {
                 value: package_manifest,
                 warnings: mut package_warnings,
             } = package.into_manifest(
-                workspace_manifest.derived_external_package_properties(),
+                workspace_manifest.workspace_package_properties(),
+                package_defaults,
                 &workspace_manifest.workspace.preview,
                 root_directory,
             )?;
@@ -568,10 +577,11 @@ pub struct ExternalWorkspaceProperties {
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::{toml::FromTomlStr, utils::test_utils::expect_parse_warnings};
     use insta::assert_snapshot;
     use pixi_test_utils::format_parse_error;
+
+    use super::*;
+    use crate::{toml::FromTomlStr, utils::test_utils::expect_parse_warnings};
 
     /// A helper function that generates a snapshot of the error message when
     /// parsing a manifest TOML. The error is returned.
@@ -579,7 +589,11 @@ mod test {
     pub(crate) fn expect_parse_failure(pixi_toml: &str) -> String {
         let parse_error = <TomlManifest as FromTomlStr>::from_toml_str(pixi_toml)
             .and_then(|manifest| {
-                manifest.into_workspace_manifest(ExternalWorkspaceProperties::default(), None)
+                manifest.into_workspace_manifest(
+                    ExternalWorkspaceProperties::default(),
+                    PackageDefaults::default(),
+                    None,
+                )
             })
             .expect_err("parsing should fail");
 
@@ -614,6 +628,7 @@ mod test {
         preview = ["pixi-build"]
 
         [package]
+        name = { workspace = true }
 
         [package.build]
         backend = { name = "foobar", version = "*" }

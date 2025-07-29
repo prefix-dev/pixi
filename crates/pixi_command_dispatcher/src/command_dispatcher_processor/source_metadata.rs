@@ -2,44 +2,62 @@ use std::{collections::hash_map::Entry, sync::Arc};
 
 use futures::FutureExt;
 
-use super::{CommandDispatcherProcessor, PendingSourceMetadata, TaskResult};
+use super::{CommandDispatcherProcessor, PendingDeduplicatingTask, TaskResult};
 use crate::{
-    CommandDispatcherError, CommandDispatcherErrorResultExt, Reporter,
+    CommandDispatcherError, Reporter, SourceMetadata, SourceMetadataError, SourceMetadataSpec,
     command_dispatcher::{CommandDispatcherContext, SourceMetadataId, SourceMetadataTask},
-    source_metadata::{SourceMetadata, SourceMetadataError},
+    source_metadata::Cycle,
 };
 
 impl CommandDispatcherProcessor {
-    /// Called when a [`crate::command_dispatcher::SourceMetadataTask`] task was
-    /// received.
+    /// Constructs a new [`SourceBuildId`] for the given `task`.
+    fn gen_source_metadata_id(&mut self, task: &SourceMetadataTask) -> SourceMetadataId {
+        let id = SourceMetadataId(self.source_metadata_ids.len());
+        self.source_metadata_ids.insert(task.spec.clone(), id);
+        if let Some(parent) = task.parent {
+            self.parent_contexts.insert(id.into(), parent);
+        }
+        id
+    }
+
+    /// Called when a [`crate::command_dispatcher::SourceMetadataTask`]
+    /// task was received.
     pub(crate) fn on_source_metadata(&mut self, task: SourceMetadataTask) {
         // Lookup the id of the source metadata to avoid deduplication.
         let source_metadata_id = {
             match self.source_metadata_ids.get(&task.spec) {
-                Some(id) => *id,
-                None => {
-                    // If the source metadata is not in the map, we need to
-                    // create a new id for it.
-                    let id = SourceMetadataId(self.source_metadata_ids.len());
-                    self.source_metadata_ids.insert(task.spec.clone(), id);
-                    id
+                Some(id) => {
+                    // We already have a pending task for this source metadata. Let's make sure that
+                    // we are not trying to resolve the same source metadata in a cycle.
+                    if self.contains_cycle(*id, task.parent) {
+                        let _ = task
+                            .tx
+                            .send(Err(SourceMetadataError::Cycle(Cycle::default())));
+                        return;
+                    }
+
+                    *id
                 }
+                None => self.gen_source_metadata_id(&task),
             }
         };
 
         match self.source_metadata.entry(source_metadata_id) {
             Entry::Occupied(mut entry) => match entry.get_mut() {
-                PendingSourceMetadata::Pending(pending, _) => pending.push(task.tx),
-                PendingSourceMetadata::Result(fetch, _) => {
-                    let _ = task.tx.send(Ok(fetch.clone()));
+                PendingDeduplicatingTask::Pending(pending, _) => pending.push(task.tx),
+                PendingDeduplicatingTask::Result(result, _) => {
+                    let _ = task.tx.send(Ok(result.clone()));
                 }
-                PendingSourceMetadata::Errored => {
+                PendingDeduplicatingTask::Errored => {
                     // Drop the sender, this will cause a cancellation on the other side.
                     drop(task.tx);
                 }
             },
             Entry::Vacant(entry) => {
-                entry.insert(PendingSourceMetadata::Pending(vec![task.tx], task.parent));
+                entry.insert(PendingDeduplicatingTask::Pending(
+                    vec![task.tx],
+                    task.parent,
+                ));
 
                 // Notify the reporter that a new solve has been queued and started.
                 let parent_context = task.parent.and_then(|ctx| self.reporter_context(ctx));
@@ -63,19 +81,27 @@ impl CommandDispatcherProcessor {
                     reporter.on_started(reporter_id)
                 }
 
-                let dispatcher = self.create_task_command_dispatcher(
-                    CommandDispatcherContext::SourceMetadata(source_metadata_id),
-                );
-                self.pending_futures.push(
-                    task.spec
-                        .request(dispatcher)
-                        .map(move |result| {
-                            TaskResult::SourceMetadata(source_metadata_id, result.map(Arc::new))
-                        })
-                        .boxed_local(),
-                );
+                self.queue_source_metadata_task(source_metadata_id, task.spec);
             }
         }
+    }
+
+    /// Queues a source metadata task to be executed.
+    fn queue_source_metadata_task(
+        &mut self,
+        source_metadata_id: SourceMetadataId,
+        spec: SourceMetadataSpec,
+    ) {
+        let dispatcher = self.create_task_command_dispatcher(
+            CommandDispatcherContext::SourceMetadata(source_metadata_id),
+        );
+        self.pending_futures.push(
+            spec.request(dispatcher)
+                .map(move |result| {
+                    TaskResult::SourceMetadata(source_metadata_id, result.map(Arc::new))
+                })
+                .boxed_local(),
+        );
     }
 
     /// Called when a [`super::TaskResult::SourceMetadata`] task was
@@ -97,41 +123,9 @@ impl CommandDispatcherProcessor {
             reporter.on_finished(reporter_id);
         }
 
-        let Some(PendingSourceMetadata::Pending(pending, context)) =
-            self.source_metadata.get_mut(&id)
-        else {
-            unreachable!("cannot get a result for source metadata that is not pending");
-        };
-        let context = *context;
-
-        let Some(result) = result.into_ok_or_failed() else {
-            // If the job was canceled, we can just drop the sending end
-            // which will also cause a cancel on the receiving end.
-            return;
-        };
-
-        match result {
-            Ok(metadata) => {
-                for tx in pending.drain(..) {
-                    let _ = tx.send(Ok(metadata.clone()));
-                }
-
-                self.source_metadata
-                    .insert(id, PendingSourceMetadata::Result(metadata, context));
-            }
-            Err(mut err) => {
-                // Only send the error to the first channel, drop the rest, which cancels them.
-                for tx in pending.drain(..) {
-                    match tx.send(Err(err)) {
-                        Ok(_) => return,
-                        Err(Err(failed_to_send)) => err = failed_to_send,
-                        Err(Ok(_)) => unreachable!(),
-                    }
-                }
-
-                self.source_metadata
-                    .insert(id, PendingSourceMetadata::Errored);
-            }
-        }
+        self.source_metadata
+            .get_mut(&id)
+            .expect("cannot find pending task")
+            .on_pending_result(result)
     }
 }

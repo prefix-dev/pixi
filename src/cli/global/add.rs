@@ -1,10 +1,11 @@
+use crate::cli::global::global_specs::GlobalSpecs;
 use crate::cli::global::revert_environment_after_error;
-use crate::cli::has_specs::HasSpecs;
+
+use crate::global::project::NamedGlobalSpec;
 use crate::global::{EnvironmentName, Mapping, Project, StateChanges};
 use clap::Parser;
 use itertools::Itertools;
 use pixi_config::{Config, ConfigCli};
-use rattler_conda_types::MatchSpec;
 
 /// Adds dependencies to an environment
 ///
@@ -16,8 +17,8 @@ use rattler_conda_types::MatchSpec;
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
     /// Specifies the package that should be added to the environment.
-    #[arg(num_args = 1.., required = true, value_name = "PACKAGE")]
-    packages: Vec<String>,
+    #[clap(flatten)]
+    packages: GlobalSpecs,
 
     /// Specifies the environment that the dependencies need to be added to.
     #[clap(short, long, required = true)]
@@ -31,12 +32,6 @@ pub struct Args {
 
     #[clap(flatten)]
     config: ConfigCli,
-}
-
-impl HasSpecs for Args {
-    fn packages(&self) -> Vec<&str> {
-        self.packages.iter().map(AsRef::as_ref).collect()
-    }
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -54,19 +49,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     async fn apply_changes(
         env_name: &EnvironmentName,
-        specs: Vec<MatchSpec>,
+        specs: &[NamedGlobalSpec],
         expose: &[Mapping],
         project: &mut Project,
     ) -> miette::Result<StateChanges> {
         let mut state_changes = StateChanges::new_with_env(env_name.clone());
 
         // Add specs to the manifest
-        for spec in &specs {
-            project.manifest.add_dependency(
-                env_name,
-                spec,
-                project.clone().config().global_channel_config(),
-            )?;
+        for spec in specs {
+            project.manifest.add_dependency(env_name, spec)?;
         }
 
         // Add expose mappings to the manifest
@@ -78,7 +69,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         state_changes |= project.sync_environment(env_name, None).await?;
 
         // Figure out added packages and their corresponding versions
-        state_changes |= project.added_packages(specs, env_name).await?;
+        state_changes |= project
+            .added_packages(specs, env_name, project.global_channel_config())
+            .await?;
 
         state_changes |= project.sync_completions(env_name).await?;
 
@@ -89,15 +82,25 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let mut project_modified = project_original.clone();
 
-    let specs = args
-        .specs()?
+    let (specs, source): (Vec<_>, Vec<_>) = args
+        .packages
+        .to_global_specs(project_original.global_channel_config())?
         .into_iter()
-        .map(|(_, specs)| specs)
-        .collect_vec();
+        // TODO: will allow nameless specs later
+        .filter_map(|s| s.into_named())
+        // TODO: Filter out non-binary specs, we are adding support for them later
+        .partition(|s| s.spec().is_binary());
+
+    if !source.is_empty() {
+        tracing::warn!(
+            "Ignoring found source packages {}. Implementation will be added soon.",
+            source.iter().map(|s| s.name().as_source()).join(", ")
+        );
+    }
 
     match apply_changes(
         &args.environment,
-        specs,
+        &specs,
         args.expose.as_slice(),
         &mut project_modified,
     )

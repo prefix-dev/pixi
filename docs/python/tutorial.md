@@ -243,8 +243,8 @@ After we have added the `dependency-groups` to the `pyproject.toml`, Pixi sees t
 
 
 ```shell
-pixi project environment add default --solve-group default --force
-pixi project environment add test --feature test --solve-group default
+pixi workspace environment add default --solve-group default --force
+pixi workspace environment add test --feature test --solve-group default
 ```
 
 Which results in:

@@ -36,17 +36,14 @@ use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_distribution_filename::{DistExtension, ExtensionError, SourceDistExtension};
 use uv_distribution_types::RequirementSource;
+use uv_distribution_types::RequiresPython;
 use uv_git_types::GitReference;
 use uv_pypi_types::ParsedUrlError;
-use uv_resolver::RequiresPython;
 
 use super::{
     PixiRecordsByName, PypiRecord, PypiRecordsByName, package_identifier::ConversionError,
 };
-use crate::{
-    lock_file::records_by_name::HasNameVersion,
-    workspace::{Environment, grouped_environment::GroupedEnvironment},
-};
+use crate::workspace::{Environment, grouped_environment::GroupedEnvironment};
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum EnvironmentUnsat {
@@ -857,7 +854,7 @@ pub(crate) fn pypi_satifisfies_requirement(
                     .and_then(|str| Url::parse(str).ok())
                     .unwrap_or(locked_url.clone());
 
-                if *spec_url.raw() == locked_url {
+                if *spec_url.raw() == locked_url.clone().into() {
                     return Ok(());
                 } else {
                     return Err(PlatformUnsat::LockedPyPIDirectUrlMismatch {
@@ -1930,12 +1927,21 @@ mod tests {
     #[rstest]
     #[tokio::test]
     #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
-    async fn test_example_satisfiability(#[files("examples/*/p*.toml")] manifest_path: PathBuf) {
+    async fn test_example_satisfiability(#[files("examples/**/p*.toml")] manifest_path: PathBuf) {
         // If a pyproject.toml is present check for `tool.pixi` in the file to avoid
         // testing of non-pixi files
         if manifest_path.file_name().unwrap() == "pyproject.toml" {
             let manifest_str = fs_err::read_to_string(&manifest_path).unwrap();
-            if !manifest_str.contains("tool.pixi") {
+            if !manifest_str.contains("tool.pixi.workspace") {
+                return;
+            }
+        }
+
+        // If a pixi.toml is present check for `workspace` in the file to avoid
+        // testing of non-pixi workspace files
+        if manifest_path.file_name().unwrap() == "pixi.toml" {
+            let manifest_str = fs_err::read_to_string(&manifest_path).unwrap();
+            if !manifest_str.contains("workspace") {
                 return;
             }
         }
