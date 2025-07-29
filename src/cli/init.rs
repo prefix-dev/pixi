@@ -412,7 +412,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             );
             let mut workspace =
                 WorkspaceMut::from_template(pixi_manifest_path, rendered_workspace_template)?;
-            let channel_config = workspace.workspace().channel_config();
             workspace.add_specs(
                 conda_deps,
                 pypi_deps,
@@ -573,7 +572,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 channels,
                 &platforms,
                 index_url.as_ref(),
-                &extra_index_urls,
+                extra_index_urls,
                 config.s3_options,
                 None,
             );
