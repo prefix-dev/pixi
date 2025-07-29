@@ -136,8 +136,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .is_enabled(KnownPreviewFeature::PixiBuild)
                 {
                     return Err(miette::miette!(
-                        help = "Add `workspace.preview = [\"pixi-build\"]` to enable pixi build support",
-                        "source dependencies are not allowed without enabling pixi-build"
+                        help = "Add `preview = [\"pixi-build\"]` to the `workspace` or `project` table of your manifest",
+                        "conda source dependencies are not allowed without enabling the 'pixi-build' preview feature"
                     ));
                 }
 
