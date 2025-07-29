@@ -100,11 +100,45 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .channel_urls(&channel_config)
         .into_diagnostic()?;
 
-    // Determine the source of the package.
-    let source: PinnedSourceSpec = PinnedPathSpec {
-        path: search_start.to_string_lossy().into_owned().into(),
-    }
-    .into();
+    // Determine the source of the package - use src from build config if available,
+    // otherwise use current directory
+    let source: PinnedSourceSpec = if let Some(package) = &workspace.package {
+        if let Some(src_spec) = &package.value.build.src {
+            match src_spec {
+                pixi_spec::SourceSpec::Path(path_spec) => {
+                    let resolved_path = path_spec.resolve(&search_start).into_diagnostic()?;
+                    PinnedPathSpec {
+                        path: resolved_path.to_string_lossy().into_owned().into(),
+                    }
+                    .into()
+                }
+                pixi_spec::SourceSpec::Git(_git_spec) => {
+                    // For now, we can't properly pin git sources without resolving them
+                    // This is a temporary implementation - ideally we would resolve the git reference
+                    // to get the actual commit SHA
+                    miette::bail!("Git source roots are not yet supported. Use path-based source roots for now.")
+                }
+                pixi_spec::SourceSpec::Url(url_spec) => {
+                    // Convert UrlSourceSpec to PinnedSourceSpec 
+                    PinnedSourceSpec::Url(pixi_record::PinnedUrlSpec {
+                        url: url_spec.url.clone(),
+                        sha256: url_spec.sha256.unwrap_or_default(),
+                        md5: url_spec.md5,
+                    })
+                }
+            }
+        } else {
+            PinnedPathSpec {
+                path: search_start.to_string_lossy().into_owned().into(),
+            }
+            .into()
+        }
+    } else {
+        PinnedPathSpec {
+            path: search_start.to_string_lossy().into_owned().into(),
+        }
+        .into()
+    };
 
     // Create the build backend metadata specification.
     let backend_metadata_spec = BuildBackendMetadataSpec {
