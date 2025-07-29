@@ -132,10 +132,6 @@ pub struct ConfigCli {
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
     concurrent_solves: Option<usize>,
 
-    /// Set detached environments path
-    #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    detached_environments: Option<PathBuf>,
-
     /// Set pinning strategy
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS, value_enum)]
     pinning_strategy: Option<PinningStrategy>,
@@ -147,10 +143,6 @@ pub struct ConfigCli {
     /// Run post-link scripts (insecure)
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
     run_post_link_scripts: bool,
-
-    /// The platform to use to install tools
-    #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    tool_platform: Option<Platform>,
 
     /// Do not verify the TLS certificate of the server.
     #[arg(long, action = ArgAction::SetTrue, help_heading = consts::CLAP_CONFIG_OPTIONS)]
@@ -778,7 +770,7 @@ impl From<ConfigCli> for Config {
                 .pypi_keyring_provider
                 .map(|val| PyPIConfig::default().with_keyring(val))
                 .unwrap_or_default(),
-            detached_environments: cli.detached_environments.map(DetachedEnvironments::Path),
+            detached_environments: None,
             concurrency: ConcurrencyConfig {
                 solves: cli
                     .concurrent_solves
@@ -787,7 +779,7 @@ impl From<ConfigCli> for Config {
                     .concurrent_downloads
                     .unwrap_or(ConcurrencyConfig::default().downloads),
             },
-            tool_platform: cli.tool_platform,
+            tool_platform: None,
             run_post_link_scripts: if cli.run_post_link_scripts {
                 Some(RunPostLinkScripts::Insecure)
             } else {
@@ -1979,10 +1971,8 @@ UNUSED = "unused"
             pypi_keyring_provider: Some(KeyringProvider::Subprocess),
             concurrent_solves: Some(8),
             concurrent_downloads: Some(100),
-            tool_platform: Some(Platform::Linux64),
             run_post_link_scripts: true,
             use_environment_activation_cache: true,
-            detached_environments: Some(PathBuf::from("/custom/envs")),
             pinning_strategy: Some(PinningStrategy::Semver),
         };
         let config = Config::from(cli);
@@ -1993,7 +1983,6 @@ UNUSED = "unused"
         );
         assert_eq!(config.concurrency.solves, 8);
         assert_eq!(config.concurrency.downloads, 100);
-        assert_eq!(config.tool_platform, Some(Platform::Linux64));
         assert_eq!(
             config.run_post_link_scripts,
             Some(RunPostLinkScripts::Insecure)
@@ -2002,10 +1991,6 @@ UNUSED = "unused"
             config.experimental.use_environment_activation_cache,
             Some(true)
         );
-        assert!(matches!(
-            config.detached_environments,
-            Some(DetachedEnvironments::Path(_))
-        ));
         assert_eq!(config.pinning_strategy, Some(PinningStrategy::Semver));
 
         let cli = ConfigCli {
@@ -2014,10 +1999,8 @@ UNUSED = "unused"
             pypi_keyring_provider: None,
             concurrent_solves: None,
             concurrent_downloads: None,
-            tool_platform: None,
             run_post_link_scripts: false,
             use_environment_activation_cache: false,
-            detached_environments: None,
             pinning_strategy: None,
         };
 
@@ -2027,10 +2010,8 @@ UNUSED = "unused"
             config.authentication_override_file,
             Some(PathBuf::from("path.json"))
         );
-        assert_eq!(config.tool_platform, None);
         assert_eq!(config.run_post_link_scripts, None);
         assert_eq!(config.experimental.use_environment_activation_cache, None);
-        assert_eq!(config.detached_environments, None);
         assert_eq!(config.pinning_strategy, None);
     }
 
