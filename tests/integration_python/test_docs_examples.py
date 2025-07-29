@@ -1,16 +1,17 @@
-import shutil
-import sys
-from pathlib import Path
-
 import pytest
+from pathlib import Path
+import shutil
 from syrupy.assertion import SnapshotAssertion
 
-from .common import current_platform, get_manifest, repo_root, verify_cli_command
 
-pytestmark = pytest.mark.skipif(
-    sys.platform.startswith("win"),
-    reason="Enable again as soon as pixi build supports windows builds with multiple platforms",
-)
+from .common import verify_cli_command, repo_root, current_platform, get_manifest
+import sys
+
+
+# pytestmark = pytest.mark.skipif(
+#     sys.platform.startswith("win"),
+#     reason="Enable again as soon as pixi build supports windows builds with multiple platforms",
+# )
 
 
 @pytest.mark.extra_slow
@@ -99,7 +100,7 @@ def test_pytorch_documentation_examples(
     ):
         # Run the installation
         verify_cli_command(
-            [pixi, "install", "--manifest-path", manifest],
+            [pixi, "lock", "--manifest-path", manifest],
             env={"CONDA_OVERRIDE_CUDA": "12.0"},
         )
 
