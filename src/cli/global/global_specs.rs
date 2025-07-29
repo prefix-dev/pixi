@@ -15,21 +15,20 @@ pub struct GlobalSpecs {
     #[arg(num_args = 1.., required = true, value_name = "PACKAGE")]
     pub specs: Vec<String>,
 
-    /// The git url to use when adding a git dependency
-    #[clap(hide = true, long, short, help_heading = consts::CLAP_GIT_OPTIONS)]
+    /// The git url, e.g. `https://github.com/user/repo.git`
+    #[clap(long, help_heading = consts::CLAP_GIT_OPTIONS)]
     pub git: Option<Url>,
 
-    /// The git revisions to use when adding a git dependency
-    /// TODO: replace with #[clap(flatten)], skip instead of hide as that doesn't work with flatten
+    /// The git revisions
     #[clap(flatten)]
     pub rev: Option<crate::cli::cli_config::GitRev>,
 
-    /// The subdirectory of the git repository to use
-    #[clap(hide = true, long, short, requires = "git", help_heading = consts::CLAP_GIT_OPTIONS)]
+    /// The subdirectory within the git repository
+    #[clap(long, requires = "git", help_heading = consts::CLAP_GIT_OPTIONS)]
     pub subdir: Option<String>,
 
-    /// The path to the local directory to use when adding a local dependency
-    #[clap(hide = true, long, conflicts_with = "git")]
+    /// The path to the local directory
+    #[clap(long, conflicts_with = "git")]
     pub path: Option<Utf8TypedPathBuf>,
 }
 
