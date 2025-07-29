@@ -1,9 +1,9 @@
 [workspace]
-channels = ["conda-forge"]
-name = "task-visibility"
+channels = []
+platforms = []
 
 # --8<-- [start:project_tasks]
-# Hidden ask with required arguments that is only intended to be used by other tasks
+# Hidden task that is only intended to be used by other tasks
 [tasks._git-clone]
 args = ["url"]
 cmd = "echo git clone {{ url }}"
@@ -11,19 +11,13 @@ cmd = "echo git clone {{ url }}"
 # Hidden task that clones a dependency
 [tasks._clone-subproject]
 depends-on = [
-    { cmd = "_git-clone", args = [
-        "https://git.hub/org/subproject.git",
-    ] },
+  { task = "_git-clone", args = [
+    "https://git.hub/org/subproject.git",
+  ] },
 ]
 
-# Hidden task that builds a dependency
-[tasks._build-subproject]
-cmd = "echo Building subproject"
-depends-on = ["_clone-subproject"]
-
-# Task to build the project which depends on cloning and building a dependency
+# Task to build the project which depends on cloning a dependency
 [tasks.build]
 cmd = "echo Building project"
-depends-on = ["_build-subproject"]
-
+depends-on = ["_clone-subproject"]
 # --8<-- [end:project_tasks]

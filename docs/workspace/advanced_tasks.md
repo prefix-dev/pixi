@@ -270,14 +270,16 @@ For more information about available filters and template syntax, see the [MiniJ
 
 ## Task Names
 
-Task names must not contain spaces, but otherwise have no special requirements.
+A task name follows these rules:
 
-If you wish to denote that a task is for internal use only, it can be hidden from the output of commands such as `pixi run` and `pixi task list` by prefixing the task name with an underscore (`_`). These tasks can still be run manually however.
+- **No spaces** are allowed in the name.
+- Must **be unique** within the table.
+- [`_`]("underscores") at the start of the name will **hide** the task from the `pixi task list` command.
 
 Hiding tasks can be useful if your project defines many tasks but your users only need to use a subset of them.
 
 ```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_tomls/task_visibility:tasks"
+--8<-- "docs/source_files/pixi_tomls/task_visibility.toml:project_tasks"
 ```
 
 ## Caching
