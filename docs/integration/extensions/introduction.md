@@ -20,14 +20,14 @@ Pixi discovers extensions by searching for `pixi-*` executables in the following
 ### 1. PATH Environment Variable
 Pixi searches all directories in your `PATH` environment variable for executables with the `pixi-` prefix.
 
-### 2. Pixi Global Directories  
+### 2. `pixi global` Directories  
 Pixi also searches in directories managed by `pixi global`, which allows for organized extension management without cluttering your system PATH.
 
 When you run `pixi --help`, all discovered extensions are automatically listed in the "Available Extensions" section, making them easily discoverable alongside built-in commands.
 
 ## Installing Extensions
 
-### Using Pixi Global (Recommended)
+### Using `pixi global` (Recommended)
 
 The easiest way to install Pixi extensions is using `pixi global install`:
 
