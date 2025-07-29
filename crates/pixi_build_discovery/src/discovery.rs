@@ -55,7 +55,7 @@ pub struct BackendInitializationParams {
     /// Additional configuration that applies to the backend.
     pub configuration: Option<serde_json::Value>,
 
-    /// Targets that applies to the backend.
+    /// Targets that apply to the backend.
     pub target_configuration: Option<OrderMap<TargetSelectorV1, serde_json::Value>>,
 }
 
