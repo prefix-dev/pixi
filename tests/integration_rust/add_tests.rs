@@ -970,10 +970,16 @@ platforms = ["linux-64"]
 
     assert!(result.is_err());
     let error = result.unwrap_err();
-    let error_message = format!("{}", error);
-    assert!(
-        error_message.contains("source dependencies are not allowed without enabling pixi-build")
-    );
+
+    // Use insta to snapshot test the full error message format including help text
+    insta::with_settings!({
+        filters => vec![
+            // Filter out the dynamic manifest path to make the snapshot stable
+            (r"manifest \([^)]+\)", "manifest (<MANIFEST_PATH>)"),
+        ]
+    }, {
+        insta::assert_debug_snapshot!("git_dependency_without_preview_error", error);
+    });
 }
 
 #[tokio::test]
