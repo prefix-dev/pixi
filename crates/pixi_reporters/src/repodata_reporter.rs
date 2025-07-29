@@ -7,6 +7,9 @@ use std::{
 use indicatif::{MultiProgress, ProgressBar, ProgressState, ProgressStyle, style::ProgressTracker};
 use parking_lot::RwLock;
 use pixi_progress::ProgressBarPlacement;
+use rattler::package_cache::CacheReporter;
+use rattler_conda_types::RepoDataRecord;
+use rattler_repodata_gateway::RunExportsReporter;
 use url::Url;
 
 #[derive(Clone)]
@@ -31,6 +34,15 @@ impl rattler_repodata_gateway::Reporter for RepodataReporter {
     }
     fn on_download_complete(&self, url: &Url, index: usize) {
         self.inner.write().on_download_complete(url, index);
+    }
+}
+
+impl RunExportsReporter for RepodataReporter {
+    fn add(&self, _record: &RepoDataRecord) -> Arc<dyn CacheReporter> {
+        // Create a simple cache reporter that just delegates to the repodata reporter
+        Arc::new(RepodataCacheReporter {
+            repodata_reporter: self.clone(),
+        })
     }
 }
 
@@ -248,5 +260,35 @@ impl ProgressTracker for DurationTracker {
             )
             .unwrap();
         }
+    }
+}
+
+/// A simple adapter that wraps RepodataReporter to implement CacheReporter
+struct RepodataCacheReporter {
+    repodata_reporter: RepodataReporter,
+}
+
+impl CacheReporter for RepodataCacheReporter {
+    fn on_validate_start(&self) -> usize {
+        // For run exports, validation is typically not needed
+        0
+    }
+
+    fn on_validate_complete(&self, _index: usize) {
+        // No-op for repodata reporter
+    }
+
+    fn on_download_start(&self) -> usize {
+        // We can't get the URL here since CacheReporter doesn't provide it,
+        // but the progress will still be tracked through the repodata reporter
+        0
+    }
+
+    fn on_download_progress(&self, _index: usize, _progress: u64, _total: Option<u64>) {
+        // Progress is already tracked by the underlying repodata reporter
+    }
+
+    fn on_download_completed(&self, _index: usize) {
+        // Completion is already tracked by the underlying repodata reporter
     }
 }
