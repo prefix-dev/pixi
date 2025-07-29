@@ -1396,6 +1396,7 @@ def test_pixi_task_list_json(
     assert task_data == snapshot
 
 
+@pytest.mark.extra_slow
 def test_info_output_extended(
     pixi: Path, tmp_pixi_workspace: Path, snapshot: SnapshotAssertion
 ) -> None:
