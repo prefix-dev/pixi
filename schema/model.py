@@ -683,6 +683,14 @@ class Package(StrictBaseModel):
     )
 
 
+class BuildTarget(StrictBaseModel):
+    """Target-specific build configuration for different platforms"""
+
+    configuration: dict[str, Any] = Field(
+        None, description="Target-specific configuration for the build backend"
+    )
+
+
 class Build(StrictBaseModel):
     backend: BuildBackend = Field(..., description="The build backend to instantiate")
     channels: list[Channel] = Field(
@@ -693,6 +701,11 @@ class Build(StrictBaseModel):
     )
     configuration: dict[str, Any] = Field(
         None, description="The configuration of the build backend"
+    )
+    target: dict[TargetName, BuildTarget] | None = Field(
+        None,
+        description="Target-specific build configuration for different platforms",
+        examples=[{"linux-64": {"configuration": {"key": "value"}}}],
     )
 
 
