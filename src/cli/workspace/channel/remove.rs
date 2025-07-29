@@ -1,9 +1,9 @@
-use crate::lock_file::{ReinstallPackages, UpdateMode};
-use crate::{
+use miette::IntoDiagnostic;
+use pixi_api::lock_file::{ReinstallPackages, UpdateMode};
+use pixi_api::{
     UpdateLockFileOptions, WorkspaceLocator,
     environment::{LockFileUsage, get_update_lock_file_and_prefix},
 };
-use miette::IntoDiagnostic;
 
 use super::AddRemoveArgs;
 

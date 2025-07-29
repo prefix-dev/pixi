@@ -22,7 +22,7 @@ pub struct GlobalSpecs {
     /// The git revisions to use when adding a git dependency
     /// TODO: replace with #[clap(flatten)], skip instead of hide as that doesn't work with flatten
     #[clap(skip)]
-    pub rev: Option<crate::cli::cli_config::GitRev>,
+    pub rev: Option<pixi_api::cli::cli_config::GitRev>,
 
     /// The subdirectory of the git repository to use
     #[clap(hide = true, long, short, requires = "git", help_heading = consts::CLAP_GIT_OPTIONS)]

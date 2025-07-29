@@ -3,13 +3,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{
+use clap::Parser;
+use miette::{Context, IntoDiagnostic};
+use pixi_api::{
     WorkspaceLocator,
     cli::cli_config::{LockFileUpdateConfig, WorkspaceConfig},
     lock_file::UpdateLockFileOptions,
 };
-use clap::Parser;
-use miette::{Context, IntoDiagnostic};
 use pixi_config::ConfigCli;
 use rattler_conda_types::{
     ExplicitEnvironmentEntry, ExplicitEnvironmentSpec, PackageRecord, Platform, RepoDataRecord,

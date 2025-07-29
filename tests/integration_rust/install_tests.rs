@@ -7,12 +7,12 @@ use std::{
 };
 
 use fs_err::tokio as tokio_fs;
-use pixi::{
+use pixi::cli::run::{self, Args};
+use pixi_api::{
     UpdateLockFileOptions, Workspace,
     cli::{
         LockFileUsageConfig,
         cli_config::{LockFileUpdateConfig, WorkspaceConfig},
-        run::{self, Args},
     },
     environment::LockFileUsage,
     lock_file::{CondaPrefixUpdater, ReinstallPackages, UpdateMode},
@@ -333,7 +333,7 @@ async fn pypi_reinstall_python() {
     // Add flask from pypi
     pixi.add("flask")
         .with_install(true)
-        .set_type(pixi::DependencyType::PypiDependency)
+        .set_type(pixi_api::DependencyType::PypiDependency)
         .await
         .unwrap();
     assert!(pixi.lock_file().await.unwrap().contains_match_spec(
@@ -389,7 +389,7 @@ async fn pypi_add_remove() {
     // Add flask from pypi
     pixi.add("flask[dotenv]")
         .with_install(true)
-        .set_type(pixi::DependencyType::PypiDependency)
+        .set_type(pixi_api::DependencyType::PypiDependency)
         .await
         .unwrap();
 
@@ -403,7 +403,7 @@ async fn pypi_add_remove() {
     assert!(installed_311.iter().count() > 0);
 
     pixi.remove("flask[dotenv]")
-        .set_type(pixi::DependencyType::PypiDependency)
+        .set_type(pixi_api::DependencyType::PypiDependency)
         .with_install(true)
         .await
         .unwrap();
@@ -490,7 +490,7 @@ async fn minimal_lockfile_update_pypi() {
 
     // Add pypi dependencies which are not the latest options
     pixi.add_multiple(vec!["uvicorn==0.28.0", "click==7.1.2"])
-        .set_type(pixi::DependencyType::PypiDependency)
+        .set_type(pixi_api::DependencyType::PypiDependency)
         .with_install(true)
         .await
         .unwrap();
@@ -505,7 +505,7 @@ async fn minimal_lockfile_update_pypi() {
 
     // Widening the click version to allow for the latest version
     pixi.add_multiple(vec!["uvicorn==0.29.0", "click"])
-        .set_type(pixi::DependencyType::PypiDependency)
+        .set_type(pixi_api::DependencyType::PypiDependency)
         .with_install(true)
         .await
         .unwrap();
@@ -532,7 +532,7 @@ async fn test_installer_name() {
     // Add and update lockfile with this version of python
     pixi.add("python==3.11").with_install(true).await.unwrap();
     pixi.add("click==8.0.0")
-        .set_type(pixi::DependencyType::PypiDependency)
+        .set_type(pixi_api::DependencyType::PypiDependency)
         .with_install(true)
         .await
         .unwrap();
@@ -557,7 +557,7 @@ async fn test_installer_name() {
     fs_err::write(dist_info.join("INSTALLER"), "not-pixi").unwrap();
     pixi.remove("click==8.0.0")
         .with_install(true)
-        .set_type(pixi::DependencyType::PypiDependency)
+        .set_type(pixi_api::DependencyType::PypiDependency)
         .await
         .unwrap();
 
@@ -571,7 +571,7 @@ async fn test_installer_name() {
 
     // re-manage the package by adding it, this should cause a reinstall
     pixi.add("click==8.0.0")
-        .set_type(pixi::DependencyType::PypiDependency)
+        .set_type(pixi_api::DependencyType::PypiDependency)
         .with_install(true)
         .await
         .unwrap();
@@ -592,7 +592,7 @@ async fn test_old_lock_install() {
         "tests/data/satisfiability/old_lock_file/pyproject.toml",
     ))
     .unwrap();
-    pixi::environment::get_update_lock_file_and_prefix(
+    pixi_api::environment::get_update_lock_file_and_prefix(
         &project.default_environment(),
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
@@ -732,7 +732,7 @@ async fn test_many_linux_wheel_tag() {
     pixi.add("python==3.12.*").await.unwrap();
     // We know that this package has many linux wheel tags for this version
     pixi.add("gmsh==4.13.1")
-        .set_type(pixi::DependencyType::PypiDependency)
+        .set_type(pixi_api::DependencyType::PypiDependency)
         .with_install(true)
         .await
         .unwrap();
@@ -801,7 +801,7 @@ async fn pypi_prefix_is_not_created_when_whl() {
 
     // Add pypi dependency that is a wheel
     pixi.add_multiple(vec!["boltons==24.1.0"])
-        .set_type(pixi::DependencyType::PypiDependency)
+        .set_type(pixi_api::DependencyType::PypiDependency)
         // we don't want to install the package
         // we just want to check that the prefix is not created
         .with_install(false)

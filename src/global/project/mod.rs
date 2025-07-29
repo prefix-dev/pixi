@@ -50,16 +50,16 @@ use super::{
     install::find_binary_by_name,
     trampoline::{self, GlobalExecutable},
 };
-use crate::{
-    global::{
-        EnvDir,
-        common::{
-            channel_url_to_prioritized_channel, expose_scripts_sync_status, find_package_records,
-        },
-        find_executables, find_executables_for_many_records,
-        install::{create_executable_trampolines, script_exec_mapping},
-        project::environment::environment_specs_in_sync,
+use crate::global::{
+    EnvDir,
+    common::{
+        channel_url_to_prioritized_channel, expose_scripts_sync_status, find_package_records,
     },
+    find_executables, find_executables_for_many_records,
+    install::{create_executable_trampolines, script_exec_mapping},
+    project::environment::environment_specs_in_sync,
+};
+use pixi_api::{
     prefix::{Executable, Prefix},
     repodata::Repodata,
     reporters::TopLevelProgress,

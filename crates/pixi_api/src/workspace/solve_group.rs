@@ -36,7 +36,7 @@ impl Hash for SolveGroup<'_> {
 
 impl<'p> SolveGroup<'p> {
     /// The name of the group
-    pub(crate) fn name(&self) -> &str {
+    pub fn name(&self) -> &str {
         &self.solve_group.name
     }
 

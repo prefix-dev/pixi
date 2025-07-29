@@ -1,8 +1,8 @@
 use clap::Parser;
 use miette::IntoDiagnostic;
 
-use crate::{WorkspaceLocator, cli::cli_config::WorkspaceConfig};
 use fancy_display::FancyDisplay;
+use pixi_api::{WorkspaceLocator, cli::cli_config::WorkspaceConfig};
 use pixi_manifest::FeaturesExt;
 
 #[derive(Parser, Debug, Default, Clone)]

@@ -16,8 +16,8 @@ use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
 use reqwest_middleware::ClientWithMiddleware;
 use uv_configuration::RAYON_INITIALIZE;
 
-use super::cli_config::ChannelsConfig;
-use crate::{
+use pixi_api::cli::cli_config::ChannelsConfig;
+use pixi_api::{
     environment::list::{PackageToOutput, print_package_table},
     prefix::Prefix,
 };

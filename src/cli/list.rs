@@ -22,8 +22,8 @@ use serde::Serialize;
 use uv_configuration::ConfigSettings;
 use uv_distribution::RegistryWheelIndex;
 
-use super::cli_config::LockFileUpdateConfig;
-use crate::{
+use pixi_api::cli::cli_config::LockFileUpdateConfig;
+use pixi_api::{
     WorkspaceLocator,
     cli::cli_config::WorkspaceConfig,
     lock_file::{UpdateLockFileOptions, UvResolutionContext},

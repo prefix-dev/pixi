@@ -1,10 +1,16 @@
 use std::{fmt::Display, path::PathBuf};
 
-use crate::cli::cli_config::WorkspaceConfig;
+use crate::{
+    global,
+    global::{BinDir, EnvRoot},
+};
 use chrono::{DateTime, Local};
 use clap::Parser;
+use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
+use pixi_api::cli::cli_config::WorkspaceConfig;
+use pixi_api::{WorkspaceLocator, task::TaskName};
 use pixi_config;
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeatureName, SystemRequirements};
@@ -17,13 +23,6 @@ use serde::Serialize;
 use serde_with::{DisplayFromStr, serde_as};
 use tokio::task::spawn_blocking;
 use toml_edit::ser::to_string;
-
-use crate::{
-    WorkspaceLocator, global,
-    global::{BinDir, EnvRoot},
-    task::TaskName,
-};
-use fancy_display::FancyDisplay;
 
 static WIDTH: usize = 19;
 

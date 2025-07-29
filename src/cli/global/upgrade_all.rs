@@ -2,7 +2,7 @@ use clap::Parser;
 use pixi_config::ConfigCli;
 use rattler_conda_types::Platform;
 
-use crate::cli::cli_config::ChannelsConfig;
+use pixi_api::cli::cli_config::ChannelsConfig;
 
 /// Upgrade all globally installed packages
 /// This command has been removed, please use `pixi global update` instead

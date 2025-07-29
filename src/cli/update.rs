@@ -1,18 +1,18 @@
 use std::{cmp::Ordering, collections::HashSet};
 
-use crate::{
-    Workspace,
-    lock_file::{UpdateContext, filter_lock_file},
-};
-use crate::{
-    WorkspaceLocator,
-    cli::cli_config::WorkspaceConfig,
-    diff::{LockFileDiff, LockFileJsonDiff},
-};
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic, MietteDiagnostic};
+use pixi_api::{
+    Workspace,
+    lock_file::{UpdateContext, filter_lock_file},
+};
+use pixi_api::{
+    WorkspaceLocator,
+    cli::cli_config::WorkspaceConfig,
+    diff::{LockFileDiff, LockFileJsonDiff},
+};
 use pixi_config::ConfigCli;
 use pixi_consts::consts;
 use pixi_manifest::EnvironmentName;

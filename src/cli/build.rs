@@ -12,7 +12,7 @@ use pixi_progress::global_multi_progress;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 
-use crate::{WorkspaceLocator, cli::cli_config::WorkspaceConfig, reporters::TopLevelProgress};
+use pixi_api::{WorkspaceLocator, cli::cli_config::WorkspaceConfig, reporters::TopLevelProgress};
 
 #[derive(Parser, Debug)]
 #[clap(verbatim_doc_comment)]

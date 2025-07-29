@@ -58,12 +58,12 @@ pub struct ChannelsConfig {
 
 impl ChannelsConfig {
     /// Parses the channels, getting channel config and default channels from config
-    pub(crate) fn resolve_from_config(&self, config: &Config) -> miette::Result<IndexSet<Channel>> {
+    pub fn resolve_from_config(&self, config: &Config) -> miette::Result<IndexSet<Channel>> {
         self.resolve(config.global_channel_config(), config.default_channels())
     }
 
     /// Parses the channels, getting channel config and default channels from project
-    pub(crate) fn resolve_from_project(
+    pub fn resolve_from_project(
         &self,
         project: Option<&Workspace>,
     ) -> miette::Result<IndexSet<Channel>> {
@@ -140,7 +140,7 @@ pub struct PrefixUpdateConfig {
 
 impl PrefixUpdateConfig {
     /// Which `[UpdateMode]` to use
-    pub(crate) fn update_mode(&self) -> UpdateMode {
+    pub fn update_mode(&self) -> UpdateMode {
         if self.revalidate {
             UpdateMode::Revalidate
         } else {
@@ -272,7 +272,7 @@ pub struct DependencyConfig {
 }
 
 impl DependencyConfig {
-    pub(crate) fn dependency_type(&self) -> DependencyType {
+    pub fn dependency_type(&self) -> DependencyType {
         if self.pypi {
             DependencyType::PypiDependency
         } else if self.host {
@@ -284,11 +284,7 @@ impl DependencyConfig {
         }
     }
 
-    pub(crate) fn display_success(
-        &self,
-        operation: &str,
-        implicit_constraints: HashMap<String, String>,
-    ) {
+    pub fn display_success(&self, operation: &str, implicit_constraints: HashMap<String, String>) {
         for package in self.specs.clone() {
             eprintln!(
                 "{}{operation} {}{}",

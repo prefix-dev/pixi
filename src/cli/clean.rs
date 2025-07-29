@@ -1,16 +1,16 @@
-use crate::WorkspaceLocator;
+use pixi_api::WorkspaceLocator;
 use pixi_config;
 use pixi_consts::consts;
 use pixi_manifest::EnvironmentName;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use crate::cli::cli_config::WorkspaceConfig;
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use fs_err::tokio as tokio_fs;
 use indicatif::ProgressBar;
 use miette::IntoDiagnostic;
+use pixi_api::cli::cli_config::WorkspaceConfig;
 use pixi_progress::{global_multi_progress, long_running_progress_style};
 use std::str::FromStr;
 

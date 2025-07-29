@@ -1,7 +1,7 @@
 use clap::Parser;
 use rattler_conda_types::Platform;
 
-use crate::cli::{cli_config::ChannelsConfig, has_specs::HasSpecs};
+use pixi_api::cli::{cli_config::ChannelsConfig, has_specs::HasSpecs};
 
 /// Upgrade specific package which is installed globally.
 /// This command has been removed, please use `pixi global update` instead

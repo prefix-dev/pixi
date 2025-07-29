@@ -19,8 +19,8 @@ use rattler_conda_types::Platform;
 use serde::Serialize;
 use serde_with::serde_as;
 
-use crate::workspace::virtual_packages::verify_current_platform_can_run_environment;
-use crate::{
+use pixi_api::workspace::virtual_packages::verify_current_platform_can_run_environment;
+use pixi_api::{
     Workspace, WorkspaceLocator,
     cli::cli_config::WorkspaceConfig,
     workspace::{Environment, WorkspaceMut},

@@ -14,12 +14,12 @@ use rattler_conda_types::Platform;
 use rattler_lock::LockedPackageRef;
 use regex::Regex;
 
-use crate::{
+use pixi_api::{
     WorkspaceLocator, cli::cli_config::WorkspaceConfig, lock_file::UpdateLockFileOptions,
     workspace::Environment,
 };
 
-use super::cli_config::LockFileUpdateConfig;
+use pixi_api::cli::cli_config::LockFileUpdateConfig;
 
 /// Show a tree of workspace dependencies
 #[derive(Debug, Parser)]

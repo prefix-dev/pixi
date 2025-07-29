@@ -110,21 +110,21 @@ impl<'p> ExecutableTask<'p> {
     }
 
     /// Returns the name of the task or `None` if this is an anonymous task.
-    pub(crate) fn name(&self) -> Option<&str> {
+    pub fn name(&self) -> Option<&str> {
         self.name.as_ref().map(|name| name.as_str())
     }
 
     /// Returns the task description from the project.
-    pub(crate) fn task(&self) -> &Task {
+    pub fn task(&self) -> &Task {
         self.task.as_ref()
     }
 
     /// Returns the project in which this task is defined.
-    pub(crate) fn project(&self) -> &'p Workspace {
+    pub fn project(&self) -> &'p Workspace {
         self.workspace
     }
 
-    pub(crate) fn args(&self) -> &ArgValues {
+    pub fn args(&self) -> &ArgValues {
         &self.args
     }
 
@@ -165,9 +165,7 @@ impl<'p> ExecutableTask<'p> {
     /// Returns a [`SequentialList`] which can be executed by deno task shell.
     /// Returns `None` if the command is not executable like in the case of
     /// an alias.
-    pub(crate) fn as_deno_script(
-        &self,
-    ) -> Result<Option<SequentialList>, FailedToParseShellScript> {
+    pub fn as_deno_script(&self) -> Result<Option<SequentialList>, FailedToParseShellScript> {
         let full_script = self.as_script()?;
 
         if let Some(full_script) = full_script {
@@ -186,7 +184,7 @@ impl<'p> ExecutableTask<'p> {
     }
 
     /// Returns the working directory for this task.
-    pub(crate) fn working_directory(&self) -> Result<PathBuf, InvalidWorkingDirectory> {
+    pub fn working_directory(&self) -> Result<PathBuf, InvalidWorkingDirectory> {
         Ok(match self.task.working_directory() {
             Some(cwd) if cwd.is_absolute() => cwd.to_path_buf(),
             Some(cwd) => {
@@ -229,7 +227,7 @@ impl<'p> ExecutableTask<'p> {
 
     /// Returns an object that implements [`Display`] which outputs the command
     /// of the wrapped task.
-    pub(crate) fn display_command(&self) -> impl Display + '_ {
+    pub fn display_command(&self) -> impl Display + '_ {
         ExecutableTaskConsoleDisplay { task: self }
     }
 
@@ -289,7 +287,7 @@ impl<'p> ExecutableTask<'p> {
     /// `CanSkip::No` and includes the hash of the task that caused the task
     /// to not be skipped - we can use this later to update the cache file
     /// quickly.
-    pub(crate) async fn can_skip(&self, lock_file: &LockFile) -> Result<CanSkip, std::io::Error> {
+    pub async fn can_skip(&self, lock_file: &LockFile) -> Result<CanSkip, std::io::Error> {
         tracing::info!("Checking if task can be skipped");
         let args_hash = TaskHash::task_args_hash(self).unwrap_or_default();
         let cache_name = self.cache_name(args_hash);
@@ -312,7 +310,7 @@ impl<'p> ExecutableTask<'p> {
     /// Saves the cache of the task. This function will update the cache file
     /// with the new hash of the task (inputs and outputs). If the task has
     /// no hash, it will not save the cache.
-    pub(crate) async fn save_cache(
+    pub async fn save_cache(
         &self,
         lock_file: &LockFile,
         previous_hash: Option<TaskHash>,

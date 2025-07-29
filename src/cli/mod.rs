@@ -1,12 +1,11 @@
 use clap::Parser;
 use clap::builder::styling::{AnsiColor, Color, Style};
 use indicatif::ProgressDrawTarget;
-use miette::{Diagnostic, IntoDiagnostic};
+use miette::IntoDiagnostic;
 use pixi_consts::consts;
 use pixi_progress::global_multi_progress;
 
 use std::{env, io::IsTerminal};
-use thiserror::Error;
 use tracing::level_filters::LevelFilter;
 
 pub mod add;
@@ -366,6 +365,7 @@ pub fn get_styles() -> clap::builder::Styles {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pixi_api::cli::{LockFileUsageArgs, LockFileUsageArgsRaw, LockFileUsageConfig};
     use temp_env;
 
     #[test]

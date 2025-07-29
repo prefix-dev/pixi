@@ -14,16 +14,19 @@ use std::{
 use builders::{LockBuilder, SearchBuilder};
 use indicatif::ProgressDrawTarget;
 use miette::{Context, Diagnostic, IntoDiagnostic};
-use pixi::{
+use pixi::cli::{
+    add,
+    init::{self, GitAttributes},
+    install::Args,
+    lock, remove, run, search,
+    task::{self, AddArgs, AliasArgs},
+    update, workspace,
+};
+use pixi_api::{
     UpdateLockFileOptions, Workspace,
     cli::{
-        LockFileUsageConfig, add,
+        LockFileUsageConfig,
         cli_config::{ChannelsConfig, LockFileUpdateConfig, PrefixUpdateConfig, WorkspaceConfig},
-        init::{self, GitAttributes},
-        install::Args,
-        lock, remove, run, search,
-        task::{self, AddArgs, AliasArgs},
-        update, workspace,
     },
     lock_file::{ReinstallPackages, UpdateMode},
     task::{

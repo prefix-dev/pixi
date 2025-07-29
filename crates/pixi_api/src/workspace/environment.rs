@@ -70,7 +70,7 @@ impl<'p> Environment<'p> {
     }
 
     /// Returns true if this environment is the default environment.
-    pub(crate) fn is_default(&self) -> bool {
+    pub fn is_default(&self) -> bool {
         self.environment.name == EnvironmentName::Default
     }
 
@@ -86,7 +86,7 @@ impl<'p> Environment<'p> {
 
     /// Returns the solve group to which this environment belongs, or `None` if
     /// no solve group was specified.
-    pub(crate) fn solve_group(&self) -> Option<SolveGroup<'p>> {
+    pub fn solve_group(&self) -> Option<SolveGroup<'p>> {
         self.environment
             .solve_group
             .map(|solve_group_idx| SolveGroup {
@@ -105,12 +105,12 @@ impl<'p> Environment<'p> {
     /// We store a hash of the lockfile and all activation env variables in a
     /// file in the cache. The current name is
     /// `activation_environment-name.json`.
-    pub(crate) fn activation_cache_name(&self) -> String {
+    pub fn activation_cache_name(&self) -> String {
         format!("activation_{}.json", self.name())
     }
 
     /// Returns the activation cache file path.
-    pub(crate) fn activation_cache_file_path(&self) -> std::path::PathBuf {
+    pub fn activation_cache_file_path(&self) -> std::path::PathBuf {
         self.workspace
             .activation_env_cache_folder()
             .join(self.activation_cache_name())
@@ -200,7 +200,7 @@ impl<'p> Environment<'p> {
 
     /// Return all tasks available for the given environment
     /// This will not return task prefixed with _
-    pub(crate) fn get_filtered_tasks(&self) -> HashSet<TaskName> {
+    pub fn get_filtered_tasks(&self) -> HashSet<TaskName> {
         self.tasks(Some(self.best_platform()))
             .into_iter()
             .flat_map(|tasks| {
@@ -217,7 +217,7 @@ impl<'p> Environment<'p> {
     }
     /// Returns the task with the given `name` and for the specified `platform`
     /// or an `UnknownTask` which explains why the task was not available.
-    pub(crate) fn task(
+    pub fn task(
         &self,
         name: &TaskName,
         platform: Option<Platform>,
@@ -236,9 +236,7 @@ impl<'p> Environment<'p> {
     /// Returns a map of all the features and their tasks for this environment.
     ///
     /// Resolves for the best platform target.
-    pub(crate) fn feature_tasks(
-        &self,
-    ) -> HashMap<&'p FeatureName, HashMap<&'p TaskName, &'p Task>> {
+    pub fn feature_tasks(&self) -> HashMap<&'p FeatureName, HashMap<&'p TaskName, &'p Task>> {
         self.features()
             .map(|feature| {
                 (
@@ -271,7 +269,7 @@ impl<'p> Environment<'p> {
     /// If you want to get the system requirements for this environment without
     /// taking the solve group into account, use the
     /// [`Self::local_system_requirements`] method.
-    pub(crate) fn system_requirements(&self) -> SystemRequirements {
+    pub fn system_requirements(&self) -> SystemRequirements {
         if let Some(solve_group) = self.solve_group() {
             solve_group.system_requirements()
         } else {

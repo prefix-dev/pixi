@@ -6,8 +6,8 @@ use pixi_manifest::{FeatureName, SpecType};
 use pixi_spec::{GitSpec, SourceSpec};
 use rattler_conda_types::{MatchSpec, PackageName};
 
-use super::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs};
-use crate::{
+use pixi_api::cli::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs};
+use pixi_api::{
     WorkspaceLocator,
     cli::cli_config::{DependencyConfig, PrefixUpdateConfig, WorkspaceConfig},
     environment::sanity_check_workspace,

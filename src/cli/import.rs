@@ -10,8 +10,8 @@ use rattler_conda_types::Platform;
 use miette::{Diagnostic, IntoDiagnostic, Result};
 use thiserror::Error;
 
-use super::cli_config::LockFileUpdateConfig;
-use crate::{
+use pixi_api::cli::cli_config::LockFileUpdateConfig;
+use pixi_api::{
     WorkspaceLocator,
     cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
     environment::sanity_check_workspace,

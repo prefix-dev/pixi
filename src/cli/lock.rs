@@ -1,8 +1,8 @@
 use clap::Parser;
 use miette::{Context, IntoDiagnostic};
 
-use crate::lock_file::LockFileDerivedData;
-use crate::{
+use pixi_api::lock_file::LockFileDerivedData;
+use pixi_api::{
     WorkspaceLocator,
     cli::cli_config::WorkspaceConfig,
     diff::{LockFileDiff, LockFileJsonDiff},

@@ -1,5 +1,5 @@
-use crate::Workspace;
 use fancy_display::FancyDisplay;
+use pixi_api::Workspace;
 use pixi_manifest::FeaturesExt;
 
 pub async fn execute(workspace: Workspace) -> miette::Result<()> {

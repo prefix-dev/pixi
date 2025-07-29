@@ -1,7 +1,7 @@
 use indexmap::IndexMap;
 use insta::assert_snapshot;
-use pixi::Workspace;
 use pixi::cli::upgrade::{Args, parse_specs};
+use pixi_api::Workspace;
 use rattler_conda_types::Platform;
 
 use crate::common::PixiControl;

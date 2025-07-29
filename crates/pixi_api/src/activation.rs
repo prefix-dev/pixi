@@ -115,7 +115,7 @@ impl Environment<'_> {
 /// This method will create an activator for the environment and add the activation scripts from the project.
 /// The activator will be created for the current platform and the default shell.
 /// The activation scripts from the environment will be checked for existence and the extension will be checked for correctness.
-pub(crate) fn get_activator<'p>(
+pub fn get_activator<'p>(
     environment: &'p Environment<'p>,
     shell: ShellEnum,
 ) -> Result<Activator<ShellEnum>, ActivationError> {

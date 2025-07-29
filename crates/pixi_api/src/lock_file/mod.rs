@@ -13,14 +13,14 @@ pub(crate) use package_identifier::PypiPackageIdentifier;
 use pixi_record::PixiRecord;
 use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};
 pub(crate) use records_by_name::{PixiRecordsByName, PypiRecordsByName};
-pub(crate) use resolve::{pypi::resolve_pypi, uv_resolution_context::UvResolutionContext};
+pub use resolve::{pypi::resolve_pypi, uv_resolution_context::UvResolutionContext};
 pub use satisfiability::{
     EnvironmentUnsat, PlatformUnsat, verify_environment_satisfiability,
     verify_platform_satisfiability,
 };
 pub use update::{LockFileDerivedData, ReinstallPackages, UpdateContext};
 pub use update::{UpdateLockFileOptions, UpdateMode};
-pub(crate) use utils::filter_lock_file;
+pub use utils::filter_lock_file;
 
 pub use utils::IoConcurrencyLimit;
 

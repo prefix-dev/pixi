@@ -1,5 +1,5 @@
 use clap::Parser;
-use miette::{Diagnostic, IntoDiagnostic};
+use miette::Diagnostic;
 use pixi_consts::consts;
 
 use thiserror::Error;
@@ -22,15 +22,15 @@ pub struct LockFileUsageArgs {
 #[derive(Parser, Debug, Default, Copy, Clone)]
 #[group(multiple = false)]
 /// Raw lock file usage arguments (use LockFileUsageArgs instead)
-struct LockFileUsageArgsRaw {
+pub struct LockFileUsageArgsRaw {
     /// Install the environment as defined in the lockfile, doesn't update
     /// lockfile if it isn't up-to-date with the manifest file.
     #[clap(long, env = "PIXI_FROZEN", help_heading = consts::CLAP_UPDATE_OPTIONS)]
-    frozen: bool,
+    pub frozen: bool,
     /// Check if lockfile is up-to-date before installing the environment,
     /// aborts when lockfile isn't up-to-date with the manifest file.
     #[clap(long, env = "PIXI_LOCKED", help_heading = consts::CLAP_UPDATE_OPTIONS)]
-    locked: bool,
+    pub locked: bool,
 }
 
 impl LockFileUsageArgs {

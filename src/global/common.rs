@@ -1,6 +1,6 @@
 use super::trampoline::{GlobalExecutable, Trampoline};
 use super::{EnvironmentName, ExposedName, Mapping};
-use crate::prefix::Executable;
+use pixi_api::prefix::Executable;
 
 use ahash::HashSet;
 use console::StyledObject;

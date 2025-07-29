@@ -19,7 +19,7 @@ use tokio::fs::OpenOptions;
 use url::Url;
 use uv_normalize::PackageName;
 
-use crate::workspace::WorkspaceMut;
+use pixi_api::workspace::WorkspaceMut;
 
 #[derive(Parser, Debug, Clone, PartialEq, ValueEnum)]
 pub enum ManifestFormat {

@@ -1,18 +1,18 @@
 use std::cmp::Ordering;
 
-use super::cli_config::{LockFileUpdateConfig, PrefixUpdateConfig};
-use crate::{
-    WorkspaceLocator,
-    cli::cli_config::WorkspaceConfig,
-    diff::LockFileJsonDiff,
-    workspace::{MatchSpecs, PypiDeps, WorkspaceMut},
-};
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic, MietteDiagnostic};
 use pep508_rs::{MarkerTree, Requirement};
+use pixi_api::cli::cli_config::{LockFileUpdateConfig, PrefixUpdateConfig};
+use pixi_api::{
+    WorkspaceLocator,
+    cli::cli_config::WorkspaceConfig,
+    diff::LockFileJsonDiff,
+    workspace::{MatchSpecs, PypiDeps, WorkspaceMut},
+};
 use pixi_config::ConfigCli;
 use pixi_manifest::{FeatureName, SpecType};
 use pixi_pypi_spec::PixiPypiSpec;

@@ -1,5 +1,5 @@
-use crate::Workspace;
 use clap::Parser;
+use pixi_api::Workspace;
 
 #[derive(Parser, Debug, Default)]
 pub struct Args {}

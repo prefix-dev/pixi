@@ -1,4 +1,4 @@
-use crate::Workspace;
+use pixi_api::Workspace;
 use pixi_manifest::ExplicitManifestError;
 
 pub async fn execute(workspace: Workspace) -> miette::Result<()> {

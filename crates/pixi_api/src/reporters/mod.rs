@@ -28,7 +28,7 @@ use crate::reporters::{
 /// A top-level reporter that combines the different reporters into one. This
 /// directly implements the [`pixi_command_dispatcher::Reporter`] trait.
 /// And subsequently, offloads the work to its sub progress reporters.
-pub(crate) struct TopLevelProgress {
+pub struct TopLevelProgress {
     source_checkout_reporter: GitCheckoutProgress,
     conda_solve_reporter: MainProgressBar<String>,
     repodata_reporter: RepodataReporter,

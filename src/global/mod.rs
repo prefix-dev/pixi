@@ -10,7 +10,7 @@ pub(crate) use common::{BinDir, EnvChanges, EnvDir, EnvRoot, EnvState, StateChan
 use pixi_utils::executable_from_path;
 pub(crate) use project::{EnvironmentName, ExposedName, Mapping, Project};
 
-use crate::prefix::{Executable, Prefix};
+use pixi_api::prefix::{Executable, Prefix};
 use rattler_conda_types::PrefixRecord;
 use std::path::{Path, PathBuf};
 

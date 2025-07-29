@@ -2,8 +2,8 @@ pub mod bump;
 pub mod get;
 pub mod set;
 
-use crate::{WorkspaceLocator, cli::cli_config::WorkspaceConfig};
 use clap::Parser;
+use pixi_api::{WorkspaceLocator, cli::cli_config::WorkspaceConfig};
 use rattler_conda_types::VersionBumpType;
 
 /// Commands to manage workspace version.

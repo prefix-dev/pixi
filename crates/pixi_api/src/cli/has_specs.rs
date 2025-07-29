@@ -6,7 +6,7 @@ use pixi_pypi_spec::PypiPackageName;
 use rattler_conda_types::{MatchSpec, PackageName, ParseStrictness};
 
 /// A trait to facilitate extraction of packages data from arguments
-pub(crate) trait HasSpecs {
+pub trait HasSpecs {
     /// returns packages passed as arguments to the command
     fn packages(&self) -> Vec<&str>;
 

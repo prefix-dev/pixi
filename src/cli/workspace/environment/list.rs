@@ -1,6 +1,6 @@
-use crate::Workspace;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
+use pixi_api::Workspace;
 use pixi_consts::consts;
 use pixi_manifest::HasFeaturesIter;
 

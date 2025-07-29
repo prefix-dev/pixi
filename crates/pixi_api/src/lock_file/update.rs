@@ -235,7 +235,7 @@ pub struct LockFileDerivedData<'p> {
     ///
     /// Prefer to use `as_lock_file` or `into_lock_file` to also make a decision
     /// what to do with the resources used to create this instance.
-    pub(crate) lock_file: LockFile,
+    pub lock_file: LockFile,
 
     /// The package cache
     pub package_cache: PackageCache,
@@ -297,7 +297,7 @@ impl<'p> LockFileDerivedData<'p> {
     /// Returns a reference to the internal lock-file but does not consume any
     /// build resources, this is useful if you want to keep using the original
     /// instance.
-    pub(crate) fn as_lock_file(&self) -> &LockFile {
+    pub fn as_lock_file(&self) -> &LockFile {
         &self.lock_file
     }
 
@@ -911,13 +911,13 @@ impl<'p> UpdateContextBuilder<'p> {
     /// Defines if during the update-process it is allowed to create prefixes.
     /// This might be required to solve pypi dependencies because those require
     /// a python interpreter.
-    pub(crate) fn with_no_install(self, no_install: bool) -> Self {
+    pub fn with_no_install(self, no_install: bool) -> Self {
         Self { no_install, ..self }
     }
 
     /// Sets the current lock-file that should be used to determine the
     /// previously locked packages.
-    pub(crate) fn with_lock_file(self, lock_file: LockFile) -> Self {
+    pub fn with_lock_file(self, lock_file: LockFile) -> Self {
         Self { lock_file, ..self }
     }
 
@@ -951,7 +951,7 @@ impl<'p> UpdateContextBuilder<'p> {
     }
 
     /// Construct the context.
-    pub(crate) async fn finish(self) -> miette::Result<UpdateContext<'p>> {
+    pub async fn finish(self) -> miette::Result<UpdateContext<'p>> {
         let project = self.project;
         let package_cache = match self.package_cache {
             Some(package_cache) => package_cache,
@@ -1177,7 +1177,7 @@ impl<'p> UpdateContextBuilder<'p> {
 
 impl<'p> UpdateContext<'p> {
     /// Construct a new builder for the update context.
-    pub(crate) fn builder(project: &'p Workspace) -> UpdateContextBuilder<'p> {
+    pub fn builder(project: &'p Workspace) -> UpdateContextBuilder<'p> {
         UpdateContextBuilder {
             project,
             lock_file: LockFile::default(),

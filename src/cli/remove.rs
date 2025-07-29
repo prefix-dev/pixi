@@ -1,12 +1,12 @@
-use super::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs};
-use crate::{
+use clap::Parser;
+use miette::{Context, IntoDiagnostic};
+use pixi_api::cli::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs};
+use pixi_api::{
     DependencyType, UpdateLockFileOptions, WorkspaceLocator,
     cli::cli_config::{DependencyConfig, PrefixUpdateConfig, WorkspaceConfig},
     environment::get_update_lock_file_and_prefix,
     lock_file::{ReinstallPackages, UpdateMode},
 };
-use clap::Parser;
-use miette::{Context, IntoDiagnostic};
 use pixi_config::ConfigCli;
 use pixi_manifest::FeaturesExt;
 

@@ -89,7 +89,7 @@ pub enum VerifyCurrentPlatformError {
 
 /// Verifies if the current platform satisfies the minimal virtual package
 /// requirements.
-pub(crate) fn verify_current_platform_can_run_environment(
+pub fn verify_current_platform_can_run_environment(
     environment: &Environment<'_>,
     lockfile: Option<&LockFile>,
 ) -> Result<(), VerifyCurrentPlatformError> {
@@ -121,7 +121,7 @@ pub(crate) fn verify_current_platform_can_run_environment(
 impl Environment<'_> {
     /// Returns the set of virtual packages to use for the specified platform. This method
     /// takes into account the system requirements specified in the project manifest.
-    pub(crate) fn virtual_packages(&self, platform: Platform) -> Vec<VirtualPackage> {
+    pub fn virtual_packages(&self, platform: Platform) -> Vec<VirtualPackage> {
         get_minimal_virtual_packages(platform, &self.system_requirements())
     }
 }

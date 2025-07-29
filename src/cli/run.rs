@@ -20,8 +20,8 @@ use rattler_conda_types::Platform;
 use thiserror::Error;
 use tracing::Level;
 
-use super::cli_config::LockFileUpdateConfig;
-use crate::{
+use pixi_api::cli::cli_config::LockFileUpdateConfig;
+use pixi_api::{
     Workspace, WorkspaceLocator,
     cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
     environment::sanity_check_workspace,

@@ -276,7 +276,7 @@ impl Workspace {
         &self.env_vars
     }
 
-    pub(crate) fn with_cli_config<C>(mut self, config: C) -> Self
+    pub fn with_cli_config<C>(mut self, config: C) -> Self
     where
         C: Into<Config>,
     {
@@ -307,7 +307,7 @@ impl Workspace {
     }
 
     /// Returns the root directory of the workspace
-    pub(crate) fn root(&self) -> &Path {
+    pub fn root(&self) -> &Path {
         &self.root
     }
 
@@ -332,12 +332,12 @@ impl Workspace {
 
     /// Returns the default environment directory without interacting with
     /// config.
-    pub(crate) fn default_environments_dir(&self) -> PathBuf {
+    pub fn default_environments_dir(&self) -> PathBuf {
         self.pixi_dir().join(consts::ENVIRONMENTS_DIR)
     }
 
     /// Returns the environment directory
-    pub(crate) fn environments_dir(&self) -> PathBuf {
+    pub fn environments_dir(&self) -> PathBuf {
         let default_envs_dir = self.default_environments_dir();
 
         // Early out if detached-environments is not set
@@ -381,12 +381,12 @@ impl Workspace {
 
     /// Returns the default solve group environments directory, without
     /// interacting with config
-    pub(crate) fn default_solve_group_environments_dir(&self) -> PathBuf {
+    pub fn default_solve_group_environments_dir(&self) -> PathBuf {
         self.pixi_dir().join(consts::SOLVE_GROUP_ENVIRONMENTS_DIR)
     }
 
     /// Returns the solve group environments directory
-    pub(crate) fn solve_group_environments_dir(&self) -> PathBuf {
+    pub fn solve_group_environments_dir(&self) -> PathBuf {
         // If the detached-environments path is set, use it instead of the default
         // directory.
         if let Some(detached_environments_path) = self.detached_environments_path() {
@@ -397,7 +397,7 @@ impl Workspace {
 
     /// Returns the path to the lock file of the project
     /// [consts::PROJECT_LOCK_FILE]
-    pub(crate) fn lock_file_path(&self) -> PathBuf {
+    pub fn lock_file_path(&self) -> PathBuf {
         self.root.join(consts::PROJECT_LOCK_FILE)
     }
 
@@ -419,7 +419,7 @@ impl Workspace {
     }
 
     /// Returns the environments in this project.
-    pub(crate) fn environments(&self) -> Vec<Environment> {
+    pub fn environments(&self) -> Vec<Environment> {
         self.workspace
             .value
             .environments
@@ -556,7 +556,7 @@ impl Workspace {
         })
     }
 
-    pub(crate) fn config(&self) -> &Config {
+    pub fn config(&self) -> &Config {
         &self.config
     }
 
@@ -569,11 +569,11 @@ impl Workspace {
         }
     }
 
-    pub(crate) fn task_cache_folder(&self) -> PathBuf {
+    pub fn task_cache_folder(&self) -> PathBuf {
         self.pixi_dir().join(consts::TASK_CACHE_DIR)
     }
 
-    pub(crate) fn activation_env_cache_folder(&self) -> PathBuf {
+    pub fn activation_env_cache_folder(&self) -> PathBuf {
         self.pixi_dir().join(consts::ACTIVATION_ENV_CACHE_DIR)
     }
 

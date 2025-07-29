@@ -102,9 +102,7 @@ impl<'p> SearchEnvironments<'p, NoDisambiguation> {
 impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
     /// Returns a new `SearchEnvironments` with the given disambiguation
     /// function.
-    pub(crate) fn with_disambiguate_fn<
-        F: Fn(&AmbiguousTask<'p>) -> Option<TaskAndEnvironment<'p>>,
-    >(
+    pub fn with_disambiguate_fn<F: Fn(&AmbiguousTask<'p>) -> Option<TaskAndEnvironment<'p>>>(
         self,
         func: F,
     ) -> SearchEnvironments<'p, DisambiguateFn<F>> {

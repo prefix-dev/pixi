@@ -1,8 +1,8 @@
-use crate::WorkspaceLocator;
-use crate::cli::cli_config::WorkspaceConfig;
-use crate::workspace::WorkspaceLocatorError;
 use clap::Parser;
 use miette::{IntoDiagnostic, WrapErr};
+use pixi_api::WorkspaceLocator;
+use pixi_api::cli::cli_config::WorkspaceConfig;
+use pixi_api::workspace::WorkspaceLocatorError;
 use pixi_config;
 use pixi_config::Config;
 use pixi_consts::consts;

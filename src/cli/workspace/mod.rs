@@ -1,5 +1,5 @@
-use crate::cli::cli_config::WorkspaceConfig;
 use clap::Parser;
+use pixi_api::cli::cli_config::WorkspaceConfig;
 
 pub mod channel;
 pub mod description;

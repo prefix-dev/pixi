@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use pixi::{DependencyType, Workspace, cli::cli_config::GitRev};
+use pixi_api::{DependencyType, Workspace, cli::cli_config::GitRev};
 use pixi_consts::consts;
 use pixi_manifest::{FeaturesExt, SpecType};
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName, VersionOrStar};

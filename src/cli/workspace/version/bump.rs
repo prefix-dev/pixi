@@ -1,5 +1,5 @@
-use crate::Workspace;
 use miette::{Context, IntoDiagnostic};
+use pixi_api::Workspace;
 use rattler_conda_types::VersionBumpType;
 
 pub async fn execute(workspace: Workspace, bump_type: VersionBumpType) -> miette::Result<()> {
