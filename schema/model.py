@@ -207,7 +207,7 @@ class MatchspecTable(StrictBaseModel):
     channel: NonEmptyStr | None = Field(
         None,
         description="The channel the packages needs to be fetched from",
-        examples=["conda-forge", "pytorch", "https://repo.prefix.dev/conda-forge"],
+        examples=["conda-forge", "pytorch", "https://prefix.dev/conda-forge"],
     )
     subdir: NonEmptyStr | None = Field(
         None, description="The subdir of the package, also known as platform"

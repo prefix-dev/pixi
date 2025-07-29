@@ -389,7 +389,7 @@
           "examples": [
             "conda-forge",
             "pytorch",
-            "https://repo.prefix.dev/conda-forge"
+            "https://prefix.dev/conda-forge"
           ]
         },
         "file-name": {
@@ -883,7 +883,7 @@
           "examples": [
             "conda-forge",
             "pytorch",
-            "https://repo.prefix.dev/conda-forge"
+            "https://prefix.dev/conda-forge"
           ]
         },
         "file-name": {
