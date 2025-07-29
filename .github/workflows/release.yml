@@ -73,16 +73,21 @@ jobs:
       - name: Install cargo-dist from git
         uses: baptiste0928/cargo-install@e38323ef017552d7f7af73a3f4db467f278310ed # v3
         with:
-          crate: cargo-dist
-          git: https://github.com/ruben-arts/cargo-dist
-          branch: feature/allow_binaries_in_root_of_tar
+          crate: dist
+          git: https://github.com/ruben-arts/cargo-dist.git
+          rev: 6f945d0efcaeabb0fc3e3472330bb7a294f80d29
+
+      - uses: prefix-dev/setup-pixi@main
+        with:
+          environments: dist
+          activate-environment: true
 
       - name: Cache dist
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: cargo-dist-cache
           # TODO: revert after switching back to released dist
-          path: ~/.cargo-install/cargo-dist/bin/dist
+          path: ~/.cargo-install/dist/bin/dist
       # sure would be cool if github gave us proper conditionals...
       # so here's a doubly-nested ternary-via-truthiness to try to provide the best possible
       # functionality based on whether this is a pull_request, and whether it's from a fork.
@@ -107,6 +112,9 @@ jobs:
     needs:
       - plan
     if: ${{ fromJson(needs.plan.outputs.val).ci.github.artifacts_matrix.include != null && (needs.plan.outputs.publishing == 'true' || fromJson(needs.plan.outputs.val).ci.github.pr_run_mode == 'upload') || inputs.tag == 'dry-run' }}
+    permissions:
+      attestations: write
+      id-token: write
     strategy:
       fail-fast: false
       # Target platforms/runners are computed by dist in create-release.
@@ -138,13 +146,28 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
           submodules: recursive
-      # Install fork of dist to allow for binaries in the root of the tarball
+
+      # Use fork of dist to allow for binaries in the root of the tarball
       - name: Install cargo-dist from git
         uses: baptiste0928/cargo-install@e38323ef017552d7f7af73a3f4db467f278310ed # v3
         with:
-          crate: cargo-dist
-          git: https://github.com/ruben-arts/cargo-dist
-          branch: feature/allow_binaries_in_root_of_tar
+          crate: dist
+          git: https://github.com/ruben-arts/cargo-dist.git
+          rev: 6f945d0efcaeabb0fc3e3472330bb7a294f80d29
+
+      - name: Install cargo-zigbuild
+        # Only install on non windows platforms
+        if: ${{ contains(matrix.runner, 'windows') == false }}
+        uses: baptiste0928/cargo-install@e38323ef017552d7f7af73a3f4db467f278310ed # v3
+        with:
+          crate: cargo-zigbuild
+          version: "0.20.1"
+
+      - uses: prefix-dev/setup-pixi@main
+        with:
+          environments: dist
+          activate-environment: true
+
       # Get the dist-manifest
       - name: Fetch local artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
@@ -168,6 +191,12 @@ jobs:
           # Actually do builds and make zips and whatnot
           dist build ${{ needs.plan.outputs.tag-flag }} --print=linkage --output-format=json ${{ matrix.dist_args }} > dist-manifest.json
           echo "dist ran successfully"
+      - name: Attest Builds
+        id: attest
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-path: "target/distrib/*${{ join(matrix.targets, ', ') }}"
+      - run: cp ${{ steps.attest.outputs.bundle-path }} target/distrib/attestations-${{ join(matrix.targets, ', ') }}.intoto.jsonl
       - id: cargo-dist
         name: Post-build
         # We force bash here just because github makes it really hard to get values up
@@ -188,6 +217,7 @@ jobs:
           path: |
             ${{ steps.cargo-dist.outputs.paths }}
             ${{ env.BUILD_MANIFEST_NAME }}
+            target/distrib/attestations-${{ join(matrix.targets, ', ') }}.intoto.jsonl
 
   # Build and package all the platform-agnostic(ish) things
   build-global-artifacts:

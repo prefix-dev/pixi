@@ -14,7 +14,7 @@ async fn pypi_dependency_index_preserved_on_upgrade() {
     let pixi = PixiControl::from_manifest(&format!(
         r#"
         [workspace]
-        channels = ["conda-forge"]
+        channels = ["https://prefix.dev/conda-forge"]
         platforms = ["{platform}"]
         exclude-newer = "2025-05-19"
 

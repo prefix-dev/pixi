@@ -19,4 +19,6 @@ PypiOptions {
             },
         ),
     ),
+    dependency_overrides: None,
+    no_binary: None,
 }
