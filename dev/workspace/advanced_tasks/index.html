@@ -1008,6 +1008,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#task-names" class="md-nav__link">
+    <span class="md-ellipsis">
+      Task Names
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#caching" class="md-nav__link">
     <span class="md-ellipsis">
       Caching
@@ -2925,6 +2934,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#task-names" class="md-nav__link">
+    <span class="md-ellipsis">
+      Task Names
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#caching" class="md-nav__link">
     <span class="md-ellipsis">
       Caching
@@ -3075,6 +3093,10 @@ In that package we have some tasks that depend on each other, so we can assure t
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">fmt</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;ruff&quot;</span>
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">lint</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;pylint&quot;</span>
 </span></code></pre></div>
+<div class="admonition tip">
+<p class="admonition-title">Hiding Tasks</p>
+<p>Tasks can be hidden from user facing commands by <a href="#task-names">naming them</a> with an <code>_</code> prefix.</p>
+</div>
 <h3 id="shorthand-syntax">Shorthand Syntax<a class="headerlink" href="#shorthand-syntax" title="Permanent link">#</a></h3>
 <p>Pixi supports a shorthand syntax for defining tasks that only depend on other tasks. Instead of using the more verbose <code>depends-on</code> field, you can define a task directly as an array of dependencies.</p>
 <p>Executing:</p>
@@ -3292,6 +3314,32 @@ For example, consider a Pixi workspace structured as follows:</p>
 </span><span id="__span-22-17"><a id="__codelineno-22-17" name="__codelineno-22-17" href="#__codelineno-22-17"></a><span class="p">]</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 <p>For more information about available filters and template syntax, see the <a href="https://docs.rs/minijinja/latest/minijinja/filters/index.html">MiniJinja documentation</a>.</p>
+<h2 id="task-names">Task Names<a class="headerlink" href="#task-names" title="Permanent link">#</a></h2>
+<p>A task name follows these rules:</p>
+<ul>
+<li><strong>No spaces</strong> are allowed in the name.</li>
+<li>Must <strong>be unique</strong> within the table.</li>
+<li><a href="" title="underscores"><code>_</code></a> at the start of the name will <strong>hide</strong> the task from the <code>pixi task list</code> command.</li>
+</ul>
+<p>Hiding tasks can be useful if your project defines many tasks but your users only need to use a subset of them.</p>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># Hidden task that is only intended to be used by other tasks</span>
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="k">[tasks._git-clone]</span>
+</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="n">args</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;url&quot;</span><span class="p">]</span>
+</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="n">cmd</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;echo git clone {{ url }}&quot;</span>
+</span><span id="__span-23-5"><a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a>
+</span><span id="__span-23-6"><a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a><span class="c1"># Hidden task that clones a dependency</span>
+</span><span id="__span-23-7"><a id="__codelineno-23-7" name="__codelineno-23-7" href="#__codelineno-23-7"></a><span class="k">[tasks._clone-subproject]</span>
+</span><span id="__span-23-8"><a id="__codelineno-23-8" name="__codelineno-23-8" href="#__codelineno-23-8"></a><span class="n">depends-on</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-23-9"><a id="__codelineno-23-9" name="__codelineno-23-9" href="#__codelineno-23-9"></a><span class="w">  </span><span class="p">{</span><span class="w"> </span><span class="n">task</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;_git-clone&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">args</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-23-10"><a id="__codelineno-23-10" name="__codelineno-23-10" href="#__codelineno-23-10"></a><span class="w">    </span><span class="s2">&quot;https://git.hub/org/subproject.git&quot;</span><span class="p">,</span>
+</span><span id="__span-23-11"><a id="__codelineno-23-11" name="__codelineno-23-11" href="#__codelineno-23-11"></a><span class="w">  </span><span class="p">]</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-23-12"><a id="__codelineno-23-12" name="__codelineno-23-12" href="#__codelineno-23-12"></a><span class="p">]</span>
+</span><span id="__span-23-13"><a id="__codelineno-23-13" name="__codelineno-23-13" href="#__codelineno-23-13"></a>
+</span><span id="__span-23-14"><a id="__codelineno-23-14" name="__codelineno-23-14" href="#__codelineno-23-14"></a><span class="c1"># Task to build the project which depends on cloning a dependency</span>
+</span><span id="__span-23-15"><a id="__codelineno-23-15" name="__codelineno-23-15" href="#__codelineno-23-15"></a><span class="k">[tasks.build]</span>
+</span><span id="__span-23-16"><a id="__codelineno-23-16" name="__codelineno-23-16" href="#__codelineno-23-16"></a><span class="n">cmd</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;echo Building project&quot;</span>
+</span><span id="__span-23-17"><a id="__codelineno-23-17" name="__codelineno-23-17" href="#__codelineno-23-17"></a><span class="n">depends-on</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;_clone-subproject&quot;</span><span class="p">]</span>
+</span></code></pre></div>
 <h2 id="caching">Caching<a class="headerlink" href="#caching" title="Permanent link">#</a></h2>
 <p>When you specify <code>inputs</code> and/or <code>outputs</code> to a task, Pixi will reuse the result of the task.</p>
 <p>For the cache, Pixi checks that the following are true:</p>
@@ -3304,65 +3352,65 @@ For example, consider a Pixi workspace structured as follows:</p>
 </ul>
 <p>If all of these conditions are met, Pixi will not run the task again and instead use the existing result.</p>
 <p>Inputs and outputs can be specified as globs, which will be expanded to all matching files. You can also use MiniJinja templates in your <code>inputs</code> and <code>outputs</code> fields to parameterize the paths, making tasks more reusable:</p>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="k">[tasks]</span>
-</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="c1"># This task will only run if the `main.py` file has changed.</span>
-</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="n">run</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;python main.py&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">inputs</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;main.py&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a>
-</span><span id="__span-23-5"><a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a><span class="c1"># This task will remember the result of the `curl` command and not run it again if the file `data.csv` already exists.</span>
-</span><span id="__span-23-6"><a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a><span class="n">download_data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;curl -o data.csv https://example.com/data.csv&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">outputs</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-23-7"><a id="__codelineno-23-7" name="__codelineno-23-7" href="#__codelineno-23-7"></a><span class="w">  </span><span class="s2">&quot;data.csv&quot;</span><span class="p">,</span>
-</span><span id="__span-23-8"><a id="__codelineno-23-8" name="__codelineno-23-8" href="#__codelineno-23-8"></a><span class="p">]</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-23-9"><a id="__codelineno-23-9" name="__codelineno-23-9" href="#__codelineno-23-9"></a>
-</span><span id="__span-23-10"><a id="__codelineno-23-10" name="__codelineno-23-10" href="#__codelineno-23-10"></a><span class="c1"># This task will only run if the `src` directory has changed and will remember the result of the `make` command.</span>
-</span><span id="__span-23-11"><a id="__codelineno-23-11" name="__codelineno-23-11" href="#__codelineno-23-11"></a><span class="n">build</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;make&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">inputs</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-23-12"><a id="__codelineno-23-12" name="__codelineno-23-12" href="#__codelineno-23-12"></a><span class="w">  </span><span class="s2">&quot;src/*.cpp&quot;</span><span class="p">,</span>
-</span><span id="__span-23-13"><a id="__codelineno-23-13" name="__codelineno-23-13" href="#__codelineno-23-13"></a><span class="w">  </span><span class="s2">&quot;include/*.hpp&quot;</span><span class="p">,</span>
-</span><span id="__span-23-14"><a id="__codelineno-23-14" name="__codelineno-23-14" href="#__codelineno-23-14"></a><span class="p">],</span><span class="w"> </span><span class="n">outputs</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-23-15"><a id="__codelineno-23-15" name="__codelineno-23-15" href="#__codelineno-23-15"></a><span class="w">  </span><span class="s2">&quot;build/app.exe&quot;</span><span class="p">,</span>
-</span><span id="__span-23-16"><a id="__codelineno-23-16" name="__codelineno-23-16" href="#__codelineno-23-16"></a><span class="p">]</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-23-17"><a id="__codelineno-23-17" name="__codelineno-23-17" href="#__codelineno-23-17"></a>
-</span><span id="__span-23-18"><a id="__codelineno-23-18" name="__codelineno-23-18" href="#__codelineno-23-18"></a><span class="c1"># Process a specific file based on the provided argument</span>
-</span><span id="__span-23-19"><a id="__codelineno-23-19" name="__codelineno-23-19" href="#__codelineno-23-19"></a><span class="n">process-file</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;python process.py inputs/{{ filename }}.txt --output outputs/{{ filename }}.processed&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">args</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-23-20"><a id="__codelineno-23-20" name="__codelineno-23-20" href="#__codelineno-23-20"></a><span class="w">  </span><span class="s2">&quot;filename&quot;</span><span class="p">,</span>
-</span><span id="__span-23-21"><a id="__codelineno-23-21" name="__codelineno-23-21" href="#__codelineno-23-21"></a><span class="p">],</span><span class="w"> </span><span class="n">inputs</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-23-22"><a id="__codelineno-23-22" name="__codelineno-23-22" href="#__codelineno-23-22"></a><span class="w">  </span><span class="s2">&quot;inputs/{{ filename }}.txt&quot;</span><span class="p">,</span>
-</span><span id="__span-23-23"><a id="__codelineno-23-23" name="__codelineno-23-23" href="#__codelineno-23-23"></a><span class="p">],</span><span class="w"> </span><span class="n">outputs</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-23-24"><a id="__codelineno-23-24" name="__codelineno-23-24" href="#__codelineno-23-24"></a><span class="w">  </span><span class="s2">&quot;outputs/{{ filename }}.processed&quot;</span><span class="p">,</span>
-</span><span id="__span-23-25"><a id="__codelineno-23-25" name="__codelineno-23-25" href="#__codelineno-23-25"></a><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="k">[tasks]</span>
+</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="c1"># This task will only run if the `main.py` file has changed.</span>
+</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="n">run</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;python main.py&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">inputs</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;main.py&quot;</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a>
+</span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a><span class="c1"># This task will remember the result of the `curl` command and not run it again if the file `data.csv` already exists.</span>
+</span><span id="__span-24-6"><a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a><span class="n">download_data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;curl -o data.csv https://example.com/data.csv&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">outputs</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-24-7"><a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a><span class="w">  </span><span class="s2">&quot;data.csv&quot;</span><span class="p">,</span>
+</span><span id="__span-24-8"><a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-24-9"><a id="__codelineno-24-9" name="__codelineno-24-9" href="#__codelineno-24-9"></a>
+</span><span id="__span-24-10"><a id="__codelineno-24-10" name="__codelineno-24-10" href="#__codelineno-24-10"></a><span class="c1"># This task will only run if the `src` directory has changed and will remember the result of the `make` command.</span>
+</span><span id="__span-24-11"><a id="__codelineno-24-11" name="__codelineno-24-11" href="#__codelineno-24-11"></a><span class="n">build</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;make&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">inputs</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-24-12"><a id="__codelineno-24-12" name="__codelineno-24-12" href="#__codelineno-24-12"></a><span class="w">  </span><span class="s2">&quot;src/*.cpp&quot;</span><span class="p">,</span>
+</span><span id="__span-24-13"><a id="__codelineno-24-13" name="__codelineno-24-13" href="#__codelineno-24-13"></a><span class="w">  </span><span class="s2">&quot;include/*.hpp&quot;</span><span class="p">,</span>
+</span><span id="__span-24-14"><a id="__codelineno-24-14" name="__codelineno-24-14" href="#__codelineno-24-14"></a><span class="p">],</span><span class="w"> </span><span class="n">outputs</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-24-15"><a id="__codelineno-24-15" name="__codelineno-24-15" href="#__codelineno-24-15"></a><span class="w">  </span><span class="s2">&quot;build/app.exe&quot;</span><span class="p">,</span>
+</span><span id="__span-24-16"><a id="__codelineno-24-16" name="__codelineno-24-16" href="#__codelineno-24-16"></a><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-24-17"><a id="__codelineno-24-17" name="__codelineno-24-17" href="#__codelineno-24-17"></a>
+</span><span id="__span-24-18"><a id="__codelineno-24-18" name="__codelineno-24-18" href="#__codelineno-24-18"></a><span class="c1"># Process a specific file based on the provided argument</span>
+</span><span id="__span-24-19"><a id="__codelineno-24-19" name="__codelineno-24-19" href="#__codelineno-24-19"></a><span class="n">process-file</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;python process.py inputs/{{ filename }}.txt --output outputs/{{ filename }}.processed&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">args</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-24-20"><a id="__codelineno-24-20" name="__codelineno-24-20" href="#__codelineno-24-20"></a><span class="w">  </span><span class="s2">&quot;filename&quot;</span><span class="p">,</span>
+</span><span id="__span-24-21"><a id="__codelineno-24-21" name="__codelineno-24-21" href="#__codelineno-24-21"></a><span class="p">],</span><span class="w"> </span><span class="n">inputs</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-24-22"><a id="__codelineno-24-22" name="__codelineno-24-22" href="#__codelineno-24-22"></a><span class="w">  </span><span class="s2">&quot;inputs/{{ filename }}.txt&quot;</span><span class="p">,</span>
+</span><span id="__span-24-23"><a id="__codelineno-24-23" name="__codelineno-24-23" href="#__codelineno-24-23"></a><span class="p">],</span><span class="w"> </span><span class="n">outputs</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-24-24"><a id="__codelineno-24-24" name="__codelineno-24-24" href="#__codelineno-24-24"></a><span class="w">  </span><span class="s2">&quot;outputs/{{ filename }}.processed&quot;</span><span class="p">,</span>
+</span><span id="__span-24-25"><a id="__codelineno-24-25" name="__codelineno-24-25" href="#__codelineno-24-25"></a><span class="p">]</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 <p>When using template variables in inputs/outputs, Pixi expands the templates using the provided arguments or environment variables, and uses the resolved paths for caching decisions. This allows you to create generic tasks that can handle different files without duplicating task configurations:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="c1"># First run processes the file and caches the result</span>
-</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>pixi<span class="w"> </span>run<span class="w"> </span>process-file<span class="w"> </span>data1
-</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>
-</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="c1"># Second run with the same argument uses the cached result</span>
-</span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a>pixi<span class="w"> </span>run<span class="w"> </span>process-file<span class="w"> </span>data1<span class="w">  </span><span class="c1"># [cache hit]</span>
-</span><span id="__span-24-6"><a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a>
-</span><span id="__span-24-7"><a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a><span class="c1"># Run with a different argument processes a different file</span>
-</span><span id="__span-24-8"><a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a>pixi<span class="w"> </span>run<span class="w"> </span>process-file<span class="w"> </span>data2
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># First run processes the file and caches the result</span>
+</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>pixi<span class="w"> </span>run<span class="w"> </span>process-file<span class="w"> </span>data1
+</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>
+</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="c1"># Second run with the same argument uses the cached result</span>
+</span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a>pixi<span class="w"> </span>run<span class="w"> </span>process-file<span class="w"> </span>data1<span class="w">  </span><span class="c1"># [cache hit]</span>
+</span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a>
+</span><span id="__span-25-7"><a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a><span class="c1"># Run with a different argument processes a different file</span>
+</span><span id="__span-25-8"><a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a>pixi<span class="w"> </span>run<span class="w"> </span>process-file<span class="w"> </span>data2
 </span></code></pre></div>
 <p>Note: if you want to debug the globs you can use the <code>--verbose</code> flag to see which files are selected.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># shows info logs of all files that were selected by the globs</span>
-</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>pixi<span class="w"> </span>run<span class="w"> </span>-v<span class="w"> </span>start
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># shows info logs of all files that were selected by the globs</span>
+</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>pixi<span class="w"> </span>run<span class="w"> </span>-v<span class="w"> </span>start
 </span></code></pre></div>
 <h2 id="environment-variables">Environment variables<a class="headerlink" href="#environment-variables" title="Permanent link">#</a></h2>
 <p>You can set environment variables for a task.
 These are seen as "default" values for the variables as you can overwrite them from the shell.</p>
-<p><div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="k">[tasks]</span>
-</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="n">echo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;echo $ARGUMENT&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">env</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">ARGUMENT</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;hello&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
+<p><div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="k">[tasks]</span>
+</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="n">echo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;echo $ARGUMENT&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">env</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">ARGUMENT</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;hello&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 If you run <code>pixi run echo</code> it will output <code>hello</code>.
 When you set the environment variable <code>ARGUMENT</code> before running the task, it will use that value instead.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="nv">ARGUMENT</span><span class="o">=</span>world<span class="w"> </span>pixi<span class="w"> </span>run<span class="w"> </span><span class="nb">echo</span>
-</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>✨<span class="w"> </span>Pixi<span class="w"> </span>task<span class="w"> </span><span class="o">(</span><span class="nb">echo</span><span class="w"> </span><span class="k">in</span><span class="w"> </span>default<span class="o">)</span>:<span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="nv">$ARGUMENT</span>
-</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>world
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="nv">ARGUMENT</span><span class="o">=</span>world<span class="w"> </span>pixi<span class="w"> </span>run<span class="w"> </span><span class="nb">echo</span>
+</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>✨<span class="w"> </span>Pixi<span class="w"> </span>task<span class="w"> </span><span class="o">(</span><span class="nb">echo</span><span class="w"> </span><span class="k">in</span><span class="w"> </span>default<span class="o">)</span>:<span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="nv">$ARGUMENT</span>
+</span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>world
 </span></code></pre></div>
 <p>These variables are not shared over tasks, so you need to define these for every task you want to use them in.</p>
 <div class="admonition note">
 <p class="admonition-title">Extend instead of overwrite</p>
 <p>If you use the same environment variable in the value as in the key of the map you will also overwrite the variable.
 For example overwriting a <code>PATH</code>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="k">[tasks]</span>
-</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="n">echo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;echo $PATH&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">env</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">PATH</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;/tmp/path:$PATH&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
+<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="k">[tasks]</span>
+</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="n">echo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;echo $PATH&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">env</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">PATH</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;/tmp/path:$PATH&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 This will output <code>/tmp/path:/usr/bin:/bin</code> instead of the original <code>/usr/bin:/bin</code>.</p>
 </div>
@@ -3372,8 +3420,8 @@ Here Pixi will only include the minimal required environment variables for your 
 The environment will contain all variables set by the conda environment like <code>"CONDA_PREFIX"</code>.
 It will however include some default values from the shell, like:
 <code>"DISPLAY"</code>, <code>"LC_ALL"</code>, <code>"LC_TIME"</code>, <code>"LC_NUMERIC"</code>, <code>"LC_MEASUREMENT"</code>, <code>"SHELL"</code>, <code>"USER"</code>, <code>"USERNAME"</code>, <code>"LOGNAME"</code>, <code>"HOME"</code>, <code>"HOSTNAME"</code>,<code>"TMPDIR"</code>, <code>"XPC_SERVICE_NAME"</code>, <code>"XPC_FLAGS"</code></p>
-<p><div class="language-toml highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="k">[tasks]</span>
-</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="n">clean_command</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;python run_in_isolated_env.py&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">clean-env</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="p">}</span>
+<p><div class="language-toml highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="k">[tasks]</span>
+</span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="n">clean_command</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;python run_in_isolated_env.py&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">clean-env</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="p">}</span>
 </span></code></pre></div>
 This setting can also be set from the command line with <code>pixi run --clean-env TASK_NAME</code>.</p>
 <div class="admonition warning">
