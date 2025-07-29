@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from .common import exec_extension
+from .common import exec_extension, CONDA_FORGE_CHANNEL
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
@@ -23,9 +23,9 @@ def pixi(request: pytest.FixtureRequest) -> Path:
 
 @pytest.fixture
 def tmp_pixi_workspace(tmp_path: Path) -> Path:
-    pixi_config = """
+    pixi_config = f"""
 # Reset to defaults
-default-channels = ["conda-forge"]
+default-channels = ["{CONDA_FORGE_CHANNEL}"]
 shell.change-ps1 = true
 tls-no-verify = false
 detached-environments = false

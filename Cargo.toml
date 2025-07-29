@@ -77,6 +77,7 @@ reqwest-middleware = "0.4"
 reqwest-retry = "0.7.0"
 rlimit = "0.10.2"
 rstest = "0.25.0"
+same-file = "1.0.6"
 self-replace = "1.5.0"
 serde = "1.0.218"
 serde-untagged = "0.1.6"
@@ -134,7 +135,7 @@ rattler_networking = { version = "0.25.8", default-features = false, features = 
   "google-cloud-auth",
   "dirs",
 ] }
-rattler_package_streaming = { version = "0.22.47", default-features = false }
+rattler_package_streaming = { version = "0.22.48", default-features = false }
 rattler_repodata_gateway = { version = "0.23.9", default-features = false }
 rattler_shell = { version = "0.24.7", default-features = false }
 rattler_solve = { version = "2.1.8", default-features = false }
@@ -199,7 +200,7 @@ license.workspace = true
 name = "pixi"
 readme.workspace = true
 repository.workspace = true
-version = "0.50.1"
+version = "0.50.2"
 
 [features]
 default = ["online_tests", "rustls-tls"]
@@ -282,7 +283,7 @@ rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true }
 rattler_lock = { workspace = true }
 rattler_menuinst = { workspace = true }
-rattler_networking = { workspace = true }
+rattler_networking = { workspace = true, default-features = false }
 rattler_repodata_gateway = { workspace = true, features = [
   "sparse",
   "gateway",
@@ -327,6 +328,7 @@ reqwest = { workspace = true, features = [
 ] }
 reqwest-middleware = { workspace = true }
 rlimit = { workspace = true }
+same-file = { workspace = true }
 self-replace = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

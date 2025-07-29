@@ -19,3 +19,4 @@ init-params:
   manifest-path: recipe.yaml
   project-model: ~
   configuration: ~
+  target-configuration: ~
