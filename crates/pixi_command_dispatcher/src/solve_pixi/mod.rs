@@ -122,6 +122,9 @@ impl PixiEnvironmentSpec {
         let (source_specs, binary_specs) =
             Self::split_into_source_and_binary_requirements(self.dependencies);
 
+        tracing::debug!("Source specs {source_specs:#?}");
+        tracing::debug!("Binary specs {binary_specs:#?}");
+
         // Recursively collect the metadata of all the source specs.
         let CollectedSourceMetadata {
             source_repodata,
