@@ -16,6 +16,11 @@ pub struct PathSpec {
 }
 
 impl PathSpec {
+    /// Constructs a new [`PathSpec`] from the given path.
+    pub fn new(path: impl Into<Utf8TypedPathBuf>) -> Self {
+        Self { path: path.into() }
+    }
+
     /// Converts this instance into a [`NamelessMatchSpec`] if the path points
     /// to binary archive.
     pub fn try_into_nameless_match_spec(

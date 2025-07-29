@@ -18,8 +18,6 @@ pixi global install [OPTIONS] <PACKAGE>...
 <br>**required**: `true`
 
 ## Options
-- <a id="arg---path" href="#arg---path">`--path <PATH>`</a>
-:  The path to the local directory to use when adding a local dependency
 - <a id="arg---channel" href="#arg---channel">`--channel (-c) <CHANNEL>`</a>
 :  The channels to consider as a name or a url. Multiple channels can be specified by using this field multiple times
 <br>May be provided more than once.
@@ -50,18 +48,6 @@ pixi global install [OPTIONS] <PACKAGE>...
 :  Max concurrent solves, default is the number of CPUs
 - <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
 :  Max concurrent network requests, default is `50`
-
-## Git Options
-- <a id="arg---git" href="#arg---git">`--git (-g) <GIT>`</a>
-:  The git url to use when adding a git dependency
-- <a id="arg---branch" href="#arg---branch">`--branch <BRANCH>`</a>
-:  The git branch
-- <a id="arg---tag" href="#arg---tag">`--tag <TAG>`</a>
-:  The git tag
-- <a id="arg---rev" href="#arg---rev">`--rev <REV>`</a>
-:  The git revision
-- <a id="arg---subdir" href="#arg---subdir">`--subdir (-s) <SUBDIR>`</a>
-:  The subdirectory of the git repository to use
 
 ## Description
 Installs the defined packages in a globally accessible location and exposes their command line applications.

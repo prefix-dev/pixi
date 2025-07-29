@@ -9,8 +9,11 @@ preview = ["pixi-build"]
 sdl_example = { path = "." }
 
 [tasks.start]
-# A tasks to run the executable that is build by the package section.
 cmd = "sdl_example"
+description = "A tasks to run the executable that is build by the package section."
+
+[tasks]
+test = "sdl_example -h"
 
 [package]
 authors = ["Bas Zalmstra <bas@prefix.dev>"]

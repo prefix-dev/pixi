@@ -31,13 +31,13 @@ macro_rules! println {
             let _err = mp.println("");
         }
     };
-    ($fmt_str:literal, $( $arg:expr ),*) => {
+    ($($arg:tt)*) => {
         let mp = $crate::global_multi_progress();
         if mp.is_hidden() {
-            eprintln!($fmt_str, $( $arg ),*);
+            eprintln!($($arg)*);
         } else {
             // Ignore any error
-            let _err = mp.println(format!($fmt_str, $( $arg ),*));
+            let _err = mp.println(format!($($arg)*));
         }
     }
 }

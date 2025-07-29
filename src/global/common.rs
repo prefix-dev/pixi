@@ -468,20 +468,20 @@ impl StateChanges {
                         exposed_names.sort();
 
                         if exposed_names.len() == 1 {
-                            eprintln!(
+                            pixi_progress::println!(
                                 "{}Exposed executable {} from environment {}.",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 exposed_names[0].fancy_display(),
                                 env_name.fancy_display()
                             );
                         } else {
-                            eprintln!(
+                            pixi_progress::println!(
                                 "{}Exposed executables from environment {}:",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 env_name.fancy_display()
                             );
                             for exposed_name in exposed_names {
-                                eprintln!("   - {}", exposed_name.fancy_display());
+                                pixi_progress::println!("   - {}", exposed_name.fancy_display());
                             }
                         }
                     }
@@ -496,20 +496,20 @@ impl StateChanges {
                         );
                         exposed_names.sort();
                         if exposed_names.len() == 1 {
-                            eprintln!(
+                            pixi_progress::println!(
                                 "{}Removed exposed executable {} from environment {}.",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 exposed_names[0].fancy_display(),
                                 env_name.fancy_display()
                             );
                         } else {
-                            eprintln!(
+                            pixi_progress::println!(
                                 "{}Removed exposed executables from environment {}:",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 env_name.fancy_display()
                             );
                             for exposed_name in exposed_names {
-                                eprintln!("   - {}", exposed_name.fancy_display());
+                                pixi_progress::println!("   - {}", exposed_name.fancy_display());
                             }
                         }
                     }
@@ -524,20 +524,20 @@ impl StateChanges {
                         );
                         exposed_names.sort();
                         if exposed_names.len() == 1 {
-                            eprintln!(
+                            pixi_progress::println!(
                                 "{}Updated executable {} of environment {}.",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 exposed_names[0].fancy_display(),
                                 env_name.fancy_display()
                             );
                         } else {
-                            eprintln!(
+                            pixi_progress::println!(
                                 "{}Updated executables of environment {}:",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 env_name.fancy_display()
                             );
                             for exposed_name in exposed_names {
-                                eprintln!("   - {}", exposed_name.fancy_display());
+                                pixi_progress::println!("   - {}", exposed_name.fancy_display());
                             }
                         }
                     }
@@ -554,7 +554,7 @@ impl StateChanges {
                         added_pkgs.sort_by(|pkg1, pkg2| pkg1.name.cmp(&pkg2.name));
 
                         if added_pkgs.len() == 1 {
-                            eprintln!(
+                            pixi_progress::println!(
                                 "{}Added package {}={} to environment {}.",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 console::style(pkg.name.as_normalized()).green(),
@@ -562,13 +562,13 @@ impl StateChanges {
                                 env_name.fancy_display()
                             );
                         } else {
-                            eprintln!(
+                            pixi_progress::println!(
                                 "{}Added packages of environment {}:",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 env_name.fancy_display()
                             );
                             for pkg in added_pkgs {
-                                eprintln!(
+                                pixi_progress::println!(
                                     "   - {}={}",
                                     console::style(pkg.name.as_normalized()).green(),
                                     console::style(&pkg.version).blue(),
@@ -577,14 +577,14 @@ impl StateChanges {
                         }
                     }
                     StateChange::AddedEnvironment => {
-                        eprintln!(
+                        pixi_progress::println!(
                             "{}Added environment {}.",
                             console::style(console::Emoji("✔ ", "")).green(),
                             env_name.fancy_display()
                         );
                     }
                     StateChange::RemovedEnvironment => {
-                        eprintln!(
+                        pixi_progress::println!(
                             "{}Removed environment {}.",
                             console::style(console::Emoji("✔ ", "")).green(),
                             env_name.fancy_display()
@@ -606,20 +606,20 @@ impl StateChanges {
                         installed_items.sort();
 
                         if installed_items.len() == 1 {
-                            eprintln!(
+                            pixi_progress::println!(
                                 "{}Installed shortcut {} of environment {}.",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 installed_items[0],
                                 env_name.fancy_display()
                             );
                         } else {
-                            eprintln!(
+                            pixi_progress::println!(
                                 "{}Installed shortcuts of environment {}:",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 env_name.fancy_display()
                             );
                             for installed_item in installed_items {
-                                eprintln!("   - {}", installed_item);
+                                pixi_progress::println!("   - {}", installed_item);
                             }
                         }
                     }
@@ -636,20 +636,20 @@ impl StateChanges {
                         uninstalled_items.sort();
 
                         if uninstalled_items.len() == 1 {
-                            eprintln!(
+                            pixi_progress::println!(
                                 "{}Uninstalled shortcut {} of environment {}.",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 uninstalled_items[0],
                                 env_name.fancy_display()
                             );
                         } else {
-                            eprintln!(
+                            pixi_progress::println!(
                                 "{}Uninstalled shortcuts of environment {}:",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 env_name.fancy_display()
                             );
                             for uninstalled_item in uninstalled_items {
-                                eprintln!("   - {}", uninstalled_item);
+                                pixi_progress::println!("   - {}", uninstalled_item);
                             }
                         }
                     }
@@ -666,20 +666,20 @@ impl StateChanges {
                         installed_items.sort();
 
                         if installed_items.len() == 1 {
-                            eprintln!(
+                            pixi_progress::println!(
                                 "{}Exposed completion {} of environment {}.",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 installed_items[0],
                                 env_name.fancy_display()
                             );
                         } else {
-                            eprintln!(
+                            pixi_progress::println!(
                                 "{}Exposed completions of environment {}:",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 env_name.fancy_display()
                             );
                             for installed_item in installed_items {
-                                eprintln!("   - {}", installed_item);
+                                pixi_progress::println!("   - {}", installed_item);
                             }
                         }
                     }
@@ -696,20 +696,20 @@ impl StateChanges {
                         uninstalled_items.sort();
 
                         if uninstalled_items.len() == 1 {
-                            eprintln!(
+                            pixi_progress::println!(
                                 "{}Removed completion {} of environment {}.",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 uninstalled_items[0],
                                 env_name.fancy_display()
                             );
                         } else {
-                            eprintln!(
+                            pixi_progress::println!(
                                 "{}Removed completions of environment {}:",
                                 console::style(console::Emoji("✔ ", "")).green(),
                                 env_name.fancy_display()
                             );
                             for uninstalled_item in uninstalled_items {
-                                eprintln!("   - {}", uninstalled_item);
+                                pixi_progress::println!("   - {}", uninstalled_item);
                             }
                         }
                     }
@@ -724,7 +724,7 @@ impl StateChanges {
     ) {
         // Check if there are any changes
         if environment_update.is_empty() {
-            eprintln!(
+            pixi_progress::println!(
                 "{}Environment {} was already up-to-date.",
                 console::style(console::Emoji("✔ ", "")).green(),
                 env_name.fancy_display(),
@@ -759,9 +759,9 @@ impl StateChanges {
 
         // Output messages based on the type of changes
         if top_level_changes.is_empty() && !transitive_changes.is_empty() {
-            eprintln!("{check_mark}Updated environment {env_fancy}.",);
+            pixi_progress::println!("{check_mark}Updated environment {env_fancy}.",);
         } else if top_level_changes.is_empty() && transitive_changes.is_empty() {
-            eprintln!("{check_mark}Environment {env_fancy} was already up-to-date.");
+            pixi_progress::println!("{check_mark}Environment {env_fancy} was already up-to-date.");
         } else if top_level_changes.len() == 1 {
             let changes = console::style(top_level_changes[0].0.as_normalized()).green();
             let version_string = top_level_changes[0]
@@ -770,11 +770,11 @@ impl StateChanges {
                 .map(|version| format!("={version}"))
                 .unwrap_or_default();
 
-            eprintln!(
+            pixi_progress::println!(
                 "{check_mark}{message} package {changes}{version_string} in environment {env_fancy}."
             );
         } else if top_level_changes.len() > 1 {
-            eprintln!(
+            pixi_progress::println!(
                 "{}{} packages in environment {}.",
                 console::style(console::Emoji("✔ ", "")).green(),
                 message,
@@ -786,7 +786,7 @@ impl StateChanges {
                     .version_fancy_display()
                     .map(|version| format!(" {version}"))
                     .unwrap_or_default();
-                eprintln!("    - {package_fancy}{change_fancy}");
+                pixi_progress::println!("    - {package_fancy}{change_fancy}");
             }
         }
     }

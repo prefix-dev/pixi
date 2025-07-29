@@ -275,7 +275,7 @@ impl PackageBuilder {
                 purls: None,
                 run_exports: None,
                 python_site_packages_path: None,
-                extra_depends: Default::default(),
+                experimental_extra_depends: Default::default(),
             },
             subdir,
             archive_type: self.archive_type,

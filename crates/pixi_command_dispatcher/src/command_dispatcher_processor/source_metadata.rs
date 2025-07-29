@@ -1,16 +1,25 @@
 use std::{collections::hash_map::Entry, sync::Arc};
 
 use futures::FutureExt;
-use itertools::Itertools;
 
 use super::{CommandDispatcherProcessor, PendingDeduplicatingTask, TaskResult};
 use crate::{
-    CommandDispatcherError, Reporter, SourceMetadata, SourceMetadataError,
+    CommandDispatcherError, Reporter, SourceMetadata, SourceMetadataError, SourceMetadataSpec,
     command_dispatcher::{CommandDispatcherContext, SourceMetadataId, SourceMetadataTask},
     source_metadata::Cycle,
 };
 
 impl CommandDispatcherProcessor {
+    /// Constructs a new [`SourceBuildId`] for the given `task`.
+    fn gen_source_metadata_id(&mut self, task: &SourceMetadataTask) -> SourceMetadataId {
+        let id = SourceMetadataId(self.source_metadata_ids.len());
+        self.source_metadata_ids.insert(task.spec.clone(), id);
+        if let Some(parent) = task.parent {
+            self.parent_contexts.insert(id.into(), parent);
+        }
+        id
+    }
+
     /// Called when a [`crate::command_dispatcher::SourceMetadataTask`]
     /// task was received.
     pub(crate) fn on_source_metadata(&mut self, task: SourceMetadataTask) {
@@ -20,15 +29,7 @@ impl CommandDispatcherProcessor {
                 Some(id) => {
                     // We already have a pending task for this source metadata. Let's make sure that
                     // we are not trying to resolve the same source metadata in a cycle.
-                    if std::iter::successors(task.parent, |ctx| {
-                        self.parent_contexts.get(ctx).cloned()
-                    })
-                    .filter_map(|context| match context {
-                        CommandDispatcherContext::SourceMetadata(id) => Some(id),
-                        _ => None,
-                    })
-                    .contains(id)
-                    {
+                    if self.contains_cycle(*id, task.parent) {
                         let _ = task
                             .tx
                             .send(Err(SourceMetadataError::Cycle(Cycle::default())));
@@ -37,16 +38,7 @@ impl CommandDispatcherProcessor {
 
                     *id
                 }
-                None => {
-                    // If the source metadata is not in the map, we need to
-                    // create a new id for it.
-                    let id = SourceMetadataId(self.source_metadata_ids.len());
-                    self.source_metadata_ids.insert(task.spec.clone(), id);
-                    if let Some(parent) = task.parent {
-                        self.parent_contexts.insert(id.into(), parent);
-                    }
-                    id
-                }
+                None => self.gen_source_metadata_id(&task),
             }
         };
 
@@ -89,19 +81,27 @@ impl CommandDispatcherProcessor {
                     reporter.on_started(reporter_id)
                 }
 
-                let dispatcher = self.create_task_command_dispatcher(
-                    CommandDispatcherContext::SourceMetadata(source_metadata_id),
-                );
-                self.pending_futures.push(
-                    task.spec
-                        .request(dispatcher)
-                        .map(move |result| {
-                            TaskResult::SourceMetadata(source_metadata_id, result.map(Arc::new))
-                        })
-                        .boxed_local(),
-                );
+                self.queue_source_metadata_task(source_metadata_id, task.spec);
             }
         }
+    }
+
+    /// Queues a source metadata task to be executed.
+    fn queue_source_metadata_task(
+        &mut self,
+        source_metadata_id: SourceMetadataId,
+        spec: SourceMetadataSpec,
+    ) {
+        let dispatcher = self.create_task_command_dispatcher(
+            CommandDispatcherContext::SourceMetadata(source_metadata_id),
+        );
+        self.pending_futures.push(
+            spec.request(dispatcher)
+                .map(move |result| {
+                    TaskResult::SourceMetadata(source_metadata_id, result.map(Arc::new))
+                })
+                .boxed_local(),
+        );
     }
 
     /// Called when a [`super::TaskResult::SourceMetadata`] task was
@@ -125,7 +125,7 @@ impl CommandDispatcherProcessor {
 
         self.source_metadata
             .get_mut(&id)
-            .expect("cannot find pending build backend metadata task")
+            .expect("cannot find pending task")
             .on_pending_result(result)
     }
 }

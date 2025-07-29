@@ -1040,9 +1040,8 @@ packages:
   - libgcc >=15
   - sdl2 >=2.32.54,<3.0a0
   input:
-    hash: 8851f93049d288a7c9518787c25a3ed116e22005e87f9f8985eb3967c8caf511
-    globs:
-    - pixi.toml
+    hash: 31ce6534707ac3b31b85d64591e46cb491b3da9ce64fcc66e64b8952d8d810f2
+    globs: []
 - conda: .
   name: sdl_example
   version: 0.1.0
@@ -1052,9 +1051,8 @@ packages:
   - libcxx >=20
   - sdl2 >=2.32.54,<3.0a0
   input:
-    hash: 8851f93049d288a7c9518787c25a3ed116e22005e87f9f8985eb3967c8caf511
-    globs:
-    - pixi.toml
+    hash: 31ce6534707ac3b31b85d64591e46cb491b3da9ce64fcc66e64b8952d8d810f2
+    globs: []
 - conda: .
   name: sdl_example
   version: 0.1.0
@@ -1064,22 +1062,21 @@ packages:
   - libcxx >=20
   - sdl2 >=2.32.54,<3.0a0
   input:
-    hash: 8851f93049d288a7c9518787c25a3ed116e22005e87f9f8985eb3967c8caf511
-    globs:
-    - pixi.toml
+    hash: 31ce6534707ac3b31b85d64591e46cb491b3da9ce64fcc66e64b8952d8d810f2
+    globs: []
 - conda: .
   name: sdl_example
   version: 0.1.0
   build: hbf21a9e_0
   subdir: win-64
   depends:
-  - vc >=14.1,<15
-  - vc14_runtime >=14.16.27033
+  - vc >=14.2,<15
+  - vc14_runtime >=14.29.30139
+  - ucrt >=10.0.20348.0
   - sdl2 >=2.32.54,<3.0a0
   input:
-    hash: 8851f93049d288a7c9518787c25a3ed116e22005e87f9f8985eb3967c8caf511
-    globs:
-    - pixi.toml
+    hash: 31ce6534707ac3b31b85d64591e46cb491b3da9ce64fcc66e64b8952d8d810f2
+    globs: []
 - conda: https://prefix.dev/conda-forge/win-64/ucrt-10.0.22621.0-h57928b3_1.conda
   sha256: db8dead3dd30fb1a032737554ce91e2819b43496a0db09927edf01c32b577450
   md5: 6797b005cd0f439c4c5c9ac565783700
