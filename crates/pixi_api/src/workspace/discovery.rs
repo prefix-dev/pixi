@@ -294,7 +294,14 @@ mod test {
         let workspace_locator = WorkspaceLocator::default();
         let workspace = workspace_locator.locate().unwrap();
         let project_root = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-        assert_eq!(workspace.root, PathBuf::from(project_root));
+        assert_eq!(
+            workspace.root,
+            PathBuf::from(project_root)
+                .parent()
+                .unwrap()
+                .parent()
+                .unwrap()
+        );
     }
 
     #[test]
@@ -303,7 +310,14 @@ mod test {
         let workspace_locator = WorkspaceLocator::for_cli();
         let workspace = workspace_locator.locate().unwrap();
         let project_root = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-        assert_eq!(workspace.root, PathBuf::from(project_root));
+        assert_eq!(
+            workspace.root,
+            PathBuf::from(project_root)
+                .parent()
+                .unwrap()
+                .parent()
+                .unwrap()
+        );
     }
 
     #[test]
@@ -312,10 +326,23 @@ mod test {
         let project_root = std::env::var("CARGO_MANIFEST_DIR").unwrap();
         let workspace_locator =
             WorkspaceLocator::default().with_search_start(DiscoveryStart::ExplicitManifest(
-                Path::new(&project_root).join("pixi.toml").to_path_buf(),
+                Path::new(&project_root)
+                    .parent()
+                    .unwrap()
+                    .parent()
+                    .unwrap()
+                    .join("pixi.toml")
+                    .to_path_buf(),
             ));
         let workspace = workspace_locator.locate().unwrap();
-        assert_eq!(workspace.root, PathBuf::from(project_root));
+        assert_eq!(
+            workspace.root,
+            PathBuf::from(project_root)
+                .parent()
+                .unwrap()
+                .parent()
+                .unwrap()
+        );
     }
 
     #[test]
@@ -323,21 +350,41 @@ mod test {
         // Equivalent to `pixi xxx --manifest pixi.toml`
         let project_root = std::env::var("CARGO_MANIFEST_DIR").unwrap();
         let workspace_locator = WorkspaceLocator::default().with_search_start(
-            DiscoveryStart::ExplicitManifest(Path::new("pixi.toml").to_path_buf()),
+            DiscoveryStart::ExplicitManifest(Path::new("../../pixi.toml").to_path_buf()),
         );
         let workspace = workspace_locator.locate().unwrap();
-        assert_eq!(workspace.root, PathBuf::from(project_root));
+        assert_eq!(
+            workspace.root,
+            PathBuf::from(project_root)
+                .parent()
+                .unwrap()
+                .parent()
+                .unwrap()
+        );
     }
 
     #[test]
     fn test_workspace_locator_explicit_path() {
         // Equivalent to `pixi xxx --manifest /absolute/path/to/folder`
         let project_root = std::env::var("CARGO_MANIFEST_DIR").unwrap();
-        let workspace_locator = WorkspaceLocator::default().with_search_start(
-            DiscoveryStart::ExplicitManifest(Path::new(&project_root).to_path_buf()),
-        );
+        let workspace_locator =
+            WorkspaceLocator::default().with_search_start(DiscoveryStart::ExplicitManifest(
+                Path::new(&project_root)
+                    .parent()
+                    .unwrap()
+                    .parent()
+                    .unwrap()
+                    .to_path_buf(),
+            ));
         let workspace = workspace_locator.locate().unwrap();
-        assert_eq!(workspace.root, PathBuf::from(project_root));
+        assert_eq!(
+            workspace.root,
+            PathBuf::from(project_root)
+                .parent()
+                .unwrap()
+                .parent()
+                .unwrap()
+        );
     }
 
     #[test]
