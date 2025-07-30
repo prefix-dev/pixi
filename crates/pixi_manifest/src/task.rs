@@ -876,6 +876,8 @@ impl From<Task> for Item {
 
 #[cfg(test)]
 mod tests {
+    use insta::assert_snapshot;
+
     use crate::task::{Alias, Dependency, DependencyArg, Task};
 
     use super::quote;
@@ -908,6 +910,6 @@ mod tests {
         };
         let task = Task::Alias(alias);
         let toml = toml_edit::Item::from(task);
-        println!("{:#?}", toml);
+        assert_snapshot!(toml.to_string(), @r###"[{ task = "depTask", args = ["foo", { bar = "baz" }] }]"###);
     }
 }
