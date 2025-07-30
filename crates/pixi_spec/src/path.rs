@@ -78,6 +78,11 @@ impl Display for PathSpec {
     }
 }
 
+// TODO: Contribute `impl FromStr for Utf8TypedPathBuf` to typed-path
+// to continue using `serde_as` and remove manual implementations of
+// serialization and deserialization below. See git blame history
+// right before this line was added.
+
 /// Path to a source package. Different from [`PathSpec`] in that this type only
 /// refers to source packages.
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
