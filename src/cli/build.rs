@@ -91,9 +91,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Query any and all information we can acquire about the package we're
     // attempting to build.
-    let Ok(search_start) = workspace_locator.path() else {
-        miette::bail!("could not determine the current working directory to locate the workspace");
-    };
+    let search_start = workspace.root();
     let channel_config = workspace.channel_config();
     let channels = workspace
         .default_environment()
