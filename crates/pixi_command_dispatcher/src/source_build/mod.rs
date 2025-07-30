@@ -568,6 +568,7 @@ impl SourceBuildSpec {
         dependencies: Dependencies,
         build_environment: BuildEnvironment,
     ) -> Result<Vec<PixiRecord>, CommandDispatcherError<SolvePixiEnvironmentError>> {
+        tracing::trace!("Got dependencies {dependencies:#?}");
         if dependencies.dependencies.is_empty() {
             return Ok(vec![]);
         }

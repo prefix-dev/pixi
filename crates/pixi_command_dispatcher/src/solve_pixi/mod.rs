@@ -118,6 +118,7 @@ impl PixiEnvironmentSpec {
         command_queue: CommandDispatcher,
         gateway_reporter: Option<Box<dyn rattler_repodata_gateway::Reporter>>,
     ) -> Result<Vec<PixiRecord>, CommandDispatcherError<SolvePixiEnvironmentError>> {
+        tracing::debug!("All specs {:#?}", self.dependencies);
         // Split the requirements into source and binary requirements.
         let (source_specs, binary_specs) =
             Self::split_into_source_and_binary_requirements(self.dependencies);
