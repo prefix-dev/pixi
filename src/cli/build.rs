@@ -104,7 +104,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         if let Some(src_spec) = &package.value.build.src {
             match src_spec {
                 pixi_spec::SourceSpec::Path(path_spec) => {
-                    let resolved_path = path_spec.resolve(&search_start).into_diagnostic()?;
+                    let resolved_path = path_spec.resolve(search_start).into_diagnostic()?;
                     PinnedPathSpec {
                         path: resolved_path.to_string_lossy().into_owned().into(),
                     }
