@@ -372,6 +372,18 @@ def test_pixi_init_non_existing_dir(pixi: Path, tmp_pixi_workspace: Path) -> Non
     assert "[workspace]" in manifest_content
 
 
+def test_pixi_init_pixi_home_parent(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    pixi_home = tmp_pixi_workspace / ".pixi"
+    pixi_home.mkdir(exist_ok=True)
+
+    verify_cli_command(
+        [pixi, "init", pixi_home.parent],
+        ExitCode.FAILURE,
+        stderr_contains="You cannot create a workspace in the parent of the pixi home directory",
+        env={"PIXI_HOME": str(pixi_home)},
+    )
+
+
 @pytest.mark.slow
 def test_pixi_init_pyproject(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest_path = tmp_pixi_workspace / "pyproject.toml"
@@ -772,6 +784,58 @@ def test_concurrency_flags(
             manifest_path,
             "package3",
         ]
+    )
+
+
+def test_cli_config_options(
+    pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
+) -> None:
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+
+    # Create a new project
+    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, tmp_pixi_workspace])
+
+    # Test --pinning-strategy flag
+    verify_cli_command(
+        [pixi, "add", "--pinning-strategy=semver", "--manifest-path", manifest_path, "package"]
+    )
+    verify_cli_command(
+        [pixi, "add", "--pinning-strategy=minor", "--manifest-path", manifest_path, "package2"]
+    )
+    verify_cli_command(
+        [pixi, "add", "--pinning-strategy=major", "--manifest-path", manifest_path, "package3"]
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "add",
+            "--pinning-strategy=latest-up",
+            "--manifest-path",
+            manifest_path,
+            "package==0.1.0",
+        ]
+    )
+
+    # Test other CLI config flags
+    verify_cli_command(
+        [pixi, "install", "--run-post-link-scripts", "--manifest-path", manifest_path]
+    )
+    verify_cli_command([pixi, "install", "--tls-no-verify", "--manifest-path", manifest_path])
+    verify_cli_command(
+        [pixi, "install", "--use-environment-activation-cache", "--manifest-path", manifest_path]
+    )
+    verify_cli_command(
+        [pixi, "install", "--pypi-keyring-provider=disabled", "--manifest-path", manifest_path]
+    )
+    verify_cli_command(
+        [pixi, "install", "--pypi-keyring-provider=subprocess", "--manifest-path", manifest_path]
+    )
+
+    # Test --auth-file flag
+    auth_file = tmp_pixi_workspace / "auth.json"
+    auth_file.write_text("{}")
+    verify_cli_command(
+        [pixi, "install", f"--auth-file={auth_file}", "--manifest-path", manifest_path]
     )
 
 
