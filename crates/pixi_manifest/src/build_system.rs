@@ -141,7 +141,7 @@ mod tests {
         let build = PackageBuild::from_toml_str(toml).unwrap();
         assert_eq!(build.backend.name.as_source(), "pixi-build-rattler-build");
         assert!(build.src.is_some());
-        
+
         // Verify it's a path source and contains the relative path
         if let Some(src) = &build.src {
             match src {
@@ -167,7 +167,7 @@ mod tests {
         let build = PackageBuild::from_toml_str(toml).unwrap();
         assert_eq!(build.backend.name.as_source(), "pixi-build-rattler-build");
         assert!(build.src.is_some());
-        
+
         // Verify it's a path source and contains the home directory path
         if let Some(src) = &build.src {
             match src {
@@ -182,11 +182,11 @@ mod tests {
     #[test]
     fn test_path_resolution_relative_paths() {
         use tempfile::TempDir;
-        
+
         // Create a temporary directory structure for testing
         let temp_dir = TempDir::new().unwrap();
         let workspace_root = temp_dir.path();
-        
+
         let toml = r#"
             backend = { name = "pixi-build-rattler-build", version = "0.1.*" }
             src = { path = "../other-source" }
@@ -194,16 +194,16 @@ mod tests {
 
         let build = PackageBuild::from_toml_str(toml).unwrap();
         assert!(build.src.is_some());
-        
+
         if let Some(src) = &build.src {
             match src {
                 pixi_spec::SourceSpec::Path(path_spec) => {
                     // Test that the path spec can resolve relative paths correctly
                     let resolved = path_spec.resolve(workspace_root).unwrap();
-                    
-                    // The resolved path should contain "other-source" (canonicalized may differ, but should point to same logical location) 
+
+                    // The resolved path should contain "other-source" (canonicalized may differ, but should point to same logical location)
                     assert!(resolved.to_string_lossy().contains("other-source"));
-                    
+
                     // Test that relative path is preserved in the spec itself
                     assert_eq!(path_spec.path.as_str(), "../other-source");
                 }
@@ -212,10 +212,10 @@ mod tests {
         }
     }
 
-    #[test] 
+    #[test]
     fn test_path_resolution_absolute_paths() {
         use std::path::Path;
-        
+
         let toml = r#"
             backend = { name = "pixi-build-rattler-build", version = "0.1.*" }
             src = { path = "/absolute/path/to/source" }
@@ -223,14 +223,14 @@ mod tests {
 
         let build = PackageBuild::from_toml_str(toml).unwrap();
         assert!(build.src.is_some());
-        
+
         if let Some(src) = &build.src {
             match src {
                 pixi_spec::SourceSpec::Path(path_spec) => {
                     // Test that absolute paths are returned as-is during resolution
                     let resolved = path_spec.resolve("/workspace/root").unwrap();
                     assert_eq!(resolved, Path::new("/absolute/path/to/source"));
-                    
+
                     // Test that absolute path is preserved in the spec itself
                     assert_eq!(path_spec.path.as_str(), "/absolute/path/to/source");
                 }
@@ -243,34 +243,45 @@ mod tests {
     fn test_various_relative_path_formats() {
         let test_cases = vec![
             ("./current-dir", "./current-dir"),
-            ("../parent-dir", "../parent-dir"), 
+            ("../parent-dir", "../parent-dir"),
             ("../../grandparent", "../../grandparent"),
             ("subdir/nested", "subdir/nested"),
             ("../sibling/nested", "../sibling/nested"),
         ];
 
         for (input_path, expected_path) in test_cases {
-            let toml = format!(r#"
+            let toml = format!(
+                r#"
                 backend = {{ name = "pixi-build-rattler-build", version = "0.1.*" }}
                 src = {{ path = "{}" }}
-                "#, input_path);
+                "#,
+                input_path
+            );
 
             let build = PackageBuild::from_toml_str(&toml).unwrap();
             assert!(build.src.is_some(), "Failed for path: {}", input_path);
-            
+
             if let Some(src) = &build.src {
                 match src {
                     pixi_spec::SourceSpec::Path(path_spec) => {
                         // Verify the path is preserved correctly
-                        assert_eq!(path_spec.path.as_str(), expected_path, 
-                                 "Path mismatch for input: {}", input_path);
-                        
+                        assert_eq!(
+                            path_spec.path.as_str(),
+                            expected_path,
+                            "Path mismatch for input: {}",
+                            input_path
+                        );
+
                         // Verify it can be resolved (using a dummy workspace root)
                         let workspace_root = std::path::Path::new("/workspace");
                         let resolved = path_spec.resolve(workspace_root).unwrap();
-                        
+
                         // The resolved path should be different from the input (unless it was absolute)
-                        assert!(resolved.is_absolute(), "Resolved path should be absolute for: {}", input_path);
+                        assert!(
+                            resolved.is_absolute(),
+                            "Resolved path should be absolute for: {}",
+                            input_path
+                        );
                     }
                     _ => panic!("Expected a path source spec for: {}", input_path),
                 }

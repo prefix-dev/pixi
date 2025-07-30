@@ -116,10 +116,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     // For now, we can't properly pin git sources without resolving them
                     // This is a temporary implementation - ideally we would resolve the git reference
                     // to get the actual commit SHA
-                    miette::bail!("Git source roots are not yet supported. Use path-based source roots for now.")
+                    miette::bail!(
+                        "Git source roots are not yet supported. Use path-based source roots for now."
+                    )
                 }
                 pixi_spec::SourceSpec::Url(url_spec) => {
-                    // Convert UrlSourceSpec to PinnedSourceSpec 
+                    // Convert UrlSourceSpec to PinnedSourceSpec
                     PinnedSourceSpec::Url(pixi_record::PinnedUrlSpec {
                         url: url_spec.url.clone(),
                         sha256: url_spec.sha256.unwrap_or_default(),

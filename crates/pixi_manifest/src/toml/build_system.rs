@@ -6,7 +6,9 @@ use pixi_spec::{SourceSpec, TomlSpec};
 use pixi_toml::{Same, TomlFromStr, TomlIndexMap, TomlWith};
 use rattler_conda_types::NamedChannelOrUrl;
 use serde::Deserialize;
-use toml_span::{DeserError, ErrorKind, Spanned, Value, de_helpers::TableHelper, value::ValueInner};
+use toml_span::{
+    DeserError, ErrorKind, Spanned, Value, de_helpers::TableHelper, value::ValueInner,
+};
 
 use crate::{
     PackageBuild, TargetSelector, TomlError,
@@ -165,7 +167,10 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
             .map(|(_, mut value)| {
                 // Parse the SourceSpec using its serde deserialization
                 let value_as_json = convert_toml_to_serde(&mut value)?;
-                <SourceSpec as Deserialize>::deserialize(serde_value::ValueDeserializer::new(value_as_json)).map_err(|e: serde_value::DeserializerError| {
+                <SourceSpec as Deserialize>::deserialize(serde_value::ValueDeserializer::new(
+                    value_as_json,
+                ))
+                .map_err(|e: serde_value::DeserializerError| {
                     DeserError::from(toml_span::Error {
                         kind: ErrorKind::Custom(e.to_string().into()),
                         span: value.span,
