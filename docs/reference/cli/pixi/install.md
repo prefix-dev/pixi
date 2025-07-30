@@ -18,7 +18,7 @@ pixi install [OPTIONS]
 - <a id="arg---all" href="#arg---all">`--all (-a)`</a>
 :  Install all environments
 - <a id="arg---skip" href="#arg---skip">`--skip <SKIP>`</a>
-:  Skip installation of specific packages present in the lockfile. Requires --frozen This can be useful in particular for skipping local source dependencies
+:  Skip installation of specific packages present in the lockfile. Requires --frozen. This can be useful for instance in a Dockerfile to skip local source dependencies when installing dependencies
 <br>May be provided more than once.
 
 ## Config Options

@@ -49,8 +49,8 @@ pub struct Args {
     #[arg(long, short, conflicts_with = "environment")]
     pub all: bool,
 
-    /// Skip installation of specific packages present in the lockfile. Requires --frozen
-    /// This can be useful in particular for skipping local source dependencies.
+    /// Skip installation of specific packages present in the lockfile. Requires --frozen.
+    /// This can be useful for instance in a Dockerfile to skip local source dependencies when installing dependencies.
     #[arg(long, requires = "frozen")]
     pub skip: Option<Vec<String>>,
 }
