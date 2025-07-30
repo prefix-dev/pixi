@@ -1363,13 +1363,14 @@ platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
 """
     manifest.write_text(toml)
 
+    # Plain
     verify_cli_command(
         [
             pixi,
             "task",
             "add",
             "--arg",
-            "name",
+            "name=default",
             "--manifest-path",
             manifest,
             "test",
@@ -1377,8 +1378,113 @@ platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
         ]
     )
 
+    # Alias
     verify_cli_command(
-        [pixi, "task", "add", "--depends-on", "test", "--manifest-path", manifest, "test-alias", ""]
+        [pixi, "task", "add", "--depends-on", "test", "--manifest-path", manifest, "test-alias"]
+    )
+
+    # Alias with args and environments
+    verify_cli_command(
+        [
+            pixi,
+            "task",
+            "add",
+            "--depends-on",
+            "test:env:arg",
+            "--manifest-path",
+            manifest,
+            "test-depends-on",
+        ]
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "task",
+            "add",
+            "--depends-on",
+            "test:env:arg,arg2",
+            "--manifest-path",
+            manifest,
+            "test-depends-on-two-args",
+        ]
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "task",
+            "add",
+            "--depends-on",
+            "test:env",
+            "--manifest-path",
+            manifest,
+            "test-depends-on-env-only",
+        ]
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "task",
+            "add",
+            "--depends-on",
+            "test::arg,arg2",
+            "--manifest-path",
+            manifest,
+            "test-depends-on-args-only",
+        ]
+    )
+
+    # Full spec task
+    verify_cli_command(
+        [
+            pixi,
+            "task",
+            "add",
+            "--arg",
+            "name",
+            "--env",
+            "VAR=val",
+            "--env",
+            "VAR2=val2",
+            "--depends-on",
+            "test",
+            "--depends-on",
+            "test-alias:env:arg",
+            "--platform",
+            "linux-64",
+            "--feature",
+            "py312",
+            "--manifest-path",
+            manifest,
+            "test-full-spec",
+            "echo 'Hello {{name | title}}'",
+        ]
+    )
+
+    # Read it with pixi task list
+    verify_cli_command(
+        [pixi, "task", "list", "--manifest-path", manifest],
+    )
+
+    # Fail validation
+    verify_cli_command(
+        [
+            pixi,
+            "task",
+            "add",
+            "--arg",
+            "a",
+            "--env",
+            "VAR=val",
+            "--platform",
+            "linux-64",
+            "--feature",
+            "py312",
+            "--manifest-path",
+            manifest,
+            "test-invalid-task",
+        ],
+        ExitCode.FAILURE,
+        stderr_contains=["commands", "--depends-on"],
     )
 
     assert manifest.read_text() == snapshot
