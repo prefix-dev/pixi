@@ -84,4 +84,5 @@ TomlPackageBuild {
             },
         ),
     ),
+    target: {},
 }

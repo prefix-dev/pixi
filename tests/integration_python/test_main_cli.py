@@ -372,6 +372,18 @@ def test_pixi_init_non_existing_dir(pixi: Path, tmp_pixi_workspace: Path) -> Non
     assert "[workspace]" in manifest_content
 
 
+def test_pixi_init_pixi_home_parent(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    pixi_home = tmp_pixi_workspace / ".pixi"
+    pixi_home.mkdir(exist_ok=True)
+
+    verify_cli_command(
+        [pixi, "init", pixi_home.parent],
+        ExitCode.FAILURE,
+        stderr_contains="You cannot create a workspace in the parent of the pixi home directory",
+        env={"PIXI_HOME": str(pixi_home)},
+    )
+
+
 @pytest.mark.slow
 def test_pixi_init_pyproject(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest_path = tmp_pixi_workspace / "pyproject.toml"
@@ -1344,6 +1356,7 @@ def test_pixi_task_list_json(
     assert task_data == snapshot
 
 
+@pytest.mark.extra_slow
 def test_info_output_extended(
     pixi: Path, tmp_pixi_workspace: Path, snapshot: SnapshotAssertion
 ) -> None:

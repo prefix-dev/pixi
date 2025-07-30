@@ -1,14 +1,16 @@
 use std::collections::BTreeMap;
 
+use indexmap::IndexMap;
 use pixi_spec::TomlSpec;
-use pixi_toml::{TomlFromStr, TomlWith};
+use pixi_toml::{Same, TomlFromStr, TomlIndexMap, TomlWith};
 use rattler_conda_types::NamedChannelOrUrl;
 use toml_span::{DeserError, Spanned, Value, de_helpers::TableHelper, value::ValueInner};
 
 use crate::{
-    PackageBuild, TomlError,
+    PackageBuild, TargetSelector, TomlError,
     build_system::BuildBackend,
     error::GenericError,
+    toml::build_target::TomlPackageBuildTarget,
     utils::{PixiSpanned, package_map::UniquePackageMap},
 };
 
@@ -18,6 +20,7 @@ pub struct TomlPackageBuild {
     pub channels: Option<PixiSpanned<Vec<NamedChannelOrUrl>>>,
     pub additional_dependencies: UniquePackageMap,
     pub configuration: Option<serde_value::Value>,
+    pub target: IndexMap<PixiSpanned<TargetSelector>, TomlPackageBuildTarget>,
 }
 
 #[derive(Debug)]
@@ -48,6 +51,17 @@ impl TomlPackageBuild {
             }
         }
 
+        // Convert target-specific build configurations
+        let target_configuration = self
+            .target
+            .into_iter()
+            .flat_map(|(selector, target)| {
+                target
+                    .configuration
+                    .map(|config| (selector.into_inner(), config))
+            })
+            .collect::<IndexMap<_, _>>();
+
         Ok(PackageBuild {
             backend: BuildBackend {
                 name: self.backend.value.name.value,
@@ -56,11 +70,16 @@ impl TomlPackageBuild {
             additional_dependencies,
             channels: self.channels.map(|channels| channels.value),
             configuration: self.configuration,
+            target_configuration: if target_configuration.is_empty() {
+                None
+            } else {
+                Some(target_configuration)
+            },
         })
     }
 }
 
-fn convert_toml_to_serde(value: &mut Value) -> Result<serde_value::Value, DeserError> {
+pub fn convert_toml_to_serde(value: &mut Value) -> Result<serde_value::Value, DeserError> {
     Ok(match value.take() {
         ValueInner::String(s) => serde_value::Value::String(s.to_string()),
         ValueInner::Integer(i) => serde_value::Value::I64(i),
@@ -121,12 +140,18 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
             .map(|(_, mut value)| convert_toml_to_serde(&mut value))
             .transpose()?;
 
+        let target = th
+            .optional::<TomlWith<_, TomlIndexMap<_, Same>>>("target")
+            .map(TomlWith::into_inner)
+            .unwrap_or_default();
+
         th.finalize(None)?;
         Ok(Self {
             backend: build_backend,
             channels,
             additional_dependencies,
             configuration,
+            target,
         })
     }
 }

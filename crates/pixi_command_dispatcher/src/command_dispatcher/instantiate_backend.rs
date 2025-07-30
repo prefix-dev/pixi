@@ -64,6 +64,7 @@ impl CommandDispatcher {
                             cache_directory: Some(self.cache_dirs().root().clone()),
                             project_model: spec.init_params.project_model.map(Into::into),
                             configuration: spec.init_params.configuration,
+                            target_configuration: spec.init_params.target_configuration,
                         })
                         .map_err(InstantiateBackendError::InMemoryError)
                         .map_err(CommandDispatcherError::Failed)?;
@@ -139,6 +140,7 @@ impl CommandDispatcher {
             manifest_path,
             spec.init_params.project_model,
             spec.init_params.configuration,
+            spec.init_params.target_configuration,
             Some(self.cache_dirs().root().clone()),
             tool,
         )
