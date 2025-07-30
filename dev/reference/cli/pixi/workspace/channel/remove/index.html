@@ -2748,14 +2748,27 @@
 <ul>
 <li>
 <dl>
-<dt><a id="arg---tls-no-verify" href="#arg---tls-no-verify"><code>--tls-no-verify</code></a></dt>
-<dd>Do not verify the TLS certificate of the server</dd>
+<dt><a id="arg---auth-file" href="#arg---auth-file"><code>--auth-file &lt;AUTH_FILE&gt;</code></a></dt>
+<dd>Path to the file containing the authentication token</dd>
 </dl>
 </li>
 <li>
 <dl>
-<dt><a id="arg---auth-file" href="#arg---auth-file"><code>--auth-file &lt;AUTH_FILE&gt;</code></a></dt>
-<dd>Path to the file containing the authentication token</dd>
+<dt><a id="arg---concurrent-downloads" href="#arg---concurrent-downloads"><code>--concurrent-downloads &lt;CONCURRENT_DOWNLOADS&gt;</code></a></dt>
+<dd>Max concurrent network requests, default is <code>50</code></dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---concurrent-solves" href="#arg---concurrent-solves"><code>--concurrent-solves &lt;CONCURRENT_SOLVES&gt;</code></a></dt>
+<dd>Max concurrent solves, default is the number of CPUs</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---pinning-strategy" href="#arg---pinning-strategy"><code>--pinning-strategy &lt;PINNING_STRATEGY&gt;</code></a></dt>
+<dd>Set pinning strategy
+<br><strong>options</strong>: <code>semver</code>, <code>minor</code>, <code>major</code>, <code>latest-up</code>, <code>exact-version</code>, <code>no-pin</code></dd>
 </dl>
 </li>
 <li>
@@ -2767,14 +2780,20 @@
 </li>
 <li>
 <dl>
-<dt><a id="arg---concurrent-solves" href="#arg---concurrent-solves"><code>--concurrent-solves &lt;CONCURRENT_SOLVES&gt;</code></a></dt>
-<dd>Max concurrent solves, default is the number of CPUs</dd>
+<dt><a id="arg---run-post-link-scripts" href="#arg---run-post-link-scripts"><code>--run-post-link-scripts</code></a></dt>
+<dd>Run post-link scripts (insecure)</dd>
 </dl>
 </li>
 <li>
 <dl>
-<dt><a id="arg---concurrent-downloads" href="#arg---concurrent-downloads"><code>--concurrent-downloads &lt;CONCURRENT_DOWNLOADS&gt;</code></a></dt>
-<dd>Max concurrent network requests, default is <code>50</code></dd>
+<dt><a id="arg---tls-no-verify" href="#arg---tls-no-verify"><code>--tls-no-verify</code></a></dt>
+<dd>Do not verify the TLS certificate of the server</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---use-environment-activation-cache" href="#arg---use-environment-activation-cache"><code>--use-environment-activation-cache</code></a></dt>
+<dd>Use environment activation cache (experimental)</dd>
 </dl>
 </li>
 </ul>

@@ -335,6 +335,26 @@
           "description": "The configuration of the build backend",
           "type": "object",
           "additionalProperties": true
+        },
+        "target": {
+          "title": "Target",
+          "description": "Target-specific build configuration for different platforms",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/BuildTarget"
+          },
+          "propertyNames": {
+            "minLength": 1
+          },
+          "examples": [
+            {
+              "linux-64": {
+                "configuration": {
+                  "key": "value"
+                }
+              }
+            }
+          ]
         }
       }
     },
@@ -449,6 +469,20 @@
           "description": "The version of the package in [MatchSpec](https://github.com/conda/conda/blob/078e7ee79381060217e1ec7f9b0e9cf80ecc8f3f/conda/models/match_spec.py) format",
           "type": "string",
           "minLength": 1
+        }
+      }
+    },
+    "BuildTarget": {
+      "title": "BuildTarget",
+      "description": "Target-specific build configuration for different platforms",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "configuration": {
+          "title": "Configuration",
+          "description": "Target-specific configuration for the build backend",
+          "type": "object",
+          "additionalProperties": true
         }
       }
     },
