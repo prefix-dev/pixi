@@ -443,20 +443,19 @@ impl<'p> TaskGraph<'p> {
             match arg {
                 TypedDependencyArg::Named(name, value) => {
                     if !task_arg_names.contains(name) {
-                        // TODO: make an error variant for this
-                        return Err(TaskGraphError::TooManyArguments(format!(
-                            "named argument '{}' does not exist for task {}",
-                            name, task_name
-                        )));
+                        return Err(TaskGraphError::UnknownArgument(
+                            name.to_string(),
+                            task_name.to_string(),
+                        ));
                     }
                     seen_named = true;
                     named_args.push((name.to_string(), value.to_string()));
                 }
-                TypedDependencyArg::Positional(_) => {
+                TypedDependencyArg::Positional(value) => {
                     if seen_named {
-                        // TODO: make an error variant for this
-                        return Err(TaskGraphError::TooManyArguments(
-                            "Positional argument found after named argument".into(),
+                        return Err(TaskGraphError::PositionalAfterNamedArgument(
+                            value.to_string(),
+                            task_name.to_string(),
                         ));
                     }
                 }
@@ -558,6 +557,12 @@ pub enum TaskGraphError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     TemplateStringError(#[from] TemplateStringError),
+
+    #[error("named argument '{0}' does not exist for task {1}")]
+    UnknownArgument(String, String),
+
+    #[error("Positional argument '{0}' found after named argument for task {1}")]
+    PositionalAfterNamedArgument(String, String),
 }
 
 #[cfg(test)]
