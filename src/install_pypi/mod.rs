@@ -13,7 +13,7 @@ use pixi_manifest::{
 use pixi_progress::await_in_progress;
 use pixi_record::PixiRecord;
 use pixi_uv_conversions::{
-    BuildIsolation, locked_indexes_to_index_locations, pypi_options_to_build_options, to_normalize,
+    BuildIsolation, locked_indexes_to_index_locations, pypi_options_to_build_options,
 };
 use plan::{InstallPlanner, InstallReason, NeedReinstall, PyPIInstallationPlan};
 use pypi_modifiers::{
@@ -340,11 +340,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
                 let mut no_build_isolation_dists = Vec::new();
                 for no_build_isolation in no_build_isolation_packages {
                     for dist in &dists {
-                        let Ok(dist_name) = to_normalize(dist.name()) else {
-                            regular_dists.push(dist.clone());
-                            continue;
-                        };
-                        if &dist_name == no_build_isolation {
+                        if dist.name().to_string() == no_build_isolation.to_string() {
                             no_build_isolation_dists.push(dist.clone());
                         } else {
                             regular_dists.push(dist.clone());
