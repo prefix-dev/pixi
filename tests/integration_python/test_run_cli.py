@@ -1,4 +1,8 @@
 import json
+import shutil
+import signal
+import time
+import subprocess
 import tomli_w
 from pathlib import Path
 
@@ -1355,3 +1359,50 @@ def test_task_caching_with_multiple_inputs_args(pixi: Path, tmp_pixi_workspace: 
             "cache hit",
         ],
     )
+
+
+def test_signal_forwarding(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test that signals are forwarded correctly to the task.
+    We copy the data from the ../data/run_signals folder to the tmp workspace
+    """
+
+    # copy the folder from ../data/run_signals to the tmp workspace
+    data_path = Path(__file__).parent.parent.joinpath("data", "run_signals")
+    tmp_data_path = tmp_pixi_workspace.joinpath("run_signals")
+
+    shutil.copytree(data_path, tmp_data_path)
+
+    # Use the manifest from the copied run_signals directory
+    manifest = tmp_data_path.joinpath("pixi.toml")
+
+    # run the `start` task in the background and send some signals to it
+    # with `pixi run start`
+    process = subprocess.Popen(
+        [pixi, "run", "--no-progress", "--manifest-path", manifest, "start"], cwd=tmp_data_path
+    )
+
+    time.sleep(5)  # wait for the process to start
+
+    # send a SIGINT to the process
+    # process.send_signal(signal.SIGHUP)
+    # process.send_signal(signal.SIGHUP)
+    process.send_signal(signal.SIGINT)
+
+    # check exit code
+    exit_code = process.wait(timeout=5)
+
+    assert exit_code == 12, f"Process exited with code {exit_code}"
+
+    output_file = tmp_data_path.joinpath("output.txt")
+    print(f"Output file exists: {output_file.exists()}")
+
+    if output_file.exists():
+        # check if we can read "SIGINT received, exiting gracefully"
+        with open(output_file, "r") as f:
+            output = f.read()
+            # assert "HUPHUPHUP" in output, "HUP signals were not handled correctly"
+            assert "SIGINT received, exiting gracefully" in output, (
+                "SIGINT signal was not handled correctly"
+            )
+    else:
+        raise AssertionError("Output file was not created")

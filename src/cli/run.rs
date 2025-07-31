@@ -412,7 +412,10 @@ async fn execute_task(
         let signal_code = received_signal.load(Ordering::Relaxed);
         if signal_code != 0 {
             let signal_kind = SignalKind::from(signal_code);
-            tracing::debug!("Abort signal detected during task execution, forwarding {:?}...", signal_kind);
+            tracing::debug!(
+                "Abort signal detected during task execution, forwarding {:?}...",
+                signal_kind
+            );
             kill_signal.send(signal_kind);
         }
     };

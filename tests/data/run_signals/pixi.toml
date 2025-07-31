@@ -1,0 +1,12 @@
+[workspace]
+authors = ["Wolf Vollprecht <w.vollprecht@gmail.com>"]
+channels = ["conda-forge"]
+name = "ctrlc"
+platforms = ["osx-arm64"]
+version = "0.1.0"
+
+[tasks]
+start = "python ./test.py"
+
+[dependencies]
+python = "3.12.*"
