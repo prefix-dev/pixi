@@ -60,7 +60,7 @@ pub struct Args {
     pub list: Option<String>,
 
     /// Disable modification of the PS1 prompt to indicate the temporary environment
-    #[clap(long, action = clap::ArgAction::SetTrue, default_value = "false")]
+    #[clap(long)]
     pub no_modify_ps1: bool,
 
     #[clap(flatten)]
