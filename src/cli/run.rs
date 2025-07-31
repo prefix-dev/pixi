@@ -3,14 +3,11 @@ use std::{
     convert::identity,
     ffi::OsString,
     string::String,
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::atomic::Ordering,
 };
 
 use clap::Parser;
-use deno_task_shell::{KillSignal, SignalKind};
+use deno_task_shell::KillSignal;
 use dialoguer::theme::ColorfulTheme;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
@@ -19,6 +16,7 @@ use pixi_config::{ConfigCli, ConfigCliActivation};
 use pixi_manifest::{FeaturesExt, TaskName};
 use rattler_conda_types::Platform;
 use thiserror::Error;
+use tokio_util::sync::CancellationToken;
 use tracing::Level;
 
 use super::cli_config::LockFileUpdateConfig;
@@ -33,8 +31,6 @@ use crate::{
     },
     workspace::{Environment, errors::UnsupportedPlatformError},
 };
-
-static SIGNAL_NOTIFY: tokio::sync::Notify = tokio::sync::Notify::const_new();
 
 /// Runs task in the pixi environment.
 ///
@@ -137,24 +133,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         })
         .await?;
 
-    let ctrlc_should_exit_process = Arc::new(AtomicBool::new(true));
-    let ctrlc_should_exit_process_clone = Arc::clone(&ctrlc_should_exit_process);
-
-    // Store the signal that was received for forwarding
-    let received_signal = Arc::new(std::sync::atomic::AtomicI32::new(0));
-    let received_signal_clone = Arc::clone(&received_signal);
-
-    ctrlc::set_handler(move || {
-        reset_cursor();
-        if ctrlc_should_exit_process_clone.load(Ordering::Relaxed) {
-            exit_process_on_sigint();
-        } else {
-            received_signal_clone.store(SignalKind::SIGINT.into(), Ordering::Relaxed);
-            SIGNAL_NOTIFY.notify_waiters();
-        }
-    })
-    .into_diagnostic()?;
-
     // Construct a task graph from the input arguments
     let search_environment = SearchEnvironments::from_opt_env(
         &workspace,
@@ -179,10 +157,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         );
     }
 
+    // Spawn a task that listens for ctrl+c and resets the cursor.
+    tokio::spawn(async {
+        if let Ok(_) = tokio::signal::ctrl_c().await {
+            reset_cursor();
+        }
+    });
+
     // Traverse the task graph in topological order and execute each individual
     // task.
     let mut task_idx = 0;
     let mut task_envs = HashMap::new();
+    let signal = KillSignal::default();
     for task_id in task_graph.topological_order() {
         let executable_task = ExecutableTask::from_task_graph(&task_graph, task_id);
 
@@ -289,8 +275,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
         };
 
-        ctrlc_should_exit_process.store(false, Ordering::Relaxed);
-
         let task_env = task_env
             .iter()
             .map(|(k, v)| (OsString::from(k), OsString::from(v)))
@@ -299,7 +283,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // Execute the task itself within the command environment. If one of the tasks
         // failed with a non-zero exit code, we exit this parent process with
         // the same code.
-        match execute_task(&executable_task, &task_env, received_signal.clone()).await {
+        match execute_task(&executable_task, &task_env, signal.clone()).await {
             Ok(_) => {
                 task_idx += 1;
             }
@@ -311,9 +295,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
             Err(err) => return Err(err.into()),
         }
-
-        // Handle CTRL-C ourselves again
-        ctrlc_should_exit_process.store(true, Ordering::Relaxed);
 
         // Update the task cache with the new hash
         executable_task
@@ -387,14 +368,12 @@ enum TaskExecutionError {
 async fn execute_task(
     task: &ExecutableTask<'_>,
     command_env: &HashMap<OsString, OsString>,
-    received_signal: Arc<std::sync::atomic::AtomicI32>,
+    kill_signal: KillSignal,
 ) -> Result<(), TaskExecutionError> {
     let Some(script) = task.as_deno_script()? else {
         return Ok(());
     };
     let cwd = task.working_directory()?;
-    let kill_signal = KillSignal::default();
-
     let execute_future = deno_task_shell::execute(
         script,
         command_env.clone(),
@@ -403,31 +382,8 @@ async fn execute_task(
         kill_signal.clone(),
     );
 
-    // Pin the future so we can reference it in both select arms
-    let mut execute_future = std::pin::pin!(execute_future);
-
-    // Create a notifier that triggers when signal is received
-    let signal_notifier = async {
-        SIGNAL_NOTIFY.notified().await;
-        let signal_code = received_signal.load(Ordering::Relaxed);
-        if signal_code != 0 {
-            let signal_kind = SignalKind::from(signal_code);
-            tracing::debug!(
-                "Abort signal detected during task execution, forwarding {:?}...",
-                signal_kind
-            );
-            kill_signal.send(signal_kind);
-        }
-    };
-
-    let status_code = tokio::select! {
-        code = &mut execute_future => code,
-        _ = signal_notifier => {
-            // Wait for the task to complete after signal forwarding
-            execute_future.await
-        },
-    };
-
+    // Execute the process and forward signals.
+    let status_code = run_future_forwarding_signals(kill_signal, execute_future).await;
     if status_code != 0 {
         return Err(TaskExecutionError::NonZeroExitCode(status_code));
     }
@@ -467,25 +423,99 @@ fn disambiguate_task_interactive<'p>(
         .map(|idx| problem.environments[idx].clone())
 }
 
-/// `dialoguer` doesn't clean up your term if it's aborted via e.g. `SIGINT` or
-/// other exceptions: https://github.com/console-rs/dialoguer/issues/188.
+// /// `dialoguer` doesn't clean up your term if it's aborted via e.g. `SIGINT` or
+// /// other exceptions: https://github.com/console-rs/dialoguer/issues/188.
+// ///
+// /// `dialoguer`, as a library, doesn't want to mess with signal handlers,
+// /// but we, as an application, are free to mess with signal handlers if we feel
+// /// like it, since we own the process.
+// /// This function was taken from https://github.com/dnjstrom/git-select-branch/blob/16c454624354040bc32d7943b9cb2e715a5dab92/src/main.rs#L119
+// fn reset_cursor() {
+//     let term = console::Term::stdout();
+//     let _ = term.show_cursor();
+// }
+//
+// /// Exit the process with the appropriate exit code for a SIGINT.
+// fn exit_process_on_sigint() {
+//     // https://learn.microsoft.com/en-us/cpp/c-runtime-library/signal-constants
+//     #[cfg(target_os = "windows")]
+//     std::process::exit(3);
+//
+//     // POSIX compliant OSs: 128 + SIGINT (2)
+//     #[cfg(not(target_os = "windows"))]
+//     std::process::exit(130);
+// }
+
+/// Runs a task future forwarding any signals received to the process.
 ///
-/// `dialoguer`, as a library, doesn't want to mess with signal handlers,
-/// but we, as an application, are free to mess with signal handlers if we feel
-/// like it, since we own the process.
-/// This function was taken from https://github.com/dnjstrom/git-select-branch/blob/16c454624354040bc32d7943b9cb2e715a5dab92/src/main.rs#L119
-fn reset_cursor() {
-    let term = console::Term::stdout();
-    let _ = term.show_cursor();
+/// Signal listeners and ctrl+c listening will be setup.
+pub async fn run_future_forwarding_signals<TOutput>(
+    kill_signal: KillSignal,
+    future: impl std::future::Future<Output = TOutput>,
+) -> TOutput {
+    fn spawn_future_with_cancellation(
+        future: impl std::future::Future<Output = ()> + 'static,
+        token: CancellationToken,
+    ) {
+        tokio::task::spawn_local(async move {
+            tokio::select! {
+              _ = future => {}
+              _ = token.cancelled() => {}
+            }
+        });
+    }
+
+    let token = CancellationToken::new();
+    let _token_drop_guard = token.clone().drop_guard();
+    let _drop_guard = kill_signal.clone().drop_guard();
+
+    spawn_future_with_cancellation(listen_ctrl_c(kill_signal.clone()), token.clone());
+    #[cfg(unix)]
+    spawn_future_with_cancellation(listen_and_forward_all_signals(kill_signal), token);
+
+    let local_set = tokio::task::LocalSet::new();
+    local_set.run_until(future).await
 }
 
-/// Exit the process with the appropriate exit code for a SIGINT.
-fn exit_process_on_sigint() {
-    // https://learn.microsoft.com/en-us/cpp/c-runtime-library/signal-constants
-    #[cfg(target_os = "windows")]
-    std::process::exit(3);
+async fn listen_ctrl_c(kill_signal: KillSignal) {
+    while let Ok(()) = tokio::signal::ctrl_c().await {
+        // On windows, ctrl+c is sent to the process group, so the signal would
+        // have already been sent to the child process. We still want to listen
+        // for ctrl+c here to keep the process alive when receiving it, but no
+        // need to forward the signal because it's already been sent.
+        if !cfg!(windows) {
+            kill_signal.send(deno_task_shell::SignalKind::SIGINT)
+        }
+    }
+}
 
-    // POSIX compliant OSs: 128 + SIGINT (2)
-    #[cfg(not(target_os = "windows"))]
-    std::process::exit(130);
+#[cfg(unix)]
+async fn listen_and_forward_all_signals(kill_signal: KillSignal) {
+    use futures::FutureExt;
+    use tokio::signal::unix::{SignalKind, signal};
+
+    use crate::signals::SIGNALS;
+
+    // listen and forward every signal we support
+    let mut futures = Vec::with_capacity(SIGNALS.len());
+    for signo in SIGNALS.iter().copied() {
+        if signo == libc::SIGKILL || signo == libc::SIGSTOP {
+            continue; // skip, can't listen to these
+        }
+
+        let kill_signal = kill_signal.clone();
+        futures.push(
+            async move {
+                let Ok(mut stream) = tokio::signal::unix::signal(signo) else {
+                    return;
+                };
+                let signal_kind: tokio::signal::unix::SignalKind = signo.into();
+                while let Some(()) = stream.recv().await {
+                    kill_signal.send(signal_kind);
+                }
+            }
+            .boxed_local(),
+        )
+    }
+    futures::future::join_all(futures).await;
 }
