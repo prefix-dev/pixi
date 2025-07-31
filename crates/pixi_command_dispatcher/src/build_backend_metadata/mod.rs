@@ -13,6 +13,7 @@ use pixi_build_type_conversions::compute_project_model_hash;
 use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
 use pixi_glob::GlobHashKey;
 use pixi_record::{InputHash, PinnedSourceSpec};
+use pixi_spec::{SourceAnchor, SourceSpec};
 use rand::random;
 use rattler_conda_types::{ChannelConfig, ChannelUrl};
 use thiserror::Error;
@@ -128,7 +129,9 @@ impl BuildBackendMetadataSpec {
         // Instantiate the backend with the discovered information.
         let backend = command_dispatcher
             .instantiate_backend(InstantiateBackendSpec {
-                backend_spec: discovered_backend.backend_spec,
+                backend_spec: discovered_backend
+                    .backend_spec
+                    .resolve(SourceAnchor::from(SourceSpec::from(self.source.clone()))),
                 init_params: discovered_backend.init_params,
                 channel_config: self.channel_config.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),

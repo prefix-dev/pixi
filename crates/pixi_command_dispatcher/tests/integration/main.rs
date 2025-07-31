@@ -1,6 +1,5 @@
 mod event_reporter;
 mod event_tree;
-mod source_backend;
 
 use std::{
     collections::HashMap,
@@ -371,39 +370,30 @@ pub async fn test_stale_host_dependency_triggers_rebuild() {
 
 #[tokio::test]
 pub async fn instantiate_backend_with_from_source() {
-    let backend_name = PackageName::new_unchecked("some-source-backend");
-
-    // Create a temporary directory and build the fake backend package
-    let tempdir = tempfile::tempdir().unwrap();
-    let package_dir = SourceBackendBuilder::new(
-        "some-source-backend",
-        source_backend::BackendType::PixiBuildPython,
-    )
-    .build(tempdir.path())
-    .unwrap();
+    let root_dir = workspaces_dir().join("source-backends");
 
     let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(root_dir.clone())
         .with_cache_dirs(default_cache_dirs())
         .with_executor(Executor::Serial)
         .with_backend_overrides(BackendOverride::InMemory(
             InMemoryOverriddenBackends::Specified(HashMap::from_iter([(
-                backend_name.as_source().to_string(),
+                "in-memory".to_string(),
                 PassthroughBackend::instantiator().into(),
             )])),
         ))
         .finish();
 
     // Use PixiSpec::Path to test path-based resolution and installation
-    dispatcher
+    let err = dispatcher
         .instantiate_tool_environment(InstantiateToolEnvironmentSpec::new(
-            backend_name,
-            PixiSpec::Path(PathSpec {
-                path: Utf8TypedPathBuf::from(package_dir.to_str().unwrap()),
-            }),
-            Vec::from([Url::from_str("https://prefix.dev/conda-forge")
-                .unwrap()
-                .into()]),
+            PackageName::new_unchecked("package-d"),
+            PathSpec::new("package-d").into(),
+            Vec::default(),
         ))
         .await
+        .err()
         .unwrap();
+
+    insta::assert_debug_snapshot!(err);
 }

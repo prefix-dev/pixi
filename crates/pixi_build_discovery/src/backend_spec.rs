@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use pixi_spec::{BinarySpec, PixiSpec};
+use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{Channel, ChannelConfig, ChannelUrl};
 use url::Url;
@@ -13,6 +13,37 @@ pub enum BackendSpec {
     /// Describes a backend that uses JSON-RPC to communicate with a backend.
     JsonRpc(JsonRpcBackendSpec),
     // TODO: Support in-memory backends without going through JSON-RPC.
+}
+
+impl BackendSpec {
+    /// Resolves the backend specification to a relative path based on the
+    /// provided source anchor.
+    pub fn resolve(self, source_anchor: SourceAnchor) -> Self {
+        match self {
+            BackendSpec::JsonRpc(spec) => BackendSpec::JsonRpc(JsonRpcBackendSpec {
+                name: spec.name.clone(),
+                command: {
+                    match spec.command {
+                        CommandSpec::EnvironmentSpec(mut env_spec) => {
+                            let maybe_source_spec = env_spec.requirement.1.try_into_source_spec();
+
+                            let pixi_spec = match maybe_source_spec {
+                                Ok(source_spec) => {
+                                    let resolved_spec = source_anchor.resolve(source_spec);
+                                    PixiSpec::from(resolved_spec)
+                                }
+                                Err(pixi_spec) => pixi_spec,
+                            };
+
+                            env_spec.requirement.1 = pixi_spec;
+                            CommandSpec::EnvironmentSpec(env_spec)
+                        }
+                        CommandSpec::System(system_spec) => CommandSpec::System(system_spec),
+                    }
+                },
+            }),
+        }
+    }
 }
 
 /// Describes a backend that uses JSON-RPC to communicate with an executable.
