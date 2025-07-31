@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.50.2] - 2025-07-28
+#### Documentation
+
+- Update setup-pixi docs by @pavelzw in [#4207](https://github.com/prefix-dev/pixi/pull/4207)
+- Update cli welcome in README by @pauljurczak in [#4211](https://github.com/prefix-dev/pixi/pull/4211)
+
+
+#### Fixed
+
+- Print build log if build fails by @Hofer-Julian in [#4205](https://github.com/prefix-dev/pixi/pull/4205)
+- Increase retention of pixi artifacts by @Hofer-Julian in [#4215](https://github.com/prefix-dev/pixi/pull/4215)
+- Network authentication pixi global by @ruben-arts in [#4222](https://github.com/prefix-dev/pixi/pull/4222)
+- Netrc issue and hash mismatch by @baszalmstra in [#4218](https://github.com/prefix-dev/pixi/pull/4218)
+
+
+
+#### New Contributors
+* @pauljurczak made their first contribution in [#4211](https://github.com/prefix-dev/pixi/pull/4211)
+
+### [0.50.1] - 2025-07-25
+#### ✨ Highlights
+
+Use `pixi import` to import `environment.yml` files into your Pixi manifest.
+
+#### Added
+
+- Add build profiles to not build in editable mode in `pixi build` by @baszalmstra in [#4202](https://github.com/prefix-dev/pixi/pull/4202)
+
+#### Changed
+
+- Implement `pixi import` for `environment.yml` by @lucascolley in [#4096](https://github.com/prefix-dev/pixi/pull/4096)
+
+#### Fixed
+
+- Global progress by @tdejager in [#4190](https://github.com/prefix-dev/pixi/pull/4190)
+- Update rattler and add test for variable expansion by @Hofer-Julian in [#4199](https://github.com/prefix-dev/pixi/pull/4199)
+
 ### [0.50.0] - 2025-07-22
 #### ✨ Highlights
 This release contains loads of bug fixes and refactors, primarily to make `pixi build` more stable and feature rich in the near future.

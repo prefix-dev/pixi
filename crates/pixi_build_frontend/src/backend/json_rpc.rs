@@ -12,9 +12,12 @@ use jsonrpsee::{
     types::ErrorCode,
 };
 use miette::Diagnostic;
+use ordermap::OrderMap;
 use pixi_build_types::{
-    BackendCapabilities, FrontendCapabilities, ProjectModelV1, VersionedProjectModel, procedures,
+    BackendCapabilities, FrontendCapabilities, ProjectModelV1, TargetSelectorV1,
+    VersionedProjectModel,
     procedures::{
+        self,
         conda_build_v0::{CondaBuildParams, CondaBuildResult},
         conda_build_v1::{CondaBuildV1Params, CondaBuildV1Result},
         conda_metadata::{CondaMetadataParams, CondaMetadataResult},
@@ -143,6 +146,7 @@ impl JsonRpcBackend {
         manifest_path: PathBuf,
         package_manifest: Option<ProjectModelV1>,
         configuration: Option<serde_json::Value>,
+        target_configuration: Option<OrderMap<TargetSelectorV1, serde_json::Value>>,
         cache_dir: Option<PathBuf>,
         tool: Tool,
     ) -> Result<Self, InitializeError> {
@@ -187,6 +191,7 @@ impl JsonRpcBackend {
             manifest_path,
             package_manifest,
             configuration,
+            target_configuration,
             cache_dir,
             tx,
             rx,
@@ -203,6 +208,7 @@ impl JsonRpcBackend {
         manifest_path: PathBuf,
         project_model: Option<ProjectModelV1>,
         configuration: Option<serde_json::Value>,
+        target_configuration: Option<OrderMap<TargetSelectorV1, serde_json::Value>>,
         cache_dir: Option<PathBuf>,
         sender: impl TransportSenderT + Send,
         receiver: impl TransportReceiverT + Send,
@@ -239,6 +245,7 @@ impl JsonRpcBackend {
                 RpcParams::from(InitializeParams {
                     project_model: project_model.map(VersionedProjectModel::V1),
                     configuration,
+                    target_configuration,
                     manifest_path: manifest_path.clone(),
                     source_dir: Some(source_dir),
                     cache_directory: cache_dir,

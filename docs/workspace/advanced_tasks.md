@@ -80,6 +80,8 @@ pixi task add lint pylint
 --8<-- "docs/source_files/pixi_tomls/pixi_task_alias.toml:not-all"
 ```
 
+!!! tip "Hiding Tasks"
+    Tasks can be hidden from user facing commands by [naming them](#task-names) with an `_` prefix.
 
 ### Shorthand Syntax
 
@@ -267,6 +269,20 @@ You can also use filters to transform argument values:
 ```
 
 For more information about available filters and template syntax, see the [MiniJinja documentation](https://docs.rs/minijinja/latest/minijinja/filters/index.html).
+
+## Task Names
+
+A task name follows these rules:
+
+- **No spaces** are allowed in the name.
+- Must **be unique** within the table.
+- [`_`]("underscores") at the start of the name will **hide** the task from the `pixi task list` command.
+
+Hiding tasks can be useful if your project defines many tasks but your users only need to use a subset of them.
+
+```toml title="pixi.toml"
+--8<-- "docs/source_files/pixi_tomls/task_visibility.toml:project_tasks"
+```
 
 ## Caching
 
