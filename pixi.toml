@@ -196,6 +196,9 @@ deploy-latest = "mike deploy --push --update-aliases $RELEASE_VERSION latest"
 docs = { cmd = "mkdocs serve", description = "Serve the docs locally" }
 mike-serve = "mike serve"
 
+[feature.docs.pypi-dependencies]
+mkdocs-llmstxt = ">=0.3.0, <0.4"
+
 [feature.schema.tasks]
 generate-schema = { cmd = "python model.py > schema.json", cwd = "schema" }
 test-schema = { cmd = "pytest -s", depends-on = "generate-schema", cwd = "schema", description = "Test the manifest json schema" }

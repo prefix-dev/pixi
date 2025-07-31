@@ -250,3 +250,38 @@ plugins:
     # version_selector: true
     # css_dir: css
     # javascript_dir: js
+  # llmstxt must come after the mike plugin:
+  - llmstxt:
+      enabled: true
+      full_output: llms-full.txt
+      markdown_description: |-
+        Pixi is a fast, modern, and reproducible package management tool
+        for developers of all backgrounds.
+      sections:
+        Getting Started documentation:
+          - index.md
+          - installation.md
+          - getting_started.md
+          - first_project.md
+        Tutorials documentation:
+          - python/*.md
+          - tutorials/*.md
+          - switching_from/*.md
+          - global_tools/introduction.md
+        Concepts documentation:
+          - workspace/*.md
+          - global_tools/manifest.md
+          - global_tools/trampolines.md
+        Building documentation:
+          - build/*.md
+        Distributing documentation:
+          - deployment/*.md
+        Integration documentation:
+          - integration/**/*.md
+        Advanced documentation:
+          - advanced/*.md
+        Reference documentation:
+          - reference/*.md
+        Miscellaneous documentation:
+          - CHANGELOG.md
+          - misc/*.md
