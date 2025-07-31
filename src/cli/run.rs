@@ -132,6 +132,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         })
         .await?;
 
+    // Spawn a task that listens for ctrl+c and resets the cursor.
+    tokio::spawn(async {
+        if tokio::signal::ctrl_c().await.is_ok() {
+            reset_cursor();
+        }
+    });
+
     // Construct a task graph from the input arguments
     let search_environment = SearchEnvironments::from_opt_env(
         &workspace,
@@ -156,18 +163,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         );
     }
 
-    // Spawn a task that listens for ctrl+c and resets the cursor.
-    tokio::spawn(async {
-        if let Ok(_) = tokio::signal::ctrl_c().await {
-            reset_cursor();
-        }
-    });
-
     // Traverse the task graph in topological order and execute each individual
     // task.
     let mut task_idx = 0;
     let mut task_envs = HashMap::new();
     let signal = KillSignal::default();
+    // make sure that child processes are killed when pixi stops
+    let _drop_guard = signal.clone().drop_guard();
+
     for task_id in task_graph.topological_order() {
         let executable_task = ExecutableTask::from_task_graph(&task_graph, task_id);
 
@@ -466,7 +469,6 @@ pub async fn run_future_forwarding_signals<TOutput>(
 
     let token = CancellationToken::new();
     let _token_drop_guard = token.clone().drop_guard();
-    let _drop_guard = kill_signal.clone().drop_guard();
     let local_set = tokio::task::LocalSet::new();
 
     local_set

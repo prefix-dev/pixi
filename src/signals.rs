@@ -1,7 +1,7 @@
 //! For each operating system, list the signals that can be caught.
 
 #[cfg(target_os = "freebsd")]
-pub const SIGNALS: &'static [libc::c_int] = &[
+pub const SIGNALS: &[libc::c_int] = &[
     libc::SIGHUP,
     libc::SIGINT,
     libc::SIGQUIT,
@@ -38,7 +38,7 @@ pub const SIGNALS: &'static [libc::c_int] = &[
 ];
 
 #[cfg(target_os = "openbsd")]
-pub const SIGNALS: &'static [libc::c_int] = &[
+pub const SIGNALS: &[libc::c_int] = &[
     libc::SIGHUP,
     libc::SIGINT,
     libc::SIGQUIT,
@@ -73,7 +73,7 @@ pub const SIGNALS: &'static [libc::c_int] = &[
 ];
 
 #[cfg(any(target_os = "android", target_os = "linux"))]
-pub const SIGNALS: &'static [libc::c_int] = &[
+pub const SIGNALS: &[libc::c_int] = &[
     libc::SIGHUP,
     libc::SIGINT,
     libc::SIGQUIT,
@@ -108,7 +108,7 @@ pub const SIGNALS: &'static [libc::c_int] = &[
 ];
 
 #[cfg(target_os = "macos")]
-pub const SIGNALS: &'static [libc::c_int] = &[
+pub const SIGNALS: &[libc::c_int] = &[
     libc::SIGHUP,
     libc::SIGINT,
     libc::SIGQUIT,
@@ -143,7 +143,7 @@ pub const SIGNALS: &'static [libc::c_int] = &[
 ];
 
 #[cfg(any(target_os = "solaris", target_os = "illumos"))]
-pub const SIGNALS: &'static [libc::c_int] = &[
+pub const SIGNALS: &[libc::c_int] = &[
     libc::SIGHUP,
     libc::SIGINT,
     libc::SIGQUIT,
