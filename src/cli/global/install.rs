@@ -5,7 +5,7 @@ use indexmap::IndexMap;
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
-use miette::Context;
+use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, Platform};
 
 use crate::{
@@ -84,9 +84,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?
         .with_cli_config(config.clone());
 
+    // Capture the current working directory for proper relative path resolution
+    let current_dir = std::env::current_dir()
+        .into_diagnostic()
+        .wrap_err("Could not retrieve the current directory")?;
+    let channel_config = rattler_conda_types::ChannelConfig {
+        root_dir: current_dir,
+        ..project_original.global_channel_config().clone()
+    };
+
     let (specs, source): (Vec<_>, Vec<_>) = args
         .packages
-        .to_global_specs(project_original.global_channel_config())?
+        .to_global_specs(&channel_config)?
         .into_iter()
         // TODO: will allow nameless specs later
         .filter_map(|s| s.into_named())
