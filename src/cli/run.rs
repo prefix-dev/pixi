@@ -3,7 +3,6 @@ use std::{
     convert::identity,
     ffi::OsString,
     string::String,
-    sync::atomic::Ordering,
 };
 
 use clap::Parser;
@@ -423,18 +422,18 @@ fn disambiguate_task_interactive<'p>(
         .map(|idx| problem.environments[idx].clone())
 }
 
-// /// `dialoguer` doesn't clean up your term if it's aborted via e.g. `SIGINT` or
-// /// other exceptions: https://github.com/console-rs/dialoguer/issues/188.
-// ///
-// /// `dialoguer`, as a library, doesn't want to mess with signal handlers,
-// /// but we, as an application, are free to mess with signal handlers if we feel
-// /// like it, since we own the process.
-// /// This function was taken from https://github.com/dnjstrom/git-select-branch/blob/16c454624354040bc32d7943b9cb2e715a5dab92/src/main.rs#L119
-// fn reset_cursor() {
-//     let term = console::Term::stdout();
-//     let _ = term.show_cursor();
-// }
-//
+/// `dialoguer` doesn't clean up your term if it's aborted via e.g. `SIGINT` or
+/// other exceptions: https://github.com/console-rs/dialoguer/issues/188.
+///
+/// `dialoguer`, as a library, doesn't want to mess with signal handlers,
+/// but we, as an application, are free to mess with signal handlers if we feel
+/// like it, since we own the process.
+/// This function was taken from https://github.com/dnjstrom/git-select-branch/blob/16c454624354040bc32d7943b9cb2e715a5dab92/src/main.rs#L119
+fn reset_cursor() {
+    let term = console::Term::stdout();
+    let _ = term.show_cursor();
+}
+
 // /// Exit the process with the appropriate exit code for a SIGINT.
 // fn exit_process_on_sigint() {
 //     // https://learn.microsoft.com/en-us/cpp/c-runtime-library/signal-constants
