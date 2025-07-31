@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from syrupy.assertion import SnapshotAssertion
+from inline_snapshot import snapshot
 
 from .common import current_platform, get_manifest, repo_root, verify_cli_command
 
@@ -24,7 +24,7 @@ pytestmark = pytest.mark.skipif(
     ],
 )
 def test_doc_pixi_workspaces_pixi_build(
-    pixi_project: Path, pixi: Path, tmp_pixi_workspace: Path, snapshot: SnapshotAssertion
+    pixi_project: Path, pixi: Path, tmp_pixi_workspace: Path
 ) -> None:
     # Remove existing .pixi folders
     shutil.rmtree(pixi_project.joinpath(".pixi"), ignore_errors=True)
@@ -39,7 +39,15 @@ def test_doc_pixi_workspaces_pixi_build(
     output = verify_cli_command(
         [pixi, "run", "--locked", "--manifest-path", manifest, "start"],
     )
-    assert output.stdout == snapshot
+    assert output.stdout == snapshot("""\
+┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
+┃ name         ┃ age ┃ city        ┃
+┡━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━━━━┩
+│ John Doe     │ 30  │ New York    │
+│ Jane Smith   │ 25  │ Los Angeles │
+│ Tim de Jager │ 35  │ Utrecht     │
+└──────────────┴─────┴─────────────┘
+""")
 
 
 @pytest.mark.extra_slow
@@ -105,7 +113,7 @@ def test_pytorch_documentation_examples(
 
 
 def test_doc_pixi_workspaces_minijinja_task_args(
-    doc_pixi_workspaces: Path, pixi: Path, tmp_pixi_workspace: Path, snapshot: SnapshotAssertion
+    doc_pixi_workspaces: Path, pixi: Path, tmp_pixi_workspace: Path
 ) -> None:
     workspace_dir = doc_pixi_workspaces.joinpath("minijinja", "task_args")
 
@@ -135,4 +143,15 @@ def test_doc_pixi_workspaces_minijinja_task_args(
 
         results[task] = output
 
-    assert results == snapshot
+    assert results == snapshot(
+        {
+            "task1": "HOI RUBEN\n",
+            "task2": "hoi ruben\n",
+            "task3": "hoi Ruben!\n",
+            "task4": "unix\n",
+            "task5": """\
+hoi
+Ruben
+""",
+        }
+    )

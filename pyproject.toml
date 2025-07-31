@@ -1,0 +1,5 @@
+# there is no Python project,
+# this file is just for configuring tools used in Python tests
+
+[tool.inline-snapshot]
+format-command = "pixi run -e lint ruff format --stdin-filename {filename}"
