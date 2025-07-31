@@ -25,10 +25,9 @@ use rattler_conda_types::{
     GenericVirtualPackage, PackageName, Platform, VersionSpec, prefix::Prefix,
 };
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
-use typed_path::Utf8TypedPathBuf;
 use url::Url;
 
-use crate::{event_tree::EventTree, source_backend::SourceBackendBuilder};
+use crate::event_tree::EventTree;
 
 /// Returns a default set of cache directories for the test.
 fn default_cache_dirs() -> CacheDirs {
