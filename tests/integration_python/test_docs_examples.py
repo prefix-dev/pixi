@@ -17,67 +17,80 @@ class TestPixiBuild:
     pixi_projects = list(
         repo_root().joinpath("docs/source_files/pixi_workspaces/pixi_build").iterdir()
     )
+    pixi_projects.sort()
     pixi_project_params = [
         (
             pixi_projects[0].name,
             (
                 pixi_projects[0],
-                snapshot("""\
-    ┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
-    ┃ name         ┃ age ┃ city        ┃
-    ┡━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━━━━┩
-    │ John Doe     │ 30  │ New York    │
-    │ Jane Smith   │ 25  │ Los Angeles │
-    │ Tim de Jager │ 35  │ Utrecht     │
-    └──────────────┴─────┴─────────────┘
-    """),
+                snapshot("3\n"),
             ),
         ),
         (
             pixi_projects[1].name,
             (
                 pixi_projects[1],
-                snapshot("""\
-    ┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
-    ┃ name         ┃ age ┃ city        ┃
-    ┡━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━━━━┩
-    │ John Doe     │ 31  │ New York    │
-    │ Jane Smith   │ 26  │ Los Angeles │
-    │ Tim de Jager │ 36  │ Utrecht     │
-    └──────────────┴─────┴─────────────┘
-    """),
+                snapshot("3\n"),
             ),
         ),
-        (pixi_projects[2].name, (pixi_projects[2], snapshot("3\n"))),
+        (
+            pixi_projects[2].name,
+            (
+                pixi_projects[2],
+                snapshot("""\
+┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
+┃ name         ┃ age ┃ city        ┃
+┡━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━━━━┩
+│ John Doe     │ 30  │ New York    │
+│ Jane Smith   │ 25  │ Los Angeles │
+│ Tim de Jager │ 35  │ Utrecht     │
+└──────────────┴─────┴─────────────┘
+"""),
+            ),
+        ),
         (
             pixi_projects[3].name,
             (
                 pixi_projects[3],
                 snapshot("""\
-    ┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
-    ┃ name         ┃ age ┃ city        ┃
-    ┡━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━━━━┩
-    │ John Doe     │ 31  │ New York    │
-    │ Jane Smith   │ 26  │ Los Angeles │
-    │ Tim de Jager │ 36  │ Utrecht     │
-    └──────────────┴─────┴─────────────┘
-    """),
+┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
+┃ name         ┃ age ┃ city        ┃
+┡━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━━━━┩
+│ John Doe     │ 30  │ New York    │
+│ Jane Smith   │ 25  │ Los Angeles │
+│ Tim de Jager │ 35  │ Utrecht     │
+└──────────────┴─────┴─────────────┘
+"""),
             ),
         ),
-        (pixi_projects[4].name, (pixi_projects[4], snapshot("3\n"))),
+        (
+            pixi_projects[4].name,
+            (
+                pixi_projects[4],
+                snapshot("""\
+┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
+┃ name         ┃ age ┃ city        ┃
+┡━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━━━━┩
+│ John Doe     │ 31  │ New York    │
+│ Jane Smith   │ 26  │ Los Angeles │
+│ Tim de Jager │ 36  │ Utrecht     │
+└──────────────┴─────┴─────────────┘
+"""),
+            ),
+        ),
         (
             pixi_projects[5].name,
             (
                 pixi_projects[5],
                 snapshot("""\
-    ┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
-    ┃ name         ┃ age ┃ city        ┃
-    ┡━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━━━━┩
-    │ John Doe     │ 30  │ New York    │
-    │ Jane Smith   │ 25  │ Los Angeles │
-    │ Tim de Jager │ 35  │ Utrecht     │
-    └──────────────┴─────┴─────────────┘
-    """),
+┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
+┃ name         ┃ age ┃ city        ┃
+┡━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━━━━┩
+│ John Doe     │ 31  │ New York    │
+│ Jane Smith   │ 26  │ Los Angeles │
+│ Tim de Jager │ 36  │ Utrecht     │
+└──────────────┴─────┴─────────────┘
+"""),
             ),
         ),
     ]
