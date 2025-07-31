@@ -1,19 +1,20 @@
-use std::ops::Not;
+use std::{ops::Not, str::FromStr};
+
+use indexmap::IndexMap;
 
 use clap::Parser;
 use fancy_display::FancyDisplay;
-use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
-use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, PackageName, Platform};
+use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, Platform};
 
 use crate::{
-    cli::{global::revert_environment_after_error, has_specs::HasSpecs},
+    cli::global::{global_specs::GlobalSpecs, revert_environment_after_error},
     global::{
         self, EnvChanges, EnvState, EnvironmentName, Mapping, Project, StateChange, StateChanges,
         common::{NotChangedReason, contains_menuinst_document},
         list::list_all_global_environments,
-        project::ExposedType,
+        project::{ExposedType, NamedGlobalSpec},
     },
 };
 use pixi_config::{self, Config, ConfigCli};
@@ -30,8 +31,8 @@ use pixi_config::{self, Config, ConfigCli};
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
     /// Specifies the package that should be installed.
-    #[arg(num_args = 1.., required = true, value_name = "PACKAGE")]
-    packages: Vec<String>,
+    #[clap(flatten)]
+    packages: GlobalSpecs,
 
     /// The channels to consider as a name or a url.
     /// Multiple channels can be specified by using this field multiple times.
@@ -77,50 +78,64 @@ pub struct Args {
     no_shortcuts: bool,
 }
 
-impl HasSpecs for Args {
-    fn packages(&self) -> Vec<&str> {
-        self.packages.iter().map(AsRef::as_ref).collect()
-    }
-}
-
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
     let project_original = global::Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
 
-    let env_names = match &args.environment {
-        Some(env_name) => Vec::from([env_name.clone()]),
-        None => args
-            .specs()?
-            .iter()
-            .map(|(package_name, _)| package_name.as_normalized().parse().into_diagnostic())
-            .collect::<miette::Result<Vec<_>>>()?,
+    // Capture the current working directory for proper relative path resolution
+    let current_dir = std::env::current_dir()
+        .into_diagnostic()
+        .wrap_err("Could not retrieve the current directory")?;
+    let channel_config = rattler_conda_types::ChannelConfig {
+        root_dir: current_dir,
+        ..project_original.global_channel_config().clone()
     };
 
-    let multiple_envs = env_names.len() > 1;
+    let (specs, source): (Vec<_>, Vec<_>) = args
+        .packages
+        .to_global_specs(&channel_config)?
+        .into_iter()
+        // TODO: will allow nameless specs later
+        .filter_map(|s| s.into_named())
+        // TODO: Filter out non-binary specs, we are adding support for them later
+        .partition(|s| s.spec().is_binary());
 
-    if !args.expose.is_empty() && env_names.len() != 1 {
+    if !source.is_empty() {
+        tracing::warn!(
+            "Ignoring found source packages {}. Implementation will be added soon.",
+            source.iter().map(|s| s.name().as_source()).join(", ")
+        );
+    }
+
+    let env_to_specs: IndexMap<EnvironmentName, Vec<NamedGlobalSpec>> = match &args.environment {
+        Some(env_name) => IndexMap::from_iter(std::iter::once((env_name.clone(), specs))),
+        None => specs
+            .into_iter()
+            .map(|spec| {
+                (
+                    EnvironmentName::from_str(spec.name().as_normalized())
+                        .expect("valid environment name"),
+                    vec![spec],
+                )
+            })
+            .collect(),
+    };
+
+    if !args.expose.is_empty() && env_to_specs.len() != 1 {
         miette::bail!("Can't add exposed mappings with `--exposed` for more than one environment");
     }
 
-    if !args.with.is_empty() && env_names.len() != 1 {
+    if !args.with.is_empty() && env_to_specs.len() != 1 {
         miette::bail!("Can't add packages with `--with` for more than one environment");
     }
 
     let mut env_changes = EnvChanges::default();
     let mut last_updated_project = project_original;
-    let specs = args.specs()?;
-    for env_name in &env_names {
-        let specs = specs.clone();
-        let specs = if multiple_envs {
-            specs
-                .into_iter()
-                .filter(|(package_name, _)| env_name.as_str() == package_name.as_source())
-                .collect()
-        } else {
-            specs
-        };
+    // Convert the packages into named global specs
+
+    for (env_name, specs) in &env_to_specs {
         let mut project = last_updated_project.clone();
         match setup_environment(env_name, &args, specs, &mut project)
             .await
@@ -154,7 +169,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // After installing, we always want to list the changed environments
     list_all_global_environments(
         &last_updated_project,
-        Some(env_names),
+        Some(env_to_specs.into_keys().collect()),
         Some(&env_changes),
         None,
         false,
@@ -167,7 +182,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 async fn setup_environment(
     env_name: &EnvironmentName,
     args: &Args,
-    specs: IndexMap<PackageName, MatchSpec>,
+    specs: &[NamedGlobalSpec],
     project: &mut Project,
 ) -> miette::Result<StateChanges> {
     let mut state_changes = StateChanges::new_with_env(env_name.clone());
@@ -192,19 +207,25 @@ async fn setup_environment(
         project.manifest.set_platform(env_name, platform)?;
     }
 
+    let converted_with_inclusions = args
+        .with
+        .iter()
+        .map(|spec| {
+            NamedGlobalSpec::try_from_matchspec_with_name(
+                spec.clone(),
+                project.config().global_channel_config(),
+            )
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+
     // Add the dependencies to the environment
     let packages_to_add = specs
-        .clone()
-        .into_iter()
-        .map(|(_, spec)| spec)
-        .chain(args.with.clone())
+        .iter()
+        .chain(converted_with_inclusions.iter())
         .collect_vec();
+
     for spec in &packages_to_add {
-        project.manifest.add_dependency(
-            env_name,
-            spec,
-            project.clone().config().global_channel_config(),
-        )?;
+        project.manifest.add_dependency(env_name, spec)?;
     }
 
     if !args.expose.is_empty() {
@@ -228,17 +249,23 @@ async fn setup_environment(
     // Add shortcuts
     if !args.no_shortcuts {
         let prefix = project.environment_prefix(env_name).await?;
-        for (package_name, _) in specs.iter() {
-            let prefix_record = prefix.find_designated_package(package_name).await?;
+        for spec in specs.iter() {
+            let prefix_record = prefix.find_designated_package(spec.name()).await?;
             if contains_menuinst_document(&prefix_record, prefix.root()) {
-                project.manifest.add_shortcut(env_name, package_name)?;
+                project.manifest.add_shortcut(env_name, spec.name())?;
             }
         }
         state_changes |= project.sync_shortcuts(env_name).await?;
     }
 
     // Figure out added packages and their corresponding versions
-    state_changes |= project.added_packages(packages_to_add, env_name).await?;
+    state_changes |= project
+        .added_packages(
+            &packages_to_add.into_iter().cloned().collect_vec(),
+            env_name,
+            project.global_channel_config(),
+        )
+        .await?;
 
     // Expose executables of the new environment
     state_changes |= project

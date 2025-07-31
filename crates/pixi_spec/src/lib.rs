@@ -363,6 +363,11 @@ impl SourceSpec {
         matches!(self, Self::Git(_))
     }
 
+    /// Convert this instance into a nameless match spec.
+    pub fn to_nameless_match_spec(&self) -> NamelessMatchSpec {
+        NamelessMatchSpec::default()
+    }
+
     /// Converts this instance into a [`toml_edit::Value`].
     pub fn to_toml_value(&self) -> toml_edit::Value {
         ::serde::Serialize::serialize(self, toml_edit::ser::ValueSerializer::new())
@@ -427,7 +432,8 @@ impl From<PixiSpec> for toml_edit::Value {
 ///
 /// This type only represents binary packages. Use [`PixiSpec`] to represent
 /// both binary and source packages.
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, ::serde::Serialize)]
+#[serde(untagged)]
 pub enum BinarySpec {
     /// The spec is represented solely by a version string. The package should
     /// be retrieved from a channel.

@@ -1,26 +1,3 @@
-use self::trampoline::{Configuration, ConfigurationParseError, Trampoline};
-use super::{
-    BinDir, EnvRoot, StateChange, StateChanges,
-    common::{EnvironmentUpdate, get_install_changes, shortcuts_sync_status},
-    install::find_binary_by_name,
-    trampoline::{self, GlobalExecutable},
-};
-use crate::{
-    global::{
-        EnvDir,
-        common::{
-            channel_url_to_prioritized_channel, expose_scripts_sync_status, find_package_records,
-        },
-        find_executables, find_executables_for_many_records,
-        install::{create_executable_trampolines, script_exec_mapping},
-        project::environment::environment_specs_in_sync,
-    },
-    prefix::{Executable, Prefix},
-    repodata::Repodata,
-    reporters::TopLevelProgress,
-    rlimit::try_increase_rlimit_to_sensible,
-};
-
 use std::{
     ffi::OsStr,
     fmt::{Debug, Formatter},
@@ -46,9 +23,9 @@ use parsed_manifest::ParsedManifest;
 pub(crate) use parsed_manifest::{ExposedName, ParsedEnvironment};
 use pixi_build_discovery::EnabledProtocols;
 use pixi_command_dispatcher::{
-    BuildEnvironment, CommandDispatcher, InstallPixiEnvironmentSpec, PixiEnvironmentSpec,
+    BuildEnvironment, CommandDispatcher, InstallPixiEnvironmentSpec, Limits, PixiEnvironmentSpec,
 };
-use pixi_config::{Config, default_channel_config, pixi_home};
+use pixi_config::{Config, RunPostLinkScripts, default_channel_config, pixi_home};
 use pixi_consts::consts::{self};
 use pixi_manifest::PrioritizedChannel;
 use pixi_progress::global_multi_progress;
@@ -66,9 +43,35 @@ use reqwest_middleware::ClientWithMiddleware;
 use tokio::sync::Semaphore;
 use toml_edit::DocumentMut;
 
+use self::trampoline::{Configuration, ConfigurationParseError, Trampoline};
+use super::{
+    BinDir, EnvRoot, StateChange, StateChanges,
+    common::{EnvironmentUpdate, get_install_changes, shortcuts_sync_status},
+    install::find_binary_by_name,
+    trampoline::{self, GlobalExecutable},
+};
+use crate::{
+    global::{
+        EnvDir,
+        common::{
+            channel_url_to_prioritized_channel, expose_scripts_sync_status, find_package_records,
+        },
+        find_executables, find_executables_for_many_records,
+        install::{create_executable_trampolines, script_exec_mapping},
+        project::environment::environment_specs_in_sync,
+    },
+    prefix::{Executable, Prefix},
+    repodata::Repodata,
+    reporters::TopLevelProgress,
+    rlimit::try_increase_rlimit_to_sensible,
+};
+
 mod environment;
+mod global_spec;
 mod manifest;
 mod parsed_manifest;
+pub use global_spec::{FromMatchSpecError, GlobalSpec, NamedGlobalSpec};
+use pixi_build_frontend::BackendOverride;
 
 pub(crate) const MANIFESTS_DIR: &str = "manifests";
 
@@ -486,6 +489,10 @@ impl Project {
         &self.config
     }
 
+    pub(crate) fn global_channel_config(&self) -> &ChannelConfig {
+        self.config.global_channel_config()
+    }
+
     pub(crate) async fn install_environment(
         &self,
         env_name: &EnvironmentName,
@@ -547,10 +554,11 @@ impl Project {
             .map(|channel| channel.base_url.clone())
             .collect::<Vec<_>>();
 
+        let build_environment = BuildEnvironment::simple(platform, virtual_packages);
         let solve_spec = PixiEnvironmentSpec {
             name: Some(env_name.to_string()),
             dependencies: pixi_specs,
-            build_environment: BuildEnvironment::simple(platform, virtual_packages),
+            build_environment: build_environment.clone(),
             channels: channels.clone(),
             channel_config: self.config.global_channel_config().clone(),
             ..Default::default()
@@ -572,7 +580,7 @@ impl Project {
                 records: pixi_records,
                 prefix: rattler_conda_types::prefix::Prefix::create(prefix.root())
                     .into_diagnostic()?,
-                target_platform: platform,
+                build_environment,
                 channels,
                 channel_config: self.config.global_channel_config().clone(),
                 enabled_protocols: EnabledProtocols::default(),
@@ -581,6 +589,8 @@ impl Project {
                 variants: None,
             })
             .await?;
+
+        command_dispatcher.clear_reporter().await;
 
         let install_changes = get_install_changes(result.transaction);
         Ok(EnvironmentUpdate::new(install_changes, dependencies_names))
@@ -591,7 +601,8 @@ impl Project {
         &mut self,
         env_name: &EnvironmentName,
     ) -> miette::Result<StateChanges> {
-        // Check if the environment exists in the manifest first, before creating any directories
+        // Check if the environment exists in the manifest first, before creating any
+        // directories
         if !self.manifest.parsed.envs.contains_key(env_name) {
             miette::bail!("Environment {} doesn't exist.", env_name.fancy_display());
         }
@@ -1088,17 +1099,29 @@ impl Project {
     // Figure which packages have been added
     pub async fn added_packages(
         &self,
-        specs: Vec<MatchSpec>,
+        specs: &[NamedGlobalSpec],
         env_name: &EnvironmentName,
+        channel_config: &ChannelConfig,
     ) -> miette::Result<StateChanges> {
+        // TODO: now just matching binary specs, we need to integrate source specs instead
+        // I think we can just remove this function and couple it to the transaction instead
         let mut state_changes = StateChanges::default();
+        let match_specs = specs
+            .iter()
+            .filter_map(|s| s.clone().try_into_matchspec(channel_config).ok().flatten())
+            .collect_vec();
+
         state_changes.push_changes(
             env_name,
             self.environment_prefix(env_name)
                 .await?
                 .find_installed_packages()?
                 .into_iter()
-                .filter(|r| specs.iter().any(|s| s.matches(&r.repodata_record)))
+                .filter(|r| {
+                    match_specs
+                        .iter()
+                        .any(|spec| spec.matches(&r.repodata_record))
+                })
                 .map(|r| r.repodata_record.package_record)
                 .map(StateChange::AddedPackage),
         );
@@ -1263,8 +1286,19 @@ impl Project {
             Ok(pixi_command_dispatcher::CommandDispatcher::builder()
                 .with_gateway(self.repodata_gateway()?.clone())
                 .with_cache_dirs(cache_dirs)
-                .with_reporter(TopLevelProgress::new(multi_progress, anchor_pb))
                 .with_root_dir(self.root.clone())
+                .with_download_client(self.authenticated_client()?.clone())
+                .with_max_download_concurrency(self.concurrent_downloads_semaphore())
+                .with_limits(Limits {
+                    max_concurrent_solves: self.config().max_concurrent_solves().into(),
+                    ..Limits::default()
+                })
+                .with_backend_overrides(BackendOverride::from_env()?.unwrap_or_default())
+                .execute_link_scripts(match self.config.run_post_link_scripts() {
+                    RunPostLinkScripts::Insecure => true,
+                    RunPostLinkScripts::False => false,
+                })
+                .with_reporter(TopLevelProgress::new(multi_progress, anchor_pb))
                 .finish())
         })
     }

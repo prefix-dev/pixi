@@ -18,6 +18,19 @@ def create_external_command(command_path: Path, script_content: str) -> Path:
     return command_path
 
 
+def test_command_suggestion_tee_suggests_tree(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test that typo 'tee' suggests 'tree' command"""
+    verify_cli_command(
+        [pixi, "tee"],
+        cwd=tmp_pixi_workspace,
+        stderr_contains=[
+            "unrecognized subcommand 'tee'",
+            "tip: a similar subcommand exists: 'tree'",
+        ],
+        expected_exit_code=ExitCode.INCORRECT_USAGE,
+    )
+
+
 def test_external_extension(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
     env = {"PIXI_HOME": str(tmp_pixi_workspace)}
 
@@ -77,7 +90,10 @@ def test_external_command_not_found(
         [pixi, "nonexistent"],
         env=env,
         cwd=tmp_pixi_workspace,
-        stderr_contains="No such command: `pixi nonexistent`",
+        stderr_contains=[
+            "unrecognized subcommand 'nonexistent'",
+            "tip: a similar subcommand exists:",
+        ],
         expected_exit_code=ExitCode.INCORRECT_USAGE,
     )
 

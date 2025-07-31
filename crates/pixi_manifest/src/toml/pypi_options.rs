@@ -1,7 +1,7 @@
 use std::{path::PathBuf, str::FromStr};
 
 use indexmap::IndexSet;
-use pixi_toml::{TomlEnum, TomlFromStr, TomlWith};
+use pixi_toml::{TomlEnum, TomlFromStr, TomlIndexMap, TomlWith};
 use toml_span::{
     DeserError, ErrorKind, Value,
     de_helpers::{TableHelper, expected},
@@ -124,6 +124,9 @@ impl<'de> toml_span::Deserialize<'de> for PypiOptions {
             .map(TomlEnum::into_inner);
 
         let no_build = th.optional::<NoBuild>("no-build");
+        let dependency_overrides = th
+            .optional::<TomlIndexMap<_, _>>("dependency-overrides")
+            .map(TomlIndexMap::into_inner);
 
         let no_binary = th.optional::<NoBinary>("no-binary");
 
@@ -136,6 +139,7 @@ impl<'de> toml_span::Deserialize<'de> for PypiOptions {
             no_build_isolation,
             index_strategy,
             no_build,
+            dependency_overrides,
             no_binary,
         })
     }
@@ -238,6 +242,7 @@ impl<'de> toml_span::Deserialize<'de> for NoBuildIsolation {
 #[cfg(test)]
 mod test {
     use insta::{assert_debug_snapshot, assert_snapshot};
+    use pixi_pypi_spec::PypiPackageName;
     use pixi_test_utils::format_parse_error;
 
     use super::*;
@@ -262,6 +267,9 @@ mod test {
 
                  [[find-links]]
                  url = "https://flat.index"
+
+                 [dependency-overrides]
+                 numpy = ">=2.0.0"
              "#;
         let deserialized_options: PypiOptions = PypiOptions::from_toml_str(toml_str).unwrap();
         assert_eq!(
@@ -279,6 +287,12 @@ mod test {
                 ]),
                 index_strategy: None,
                 no_build: Default::default(),
+                dependency_overrides: Some(indexmap::IndexMap::from_iter([(
+                    PypiPackageName::from_str("numpy").unwrap(),
+                    pixi_pypi_spec::PixiPypiSpec::RawVersion(
+                        pixi_pypi_spec::VersionOrStar::from_str(">=2.0.0").unwrap()
+                    )
+                )]),),
                 no_binary: Default::default(),
             },
         );

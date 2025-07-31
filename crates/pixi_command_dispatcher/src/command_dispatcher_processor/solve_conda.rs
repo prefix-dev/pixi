@@ -2,6 +2,7 @@ use futures::FutureExt;
 use pixi_record::PixiRecord;
 
 use super::{CommandDispatcherProcessor, PendingSolveCondaEnvironment, TaskResult};
+use crate::solve_conda::SolveCondaEnvironmentError;
 use crate::{
     CommandDispatcherError, CommandDispatcherErrorResultExt, Reporter,
     command_dispatcher::{SolveCondaEnvironmentId, SolveCondaEnvironmentTask},
@@ -26,6 +27,11 @@ impl CommandDispatcherProcessor {
             tx: task.tx,
             reporter_id,
         });
+
+        if let Some(parent) = task.parent {
+            // Store the parent context for the task.
+            self.parent_contexts.insert(environment_id.into(), parent);
+        }
 
         // Add the environment to the list of pending environments.
         self.pending_conda_solves
@@ -76,8 +82,9 @@ impl CommandDispatcherProcessor {
     pub(crate) fn on_solve_conda_environment_result(
         &mut self,
         id: SolveCondaEnvironmentId,
-        result: Result<Vec<PixiRecord>, CommandDispatcherError<rattler_solve::SolveError>>,
+        result: Result<Vec<PixiRecord>, CommandDispatcherError<SolveCondaEnvironmentError>>,
     ) {
+        self.parent_contexts.remove(&id.into());
         let env = self
             .conda_solves
             .remove(id)

@@ -14,6 +14,7 @@ use pixi_git::{
 use pixi_spec::{GitReference, GitSpec, PathSourceSpec, SourceSpec, UrlSourceSpec};
 use rattler_digest::{Md5Hash, Sha256Hash};
 use rattler_lock::UrlOrPath;
+use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use thiserror::Error;
 use typed_path::Utf8TypedPathBuf;
@@ -22,7 +23,7 @@ use url::Url;
 /// Describes an exact revision of a source checkout. This is used to pin a
 /// particular source definition to a revision. A git source spec does not
 /// describe an exact commit. This struct describes an exact commit.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum PinnedSourceSpec {
     /// A pinned url source package.
@@ -109,6 +110,23 @@ impl PinnedSourceSpec {
     pub fn is_immutable(&self) -> bool {
         !matches!(self, PinnedSourceSpec::Path(_))
     }
+
+    /// Returns true if the pinned source may change even if the pinned source
+    /// itself does not. This indicates that the contents of this instance may
+    /// change over time, such as a local path.
+    pub fn is_mutable(&self) -> bool {
+        matches!(self, PinnedSourceSpec::Path(_))
+    }
+
+    /// Returns a URL that uniquely identifies this path spec. This URL is not
+    /// portable, e.g. it might result in a different URL on different systems.
+    pub fn identifiable_url(&self) -> Url {
+        match self {
+            PinnedSourceSpec::Url(spec) => spec.identifiable_url(),
+            PinnedSourceSpec::Git(spec) => spec.identifiable_url(),
+            PinnedSourceSpec::Path(spec) => spec.identifiable_url(),
+        }
+    }
 }
 
 impl MutablePinnedSourceSpec {
@@ -137,7 +155,7 @@ impl From<MutablePinnedSourceSpec> for PinnedSourceSpec {
 
 /// A pinned url archive.
 #[serde_as]
-#[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct PinnedUrlSpec {
     /// The URL of the archive.
     pub url: Url,
@@ -149,6 +167,17 @@ pub struct PinnedUrlSpec {
     pub md5: Option<Md5Hash>,
 }
 
+impl PinnedUrlSpec {
+    /// Returns a URL that uniquely identifies this path spec. This URL is not
+    /// portable, e.g. it might result in a different URL on different systems.
+    pub fn identifiable_url(&self) -> Url {
+        let mut url = self.url.clone();
+        url.query_pairs_mut()
+            .append_pair("sha256", &format!("{:x}", self.sha256));
+        url
+    }
+}
+
 impl From<PinnedUrlSpec> for PinnedSourceSpec {
     fn from(value: PinnedUrlSpec) -> Self {
         PinnedSourceSpec::Url(value)
@@ -156,7 +185,7 @@ impl From<PinnedUrlSpec> for PinnedSourceSpec {
 }
 
 /// A pinned version of a git checkout.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord, serde::Serialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct PinnedGitCheckout {
     /// The commit hash of the git checkout.
     pub commit: GitSha,
@@ -241,7 +270,7 @@ impl PinnedGitCheckout {
 
 /// A pinned version of a git checkout.
 /// Similar with [`GitUrl`] but with a resolved commit field.
-#[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize, Deserialize)]
 pub struct PinnedGitSpec {
     /// The URL of the repository without the revision and subdirectory
     /// fragment.
@@ -255,6 +284,12 @@ impl PinnedGitSpec {
     /// Creates a new pinned git spec.
     pub fn new(git: Url, source: PinnedGitCheckout) -> Self {
         Self { git, source }
+    }
+
+    /// Returns a URL that uniquely identifies this path spec. This URL is not
+    /// portable, e.g. it might result in a different URL on different systems.
+    pub fn identifiable_url(&self) -> Url {
+        self.into_locked_git_url().to_url()
     }
 
     /// Construct the lockfile-compatible [`Url`] from [`PinnedGitSpec`].
@@ -322,10 +357,13 @@ impl From<PinnedGitSpec> for PinnedSourceSpec {
 /// `PathSpec` this path is always either absolute or relative to the project
 /// root.
 #[serde_as]
-#[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct PinnedPathSpec {
     /// The path of the source.
-    #[serde_as(as = "serde_with::DisplayFromStr")]
+    #[serde_as(
+        serialize_as = "serde_with::DisplayFromStr",
+        deserialize_as = "serde_with::FromInto<String>"
+    )]
     pub path: Utf8TypedPathBuf,
 }
 
@@ -338,6 +376,17 @@ impl PinnedPathSpec {
         } else {
             project_root.join(native_path)
         }
+    }
+
+    /// Returns a URL that uniquely identifies this path spec. This URL is not
+    /// portable, e.g. it might result in a different URL on different systems.
+    pub fn identifiable_url(&self) -> Url {
+        let resolved = if cfg!(windows) {
+            self.resolve(Path::new("\\\\localhost\\"))
+        } else {
+            self.resolve(Path::new("/"))
+        };
+        Url::from_directory_path(resolved).expect("expected valid URL")
     }
 }
 

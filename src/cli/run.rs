@@ -156,18 +156,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let task_graph =
         TaskGraph::from_cmd_args(&workspace, &search_environment, args.task, args.skip_deps)?;
 
-    tracing::info!("Task graph: {}", task_graph);
+    tracing::debug!("Task graph: {}", task_graph);
 
     // Print dry-run message if dry-run mode is enabled
     if args.dry_run {
-        eprintln!(
-            "{}{}",
+        pixi_progress::println!(
+            "{}{}\n\n",
             console::Emoji("🌵 ", ""),
             console::style("Dry-run mode enabled - no tasks will be executed.")
                 .yellow()
-                .bold(),
+                .bold()
         );
-        eprintln!();
     }
 
     // Traverse the task graph in topological order and execute each individual
@@ -187,12 +186,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         if tracing::enabled!(Level::WARN) && !executable_task.task().is_custom() {
             if task_idx > 0 {
                 // Add a newline between task outputs
-                eprintln!();
+                pixi_progress::println!();
             }
 
             let display_command = executable_task.display_command().to_string();
 
-            eprintln!(
+            pixi_progress::println!(
                 "{}{}{}{}{}{}{}",
                 console::Emoji("✨ ", ""),
                 console::style("Pixi task (").bold(),
@@ -241,9 +240,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     String::new()
                 };
 
-                eprintln!(
+                pixi_progress::println!(
                     "Task '{}'{args_text} can be skipped (cache hit) 🚀",
-                    console::style(executable_task.name().unwrap_or("")).bold(),
+                    console::style(executable_task.name().unwrap_or("")).bold()
                 );
                 task_idx += 1;
                 continue;
@@ -266,11 +265,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .await?;
 
                 // Clear the current progress reports.
-                lock_file
-                    .build_context
-                    .command_dispatcher()
-                    .clear_reporter()
-                    .await;
+                lock_file.command_dispatcher.clear_reporter().await;
 
                 let command_env = get_task_env(
                     &executable_task.run_environment,
@@ -334,7 +329,7 @@ fn command_not_found<'p>(workspace: &'p Workspace, explicit_environment: Option<
         };
 
     if !available_tasks.is_empty() {
-        eprintln!(
+        pixi_progress::println!(
             "\nAvailable tasks:\n{}",
             available_tasks
                 .into_iter()
@@ -352,11 +347,11 @@ fn command_not_found<'p>(workspace: &'p Workspace, explicit_environment: Option<
         .iter()
         .all(|env| !env.platforms().contains(&env.best_platform()))
     {
-        eprintln!(
+        pixi_progress::println!(
             "\nHelp: This platform ({}) is not supported. Please run the following command to add this platform to the workspace:\n\n\tpixi workspace platform add {}",
             Platform::current(),
-            Platform::current(),
-        )
+            Platform::current()
+        );
     }
 }
 

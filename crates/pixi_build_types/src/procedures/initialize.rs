@@ -1,8 +1,11 @@
+//! This API was introduced in Pixi Build API version 0.
+
 use std::path::PathBuf;
 
+use ordermap::OrderMap;
 use serde::{Deserialize, Serialize};
 
-use crate::VersionedProjectModel;
+use crate::{TargetSelectorV1, VersionedProjectModel};
 
 pub const METHOD_NAME: &str = "initialize";
 
@@ -44,6 +47,9 @@ pub struct InitializeParams {
 
     /// Backend specific configuration passed from the frontend to the backend.
     pub configuration: Option<serde_json::Value>,
+
+    /// Targets that apply to the backend.
+    pub target_configuration: Option<OrderMap<TargetSelectorV1, serde_json::Value>>,
 }
 
 /// The result of the initialize request.

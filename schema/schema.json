@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://pixi.sh/v0.49.0/schema/manifest/schema.json",
+  "$id": "https://pixi.sh/v0.50.2/schema/manifest/schema.json",
   "title": "`pixi.toml` manifest file",
   "description": "The configuration for a [`pixi`](https://pixi.sh) project.",
   "type": "object",
@@ -10,7 +10,7 @@
       "title": "Schema",
       "description": "The schema identifier for the project's configuration",
       "type": "string",
-      "default": "https://pixi.sh/v0.49.0/schema/manifest/schema.json",
+      "default": "https://pixi.sh/v0.50.2/schema/manifest/schema.json",
       "format": "uri-reference"
     },
     "activation": {
@@ -335,6 +335,26 @@
           "description": "The configuration of the build backend",
           "type": "object",
           "additionalProperties": true
+        },
+        "target": {
+          "title": "Target",
+          "description": "Target-specific build configuration for different platforms",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/BuildTarget"
+          },
+          "propertyNames": {
+            "minLength": 1
+          },
+          "examples": [
+            {
+              "linux-64": {
+                "configuration": {
+                  "key": "value"
+                }
+              }
+            }
+          ]
         }
       }
     },
@@ -369,7 +389,7 @@
           "examples": [
             "conda-forge",
             "pytorch",
-            "https://repo.prefix.dev/conda-forge"
+            "https://prefix.dev/conda-forge"
           ]
         },
         "file-name": {
@@ -449,6 +469,20 @@
           "description": "The version of the package in [MatchSpec](https://github.com/conda/conda/blob/078e7ee79381060217e1ec7f9b0e9cf80ecc8f3f/conda/models/match_spec.py) format",
           "type": "string",
           "minLength": 1
+        }
+      }
+    },
+    "BuildTarget": {
+      "title": "BuildTarget",
+      "description": "Target-specific build configuration for different platforms",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "configuration": {
+          "title": "Configuration",
+          "description": "Target-specific configuration for the build backend",
+          "type": "object",
+          "additionalProperties": true
         }
       }
     },
@@ -849,7 +883,7 @@
           "examples": [
             "conda-forge",
             "pytorch",
-            "https://repo.prefix.dev/conda-forge"
+            "https://prefix.dev/conda-forge"
           ]
         },
         "file-name": {
@@ -1308,6 +1342,45 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "dependency-overrides": {
+          "title": "Dependency-Overrides",
+          "description": "A list of PyPI dependencies that override the resolved dependencies",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/PyPIVersion"
+              },
+              {
+                "$ref": "#/$defs/PyPIGitBranchRequirement"
+              },
+              {
+                "$ref": "#/$defs/PyPIGitTagRequirement"
+              },
+              {
+                "$ref": "#/$defs/PyPIGitRevRequirement"
+              },
+              {
+                "$ref": "#/$defs/PyPIPathRequirement"
+              },
+              {
+                "$ref": "#/$defs/PyPIUrlRequirement"
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          },
+          "examples": [
+            {
+              "numpy": ">=1.21.0"
+            }
+          ]
+        },
         "extra-index-urls": {
           "title": "Extra-Index-Urls",
           "description": "Additional PyPI registries that should be used as extra indexes",

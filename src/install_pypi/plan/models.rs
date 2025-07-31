@@ -6,7 +6,7 @@ use super::InstallReason;
 pub struct PyPIInstallationPlan {
     /// The distributions that are not already installed in the current
     /// environment, but are available in the local cache.
-    pub local: Vec<(CachedDist, InstallReason)>,
+    pub cached: Vec<(CachedDist, InstallReason)>,
 
     /// The distributions that are not already installed in the current
     /// environment, and are not available in the local cache.

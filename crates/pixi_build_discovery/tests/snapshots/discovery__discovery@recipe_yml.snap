@@ -10,7 +10,7 @@ backend-spec:
     type: environment-spec
     requirement:
       - pixi-build-rattler-build
-      - {}
+      - "*"
     channels:
       - "https://conda.anaconda.org/conda-forge"
       - "https://prefix.dev/pixi-build-backends"
@@ -19,3 +19,4 @@ init-params:
   manifest-path: recipe.yml
   project-model: ~
   configuration: ~
+  target-configuration: ~

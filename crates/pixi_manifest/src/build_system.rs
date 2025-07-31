@@ -4,6 +4,7 @@ use indexmap::IndexMap;
 use pixi_spec::BinarySpec;
 use rattler_conda_types::NamedChannelOrUrl;
 
+use crate::TargetSelector;
 use crate::toml::FromTomlStr;
 use crate::{TomlError, toml::TomlPackageBuild};
 
@@ -23,6 +24,9 @@ pub struct PackageBuild {
 
     /// Additional configuration for the build backend.
     pub configuration: Option<serde_value::Value>,
+
+    /// Target-specific configuration for different platforms
+    pub target_configuration: Option<IndexMap<TargetSelector, serde_value::Value>>,
 }
 
 impl PackageBuild {
@@ -33,6 +37,7 @@ impl PackageBuild {
             channels: Some(channels),
             additional_dependencies: IndexMap::default(),
             configuration: None,
+            target_configuration: None,
         }
     }
 }

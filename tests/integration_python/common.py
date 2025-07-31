@@ -9,7 +9,7 @@ from typing import Generator, Optional, Sequence, Tuple
 
 from rattler import Platform
 
-PIXI_VERSION = "0.49.0"
+PIXI_VERSION = "0.50.2"
 
 
 ALL_PLATFORMS = '["linux-64", "osx-64", "osx-arm64", "win-64", "linux-ppc64le", "linux-aarch64"]'
@@ -22,6 +22,8 @@ name = "test"
 channels = []
 platforms = ["{CURRENT_PLATFORM}"]
 """
+
+CONDA_FORGE_CHANNEL = "https://prefix.dev/conda-forge"
 
 
 class ExitCode(IntEnum):

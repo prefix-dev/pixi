@@ -207,7 +207,7 @@ class MatchspecTable(StrictBaseModel):
     channel: NonEmptyStr | None = Field(
         None,
         description="The channel the packages needs to be fetched from",
-        examples=["conda-forge", "pytorch", "https://repo.prefix.dev/conda-forge"],
+        examples=["conda-forge", "pytorch", "https://prefix.dev/conda-forge"],
     )
     subdir: NonEmptyStr | None = Field(
         None, description="The subdir of the package, also known as platform"
@@ -605,6 +605,13 @@ class PyPIOptions(StrictBaseModel):
         description="Packages that should NOT be built",
         examples=["true", "false"],
     )
+    dependency_overrides: dict[PyPIPackageName, PyPIRequirement] | None = Field(
+        None,
+        description="A list of PyPI dependencies that override the resolved dependencies",
+        examples=[
+            {"numpy": ">=1.21.0"},
+        ],
+    )
     no_binary: bool | list[PyPIPackageName] | None = Field(
         None,
         description="Don't use pre-built wheels for these packages",
@@ -676,6 +683,14 @@ class Package(StrictBaseModel):
     )
 
 
+class BuildTarget(StrictBaseModel):
+    """Target-specific build configuration for different platforms"""
+
+    configuration: dict[str, Any] = Field(
+        None, description="Target-specific configuration for the build backend"
+    )
+
+
 class Build(StrictBaseModel):
     backend: BuildBackend = Field(..., description="The build backend to instantiate")
     channels: list[Channel] = Field(
@@ -686,6 +701,11 @@ class Build(StrictBaseModel):
     )
     configuration: dict[str, Any] = Field(
         None, description="The configuration of the build backend"
+    )
+    target: dict[TargetName, BuildTarget] | None = Field(
+        None,
+        description="Target-specific build configuration for different platforms",
+        examples=[{"linux-64": {"configuration": {"key": "value"}}}],
     )
 
 

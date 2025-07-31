@@ -12,11 +12,16 @@ use jsonrpsee::{
     types::ErrorCode,
 };
 use miette::Diagnostic;
+use ordermap::OrderMap;
 use pixi_build_types::{
-    FrontendCapabilities, ProjectModelV1, VersionedProjectModel, procedures,
+    BackendCapabilities, FrontendCapabilities, ProjectModelV1, TargetSelectorV1,
+    VersionedProjectModel,
     procedures::{
-        conda_build::{CondaBuildParams, CondaBuildResult},
+        self,
+        conda_build_v0::{CondaBuildParams, CondaBuildResult},
+        conda_build_v1::{CondaBuildV1Params, CondaBuildV1Result},
         conda_metadata::{CondaMetadataParams, CondaMetadataResult},
+        conda_outputs::{CondaOutputsParams, CondaOutputsResult},
         initialize::{InitializeParams, InitializeResult},
         negotiate_capabilities::{NegotiateCapabilitiesParams, NegotiateCapabilitiesResult},
     },
@@ -117,9 +122,12 @@ impl CommunicationError {
     }
 }
 
+#[derive(Debug)]
 pub struct JsonRpcBackend {
     /// The identifier of the backend.
     backend_identifier: String,
+    /// The capabilities of the backend.
+    backend_capabilities: BackendCapabilities,
     /// The JSON-RPC client to communicate with the backend.
     client: Client,
     /// The path to the manifest that is passed to the backend.
@@ -138,6 +146,7 @@ impl JsonRpcBackend {
         manifest_path: PathBuf,
         package_manifest: Option<ProjectModelV1>,
         configuration: Option<serde_json::Value>,
+        target_configuration: Option<OrderMap<TargetSelectorV1, serde_json::Value>>,
         cache_dir: Option<PathBuf>,
         tool: Tool,
     ) -> Result<Self, InitializeError> {
@@ -182,6 +191,7 @@ impl JsonRpcBackend {
             manifest_path,
             package_manifest,
             configuration,
+            target_configuration,
             cache_dir,
             tx,
             rx,
@@ -198,6 +208,7 @@ impl JsonRpcBackend {
         manifest_path: PathBuf,
         project_model: Option<ProjectModelV1>,
         configuration: Option<serde_json::Value>,
+        target_configuration: Option<OrderMap<TargetSelectorV1, serde_json::Value>>,
         cache_dir: Option<PathBuf>,
         sender: impl TransportSenderT + Send,
         receiver: impl TransportReceiverT + Send,
@@ -209,7 +220,7 @@ impl JsonRpcBackend {
             .build_with_tokio(sender, receiver);
 
         // Negotiate the capabilities with the backend.
-        let _negotiate_result: NegotiateCapabilitiesResult = client
+        let negotiate_result: NegotiateCapabilitiesResult = client
             .request(
                 procedures::negotiate_capabilities::METHOD_NAME,
                 RpcParams::from(NegotiateCapabilitiesParams {
@@ -234,6 +245,7 @@ impl JsonRpcBackend {
                 RpcParams::from(InitializeParams {
                     project_model: project_model.map(VersionedProjectModel::V1),
                     configuration,
+                    target_configuration,
                     manifest_path: manifest_path.clone(),
                     source_dir: Some(source_dir),
                     cache_directory: cache_dir,
@@ -253,6 +265,7 @@ impl JsonRpcBackend {
         Ok(Self {
             client,
             backend_identifier,
+            backend_capabilities: negotiate_result.capabilities,
             manifest_path,
             stderr: stderr.map(Mutex::new).map(Arc::new),
         })
@@ -309,7 +322,7 @@ impl JsonRpcBackend {
         })
     }
 
-    pub async fn conda_build<W: BackendOutputStream + Send + 'static>(
+    pub async fn conda_build_v0<W: BackendOutputStream + Send + 'static>(
         &self,
         request: CondaBuildParams,
         output_stream: W,
@@ -326,7 +339,7 @@ impl JsonRpcBackend {
         let result = self
             .client
             .request(
-                procedures::conda_build::METHOD_NAME,
+                procedures::conda_build_v0::METHOD_NAME,
                 RpcParams::from(request),
             )
             .await;
@@ -353,7 +366,109 @@ impl JsonRpcBackend {
             CommunicationError::from_client_error(
                 self.backend_identifier.clone(),
                 err,
-                procedures::conda_build::METHOD_NAME,
+                procedures::conda_build_v0::METHOD_NAME,
+                self.manifest_path.parent().unwrap_or(&self.manifest_path),
+                backend_output,
+            )
+        })
+    }
+
+    pub async fn conda_build_v1<W: BackendOutputStream + Send + 'static>(
+        &self,
+        request: CondaBuildV1Params,
+        output_stream: W,
+    ) -> Result<CondaBuildV1Result, CommunicationError> {
+        // Capture all of stderr and discard it
+        let stderr = self.stderr.as_ref().map(|stderr| {
+            // Cancellation signal
+            let (cancel_tx, cancel_rx) = oneshot::channel();
+            // Spawn the stderr forwarding task
+            let handle = tokio::spawn(stream_stderr(stderr.clone(), cancel_rx, output_stream));
+            (cancel_tx, handle)
+        });
+
+        let result = self
+            .client
+            .request(
+                procedures::conda_build_v1::METHOD_NAME,
+                RpcParams::from(request),
+            )
+            .await;
+
+        // Wait for the stderr sink to finish, by signaling it to stop
+        let backend_output = if let Some((cancel_tx, handle)) = stderr {
+            // Cancel the stderr forwarding. Ignore any error because that means the
+            // tasks also finished.
+            let _err = cancel_tx.send(());
+            let lines = handle.await.map_or_else(
+                |e| match e.try_into_panic() {
+                    Ok(panic) => std::panic::resume_unwind(panic),
+                    Err(_) => Err(CommunicationError::StdErrPipeStopped),
+                },
+                |e| e.map_err(|_| CommunicationError::StdErrPipeStopped),
+            )?;
+
+            Some(lines)
+        } else {
+            None
+        };
+
+        result.map_err(|err| {
+            CommunicationError::from_client_error(
+                self.backend_identifier.clone(),
+                err,
+                procedures::conda_build_v1::METHOD_NAME,
+                self.manifest_path.parent().unwrap_or(&self.manifest_path),
+                backend_output,
+            )
+        })
+    }
+
+    /// Call the `conda/outputs` method on the backend.
+    pub async fn conda_outputs(
+        &self,
+        request: CondaOutputsParams,
+    ) -> Result<CondaOutputsResult, CommunicationError> {
+        // Capture all of stderr and discard it
+        let stderr = self.stderr.as_ref().map(|stderr| {
+            // Cancellation signal
+            let (cancel_tx, cancel_rx) = oneshot::channel();
+            // Spawn the stderr forwarding task
+            let handle = tokio::spawn(stderr_buffer(stderr.clone(), cancel_rx));
+            (cancel_tx, handle)
+        });
+
+        let result = self
+            .client
+            .request(
+                procedures::conda_outputs::METHOD_NAME,
+                RpcParams::from(request),
+            )
+            .await;
+
+        // Wait for the stderr sink to finish, by signaling it to stop
+        let backend_output = if let Some((cancel_tx, handle)) = stderr {
+            // Cancel the stderr forwarding. Ignore any error because that means the
+            // tasks also finished.
+            let _err = cancel_tx.send(());
+            let lines = handle.await.map_or_else(
+                |e| match e.try_into_panic() {
+                    Ok(panic) => std::panic::resume_unwind(panic),
+                    Err(_) => Err(CommunicationError::StdErrPipeStopped),
+                },
+                |e| e.map_err(|_| CommunicationError::StdErrPipeStopped),
+            )?;
+
+            Some(lines)
+        } else {
+            None
+        };
+
+        result.map_err(|err| {
+            CommunicationError::from_client_error(
+                self.backend_identifier.clone(),
+                err,
+                procedures::conda_metadata::METHOD_NAME,
                 self.manifest_path.parent().unwrap_or(&self.manifest_path),
                 backend_output,
             )
@@ -363,5 +478,10 @@ impl JsonRpcBackend {
     /// Returns the backend identifier.
     pub fn identifier(&self) -> &str {
         &self.backend_identifier
+    }
+
+    /// Returns the advertised capabilities of the backend.
+    pub fn capabilities(&self) -> &BackendCapabilities {
+        &self.backend_capabilities
     }
 }
