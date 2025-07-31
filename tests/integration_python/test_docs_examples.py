@@ -95,6 +95,10 @@ class TestPixiBuild:
         ),
     ]
 
+    def test_coverage(self) -> None:
+        # check that we have covered all example directories
+        assert len(self.pixi_project_params) == len(self.pixi_projects)
+
     @pytest.mark.extra_slow
     @pytest.mark.parametrize(
         "pixi_project,result",
