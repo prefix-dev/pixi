@@ -43,6 +43,9 @@ pub struct DiscoveredBackend {
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub struct BackendInitializationParams {
+    /// The root directory of the workspace.
+    pub workspace_root: PathBuf,
+
     /// The directory that contains the source code.
     pub source_dir: PathBuf,
 
@@ -169,6 +172,7 @@ impl DiscoveredBackend {
                 channel_config,
             )),
             init_params: BackendInitializationParams {
+                workspace_root: source_dir.clone(),
                 source_dir,
                 manifest_path: recipe_relative_path,
                 project_model: None,
@@ -183,13 +187,18 @@ impl DiscoveredBackend {
     pub fn from_package_and_workspace(
         source_path: PathBuf,
         package_manifest: &WithProvenance<PackageManifest>,
-        workspace: &WorkspaceManifest,
+        workspace: &WithProvenance<WorkspaceManifest>,
         channel_config: &ChannelConfig,
     ) -> Result<Self, SpecConversionError> {
         let WithProvenance {
             value: package_manifest,
             provenance,
         } = package_manifest;
+
+        let workspace_root = workspace.provenance.path
+            .parent()
+            .expect("workspace manifest should have a parent directory")
+            .to_path_buf();
 
         // Construct the project model from the manifest
         let project_model = to_project_model_v1(package_manifest, channel_config)?;
@@ -210,7 +219,7 @@ impl DiscoveredBackend {
         let named_channels = match build_system.channels.as_ref() {
             Some(channels) => itertools::Either::Left(channels.iter()),
             None => itertools::Either::Right(PrioritizedChannel::sort_channels_by_priority(
-                workspace.workspace.channels.iter(),
+                workspace.value.workspace.channels.iter(),
             )),
         };
         let channels = named_channels
@@ -250,8 +259,8 @@ impl DiscoveredBackend {
                     })?;
 
                     // The actual source directory is the custom path
-                    // The manifest path is relative from the custom source to the manifest
-                    let manifest_path = pathdiff::diff_paths(&provenance.path, &custom_source_dir)
+                    // The manifest path is relative from the workspace root to the manifest
+                    let manifest_path = pathdiff::diff_paths(&provenance.path, &workspace_root)
                         .unwrap_or_else(|| {
                             // If we can't create a relative path, use an absolute path
                             provenance.path.clone()
@@ -261,16 +270,16 @@ impl DiscoveredBackend {
                 }
                 _ => {
                     // For non-path specs, use the original logic
-                    let manifest_path = pathdiff::diff_paths(&provenance.path, &source_dir).expect(
-                        "must be able to construct a path to go from source dir to manifest path",
+                    let manifest_path = pathdiff::diff_paths(&provenance.path, &workspace_root).expect(
+                        "must be able to construct a path to go from workspace root to manifest path",
                     );
                     (source_dir, manifest_path)
                 }
             }
         } else {
             // No custom source path, use the original logic
-            let manifest_path = pathdiff::diff_paths(&provenance.path, &source_dir)
-                .expect("must be able to construct a path to go from source dir to manifest path");
+            let manifest_path = pathdiff::diff_paths(&provenance.path, &workspace_root)
+                .expect("must be able to construct a path to go from workspace root to manifest path");
             (source_dir, manifest_path)
         };
 
@@ -286,8 +295,9 @@ impl DiscoveredBackend {
                 })),
             }),
             init_params: BackendInitializationParams {
-                manifest_path: manifest_relative_path,
+                workspace_root,
                 source_dir: actual_source_dir,
+                manifest_path: manifest_relative_path,
                 project_model: Some(project_model),
                 configuration: build_system.configuration.map(|config| {
                     config
@@ -338,7 +348,7 @@ impl DiscoveredBackend {
         Self::from_package_and_workspace(
             source_path,
             &package_manifest,
-            &manifests.workspace.value,
+            &manifests.workspace,
             channel_config,
         )
         .map_err(DiscoveryError::SpecConversionError)
