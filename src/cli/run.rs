@@ -468,11 +468,12 @@ pub async fn run_future_forwarding_signals<TOutput>(
     let _token_drop_guard = token.clone().drop_guard();
     let _drop_guard = kill_signal.clone().drop_guard();
 
+    let local_set = tokio::task::LocalSet::new();
+
     spawn_future_with_cancellation(listen_ctrl_c(kill_signal.clone()), token.clone());
     #[cfg(unix)]
     spawn_future_with_cancellation(listen_and_forward_all_signals(kill_signal), token);
 
-    let local_set = tokio::task::LocalSet::new();
     local_set.run_until(future).await
 }
 
@@ -491,7 +492,6 @@ async fn listen_ctrl_c(kill_signal: KillSignal) {
 #[cfg(unix)]
 async fn listen_and_forward_all_signals(kill_signal: KillSignal) {
     use futures::FutureExt;
-    use tokio::signal::unix::{SignalKind, signal};
 
     use crate::signals::SIGNALS;
 
@@ -505,10 +505,10 @@ async fn listen_and_forward_all_signals(kill_signal: KillSignal) {
         let kill_signal = kill_signal.clone();
         futures.push(
             async move {
-                let Ok(mut stream) = tokio::signal::unix::signal(signo) else {
+                let Ok(mut stream) = tokio::signal::unix::signal(signo.into()) else {
                     return;
                 };
-                let signal_kind: tokio::signal::unix::SignalKind = signo.into();
+                let signal_kind = signo.into();
                 while let Some(()) = stream.recv().await {
                     kill_signal.send(signal_kind);
                 }
