@@ -5,7 +5,7 @@ use indexmap::IndexMap;
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
-use miette::Context;
+use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, Platform};
 
 use crate::{
@@ -85,7 +85,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_cli_config(config.clone());
 
     // Capture the current working directory for proper relative path resolution
-    let current_dir = std::env::current_dir().expect("Could not retrieve the current directory");
+    let current_dir = std::env::current_dir()
+        .into_diagnostic()
+        .wrap_err("Could not retrieve the current directory")?;
     let channel_config = rattler_conda_types::ChannelConfig {
         root_dir: current_dir,
         ..project_original.global_channel_config().clone()
