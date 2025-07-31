@@ -1460,3 +1460,53 @@ def test_info_output_extended(
     )
 
     assert info_data == snapshot(matcher=path_matcher)
+
+
+def test_feature_name_with_dots_escaping(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test that feature names with dots are properly escaped and the manifest remains parseable."""
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+
+    # Create a new project
+    verify_cli_command([pixi, "init", tmp_pixi_workspace])
+
+    # Test data
+    feature_name = "test.test"
+    package_name = "python"
+
+    # Add a package to a feature with dots in the name - this should trigger the escaping
+    verify_cli_command(
+        [pixi, "add", "--manifest-path", manifest_path, "--feature", feature_name, package_name]
+    )
+
+    # Read the manifest and verify the feature name is properly escaped
+    manifest_content = manifest_path.read_text()
+
+    # Expected TOML section headers for properly escaped feature names
+    pyproject_format = f'[tool.pixi.feature."{feature_name}".dependencies]'
+    pixi_format = f'[feature."{feature_name}".dependencies]'
+    double_escaped_format = '[feature.\'"test"."test"\'.dependencies]'
+    unescaped_format = f"[feature.{feature_name}.dependencies]"
+
+    # The feature name should be escaped with quotes in the TOML
+    assert pyproject_format in manifest_content or pixi_format in manifest_content, (
+        f"Feature name not properly escaped in manifest:\n{manifest_content}"
+    )
+
+    # Verify it's not double-escaped or incorrectly escaped
+    assert double_escaped_format not in manifest_content, (
+        "Feature name appears to be double-escaped"
+    )
+    assert unescaped_format not in manifest_content, "Feature name not escaped when it should be"
+
+    # Test the critical part: verify the manifest can be parsed correctly
+    # Using `pixi lock` which parses the TOML but doesn't install packages (much faster)
+    verify_cli_command(
+        [pixi, "lock", "--manifest-path", manifest_path],
+        ExitCode.SUCCESS,
+    )
+
+    # Verify that the feature is recognized by the system
+    verify_cli_command(
+        [pixi, "info", "--manifest-path", manifest_path],
+        ExitCode.SUCCESS,
+    )
