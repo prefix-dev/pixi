@@ -272,6 +272,8 @@ build = { cmd="npm build", cwd="frontend", inputs=["frontend/package.json", "fro
 run = { cmd="python run.py $ARGUMENT", env={ ARGUMENT="value" }}
 format = { cmd="black $INIT_CWD" } # runs black where you run pixi run format
 clean-env = { cmd = "python isolated.py", clean-env = true} # Only on Unix!
+python-script = { cmd = "print('Hello from Python')", interpreter = "python" }
+custom-interpreter = { cmd = "echo 'Custom script'", interpreter = "bash -c {0}" }
 ```
 
 You can modify this table using [`pixi task`](cli/pixi/task.md).
@@ -281,6 +283,44 @@ You can modify this table using [`pixi task`](cli/pixi/task.md).
 !!! info
     If you want to hide a task from showing up with `pixi task list` or `pixi info`, you can prefix the name with `_`.
     For example, if you want to hide `depending`, you can rename it to `_depending`.
+
+### Task Interpreters
+
+Tasks can specify a custom interpreter to execute the command instead of using the default `deno_task_shell`. This is useful for running scripts in specific languages or shells.
+
+```toml
+[tasks]
+# Run Python code directly
+python-hello = { cmd = "print('Hello from Python')", interpreter = "python" }
+
+# Run shell script with bash
+bash-script = { cmd = "echo 'Hello from Bash'", interpreter = "bash" }
+
+# Use custom interpreter with placeholder
+custom-script = { cmd = "echo 'Custom script'", interpreter = "bash -c {0}" }
+```
+
+When using an interpreter:
+
+- The `cmd` content is written to a temporary file
+- The interpreter is executed with the temporary file as an argument
+- **Template placeholder**: If the interpreter contains `{0}`, it will be replaced with the temporary file path
+- **Default behavior**: If no `{0}` placeholder is specified, the temporary file path is appended to the interpreter command
+
+Examples of interpreter usage:
+
+```toml
+[tasks]
+# These are equivalent:
+python-script1 = { cmd = "print('Hello')", interpreter = "python" }
+python-script2 = { cmd = "print('Hello')", interpreter = "python {0}" }
+
+# Custom interpreter with specific flags
+node-script = { cmd = "console.log('Hello')", interpreter = "node --experimental-modules {0}" }
+
+# Shell with specific options
+bash-strict = { cmd = "echo 'Strict mode'", interpreter = "bash -euo pipefail {0}" }
+```
 
 ## The `system-requirements` table
 

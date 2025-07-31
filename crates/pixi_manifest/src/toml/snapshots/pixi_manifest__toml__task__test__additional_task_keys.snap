@@ -2,7 +2,7 @@
 source: crates/pixi_manifest/src/toml/task.rs
 expression: "expect_parse_failure(r#\"\n            cmd = \"test\"\n            depends = [\"a\", \"b\"]\n        \"#)"
 ---
-  × Unexpected keys, expected only 'cmd', 'inputs', 'outputs', 'depends-on', 'cwd', 'env', 'description', 'clean-env', 'args'
+  × Unexpected keys, expected only 'cmd', 'inputs', 'outputs', 'depends-on', 'cwd', 'env', 'description', 'clean-env', 'args', 'interpreter'
    ╭─[pixi.toml:3:13]
  2 │             cmd = "test"
  3 │             depends = ["a", "b"]
