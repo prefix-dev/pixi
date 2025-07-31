@@ -13,7 +13,7 @@ use pixi_manifest::{
 use pixi_progress::await_in_progress;
 use pixi_record::PixiRecord;
 use pixi_uv_conversions::{
-    BuildIsolation, locked_indexes_to_index_locations, pypi_options_to_build_options,
+    BuildIsolation, locked_indexes_to_index_locations, pypi_options_to_build_options, to_normalize,
 };
 use plan::{InstallPlanner, InstallReason, NeedReinstall, PyPIInstallationPlan};
 use pypi_modifiers::{
@@ -328,6 +328,35 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         Ok(installation_plan)
     }
 
+    /// Separates distributions into those that require build isolation and those that don't
+    fn separate_distributions_by_build_isolation(
+        &self,
+        dists: Vec<CachedDist>,
+    ) -> (Vec<CachedDist>, Vec<CachedDist>) {
+        match self.build_config.no_build_isolation {
+            NoBuildIsolation::All => (Vec::new(), dists),
+            NoBuildIsolation::Packages(no_build_isolation_packages) => {
+                let mut regular_dists = Vec::new();
+                let mut no_build_isolation_dists = Vec::new();
+                for no_build_isolation in no_build_isolation_packages {
+                    for dist in &dists {
+                        let Ok(dist_name) = to_normalize(dist.name()) else {
+                            regular_dists.push(dist.clone());
+                            continue;
+                        };
+                        if &dist_name == no_build_isolation {
+                            no_build_isolation_dists.push(dist.clone());
+                        } else {
+                            regular_dists.push(dist.clone());
+                        }
+                    }
+                }
+
+                (regular_dists, no_build_isolation_dists)
+            }
+        }
+    }
+
     /// Execute the installation plan - this is the main installation logic
     async fn execute_installation_plan(
         &self,
@@ -383,7 +412,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         // Remove any unnecessary packages.
         self.remove_packages(extraneous, reinstalls).await?;
 
-        // Install the resolved distributions.
+        // Install the resolved distributions
         let cached_dists = cached.iter().map(|(d, _)| d.clone());
         let all_dists = remote_dists
             .into_iter()
@@ -393,7 +422,18 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         self.check_and_warn_about_conflicts(&all_dists, reinstalls, setup)
             .await?;
 
-        self.install_distributions(all_dists, setup).await?;
+        // Separate distributions by build isolation requirements
+        let (regular_dists, no_build_isolation_dists) =
+            self.separate_distributions_by_build_isolation(all_dists);
+
+        // Install regular PyPI packages (with build isolation) as a batch
+        self.install_distributions(regular_dists, setup).await?;
+
+        // Install no-build-isolation PyPI packages one by one
+        for dist in no_build_isolation_dists {
+            self.install_distributions(Vec::from([dist]), setup).await?;
+        }
+
         tracing::info!("{}", format!("finished in {}", elapsed(start.elapsed())));
 
         Ok(())
