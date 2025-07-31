@@ -717,7 +717,7 @@ def test_named_dependency_args_invalid(pixi: Path, tmp_pixi_workspace: Path) -> 
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest_path, "invalid2"],
         ExitCode.FAILURE,
-        stderr_contains="Positional argument found after named argument",
+        stderr_contains="Positional argument 'custom1' found after named argument",
     )
 
     verify_cli_command(
