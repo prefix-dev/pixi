@@ -44,9 +44,9 @@ test-slow = """cargo nextest run --workspace --all-targets --features slow_integ
 [feature.pytest.dependencies]
 dirty-equals = ">=0.9.0,<0.10"
 filelock = ">=3.16.0,<4"
-inline-snapshot = ">=0.24.0,<0.25"
+inline-snapshot = ">=0.25.2,<0.26"
 mypy = ">=1.16,<1.17"
-py-rattler = ">=0.14,<0.15"
+py-rattler = ">=0.15,<0.16"
 pytest = "*"
 pytest-rerunfailures = ">=15,<16"
 pytest-timeout = ">=2.3.1,<3"
