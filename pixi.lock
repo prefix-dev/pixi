@@ -136,7 +136,6 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/schema-0.7.7-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/setuptools-80.9.0-pyhff2d567_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/six-1.17.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/syrupy-4.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/sysroot_linux-64-2.17-h0157908_18.conda
       - conda: https://prefix.dev/conda-forge/noarch/tabulate-0.9.0-pyhd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/linux-64/tbb-2022.1.0-h4ce085d_0.conda
@@ -278,7 +277,6 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/schema-0.7.7-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/setuptools-80.9.0-pyhff2d567_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/six-1.17.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/syrupy-4.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/sysroot_linux-aarch64-2.17-h68829e0_18.conda
       - conda: https://prefix.dev/conda-forge/noarch/tabulate-0.9.0-pyhd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/tbump-6.9.0-pyhd8ed1ab_0.tar.bz2
@@ -425,7 +423,6 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/setuptools-80.9.0-pyhff2d567_0.conda
       - conda: https://prefix.dev/conda-forge/osx-64/sigtool-0.1.3-h88f4db0_0.tar.bz2
       - conda: https://prefix.dev/conda-forge/noarch/six-1.17.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/syrupy-4.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/tabulate-0.9.0-pyhd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/osx-64/tapi-1300.6.5-h390ca13_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/tbump-6.9.0-pyhd8ed1ab_0.tar.bz2
@@ -574,7 +571,6 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/setuptools-80.9.0-pyhff2d567_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/sigtool-0.1.3-h44b9a77_0.tar.bz2
       - conda: https://prefix.dev/conda-forge/noarch/six-1.17.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/syrupy-4.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/tabulate-0.9.0-pyhd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/tapi-1300.6.5-h03f4b80_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/tbump-6.9.0-pyhd8ed1ab_0.tar.bz2
@@ -692,7 +688,6 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/schema-0.7.7-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/setuptools-80.9.0-pyhff2d567_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/six-1.17.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/syrupy-4.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/tabulate-0.9.0-pyhd8ed1ab_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/tbump-6.9.0-pyhd8ed1ab_0.tar.bz2
       - conda: https://prefix.dev/conda-forge/win-64/tk-8.6.13-h2c6b04d_2.conda
@@ -1458,7 +1453,6 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/rust-src-1.86.0-unix_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/rust-std-x86_64-unknown-linux-gnu-1.86.0-h2c6d0dc_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/shellcheck-0.10.0-ha770c72_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/syrupy-4.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/sysroot_linux-64-2.17-h0157908_18.conda
       - conda: https://prefix.dev/conda-forge/linux-64/taplo-0.10.0-h2d22210_1.conda
       - conda: https://prefix.dev/conda-forge/linux-64/tbb-2022.1.0-h4ce085d_0.conda
@@ -1567,7 +1561,6 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/rust-src-1.86.0-unix_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/rust-std-aarch64-unknown-linux-gnu-1.86.0-hbe8e118_0.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/shellcheck-0.10.0-h8af1aa0_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/syrupy-4.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/sysroot_linux-aarch64-2.17-h68829e0_18.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/taplo-0.10.0-h3618846_1.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/tk-8.6.13-noxft_h5688188_102.conda
@@ -1681,7 +1674,6 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/rust-std-x86_64-apple-darwin-1.86.0-h38e4360_0.conda
       - conda: https://prefix.dev/conda-forge/osx-64/shellcheck-0.10.0-h7dd6a17_0.conda
       - conda: https://prefix.dev/conda-forge/osx-64/sigtool-0.1.3-h88f4db0_0.tar.bz2
-      - conda: https://prefix.dev/conda-forge/noarch/syrupy-4.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/osx-64/tapi-1300.6.5-h390ca13_0.conda
       - conda: https://prefix.dev/conda-forge/osx-64/taplo-0.10.0-hffa81eb_1.conda
       - conda: https://prefix.dev/conda-forge/osx-64/tk-8.6.13-hf689a15_2.conda
@@ -1797,7 +1789,6 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/rust-std-aarch64-apple-darwin-1.86.0-hf6ec828_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/shellcheck-0.10.0-hecfb573_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/sigtool-0.1.3-h44b9a77_0.tar.bz2
-      - conda: https://prefix.dev/conda-forge/noarch/syrupy-4.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/tapi-1300.6.5-h03f4b80_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/taplo-0.10.0-h2b2570c_1.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/tk-8.6.13-h892fb3f_2.conda
@@ -1882,7 +1873,6 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/rust-src-1.86.0-win_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/rust-std-x86_64-pc-windows-msvc-1.86.0-h17fc481_0.conda
       - conda: https://prefix.dev/conda-forge/win-64/shellcheck-0.10.0-h57928b3_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/syrupy-4.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/win-64/taplo-0.10.0-h63977a8_1.conda
       - conda: https://prefix.dev/conda-forge/win-64/tk-8.6.13-h2c6b04d_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/tomli-2.2.1-pyhd8ed1ab_1.conda
@@ -2214,7 +2204,6 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/rich-14.0.0-pyh29332c3_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/setuptools-80.9.0-pyhff2d567_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/six-1.17.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/syrupy-4.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/tk-8.6.13-noxft_hd72426e_102.conda
       - conda: https://prefix.dev/conda-forge/noarch/tomli-2.2.1-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/tomli-w-1.2.0-pyhd8ed1ab_0.conda
@@ -2283,7 +2272,6 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/rich-14.0.0-pyh29332c3_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/setuptools-80.9.0-pyhff2d567_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/six-1.17.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/syrupy-4.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/linux-aarch64/tk-8.6.13-noxft_h5688188_102.conda
       - conda: https://prefix.dev/conda-forge/noarch/tomli-2.2.1-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/tomli-w-1.2.0-pyhd8ed1ab_0.conda
@@ -2346,7 +2334,6 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/rich-14.0.0-pyh29332c3_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/setuptools-80.9.0-pyhff2d567_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/six-1.17.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/syrupy-4.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/osx-64/tk-8.6.13-hf689a15_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/tomli-2.2.1-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/tomli-w-1.2.0-pyhd8ed1ab_0.conda
@@ -2409,7 +2396,6 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/rich-14.0.0-pyh29332c3_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/setuptools-80.9.0-pyhff2d567_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/six-1.17.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/syrupy-4.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/tk-8.6.13-h892fb3f_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/tomli-2.2.1-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/tomli-w-1.2.0-pyhd8ed1ab_0.conda
@@ -2470,7 +2456,6 @@ environments:
       - conda: https://prefix.dev/conda-forge/noarch/rich-14.0.0-pyh29332c3_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/setuptools-80.9.0-pyhff2d567_0.conda
       - conda: https://prefix.dev/conda-forge/noarch/six-1.17.0-pyhd8ed1ab_0.conda
-      - conda: https://prefix.dev/conda-forge/noarch/syrupy-4.9.1-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/win-64/tk-8.6.13-h2c6b04d_2.conda
       - conda: https://prefix.dev/conda-forge/noarch/tomli-2.2.1-pyhd8ed1ab_1.conda
       - conda: https://prefix.dev/conda-forge/noarch/tomli-w-1.2.0-pyhd8ed1ab_0.conda
@@ -9701,16 +9686,6 @@ packages:
   license_family: MIT
   size: 16385
   timestamp: 1733381032766
-- conda: https://prefix.dev/conda-forge/noarch/syrupy-4.9.1-pyhd8ed1ab_0.conda
-  sha256: 62f549992509c3d1a0ecedd7a4784972c2542f23ec1c49ada92027c156cd31a5
-  md5: f8e0fc78b3292b215266c19cdddaa6ab
-  depends:
-  - pytest >=7.0.0,<9.0.0
-  - python >=3.9,<4.0
-  license: Apache-2.0
-  license_family: APACHE
-  size: 47524
-  timestamp: 1742814070006
 - conda: https://prefix.dev/conda-forge/noarch/sysroot_linux-64-2.17-h0157908_18.conda
   sha256: 69ab5804bdd2e8e493d5709eebff382a72fab3e9af6adf93a237ccf8f7dbd624
   md5: 460eba7851277ec1fd80a1a24080787a
