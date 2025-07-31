@@ -1,0 +1,14 @@
+---
+source: tests/integration_rust/add_tests.rs
+expression: error
+---
+MietteDiagnostic {
+    message: "conda source dependencies are not allowed without enabling the 'pixi-build' preview feature",
+    code: None,
+    severity: None,
+    help: Some(
+        "Add `preview = [\"pixi-build\"]` to the `workspace` or `project` table of your manifest (<MANIFEST_PATH>)",
+    ),
+    url: None,
+    labels: None,
+}

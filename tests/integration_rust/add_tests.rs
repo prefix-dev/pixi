@@ -951,6 +951,73 @@ platforms = ["{platform}"]
 }
 
 #[tokio::test]
+async fn add_git_dependency_without_preview_feature_fails() {
+    let pixi = PixiControl::from_manifest(
+        r#"
+[workspace]
+name = "test-git-no-preview"
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["linux-64"]
+"#,
+    )
+    .unwrap();
+
+    let result = pixi
+        .add("boost-check")
+        .with_git_url(Url::parse("https://github.com/wolfv/pixi-build-examples.git").unwrap())
+        .with_git_subdir("boost-check".to_string())
+        .await;
+
+    assert!(result.is_err());
+    let error = result.unwrap_err();
+
+    // Use insta to snapshot test the full error message format including help text
+    insta::with_settings!({
+        filters => vec![
+            // Filter out the dynamic manifest path to make the snapshot stable
+            (r"manifest \([^)]+\)", "manifest (<MANIFEST_PATH>)"),
+        ]
+    }, {
+        insta::assert_debug_snapshot!("git_dependency_without_preview_error", error);
+    });
+}
+
+#[tokio::test]
+async fn add_git_dependency_with_preview_feature_succeeds() {
+    let pixi = PixiControl::from_manifest(
+        r#"
+[workspace]
+name = "test-git-with-preview"
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["linux-64"]
+preview = ["pixi-build"]
+"#,
+    )
+    .unwrap();
+
+    let result = pixi
+        .add("boost-check")
+        .with_git_url(Url::parse("https://github.com/wolfv/pixi-build-examples.git").unwrap())
+        .with_git_subdir("boost-check".to_string())
+        .with_no_lockfile_update(true)
+        .await;
+
+    assert!(result.is_ok());
+
+    let workspace = pixi.workspace().unwrap();
+    let deps = workspace
+        .default_environment()
+        .combined_dependencies(Some(Platform::Linux64));
+
+    let (name, spec) = deps
+        .into_specs()
+        .find(|(name, _)| name.as_normalized() == "boost-check")
+        .unwrap();
+    assert_eq!(name.as_normalized(), "boost-check");
+    assert!(spec.is_source());
+}
+
+#[tokio::test]
 async fn add_dependency_dont_create_project() {
     // Create a channel with two packages
     let mut package_database = PackageDatabase::default();

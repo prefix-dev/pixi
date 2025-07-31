@@ -2921,7 +2921,7 @@ bar = "*"
         let manifest = WorkspaceManifest::from_toml_str(toml);
         let err = manifest.unwrap_err();
         insta::assert_snapshot!(format_parse_error(toml, err.error), @r###"
-         × source dependencies are not allowed without enabling pixi-build
+         × conda source dependencies are not allowed without enabling the 'pixi-build' preview feature
           ╭─[pixi.toml:8:15]
         7 │         [dependencies]
         8 │         foo = { path = "./foo" }
@@ -2929,7 +2929,7 @@ bar = "*"
           ·                        ╰── source dependency specified here
         9 │
           ╰────
-         help: Add `workspace.preview = ["pixi-build"]` to enable pixi build support
+         help: Add `preview = ["pixi-build"]` to the `workspace` or `project` table of your manifest
         "###);
     }
 

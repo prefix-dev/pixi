@@ -787,6 +787,58 @@ def test_concurrency_flags(
     )
 
 
+def test_cli_config_options(
+    pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
+) -> None:
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+
+    # Create a new project
+    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, tmp_pixi_workspace])
+
+    # Test --pinning-strategy flag
+    verify_cli_command(
+        [pixi, "add", "--pinning-strategy=semver", "--manifest-path", manifest_path, "package"]
+    )
+    verify_cli_command(
+        [pixi, "add", "--pinning-strategy=minor", "--manifest-path", manifest_path, "package2"]
+    )
+    verify_cli_command(
+        [pixi, "add", "--pinning-strategy=major", "--manifest-path", manifest_path, "package3"]
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "add",
+            "--pinning-strategy=latest-up",
+            "--manifest-path",
+            manifest_path,
+            "package==0.1.0",
+        ]
+    )
+
+    # Test other CLI config flags
+    verify_cli_command(
+        [pixi, "install", "--run-post-link-scripts", "--manifest-path", manifest_path]
+    )
+    verify_cli_command([pixi, "install", "--tls-no-verify", "--manifest-path", manifest_path])
+    verify_cli_command(
+        [pixi, "install", "--use-environment-activation-cache", "--manifest-path", manifest_path]
+    )
+    verify_cli_command(
+        [pixi, "install", "--pypi-keyring-provider=disabled", "--manifest-path", manifest_path]
+    )
+    verify_cli_command(
+        [pixi, "install", "--pypi-keyring-provider=subprocess", "--manifest-path", manifest_path]
+    )
+
+    # Test --auth-file flag
+    auth_file = tmp_pixi_workspace / "auth.json"
+    auth_file.write_text("{}")
+    verify_cli_command(
+        [pixi, "install", f"--auth-file={auth_file}", "--manifest-path", manifest_path]
+    )
+
+
 def test_dont_add_broken_dep(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
     manifest_path = tmp_pixi_workspace / "pixi.toml"
 
