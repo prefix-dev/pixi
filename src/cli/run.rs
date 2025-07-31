@@ -10,6 +10,7 @@ use std::{
 };
 
 use clap::Parser;
+use deno_task_shell::{KillSignal, SignalKind};
 use dialoguer::theme::ColorfulTheme;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
@@ -32,6 +33,8 @@ use crate::{
     },
     workspace::{Environment, errors::UnsupportedPlatformError},
 };
+
+static SIGNAL_NOTIFY: tokio::sync::Notify = tokio::sync::Notify::const_new();
 
 /// Runs task in the pixi environment.
 ///
@@ -137,10 +140,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let ctrlc_should_exit_process = Arc::new(AtomicBool::new(true));
     let ctrlc_should_exit_process_clone = Arc::clone(&ctrlc_should_exit_process);
 
+    // Store the signal that was received for forwarding
+    let received_signal = Arc::new(std::sync::atomic::AtomicI32::new(0));
+    let received_signal_clone = Arc::clone(&received_signal);
+
     ctrlc::set_handler(move || {
         reset_cursor();
         if ctrlc_should_exit_process_clone.load(Ordering::Relaxed) {
             exit_process_on_sigint();
+        } else {
+            received_signal_clone.store(SignalKind::SIGINT.into(), Ordering::Relaxed);
+            SIGNAL_NOTIFY.notify_waiters();
         }
     })
     .into_diagnostic()?;
@@ -289,7 +299,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // Execute the task itself within the command environment. If one of the tasks
         // failed with a non-zero exit code, we exit this parent process with
         // the same code.
-        match execute_task(&executable_task, &task_env).await {
+        match execute_task(&executable_task, &task_env, received_signal.clone()).await {
             Ok(_) => {
                 task_idx += 1;
             }
@@ -377,20 +387,43 @@ enum TaskExecutionError {
 async fn execute_task(
     task: &ExecutableTask<'_>,
     command_env: &HashMap<OsString, OsString>,
+    received_signal: Arc<std::sync::atomic::AtomicI32>,
 ) -> Result<(), TaskExecutionError> {
     let Some(script) = task.as_deno_script()? else {
         return Ok(());
     };
     let cwd = task.working_directory()?;
+    let kill_signal = KillSignal::default();
 
-    let status_code = deno_task_shell::execute(
+    let execute_future = deno_task_shell::execute(
         script,
         command_env.clone(),
         cwd,
         Default::default(),
-        Default::default(),
-    )
-    .await;
+        kill_signal.clone(),
+    );
+
+    // Pin the future so we can reference it in both select arms
+    let mut execute_future = std::pin::pin!(execute_future);
+
+    // Create a notifier that triggers when signal is received
+    let signal_notifier = async {
+        SIGNAL_NOTIFY.notified().await;
+        let signal_code = received_signal.load(Ordering::Relaxed);
+        if signal_code != 0 {
+            let signal_kind = SignalKind::from(signal_code);
+            tracing::debug!("Abort signal detected during task execution, forwarding {:?}...", signal_kind);
+            kill_signal.send(signal_kind);
+        }
+    };
+
+    let status_code = tokio::select! {
+        code = &mut execute_future => code,
+        _ = signal_notifier => {
+            // Wait for the task to complete after signal forwarding
+            execute_future.await
+        },
+    };
 
     if status_code != 0 {
         return Err(TaskExecutionError::NonZeroExitCode(status_code));
