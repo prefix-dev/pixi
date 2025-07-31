@@ -352,7 +352,15 @@ mod test {
             cmd = "test"
             depends-on = [{ task = "foo", args = [{ "foo" = "bar", "baz" = "qux" }] }]
         "#
-        ));
+        ), @r###"
+         × got at least 2 elements when exactly one was expected
+          ╭─[pixi.toml:3:51]
+        2 │             cmd = "test"
+        3 │             depends-on = [{ task = "foo", args = [{ "foo" = "bar", "baz" = "qux" }] }]
+          ·                                                   ────────────────────────────────
+        4 │
+          ╰────
+        "###);
         insta::assert_snapshot!(expect_parse_success(
             r#"
             cmd = "test"
