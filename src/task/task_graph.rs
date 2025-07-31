@@ -215,6 +215,7 @@ impl<'p> TaskGraph<'p> {
                             return Err(TaskGraphError::TooManyArguments(task_name.to_string()));
                         }
 
+                        // TODO: support named arguments from the CLI
                         let typed_dep_args = args
                             .iter()
                             .map(|a| TypedDependencyArg::Positional(a.to_string()))
