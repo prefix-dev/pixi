@@ -467,14 +467,17 @@ pub async fn run_future_forwarding_signals<TOutput>(
     let token = CancellationToken::new();
     let _token_drop_guard = token.clone().drop_guard();
     let _drop_guard = kill_signal.clone().drop_guard();
-
     let local_set = tokio::task::LocalSet::new();
 
-    spawn_future_with_cancellation(listen_ctrl_c(kill_signal.clone()), token.clone());
-    #[cfg(unix)]
-    spawn_future_with_cancellation(listen_and_forward_all_signals(kill_signal), token);
+    local_set
+        .run_until(async move {
+            spawn_future_with_cancellation(listen_ctrl_c(kill_signal.clone()), token.clone());
+            #[cfg(unix)]
+            spawn_future_with_cancellation(listen_and_forward_all_signals(kill_signal), token);
 
-    local_set.run_until(future).await
+            future.await
+        })
+        .await
 }
 
 async fn listen_ctrl_c(kill_signal: KillSignal) {
