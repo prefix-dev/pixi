@@ -685,6 +685,118 @@ setup(
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn test_no_build_isolation_with_dependencies() {
+    let current_platform = Platform::current();
+
+    // Create pyproject.toml for package-tdjager (will be installed with build isolation)
+    let pyproject_toml_a = r#"
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "package-tdjager"
+version = "0.1.0"
+description = "Package Tim de Jager for testing build isolation"
+authors = [{name = "Test Author"}]
+requires-python = ">=3.6"
+dependencies = []
+    "#;
+
+    // Create pyproject.toml for package-b (will be installed WITHOUT build isolation)
+    // package-b depends on package-tdjager at build time
+    let pyproject_toml_b = r#"
+[build-system]
+requires = ["setuptools>=45", "wheel", "package-tdjager"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "package-b"
+version = "0.1.0"
+description = "Package B that depends on Package Tim de Jager during build"
+authors = [{name = "Test Author"}]
+requires-python = ">=3.6"
+dependencies = []
+    "#;
+
+    let manifest = format!(
+        r#"
+        [project]
+        name = "no-build-isolation-deps"
+        channels = ["https://prefix.dev/conda-forge"]
+        platforms = ["{platform}"]
+
+        [pypi-options]
+        no-build-isolation = ["package-b"]
+
+        [dependencies]
+        python = "3.12.*"
+        setuptools = ">=72,<73"
+        
+        [pypi-dependencies.package-b]
+        path = "./package-b"
+
+        [pypi-dependencies.package-tdjager]
+        path = "./package-tdjager"
+        
+        "#,
+        platform = current_platform,
+    );
+
+    let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
+
+    let project_path = pixi.workspace_path();
+
+    // Create package-tdjager directory and pyproject.toml
+    let package_a_dir = project_path.join("package-tdjager");
+    fs_err::create_dir_all(&package_a_dir).unwrap();
+    fs_err::write(package_a_dir.join("pyproject.toml"), pyproject_toml_a).unwrap();
+
+    // Create empty __init__.py for package-tdjager
+    let package_a_pkg_dir = package_a_dir.join("package_tdjager");
+    fs_err::create_dir_all(&package_a_pkg_dir).unwrap();
+    fs_err::write(package_a_pkg_dir.join("__init__.py"), "").unwrap();
+
+    // Create setup.py for package-b that imports package-tdjager at build time
+    let setup_py_b = r#"
+from setuptools import setup
+
+import package_tdjager
+
+setup(
+    name="package-b",
+    version="0.1.0",
+    description="Package B that depends on Package Tim de Jager during build",
+    author="Test Author",
+    python_requires=">=3.6",
+    install_requires=[],
+    setup_requires=["package-tdjager"],
+)
+    "#;
+
+    // Create package-b directory, setup.py and pyproject.toml
+    let package_b_dir = project_path.join("package-b");
+    fs_err::create_dir_all(&package_b_dir).unwrap();
+    fs_err::write(package_b_dir.join("pyproject.toml"), pyproject_toml_b).unwrap();
+    fs_err::write(package_b_dir.join("setup.py"), setup_py_b).unwrap();
+
+    // Create empty __init__.py for package-b
+    let package_b_pkg_dir = package_b_dir.join("package_b");
+    fs_err::create_dir_all(&package_b_pkg_dir).unwrap();
+    fs_err::write(package_b_pkg_dir.join("__init__.py"), "").unwrap();
+
+    // This should succeed with the 3-step installation:
+    // 1. Conda packages (python, setuptools)
+    // 2. PyPI packages with build isolation (package-tdjager) - batch
+    // 3. PyPI packages without build isolation (package-b) - one by one
+    // The key test: package-b should be able to import package-tdjager during its build
+    pixi.install()
+        .await
+        .expect("cannot install project with no-build-isolation dependencies");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_setuptools_override_failure() {
     // This was causing issues like: https://github.com/prefix-dev/pixi/issues/1686
     let manifest = format!(
