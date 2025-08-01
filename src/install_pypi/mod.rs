@@ -96,6 +96,13 @@ pub struct PyPIEnvironmentUpdater<'a> {
 
 type PyPIRecords = (PypiPackageData, PypiPackageEnvironmentData);
 
+/// Struct holding (regular distributions, no-build-isolation distributions)
+#[derive(Debug, Clone)]
+pub struct SeparatedDistributions {
+    pub regular_dists: Vec<(uv_distribution_types::Dist, InstallReason)>,
+    pub no_build_isolation_dists: Vec<(uv_distribution_types::Dist, InstallReason)>,
+}
+
 impl<'a> PyPIEnvironmentUpdater<'a> {
     /// Create a new PyPI environment updater with the given configurations
     pub fn new(
@@ -331,14 +338,14 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
     /// Separates distributions into those that require build isolation and those that don't
     fn separate_distributions_by_build_isolation(
         &self,
-        dists: &Vec<(uv_distribution_types::Dist, InstallReason)>,
-    ) -> (
-        Vec<(uv_distribution_types::Dist, InstallReason)>,
-        Vec<(uv_distribution_types::Dist, InstallReason)>,
-    ) {
-        let dists = dists.clone();
+        dists: &[(uv_distribution_types::Dist, InstallReason)],
+    ) -> SeparatedDistributions {
+        let dists = dists.to_owned();
         match self.build_config.no_build_isolation {
-            NoBuildIsolation::All => (Vec::new(), dists),
+            NoBuildIsolation::All => SeparatedDistributions {
+                regular_dists: Vec::new(),
+                no_build_isolation_dists: dists,
+            },
             NoBuildIsolation::Packages(no_build_isolation_packages) => {
                 let mut dist_map = dists
                     .into_iter()
@@ -351,9 +358,12 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
                     }
                 }
 
-                let regular_dists = dist_map.into_iter().map(|(_name, dist)| dist).collect();
+                let regular_dists = dist_map.into_values().collect();
 
-                (regular_dists, no_build_isolation_dists)
+                SeparatedDistributions {
+                    regular_dists,
+                    no_build_isolation_dists,
+                }
             }
         }
     }
@@ -399,8 +409,10 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         self.log_installation_details(cached, remote, reinstalls, extraneous, duplicates);
 
         // Separate distributions by build isolation requirements
-        let (regular_dists, no_build_isolation_dists) =
-            self.separate_distributions_by_build_isolation(remote);
+        let SeparatedDistributions {
+            regular_dists,
+            no_build_isolation_dists,
+        } = self.separate_distributions_by_build_isolation(remote);
 
         self.remove_duplicate_metadata(duplicates)
             .into_diagnostic()
