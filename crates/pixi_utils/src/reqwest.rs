@@ -24,7 +24,7 @@ pub fn default_retry_policy() -> ExponentialBackoff {
     ExponentialBackoff::builder().build_with_max_retries(3)
 }
 
-fn auth_store(config: &Config) -> Result<AuthenticationStorage, AuthenticationStorageError> {
+pub fn auth_store(config: &Config) -> Result<AuthenticationStorage, AuthenticationStorageError> {
     let mut store = AuthenticationStorage::from_env_and_defaults()?;
     if let Some(auth_file) = config.authentication_override_file() {
         tracing::info!("Loading authentication from file: {:?}", auth_file);
