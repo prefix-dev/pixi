@@ -429,15 +429,19 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             .await?;
 
         // Install no-build-isolation PyPI packages one by one
+        let mut prepared_no_build_isolation_dists = Vec::new();
         for no_build_isolation_dist in no_build_isolation_dists {
             let no_build_isolation_dist = self
                 .prepare_remote_distributions(&Vec::from([no_build_isolation_dist]), setup)
                 .await?;
-            self.check_and_warn_about_conflicts(&no_build_isolation_dist, reinstalls, setup)
-                .await?;
+
+            prepared_no_build_isolation_dists.extend(no_build_isolation_dist.clone());
+
             self.install_distributions(no_build_isolation_dist, setup)
                 .await?;
         }
+        self.check_and_warn_about_conflicts(&prepared_no_build_isolation_dists, reinstalls, setup)
+            .await?;
 
         tracing::info!("{}", format!("finished in {}", elapsed(start.elapsed())));
 
