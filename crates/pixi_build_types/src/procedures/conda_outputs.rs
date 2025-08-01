@@ -12,7 +12,7 @@ use std::{
 };
 
 use ordermap::OrderSet;
-use rattler_conda_types::{NoArchType, PackageName, Platform, VersionWithSource};
+use rattler_conda_types::{ChannelUrl, NoArchType, PackageName, Platform, VersionWithSource};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
@@ -27,6 +27,13 @@ pub const METHOD_NAME: &str = "conda/outputs";
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CondaOutputsParams {
+    /// The canonical channel URLs that define where dependencies will be
+    /// fetched from. Although this information is not immediately useful for
+    /// the backend, the backend may choose to generate a different recipe based
+    /// on the channels.
+    #[serde(default)]
+    pub channels: Vec<ChannelUrl>,
+
     /// The native platform for which the outputs should be computed.
     ///
     /// This is usually the same platform as the platform on which the backend

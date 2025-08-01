@@ -306,7 +306,6 @@ impl SourceBuildSpec {
                 method: BackendSourceBuildMethod::BuildV0(BackendSourceBuildV0Method {
                     editable: self.editable(),
                     channel_config: self.channel_config,
-                    channels: self.channels,
                     build_environment: self.build_environment,
                     variants: self.variants,
                     output_directory: self.output_directory,
@@ -315,6 +314,7 @@ impl SourceBuildSpec {
                 package: self.package,
                 source: self.source,
                 work_directory,
+                channels: self.channels,
             })
             .await
             .map_err_with(SourceBuildError::from)?;
@@ -347,6 +347,7 @@ impl SourceBuildSpec {
                 build_platform,
                 variant_configuration: self.variants.clone(),
                 work_directory: work_directory.clone(),
+                channels: self.channels.clone(),
             })
             .await
             .map_err(BackendSourceBuildError::BuildError)
@@ -507,6 +508,7 @@ impl SourceBuildSpec {
                 package: self.package,
                 source: self.source,
                 work_directory,
+                channels: self.channels,
             })
             .await
             .map_err_with(SourceBuildError::from)?;

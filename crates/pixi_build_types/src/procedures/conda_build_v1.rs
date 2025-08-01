@@ -10,7 +10,7 @@ use std::{
     path::PathBuf,
 };
 
-use rattler_conda_types::{PackageName, Platform, RepoDataRecord, VersionWithSource};
+use rattler_conda_types::{ChannelUrl, PackageName, Platform, RepoDataRecord, VersionWithSource};
 use serde::{Deserialize, Serialize};
 
 pub const METHOD_NAME: &str = "conda/build_v1";
@@ -19,6 +19,13 @@ pub const METHOD_NAME: &str = "conda/build_v1";
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CondaBuildV1Params {
+    /// The canonical channel URLs that define where dependencies will be
+    /// fetched from. Although this information is not immediately useful for
+    /// the backend, the backend may choose to generate a different recipe based
+    /// on the channels.
+    #[serde(default)]
+    pub channels: Vec<ChannelUrl>,
+
     /// The path to the build prefix, or `None` if no build prefix is created.
     pub build_prefix: Option<CondaBuildV1Prefix>,
 

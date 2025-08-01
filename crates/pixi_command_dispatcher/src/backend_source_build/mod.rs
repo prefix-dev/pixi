@@ -49,6 +49,9 @@ pub struct BackendSourceBuildSpec {
     /// The method to use for building the source package.
     pub method: BackendSourceBuildMethod,
 
+    /// The channels to use for solving.
+    pub channels: Vec<ChannelUrl>,
+
     /// The working directory to use for the build.
     pub work_directory: PathBuf,
 }
@@ -63,9 +66,6 @@ pub enum BackendSourceBuildMethod {
 pub struct BackendSourceBuildV0Method {
     /// The channel configuration to use when resolving metadata
     pub channel_config: ChannelConfig,
-
-    /// The channels to use for solving.
-    pub channels: Vec<ChannelUrl>,
 
     /// Information about the platform to install build tools for and the
     /// platform to target.
@@ -141,6 +141,7 @@ impl BackendSourceBuildSpec {
                     self.source,
                     params,
                     self.work_directory,
+                    self.channels,
                     log_sink,
                 )
                 .await
@@ -151,6 +152,7 @@ impl BackendSourceBuildSpec {
                     self.package,
                     params,
                     self.work_directory,
+                    self.channels,
                     log_sink,
                 )
                 .await
@@ -164,6 +166,7 @@ impl BackendSourceBuildSpec {
         source: PinnedSourceSpec,
         params: BackendSourceBuildV0Method,
         work_directory: PathBuf,
+        channels: Vec<ChannelUrl>,
         mut log_sink: UnboundedSender<String>,
     ) -> Result<BackendBuiltSource, CommandDispatcherError<BackendSourceBuildError>> {
         // Use the backend to build the source package.
@@ -173,7 +176,7 @@ impl BackendSourceBuildSpec {
                     build_platform_virtual_packages: Some(
                         params.build_environment.build_virtual_packages,
                     ),
-                    channel_base_urls: Some(params.channels.into_iter().map(Into::into).collect()),
+                    channel_base_urls: Some(channels.into_iter().map(Into::into).collect()),
                     channel_configuration: ChannelConfiguration {
                         base_url: params.channel_config.channel_alias.clone(),
                     },
@@ -263,11 +266,13 @@ impl BackendSourceBuildSpec {
         record: PackageIdentifier,
         params: BackendSourceBuildV1Method,
         work_directory: PathBuf,
+        channels: Vec<ChannelUrl>,
         mut log_sink: UnboundedSender<String>,
     ) -> Result<BackendBuiltSource, CommandDispatcherError<BackendSourceBuildError>> {
         let built_package = backend
             .conda_build_v1(
                 CondaBuildV1Params {
+                    channels,
                     build_prefix: Some(CondaBuildV1Prefix {
                         prefix: params.build_prefix.prefix,
                         platform: params.build_prefix.platform,
