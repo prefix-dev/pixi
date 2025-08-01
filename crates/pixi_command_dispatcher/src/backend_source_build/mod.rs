@@ -21,7 +21,7 @@ use pixi_build_types::{
         },
     },
 };
-use pixi_record::{PinnedSourceSpec, PixiRecord};
+use pixi_record::PinnedSourceSpec;
 use rattler_conda_types::{ChannelConfig, ChannelUrl, Platform, RepoDataRecord, Version};
 use serde::Serialize;
 use thiserror::Error;
@@ -283,14 +283,14 @@ impl BackendSourceBuildSpec {
                     host_prefix: Some(CondaBuildV1Prefix {
                         prefix: params.host_prefix.prefix,
                         platform: params.host_prefix.platform,
-                        packages:  params
+                        packages: params
                             .host_prefix
                             .records
                             .into_iter()
                             .map(|record| CondaBuildV1PrefixPackage {
                                 repodata_record: record,
                             })
-                            .collect()
+                            .collect(),
                     }),
                     output: CondaBuildV1Output {
                         name: record.name.clone(),
