@@ -1,8 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-    path::Path,
-    sync::Arc,
-};
+use std::{collections::HashMap, path::Path, sync::Arc};
 
 use crate::environment::{ContinuePyPIPrefixUpdate, on_python_interpreter_change};
 use conda_pypi_clobber::PypiCondaClobberRegistry;
