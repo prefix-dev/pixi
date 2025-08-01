@@ -16,12 +16,13 @@ use pixi_build_types::{
     procedures::{
         conda_build_v0::{CondaBuildParams, CondaBuiltPackage, CondaOutputIdentifier},
         conda_build_v1::{
-            CondaBuildV1Output, CondaBuildV1Params, CondaBuildV1Prefix, CondaBuildV1Result,
+            CondaBuildV1Output, CondaBuildV1Params, CondaBuildV1Prefix, CondaBuildV1PrefixPackage,
+            CondaBuildV1Result,
         },
     },
 };
-use pixi_record::{PinnedSourceSpec, PixiRecord};
-use rattler_conda_types::{ChannelConfig, ChannelUrl, Platform, Version};
+use pixi_record::PinnedSourceSpec;
+use rattler_conda_types::{ChannelConfig, ChannelUrl, Platform, RepoDataRecord, Version};
 use serde::Serialize;
 use thiserror::Error;
 
@@ -113,7 +114,7 @@ pub struct BackendSourceBuildPrefix {
     pub prefix: PathBuf,
 
     /// The records that are installed in the prefix.
-    pub records: Vec<PixiRecord>,
+    pub records: Vec<RepoDataRecord>,
 }
 
 #[derive(Debug, Serialize)]
@@ -275,10 +276,26 @@ impl BackendSourceBuildSpec {
                     build_prefix: Some(CondaBuildV1Prefix {
                         prefix: params.build_prefix.prefix,
                         platform: params.build_prefix.platform,
+                        packages: params
+                            .build_prefix
+                            .records
+                            .into_iter()
+                            .map(|record| CondaBuildV1PrefixPackage {
+                                repodata_record: record,
+                            })
+                            .collect(),
                     }),
                     host_prefix: Some(CondaBuildV1Prefix {
                         prefix: params.host_prefix.prefix,
                         platform: params.host_prefix.platform,
+                        packages: params
+                            .host_prefix
+                            .records
+                            .into_iter()
+                            .map(|record| CondaBuildV1PrefixPackage {
+                                repodata_record: record,
+                            })
+                            .collect(),
                     }),
                     output: CondaBuildV1Output {
                         name: record.name.clone(),
