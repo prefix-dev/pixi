@@ -6,8 +6,8 @@ import tomllib
 from pathlib import Path
 
 import pytest
-from syrupy.assertion import SnapshotAssertion
-from syrupy.matchers import path_type
+from dirty_equals import IsStr, IsList
+from inline_snapshot import snapshot
 
 from .common import (
     CURRENT_PLATFORM,
@@ -370,6 +370,18 @@ def test_pixi_init_non_existing_dir(pixi: Path, tmp_pixi_workspace: Path) -> Non
     # Verify that the manifest file contains expected content
     manifest_content = manifest_path.read_text()
     assert "[workspace]" in manifest_content
+
+
+def test_pixi_init_pixi_home_parent(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    pixi_home = tmp_pixi_workspace / ".pixi"
+    pixi_home.mkdir(exist_ok=True)
+
+    verify_cli_command(
+        [pixi, "init", pixi_home.parent],
+        ExitCode.FAILURE,
+        stderr_contains="You cannot create a workspace in the parent of the pixi home directory",
+        env={"PIXI_HOME": str(pixi_home)},
+    )
 
 
 @pytest.mark.slow
@@ -772,6 +784,58 @@ def test_concurrency_flags(
             manifest_path,
             "package3",
         ]
+    )
+
+
+def test_cli_config_options(
+    pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
+) -> None:
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+
+    # Create a new project
+    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, tmp_pixi_workspace])
+
+    # Test --pinning-strategy flag
+    verify_cli_command(
+        [pixi, "add", "--pinning-strategy=semver", "--manifest-path", manifest_path, "package"]
+    )
+    verify_cli_command(
+        [pixi, "add", "--pinning-strategy=minor", "--manifest-path", manifest_path, "package2"]
+    )
+    verify_cli_command(
+        [pixi, "add", "--pinning-strategy=major", "--manifest-path", manifest_path, "package3"]
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "add",
+            "--pinning-strategy=latest-up",
+            "--manifest-path",
+            manifest_path,
+            "package==0.1.0",
+        ]
+    )
+
+    # Test other CLI config flags
+    verify_cli_command(
+        [pixi, "install", "--run-post-link-scripts", "--manifest-path", manifest_path]
+    )
+    verify_cli_command([pixi, "install", "--tls-no-verify", "--manifest-path", manifest_path])
+    verify_cli_command(
+        [pixi, "install", "--use-environment-activation-cache", "--manifest-path", manifest_path]
+    )
+    verify_cli_command(
+        [pixi, "install", "--pypi-keyring-provider=disabled", "--manifest-path", manifest_path]
+    )
+    verify_cli_command(
+        [pixi, "install", "--pypi-keyring-provider=subprocess", "--manifest-path", manifest_path]
+    )
+
+    # Test --auth-file flag
+    auth_file = tmp_pixi_workspace / "auth.json"
+    auth_file.write_text("{}")
+    verify_cli_command(
+        [pixi, "install", f"--auth-file={auth_file}", "--manifest-path", manifest_path]
     )
 
 
@@ -1255,7 +1319,7 @@ def test_pixi_task_list_platforms(pixi: Path, tmp_pixi_workspace: Path) -> None:
     )
 
 
-def test_pixi_add_alias(pixi: Path, tmp_pixi_workspace: Path, snapshot: SnapshotAssertion) -> None:
+def test_pixi_add_alias(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     toml = """
 [workspace]
@@ -1286,10 +1350,22 @@ platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
         ]
     )
 
-    assert manifest.read_text() == snapshot
+    assert manifest.read_text() == snapshot("""\
+
+[workspace]
+name = "test"
+channels = []
+platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+
+[tasks]
+dummy-a = [{ task = "dummy-b" }, { task = "dummy-c" }]
+
+[target.linux-64.tasks]
+linux-alias = [{ task = "dummy-b" }, { task = "dummy-c" }]
+""")
 
 
-def test_pixi_add_task(pixi: Path, tmp_pixi_workspace: Path, snapshot: SnapshotAssertion) -> None:
+def test_pixi_add_task(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     toml = """
 [workspace]
@@ -1317,12 +1393,20 @@ platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
         [pixi, "task", "add", "--depends-on", "test", "--manifest-path", manifest, "test-alias", ""]
     )
 
-    assert manifest.read_text() == snapshot
+    assert manifest.read_text() == snapshot("""\
+
+[workspace]
+name = "test"
+channels = []
+platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+
+[tasks]
+test = { cmd = "echo 'Hello {{name | title}}'", args = ["name"] }
+test-alias = [{ task = "test" }]
+""")
 
 
-def test_pixi_task_list_json(
-    pixi: Path, tmp_pixi_workspace: Path, snapshot: SnapshotAssertion
-) -> None:
+def test_pixi_task_list_json(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     toml = """
         [workspace]
@@ -1341,12 +1425,36 @@ def test_pixi_task_list_json(
 
     task_data = json.loads(result.stdout)
 
-    assert task_data == snapshot
+    assert task_data == snapshot(
+        [
+            {
+                "environment": "default",
+                "features": [
+                    {
+                        "name": "default",
+                        "tasks": [
+                            {
+                                "name": "test-task",
+                                "cmd": "echo 'Hello {{name | title}}'",
+                                "description": None,
+                                "depends_on": [],
+                                "args": [{"name": "name", "default": "World"}],
+                                "cwd": None,
+                                "env": None,
+                                "clean_env": False,
+                                "inputs": None,
+                                "outputs": None,
+                            }
+                        ],
+                    }
+                ],
+            }
+        ]
+    )
 
 
-def test_info_output_extended(
-    pixi: Path, tmp_pixi_workspace: Path, snapshot: SnapshotAssertion
-) -> None:
+@pytest.mark.extra_slow
+def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     toml = """
         [workspace]
@@ -1369,29 +1477,69 @@ def test_info_output_extended(
     )
     info_data = json.loads(result.stdout)
 
-    # Stub out path, size and other dynamic data from snapshot
-    path_matcher = path_type(
+    # Stub out path, size and other dynamic data from snapshot()
+    # samuelcolvin/dirty-equals#116
+    IsAnyList = IsList(length=...)  # type: ignore[call-overload]
+    assert info_data == snapshot(
         {
-            "auth_dir": (str,),
-            "cache_dir": (str,),
-            "cache_size": (str,),
-            "config_locations": (list,),
-            "environments_info.0.prefix": (str,),
-            "environments_info.0.environment_size": (str,),
-            "environments_info.0.platforms": (list,),
-            "environments_info.1.prefix": (str,),
-            "environments_info.1.environment_size": (str,),
-            "environments_info.1.platforms": (list,),
-            "global_info.bin_dir": (str,),
-            "global_info.env_dir": (str,),
-            "global_info.manifest": (str,),
-            "platform": (str,),
-            "project_info.manifest_path": (str,),
-            "project_info.pixi_folder_size": (str,),
-            "project_info.last_updated": (str,),
-            "version": (str,),
-            "virtual_packages": (list,),
+            "platform": IsStr,
+            "virtual_packages": IsAnyList,
+            "version": IsStr,
+            "cache_dir": IsStr,
+            "cache_size": IsStr,
+            "auth_dir": IsStr,
+            "global_info": {
+                "bin_dir": IsStr,
+                "env_dir": IsStr,
+                "manifest": IsStr,
+            },
+            "project_info": {
+                "name": "test",
+                "manifest_path": IsStr,
+                "last_updated": IsStr,
+                "pixi_folder_size": IsStr,
+                "version": None,
+            },
+            "environments_info": [
+                {
+                    "name": "default",
+                    "features": ["default"],
+                    "solve_group": None,
+                    "environment_size": IsStr,
+                    "dependencies": [],
+                    "pypi_dependencies": [],
+                    "platforms": IsAnyList,
+                    "tasks": [],
+                    "channels": ["conda-forge"],
+                    "prefix": IsStr,
+                    "system_requirements": {
+                        "macos": None,
+                        "linux": None,
+                        "cuda": None,
+                        "libc": None,
+                        "archspec": None,
+                    },
+                },
+                {
+                    "name": "py312",
+                    "features": ["py312", "default"],
+                    "solve_group": None,
+                    "environment_size": IsStr,
+                    "dependencies": ["python"],
+                    "pypi_dependencies": [],
+                    "platforms": IsAnyList,
+                    "tasks": [],
+                    "channels": ["conda-forge"],
+                    "prefix": IsStr,
+                    "system_requirements": {
+                        "macos": None,
+                        "linux": None,
+                        "cuda": None,
+                        "libc": None,
+                        "archspec": None,
+                    },
+                },
+            ],
+            "config_locations": IsAnyList,
         }
     )
-
-    assert info_data == snapshot(matcher=path_matcher)

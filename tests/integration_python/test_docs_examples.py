@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from syrupy.assertion import SnapshotAssertion
+from inline_snapshot import snapshot
 
 from .common import current_platform, get_manifest, repo_root, verify_cli_command
 
@@ -13,33 +13,118 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-@pytest.mark.extra_slow
-@pytest.mark.parametrize(
-    "pixi_project",
-    [
-        pytest.param(pixi_project, id=pixi_project.name)
-        for pixi_project in repo_root()
-        .joinpath("docs/source_files/pixi_workspaces/pixi_build")
-        .iterdir()
-    ],
-)
-def test_doc_pixi_workspaces_pixi_build(
-    pixi_project: Path, pixi: Path, tmp_pixi_workspace: Path, snapshot: SnapshotAssertion
-) -> None:
-    # Remove existing .pixi folders
-    shutil.rmtree(pixi_project.joinpath(".pixi"), ignore_errors=True)
-
-    # Copy to workspace
-    shutil.copytree(pixi_project, tmp_pixi_workspace, dirs_exist_ok=True)
-
-    # Get manifest
-    manifest = get_manifest(tmp_pixi_workspace)
-
-    # Run task 'start'
-    output = verify_cli_command(
-        [pixi, "run", "--locked", "--manifest-path", manifest, "start"],
+class TestPixiBuild:
+    pixi_projects = list(
+        repo_root().joinpath("docs/source_files/pixi_workspaces/pixi_build").iterdir()
     )
-    assert output.stdout == snapshot
+    pixi_projects.sort()
+    pixi_project_params = [
+        (
+            pixi_projects[0].name,
+            (
+                pixi_projects[0],
+                snapshot("3\n"),
+            ),
+        ),
+        (
+            pixi_projects[1].name,
+            (
+                pixi_projects[1],
+                snapshot("3\n"),
+            ),
+        ),
+        (
+            pixi_projects[2].name,
+            (
+                pixi_projects[2],
+                snapshot("""\
+┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
+┃ name         ┃ age ┃ city        ┃
+┡━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━━━━┩
+│ John Doe     │ 30  │ New York    │
+│ Jane Smith   │ 25  │ Los Angeles │
+│ Tim de Jager │ 35  │ Utrecht     │
+└──────────────┴─────┴─────────────┘
+"""),
+            ),
+        ),
+        (
+            pixi_projects[3].name,
+            (
+                pixi_projects[3],
+                snapshot("""\
+┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
+┃ name         ┃ age ┃ city        ┃
+┡━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━━━━┩
+│ John Doe     │ 30  │ New York    │
+│ Jane Smith   │ 25  │ Los Angeles │
+│ Tim de Jager │ 35  │ Utrecht     │
+└──────────────┴─────┴─────────────┘
+"""),
+            ),
+        ),
+        (
+            pixi_projects[4].name,
+            (
+                pixi_projects[4],
+                snapshot("""\
+┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
+┃ name         ┃ age ┃ city        ┃
+┡━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━━━━┩
+│ John Doe     │ 31  │ New York    │
+│ Jane Smith   │ 26  │ Los Angeles │
+│ Tim de Jager │ 36  │ Utrecht     │
+└──────────────┴─────┴─────────────┘
+"""),
+            ),
+        ),
+        (
+            pixi_projects[5].name,
+            (
+                pixi_projects[5],
+                snapshot("""\
+┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
+┃ name         ┃ age ┃ city        ┃
+┡━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━━━━┩
+│ John Doe     │ 31  │ New York    │
+│ Jane Smith   │ 26  │ Los Angeles │
+│ Tim de Jager │ 36  │ Utrecht     │
+└──────────────┴─────┴─────────────┘
+"""),
+            ),
+        ),
+    ]
+
+    def test_coverage(self) -> None:
+        # check that we have covered all example directories
+        assert len(self.pixi_project_params) == len(self.pixi_projects)
+
+    @pytest.mark.extra_slow
+    @pytest.mark.parametrize(
+        "pixi_project,result",
+        list(map(lambda p: pytest.param(*p[1], id=p[0]), pixi_project_params)),
+    )
+    def test_doc_pixi_workspaces_pixi_build(
+        self,
+        pixi_project: Path,
+        result: str,
+        pixi: Path,
+        tmp_pixi_workspace: Path,
+    ) -> None:
+        # Remove existing .pixi folders
+        shutil.rmtree(pixi_project.joinpath(".pixi"), ignore_errors=True)
+
+        # Copy to workspace
+        shutil.copytree(pixi_project, tmp_pixi_workspace, dirs_exist_ok=True)
+
+        # Get manifest
+        manifest = get_manifest(tmp_pixi_workspace)
+
+        # Run task 'start'
+        output = verify_cli_command(
+            [pixi, "run", "--locked", "--manifest-path", manifest, "start"],
+        )
+        assert output.stdout == result
 
 
 @pytest.mark.extra_slow
@@ -105,7 +190,7 @@ def test_pytorch_documentation_examples(
 
 
 def test_doc_pixi_workspaces_minijinja_task_args(
-    doc_pixi_workspaces: Path, pixi: Path, tmp_pixi_workspace: Path, snapshot: SnapshotAssertion
+    doc_pixi_workspaces: Path, pixi: Path, tmp_pixi_workspace: Path
 ) -> None:
     workspace_dir = doc_pixi_workspaces.joinpath("minijinja", "task_args")
 
@@ -135,4 +220,15 @@ def test_doc_pixi_workspaces_minijinja_task_args(
 
         results[task] = output
 
-    assert results == snapshot
+    assert results == snapshot(
+        {
+            "task1": "HOI RUBEN\n",
+            "task2": "hoi ruben\n",
+            "task3": "hoi Ruben!\n",
+            "task4": "unix\n",
+            "task5": """\
+hoi
+Ruben
+""",
+        }
+    )
