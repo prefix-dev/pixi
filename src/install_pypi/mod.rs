@@ -335,14 +335,18 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
     /// Separates distributions into those that require build isolation and those that don't
     fn separate_distributions_by_build_isolation(
         &self,
-        dists: Vec<CachedDist>,
-    ) -> (Vec<CachedDist>, Vec<CachedDist>) {
+        dists: &Vec<(uv_distribution_types::Dist, InstallReason)>,
+    ) -> (
+        Vec<(uv_distribution_types::Dist, InstallReason)>,
+        Vec<(uv_distribution_types::Dist, InstallReason)>,
+    ) {
+        let dists = dists.clone();
         match self.build_config.no_build_isolation {
             NoBuildIsolation::All => (Vec::new(), dists),
             NoBuildIsolation::Packages(no_build_isolation_packages) => {
                 let mut dist_map = dists
                     .into_iter()
-                    .map(|dist| (dist.name().to_string(), dist))
+                    .map(|(dist, reason)| (dist.name().to_string(), (dist, reason)))
                     .collect::<HashMap<_, _>>();
                 let mut no_build_isolation_dists = Vec::new();
                 for no_build_isolation in no_build_isolation_packages {
@@ -398,41 +402,45 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         // Log installation details for debugging
         self.log_installation_details(cached, remote, reinstalls, extraneous, duplicates);
 
-        // Download, build, and unzip any missing distributions.
-        let remote_dists = if remote.is_empty() {
-            Vec::new()
-        } else {
-            self.prepare_remote_distributions(remote, setup).await?
-        };
+        // Separate distributions by build isolation requirements
+        let (regular_dists, no_build_isolation_dists) =
+            self.separate_distributions_by_build_isolation(remote);
 
-        // Remove any duplicate metadata for packages that are now owned by conda
         self.remove_duplicate_metadata(duplicates)
             .into_diagnostic()
             .wrap_err("while removing duplicate metadata")?;
-
-        // Remove any unnecessary packages.
         self.remove_packages(extraneous, reinstalls).await?;
+
+        // Install regular PyPI packages (with build isolation) as a batch
+        let regular_dists = if regular_dists.is_empty() {
+            Vec::new()
+        } else {
+            self.prepare_remote_distributions(&regular_dists, setup)
+                .await?
+        };
 
         // Install the resolved distributions
         let cached_dists = cached.iter().map(|(d, _)| d.clone());
-        let all_dists = remote_dists
+        let dists_build_isolation = regular_dists
             .into_iter()
             .chain(cached_dists)
             .collect::<Vec<_>>();
 
-        self.check_and_warn_about_conflicts(&all_dists, reinstalls, setup)
+        self.check_and_warn_about_conflicts(&dists_build_isolation, reinstalls, setup)
             .await?;
 
-        // Separate distributions by build isolation requirements
-        let (regular_dists, no_build_isolation_dists) =
-            self.separate_distributions_by_build_isolation(all_dists);
-
-        // Install regular PyPI packages (with build isolation) as a batch
-        self.install_distributions(regular_dists, setup).await?;
+        self.install_distributions(dists_build_isolation, setup)
+            .await?;
 
         // Install no-build-isolation PyPI packages one by one
-        for dist in no_build_isolation_dists {
-            self.install_distributions(Vec::from([dist]), setup).await?;
+        for no_build_isolation_dist in no_build_isolation_dists {
+            let no_build_isolation_dist = self
+                .prepare_remote_distributions(&Vec::from([no_build_isolation_dist]), setup)
+                .await?;
+            self.check_and_warn_about_conflicts(&no_build_isolation_dist, reinstalls, setup)
+                .await?;
+            self.install_distributions(no_build_isolation_dist, setup)
+                .await?;
         }
 
         tracing::info!("{}", format!("finished in {}", elapsed(start.elapsed())));
