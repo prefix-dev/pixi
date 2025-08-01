@@ -1,23 +1,22 @@
 # type: ignore
+import sys
 import signal
 import time
+from pathlib import Path
 
-file = open("./output.txt", "w")
-
+output_file = Path("output.txt")
+if output_file.exists():
+    output_file.unlink()
 
 def signal_handler(signum, frame):
-    file.write(f"Signal handler called with signal {signum}\n")
+    output_file.write_text(f"Signal handler called with signal {signum}\n")
     if signum == signal.SIGINT:
-        file.write("SIGINT received, exiting gracefully...\n")
-        exit(12)
-    elif signum == signal.SIGHUP:
-        file.write("HUP HUP HUP\n")
-        return
-
+        print("SIGINT received, exiting gracefully...")
+        output_file.write_text("SIGINT received, exiting gracefully...\n")
+        sys.exit(12)
 
 signal.signal(signal.SIGINT, signal_handler)
-signal.signal(signal.SIGHUP, signal_handler)
 
 while True:
-    file.write("Running...\n")
+    print("Running...\n")
     time.sleep(1)

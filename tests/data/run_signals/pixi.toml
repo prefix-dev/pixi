@@ -2,10 +2,11 @@
 authors = ["Wolf Vollprecht <w.vollprecht@gmail.com>"]
 channels = ["conda-forge"]
 name = "ctrlc"
-platforms = ["osx-arm64"]
+platforms = ["osx-arm64", "linux-64", "win-64"]
 version = "0.1.0"
 
 [tasks]
+print = "cat ./test.py"
 start = "python ./test.py"
 
 [dependencies]

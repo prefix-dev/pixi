@@ -70,7 +70,7 @@ test-integration-extra-slow-ci = "pytest --numprocesses=auto --durations=0 --tim
 test-integration-fast = { cmd = "pytest --pixi-build=debug --numprocesses=auto --durations=0 --timeout=100 -m 'not slow and not extra_slow' tests/integration_python", depends-on = [
   "build-debug",
 ] }
-test-integration-slow = { cmd = "pytest -s --numprocesses=1 --durations=0 --timeout=100 -m 'not extra_slow' tests/integration_python", depends-on = [
+test-integration-slow = { cmd = "pytest --numprocesses=auto --durations=0 --timeout=100 -m 'not extra_slow' tests/integration_python", depends-on = [
   "build-release",
 ] }
 # pass the file to run as an argument to the task
