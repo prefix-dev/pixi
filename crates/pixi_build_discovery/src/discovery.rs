@@ -195,7 +195,9 @@ impl DiscoveredBackend {
             provenance,
         } = package_manifest;
 
-        let workspace_root = workspace.provenance.path
+        let workspace_root = workspace
+            .provenance
+            .path
             .parent()
             .expect("workspace manifest should have a parent directory")
             .to_path_buf();
@@ -259,8 +261,8 @@ impl DiscoveredBackend {
                     })?;
 
                     // The actual source directory is the custom path
-                    // The manifest path is relative from the workspace root to the manifest
-                    let manifest_path = pathdiff::diff_paths(&provenance.path, &workspace_root)
+                    // The manifest path is relative from the custom source to the manifest
+                    let manifest_path = pathdiff::diff_paths(&provenance.path, &custom_source_dir)
                         .unwrap_or_else(|| {
                             // If we can't create a relative path, use an absolute path
                             provenance.path.clone()
@@ -270,16 +272,16 @@ impl DiscoveredBackend {
                 }
                 _ => {
                     // For non-path specs, use the original logic
-                    let manifest_path = pathdiff::diff_paths(&provenance.path, &workspace_root).expect(
-                        "must be able to construct a path to go from workspace root to manifest path",
+                    let manifest_path = pathdiff::diff_paths(&provenance.path, &source_dir).expect(
+                        "must be able to construct a path to go from source dir to manifest path",
                     );
                     (source_dir, manifest_path)
                 }
             }
         } else {
             // No custom source path, use the original logic
-            let manifest_path = pathdiff::diff_paths(&provenance.path, &workspace_root)
-                .expect("must be able to construct a path to go from workspace root to manifest path");
+            let manifest_path = pathdiff::diff_paths(&provenance.path, &source_dir)
+                .expect("must be able to construct a path to go from source dir to manifest path");
             (source_dir, manifest_path)
         };
 
