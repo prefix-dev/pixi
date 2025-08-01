@@ -214,11 +214,6 @@ impl WorkspaceTarget {
     ///
     /// This will overwrite any existing dependency of the same name
     pub fn add_pypi_dependency(&mut self, name: PypiPackageName, requirement: PixiPypiSpec) {
-        tracing::info!(
-            "Adding pypi dependency: {} {}",
-            name.as_normalized(),
-            requirement
-        );
         self.pypi_dependencies
             .get_or_insert_with(Default::default)
             .insert(name, requirement);
