@@ -20,28 +20,7 @@ impl BackendSpec {
     /// provided source anchor.
     pub fn resolve(self, source_anchor: SourceAnchor) -> Self {
         match self {
-            BackendSpec::JsonRpc(spec) => BackendSpec::JsonRpc(JsonRpcBackendSpec {
-                name: spec.name.clone(),
-                command: {
-                    match spec.command {
-                        CommandSpec::EnvironmentSpec(mut env_spec) => {
-                            let maybe_source_spec = env_spec.requirement.1.try_into_source_spec();
-
-                            let pixi_spec = match maybe_source_spec {
-                                Ok(source_spec) => {
-                                    let resolved_spec = source_anchor.resolve(source_spec);
-                                    PixiSpec::from(resolved_spec)
-                                }
-                                Err(pixi_spec) => pixi_spec,
-                            };
-
-                            env_spec.requirement.1 = pixi_spec;
-                            CommandSpec::EnvironmentSpec(env_spec)
-                        }
-                        CommandSpec::System(system_spec) => CommandSpec::System(system_spec),
-                    }
-                },
-            }),
+            BackendSpec::JsonRpc(spec) => BackendSpec::JsonRpc(spec.resolve(source_anchor)),
         }
     }
 }
@@ -56,6 +35,32 @@ pub struct JsonRpcBackendSpec {
 
     /// The specification on how to instantiate the backend.
     pub command: CommandSpec,
+}
+
+impl JsonRpcBackendSpec {
+    /// Constructs a new instance for a JSON-RPC backend.
+    pub fn resolve(self, source_anchor: SourceAnchor) -> Self {
+        Self {
+            name: self.name,
+            command: {
+                match self.command {
+                    CommandSpec::EnvironmentSpec(mut env_spec) => {
+                        let maybe_source_spec = env_spec.requirement.1.try_into_source_spec();
+                        let pixi_spec = match maybe_source_spec {
+                            Ok(source_spec) => {
+                                let resolved_spec = source_anchor.resolve(source_spec);
+                                PixiSpec::from(resolved_spec)
+                            }
+                            Err(pixi_spec) => pixi_spec,
+                        };
+                        env_spec.requirement.1 = pixi_spec;
+                        CommandSpec::EnvironmentSpec(env_spec)
+                    }
+                    CommandSpec::System(system_spec) => CommandSpec::System(system_spec),
+                }
+            },
+        }
+    }
 }
 
 /// Describes a command that should be run by calling an executable in a certain
