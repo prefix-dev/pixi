@@ -8,7 +8,6 @@ use pixi_build_frontend::{
     tool::{IsolatedTool, SystemTool, Tool},
 };
 use pixi_build_types::{PixiBuildApiVersion, procedures::initialize::InitializeParams};
-use pixi_spec::PixiSpec;
 use rattler_conda_types::ChannelConfig;
 use rattler_shell::{
     activation::{ActivationError, ActivationVariables, Activator},
@@ -55,18 +54,24 @@ impl CommandDispatcher {
                 .named_backend_override(&backend_spec.name)
                 .unwrap_or(backend_spec.command),
             BackendOverride::InMemory(memory) => {
-                let backend = memory
-                    .initialize(InitializeParams {
-                        manifest_path: spec.init_params.manifest_path,
-                        source_dir: Some(spec.init_params.source_dir),
-                        cache_directory: Some(self.cache_dirs().root().clone()),
-                        project_model: spec.init_params.project_model.map(Into::into),
-                        configuration: spec.init_params.configuration,
-                        target_configuration: spec.init_params.target_configuration,
-                    })
-                    .map_err(InstantiateBackendError::InMemoryError)
-                    .map_err(CommandDispatcherError::Failed)?;
-                return Ok(Backend::new(backend.into(), memory.api_version()));
+                let backend = memory.backend_override(&backend_spec.name);
+
+                if let Some(in_mem) = backend {
+                    let memory = in_mem
+                        .initialize(InitializeParams {
+                            manifest_path: spec.init_params.manifest_path,
+                            source_dir: Some(spec.init_params.source_dir),
+                            cache_directory: Some(self.cache_dirs().root().clone()),
+                            project_model: spec.init_params.project_model.map(Into::into),
+                            configuration: spec.init_params.configuration,
+                            target_configuration: spec.init_params.target_configuration,
+                        })
+                        .map_err(InstantiateBackendError::InMemoryError)
+                        .map_err(CommandDispatcherError::Failed)?;
+                    return Ok(Backend::new(memory.into(), in_mem.api_version()));
+                } else {
+                    backend_spec.command
+                }
             }
         };
 
@@ -82,15 +87,8 @@ impl CommandDispatcher {
                 let (tool_platform, tool_platform_virtual_packages) = self.tool_platform();
                 let InstantiateToolEnvironmentResult { prefix, api } = self
                     .instantiate_tool_environment(InstantiateToolEnvironmentSpec {
-                        requirement: (
-                            env_spec.requirement.0,
-                            PixiSpec::from(env_spec.requirement.1),
-                        ),
-                        additional_requirements: env_spec
-                            .additional_requirements
-                            .into_specs()
-                            .map(|(name, spec)| (name, PixiSpec::from(spec)))
-                            .collect(),
+                        requirement: env_spec.requirement,
+                        additional_requirements: env_spec.additional_requirements,
                         constraints: env_spec.constraints,
                         build_environment: BuildEnvironment {
                             host_platform: tool_platform,

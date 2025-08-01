@@ -1,6 +1,6 @@
 use toml_span::{DeserError, Value, de_helpers::TableHelper};
 
-use crate::toml::build_system::convert_toml_to_serde;
+use crate::toml::build_backend::convert_toml_to_serde;
 
 #[derive(Debug)]
 pub struct TomlPackageBuildTarget {

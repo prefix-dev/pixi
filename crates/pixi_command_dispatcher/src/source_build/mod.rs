@@ -158,7 +158,9 @@ impl SourceBuildSpec {
         // Instantiate the backend with the discovered information.
         let backend = command_dispatcher
             .instantiate_backend(InstantiateBackendSpec {
-                backend_spec: discovered_backend.backend_spec,
+                backend_spec: discovered_backend
+                    .backend_spec
+                    .resolve(SourceAnchor::from(SourceSpec::from(self.source.clone()))),
                 init_params: discovered_backend.init_params,
                 channel_config: self.channel_config.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
