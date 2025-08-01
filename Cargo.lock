@@ -6403,6 +6403,7 @@ dependencies = [
  "rattler_package_streaming 0.22.48",
  "rattler_redaction 0.1.12",
  "rattler_solve 2.1.8",
+ "regex",
  "reqwest",
  "reqwest-middleware",
  "reqwest-retry",
