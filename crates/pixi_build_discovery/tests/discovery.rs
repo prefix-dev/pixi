@@ -51,9 +51,18 @@ fn test_discovery() {
             .trim_end_matches(['/', '\\'])
             .to_owned();
         let source_path_regex = path.to_string_lossy().replace(r"\", r"\\");
+        // Also create a regex for the parent directory (discovery folder)
+        let discovery_path = dunce::canonicalize(
+            path.ancestors()
+                .find(|p| p.file_name().map(|n| n == "discovery").unwrap_or(false))
+                .expect("Should find discovery directory"),
+        )
+        .unwrap();
+        let discovery_path_regex = discovery_path.to_string_lossy().replace(r"\", r"\\");
         insta::with_settings!({
             filters => vec![
                 (source_path_regex.as_str(), "file://<ROOT>"),
+                (discovery_path_regex.as_str(), "file://<ROOT>"),
                 (r"\\", r"/"),
             ],
             snapshot_suffix => new_suffix}, {

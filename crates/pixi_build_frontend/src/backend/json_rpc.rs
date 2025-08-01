@@ -144,6 +144,7 @@ impl JsonRpcBackend {
     pub async fn setup(
         source_dir: PathBuf,
         manifest_path: PathBuf,
+        workspace_root: PathBuf,
         package_manifest: Option<ProjectModelV1>,
         configuration: Option<serde_json::Value>,
         target_configuration: Option<OrderMap<TargetSelectorV1, serde_json::Value>>,
@@ -154,6 +155,7 @@ impl JsonRpcBackend {
         let command = tool.command();
         let program_name = command.get_program().to_string_lossy().into_owned();
         let mut process = match tokio::process::Command::from(command)
+            .current_dir(&source_dir)
             .stdout(std::process::Stdio::piped())
             .stdin(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
@@ -189,6 +191,7 @@ impl JsonRpcBackend {
             backend_identifier,
             source_dir,
             manifest_path,
+            workspace_root,
             package_manifest,
             configuration,
             target_configuration,
@@ -206,6 +209,7 @@ impl JsonRpcBackend {
         backend_identifier: String,
         source_dir: PathBuf,
         manifest_path: PathBuf,
+        workspace_root: PathBuf,
         project_model: Option<ProjectModelV1>,
         configuration: Option<serde_json::Value>,
         target_configuration: Option<OrderMap<TargetSelectorV1, serde_json::Value>>,
@@ -248,6 +252,7 @@ impl JsonRpcBackend {
                     target_configuration,
                     manifest_path: manifest_path.clone(),
                     source_dir: Some(source_dir),
+                    workspace_root: Some(workspace_root),
                     cache_directory: cache_dir,
                 }),
             )

@@ -2,10 +2,13 @@ use std::collections::BTreeMap;
 
 use indexmap::IndexMap;
 use itertools::Either;
-use pixi_spec::TomlSpec;
+use pixi_spec::{SourceSpec, TomlSpec};
 use pixi_toml::{Same, TomlFromStr, TomlIndexMap, TomlWith};
 use rattler_conda_types::NamedChannelOrUrl;
-use toml_span::{DeserError, Spanned, Value, de_helpers::TableHelper, value::ValueInner};
+use serde::Deserialize;
+use toml_span::{
+    DeserError, ErrorKind, Spanned, Value, de_helpers::TableHelper, value::ValueInner,
+};
 
 use crate::{
     PackageBuild, TargetSelector, TomlError,
@@ -20,6 +23,7 @@ pub struct TomlPackageBuild {
     pub backend: PixiSpanned<TomlBuildBackend>,
     pub channels: Option<PixiSpanned<Vec<NamedChannelOrUrl>>>,
     pub additional_dependencies: UniquePackageMap,
+    pub src: Option<SourceSpec>,
     pub configuration: Option<serde_value::Value>,
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlPackageBuildTarget>,
 }
@@ -91,6 +95,7 @@ impl TomlPackageBuild {
             },
             additional_dependencies,
             channels: self.channels.map(|channels| channels.value),
+            src: self.src,
             configuration: self.configuration,
             target_configuration: if target_configuration.is_empty() {
                 None
@@ -157,6 +162,24 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
             });
         let additional_dependencies = th.optional("additional-dependencies").unwrap_or_default();
 
+        let src = th
+            .take("src")
+            .map(|(_, mut value)| {
+                // Parse the SourceSpec using its serde deserialization
+                let value_as_json = convert_toml_to_serde(&mut value)?;
+                <SourceSpec as Deserialize>::deserialize(serde_value::ValueDeserializer::new(
+                    value_as_json,
+                ))
+                .map_err(|e: serde_value::DeserializerError| {
+                    DeserError::from(toml_span::Error {
+                        kind: ErrorKind::Custom(e.to_string().into()),
+                        span: value.span,
+                        line_info: None,
+                    })
+                })
+            })
+            .transpose()?;
+
         let configuration = th
             .take("configuration")
             .map(|(_, mut value)| convert_toml_to_serde(&mut value))
@@ -172,6 +195,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
             backend: build_backend,
             channels,
             additional_dependencies,
+            src,
             configuration,
             target,
         })
