@@ -79,6 +79,16 @@ impl GlobalSpecs {
             } else if let Some(path) = &self.path {
                 // Handle path dependencies
                 PixiSpec::Path(pixi_spec::PathSpec { path: path.clone() })
+            } else if spec_str.ends_with(".conda")
+                || spec_str.ends_with(".tar.bz2")
+                || spec_str.starts_with("./")
+                || spec_str.starts_with("../")
+                || spec_str.starts_with('/')
+            {
+                // Auto-detect .conda/.tar.bz2 files or path-like specs and handle as path dependencies
+                PixiSpec::Path(pixi_spec::PathSpec {
+                    path: Utf8TypedPathBuf::from(spec_str.to_string()),
+                })
             } else {
                 // Handle regular conda/version dependencies - use the new try_from_str method
                 let global_spec =
@@ -91,11 +101,45 @@ impl GlobalSpecs {
             };
 
             // For git/path dependencies, we need to parse the spec to get the name
-            let match_spec = MatchSpec::from_str(spec_str, ParseStrictness::Lenient)?;
-            if let Some(name) = match_spec.name {
-                result.push(GlobalSpec::named(name, pixi_spec));
+            // For auto-detected paths, extract the name from the filename if it's a .conda or .tar.bz2 file
+            if matches!(pixi_spec, PixiSpec::Path(_))
+                && (spec_str.ends_with(".conda")
+                    || spec_str.ends_with(".tar.bz2")
+                    || spec_str.starts_with("./")
+                    || spec_str.starts_with("../")
+                    || spec_str.starts_with('/'))
+            {
+                // For .conda or .tar.bz2 files, extract package name from filename
+                if spec_str.ends_with(".conda") || spec_str.ends_with(".tar.bz2") {
+                    let filename = std::path::Path::new(spec_str)
+                        .file_name()
+                        .and_then(|name| name.to_str())
+                        .unwrap_or(spec_str);
+
+                    // Extract package name from conda filename (e.g., "curl-8.14.1-h332b0f4_0.conda" or "curl-8.14.1-h332b0f4_0.tar.bz2" -> "curl")
+                    if let Some(package_name_part) = filename.split('-').next() {
+                        if let Ok(package_name) = rattler_conda_types::PackageName::try_from(
+                            package_name_part.to_string(),
+                        ) {
+                            result.push(GlobalSpec::named(package_name, pixi_spec));
+                        } else {
+                            result.push(GlobalSpec::nameless(pixi_spec));
+                        }
+                    } else {
+                        result.push(GlobalSpec::nameless(pixi_spec));
+                    }
+                } else {
+                    // For other paths, create nameless spec
+                    result.push(GlobalSpec::nameless(pixi_spec));
+                }
             } else {
-                result.push(GlobalSpec::nameless(pixi_spec));
+                // For explicit git/path dependencies, parse the spec to get the name
+                let match_spec = MatchSpec::from_str(spec_str, ParseStrictness::Lenient)?;
+                if let Some(name) = match_spec.name {
+                    result.push(GlobalSpec::named(name, pixi_spec));
+                } else {
+                    result.push(GlobalSpec::nameless(pixi_spec));
+                }
             }
         }
 
@@ -187,5 +231,102 @@ mod tests {
             global_specs.first().unwrap().spec(),
             &PixiSpec::Path(..)
         ))
+    }
+
+    #[test]
+    fn test_to_global_specs_auto_detect_conda_file() {
+        let specs = GlobalSpecs {
+            specs: vec!["./curl-8.14.1-h332b0f4_0.conda".to_string()],
+            path: None,
+            git: None,
+            rev: None,
+            subdir: None,
+        };
+
+        let channel_config = ChannelConfig::default_with_root_dir(PathBuf::from("."));
+        let global_specs = specs.to_global_specs(&channel_config).unwrap();
+
+        assert_eq!(global_specs.len(), 1);
+        let global_spec = global_specs.first().unwrap();
+        assert!(matches!(global_spec.spec(), &PixiSpec::Path(..)));
+        // Should extract "curl" as the package name from "curl-8.14.1-h332b0f4_0.conda"
+        match global_spec {
+            GlobalSpec::Named(named_spec) => {
+                assert_eq!(named_spec.name().as_source(), "curl");
+            }
+            GlobalSpec::Nameless(_) => panic!("Expected named spec for .conda file"),
+        }
+    }
+
+    #[test]
+    fn test_to_global_specs_auto_detect_relative_path() {
+        let specs = GlobalSpecs {
+            specs: vec!["../some-package".to_string()],
+            path: None,
+            git: None,
+            rev: None,
+            subdir: None,
+        };
+
+        let channel_config = ChannelConfig::default_with_root_dir(PathBuf::from("."));
+        let global_specs = specs.to_global_specs(&channel_config).unwrap();
+
+        assert_eq!(global_specs.len(), 1);
+        let global_spec = global_specs.first().unwrap();
+        assert!(matches!(global_spec.spec(), &PixiSpec::Path(..)));
+        // Should be nameless for non-.conda paths
+        assert!(matches!(global_spec, GlobalSpec::Nameless(_)));
+    }
+
+    #[test]
+    fn test_to_global_specs_auto_detect_tar_bz2_file() {
+        let specs = GlobalSpecs {
+            specs: vec!["./python-3.8.5-h7579374_1.tar.bz2".to_string()],
+            path: None,
+            git: None,
+            rev: None,
+            subdir: None,
+        };
+
+        let channel_config = ChannelConfig::default_with_root_dir(PathBuf::from("."));
+        let global_specs = specs.to_global_specs(&channel_config).unwrap();
+
+        assert_eq!(global_specs.len(), 1);
+        let global_spec = global_specs.first().unwrap();
+        assert!(matches!(global_spec.spec(), &PixiSpec::Path(..)));
+        // Should extract "python" as the package name from "python-3.8.5-h7579374_1.tar.bz2"
+        match global_spec {
+            GlobalSpec::Named(named_spec) => {
+                assert_eq!(named_spec.name().as_source(), "python");
+            }
+            GlobalSpec::Nameless(_) => panic!("Expected named spec for .tar.bz2 file"),
+        }
+    }
+
+    #[test]
+    fn test_to_global_specs_auto_detect_absolute_path_tar_bz2() {
+        let specs = GlobalSpecs {
+            specs: vec!["/tmp/numpy-1.21.0-py38h9894fe3_0.tar.bz2".to_string()],
+            path: None,
+            git: None,
+            rev: None,
+            subdir: None,
+        };
+
+        let channel_config = ChannelConfig::default_with_root_dir(PathBuf::from("."));
+        let global_specs = specs.to_global_specs(&channel_config).unwrap();
+
+        assert_eq!(global_specs.len(), 1);
+        let global_spec = global_specs.first().unwrap();
+        assert!(matches!(global_spec.spec(), &PixiSpec::Path(..)));
+        // Should extract "numpy" as the package name
+        match global_spec {
+            GlobalSpec::Named(named_spec) => {
+                assert_eq!(named_spec.name().as_source(), "numpy");
+            }
+            GlobalSpec::Nameless(_) => {
+                panic!("Expected named spec for absolute path .tar.bz2 file")
+            }
+        }
     }
 }
