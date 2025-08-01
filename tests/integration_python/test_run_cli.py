@@ -1406,4 +1406,3 @@ def test_signal_forwarding(pixi: Path, tmp_pixi_workspace: Path) -> None:
             )
     else:
         raise AssertionError("Output file was not created")
-
