@@ -53,7 +53,6 @@ pytest-timeout = ">=2.3.1,<3"
 pytest-xdist = ">=3.6.1,<4"
 pyyaml = ">=6.0.2,<7"
 rich = ">=14,<15"
-syrupy = ">=4.8.0,<5"
 tomli-w = ">=1.0,<2"
 types-pyyaml = ">=6.0.12.20241230,<7"
 
@@ -96,7 +95,6 @@ tbump = ">=6.9.0,<6.10"
 
 [feature.dev.tasks]
 insta-review = "cargo insta review --workspace"
-syrupy-update = "pytest --snapshot-update"
 update-rattler = "cargo upgrade -p rattler -p file_url -p rattler_cache -p rattler_conda_types -p rattler_digest -p rattler_lock -p rattler_networking -p rattler_repodata_gateway -p rattler_shell -p rattler_solve -p rattler_virtual_packages"
 
 # UV dependency management
@@ -116,6 +114,10 @@ description = "Switch to local rattler development dependencies"
 [feature.dev.tasks.switch-to-remote-rattler]
 cmd = "python scripts/local_patch.py rattler remote"
 description = "Switch back to remote rattler dependencies"
+
+[feature.dev.tasks.snapshot-update]
+args = [{ "arg" = "expression", "default" = "" }]
+cmd = "pytest --inline-snapshot=fix -k '{{ expression }}'"
 
 [feature.lint.dependencies]
 actionlint = ">=1.7.7,<2"
