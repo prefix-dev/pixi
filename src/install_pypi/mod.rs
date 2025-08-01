@@ -1,4 +1,8 @@
-use std::{collections::HashMap, path::Path, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    path::Path,
+    sync::Arc,
+};
 
 use crate::environment::{ContinuePyPIPrefixUpdate, on_python_interpreter_change};
 use conda_pypi_clobber::PypiCondaClobberRegistry;
@@ -336,17 +340,18 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         match self.build_config.no_build_isolation {
             NoBuildIsolation::All => (Vec::new(), dists),
             NoBuildIsolation::Packages(no_build_isolation_packages) => {
-                let mut regular_dists = Vec::new();
+                let mut dist_map = dists
+                    .into_iter()
+                    .map(|dist| (dist.name().to_string(), dist))
+                    .collect::<HashMap<_, _>>();
                 let mut no_build_isolation_dists = Vec::new();
                 for no_build_isolation in no_build_isolation_packages {
-                    for dist in &dists {
-                        if dist.name().to_string() == no_build_isolation.to_string() {
-                            no_build_isolation_dists.push(dist.clone());
-                        } else {
-                            regular_dists.push(dist.clone());
-                        }
+                    if let Some(dist) = dist_map.remove(&no_build_isolation.to_string()) {
+                        no_build_isolation_dists.push(dist.clone());
                     }
                 }
+
+                let regular_dists = dist_map.into_iter().map(|(_name, dist)| dist).collect();
 
                 (regular_dists, no_build_isolation_dists)
             }
