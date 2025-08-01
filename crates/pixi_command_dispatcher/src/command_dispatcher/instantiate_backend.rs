@@ -130,9 +130,12 @@ impl CommandDispatcher {
             }
         };
 
-        // The backend expects the source directory to be absolute and the manifest path
-        // to be relative to the workspace root.
-        let manifest_path = spec.init_params.manifest_path;
+        // The backend expects both the manifest path and the source directory to be
+        // absolute paths.
+        let manifest_path = spec
+            .init_params
+            .source_dir
+            .join(spec.init_params.manifest_path);
         let source_dir = spec.init_params.source_dir;
 
         JsonRpcBackend::setup(
