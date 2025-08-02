@@ -2,7 +2,7 @@
 # <code>[pixi](../../pixi.md) [global](../global.md) list</code>
 
 ## About
-Lists all packages previously installed into a globally accessible location via `pixi global install`.
+Lists global environments with their dependencies and exposed commands. Can also display all packages within a specific global environment when using the --environment flag.
 
 --8<-- "docs/reference/cli/pixi/global/list_extender:description"
 
@@ -17,7 +17,7 @@ pixi global list [OPTIONS] [REGEX]
 
 ## Options
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
-:  The name of the environment to list
+:  Allows listing all the packages installed in a specific environment, with an output similar to `pixi list`
 - <a id="arg---sort-by" href="#arg---sort-by">`--sort-by <SORT_BY>`</a>
 :  Sorting strategy for the package table of an environment
 <br>**default**: `name`
@@ -44,7 +44,7 @@ pixi global list [OPTIONS] [REGEX]
 :  Use environment activation cache (experimental)
 
 ## Description
-Lists all packages previously installed into a globally accessible location via `pixi global install`.
+Lists global environments with their dependencies and exposed commands. Can also display all packages within a specific global environment when using the --environment flag.
 
 All environments:
 

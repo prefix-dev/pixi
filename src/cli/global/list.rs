@@ -7,7 +7,7 @@ use fancy_display::FancyDisplay;
 use pixi_config::{Config, ConfigCli};
 use std::str::FromStr;
 
-/// Lists all packages previously installed into a globally accessible location via `pixi global install`.
+/// Lists global environments with their dependencies and exposed commands. Can also display all packages within a specific global environment when using the --environment flag.
 ///
 /// All environments:
 ///
@@ -30,7 +30,7 @@ pub struct Args {
     #[clap(flatten)]
     config: ConfigCli,
 
-    /// The name of the environment to list.
+    /// Allows listing all the packages installed in a specific environment, with an output similar to `pixi list`.
     #[clap(short, long)]
     environment: Option<String>,
 
