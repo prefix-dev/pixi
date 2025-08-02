@@ -135,11 +135,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     )> {
         let mut state_changes = StateChanges::default();
 
-        let should_check_for_updates = if dry_run || json_output {
-            true // Always check for updates in dry-run or JSON mode
-        } else {
-            !project.environment_in_sync(env_name).await? // Only if out of sync in normal mode
-        };
+        let should_check_for_updates = true;
 
         let mut dry_run_environment_update = None;
 
