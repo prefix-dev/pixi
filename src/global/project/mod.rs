@@ -1271,7 +1271,7 @@ impl Project {
     }
 
     /// Returns the command dispatcher for this project.
-    fn command_dispatcher(&self) -> miette::Result<&CommandDispatcher> {
+    pub(crate) fn command_dispatcher(&self) -> miette::Result<&CommandDispatcher> {
         self.command_dispatcher.get_or_try_init(|| {
             let multi_progress = global_multi_progress();
             let anchor_pb = multi_progress.add(ProgressBar::hidden());

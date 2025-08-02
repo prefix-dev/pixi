@@ -361,7 +361,7 @@ pub(crate) enum StateChange {
 }
 
 #[must_use]
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub(crate) struct StateChanges {
     changes: HashMap<EnvironmentName, Vec<StateChange>>,
 }
