@@ -163,8 +163,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
 
         if !dry_run && !json_output {
-            let require_reinstall = state_changes.has_changed();
-
             // See what executables were installed prior to update
             let env_binaries = project.executables_of_direct_dependencies(env_name).await?;
 
@@ -182,15 +180,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             } else {
                 ExposedType::Nothing
             };
-
-            // Reinstall the environment
-            if require_reinstall {
-                let environment_update = project.install_environment(env_name).await?;
-                state_changes.insert_change(
-                    env_name,
-                    global::StateChange::UpdatedEnvironment(environment_update),
-                );
-            }
 
             // Sync executables exposed names with the manifest
             project.sync_exposed_names(env_name, expose_type).await?;
