@@ -2703,6 +2703,9 @@ With <a href="https://github.com/henriklovhaug/md-tui">henriklovhaug/md-tui</a>,
 <p>You can view this generated markdown file in your terminal using <a href="https://github.com/henriklovhaug/md-tui"><code>md-tui</code></a>.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>mdt<span class="w"> </span>diff.md
 </span></code></pre></div>
+<p>You can also view the markdown file directly from stdin using <a href="https://github.com/henriklovhaug/md-tui"><code>md-tui</code></a>.</p>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>pixi<span class="w"> </span>diff<span class="w"> </span>&lt;<span class="o">(</span>git<span class="w"> </span>show<span class="w"> </span>HEAD~20:pixi.lock<span class="o">)</span><span class="w"> </span>pixi.lock<span class="w"> </span><span class="p">|</span><span class="w"> </span>pixi<span class="w"> </span>diff-to-markdown<span class="w"> </span><span class="p">|</span><span class="w"> </span>mdt
+</span></code></pre></div>
 
 
 
