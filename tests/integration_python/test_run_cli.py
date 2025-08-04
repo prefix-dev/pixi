@@ -1,5 +1,11 @@
 import json
+import shutil
+import sys
+import signal
+import time
+import subprocess
 import tomli_w
+import pytest
 from pathlib import Path
 
 from .common import (
@@ -618,7 +624,11 @@ def test_task_with_dependency_args(pixi: Path, tmp_pixi_workspace: Path) -> None
                 {"arg": "arg2", "default": "default2"},
             ],
         },
-        "parent-task": {"depends-on": [{"task": "base-task", "args": ["custom1", "custom2"]}]},
+        "parent-task": {
+            "depends-on": [
+                {"task": "base-task", "args": [{"arg1": "custom1"}, {"arg2": "custom2"}]}
+            ]
+        },
         "parent-task-partial": {"depends-on": [{"task": "base-task", "args": ["override1"]}]},
     }
 
@@ -632,6 +642,94 @@ def test_task_with_dependency_args(pixi: Path, tmp_pixi_workspace: Path) -> None
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest_path, "parent-task-partial"],
         stdout_contains="Base task with override1 and default2",
+    )
+
+
+def test_named_dependency_args_valid(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test passing named arguments to a dependency task."""
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+
+    manifest_content["tasks"] = {
+        "base-task": {
+            "cmd": "echo Base task with {{ arg1 }}, {{ arg2 }}, and {{ arg3 }}",
+            "args": [
+                {"arg": "arg1"},
+                {"arg": "arg2", "default": "default2"},
+                {"arg": "arg3", "default": "default3"},
+            ],
+        },
+        # named args can be passed in any order, and default values are used
+        "valid1": {
+            "depends-on": [
+                {"task": "base-task", "args": [{"arg2": "custom2"}, {"arg1": "custom1"}]}
+            ]
+        },
+        # positional args before named args should be fine, and default values can fill in gaps
+        "valid2": {"depends-on": [{"task": "base-task", "args": ["custom1", {"arg3": "custom3"}]}]},
+    }
+
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "valid1"],
+        stdout_contains="Base task with custom1, custom2, and default3",
+    )
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "valid2"],
+        stdout_contains="Base task with custom1, default2, and custom3",
+    )
+
+
+def test_named_dependency_args_invalid(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test passing named arguments to a dependency task."""
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+
+    manifest_content["tasks"] = {
+        "base-task": {
+            "cmd": "echo Base task with {{ arg1 }}, {{ arg2 }}, and {{ arg3 }}",
+            "args": [
+                {"arg": "arg1"},
+                {"arg": "arg2", "default": "default2"},
+                {"arg": "arg3", "default": "default3"},
+            ],
+        },
+        # unknown args should error
+        "invalid1": {"depends-on": [{"task": "base-task", "args": ["custom1", {"foo": "bar"}]}]},
+        # positional args after named args should error
+        "invalid2": {
+            "depends-on": [{"task": "base-task", "args": [{"arg2": "custom2"}, "custom1"]}]
+        },
+        # args without a default value cannot be omitted
+        "invalid3": {
+            "depends-on": [
+                {"task": "base-task", "args": [{"arg2": "custom2"}, {"arg3": "custom3"}]}
+            ]
+        },
+    }
+
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "invalid1"],
+        ExitCode.FAILURE,
+        stderr_contains="'foo' does not exist",
+    )
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "invalid2"],
+        ExitCode.FAILURE,
+        stderr_contains="Positional argument 'custom1' found after named argument",
+    )
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "invalid3"],
+        ExitCode.FAILURE,
+        stderr_contains="no value provided for argument 'arg1'",
     )
 
 
@@ -1355,3 +1453,48 @@ def test_task_caching_with_multiple_inputs_args(pixi: Path, tmp_pixi_workspace: 
             "cache hit",
         ],
     )
+
+
+@pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="Signal handling is different on Windows",
+)
+def test_signal_forwarding(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test that signals are forwarded correctly to the task."""
+
+    # copy the folder from ../data/run_signals to the tmp workspace
+    data_path = Path(__file__).parent.parent.joinpath("data", "run_signals")
+    tmp_data_path = tmp_pixi_workspace.joinpath("run_signals")
+
+    shutil.copytree(data_path, tmp_data_path)
+
+    # Use the manifest from the copied run_signals directory
+    manifest = tmp_data_path.joinpath("pixi.toml")
+
+    # install the dependencies
+    subprocess.check_call([pixi, "install", "--manifest-path", manifest], cwd=tmp_data_path)
+    # run the `start` task in the background and send some signals to it
+    process = subprocess.Popen(
+        [pixi, "run", "--manifest-path", manifest, "start"], cwd=tmp_data_path
+    )
+
+    time.sleep(1)  # wait for the process to start
+
+    # send a SIGINT to the process
+    process.send_signal(signal.SIGINT)
+
+    # check exit code
+    exit_code = process.wait(timeout=10)
+    assert exit_code == 12, f"Process exited with code {exit_code}"
+
+    output_file = tmp_data_path.joinpath("output.txt")
+
+    if output_file.exists():
+        # check if we can read "SIGINT received, exiting gracefully"
+        with open(output_file, "r") as f:
+            output = f.read()
+            assert "SIGINT received, exiting gracefully" in output, (
+                "SIGINT signal was not handled correctly"
+            )
+    else:
+        raise AssertionError("Output file was not created")

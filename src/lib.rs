@@ -16,6 +16,7 @@ pub mod workspace;
 mod reporters;
 
 mod rlimit;
+mod signals;
 mod uv_reporter;
 pub mod variants;
 

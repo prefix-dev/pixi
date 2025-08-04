@@ -1895,7 +1895,7 @@ async fn spawn_solve_conda_environment_task(
         .await
         .with_context(|| {
             format!(
-                "failed to solve '{}' for {}",
+                "failed to solve requirements of environment '{}' for platform '{}'",
                 group.name().fancy_display(),
                 platform
             )
@@ -2197,7 +2197,7 @@ async fn spawn_solve_pypi_task<'p>(
         .await
         .with_context(|| {
             format!(
-                "failed to solve the pypi requirements of '{}' '{}'",
+                "failed to solve the pypi requirements of environment '{}' for platform '{}'",
                 environment_name.fancy_display(),
                 consts::PLATFORM_STYLE.apply_to(platform)
             )
