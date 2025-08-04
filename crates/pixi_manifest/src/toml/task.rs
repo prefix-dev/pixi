@@ -1,5 +1,7 @@
+use std::borrow::Cow;
 use std::str::FromStr;
 
+use itertools::Itertools;
 use pixi_toml::{TomlFromStr, TomlIndexMap};
 use toml_span::{
     DeserError, ErrorKind, Value,
@@ -9,7 +11,10 @@ use toml_span::{
 
 use crate::{
     EnvironmentName, Task, TaskName, WithWarnings,
-    task::{Alias, ArgName, CmdArgs, Dependency, Execute, GlobPatterns, TaskArg, TemplateString},
+    task::{
+        Alias, ArgName, CmdArgs, Dependency, DependencyArg, Execute, GlobPatterns, TaskArg,
+        TemplateString,
+    },
     warning::Deprecation,
 };
 
@@ -71,6 +76,30 @@ impl<'de> toml_span::Deserialize<'de> for TaskArg {
 /// A task defined in the manifest.
 pub type TomlTask = WithWarnings<Task>;
 
+impl<'de> toml_span::Deserialize<'de> for DependencyArg {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        match value.take() {
+            ValueInner::String(s) => Ok(DependencyArg::Positional(TemplateString::new(
+                s.into_owned(),
+            ))),
+            ValueInner::Table(table) => {
+                let (k, mut v) = table.into_iter().exactly_one().map_err(|e| {
+                    toml_span::Error::from((
+                        toml_span::ErrorKind::Custom(Cow::Owned(e.to_string())),
+                        value.span,
+                    ))
+                })?;
+                let inner = v.take_string(None)?;
+                Ok(DependencyArg::Named(
+                    k.to_string(),
+                    TemplateString::new(inner.into_owned()),
+                ))
+            }
+            other => Err(expected("string or { string = string }", other, value.span).into()),
+        }
+    }
+}
+
 impl<'de> toml_span::Deserialize<'de> for TomlTask {
     fn deserialize(value: &mut toml_span::Value<'de>) -> Result<Self, DeserError> {
         let mut th = match value.take() {
@@ -83,7 +112,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                         ValueInner::Table(table) => {
                             let mut th = TableHelper::from((table, item.span));
                             let name = th.required::<String>("task")?;
-                            let args = th.optional::<Vec<TemplateString>>("args");
+                            let args = th.optional::<Vec<DependencyArg>>("args");
                             let environment = th
                                 .optional::<TomlFromStr<EnvironmentName>>("environment")
                                 .map(TomlFromStr::into_inner);
@@ -121,10 +150,11 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                                 ValueInner::Table(table) => {
                                     let mut th = TableHelper::from((table, span));
                                     let name = th.required::<String>("task")?;
-                                    let args = th.optional::<Vec<TemplateString>>("args");
+                                    let args = th.optional::<Vec<DependencyArg>>("args");
                                     let environment = th
                                         .optional::<TomlFromStr<EnvironmentName>>("environment")
                                         .map(TomlFromStr::into_inner);
+                                    th.finalize(None)?;
 
                                     Ok(Dependency::new(&name, args, environment))
                                 }
@@ -158,7 +188,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                                 ValueInner::Table(table) => {
                                     let mut th = TableHelper::from((table, span));
                                     let name = th.required::<String>("task")?;
-                                    let args = th.optional::<Vec<TemplateString>>("args");
+                                    let args = th.optional::<Vec<DependencyArg>>("args");
                                     let environment = th
                                         .optional::<TomlFromStr<EnvironmentName>>("environment")
                                         .map(TomlFromStr::into_inner);
@@ -275,6 +305,14 @@ mod test {
         format_parse_error(pixi_toml, parse_error)
     }
 
+    fn expect_parse_success(pixi_toml: &str) -> String {
+        <TomlTask as crate::toml::FromTomlStr>::from_toml_str(pixi_toml)
+            .ok()
+            .unwrap()
+            .value
+            .to_string()
+    }
+
     #[test]
     fn test_depends_on_deprecation() {
         let input = r#"
@@ -305,5 +343,29 @@ mod test {
             depends-on = { task = "z" }
         "#
         ));
+    }
+
+    #[test]
+    fn test_named_arg_multiple_fields() {
+        insta::assert_snapshot!(expect_parse_failure(
+            r#"
+            cmd = "test"
+            depends-on = [{ task = "foo", args = [{ "foo" = "bar", "baz" = "qux" }] }]
+        "#
+        ), @r###"
+         × got at least 2 elements when exactly one was expected
+          ╭─[pixi.toml:3:51]
+        2 │             cmd = "test"
+        3 │             depends-on = [{ task = "foo", args = [{ "foo" = "bar", "baz" = "qux" }] }]
+          ·                                                   ────────────────────────────────
+        4 │
+          ╰────
+        "###);
+        insta::assert_snapshot!(expect_parse_success(
+            r#"
+            cmd = "test"
+            depends-on = [{ task = "foo", args = [{ "foo" = "bar" }, { "baz" = "qux" }] }]
+        "#
+        ), @"test, depends-on = 'foo with args'");
     }
 }

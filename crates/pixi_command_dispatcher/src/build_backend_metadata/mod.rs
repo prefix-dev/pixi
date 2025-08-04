@@ -233,6 +233,7 @@ impl BuildBackendMetadataSpec {
         project_model_hash: Option<Vec<u8>>,
     ) -> Result<CachedCondaMetadata, CommandDispatcherError<BuildBackendMetadataError>> {
         let params = CondaOutputsParams {
+            channels: self.channels,
             host_platform: self.build_environment.host_platform,
             build_platform: self.build_environment.build_platform,
             variant_configuration: self.variants.map(|variants| variants.into_iter().collect()),
