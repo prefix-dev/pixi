@@ -139,6 +139,31 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         let mut dry_run_environment_update = None;
 
+        // Determine the expose type BEFORE any updates
+        let expose_type = if !dry_run && !json_output {
+            // See what executables were installed prior to update
+            let env_binaries = project.executables_of_direct_dependencies(env_name).await?;
+
+            // Get the exposed binaries from mapping
+            let exposed_mapping_binaries = &project
+                .environment(env_name)
+                .ok_or_else(|| {
+                    miette::miette!("Environment {} not found", env_name.fancy_display())
+                })?
+                .exposed;
+
+            // Check if they were all auto-exposed, or if the user manually exposed a subset of them
+            Some(
+                if check_all_exposed(&env_binaries, exposed_mapping_binaries) {
+                    ExposedType::All
+                } else {
+                    ExposedType::Nothing
+                },
+            )
+        } else {
+            None
+        };
+
         if should_check_for_updates {
             if dry_run || json_output {
                 // dry-run mode: performs solving only
@@ -162,25 +187,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
         }
 
-        if !dry_run && !json_output {
-            // See what executables were installed prior to update
-            let env_binaries = project.executables_of_direct_dependencies(env_name).await?;
-
-            // Get the exposed binaries from mapping
-            let exposed_mapping_binaries = &project
-                .environment(env_name)
-                .ok_or_else(|| {
-                    miette::miette!("Environment {} not found", env_name.fancy_display())
-                })?
-                .exposed;
-
-            // Check if they were all auto-exposed, or if the user manually exposed a subset of them
-            let expose_type = if check_all_exposed(&env_binaries, exposed_mapping_binaries) {
-                ExposedType::All
-            } else {
-                ExposedType::Nothing
-            };
-
+        if let Some(expose_type) = expose_type {
             // Sync executables exposed names with the manifest
             project.sync_exposed_names(env_name, expose_type).await?;
 
