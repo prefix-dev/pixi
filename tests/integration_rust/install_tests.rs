@@ -426,7 +426,7 @@ async fn install_skip_non_existent_package_warning() {
 
     let output = log_buffer.get_output();
     assert!(output.contains(
-        "No packages were skipped. non-existent-package did not match any packages in the lockfile."
+        "No packages were skipped. 'non-existent-package' did not match any packages in the lockfile."
     ));
 }
 

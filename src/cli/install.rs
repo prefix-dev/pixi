@@ -149,8 +149,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .unwrap();
         } else {
             tracing::warn!(
-                "No packages were skipped. {} did not match any packages in the lockfile.",
-                skip.join(", ")
+                "No packages were skipped. '{}' did not match any packages in the lockfile.",
+                skip.join("', '")
             );
         }
     }
