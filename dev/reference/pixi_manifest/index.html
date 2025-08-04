@@ -3837,6 +3837,11 @@ This is convenient if you want to use <code>torch</code> or something similar fo
 </span><span id="__span-25-7"><a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a><span class="k">[pypi-dependencies]</span>
 </span><span id="__span-25-8"><a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a><span class="n">detectron2</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">git</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;https://github.com/facebookresearch/detectron2.git&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">rev</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;5b72c27ae39f99db75d43f18fd1312e1ea934e60&quot;</span><span class="p">}</span>
 </span></code></pre></div>
+<p>Setting <code>no-build-isolation</code> also affects the order in which PyPI packages are installed.
+Packages are installed in that order:
+- conda packages in one go
+- packages with build isolation in one go
+- packages without build isolation installed in the order they are added to <code>no-build-isolation</code></p>
 <p>It is also possible to remove all packages from build isolation by setting the <code>no-build-isolation</code> to <code>true</code>.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="k">[pypi-options]</span>
 </span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="n">no-build-isolation</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
