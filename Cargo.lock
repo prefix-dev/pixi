@@ -4701,7 +4701,6 @@ dependencies = [
  "minijinja",
  "nix 0.29.0",
  "once_cell",
- "parking_lot",
  "pathdiff",
  "pep440_rs",
  "pep508_rs",
