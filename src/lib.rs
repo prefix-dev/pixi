@@ -13,10 +13,8 @@ pub(crate) mod repodata;
 pub mod task;
 pub mod workspace;
 
-mod reporters;
-
 mod rlimit;
-mod uv_reporter;
+mod signals;
 pub mod variants;
 
 pub use lock_file::UpdateLockFileOptions;

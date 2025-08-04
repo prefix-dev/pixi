@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum InstallReason {
     /// Reinstall a package from the local cache, will link from the cache
     ReinstallCached,

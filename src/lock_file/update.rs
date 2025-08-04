@@ -86,7 +86,7 @@ impl Workspace {
         let anchor_pb = multi_progress.add(ProgressBar::hidden());
         let command_dispatcher = self
             .command_dispatcher_builder()?
-            .with_reporter(crate::reporters::TopLevelProgress::new(
+            .with_reporter(pixi_reporters::TopLevelProgress::new(
                 global_multi_progress(),
                 anchor_pb,
             ))
@@ -1144,7 +1144,7 @@ impl<'p> UpdateContextBuilder<'p> {
             None => self
                 .project
                 .command_dispatcher_builder()?
-                .with_reporter(crate::reporters::TopLevelProgress::new(
+                .with_reporter(pixi_reporters::TopLevelProgress::new(
                     global_multi_progress(),
                     anchor_pb.clone(),
                 ))
@@ -1838,7 +1838,7 @@ async fn spawn_solve_conda_environment_task(
         .await
         .with_context(|| {
             format!(
-                "failed to solve '{}' for {}",
+                "failed to solve requirements of environment '{}' for platform '{}'",
                 group.name().fancy_display(),
                 platform
             )
@@ -2140,7 +2140,7 @@ async fn spawn_solve_pypi_task<'p>(
         .await
         .with_context(|| {
             format!(
-                "failed to solve the pypi requirements of '{}' '{}'",
+                "failed to solve the pypi requirements of environment '{}' for platform '{}'",
                 environment_name.fancy_display(),
                 consts::PLATFORM_STYLE.apply_to(platform)
             )

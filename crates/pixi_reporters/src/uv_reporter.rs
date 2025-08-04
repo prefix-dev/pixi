@@ -25,7 +25,7 @@ pub struct UvReporterOptions {
 }
 
 impl UvReporterOptions {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             length: None,
             top_level_message: "",
@@ -34,24 +34,30 @@ impl UvReporterOptions {
         }
     }
 
-    pub(crate) fn with_length(mut self, length: u64) -> Self {
+    pub fn with_length(mut self, length: u64) -> Self {
         self.length = Some(length);
         self
     }
 
-    pub(crate) fn with_top_level_message(mut self, message: &'static str) -> Self {
+    pub fn with_top_level_message(mut self, message: &'static str) -> Self {
         self.top_level_message = message;
         self
     }
 
-    pub(crate) fn with_existing(mut self, progress_bar: ProgressBar) -> Self {
+    pub fn with_existing(mut self, progress_bar: ProgressBar) -> Self {
         self.progress_bar = Some(progress_bar);
         self
     }
 
-    pub(crate) fn with_starting_tasks(mut self, tasks: impl Iterator<Item = String>) -> Self {
+    pub fn with_starting_tasks(mut self, tasks: impl Iterator<Item = String>) -> Self {
         self.starting_tasks = tasks.collect_vec();
         self
+    }
+}
+
+impl Default for UvReporterOptions {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -68,7 +74,7 @@ pub struct UvReporter {
 impl UvReporter {
     /// Create a new instance that will report on the progress the given uv reporter
     /// This uses a set size and message
-    pub(crate) fn new(options: UvReporterOptions) -> Self {
+    pub fn new(options: UvReporterOptions) -> Self {
         // Use a new progress bar if none was provided.
         let pb = if let Some(pb) = options.progress_bar {
             pixi_progress::global_multi_progress().add(pb)
@@ -100,7 +106,7 @@ impl UvReporter {
         }
     }
 
-    pub(crate) fn new_arc(options: UvReporterOptions) -> Arc<Self> {
+    pub fn new_arc(options: UvReporterOptions) -> Arc<Self> {
         Arc::new(Self::new(options))
     }
 
@@ -108,14 +114,14 @@ impl UvReporter {
         self.scoped_tasks.lock().expect("progress lock poison")
     }
 
-    pub(crate) fn start(&self, message: String) -> usize {
+    pub fn start(&self, message: String) -> usize {
         let task = self.fmt.start(message);
         let mut lock = self.lock();
         lock.push(Some(task));
         lock.len() - 1
     }
 
-    pub(crate) fn finish(&self, id: usize) {
+    pub fn finish(&self, id: usize) {
         let mut lock = self.lock();
         let len = lock.len();
         let task = lock
@@ -127,11 +133,11 @@ impl UvReporter {
         }
     }
 
-    pub(crate) fn finish_all(&self) {
+    pub fn finish_all(&self) {
         self.pb.finish_and_clear()
     }
 
-    pub(crate) fn increment_progress(&self) {
+    pub fn increment_progress(&self) {
         self.pb.inc(1);
     }
 
