@@ -187,6 +187,7 @@ mike = "2.1.3.*"
 mkdocs-material = ">=9.6.14,<10"
 mkdocs-redirects = ">=1.2.1,<2"
 pillow = ">=9.4.0"
+mkdocs-llmstxt = ">=0.3.0,<0.4"
 
 [feature.docs.tasks]
 build-docs = "mkdocs build --strict"
@@ -195,9 +196,6 @@ deploy-dev = "mike deploy --push dev devel"
 deploy-latest = "mike deploy --push --update-aliases $RELEASE_VERSION latest"
 docs = { cmd = "mkdocs serve", description = "Serve the docs locally" }
 mike-serve = "mike serve"
-
-[feature.docs.pypi-dependencies]
-mkdocs-llmstxt = ">=0.3.0, <0.4"
 
 [feature.schema.tasks]
 generate-schema = { cmd = "python model.py > schema.json", cwd = "schema" }
