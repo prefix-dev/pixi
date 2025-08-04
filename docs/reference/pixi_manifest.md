@@ -371,6 +371,12 @@ no-build-isolation = ["detectron2"]
 detectron2 = { git = "https://github.com/facebookresearch/detectron2.git", rev = "5b72c27ae39f99db75d43f18fd1312e1ea934e60"}
 ```
 
+Setting `no-build-isolation` also affects the order in which PyPI packages are installed.
+Packages are installed in that order:
+- conda packages in one go
+- packages with build isolation in one go
+- packages without build isolation installed in the order they are added to `no-build-isolation`
+
 It is also possible to remove all packages from build isolation by setting the `no-build-isolation` to `true`.
 
 ```toml
