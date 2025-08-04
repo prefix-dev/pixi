@@ -441,7 +441,8 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             .await?;
 
         // Install no-build-isolation PyPI packages one by one
-        let mut prepared_no_build_isolation_dists = Vec::new();
+        let mut prepared_no_build_isolation_dists =
+            Vec::with_capacity(no_build_isolation_dists.len());
         for no_build_isolation_dist in no_build_isolation_dists {
             let no_build_isolation_dist = self
                 .prepare_remote_distributions(&Vec::from([no_build_isolation_dist]), setup)
