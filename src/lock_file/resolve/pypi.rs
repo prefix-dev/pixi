@@ -18,6 +18,7 @@ use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, SystemRequirements, pypi::pypi_options::PypiOptions};
 use pixi_pypi_spec::PixiPypiSpec;
 use pixi_record::PixiRecord;
+use pixi_reporters::{UvReporter, UvReporterOptions};
 use pixi_uv_conversions::{
     ConversionError, as_uv_req, convert_uv_requirements_to_pep508, into_pinned_git_spec,
     pypi_options_to_build_options, pypi_options_to_index_locations, to_exclude_newer,
@@ -63,7 +64,6 @@ use crate::{
             resolver_provider::CondaResolverProvider,
         },
     },
-    uv_reporter::{UvReporter, UvReporterOptions},
     workspace::{Environment, EnvironmentVars},
 };
 

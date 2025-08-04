@@ -182,6 +182,7 @@ pixi_manifest = { path = "crates/pixi_manifest" }
 pixi_progress = { path = "crates/pixi_progress" }
 pixi_pypi_spec = { path = "crates/pixi_pypi_spec" }
 pixi_record = { path = "crates/pixi_record" }
+pixi_reporters = { path = "crates/pixi_reporters" }
 pixi_spec = { path = "crates/pixi_spec" }
 pixi_spec_containers = { path = "crates/pixi_spec_containers" }
 pixi_test_utils = { path = "crates/pixi_test_utils" }
@@ -312,6 +313,7 @@ pixi_manifest = { workspace = true, features = ["rattler_lock"] }
 pixi_progress = { workspace = true }
 pixi_pypi_spec = { workspace = true }
 pixi_record = { workspace = true }
+pixi_reporters = { workspace = true }
 pixi_spec = { workspace = true }
 pixi_spec_containers = { workspace = true }
 pixi_toml = { workspace = true }

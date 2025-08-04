@@ -15,7 +15,7 @@ use rattler_conda_types::Version;
 use std::str::FromStr;
 
 use crate::cli::GlobalOptions;
-use crate::reporters::format_release_notes;
+use pixi_reporters::format_release_notes;
 
 /// Update pixi to the latest version or a specific version.
 #[derive(Debug, clap::Parser)]

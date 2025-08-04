@@ -4721,6 +4721,7 @@ dependencies = [
  "pixi_pty",
  "pixi_pypi_spec",
  "pixi_record",
+ "pixi_reporters",
  "pixi_spec",
  "pixi_spec_containers",
  "pixi_test_utils",
@@ -5126,6 +5127,37 @@ dependencies = [
  "thiserror 2.0.12",
  "typed-path",
  "url",
+]
+
+[[package]]
+name = "pixi_reporters"
+version = "0.1.0"
+dependencies = [
+ "console 0.15.11",
+ "futures",
+ "human_bytes",
+ "indexmap 2.10.0",
+ "indicatif",
+ "itertools 0.14.0",
+ "parking_lot",
+ "pixi_command_dispatcher",
+ "pixi_git",
+ "pixi_progress",
+ "pixi_spec",
+ "rattler",
+ "rattler_conda_types",
+ "rattler_repodata_gateway",
+ "regex",
+ "tokio",
+ "tracing",
+ "url",
+ "uv-configuration",
+ "uv-distribution",
+ "uv-distribution-types",
+ "uv-installer",
+ "uv-normalize",
+ "uv-redacted",
+ "uv-resolver",
 ]
 
 [[package]]
