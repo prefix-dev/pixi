@@ -495,29 +495,6 @@ rust = "==1.72"
 pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 ```
 
-
-### `host-dependencies`
-
-```toml
-[host-dependencies]
-python = "~=3.10.3"
-```
-Typical examples of host dependencies are:
-
-- Base interpreters: a Python package would list `python` here and an R package would list `mro-base` or `r-base`.
-- Libraries your workspace links against during compilation like `openssl`, `rapidjson`, or `xtensor`.
-
-### `build-dependencies`
-
-This table contains dependencies that are needed to build the workspace.
-Different from `dependencies` and `host-dependencies` these packages are installed for the architecture of the _build_ machine.
-This enables cross-compiling from one machine architecture to another.
-
-```toml
-[build-dependencies]
-cmake = "~=3.24"
-```
-
 ### `pypi-dependencies`
 
 ??? info "Details regarding the PyPI integration"
@@ -909,55 +886,112 @@ An example of a preview feature in the manifest:
 
 Preview features in the documentation will be marked as such on the relevant pages.
 
-## Pixi Build
 
-Pixi build is an experimental feature that requires `preview = ["pixi-build"]` to be set in `[workspace]`
+## The `package` section
 
-### Workspace section
+!!! warning
+    `pixi-build` is a preview feature, and will change until it is stabilized.
+    Please keep that in mind when you use it for your workspaces.
 
-Currently, `workspace` is an alias for `project` and we recommend using `workspace` instead of `project`,
-when making use of the `pixi-build` preview feature.
-To use this keyword the preview feature *does not* need to be enabled, but for now we do recommend it for that use-case solely.
+The package section is used to define the package that is built.
+You can add it to a workspace manifest to define the package that is built by Pixi.
 
-### Package section
+A package section can be inside the manifest of a `workspace` or standalone.
 
-The package section is used to define the package that is built by the project.
-Pixi only allows this table if `preview = ["pixi-build"]` is set in `[workspace]`.
+These packages will be built into a conda package that can be installed into a conda environment.
+The package section is defined using the following fields:
+
+- `name`: The name of the package.
+- `version`: The version of the package.
+- `build`: The build system used to build the package.
+- `build-dependencies`: The build dependencies of the package.
+- `host-dependencies`: The host dependencies of the package.
+- `run-dependencies`: The run dependencies of the package.
+- `target`: The target table to configure target specific dependencies. (Similar to the [target](#the-target-table) table)
+
+And to extend the basics, it can also contain the following fields:
+
+- `description`: A short description of the package.
+- `authors`: A list of authors of the package.
+- `license`: The license of the package.
+- `license-file`: The license file of the package.
+- `readme`: The README file of the package.
+- `homepage`: The homepage link of the package.
+- `repository`: The repository link of the package.
+- `documentation`: The documentation link of the package.
 
 ```toml
---8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:package"
+--8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:package"
+--8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:extra-fields"
 ```
 
-### Host, Build, dependencies
-
-The package section re-uses the `host-dependencies` and `build-dependencies`,
-which you can read about here: [host-build-dependencies](#host-dependencies) and [build-dependencies](#build-dependencies).
-If you have the `preview = ["pixi-build"]` enabled these are interpreted as part of the package.
-
-### Run dependencies
-
-Run dependencies are dependencies that are required at runtime by your package.
-For Python packages, these are the most common dependency types.
-For compiled languages, these are less common and would basically be dependencies that you do not need when compiling the package but are needed when running it.
-
-```toml
---8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:run-dependencies"
-```
-
-### The `build-system`
+### `build` table
 
 The build system specifies how the package can be built.
 The build system is a table that can contain the following fields:
 
 - `channels`: specifies the channels to get the build backend from.
-- `build-backend`: specifies the build backend to use. This is a table that can contain the following fields:
+- `backend`: specifies the build backend to use. This is a table that can contain the following fields:
   - `name`: the name of the build backend to use. This will also be the executable name.
   - `version`: the version of the build backend to use.
+- `configuration`: a table that contains the configuration options for the build backend.
+- `target`: a table that can contain target specific build configuration.
+
+More documentation on the backends can be found in the [build backend documentation](../build/backends.md).
 
 ```toml
---8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:build-system"
+--8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:build-system"
 ```
 
-!!! note
-    We are currently not publishing the backends on conda-forge, but will do so in the future.
-    For now the backends are published at [conda channel](https://prefix.dev/channels/pixi-build-backends).
+
+### The `build` `host` and `run` dependencies tables
+The dependencies of a package are split in three tables.
+Each of these tables has a different purpose and is used to define the dependencies of the package.
+
+- [`build-dependencies`](#build-dependencies): Dependencies that are required to build the package on the build platform.
+- [`host-dependencies`](#host-dependencies): Dependencies that are required during the build process, to link the package against the target platform.
+- [`run-dependencies`](#run-dependencies): Dependencies that are required to run the package on the target platform.
+
+
+### `build-dependencies`
+Build dependencies are required in the build environment and contain all tools that are not needed on the host of the package.
+
+Following packages are examples of typical build dependencies:
+
+- compilers (`gcc`, `clang`, `gfortran`)
+- build tools (`cmake`, `ninja`, `meson`)
+- `make`
+- `pkg-config`
+- VSC packages (`git`, `svn`)
+
+```toml
+--8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:build-dependencies"
+```
+
+### `host-dependencies`
+
+Host dependencies are required during build phase, but in contrast to build packages they have to be present on the host.
+
+Following packages are typical examples for host dependencies:
+
+- shared libraries (c/c++)
+- python/r libraries that link against c libraries
+- `python`, `r-base`
+- `setuptools`, `pip`
+
+```toml
+--8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:host-dependencies"
+```
+
+### `run-dependencies` table
+The `run-dependencies` are the packages that will be installed in the environment when the package is run.
+
+- Libraries
+- Extra data file packages
+- Python/R packages that are not needed during build time
+
+```toml
+--8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:run-dependencies"
+```
+
+

@@ -2,18 +2,22 @@ To decouple the building of a conda package from Pixi we provide something what 
 These are essentially executables following a specific protocol that is implemented for both Pixi and the build backend.
 This also allows for decoupling of the build backend from Pixi and it's manifest specification.
 
-The backends we are currently developing are available in the following [conda channel](https://prefix.dev/channels/pixi-build-backends).
-And are being developed in the [pixi-build-backends](https://github.com/prefix-dev/pixi-build-backends) repository.
+The Prefix.dev managed backends are being developed in the [pixi-build-backends](https://github.com/prefix-dev/pixi-build-backends) repository, and have their own
+[documentation](https://prefix-dev.github.io/pixi-build-backends/).
 
 ### Installation
 
-When looking at the following build-section:
+Install a certain build backend by adding it to the `package.build` section of the manifest file.:
 
 ```toml
 --8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:build-system"
 ```
 
-5. This will allow Pixi to install desired backends from the `pixi-build-backends` channel, and any requirements from `conda-forge`. Backends are installed into isolated environments, and will be shared across Pixi workspaces.
+For custom backend channels, you can add the channel to the `channels` section of the manifest file:
+```toml
+--8<-- "docs/source_files/pixi_tomls/pixi-build-backend-channel.toml"
+```
+
 
 ### Overriding the Build Backend
 
