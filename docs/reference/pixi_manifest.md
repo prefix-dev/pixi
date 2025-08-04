@@ -925,6 +925,17 @@ And to extend the basics, it can also contain the following fields:
 --8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:extra-fields"
 ```
 
+!!! note "Workspace inheritance"
+    Most extra fields can be inherited from the workspace manifest.
+    This means that you can define the `description`, `authors`, `license` in the workspace manifest, and they will be inherited by the package manifest.
+    ```toml
+    [workspace]    
+    name = "my-workspace"
+    
+    [package]
+    name = { workspace = true } # Inherit the name from the workspace
+    ```
+
 ### `build` table
 
 The build system specifies how the package can be built.
