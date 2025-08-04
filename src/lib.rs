@@ -4,7 +4,7 @@ pub mod activation;
 pub mod cli;
 pub mod diff;
 pub mod environment;
-mod global;
+pub mod global;
 mod install_pypi;
 pub mod lock_file;
 mod prefix;
