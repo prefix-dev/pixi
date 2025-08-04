@@ -142,24 +142,28 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // Determine the expose type BEFORE any updates
         let expose_type = if !dry_run && !json_output {
             // See what executables were installed prior to update
-            let env_binaries = project.executables_of_direct_dependencies(env_name).await?;
+            // Only if the environment is already installed
+            if let Ok(env_binaries) = project.executables_of_direct_dependencies(env_name).await {
+                // Get the exposed binaries from mapping
+                let exposed_mapping_binaries = &project
+                    .environment(env_name)
+                    .ok_or_else(|| {
+                        miette::miette!("Environment {} not found", env_name.fancy_display())
+                    })?
+                    .exposed;
 
-            // Get the exposed binaries from mapping
-            let exposed_mapping_binaries = &project
-                .environment(env_name)
-                .ok_or_else(|| {
-                    miette::miette!("Environment {} not found", env_name.fancy_display())
-                })?
-                .exposed;
-
-            // Check if they were all auto-exposed, or if the user manually exposed a subset of them
-            Some(
-                if check_all_exposed(&env_binaries, exposed_mapping_binaries) {
-                    ExposedType::All
-                } else {
-                    ExposedType::Nothing
-                },
-            )
+                // Check if they were all auto-exposed, or if the user manually exposed a subset of them
+                Some(
+                    if check_all_exposed(&env_binaries, exposed_mapping_binaries) {
+                        ExposedType::All
+                    } else {
+                        ExposedType::Nothing
+                    },
+                )
+            } else {
+                // Environment not installed yet, default to ExposedType::All for new installations
+                Some(ExposedType::All)
+            }
         } else {
             None
         };

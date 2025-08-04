@@ -1133,7 +1133,7 @@ def test_install_only_reverts_failing(
         [pixi, "global", "install", "--channel", dummy_channel_1, "dummy-a", "dummy-b", "dummy-x"],
         ExitCode.FAILURE,
         env=env,
-        stderr_contains="No candidates were found for 'dummy-x'",
+        stderr_contains="No candidates were found for dummy-x",
     )
 
     # dummy-a, dummy-b should be installed, but not dummy-x
