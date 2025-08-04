@@ -200,11 +200,7 @@ impl DiscoveredBackend {
             build_system.backend.name.clone(),
             build_system.backend.spec.clone(),
         );
-        let additional_requirements = build_system
-            .additional_dependencies
-            .iter()
-            .map(|(name, spec)| Ok((name.clone(), spec.clone())))
-            .collect::<Result<_, SpecConversionError>>()?;
+        let additional_requirements = build_system.additional_dependencies.into_iter().collect();
 
         // Figure out the channels to use
         let named_channels = match build_system.channels.as_ref() {
@@ -270,7 +266,8 @@ impl DiscoveredBackend {
         })
     }
 
-    /// Try to discover a pixi.toml file with a `[package]` table in the source directory.
+    /// Try to discover a pixi.toml file with a `[package]` table in the source
+    /// directory.
     fn discover_pixi(
         source_path: PathBuf,
         channel_config: &ChannelConfig,
