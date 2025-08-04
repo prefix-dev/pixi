@@ -2,6 +2,7 @@
 
 pub mod builders;
 pub mod client;
+pub mod logging;
 pub mod package_database;
 
 use std::{

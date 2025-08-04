@@ -36,6 +36,7 @@ use crate::common::{
     builders::{
         HasDependencyConfig, HasLockFileUpdateConfig, HasPrefixUpdateConfig, string_from_iter,
     },
+    logging::try_init_test_subscriber,
     package_database::{Package, PackageDatabase},
 };
 
@@ -403,6 +404,30 @@ async fn install_frozen_skip() {
 
     assert!(is_pypi_package_installed(&env, "no-build-editable"));
     assert!(is_conda_package_installed(&prefix_path, "python_rich").await);
+}
+
+/// Test `pixi install --frozen --skip` functionality with a non existing package
+#[tokio::test]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn install_skip_non_existent_package_warning() {
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().await.unwrap();
+    // Add a dependency to create a lock file
+    pixi.add("python").await.unwrap();
+
+    let log_buffer = try_init_test_subscriber();
+
+    // Install with a skipped package that doesn't exist in the lock file
+    pixi.install()
+        .with_frozen()
+        .with_skipped(vec!["non-existent-package".to_string()])
+        .await
+        .unwrap();
+
+    let output = log_buffer.get_output();
+    assert!(output.contains(
+        "No packages were skipped. non-existent-package did not match any packages in the lockfile."
+    ));
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
