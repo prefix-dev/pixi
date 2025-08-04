@@ -43,7 +43,7 @@ use pypi_mapping::{self, MappingClient};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Arch, GenericVirtualPackage, PackageName, Platform};
-use rattler_lock::{LockFile, ParseCondaLockError, PypiPackageData, PypiPackageEnvironmentData};
+use rattler_lock::{LockFile, LockedPackageRef, ParseCondaLockError};
 use std::{
     cmp::PartialEq,
     collections::{HashMap, HashSet},
@@ -430,14 +430,22 @@ impl<'p> LockFileDerivedData<'p> {
                 ))?;
 
                 let platform = environment.best_platform();
-                let mut pixi_records = self
-                    .pixi_records(environment, platform)?
-                    .unwrap_or_default();
-                if !skipped.is_empty() {
-                    pixi_records =
-                        Self::filter_skipped_conda_packages(pixi_records.into_iter(), skipped)
-                            .collect();
-                }
+                let locked_env = self.locked_env(environment)?;
+                let packages =
+                    Self::filter_skipped_packages(locked_env.packages(platform), skipped);
+
+                // Separate the packages into conda and pypi packages
+                let (conda_packages, pypi_packages) = packages
+                    .into_iter()
+                    .partition::<Vec<_>, _>(|p| p.as_conda().is_some());
+
+                let pixi_records = locked_packages_to_pixi_records(conda_packages)?;
+
+                let pypi_records = pypi_packages
+                    .into_iter()
+                    .filter_map(LockedPackageRef::as_pypi)
+                    .map(|(data, env_data)| (data.clone(), env_data.clone()))
+                    .collect::<Vec<_>>();
 
                 let conda_reinstall_packages = match reinstall_packages {
                     ReinstallPackages::None => None,
@@ -456,15 +464,6 @@ impl<'p> LockFileDerivedData<'p> {
                 let (prefix, python_status) = self
                     .conda_prefix(environment, conda_reinstall_packages, skipped)
                     .await?;
-
-                let mut pypi_records = self
-                    .pypi_records(environment, platform)?
-                    .unwrap_or_default();
-                if !skipped.is_empty() {
-                    pypi_records =
-                        Self::filter_skipped_pypi_packages(pypi_records.into_iter(), skipped)
-                            .collect();
-                }
 
                 // No `uv` support for WASM right now
                 if platform.arch() == Some(Arch::Wasm32) {
@@ -577,51 +576,18 @@ impl<'p> LockFileDerivedData<'p> {
     }
 
     /// Filters out packages that are in the `skipped` list.
-    fn filter_skipped_pypi_packages<'a>(
-        packages: impl Iterator<Item = (PypiPackageData, PypiPackageEnvironmentData)>,
-        skipped: &'a [String],
-    ) -> impl Iterator<Item = (PypiPackageData, PypiPackageEnvironmentData)> {
-        packages.filter(|(p, _)| !skipped.iter().any(|s| s == p.name.as_ref()))
-    }
-
-    /// Filters out packages that are in the `skipped` list.
-    fn filter_skipped_conda_packages<'a>(
-        packages: impl Iterator<Item = PixiRecord>,
-        skipped: &'a [String],
-    ) -> impl Iterator<Item = PixiRecord> {
-        packages.filter(|p| !skipped.iter().any(|s| s == p.name().as_normalized()))
-    }
-
-    fn pypi_records(
-        &self,
-        environment: &Environment<'p>,
-        platform: Platform,
-    ) -> Result<Option<Vec<(PypiPackageData, PypiPackageEnvironmentData)>>, UpdateError> {
-        match self.locked_env(environment)?.pypi_packages(platform) {
-            Some(packages) => {
-                let records = packages
-                    .map(|(data, env_data)| (data.clone(), env_data.clone()))
-                    .collect_vec();
-                Ok(Some(records))
-            }
-            None => Ok(None),
-        }
-    }
-
-    fn pixi_records(
-        &self,
-        environment: &Environment<'p>,
-        platform: Platform,
-    ) -> Result<Option<Vec<PixiRecord>>, UpdateError> {
-        match self.locked_env(environment)?.conda_packages(platform) {
-            Some(packages) => {
-                let records = packages
-                    .cloned()
-                    .map(PixiRecord::try_from)
-                    .collect::<Result<Vec<_>, _>>()?;
-                Ok(Some(records))
-            }
-            None => Ok(None),
+    pub fn filter_skipped_packages<'lock>(
+        packages: Option<
+            impl DoubleEndedIterator<Item = LockedPackageRef<'lock>> + ExactSizeIterator + 'lock,
+        >,
+        skipped: &'lock [String],
+    ) -> Vec<LockedPackageRef<'lock>> {
+        match (packages, skipped.is_empty()) {
+            (Some(packages), true) => packages.collect(),
+            (Some(packages), false) => packages
+                .filter(|p| !skipped.iter().any(|s| s == p.name()))
+                .collect(),
+            (None, _) => Vec::new(),
         }
     }
 
@@ -656,13 +622,10 @@ impl<'p> LockFileDerivedData<'p> {
                 .finish()?;
 
                 // Get the locked environment from the lock-file.
-                let mut records = self
-                    .pixi_records(environment, platform)?
-                    .unwrap_or_default();
-                if !skipped.is_empty() {
-                    records =
-                        Self::filter_skipped_conda_packages(records.into_iter(), skipped).collect();
-                }
+                let locked_env = self.locked_env(environment)?;
+                let packages =
+                    Self::filter_skipped_packages(locked_env.packages(platform), skipped);
+                let records = locked_packages_to_pixi_records(packages)?;
 
                 // Update the conda prefix
                 let CondaPrefixUpdated {
@@ -686,35 +649,42 @@ impl<'p> LockFileDerivedData<'p> {
         environment: &Environment<'p>,
         skipped: &[String],
     ) -> miette::Result<Vec<String>> {
-        let mut skipped_names = HashSet::new();
         let platform = environment.best_platform();
+        let locked_env = self.locked_env(environment)?;
 
-        // Check conda packages
-        if let Some(packages) = self.pixi_records(environment, platform)? {
-            let all_package_names: HashSet<String> = packages
-                .iter()
-                .map(|p| p.name().as_normalized().to_string())
+        // Get all package names
+        let all_package_names: HashSet<String> = locked_env
+            .packages(platform)
+            .into_iter()
+            .flat_map(|p| p.map(|p| p.name().to_string()))
+            .collect();
+
+        // Get kept package names
+        let kept_package_names: HashSet<String> =
+            Self::filter_skipped_packages(locked_env.packages(platform), skipped)
+                .into_iter()
+                .map(|p| p.name().to_string())
                 .collect();
-            let kept_package_names: HashSet<String> =
-                Self::filter_skipped_conda_packages(packages.into_iter(), skipped)
-                    .map(|p| p.name().as_normalized().to_string())
-                    .collect();
-            skipped_names.extend(all_package_names.difference(&kept_package_names).cloned());
-        }
 
-        // Check pypi packages
-        if let Some(packages) = self.pypi_records(environment, platform)? {
-            let all_package_names: HashSet<String> =
-                packages.iter().map(|(p, _)| p.name.to_string()).collect();
-            let kept_package_names: HashSet<String> =
-                Self::filter_skipped_pypi_packages(packages.into_iter(), skipped)
-                    .map(|(p, _)| p.name.to_string())
-                    .collect();
-            skipped_names.extend(all_package_names.difference(&kept_package_names).cloned());
-        }
-
-        Ok(skipped_names.into_iter().sorted().collect())
+        Ok(all_package_names
+            .difference(&kept_package_names)
+            .cloned()
+            .sorted()
+            .collect())
     }
+}
+
+fn locked_packages_to_pixi_records(
+    conda_packages: Vec<LockedPackageRef<'_>>,
+) -> Result<Vec<PixiRecord>, Report> {
+    let pixi_records = conda_packages
+        .into_iter()
+        .filter_map(LockedPackageRef::as_conda)
+        .cloned()
+        .map(PixiRecord::try_from)
+        .collect::<Result<Vec<_>, _>>()
+        .into_diagnostic()?;
+    Ok(pixi_records)
 }
 
 pub struct UpdateContext<'p> {

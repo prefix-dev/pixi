@@ -115,27 +115,24 @@ impl LockedEnvironmentHash {
     ) -> Self {
         let mut hasher = Xxh3::new();
 
-        if let Some(packages) = environment.packages(platform) {
-            for package in packages
-                // exclude skipped packages
-                .filter(|p| !skipped.iter().any(|s| s == p.name()))
-            {
-                // Always has the url or path
-                package.location().to_owned().to_string().hash(&mut hasher);
+        for package in
+            LockFileDerivedData::filter_skipped_packages(environment.packages(platform), skipped)
+        {
+            // Always has the url or path
+            package.location().to_owned().to_string().hash(&mut hasher);
 
-                match package {
-                    // A select set of fields are used to hash the package
-                    LockedPackageRef::Conda(pack) => {
-                        if let Some(sha) = pack.record().sha256 {
-                            sha.hash(&mut hasher);
-                        } else if let Some(md5) = pack.record().md5 {
-                            md5.hash(&mut hasher);
-                        }
+            match package {
+                // A select set of fields are used to hash the package
+                LockedPackageRef::Conda(pack) => {
+                    if let Some(sha) = pack.record().sha256 {
+                        sha.hash(&mut hasher);
+                    } else if let Some(md5) = pack.record().md5 {
+                        md5.hash(&mut hasher);
                     }
-                    LockedPackageRef::Pypi(pack, env) => {
-                        pack.editable.hash(&mut hasher);
-                        env.extras.hash(&mut hasher);
-                    }
+                }
+                LockedPackageRef::Pypi(pack, env) => {
+                    pack.editable.hash(&mut hasher);
+                    env.extras.hash(&mut hasher);
                 }
             }
         }
