@@ -141,31 +141,23 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
         // Determine the expose type BEFORE any updates
         let expose_type = if !dry_run && !json_output {
-            // Check if environment exists and has executables
-            match project.executables_of_direct_dependencies(env_name).await {
-                Ok(env_binaries) => {
-                    // Environment exists
-                    let exposed_mapping_binaries = &project
-                        .environment(env_name)
-                        .ok_or_else(|| {
-                            miette::miette!("Environment {} not found", env_name.fancy_display())
-                        })?
-                        .exposed;
+            let environment = project.environment(env_name).ok_or_else(|| {
+                miette::miette!("Environment {} not found", env_name.fancy_display())
+            })?;
 
-                    // Check if they were all auto-exposed, or if the user manually exposed a subset of them
-                    Some(
-                        if check_all_exposed(&env_binaries, exposed_mapping_binaries) {
-                            ExposedType::All
-                        } else {
-                            ExposedType::Nothing
-                        },
-                    )
+            let expose_type = if let Ok(env_binaries) =
+                project.executables_of_direct_dependencies(env_name).await
+            {
+                if check_all_exposed(&env_binaries, &environment.exposed) {
+                    ExposedType::All
+                } else {
+                    ExposedType::Nothing
                 }
-                Err(_) => {
-                    // Environment doesn't exist yet, default to ExposedType::All for new installations
-                    Some(ExposedType::All)
-                }
-            }
+            } else {
+                ExposedType::All
+            };
+
+            Some(expose_type)
         } else {
             None
         };
