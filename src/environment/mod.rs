@@ -111,27 +111,28 @@ impl LockedEnvironmentHash {
     pub(crate) fn from_environment(
         environment: rattler_lock::Environment,
         platform: Platform,
+        skipped: &[String],
     ) -> Self {
         let mut hasher = Xxh3::new();
 
-        if let Some(packages) = environment.packages(platform) {
-            for package in packages {
-                // Always has the url or path
-                package.location().to_owned().to_string().hash(&mut hasher);
+        for package in
+            LockFileDerivedData::filter_skipped_packages(environment.packages(platform), skipped)
+        {
+            // Always has the url or path
+            package.location().to_owned().to_string().hash(&mut hasher);
 
-                match package {
-                    // A select set of fields are used to hash the package
-                    LockedPackageRef::Conda(pack) => {
-                        if let Some(sha) = pack.record().sha256 {
-                            sha.hash(&mut hasher);
-                        } else if let Some(md5) = pack.record().md5 {
-                            md5.hash(&mut hasher);
-                        }
+            match package {
+                // A select set of fields are used to hash the package
+                LockedPackageRef::Conda(pack) => {
+                    if let Some(sha) = pack.record().sha256 {
+                        sha.hash(&mut hasher);
+                    } else if let Some(md5) = pack.record().md5 {
+                        md5.hash(&mut hasher);
                     }
-                    LockedPackageRef::Pypi(pack, env) => {
-                        pack.editable.hash(&mut hasher);
-                        env.extras.hash(&mut hasher);
-                    }
+                }
+                LockedPackageRef::Pypi(pack, env) => {
+                    pack.editable.hash(&mut hasher);
+                    env.extras.hash(&mut hasher);
                 }
             }
         }
@@ -418,12 +419,14 @@ pub async fn get_update_lock_file_and_prefix<'env>(
     update_mode: UpdateMode,
     update_lock_file_options: UpdateLockFileOptions,
     reinstall_packages: ReinstallPackages,
+    skipped: &[String],
 ) -> miette::Result<(LockFileDerivedData<'env>, Prefix)> {
     let (lock_file, prefixes) = get_update_lock_file_and_prefixes(
         &[environment.clone()],
         update_mode,
         update_lock_file_options,
         reinstall_packages,
+        skipped,
     )
     .await?;
     Ok((
@@ -442,6 +445,7 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
     update_mode: UpdateMode,
     update_lock_file_options: UpdateLockFileOptions,
     reinstall_packages: ReinstallPackages,
+    skipped: &[String],
 ) -> miette::Result<(LockFileDerivedData<'env>, Vec<Prefix>)> {
     if environments.is_empty() {
         return Err(miette::miette!("No environments provided to install."));
@@ -487,7 +491,7 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
                 std::future::ready(Ok(Prefix::new(env.dir()))).left_future()
             } else {
                 lock_file_ref
-                    .prefix(env, update_mode, reinstall_packages)
+                    .prefix(env, update_mode, reinstall_packages, skipped)
                     .right_future()
             }
         })
