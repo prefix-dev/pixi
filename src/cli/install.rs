@@ -85,7 +85,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .collect::<Result<Vec<_>, _>>()?;
 
     // Update the prefixes by installing all packages
-    get_update_lock_file_and_prefixes(
+    let (lock_file, _) = get_update_lock_file_and_prefixes(
         &environments,
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
@@ -99,7 +99,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     .await?;
 
     let installed_envs = environments
-        .into_iter()
+        .iter()
         .map(|env| env.name())
         .collect::<Vec<_>>();
 
@@ -131,9 +131,27 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .unwrap()
     }
 
-    if let Some(skip) = args.skip {
-        if !skip.is_empty() {
-            write!(&mut message, " excluding {}", skip.join(", ")).unwrap()
+    if let Some(skip) = &args.skip {
+        let mut all_skipped_packages = std::collections::HashSet::new();
+        for env in &environments {
+            let skipped_packages = lock_file.get_skipped_package_names(env, skip)?;
+            all_skipped_packages.extend(skipped_packages);
+        }
+
+        if !all_skipped_packages.is_empty() {
+            let mut skipped_packages_vec: Vec<_> = all_skipped_packages.into_iter().collect();
+            skipped_packages_vec.sort();
+            write!(
+                &mut message,
+                " excluding {}",
+                skipped_packages_vec.join(", ")
+            )
+            .unwrap();
+        } else {
+            tracing::warn!(
+                "No packages were skipped. {} did not match any packages in the lockfile.",
+                skip.join(", ")
+            );
         }
     }
 

@@ -686,24 +686,34 @@ impl<'p> LockFileDerivedData<'p> {
         environment: &Environment<'p>,
         skipped: &[String],
     ) -> miette::Result<Vec<String>> {
-        let mut skipped_names = Vec::new();
+        let mut skipped_names = HashSet::new();
         let platform = environment.best_platform();
 
         // Check conda packages
         if let Some(packages) = self.pixi_records(environment, platform)? {
-            for record in Self::filter_skipped_conda_packages(packages.into_iter(), skipped) {
-                skipped_names.push(record.name().as_normalized().to_string());
-            }
+            let all_package_names: HashSet<String> = packages
+                .iter()
+                .map(|p| p.name().as_normalized().to_string())
+                .collect();
+            let kept_package_names: HashSet<String> =
+                Self::filter_skipped_conda_packages(packages.into_iter(), skipped)
+                    .map(|p| p.name().as_normalized().to_string())
+                    .collect();
+            skipped_names.extend(all_package_names.difference(&kept_package_names).cloned());
         }
 
         // Check pypi packages
         if let Some(packages) = self.pypi_records(environment, platform)? {
-            for (data, _) in Self::filter_skipped_pypi_packages(packages.into_iter(), skipped) {
-                skipped_names.push(data.name.to_string());
-            }
+            let all_package_names: HashSet<String> =
+                packages.iter().map(|(p, _)| p.name.to_string()).collect();
+            let kept_package_names: HashSet<String> =
+                Self::filter_skipped_pypi_packages(packages.into_iter(), skipped)
+                    .map(|(p, _)| p.name.to_string())
+                    .collect();
+            skipped_names.extend(all_package_names.difference(&kept_package_names).cloned());
         }
 
-        Ok(skipped_names)
+        Ok(skipped_names.into_iter().sorted().collect())
     }
 }
 
