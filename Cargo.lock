@@ -6245,6 +6245,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "rattler_progress"
+version = "0.1.0"
+dependencies = [
+ "indicatif",
+ "parking_lot",
+]
+
+[[package]]
 name = "rattler_pty"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6401,6 +6409,7 @@ dependencies = [
  "rattler_digest 1.1.5",
  "rattler_networking 0.25.8",
  "rattler_package_streaming 0.22.48",
+ "rattler_progress",
  "rattler_redaction 0.1.12",
  "rattler_solve 2.1.8",
  "regex",
