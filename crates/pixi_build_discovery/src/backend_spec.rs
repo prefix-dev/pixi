@@ -38,7 +38,8 @@ pub struct JsonRpcBackendSpec {
 }
 
 impl JsonRpcBackendSpec {
-    /// Constructs a new instance for a JSON-RPC backend.
+    /// Resolves the JsonRpcBackendSpec to a relative path based on the
+    /// provided source anchor.
     pub fn resolve(self, source_anchor: SourceAnchor) -> Self {
         Self {
             name: self.name,
@@ -71,6 +72,19 @@ impl JsonRpcBackendSpec {
 pub enum CommandSpec {
     EnvironmentSpec(Box<EnvironmentSpec>),
     System(SystemCommandSpec),
+}
+
+impl CommandSpec {
+    /// Resolves the CommandSpec to a relative path based on the
+    /// provided source anchor.
+    pub fn resolve(self, source_anchor: SourceAnchor) -> Self {
+        match self {
+            CommandSpec::EnvironmentSpec(env_spec) => {
+                CommandSpec::EnvironmentSpec(Box::new(env_spec.resolve(source_anchor)))
+            }
+            CommandSpec::System(system_spec) => CommandSpec::System(system_spec),
+        }
+    }
 }
 
 /// Describes a command that should be run by calling an executable on the
@@ -114,6 +128,23 @@ pub struct EnvironmentSpec {
     /// this should be derived from the name of the backend.
     #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
     pub command: Option<String>,
+}
+
+impl EnvironmentSpec {
+    /// Resolves the EnvironmentSpec to a relative path based on the
+    /// provided source anchor.
+    pub fn resolve(mut self, source_anchor: SourceAnchor) -> Self {
+        let maybe_source_spec = self.requirement.1.try_into_source_spec();
+        let pixi_spec = match maybe_source_spec {
+            Ok(source_spec) => {
+                let resolved_spec = source_anchor.resolve(source_spec);
+                PixiSpec::from(resolved_spec)
+            }
+            Err(pixi_spec) => pixi_spec,
+        };
+        self.requirement.1 = pixi_spec;
+        self
+    }
 }
 
 impl JsonRpcBackendSpec {
