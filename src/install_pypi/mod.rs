@@ -42,8 +42,8 @@ use crate::{
     install_pypi::plan::{CachedWheels, RequiredDists},
     lock_file::UvResolutionContext,
     prefix::Prefix,
-    uv_reporter::{UvReporter, UvReporterOptions},
 };
+use pixi_reporters::{UvReporter, UvReporterOptions};
 
 pub(crate) mod conda_pypi_clobber;
 pub(crate) mod conversions;

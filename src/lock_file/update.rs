@@ -86,7 +86,7 @@ impl Workspace {
         let anchor_pb = multi_progress.add(ProgressBar::hidden());
         let command_dispatcher = self
             .command_dispatcher_builder()?
-            .with_reporter(crate::reporters::TopLevelProgress::new(
+            .with_reporter(pixi_reporters::TopLevelProgress::new(
                 global_multi_progress(),
                 anchor_pb,
             ))
@@ -1144,7 +1144,7 @@ impl<'p> UpdateContextBuilder<'p> {
             None => self
                 .project
                 .command_dispatcher_builder()?
-                .with_reporter(crate::reporters::TopLevelProgress::new(
+                .with_reporter(pixi_reporters::TopLevelProgress::new(
                     global_multi_progress(),
                     anchor_pb.clone(),
                 ))
