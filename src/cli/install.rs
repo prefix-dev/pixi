@@ -143,8 +143,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             skipped_packages_vec.sort();
             write!(
                 &mut message,
-                " excluding {}",
-                skipped_packages_vec.join(", ")
+                " excluding '{}'",
+                skipped_packages_vec.join("', '")
             )
             .unwrap();
         } else {
