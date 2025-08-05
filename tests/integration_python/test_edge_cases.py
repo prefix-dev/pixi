@@ -42,7 +42,7 @@ def test_python_mismatch(pixi: Path, tmp_pixi_workspace: Path) -> None:
     )
 
 
-@pytest.mark.slow
+@pytest.mark.extra_slow
 def test_prefix_only_created_when_sdist(
     pixi: Path, tmp_pixi_workspace: Path, tmp_path: Path
 ) -> None:
@@ -476,7 +476,7 @@ def test_help_warning_when_platform_not_supported(pixi: Path, tmp_pixi_workspace
     )
 
 
-@pytest.mark.slow
+@pytest.mark.extra_slow
 def test_issue_4123_cache_prevents_editable_install(
     pixi: Path, tmp_pixi_workspace: Path, tmp_path: Path
 ) -> None:
