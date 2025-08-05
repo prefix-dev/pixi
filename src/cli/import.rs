@@ -90,16 +90,8 @@ struct MissingEnvironmentName;
 fn get_feature_and_environment(
     feature_arg: &Option<String>,
     environment_arg: &Option<String>,
-    file: &Option<CondaEnvFile>,
+    fallback: impl Fn() -> Result<String, MissingEnvironmentName>,
 ) -> Result<(String, String), miette::Report> {
-    let fallback = || match file {
-        Some(f) => f
-            .name()
-            .map(|s| s.to_string())
-            .ok_or(MissingEnvironmentName),
-        None => Err(MissingEnvironmentName),
-    };
-
     let feature_string = match (feature_arg, environment_arg) {
         (Some(f), _) => f.clone(),
         (_, Some(e)) => e.clone(),
@@ -157,14 +149,22 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
     let (env_file, feature_string, environment_string) = match format {
         ImportFileFormat::CondaEnv => {
             // TODO: refactor to reduce duplication — custom enum for env_file?
-            let env_file = Some(CondaEnvFile::from_path(&input_file)?);
+            let env_file = CondaEnvFile::from_path(&input_file)?;
+            let fallback = || {
+                env_file
+                    .name()
+                    .map(|s| s.to_string())
+                    .ok_or(MissingEnvironmentName)
+            };
             let (feature_string, environment_string) =
-                get_feature_and_environment(&args.feature, &args.environment, &env_file)?;
-            (env_file, feature_string, environment_string)
+                get_feature_and_environment(&args.feature, &args.environment, fallback)?;
+            (Some(env_file), feature_string, environment_string)
         }
         ImportFileFormat::PypiTxt => {
             let (feature_string, environment_string) =
-                get_feature_and_environment(&args.feature, &args.environment, &None)?;
+                get_feature_and_environment(&args.feature, &args.environment, || {
+                    Err(MissingEnvironmentName)
+                })?;
             (None, feature_string, environment_string)
         }
     };
