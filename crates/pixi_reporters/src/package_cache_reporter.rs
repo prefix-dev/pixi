@@ -22,7 +22,7 @@ pub struct PackageCacheReporter {
 
 impl PackageCacheReporter {
     /// Construct a new reporter.
-    pub fn new(multi_progress: MultiProgress, placement: ProgressBarPlacement) -> Self {
+    pub fn _new(multi_progress: MultiProgress, placement: ProgressBarPlacement) -> Self {
         Self {
             inner: Arc::new(Mutex::new(PackageCacheReporterInner {
                 multi_progress,
@@ -41,7 +41,7 @@ impl PackageCacheReporter {
     }
 
     /// Specify a prefix for the progress bars.
-    pub fn with_prefix(self, prefix: impl Into<Cow<'static, str>>) -> Self {
+    pub fn _with_prefix(self, prefix: impl Into<Cow<'static, str>>) -> Self {
         let mut inner = self.inner.lock().unwrap();
         inner.prefix = prefix.into();
         inner.rerender();

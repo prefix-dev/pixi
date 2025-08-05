@@ -21,7 +21,6 @@ use pixi_spec::PixiSpec;
 use rattler_repodata_gateway::{Reporter, RunExportsReporter};
 pub use release_notes::format_release_notes;
 use uv_configuration::RAYON_INITIALIZE;
-use package_cache_reporter::PackageCacheReporter;
 
 use install_reporter::SyncReporter;
 use main_progress_bar::MainProgressBar;

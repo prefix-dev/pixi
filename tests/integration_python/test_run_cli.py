@@ -1554,7 +1554,8 @@ def test_run_with_environment_variable_priority(
         stdout_excludes="outside_env",
         env={"MY_ENV": "outside_env"},
     )
-    
+
+
 @pytest.mark.skipif(
     sys.platform == "win32",
     reason="Signal handling is different on Windows",
