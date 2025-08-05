@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow,
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     ffi::OsString,
     fmt::{Display, Formatter},
     path::PathBuf,
@@ -451,22 +451,7 @@ fn get_export_specific_task_env(task: &Task, command_env: IndexMap<String, Strin
     }
 
     // Define keys that should not be overridden
-    let override_excluded_keys: HashSet<&str> = [
-        "PIXI_PROJECT_ROOT",
-        "PIXI_PROJECT_NAME",
-        "PIXI_PROJECT_VERSION",
-        "PIXI_PROMPT",
-        "PIXI_ENVIRONMENT_NAME",
-        "PIXI_ENVIRONMENT_PLATFORMS",
-        "CONDA_PREFIX",
-        "CONDA_DEFAULT_ENV",
-        "PATH",
-        "INIT_CWD",
-        "PWD",
-    ]
-    .iter()
-    .cloned()
-    .collect();
+    let override_excluded_keys = consts::get_override_excluded_keys();
 
     // Create environment map struct
     let env_map = EnvMap::new(command_env.clone(), task.env());

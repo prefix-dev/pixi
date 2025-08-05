@@ -4,6 +4,7 @@ use fs_err::tokio as tokio_fs;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
+use pixi_consts::consts;
 use pixi_manifest::EnvironmentName;
 use pixi_manifest::FeaturesExt;
 use rattler_conda_types::Platform;
@@ -316,11 +317,15 @@ pub async fn run_activation(
             None,
         );
 
+        let override_excluded_keys = consts::get_override_excluded_keys();
         // `activator.env_vars` should override `activator_result` for duplicate keys
         new_activator.map(|mut map: HashMap<String, String>| {
             // First pass: Add all variables from activator.env_vars(as map is unordered, we need to update the referenced value in the second loop)
             for (k, v) in &activator.env_vars {
-                map.insert(k.clone(), v.clone());
+                let should_exclude = override_excluded_keys.contains(k.as_str());
+                if !should_exclude {
+                    map.insert(k.clone(), v.clone());
+                }
             }
 
             // Second pass: Loop through the map and resolve variable references
