@@ -289,7 +289,6 @@ impl CacheReporter for RepodataCacheReporter {
     }
 
     fn on_download_start(&self) -> usize {
-        tracing::trace!("Start download of {:#?}", self.url);
         // Start tracking download progress using the real URL from the RepoDataRecord
         let download_id = self
             .repodata_reporter
@@ -304,8 +303,6 @@ impl CacheReporter for RepodataCacheReporter {
     }
 
     fn on_download_progress(&self, _index: usize, progress: u64, total: Option<u64>) {
-        tracing::trace!("Progressing in download of {:#?}", self.url);
-
         // Update progress in the repodata reporter using the real URL
         if let Ok(guard) = self.download_id.try_lock() {
             if let Some(download_id) = *guard {
@@ -320,8 +317,6 @@ impl CacheReporter for RepodataCacheReporter {
     }
 
     fn on_download_completed(&self, _index: usize) {
-        tracing::trace!("Completing download of {:#?}", self.url);
-
         // Mark download as complete using the real URL
         if let Ok(guard) = self.download_id.try_lock() {
             if let Some(download_id) = *guard {

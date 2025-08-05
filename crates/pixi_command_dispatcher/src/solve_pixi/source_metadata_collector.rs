@@ -88,13 +88,11 @@ impl SourceMetadataCollector {
         self,
         specs: Vec<(rattler_conda_types::PackageName, SourceSpec)>,
     ) -> Result<CollectedSourceMetadata, CommandDispatcherError<CollectSourceMetadataError>> {
-        tracing::trace!("Start collecting source metadata for packages {specs:#?}");
         let mut source_futures = ExecutorFutures::new(self.command_queue.executor());
         let mut specs = specs
             .into_iter()
             .map(|(name, spec)| (name, spec, Vec::new()))
             .collect::<Vec<_>>();
-        tracing::trace!("Start collecting source metadata for packages {specs:#?}");
         let mut result = CollectedSourceMetadata::default();
         let mut already_encountered_specs = HashSet::new();
 
