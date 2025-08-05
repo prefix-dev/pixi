@@ -19,7 +19,7 @@ pixi import [OPTIONS] <FILE>
 ## Options
 - <a id="arg---format" href="#arg---format">`--format <FORMAT>`</a>
 :  Which format to interpret the file as
-<br>**options**: `conda-env`
+<br>**options**: `conda-env`, `pypi-txt`
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
 :  The platforms for the imported environment
 <br>May be provided more than once.
