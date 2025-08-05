@@ -145,19 +145,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 miette::miette!("Environment {} not found", env_name.fancy_display())
             })?;
 
-            let expose_type = if let Ok(env_binaries) =
-                project.executables_of_direct_dependencies(env_name).await
-            {
+            if let Ok(env_binaries) = project.executables_of_direct_dependencies(env_name).await {
                 if check_all_exposed(&env_binaries, &environment.exposed) {
-                    ExposedType::All
+                    Some(ExposedType::All)
                 } else {
-                    ExposedType::Nothing
+                    // user manually configured, don't modify
+                    None
                 }
             } else {
-                ExposedType::All
-            };
-
-            Some(expose_type)
+                Some(ExposedType::All)
+            }
         } else {
             None
         };
