@@ -36,5 +36,6 @@ uv-pep508 = { workspace = true, features = ["non-pep508-extensions"] }
 uv-pypi-types = { workspace = true }
 uv-python = { workspace = true }
 uv-redacted = { workspace = true }
+uv-requirements-txt = { workspace = true }
 uv-resolver = { workspace = true }
 uv-types = { workspace = true }
