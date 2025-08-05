@@ -40,7 +40,10 @@ impl rattler_repodata_gateway::Reporter for RepodataReporter {
 
 impl RunExportsReporter for RepodataReporter {
     fn add(&self, record: &RepoDataRecord) -> Arc<dyn CacheReporter> {
-        tracing::trace!("Adding new record {:#?}", record.package_record.name.as_normalized());
+        tracing::trace!(
+            "Adding new record {:#?}",
+            record.package_record.name.as_normalized()
+        );
         // Create a cache reporter that delegates to the repodata reporter with the actual URL
         Arc::new(RepodataCacheReporter {
             repodata_reporter: self.clone(),
@@ -317,7 +320,6 @@ impl CacheReporter for RepodataCacheReporter {
     }
 
     fn on_download_completed(&self, _index: usize) {
-
         tracing::trace!("Completing download of {:#?}", self.url);
 
         // Mark download as complete using the real URL

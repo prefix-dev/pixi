@@ -14,7 +14,7 @@ use rattler_conda_types::{
     ChannelConfig, InvalidPackageNameError, MatchSpec, PackageName, PackageRecord,
     package::RunExportsJson,
 };
-use rattler_repodata_gateway::{Gateway, RunExportExtractorError, RunExportsReporter};
+use rattler_repodata_gateway::{RunExportExtractorError, RunExportsReporter};
 use thiserror::Error;
 use tracing::instrument;
 
@@ -54,7 +54,7 @@ impl SourceMetadataSpec {
     pub async fn request(
         self,
         command_dispatcher: CommandDispatcher,
-        reporter: Option<Arc<(dyn RunExportsReporter + Send)>>,
+        reporter: Option<Arc<dyn RunExportsReporter>>,
     ) -> Result<SourceMetadata, CommandDispatcherError<SourceMetadataError>> {
         tracing::debug!(
             "Requesting source metadata from '{}'",
@@ -115,7 +115,7 @@ impl SourceMetadataSpec {
         output: &CondaOutput,
         input_hash: Option<InputHash>,
         source: PinnedSourceSpec,
-        reporter: Option<Arc<(dyn RunExportsReporter + Send)>>,
+        reporter: Option<Arc<dyn RunExportsReporter>>,
     ) -> Result<SourceRecord, CommandDispatcherError<SourceMetadataError>> {
         let source_anchor = SourceAnchor::from(SourceSpec::from(source.clone()));
 
@@ -140,23 +140,17 @@ impl SourceMetadataSpec {
             )
             .await?;
 
-        tracing::debug!(
-            "Make sure that run exports in pixi records for '{:#?}'",
-            &source
-        );
-        ensure_run_exports_in_pixi_records(
-            &command_dispatcher.data.gateway,
-            &mut build_records,
-            reporter,
-        )
-        .await
-        .map_err(SourceMetadataError::from)
-        .map_err(CommandDispatcherError::Failed)?;
-
-        // command_dispatcher.gateway.en
-
-        let build_run_exports =
-            build_dependencies.extract_run_exports(&build_records, &output.ignore_run_exports);
+        let gateway = command_dispatcher.gateway();
+        let build_run_exports = build_dependencies
+            .extract_run_exports(
+                &mut build_records,
+                &output.ignore_run_exports,
+                gateway,
+                reporter.clone(),
+            )
+            .await
+            .map_err(SourceMetadataError::from)
+            .map_err(CommandDispatcherError::Failed)?;
 
         // Solve the host environment for the output.
         let host_dependencies = output
@@ -169,7 +163,7 @@ impl SourceMetadataSpec {
             .unwrap_or_default()
             // Extend with the run exports from the build environment.
             .extend_with_run_exports_from_build(&build_run_exports);
-        let host_records = self
+        let mut host_records = self
             .solve_dependencies(
                 self.package.clone(),
                 CycleEnvironment::Host,
@@ -178,8 +172,16 @@ impl SourceMetadataSpec {
                 self.backend_metadata.build_environment.clone(),
             )
             .await?;
-        let host_run_exports =
-            host_dependencies.extract_run_exports(&host_records, &output.ignore_run_exports);
+        let host_run_exports = host_dependencies
+            .extract_run_exports(
+                &mut host_records,
+                &output.ignore_run_exports,
+                gateway,
+                reporter,
+            )
+            .await
+            .map_err(SourceMetadataError::from)
+            .map_err(CommandDispatcherError::Failed)?;
 
         // Gather the dependencies for the output.
         let run_dependencies = Dependencies::new(&output.run_dependencies, None)
@@ -390,39 +392,6 @@ impl SourceMetadataSpec {
     }
 }
 
-async fn ensure_run_exports_in_pixi_records(
-    gateway: &Gateway,
-    records: &mut [PixiRecord],
-    reporter: Option<Arc<(dyn RunExportsReporter + Send)>>,
-) -> Result<(), RunExportExtractorError> {
-    dbg!(reporter.is_some());
-    let mut repo_data_records_indices: Vec<usize> = Vec::with_capacity(records.len());
-    let mut repo_data_records = records
-        .iter()
-        .enumerate()
-        .flat_map(|(idx, r)| match r {
-            PixiRecord::Binary(repo_data_record) => {
-                repo_data_records_indices.push(idx);
-                Some(repo_data_record.clone())
-            }
-            PixiRecord::Source(_source_record) => None,
-        })
-        .collect::<Vec<_>>();
-
-    gateway
-        .ensure_run_exports(&mut repo_data_records, reporter)
-        .await?;
-
-    for (original_idx, updated_record) in repo_data_records_indices
-        .into_iter()
-        .zip(repo_data_records.into_iter())
-    {
-        records[original_idx] = PixiRecord::Binary(updated_record);
-    }
-
-    Ok(())
-}
-
 struct PackageRecordDependencies {
     pub depends: Vec<String>,
     pub constrains: Vec<String>,
@@ -475,6 +444,9 @@ pub enum SourceMetadataError {
     #[diagnostic(transparent)]
     BuildBackendMetadata(#[from] BuildBackendMetadataError),
 
+    #[error("failed to amend run exports: {0}")]
+    RunExportsExtraction(#[from] RunExportExtractorError),
+
     #[error("while trying to solve the build environment for the package")]
     SolveBuildEnvironment(
         #[diagnostic_source]
@@ -502,9 +474,6 @@ pub enum SourceMetadataError {
         source1: Box<SourceSpec>,
         source2: Box<SourceSpec>,
     },
-
-    #[error(transparent)]
-    RunExportsExtract(#[from] RunExportExtractorError),
 
     #[error("the dependencies of some packages in the environment form a cycle")]
     Cycle(Cycle),

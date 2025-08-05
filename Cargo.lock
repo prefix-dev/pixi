@@ -2175,7 +2175,7 @@ dependencies = [
 [[package]]
 name = "file_url"
 version = "0.2.6"
-source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#39c63907966f051e8fd8fc37d1436a6058f09120"
+source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#0a3e0d99e8ab653771c6c5e82eaf5ccf0359f7a0"
 dependencies = [
  "itertools 0.14.0",
  "percent-encoding",
@@ -3086,7 +3086,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.61.2",
+ "windows-core 0.59.0",
 ]
 
 [[package]]
@@ -4446,7 +4446,7 @@ checksum = "1e91099d4268b0e11973f036e885d652fb0b21fedcf69738c627f94db6a44f42"
 [[package]]
 name = "path_resolver"
 version = "0.1.2"
-source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#39c63907966f051e8fd8fc37d1436a6058f09120"
+source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#0a3e0d99e8ab653771c6c5e82eaf5ccf0359f7a0"
 dependencies = [
  "fs-err",
  "indexmap 2.10.0",
@@ -5782,7 +5782,7 @@ dependencies = [
 [[package]]
 name = "rattler"
 version = "0.34.10"
-source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#39c63907966f051e8fd8fc37d1436a6058f09120"
+source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#0a3e0d99e8ab653771c6c5e82eaf5ccf0359f7a0"
 dependencies = [
  "anyhow",
  "clap",
@@ -5826,7 +5826,7 @@ dependencies = [
 [[package]]
 name = "rattler_cache"
 version = "0.3.28"
-source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#39c63907966f051e8fd8fc37d1436a6058f09120"
+source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#0a3e0d99e8ab653771c6c5e82eaf5ccf0359f7a0"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -5857,7 +5857,7 @@ dependencies = [
 [[package]]
 name = "rattler_conda_types"
 version = "0.37.0"
-source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#39c63907966f051e8fd8fc37d1436a6058f09120"
+source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#0a3e0d99e8ab653771c6c5e82eaf5ccf0359f7a0"
 dependencies = [
  "chrono",
  "core-foundation 0.10.1",
@@ -5897,7 +5897,7 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "1.1.5"
-source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#39c63907966f051e8fd8fc37d1436a6058f09120"
+source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#0a3e0d99e8ab653771c6c5e82eaf5ccf0359f7a0"
 dependencies = [
  "blake2",
  "digest",
@@ -5914,7 +5914,7 @@ dependencies = [
 [[package]]
 name = "rattler_lock"
 version = "0.23.13"
-source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#39c63907966f051e8fd8fc37d1436a6058f09120"
+source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#0a3e0d99e8ab653771c6c5e82eaf5ccf0359f7a0"
 dependencies = [
  "chrono",
  "file_url",
@@ -5939,7 +5939,7 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "1.0.11"
-source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#39c63907966f051e8fd8fc37d1436a6058f09120"
+source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#0a3e0d99e8ab653771c6c5e82eaf5ccf0359f7a0"
 dependencies = [
  "quote",
  "syn",
@@ -5948,7 +5948,7 @@ dependencies = [
 [[package]]
 name = "rattler_menuinst"
 version = "0.2.20"
-source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#39c63907966f051e8fd8fc37d1436a6058f09120"
+source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#0a3e0d99e8ab653771c6c5e82eaf5ccf0359f7a0"
 dependencies = [
  "chrono",
  "configparser",
@@ -5977,7 +5977,7 @@ dependencies = [
 [[package]]
 name = "rattler_networking"
 version = "0.25.8"
-source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#39c63907966f051e8fd8fc37d1436a6058f09120"
+source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#0a3e0d99e8ab653771c6c5e82eaf5ccf0359f7a0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6006,7 +6006,7 @@ dependencies = [
 [[package]]
 name = "rattler_package_streaming"
 version = "0.22.47"
-source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#39c63907966f051e8fd8fc37d1436a6058f09120"
+source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#0a3e0d99e8ab653771c6c5e82eaf5ccf0359f7a0"
 dependencies = [
  "bzip2 0.6.0",
  "chrono",
@@ -6035,7 +6035,7 @@ dependencies = [
 [[package]]
 name = "rattler_pty"
 version = "0.2.6"
-source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#39c63907966f051e8fd8fc37d1436a6058f09120"
+source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#0a3e0d99e8ab653771c6c5e82eaf5ccf0359f7a0"
 dependencies = [
  "libc",
  "nix 0.30.1",
@@ -6045,7 +6045,7 @@ dependencies = [
 [[package]]
 name = "rattler_redaction"
 version = "0.1.12"
-source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#39c63907966f051e8fd8fc37d1436a6058f09120"
+source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#0a3e0d99e8ab653771c6c5e82eaf5ccf0359f7a0"
 dependencies = [
  "reqwest",
  "reqwest-middleware",
@@ -6055,7 +6055,7 @@ dependencies = [
 [[package]]
 name = "rattler_repodata_gateway"
 version = "0.23.9"
-source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#39c63907966f051e8fd8fc37d1436a6058f09120"
+source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#0a3e0d99e8ab653771c6c5e82eaf5ccf0359f7a0"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -6112,7 +6112,7 @@ dependencies = [
 [[package]]
 name = "rattler_shell"
 version = "0.24.7"
-source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#39c63907966f051e8fd8fc37d1436a6058f09120"
+source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#0a3e0d99e8ab653771c6c5e82eaf5ccf0359f7a0"
 dependencies = [
  "anyhow",
  "enum_dispatch",
@@ -6132,7 +6132,7 @@ dependencies = [
 [[package]]
 name = "rattler_solve"
 version = "2.1.8"
-source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#39c63907966f051e8fd8fc37d1436a6058f09120"
+source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#0a3e0d99e8ab653771c6c5e82eaf5ccf0359f7a0"
 dependencies = [
  "chrono",
  "futures",
@@ -6149,7 +6149,7 @@ dependencies = [
 [[package]]
 name = "rattler_virtual_packages"
 version = "2.1.1"
-source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#39c63907966f051e8fd8fc37d1436a6058f09120"
+source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#0a3e0d99e8ab653771c6c5e82eaf5ccf0359f7a0"
 dependencies = [
  "archspec",
  "libloading",
@@ -7237,7 +7237,7 @@ dependencies = [
 [[package]]
 name = "simple_spawn_blocking"
 version = "1.1.0"
-source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#39c63907966f051e8fd8fc37d1436a6058f09120"
+source = "git+https://github.com/remimimimimi/rattler.git?branch=feat%2Fextract-run-export#0a3e0d99e8ab653771c6c5e82eaf5ccf0359f7a0"
 dependencies = [
  "tokio",
 ]
@@ -7521,7 +7521,7 @@ dependencies = [
  "ntapi",
  "objc2-core-foundation",
  "objc2-io-kit",
- "windows 0.61.3",
+ "windows 0.59.0",
 ]
 
 [[package]]
@@ -9547,7 +9547,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

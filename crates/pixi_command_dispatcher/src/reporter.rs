@@ -284,7 +284,7 @@ pub trait Reporter: Send {
     fn create_run_exports_reporter(
         &mut self,
         _reason: Option<ReporterContext>,
-    ) -> Option<Arc<(dyn RunExportsReporter + Send)>> {
+    ) -> Option<Arc<dyn RunExportsReporter>> {
         None
     }
 

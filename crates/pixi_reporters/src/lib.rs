@@ -125,7 +125,7 @@ impl pixi_command_dispatcher::Reporter for TopLevelProgress {
     fn create_run_exports_reporter(
         &mut self,
         _reason: Option<ReporterContext>,
-    ) -> Option<Arc<dyn RunExportsReporter + Send>> {
+    ) -> Option<Arc<dyn RunExportsReporter>> {
         Some(Arc::new(self.repodata_reporter.clone()))
     }
 

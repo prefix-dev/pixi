@@ -1,4 +1,5 @@
 use std::str::FromStr;
+use std::sync::Arc;
 
 use itertools::Either;
 use pixi_build_types::{
@@ -14,6 +15,7 @@ use rattler_conda_types::{
     InvalidPackageNameError, MatchSpec, NamedChannelOrUrl, NamelessMatchSpec, PackageName,
     ParseStrictness, Platform, VersionSpec,
 };
+use rattler_repodata_gateway::{Gateway, RunExportExtractorError, RunExportsReporter};
 
 use super::conversion;
 use crate::SourceMetadataError;
@@ -119,11 +121,13 @@ impl Dependencies {
     }
 
     /// Extract run exports from the solved environments.
-    pub fn extract_run_exports(
+    pub async fn extract_run_exports(
         &self,
-        records: &[PixiRecord],
+        records: &mut [PixiRecord],
         ignore: &CondaOutputIgnoreRunExports,
-    ) -> PixiRunExports {
+        gateway: &Gateway,
+        reporter: Option<Arc<dyn RunExportsReporter>>,
+    ) -> Result<PixiRunExports, RunExportExtractorError> {
         let mut filter_run_exports = PixiRunExports::default();
 
         fn filter_match_specs<T: From<BinarySpec>>(
@@ -200,24 +204,30 @@ impl Dependencies {
                 .collect()
         }
 
-        for record in records {
+        let mut filtered_records = records
+            .iter_mut()
             // Only record run exports for packages that are direct dependencies.
-            if !self
-                .dependencies
-                .contains_key(&record.package_record().name)
-            {
-                continue;
-            }
-
+            .filter(|r| !self.dependencies.contains_key(&r.package_record().name))
             // Filter based on whether we want to ignore run exports for a particular
             // package.
-            if ignore.from_package.contains(&record.package_record().name) {
-                continue;
-            }
+            .filter(|r| ignore.from_package.contains(&r.package_record().name))
+            .collect::<Vec<_>>();
 
+        let repodata_records = filtered_records.iter_mut().flat_map(|r| match *r {
+            PixiRecord::Binary(repo_data_record) => Some(repo_data_record),
+            PixiRecord::Source(_source_record) => None,
+        });
+        tracing::debug!("Making sure that run exports in pixi records");
+        gateway
+            .ensure_run_exports(repodata_records, reporter)
+            .await?;
+
+        for record in filtered_records {
             // Make sure we have valid run exports.
             let Some(run_exports) = &record.package_record().run_exports else {
-                unimplemented!("Extracting run exports from other places is not implemented yet");
+                unreachable!(
+                    "We tried to make sure that run exports are available but something went wrong"
+                );
             };
 
             filter_run_exports
@@ -237,7 +247,7 @@ impl Dependencies {
                 .extend(filter_match_specs(&run_exports.weak_constrains, ignore));
         }
 
-        filter_run_exports
+        Ok(filter_run_exports)
     }
 }
 
