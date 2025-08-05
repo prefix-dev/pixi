@@ -207,10 +207,10 @@ impl Dependencies {
         let mut filtered_records = records
             .iter_mut()
             // Only record run exports for packages that are direct dependencies.
-            .filter(|r| !self.dependencies.contains_key(&r.package_record().name))
+            .filter(|r| self.dependencies.contains_key(&r.package_record().name))
             // Filter based on whether we want to ignore run exports for a particular
             // package.
-            .filter(|r| ignore.from_package.contains(&r.package_record().name))
+            .filter(|r| !ignore.from_package.contains(&r.package_record().name))
             .collect::<Vec<_>>();
 
         let repodata_records = filtered_records.iter_mut().flat_map(|r| match *r {
