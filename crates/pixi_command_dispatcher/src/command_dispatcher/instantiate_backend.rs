@@ -85,7 +85,11 @@ impl CommandDispatcher {
             ),
             CommandSpec::EnvironmentSpec(env_spec) => {
                 let (tool_platform, tool_platform_virtual_packages) = self.tool_platform();
-                let InstantiateToolEnvironmentResult { prefix, api } = self
+                let InstantiateToolEnvironmentResult {
+                    prefix,
+                    version,
+                    api,
+                } = self
                     .instantiate_tool_environment(InstantiateToolEnvironmentSpec {
                         requirement: env_spec.requirement,
                         additional_requirements: env_spec.additional_requirements,
@@ -119,6 +123,7 @@ impl CommandDispatcher {
                 (
                     Tool::from(IsolatedTool::new(
                         env_spec.command.unwrap_or(backend_spec.name),
+                        Some(version),
                         prefix.path().to_path_buf(),
                         activation_scripts,
                     )),
@@ -126,6 +131,15 @@ impl CommandDispatcher {
                 )
             }
         };
+
+        // Add debug information about what the backend supports.
+        tracing::debug!(
+            "Instantiated backend {}{}, negotiated API version {}",
+            tool.executable(),
+            tool.version()
+                .map_or_else(String::new, |v| format!("@{}", v)),
+            api_version,
+        );
 
         // The backend expects both the manifest path and the source directory to be
         // absolute paths.

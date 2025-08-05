@@ -1,9 +1,10 @@
+use rattler_conda_types::VersionWithSource;
 use std::{collections::HashMap, path::PathBuf};
 
 /// A tool that can be invoked.
 #[derive(Debug)]
 pub enum Tool {
-    Isolated(IsolatedTool),
+    Isolated(Box<IsolatedTool>),
     System(SystemTool),
 }
 
@@ -30,7 +31,7 @@ impl From<SystemTool> for Tool {
 
 impl From<IsolatedTool> for Tool {
     fn from(value: IsolatedTool) -> Self {
-        Self::Isolated(value)
+        Self::Isolated(Box::new(value))
     }
 }
 
@@ -39,6 +40,8 @@ impl From<IsolatedTool> for Tool {
 pub struct IsolatedTool {
     /// The command to invoke.
     command: String,
+    /// The version of the tool that was installed.
+    version: Option<VersionWithSource>,
     /// The prefix to use for the isolated environment.
     prefix: PathBuf,
     /// Activation scripts
@@ -49,11 +52,13 @@ impl IsolatedTool {
     /// Construct a new instance from a command and prefix.
     pub fn new(
         command: impl Into<String>,
+        version: Option<VersionWithSource>,
         prefix: impl Into<PathBuf>,
         activation: HashMap<String, String>,
     ) -> Self {
         Self {
             command: command.into(),
+            version,
             prefix: prefix.into(),
             activation_scripts: activation,
         }
@@ -76,14 +81,23 @@ impl Tool {
         }
     }
 
+    /// Returns the version of the tool, if available.
+    pub fn version(&self) -> Option<&VersionWithSource> {
+        match self {
+            Tool::Isolated(tool) => tool.version.as_ref(),
+            Tool::System(_) => None,
+        }
+    }
+
     /// Construct a new tool that calls another executable.
     pub fn with_executable(&self, executable: impl Into<String>) -> Self {
         match self {
-            Tool::Isolated(tool) => Tool::Isolated(IsolatedTool::new(
+            Tool::Isolated(tool) => Tool::Isolated(Box::new(IsolatedTool::new(
                 executable,
+                tool.version.clone(),
                 tool.prefix.clone(),
                 tool.activation_scripts.clone(),
-            )),
+            ))),
             Tool::System(_) => Tool::System(SystemTool::new(executable)),
         }
     }
