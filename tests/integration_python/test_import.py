@@ -168,6 +168,7 @@ class TestCondaEnv:
             [
                 pixi,
                 "import",
+                "--format=conda-env",
                 "--manifest-path",
                 manifest_path,
                 import_file_path,
