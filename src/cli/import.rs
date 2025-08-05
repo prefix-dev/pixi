@@ -119,16 +119,18 @@ fn get_feature_and_environment(
 fn convert_uv_requirements_txt_to_pep508(
     reqs_txt: uv_requirements_txt::RequirementsTxt,
 ) -> Result<Vec<pep508_rs::Requirement>, miette::Error> {
-    let uv_requirements: Vec<uv_pep508::Requirement<uv_pypi_types::VerbatimParsedUrl>> = reqs_txt
-        .requirements
-        .into_iter()
-        .map(|r| match r.requirement {
-            uv_requirements_txt::RequirementsTxtRequirement::Named(req) => Ok(req),
-            uv_requirements_txt::RequirementsTxtRequirement::Unnamed(_) => {
-                Err(miette::miette!("Unnamed requirements unsupported."))
-            }
-        })
-        .collect::<Result<_, _>>()?;
+    let mut uv_requirements: Vec<uv_pep508::Requirement<uv_pypi_types::VerbatimParsedUrl>> =
+        reqs_txt
+            .requirements
+            .into_iter()
+            .map(|r| match r.requirement {
+                uv_requirements_txt::RequirementsTxtRequirement::Named(req) => Ok(req),
+                uv_requirements_txt::RequirementsTxtRequirement::Unnamed(_) => {
+                    Err(miette::miette!("Unnamed requirements unsupported."))
+                }
+            })
+            .collect::<Result<_, _>>()?;
+    uv_requirements.extend(reqs_txt.constraints);
 
     let requirements = convert_uv_requirements_to_pep508(uv_requirements.iter())
         .map_err(|e| miette::miette!("Conversion error: {e}"))?;
