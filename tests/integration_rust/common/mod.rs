@@ -2,6 +2,7 @@
 
 pub mod builders;
 pub mod client;
+pub mod logging;
 pub mod package_database;
 
 use std::{
@@ -531,6 +532,7 @@ impl PixiControl {
                             &task.run_environment,
                             UpdateMode::Revalidate,
                             &ReinstallPackages::default(),
+                            &[],
                         )
                         .await?;
                     let env =
@@ -573,6 +575,7 @@ impl PixiControl {
                 },
                 config: Default::default(),
                 all: false,
+                skip: None,
             },
         }
     }
