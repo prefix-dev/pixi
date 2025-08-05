@@ -4,6 +4,7 @@ mod install_reporter;
 mod main_progress_bar;
 mod release_notes;
 mod repodata_reporter;
+pub mod uv_reporter;
 
 use std::sync::LazyLock;
 
@@ -20,15 +21,17 @@ use rattler_repodata_gateway::Reporter;
 pub use release_notes::format_release_notes;
 use uv_configuration::RAYON_INITIALIZE;
 
-use crate::reporters::{
-    install_reporter::SyncReporter, main_progress_bar::MainProgressBar,
-    repodata_reporter::RepodataReporter,
-};
+use install_reporter::SyncReporter;
+use main_progress_bar::MainProgressBar;
+use repodata_reporter::RepodataReporter;
+
+// Re-export the uv_reporter types for external use
+pub use uv_reporter::{UvReporter, UvReporterOptions};
 
 /// A top-level reporter that combines the different reporters into one. This
 /// directly implements the [`pixi_command_dispatcher::Reporter`] trait.
 /// And subsequently, offloads the work to its sub progress reporters.
-pub(crate) struct TopLevelProgress {
+pub struct TopLevelProgress {
     source_checkout_reporter: GitCheckoutProgress,
     conda_solve_reporter: MainProgressBar<String>,
     repodata_reporter: RepodataReporter,

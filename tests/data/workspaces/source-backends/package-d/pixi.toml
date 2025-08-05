@@ -1,0 +1,10 @@
+[package]
+name = "package-d"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "package-e", path = "../package-e" }
+
+
+[package.build.configuration]
+package = "package-d-0.1.0-h4616a5c_0.conda"

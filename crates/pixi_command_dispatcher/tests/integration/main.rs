@@ -2,6 +2,7 @@ mod event_reporter;
 mod event_tree;
 
 use std::{
+    collections::HashMap,
     ops::DerefMut,
     path::{Path, PathBuf},
     str::FromStr,
@@ -9,7 +10,9 @@ use std::{
 
 use event_reporter::EventReporter;
 use itertools::Itertools;
-use pixi_build_frontend::{BackendOverride, in_memory::PassthroughBackend};
+use pixi_build_frontend::{
+    BackendOverride, InMemoryOverriddenBackends, in_memory::PassthroughBackend,
+};
 use pixi_command_dispatcher::{
     BuildEnvironment, CacheDirs, CommandDispatcher, Executor, InstallPixiEnvironmentSpec,
     InstantiateToolEnvironmentSpec, PixiEnvironmentSpec,
@@ -362,4 +365,34 @@ pub async fn test_stale_host_dependency_triggers_rebuild() {
         vec!["package-a", "package-b"],
         "Expected only package-a and package-b to be rebuilt"
     );
+}
+
+#[tokio::test]
+pub async fn instantiate_backend_with_from_source() {
+    let root_dir = workspaces_dir().join("source-backends");
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(root_dir.clone())
+        .with_cache_dirs(default_cache_dirs())
+        .with_executor(Executor::Serial)
+        .with_backend_overrides(BackendOverride::InMemory(
+            InMemoryOverriddenBackends::Specified(HashMap::from_iter([(
+                "in-memory".to_string(),
+                PassthroughBackend::instantiator().into(),
+            )])),
+        ))
+        .finish();
+
+    // Use PixiSpec::Path to test path-based resolution and installation
+    let err = dispatcher
+        .instantiate_tool_environment(InstantiateToolEnvironmentSpec::new(
+            PackageName::new_unchecked("package-d"),
+            PathSpec::new("package-d").into(),
+            Vec::default(),
+        ))
+        .await
+        .err()
+        .unwrap();
+
+    insta::assert_debug_snapshot!(err);
 }
