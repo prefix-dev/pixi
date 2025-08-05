@@ -807,13 +807,8 @@ cowpy==1.1.4
         parsed_manifest = tomllib.loads(manifest_path.read_text())
         assert parsed_manifest == snapshot(
             {
-                "workspace": {
-                    "authors": ["Lucas Colley <lucas.colley8@gmail.com>"],
-                    "channels": ["conda-forge"],
-                    "name": "test_versions_include_constrai0",
-                    "platforms": ["osx-arm64"],
-                    "version": "0.1.0",
-                },
+                # these keys are irrelevant and some are machine-dependent
+                "workspace": IsPartialDict,
                 "tasks": {},
                 "dependencies": {},
                 "feature": {
