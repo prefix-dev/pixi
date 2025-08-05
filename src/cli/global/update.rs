@@ -152,8 +152,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     // user manually configured, don't modify
                     None
                 }
-            } else {
+            } else if environment.exposed.is_empty() {
                 Some(ExposedType::All)
+            } else {
+                // has existing exposure config, don't modify
+                None
             }
         } else {
             None
