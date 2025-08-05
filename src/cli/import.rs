@@ -132,8 +132,8 @@ fn convert_uv_requirements_txt_to_pep508(
             .collect::<Result<_, _>>()?;
     uv_requirements.extend(reqs_txt.constraints);
 
-    let requirements = convert_uv_requirements_to_pep508(uv_requirements.iter())
-        .map_err(|e| miette::miette!("Conversion error: {e}"))?;
+    let requirements =
+        convert_uv_requirements_to_pep508(uv_requirements.iter()).into_diagnostic()?;
 
     Ok(requirements)
 }
