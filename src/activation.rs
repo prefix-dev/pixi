@@ -237,19 +237,6 @@ async fn try_get_valid_activation_cache(
     }
 }
 
-// Extract variable name
-fn extract_variable_name(value: &str) -> Option<&str> {
-    if let Some(inner) = value.strip_prefix('$') {
-        Some(inner)
-    } else if let Some(inner) = value.strip_prefix('%').and_then(|s| s.strip_suffix('%')) {
-        Some(inner)
-    } else if let Some(inner) = value.strip_prefix("${").and_then(|s| s.strip_suffix('}')) {
-        Some(inner)
-    } else {
-        None
-    }
-}
-
 /// Runs and caches the activation script.
 pub async fn run_activation(
     environment: &Environment<'_>,
@@ -329,16 +316,7 @@ pub async fn run_activation(
             }
 
             // Second pass: Loop through the map and resolve variable references
-            let keys_to_update: Vec<String> = map.keys().cloned().collect();
-            for key in keys_to_update {
-                if let Some(value) = map.get(&key).cloned() {
-                    if let Some(referenced_var) = extract_variable_name(&value) {
-                        if let Some(actual_value) = map.get(referenced_var) {
-                            map.insert(key, actual_value.clone());
-                        }
-                    }
-                }
-            }
+            Environment::resolve_variable_references(&mut map);
 
             map
         })

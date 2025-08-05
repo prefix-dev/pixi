@@ -461,7 +461,7 @@ fn get_export_specific_task_env(task: &Task, command_env: IndexMap<String, Strin
         .expect("Task environment should exist at this point");
 
     // Determine export strategy
-    let export_merged = if task_env.keys().all(|k| !command_env.contains_key(k)) {
+    let mut export_merged = if task_env.keys().all(|k| !command_env.contains_key(k)) {
         // If task.env() and command_env don't have duplicated keys, simply export task.env().
         task_env.clone()
     } else {
@@ -469,6 +469,7 @@ fn get_export_specific_task_env(task: &Task, command_env: IndexMap<String, Strin
         env_map.merge_by_priority()
     };
 
+    Environment::resolve_variable_references(&mut export_merged);
     // Build export string
     // Put all merged environment variables to export.
     // Only the keys that are in "task_specific_envs" map would be exported.
