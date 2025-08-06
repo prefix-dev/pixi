@@ -107,7 +107,6 @@ fn get_feature_and_environment(
     Ok((feature_string, environment_string))
 }
 
-// TODO: better errors
 fn convert_uv_requirements_txt_to_pep508(
     reqs_txt: uv_requirements_txt::RequirementsTxt,
 ) -> Result<Vec<pep508_rs::Requirement>, miette::Error> {
@@ -118,7 +117,9 @@ fn convert_uv_requirements_txt_to_pep508(
             .map(|r| match r.requirement {
                 uv_requirements_txt::RequirementsTxtRequirement::Named(req) => Ok(req),
                 uv_requirements_txt::RequirementsTxtRequirement::Unnamed(_) => {
-                    Err(miette::miette!("Unnamed requirements unsupported."))
+                    Err(miette::miette!(
+                        "Error parsing input file: unnamed requirements are currently unsupported."
+                    ))
                 }
             })
             .collect::<Result<_, _>>()?;
@@ -148,7 +149,6 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
 
     let (env_file, feature_string, environment_string) = match format {
         ImportFileFormat::CondaEnv => {
-            // TODO: refactor to reduce duplication — custom enum for env_file?
             let env_file = CondaEnvFile::from_path(&input_file)?;
             let fallback = || {
                 env_file
@@ -202,8 +202,7 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
                 &BaseClientBuilder::new(),
             )
             .await
-            // TODO: proper error handling
-            .expect("file should parse");
+            .into_diagnostic()?;
             let pypi_deps = convert_uv_requirements_txt_to_pep508(reqs_txt)?;
 
             (vec![], pypi_deps)
