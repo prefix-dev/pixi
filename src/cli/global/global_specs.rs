@@ -12,7 +12,7 @@ use rattler_conda_types::{ChannelConfig, MatchSpec, ParseMatchSpecError, ParseSt
 #[derive(Parser, Debug, Default, Clone)]
 pub struct GlobalSpecs {
     /// The dependency as names, conda MatchSpecs
-    #[arg(num_args = 1.., required = true, value_name = "PACKAGE")]
+    #[arg(num_args = 1.., required_unless_present_any = ["git", "path"], value_name = "PACKAGE")]
     pub specs: Vec<String>,
 
     /// The git url, e.g. `https://github.com/user/repo.git`
