@@ -21,7 +21,7 @@ pixi import [OPTIONS] <FILE>
 
 - [`--format <FORMAT>`](#arg---format) Which format to interpret the file as
 
-  **options**: `conda-env`
+  **options**: `conda-env`, `pypi-txt`
 
 - [`--platform (-p) <PLATFORM>`](#arg---platform) The platforms for the imported environment
 
@@ -77,4 +77,4 @@ pixi import [OPTIONS] <FILE>
 
 Imports a file into an environment in an existing workspace.
 
-If `--format` isn't provided, `import` will try to guess the format based on the file extension.
+If `--format` isn't provided, `import` will try each format in turn
