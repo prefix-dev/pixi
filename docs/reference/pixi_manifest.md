@@ -956,7 +956,7 @@ More documentation on the backends can be found in the [build backend documentat
 
 
 ### The `build` `host` and `run` dependencies tables
-The dependencies of a package are split in three tables.
+The dependencies of a package are split into three tables.
 Each of these tables has a different purpose and is used to define the dependencies of the package.
 
 - [`build-dependencies`](#build-dependencies): Dependencies that are required to build the package on the build platform.
