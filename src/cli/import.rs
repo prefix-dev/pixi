@@ -30,7 +30,7 @@ pub enum ImportFileFormat {
 
 /// Imports a file into an environment in an existing workspace.
 ///
-/// If `--format` isn't provided, `import` will try to guess the format based on the file extension.
+/// If `--format` isn't provided, `import` will try each format in turn
 #[derive(Parser, Debug, Default, Clone)]
 #[clap(arg_required_else_help = true, verbatim_doc_comment)]
 pub struct Args {
