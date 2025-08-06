@@ -960,7 +960,7 @@ The dependencies of a package are split into three tables.
 Each of these tables has a different purpose and is used to define the dependencies of the package.
 
 - [`build-dependencies`](#build-dependencies): Dependencies that are required to build the package on the build platform.
-- [`host-dependencies`](#host-dependencies): Dependencies that are required during the build process, to link the package against the target platform.
+- [`host-dependencies`](#host-dependencies): Dependencies that are required during the build process, to link against the package on the target platform.
 - [`run-dependencies`](#run-dependencies): Dependencies that are required to run the package on the target platform.
 
 
