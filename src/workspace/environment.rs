@@ -298,12 +298,21 @@ impl<'p> Environment<'p> {
     /// The environment variables of all features are combined in the order they
     /// are defined for the environment.
     pub(crate) fn activation_env(&self, platform: Option<Platform>) -> IndexMap<String, String> {
-        self.features()
-            .map(|f| f.activation_env(platform))
-            .fold(IndexMap::new(), |mut acc, env| {
+        // As self.features() would put "default" envs in the last item, but the "default" env priority should be the lowest.
+        // Here, we use rfold (reverse fold) to ensure later features override earlier features
+        // for environment variables. Processing features in reverse order means that
+        // features appearing later in the list will have higher precedence.
+        //
+        // Example: If features: [override_feature, user_feature, default]
+        // - rfold processes as: [default, user_feature, override_feature]
+        // - Result: override_feature env vars take precedence over all others
+        self.features().map(|f| f.activation_env(platform)).rfold(
+            IndexMap::new(),
+            |mut acc, env| {
                 acc.extend(env.iter().map(|(k, v)| (k.clone(), v.clone())));
                 acc
-            })
+            },
+        )
     }
 
     /// Validates that the given platform is supported by this environment.
