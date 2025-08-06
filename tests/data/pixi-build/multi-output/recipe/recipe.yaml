@@ -1,0 +1,52 @@
+recipe:
+  name: multi-output
+  version: "0.1.0"
+
+outputs:
+  - package:
+      name: foobar
+    build:
+      script:
+        - if: win
+          then:
+            - mkdir -p %PREFIX%\bin
+            - echo @echo off > %PREFIX%\bin\foobar.bat
+            - echo echo Hello from foobar >> %PREFIX%\bin\foobar.bat
+          else:
+            - mkdir -p $PREFIX/bin
+            - echo "#!/usr/bin/env bash" > $PREFIX/bin/foobar
+            - echo "echo Hello from foobar" >> $PREFIX/bin/foobar
+            - chmod +x $PREFIX/bin/foobar
+
+  - package:
+      name: bizbar
+    build:
+      script:
+        - if: win
+          then:
+            - mkdir -p %PREFIX%\bin
+            - echo @echo off > %PREFIX%\bin\bizbar.bat
+            - echo echo Hello from bizbar >> %PREFIX%\bin\bizbar.bat
+          else:
+            - mkdir -p $PREFIX/bin
+            - echo "#!/usr/bin/env bash" > $PREFIX/bin/bizbar
+            - echo "echo Hello from bizbar" >> $PREFIX/bin/bizbar
+            - chmod +x $PREFIX/bin/bizbar
+
+  - package:
+      name: foobar-desktop
+    requirements:
+      run:
+        - foobar
+    build:
+      script:
+        - if: win
+          then:
+            - mkdir -p %PREFIX%\bin
+            - echo @echo off > %PREFIX%\bin\foobar-desktop.bat
+            - echo echo Hello from foobar-desktop >> %PREFIX%\bin\foobar-desktop.bat
+          else:
+            - mkdir -p $PREFIX/bin
+            - echo "#!/usr/bin/env bash" > $PREFIX/bin/foobar-desktop
+            - echo "echo Hello from foobar-desktop" >> $PREFIX/bin/foobar-desktop
+            - chmod +x $PREFIX/bin/foobar-desktop

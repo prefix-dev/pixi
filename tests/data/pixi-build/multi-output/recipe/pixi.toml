@@ -1,0 +1,6 @@
+[package]
+name = "multi-output"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "pixi-build-rattler-build", version = "*" }
