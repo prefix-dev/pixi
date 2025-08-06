@@ -517,7 +517,7 @@ cowpy==1.1.4
         # Create a new project
         verify_cli_command([pixi, "init", tmp_pixi_workspace])
 
-        # Import a simple `environment.yml`
+        # Import a simple environment
         verify_cli_command(
             [
                 pixi,
@@ -558,7 +558,6 @@ cowpy==1.1.4
         # Create a new project
         verify_cli_command([pixi, "init", tmp_pixi_workspace])
 
-        # Import an `environment.yml` without a name
         verify_cli_command(
             [
                 pixi,
@@ -594,7 +593,7 @@ cowpy==1.1.4
         # Create a new project
         verify_cli_command([pixi, "init", tmp_pixi_workspace])
 
-        # Import a simple `environment.yml` for linux-64 only
+        # Import an environment for linux-64 only
         verify_cli_command(
             [
                 pixi,
