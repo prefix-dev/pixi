@@ -222,12 +222,13 @@ impl Dependencies {
             .ensure_run_exports(repodata_records, reporter)
             .await?;
 
-        for record in filtered_records {
+        for record in &filtered_records {
+            let name = record.name().as_normalized();
+            tracing::trace!("Extracting run exports of '{name}'");
             // Make sure we have valid run exports.
             let Some(run_exports) = &record.package_record().run_exports else {
-                unreachable!(
-                    "We tried to make sure that run exports are available but something went wrong"
-                );
+                tracing::debug!("Package '{name}' doesn't have any run exports");
+                continue;
             };
 
             filter_run_exports
