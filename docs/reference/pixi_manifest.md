@@ -889,14 +889,15 @@ Preview features in the documentation will be marked as such on the relevant pag
 
 ## The `package` section
 
-!!! warning
-    `pixi-build` is a preview feature, and will change until it is stabilized.
+!!! warning "Important note"
+    `pixi-build` is a [preview feature](#preview-features), and will change until it is stabilized.
     Please keep that in mind when you use it for your workspaces.
 
 The package section can be added
 to a workspace manifest to define the package that is built by Pixi.
 
-A package section can be inside the manifest of a `workspace` or standalone.
+A package section needs to be inside a `workspace`, 
+either in the same manifest file as the `[workspace]` table or in a sub folder `pixi.toml`/`pyproject.toml` file.
 
 These packages will be built into a conda package that can be installed into a conda environment.
 The package section is defined using the following fields:
@@ -994,7 +995,7 @@ Following packages are typical examples for host dependencies:
 --8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:host-dependencies"
 ```
 
-### `run-dependencies` table
+### `run-dependencies`
 The `run-dependencies` are the packages that will be installed in the environment when the package is run.
 
 - Libraries

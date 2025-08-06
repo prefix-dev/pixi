@@ -21,7 +21,7 @@ For custom backend channels, you can add the channel to the `channels` section o
 
 ### Overriding the Build Backend
 
-Sometimes you want to override the build backend that is used by pixi. Meaning overriding the backend that is specified in the [`[package.build]`](../reference/pixi_manifest.md#the-build-system). We currently have two environment variables that allow for this:
+Sometimes you want to override the build backend that is used by pixi. Meaning overriding the backend that is specified in the [`[package.build]`](../reference/pixi_manifest.md#build-table). We currently have two environment variables that allow for this:
 
 1. `PIXI_BUILD_BACKEND_OVERRIDE`: This environment variable allows for overriding of one or multiple backends.  Use `{name}={path}` to specify a backend name mapped to a path and `,` to separate multiple backends.
 For example: `pixi-build-cmake=/path/to/bin,pixi-build-python` will:
