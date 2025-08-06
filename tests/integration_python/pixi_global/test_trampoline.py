@@ -1,14 +1,14 @@
 import copy
 import json
-import pathlib
-from pathlib import Path
-import platform
 import os
+import pathlib
+import platform
+from pathlib import Path
 from typing import Any
 
 import pytest
 
-from ..common import verify_cli_command, exec_extension, is_binary
+from ..common import exec_extension, is_binary, verify_cli_command
 
 
 def break_configuration(configuration_path: Path) -> Any:
@@ -21,11 +21,11 @@ def break_configuration(configuration_path: Path) -> Any:
 
 
 def test_trampoline_respect_activation_variables(
-    pixi: Path, tmp_pixi_workspace: Path, trampoline_channel: str
+    pixi: Path, tmp_path: Path, trampoline_channel: str
 ) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+    env = {"PIXI_HOME": str(tmp_path)}
 
-    dummy_b = tmp_pixi_workspace / "bin" / exec_extension("dummy-trampoline")
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-trampoline")
 
     verify_cli_command(
         [
@@ -41,7 +41,7 @@ def test_trampoline_respect_activation_variables(
 
     assert is_binary(dummy_b)
 
-    dummy_b_json = tmp_pixi_workspace / "bin" / "trampoline_configuration" / "dummy-trampoline.json"
+    dummy_b_json = tmp_path / "bin" / "trampoline_configuration" / "dummy-trampoline.json"
 
     trampoline_metadata = json.loads(dummy_b_json.read_text())
 
@@ -52,7 +52,7 @@ def test_trampoline_respect_activation_variables(
     assert "PATH" not in trampoline_env
 
     # verify that exe and root folder is correctly set to the original one
-    original_dummy_b = tmp_pixi_workspace / "envs" / "dummy-trampoline" / "bin" / "dummy-trampoline"
+    original_dummy_b = tmp_path / "envs" / "dummy-trampoline" / "bin" / "dummy-trampoline"
     if platform.system() == "Windows":
         original_dummy_b = original_dummy_b.with_suffix(".bat")
     assert pathlib.Path(trampoline_metadata["exe"]) == pathlib.Path(original_dummy_b)
@@ -62,11 +62,11 @@ def test_trampoline_respect_activation_variables(
 
 
 def test_trampoline_new_activation_scripts(
-    pixi: Path, tmp_pixi_workspace: Path, trampoline_channel: str
+    pixi: Path, tmp_path: Path, trampoline_channel: str
 ) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+    env = {"PIXI_HOME": str(tmp_path)}
 
-    dummy_b = tmp_pixi_workspace / "bin" / exec_extension("dummy-trampoline")
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-trampoline")
 
     verify_cli_command(
         [
@@ -82,7 +82,7 @@ def test_trampoline_new_activation_scripts(
 
     assert is_binary(dummy_b)
 
-    dummy_b_json = tmp_pixi_workspace / "bin" / "trampoline_configuration" / "dummy-trampoline.json"
+    dummy_b_json = tmp_path / "bin" / "trampoline_configuration" / "dummy-trampoline.json"
 
     trampoline_metadata = json.loads(dummy_b_json.read_text())
 
@@ -101,7 +101,7 @@ def test_trampoline_new_activation_scripts(
     )
 
     # verify that newer activation is recorded
-    dummy_b_json = tmp_pixi_workspace / "bin" / "trampoline_configuration" / "dummy-trampoline.json"
+    dummy_b_json = tmp_path / "bin" / "trampoline_configuration" / "dummy-trampoline.json"
 
     trampoline_metadata = json.loads(dummy_b_json.read_text())
 
@@ -115,13 +115,13 @@ def test_trampoline_new_activation_scripts(
 
 
 def test_trampoline_migrate_previous_script(
-    pixi: Path, tmp_pixi_workspace: Path, trampoline_channel: str
+    pixi: Path, tmp_path: Path, trampoline_channel: str
 ) -> None:
     # this test will validate if new trampoline will migrate the previous way of running packages (using scripts)
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+    env = {"PIXI_HOME": str(tmp_path)}
 
     # create a dummy script that will act as already installed package
-    dummy_trampoline = tmp_pixi_workspace / "bin" / exec_extension("dummy-trampoline")
+    dummy_trampoline = tmp_path / "bin" / exec_extension("dummy-trampoline")
 
     # now run install again, this time it should migrate the script to the new trampoline
     verify_cli_command(
@@ -139,17 +139,13 @@ def test_trampoline_migrate_previous_script(
     assert dummy_trampoline.is_file()
     assert is_binary(dummy_trampoline)
 
-    dummy_trampoline_json = (
-        tmp_pixi_workspace / "bin" / "trampoline_configuration" / "dummy-trampoline.json"
-    )
+    dummy_trampoline_json = tmp_path / "bin" / "trampoline_configuration" / "dummy-trampoline.json"
 
     assert dummy_trampoline_json.is_file()
 
 
-def test_trampoline_dot_in_exe(
-    pixi: Path, tmp_pixi_workspace: Path, trampoline_channel: str
-) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+def test_trampoline_dot_in_exe(pixi: Path, tmp_path: Path, trampoline_channel: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
 
     # Expose binary with a dot in the name
     verify_cli_command(
@@ -166,19 +162,19 @@ def test_trampoline_dot_in_exe(
         env=env,
     )
 
-    exe_test = tmp_pixi_workspace / "bin" / exec_extension("exe.test")
+    exe_test = tmp_path / "bin" / exec_extension("exe.test")
     # The binary execute should succeed
     verify_cli_command([exe_test], stdout_contains="Success:")
 
 
 def test_trampoline_migrate_with_newer_trampoline(
-    pixi: Path, tmp_pixi_workspace: Path, trampoline_channel: str
+    pixi: Path, tmp_path: Path, trampoline_channel: str
 ) -> None:
     # this test will validate if new trampoline will migrate the older trampoline
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+    env = {"PIXI_HOME": str(tmp_path)}
 
     # create a dummy bin that will act as already installed package
-    dummy_trampoline = tmp_pixi_workspace / "bin" / exec_extension("dummy-trampoline")
+    dummy_trampoline = tmp_path / "bin" / exec_extension("dummy-trampoline")
     dummy_trampoline.parent.mkdir(exist_ok=True)
     dummy_trampoline.write_text("hello")
 
@@ -198,9 +194,7 @@ def test_trampoline_migrate_with_newer_trampoline(
     assert dummy_trampoline.is_file()
     assert is_binary(dummy_trampoline)
 
-    dummy_trampoline_json = (
-        tmp_pixi_workspace / "bin" / "trampoline_configuration" / "dummy-trampoline.json"
-    )
+    dummy_trampoline_json = tmp_path / "bin" / "trampoline_configuration" / "dummy-trampoline.json"
 
     assert dummy_trampoline_json.is_file()
     # run an update, it should say that everything is up to date
@@ -243,9 +237,9 @@ def test_trampoline_migrate_with_newer_trampoline(
 
 
 def test_trampoline_install_should_only_migrate_own_environment(
-    pixi: Path, tmp_pixi_workspace: Path, trampoline_channel: str
+    pixi: Path, tmp_path: Path, trampoline_channel: str
 ) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+    env = {"PIXI_HOME": str(tmp_path)}
 
     # now run install again, this time it should migrate the script to the new trampoline
     verify_cli_command(
@@ -261,13 +255,11 @@ def test_trampoline_install_should_only_migrate_own_environment(
         env=env,
     )
 
-    dummy_trampoline = tmp_pixi_workspace / "bin" / exec_extension("dummy-trampoline")
-    dummy_trampoline_2 = tmp_pixi_workspace / "bin" / exec_extension("dummy-trampoline-2")
-    dummy_trampoline_json = (
-        tmp_pixi_workspace / "bin" / "trampoline_configuration" / "dummy-trampoline.json"
-    )
+    dummy_trampoline = tmp_path / "bin" / exec_extension("dummy-trampoline")
+    dummy_trampoline_2 = tmp_path / "bin" / exec_extension("dummy-trampoline-2")
+    dummy_trampoline_json = tmp_path / "bin" / "trampoline_configuration" / "dummy-trampoline.json"
     dummy_trampoline_2_json = (
-        tmp_pixi_workspace / "bin" / "trampoline_configuration" / "dummy-trampoline-2.json"
+        tmp_path / "bin" / "trampoline_configuration" / "dummy-trampoline-2.json"
     )
 
     assert dummy_trampoline.is_file()
@@ -328,13 +320,13 @@ def test_trampoline_install_should_only_migrate_own_environment(
 
 
 def test_trampoline_migrate_with_newer_configuration(
-    pixi: Path, tmp_pixi_workspace: Path, trampoline_channel: str
+    pixi: Path, tmp_path: Path, trampoline_channel: str
 ) -> None:
     # this test will validate if new trampoline will migrate the older trampoline
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+    env = {"PIXI_HOME": str(tmp_path)}
 
     # create a dummy bin that will act as already installed package
-    dummy_trampoline = tmp_pixi_workspace / "bin" / exec_extension("dummy-trampoline")
+    dummy_trampoline = tmp_path / "bin" / exec_extension("dummy-trampoline")
     dummy_trampoline.parent.mkdir(exist_ok=True)
     dummy_trampoline.write_text("hello")
 
@@ -354,9 +346,7 @@ def test_trampoline_migrate_with_newer_configuration(
     assert dummy_trampoline.is_file()
     assert is_binary(dummy_trampoline)
 
-    dummy_trampoline_json = (
-        tmp_pixi_workspace / "bin" / "trampoline_configuration" / "dummy-trampoline.json"
-    )
+    dummy_trampoline_json = tmp_path / "bin" / "trampoline_configuration" / "dummy-trampoline.json"
 
     assert dummy_trampoline_json.is_file()
     # run an update, it should say that everything is up to date
@@ -404,13 +394,13 @@ def test_trampoline_migrate_with_newer_configuration(
 )
 def test_trampoline_extends_path(
     pixi: Path,
-    tmp_pixi_workspace: Path,
+    tmp_path: Path,
     trampoline_path_channel: str,
     extend_path_prefix_entry: bool,
 ) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+    env = {"PIXI_HOME": str(tmp_path)}
 
-    dummy_trampoline_path = tmp_pixi_workspace / "bin" / exec_extension("dummy-trampoline-path")
+    dummy_trampoline_path = tmp_path / "bin" / exec_extension("dummy-trampoline-path")
 
     original_path = os.environ["PATH"]
     env["PATH"] = original_path
@@ -418,7 +408,7 @@ def test_trampoline_extends_path(
 
     if extend_path_prefix_entry:
         # Extend PATH with prefix entry
-        prefix_bin = str(tmp_pixi_workspace.joinpath("envs", "dummy-trampoline-path", "bin"))
+        prefix_bin = str(tmp_path.joinpath("envs", "dummy-trampoline-path", "bin"))
         env["PATH"] = os.pathsep.join([prefix_bin, original_path])
 
     verify_cli_command(
@@ -435,7 +425,7 @@ def test_trampoline_extends_path(
 
     if extend_path_prefix_entry:
         dummy_trampoline_path_configuration = (
-            tmp_pixi_workspace / "bin" / "trampoline_configuration" / "dummy-trampoline-path.json"
+            tmp_path / "bin" / "trampoline_configuration" / "dummy-trampoline-path.json"
         )
         trampoline_metadata = json.loads(dummy_trampoline_path_configuration.read_text())
         assert prefix_bin in trampoline_metadata["path_diff"]
@@ -461,11 +451,11 @@ def test_trampoline_extends_path(
 
 
 def test_trampoline_removes_trampolines_not_in_manifest(
-    pixi: Path, tmp_pixi_workspace: Path, trampoline_channel: str
+    pixi: Path, tmp_path: Path, trampoline_channel: str
 ) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+    env = {"PIXI_HOME": str(tmp_path)}
 
-    dummy_trampoline_original = tmp_pixi_workspace / "bin" / exec_extension("dummy-trampoline")
+    dummy_trampoline_original = tmp_path / "bin" / exec_extension("dummy-trampoline")
 
     verify_cli_command(
         [
