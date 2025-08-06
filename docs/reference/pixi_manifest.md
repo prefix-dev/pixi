@@ -893,8 +893,8 @@ Preview features in the documentation will be marked as such on the relevant pag
     `pixi-build` is a preview feature, and will change until it is stabilized.
     Please keep that in mind when you use it for your workspaces.
 
-The package section is used to define the package that is built.
-You can add it to a workspace manifest to define the package that is built by Pixi.
+The package section can be added
+to a workspace manifest to define the package that is built by Pixi.
 
 A package section can be inside the manifest of a `workspace` or standalone.
 
