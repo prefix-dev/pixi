@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Callable, Generator
 
 import pytest
 
@@ -140,21 +139,3 @@ def external_commands_dir(tmp_path: Path) -> Path:
     commands_dir = tmp_path / "external_commands"
     commands_dir.mkdir()
     return commands_dir
-
-
-@pytest.fixture
-def git_test_repo(tmp_path: Path) -> Generator[Callable[[Path, str], GitTestRepo], None, None]:
-    """Create a git test repository with daemon for testing git-based installs."""
-    repos = []
-
-    def _create_git_repo(source_dir: Path, repo_name: str) -> GitTestRepo:
-        repo = GitTestRepo(source_dir, repo_name, tmp_path)
-        repo.setup()
-        repos.append(repo)
-        return repo
-
-    yield _create_git_repo
-
-    # Cleanup all repositories
-    for repo in repos:
-        repo.cleanup()

@@ -1,9 +1,8 @@
 from pathlib import Path
-from typing import Callable
 
 import pytest
-from ..common import verify_cli_command, exec_extension
-from ..test_utils.git_utils import GitTestRepo
+
+from ..common import exec_extension, git_test_repo, verify_cli_command
 
 MANIFEST_VERSION = 1
 
@@ -13,7 +12,6 @@ def test_install_git_repository_basic(
     pixi: Path,
     tmp_pixi_workspace: Path,
     test_data: Path,
-    git_test_repo: Callable[[Path, str], GitTestRepo],
 ) -> None:
     """Test installing a pixi project from a git repository."""
     # Make it one level deeper so that we do no pollute git with the global
@@ -33,8 +31,7 @@ def test_install_git_repository_basic(
     )
 
     # Create git repository and start daemon
-    git_repo = git_test_repo(source_project, "test-project")
-    git_url = git_repo.get_git_url()
+    git_url = git_test_repo(source_project, "test-project", tmp_pixi_workspace)
 
     # Test git install
     verify_cli_command(
@@ -44,7 +41,7 @@ def test_install_git_repository_basic(
             "install",
             "--git",
             git_url,
-            "python_rich",  # this is the command name
+            "python_rich",  # this is the package name
         ],
         env=env,
     )
@@ -91,7 +88,6 @@ def test_add_git_repository_to_existing_environment(
     pixi: Path,
     tmp_pixi_workspace: Path,
     test_data: Path,
-    git_test_repo: Callable[[Path, str], GitTestRepo],
 ) -> None:
     """Test adding a git-based source package to an existing global environment."""
     # Make it one level deeper so that we do no pollute git with the global
@@ -117,8 +113,7 @@ def test_add_git_repository_to_existing_environment(
     )
 
     # Create git repository and start daemon
-    git_repo = git_test_repo(source_project, "test-project")
-    git_url = git_repo.get_git_url()
+    git_url = git_test_repo(source_project, "test-project", tmp_pixi_workspace)
 
     # Test adding git package to existing environment
     verify_cli_command(
