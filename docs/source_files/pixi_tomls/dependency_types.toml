@@ -8,7 +8,7 @@ name = "simple_cpp"
 version = "0.1.0"
 
 [package.build]
-backend = { name = "pixi-build-cmake", version = "0.2.*" }
+backend = { name = "pixi-build-cmake", version = "0.3.*" }
 # --8<-- [start:dependencies]
 [package.build-dependencies]
 cxx-compiler = "*"
