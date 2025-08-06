@@ -1,5 +1,7 @@
 use std::fmt::{Debug, Formatter};
 
+use rattler_conda_types::VersionWithSource;
+
 pub mod in_memory;
 
 use in_memory::InMemoryBackend;
@@ -66,6 +68,13 @@ impl BackendImplementation {
             BackendImplementation::InMemory(in_memory) => in_memory.identifier(),
         }
     }
+
+    pub fn version(&self) -> Option<&VersionWithSource> {
+        match self {
+            BackendImplementation::JsonRpc(json_rpc) => json_rpc.version(),
+            BackendImplementation::InMemory(_) => None,
+        }
+    }
 }
 
 impl From<json_rpc::JsonRpcBackend> for BackendImplementation {
@@ -96,6 +105,12 @@ impl Backend {
         self.inner.identifier()
     }
 
+    /// Returns the version of the backend, if available. This is useful for
+    /// debugging purposes mostly.
+    pub fn version(&self) -> Option<&VersionWithSource> {
+        self.inner.version()
+    }
+
     /// Returns the capabilities of the backend. This takes into account both
     /// the actual capabilities of the backend and the API version that is in
     /// use.
@@ -105,6 +120,13 @@ impl Backend {
     /// some capabilities both not all for a particular API version.
     pub fn capabilities(&self) -> &BackendCapabilities {
         &self.capabilities
+    }
+
+    /// Returns the capabilities of the backend, without taking into account the
+    /// API version. This is only useful for debugging purposes. In most cases
+    /// [`Self::capabilities`] should be used instead.
+    pub fn backend_capabilities(&self) -> BackendCapabilities {
+        self.inner.capabilities()
     }
 
     /// Returns the API version that was used to establish the backend.

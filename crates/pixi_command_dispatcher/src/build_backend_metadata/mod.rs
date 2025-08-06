@@ -17,6 +17,7 @@ use pixi_spec::{SourceAnchor, SourceSpec};
 use rand::random;
 use rattler_conda_types::{ChannelConfig, ChannelUrl};
 use thiserror::Error;
+use tracing::instrument;
 
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
@@ -71,15 +72,18 @@ pub struct BuildBackendMetadata {
 }
 
 impl BuildBackendMetadataSpec {
+    #[instrument(
+        skip_all,
+        name="backend-metadata",
+        fields(
+            source = %self.source,
+            platform = %self.build_environment.host_platform,
+        )
+    )]
     pub(crate) async fn request(
         self,
         command_dispatcher: CommandDispatcher,
     ) -> Result<BuildBackendMetadata, CommandDispatcherError<BuildBackendMetadataError>> {
-        tracing::debug!(
-            "Requesting source metadata for source spec: {}",
-            self.source
-        );
-
         // Ensure that the source is checked out before proceeding.
         let source_checkout = command_dispatcher
             .checkout_pinned_source(self.source.clone())
@@ -142,7 +146,11 @@ impl BuildBackendMetadataSpec {
         // Based on the version of the backend, call the appropriate method to get
         // metadata.
         let source = source_checkout.pinned.clone();
-        let metadata = if backend.capabilities().provides_conda_outputs == Some(true) {
+        let metadata = if backend.capabilities().provides_conda_outputs() {
+            tracing::trace!(
+                "Using `{}` procedure to get metadata information",
+                pixi_build_types::procedures::conda_outputs::METHOD_NAME
+            );
             self.call_conda_outputs(
                 command_dispatcher,
                 source_checkout,
@@ -150,7 +158,11 @@ impl BuildBackendMetadataSpec {
                 project_model_hash,
             )
             .await?
-        } else if backend.capabilities().provides_conda_metadata == Some(true) {
+        } else if backend.capabilities().provides_conda_metadata() {
+            tracing::trace!(
+                "Using `{}` procedure to get metadata information",
+                pixi_build_types::procedures::conda_metadata::METHOD_NAME
+            );
             self.call_conda_get_metadata(
                 command_dispatcher,
                 source_checkout,
@@ -191,14 +203,18 @@ impl BuildBackendMetadataSpec {
             return Ok(None);
         };
 
-        tracing::debug!(
-            "Found source metadata in cache for source spec: {}",
-            source_checkout.pinned
-        );
+        let metadata_kind = match metadata.metadata {
+            MetadataKind::GetMetadata { .. } => {
+                pixi_build_types::procedures::conda_metadata::METHOD_NAME
+            }
+            MetadataKind::Outputs { .. } => {
+                pixi_build_types::procedures::conda_outputs::METHOD_NAME
+            }
+        };
 
         let Some(input_globs) = &metadata.input_hash else {
             // No input hash so just assume it is still valid.
-            tracing::debug!("found cached metadata.");
+            tracing::trace!("found cached `{metadata_kind}` response.");
             return Ok(Some(metadata));
         };
 
@@ -215,10 +231,10 @@ impl BuildBackendMetadataSpec {
             .map_err(CommandDispatcherError::Failed)?;
 
         if new_hash.hash == input_globs.hash {
-            tracing::debug!("found up-to-date cached metadata.");
+            tracing::trace!("found up-to-date cached `{metadata_kind}` response..");
             Ok(Some(metadata))
         } else {
-            tracing::debug!("found stale cached metadata.");
+            tracing::trace!("found stale `{metadata_kind}` response..");
             Ok(None)
         }
     }

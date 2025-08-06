@@ -49,16 +49,19 @@ pub struct SourceMetadata {
 }
 
 impl SourceMetadataSpec {
-    #[instrument(skip_all, fields(name = %self.package.as_source(), platform = %self.backend_metadata.build_environment.host_platform))]
+    #[instrument(
+        skip_all,
+        name = "source-metadata",
+        fields(
+            source= %self.backend_metadata.source,
+            name = %self.package.as_source(),
+            platform = %self.backend_metadata.build_environment.host_platform,
+        )
+    )]
     pub(crate) async fn request(
         self,
         command_dispatcher: CommandDispatcher,
     ) -> Result<SourceMetadata, CommandDispatcherError<SourceMetadataError>> {
-        tracing::debug!(
-            "Requesting source metadata from '{}'",
-            &self.backend_metadata.source
-        );
-
         // Get the metadata from the build backend.
         let build_backend_metadata = command_dispatcher
             .build_backend_metadata(self.backend_metadata.clone())
