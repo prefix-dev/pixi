@@ -2,7 +2,69 @@ from pathlib import Path
 
 import pytest
 
-from ..common import exec_extension, git_test_repo, verify_cli_command
+from ..common import ExitCode, exec_extension, git_test_repo, verify_cli_command
+
+
+@pytest.mark.slow
+def test_install_multi_output(
+    pixi: Path,
+    tmp_path: Path,
+    test_data: Path,
+) -> None:
+    """Test installing a pixi project from a git repository."""
+    # Make it one level deeper so that we do no pollute git with the global
+    pixi_home = tmp_path / "pixi_home"
+    env = {"PIXI_HOME": str(pixi_home)}
+
+    # Specify the project
+    source_project = test_data.joinpath("pixi-build", "multi-output")
+
+    # Test install without any specs mentioned
+    # It should tell you which outputs are available
+    verify_cli_command(
+        [pixi, "global", "install", "--path", source_project],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains=["multiple outputs", "foobar", "bizbar", "foobar-desktop"],
+    )
+
+    # Test install and explicitly requesting `foobar-desktop`
+    verify_cli_command(
+        [pixi, "global", "install", "--path", source_project, "foobar-desktop"], env=env
+    )
+
+    # Check that the package was installed
+    foobar_desktop = pixi_home / "bin" / exec_extension("foobar-desktop")
+    assert foobar_desktop.exists(), "`foobar-desktop` executable was not created"
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("package_name", [None, "python_rich"])
+def test_install_path_dependency_basic(
+    pixi: Path,
+    tmp_path: Path,
+    test_data: Path,
+    package_name: str | None,
+) -> None:
+    """Test installing a pixi project from a git repository."""
+    # Make it one level deeper so that we do no pollute git with the global
+    pixi_home = tmp_path / "pixi_home"
+    env = {"PIXI_HOME": str(pixi_home)}
+
+    # Specify the project
+    source_project = test_data.joinpath("pixi-build", "simple-python")
+
+    # Build command based on whether package name is provided
+    cmd: list[str | Path] = [pixi, "global", "install", "--path", source_project]
+    if package_name:
+        cmd.append(package_name)
+
+    # Test install
+    verify_cli_command(cmd, env=env)
+
+    # Check that the package was installed
+    main = pixi_home / "bin" / exec_extension("rich-example-main")
+    assert main.exists(), "`rich-example-main` executable was not created"
 
 
 @pytest.mark.slow
@@ -18,10 +80,8 @@ def test_install_git_repository_basic(
     pixi_home = tmp_path / "pixi_home"
     env = {"PIXI_HOME": str(pixi_home)}
 
-    # Use the test-project-export as our source
-    source_project = test_data.parents[1].joinpath(
-        "docs", "source_files", "pixi_workspaces", "pixi_build", "python"
-    )
+    # Specify the project
+    source_project = test_data.joinpath("pixi-build", "simple-python")
 
     # Create git repository
     git_url = git_test_repo(source_project, "test-project", tmp_path)
@@ -88,12 +148,10 @@ def test_add_git_repository_to_existing_environment(
         env=env,
     )
 
-    # Use the test-project-export as our source
-    source_project = test_data.parents[1].joinpath(
-        "docs", "source_files", "pixi_workspaces", "pixi_build", "python"
-    )
+    # Specify the source
+    source_project = test_data.joinpath("pixi-build", "simple-python")
 
-    # Create git repository and start daemon
+    # Create git repository
     git_url = git_test_repo(source_project, "test-project", tmp_path)
 
     # Test adding git package to existing environment
