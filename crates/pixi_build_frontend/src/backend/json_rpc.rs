@@ -155,7 +155,6 @@ impl JsonRpcBackend {
         let command = tool.command();
         let program_name = command.get_program().to_string_lossy().into_owned();
         let mut process = match tokio::process::Command::from(command)
-            .current_dir(&source_dir)
             .stdout(std::process::Stdio::piped())
             .stdin(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
