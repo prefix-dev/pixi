@@ -69,7 +69,7 @@ pixi import [OPTIONS] <FILE>
 ## Description
 Imports a file into an environment in an existing workspace.
 
-If `--format` isn't provided, `import` will try to guess the format based on the file extension.
+If `--format` isn't provided, `import` will try each format in turn
 
 
 --8<-- "docs/reference/cli/pixi/import_extender:example"

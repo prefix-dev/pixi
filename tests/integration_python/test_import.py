@@ -802,6 +802,8 @@ cowpy==1.1.4
                 "--format=pypi-txt",
                 "--feature=complex-env",
             ],
+            # `-c` constraints should be warned about and ignored
+            stderr_contains=["Constraints detected"],
         )
         parsed_manifest = tomllib.loads(manifest_path.read_text())
         assert parsed_manifest == snapshot(
@@ -812,11 +814,7 @@ cowpy==1.1.4
                 "dependencies": {},
                 "feature": {
                     "complex-env": {
-                        "pypi-dependencies": {
-                            "cowpy": "==1.1.4",
-                            "array-api-extra": "*",
-                            "numpy": "<2",
-                        }
+                        "pypi-dependencies": {"cowpy": "==1.1.4", "array-api-extra": "*"}
                     }
                 },
                 "environments": {

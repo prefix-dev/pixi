@@ -8,6 +8,7 @@ use pixi_utils::conda_environment_file::CondaEnvFile;
 use pixi_uv_conversions::convert_uv_requirements_to_pep508;
 use rattler_conda_types::Platform;
 
+use tracing::warn;
 use uv_client::BaseClientBuilder;
 use uv_requirements_txt::RequirementsTxt;
 
@@ -91,7 +92,7 @@ fn get_feature_and_environment(
     feature_arg: &Option<String>,
     environment_arg: &Option<String>,
     fallback: impl Fn() -> Result<String, MissingEnvironmentName>,
-) -> Result<(String, String), miette::Report> {
+) -> Result<(FeatureName, EnvironmentName), miette::Report> {
     let feature_string = match (feature_arg, environment_arg) {
         (Some(f), _) => f.clone(),
         (_, Some(e)) => e.clone(),
@@ -104,26 +105,30 @@ fn get_feature_and_environment(
         _ => fallback()?,
     };
 
-    Ok((feature_string, environment_string))
+    Ok((
+        FeatureName::from(feature_string),
+        EnvironmentName::from_str(&environment_string)?,
+    ))
 }
 
 fn convert_uv_requirements_txt_to_pep508(
     reqs_txt: uv_requirements_txt::RequirementsTxt,
 ) -> Result<Vec<pep508_rs::Requirement>, miette::Error> {
-    let mut uv_requirements: Vec<uv_pep508::Requirement<uv_pypi_types::VerbatimParsedUrl>> =
-        reqs_txt
-            .requirements
-            .into_iter()
-            .map(|r| match r.requirement {
-                uv_requirements_txt::RequirementsTxtRequirement::Named(req) => Ok(req),
-                uv_requirements_txt::RequirementsTxtRequirement::Unnamed(_) => {
-                    Err(miette::miette!(
-                        "Error parsing input file: unnamed requirements are currently unsupported."
-                    ))
-                }
-            })
-            .collect::<Result<_, _>>()?;
-    uv_requirements.extend(reqs_txt.constraints);
+    let uv_requirements: Vec<uv_pep508::Requirement<uv_pypi_types::VerbatimParsedUrl>> = reqs_txt
+        .requirements
+        .into_iter()
+        .map(|r| match r.requirement {
+            uv_requirements_txt::RequirementsTxtRequirement::Named(req) => Ok(req),
+            uv_requirements_txt::RequirementsTxtRequirement::Unnamed(_) => Err(miette::miette!(
+                "Error parsing input file: unnamed requirements are currently unsupported."
+            )),
+        })
+        .collect::<Result<_, _>>()?;
+    if !reqs_txt.constraints.is_empty() {
+        warn!(
+            "Constraints detected in input file, but these are currently unsupported. Continuing without applying constraints..."
+        )
+    }
 
     let requirements =
         convert_uv_requirements_to_pep508(uv_requirements.iter()).into_diagnostic()?;
@@ -147,7 +152,12 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
 
     // TODO: add dry_run logic to import
 
-    let (env_file, feature_string, environment_string) = match format {
+    enum ProcessedInput {
+        CondaEnv(CondaEnvFile),
+        PypiTxt,
+    }
+
+    let (processed_input, feature_name, environment_name) = match format {
         ImportFileFormat::CondaEnv => {
             let env_file = CondaEnvFile::from_path(&input_file)?;
             let fallback = || {
@@ -156,20 +166,23 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
                     .map(|s| s.to_string())
                     .ok_or(MissingEnvironmentName)
             };
-            let (feature_string, environment_string) =
+            let (feature_name, environment_name) =
                 get_feature_and_environment(&args.feature, &args.environment, fallback)?;
-            (Some(env_file), feature_string, environment_string)
+
+            (
+                ProcessedInput::CondaEnv(env_file),
+                feature_name,
+                environment_name,
+            )
         }
         ImportFileFormat::PypiTxt => {
-            let (feature_string, environment_string) =
+            let (feature_name, environment_name) =
                 get_feature_and_environment(&args.feature, &args.environment, || {
                     Err(MissingEnvironmentName)
                 })?;
-            (None, feature_string, environment_string)
+            (ProcessedInput::PypiTxt, feature_name, environment_name)
         }
     };
-
-    let feature_name = FeatureName::from(feature_string.clone());
 
     // Add the platforms if they are not already present
     if !platforms.is_empty() {
@@ -178,14 +191,13 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
             .add_platforms(platforms.iter(), &feature_name)?;
     }
 
-    let (conda_deps, pypi_deps) = match format {
-        ImportFileFormat::CondaEnv => {
+    let (conda_deps, pypi_deps) = match processed_input {
+        ProcessedInput::CondaEnv(env_file) => {
             // TODO: handle `variables` section
             // let env_vars = file.variables();
 
             // TODO: Improve this:
             //  - Use .condarc as channel config
-            let env_file = env_file.expect("Some is returned for CondaEnv");
             let (conda_deps, pypi_deps, channels) = env_file.to_manifest(&config.clone())?;
             workspace.manifest().add_channels(
                 channels.iter().map(|c| PrioritizedChannel::from(c.clone())),
@@ -195,7 +207,7 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
 
             (conda_deps, pypi_deps)
         }
-        ImportFileFormat::PypiTxt => {
+        ProcessedInput::PypiTxt => {
             let reqs_txt = RequirementsTxt::parse(
                 &input_file,
                 workspace.workspace().root(),
@@ -211,15 +223,12 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
 
     workspace.add_specs(conda_deps, pypi_deps, &platforms, &feature_name)?;
 
-    match workspace
-        .workspace()
-        .environment(&EnvironmentName::from_str(&environment_string)?)
-    {
+    match workspace.workspace().environment(&environment_name) {
         None => {
             // add environment if it does not already exist
             workspace.manifest().add_environment(
-                environment_string.clone(),
-                Some(vec![feature_string.clone()]),
+                environment_name.to_string(),
+                Some(vec![feature_name.to_string()]),
                 None,
                 true,
             )?;
@@ -232,7 +241,7 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
                     let features = env
                         .features()
                         .map(|f| f.name.as_str().to_string())
-                        .chain(std::iter::once(feature_string))
+                        .chain(std::iter::once(feature_name.to_string()))
                         .collect();
                     Some(features)
                 };
