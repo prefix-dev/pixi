@@ -46,6 +46,11 @@ macro_rules! assert_discover_snapshot {
     };
 }
 
+/// A test to check what discovery looks like for different use cases.
+///
+/// The test cases are located in the `tests/data/discovery` directory. Every
+/// directory (or subdirectory) that contains a file TEST-CASE is used as a
+/// test case.
 #[test]
 fn test_discovery() {
     glob!("../../../tests/data/discovery", "**/TEST-CASE", |path| {

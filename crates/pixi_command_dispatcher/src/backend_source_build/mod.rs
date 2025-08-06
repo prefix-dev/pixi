@@ -189,7 +189,7 @@ impl BackendSourceBuildSpec {
                     variant_configuration: params
                         .variants
                         .map(|variants| variants.into_iter().collect()),
-                    work_directory,
+                    work_directory: work_directory.clone(),
                     host_platform: Some(PlatformAndVirtualPackages {
                         platform: params.build_environment.host_platform,
                         virtual_packages: Some(
@@ -255,9 +255,21 @@ impl BackendSourceBuildSpec {
             ));
         };
 
+        // Resolve the output file path relative to the work directory if it's relative
+        let output_file = if built_package.output_file.is_relative() {
+            // Rattler-build creates a "work" subdirectory inside the work directory
+            // The output path is relative to this "work" subdirectory
+            let rattler_work_dir = work_directory.join("work");
+            let joined_path = rattler_work_dir.join(built_package.output_file);
+            // Normalize the path by canonicalizing if possible, otherwise just use as-is
+            joined_path.canonicalize().unwrap_or(joined_path)
+        } else {
+            built_package.output_file
+        };
+
         Ok(BackendBuiltSource {
             input_globs: built_package.input_globs,
-            output_file: built_package.output_file,
+            output_file,
         })
     }
 
@@ -307,7 +319,7 @@ impl BackendSourceBuildSpec {
                             .expect("found a package record with an unparsable subdir"),
                         variant: params.variant,
                     },
-                    work_directory,
+                    work_directory: work_directory.clone(),
                     output_directory: params.output_directory,
                     editable: Some(params.editable),
                 },
@@ -338,9 +350,21 @@ impl BackendSourceBuildSpec {
             ));
         };
 
+        // Resolve the output file path relative to the work directory if it's relative
+        let output_file = if built_package.output_file.is_relative() {
+            // Rattler-build creates a "work" subdirectory inside the work directory
+            // The output path is relative to this "work" subdirectory
+            let rattler_work_dir = work_directory.join("work");
+            let joined_path = rattler_work_dir.join(built_package.output_file);
+            // Normalize the path by canonicalizing if possible, otherwise just use as-is
+            joined_path.canonicalize().unwrap_or(joined_path)
+        } else {
+            built_package.output_file
+        };
+
         Ok(BackendBuiltSource {
             input_globs: built_package.input_globs,
-            output_file: built_package.output_file,
+            output_file,
         })
     }
 }
