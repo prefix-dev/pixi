@@ -78,8 +78,16 @@ impl CommandDispatcherProcessor {
     fn queue_source_build_task(&mut self, source_build_id: SourceBuildId, spec: SourceBuildSpec) {
         let dispatcher = self
             .create_task_command_dispatcher(CommandDispatcherContext::SourceBuild(source_build_id));
+
+        let dispatcher_context = CommandDispatcherContext::SourceBuild(source_build_id);
+        let reporter_context = self.reporter_context(dispatcher_context);
+        let run_exports_reporter = self
+            .reporter
+            .as_mut()
+            .and_then(|reporter| reporter.create_run_exports_reporter(reporter_context));
+
         self.pending_futures.push(
-            spec.build(dispatcher)
+            spec.build(dispatcher, run_exports_reporter)
                 .map(move |result| TaskResult::SourceBuild(source_build_id, result))
                 .boxed_local(),
         );
