@@ -9,7 +9,6 @@ version = "0.1.0"
 
 [package.build]
 backend = { name = "pixi-build-cmake", version = "0.2.*" }
-channels = ["https://prefix.dev/conda-forge"]
 # --8<-- [start:dependencies]
 [package.build-dependencies]
 cxx-compiler = "*"
