@@ -6,7 +6,6 @@ preview = ["pixi-build"]
 [dependencies]
 python_rich = { path = "." }
 
-
 [tasks]
 start = "rich-example-main"
 
