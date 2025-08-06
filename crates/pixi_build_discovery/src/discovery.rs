@@ -12,7 +12,7 @@ use pixi_manifest::{
     DiscoveryStart, ExplicitManifestError, PackageManifest, PrioritizedChannel, WithProvenance,
     WorkspaceDiscoverer, WorkspaceDiscoveryError, WorkspaceManifest,
 };
-use pixi_spec::SpecConversionError;
+use pixi_spec::{SourceSpec, SpecConversionError};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::ChannelConfig;
 use thiserror::Error;
@@ -240,40 +240,26 @@ impl DiscoveredBackend {
         };
 
         // Check if the package build configuration specifies a custom source path
-        let (actual_source_dir, manifest_relative_path) = if let Some(src_spec) = &build_system.src
+        let (actual_source_dir, manifest_relative_path) = if let Some(SourceSpec::Path(path_spec)) =
+            &build_system.src
         {
-            match src_spec {
-                pixi_spec::SourceSpec::Path(path_spec) => {
-                    // Resolve the custom source path relative to the manifest directory
-                    let manifest_dir = provenance
-                        .path
-                        .parent()
-                        .expect("manifest must have a parent directory");
-                    let custom_source_dir = path_spec.resolve(manifest_dir).map_err(|e| {
-                        SpecConversionError::InvalidPath(format!(
-                            "Failed to resolve source path: {}",
-                            e
-                        ))
-                    })?;
+            let manifest_dir = provenance
+                .path
+                .parent()
+                .expect("manifest must have a parent directory");
+            let custom_source_dir = path_spec.resolve(manifest_dir).map_err(|e| {
+                SpecConversionError::InvalidPath(format!("Failed to resolve source path: {}", e))
+            })?;
 
-                    // The actual source directory is the custom path
-                    // The manifest path is relative from the custom source to the manifest
-                    let manifest_path = pathdiff::diff_paths(&provenance.path, &custom_source_dir)
-                        .unwrap_or_else(|| {
-                            // If we can't create a relative path, use an absolute path
-                            provenance.path.clone()
-                        });
+            // The actual source directory is the custom path
+            // The manifest path is relative from the custom source to the manifest
+            let manifest_path = pathdiff::diff_paths(&provenance.path, &custom_source_dir)
+                .unwrap_or_else(|| {
+                    // If we can't create a relative path, use an absolute path
+                    provenance.path.clone()
+                });
 
-                    (custom_source_dir, manifest_path)
-                }
-                _ => {
-                    // For non-path specs, use the original logic
-                    let manifest_path = pathdiff::diff_paths(&provenance.path, &source_dir).expect(
-                        "must be able to construct a path to go from source dir to manifest path",
-                    );
-                    (source_dir, manifest_path)
-                }
-            }
+            (custom_source_dir, manifest_path)
         } else {
             // No custom source path, use the original logic
             let manifest_path = pathdiff::diff_paths(&provenance.path, &source_dir)
