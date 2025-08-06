@@ -4,8 +4,6 @@ import pytest
 
 from ..common import exec_extension, git_test_repo, verify_cli_command
 
-MANIFEST_VERSION = 1
-
 
 @pytest.mark.slow
 def test_install_git_repository_basic(
