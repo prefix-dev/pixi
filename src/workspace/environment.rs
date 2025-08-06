@@ -623,6 +623,55 @@ mod tests {
         );
     }
 
+     #[test]
+    fn test_activation_env_priority() {
+        let manifest = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+            [project]
+            name = "foobar"
+            channels = []
+            platforms = ["linux-64", "osx-64"]
+
+            [activation.env]
+            FOO_VAR = "default"
+
+            [feature.foo.activation.env]
+            FOO_VAR = "foo"
+
+            [feature.cuda.activation.env]
+            FOO_VAR = "cuda"
+
+            [environments]
+            foo = ["foo"]
+            cuda = ["cuda"] 
+            "#,
+        )
+        .unwrap();
+
+        let default_env = manifest.default_environment();
+        let foo_env = manifest.environment("foo").unwrap();
+        let cuda_env = manifest.environment("cuda").unwrap();
+          assert_eq!(
+            default_env.activation_env(None),
+            indexmap! {
+                "FOO_VAR".to_string() => "default",
+            }
+        );
+        assert_eq!(
+            foo_env.activation_env(None),
+            indexmap! {
+                "FOO_VAR".to_string() => "foo",
+            }
+        );
+        assert_eq!(
+            cuda_env.activation_env(None),
+            indexmap! {
+                "FOO_VAR".to_string() => "cuda",
+            }
+        );
+    }
+
     #[test]
     fn test_channel_feature_priority() {
         let manifest = Workspace::from_str(
