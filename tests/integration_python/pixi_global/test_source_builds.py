@@ -6,10 +6,12 @@ from ..common import exec_extension, git_test_repo, verify_cli_command
 
 
 @pytest.mark.slow
+@pytest.mark.parametrize("package_name", [None, "python_rich"])
 def test_install_git_repository_basic(
     pixi: Path,
     tmp_path: Path,
     test_data: Path,
+    package_name: str | None,
 ) -> None:
     """Test installing a pixi project from a git repository."""
     # Make it one level deeper so that we do no pollute git with the global
@@ -21,21 +23,16 @@ def test_install_git_repository_basic(
         "docs", "source_files", "pixi_workspaces", "pixi_build", "python"
     )
 
-    # Create git repository and start daemon
+    # Create git repository
     git_url = git_test_repo(source_project, "test-project", tmp_path)
 
+    # Build command based on whether package name is provided
+    cmd: list[str | Path] = [pixi, "global", "install", "--git", git_url]
+    if package_name:
+        cmd.append(package_name)
+
     # Test git install
-    verify_cli_command(
-        [
-            pixi,
-            "global",
-            "install",
-            "--git",
-            git_url,
-            "python_rich",  # this is the package name
-        ],
-        env=env,
-    )
+    verify_cli_command(cmd, env=env)
 
     # Check that the package was installed
     main = pixi_home / "bin" / exec_extension("rich-example-main")
@@ -92,15 +89,8 @@ def test_add_git_repository_to_existing_environment(
     )
 
     # Use the test-project-export as our source
-    source_project = (
-        test_data
-        / ".."
-        / ".."
-        / "docs"
-        / "source_files"
-        / "pixi_workspaces"
-        / "pixi_build"
-        / "python"
+    source_project = test_data.parents[1].joinpath(
+        "docs", "source_files", "pixi_workspaces", "pixi_build", "python"
     )
 
     # Create git repository and start daemon
