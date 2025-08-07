@@ -2,7 +2,6 @@ version: 6
 environments:
   default:
     channels:
-    - url: https://prefix.dev/pixi-build-backends/
     - url: https://prefix.dev/conda-forge/
     packages:
       linux-64:
@@ -117,7 +116,6 @@ environments:
         build: py312h24e4973_0
   py311:
     channels:
-    - url: https://prefix.dev/pixi-build-backends/
     - url: https://prefix.dev/conda-forge/
     packages:
       linux-64:
@@ -232,7 +230,6 @@ environments:
         build: py311h02d16ec_0
   py312:
     channels:
-    - url: https://prefix.dev/pixi-build-backends/
     - url: https://prefix.dev/conda-forge/
     packages:
       linux-64:

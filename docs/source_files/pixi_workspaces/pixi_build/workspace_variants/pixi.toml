@@ -35,7 +35,7 @@ name = "python_rich"
 version = "0.1.0"
 
 [package.build]
-backend = { name = "pixi-build-python", version = "0.3.2" }
+backend = { name = "pixi-build-python", version = "==0.3.2" }
 
 [package.host-dependencies]
 hatchling = "==1.26.3"
