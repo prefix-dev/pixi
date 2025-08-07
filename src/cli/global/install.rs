@@ -102,7 +102,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .collect_vec();
 
     let env_to_specs: IndexMap<EnvironmentName, Vec<NamedGlobalSpec>> = match &args.environment {
-        Some(env_name) => IndexMap::from_iter(std::iter::once((env_name.clone(), specs))),
+        Some(env_name) => IndexMap::from([(env_name.clone(), specs)]),
         None => specs
             .into_iter()
             .map(|spec| {
