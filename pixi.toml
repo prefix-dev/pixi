@@ -17,6 +17,7 @@ git = "==2.49.0"
 python = "3.13.*"
 
 [tasks]
+bla = "ls"
 build-debug = "cargo build"
 build-release = "cargo build --release"
 bump = "tbump --only-patch $RELEASE_VERSION"

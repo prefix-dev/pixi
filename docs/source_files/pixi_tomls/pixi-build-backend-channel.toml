@@ -1,6 +1,16 @@
+[workspace]
+channels = []
+platforms = []
+preview = ["pixi-build"]
+
+# --8<-- [start:build]
 [package.build]
-backend = { name = "pixi-build-python", version = "0.3.*" }
+backend = { name = "pixi-build-python", version = "==0.3.2" }
 channels = [
   "https://prefix.dev/pixi-build-backends",
   "https://prefix.dev/conda-forge",
 ]
+# --8<-- [end:build]
+[package]
+name = "pixi-build-backend-channel"
+version = "0.1.0"

@@ -15,7 +15,7 @@ Install a certain build backend by adding it to the `package.build` section of t
 
 For custom backend channels, you can add the channel to the `channels` section of the manifest file:
 ```toml
---8<-- "docs/source_files/pixi_tomls/pixi-build-backend-channel.toml"
+--8<-- "docs/source_files/pixi_tomls/pixi-build-backend-channel.toml:build"
 ```
 
 
