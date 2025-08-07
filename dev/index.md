@@ -26,7 +26,7 @@ Project setup is a breeze with Pixi.
 pixi init hello-world
 cd hello-world
 pixi add python
-pixi run python -c "print('Hello World!')"
+pixi run python -c 'print("Hello World!")'
 
 ```
 
