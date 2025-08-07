@@ -147,9 +147,8 @@ impl<'a> UvBuildDispatchParams<'a> {
     }
 
     /// Set the exclude newer options for the build dispatch
-    #[allow(dead_code)]
-    pub fn with_exclude_newer(mut self, exclude_newer: Option<ExcludeNewer>) -> Self {
-        self.exclude_newer = exclude_newer;
+    pub fn with_exclude_newer(mut self, exclude_newer: ExcludeNewer) -> Self {
+        self.exclude_newer = Some(exclude_newer);
         self
     }
 

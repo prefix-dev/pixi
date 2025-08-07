@@ -1,6 +1,7 @@
 use std::{collections::HashMap, path::Path, sync::Arc};
 
 use crate::environment::{ContinuePyPIPrefixUpdate, on_python_interpreter_change};
+use chrono::{DateTime, Utc};
 use conda_pypi_clobber::PypiCondaClobberRegistry;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
@@ -14,6 +15,7 @@ use pixi_progress::await_in_progress;
 use pixi_record::PixiRecord;
 use pixi_uv_conversions::{
     BuildIsolation, locked_indexes_to_index_locations, pypi_options_to_build_options,
+    to_exclude_newer, to_index_strategy,
 };
 use plan::{InstallPlanner, InstallReason, NeedReinstall, PyPIInstallationPlan};
 use pypi_modifiers::{
@@ -28,7 +30,7 @@ use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBui
 use uv_configuration::{
     BuildOptions, ConfigSettings, Constraints, IndexStrategy, PackageConfigSettings,
 };
-use uv_dispatch::{BuildDispatch, SharedState};
+use uv_dispatch::BuildDispatch;
 use uv_distribution::{BuiltWheelIndex, DistributionDatabase, RegistryWheelIndex};
 use uv_distribution_types::{
     CachedDist, DependencyMetadata, Dist, ExtraBuildRequires, IndexLocations, IndexUrl,
@@ -37,9 +39,7 @@ use uv_distribution_types::{
 use uv_install_wheel::LinkMode;
 use uv_installer::{Preparer, SitePackages, UninstallError};
 use uv_python::{Interpreter, PythonEnvironment};
-use uv_resolver::FlatIndex;
-use uv_types::HashStrategy;
-use uv_workspace::WorkspaceCache;
+use uv_resolver::{ExcludeNewer, FlatIndex};
 
 use crate::{
     install_pypi::plan::{CachedWheels, RequiredDists},
@@ -68,6 +68,8 @@ pub struct PyPIBuildConfig<'a> {
     pub no_build_isolation: &'a NoBuildIsolation,
     pub no_build: &'a NoBuild,
     pub no_binary: &'a NoBinary,
+    pub index_strategy: Option<&'a pixi_manifest::pypi::pypi_options::IndexStrategy>,
+    pub exclude_newer: Option<&'a DateTime<Utc>>,
 }
 
 /// Configuration for PyPI context, grouping uv and environment settings
@@ -87,6 +89,10 @@ struct UvInstallerConfig {
     config_settings: ConfigSettings,
     venv: PythonEnvironment,
     build_isolation: BuildIsolation,
+    constraints: Constraints,
+    index_strategy: IndexStrategy,
+    dependency_metadata: DependencyMetadata,
+    exclude_newer: ExcludeNewer,
 }
 
 /// High-level interface for PyPI environment updates that handles all complexity internally
@@ -254,6 +260,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
 
         // Create a Python environment
         let venv = PythonEnvironment::from_interpreter(interpreter);
+        let constraints = Constraints::default();
 
         // Determine isolated packages based on input, converting names.
         let build_isolation = self
@@ -262,6 +269,13 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             .clone()
             .try_into()
             .into_diagnostic()?;
+
+        let index_strategy = to_index_strategy(self.build_config.index_strategy);
+        let exclude_newer = self
+            .build_config
+            .exclude_newer
+            .map(|d| to_exclude_newer(d.clone()))
+            .unwrap_or(ExcludeNewer::default());
 
         Ok(UvInstallerConfig {
             tags,
@@ -272,6 +286,10 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             config_settings,
             venv,
             build_isolation,
+            constraints,
+            index_strategy,
+            dependency_metadata: DependencyMetadata::default(),
+            exclude_newer,
         })
     }
 
@@ -302,7 +320,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             &self.context_config.uv_context.cache,
             &setup.tags,
             &setup.index_locations,
-            &HashStrategy::None,
+            &self.context_config.uv_context.hash_strategy,
             &setup.config_settings,
         );
         // These were added in 0.8.2, we might want to support these
@@ -312,7 +330,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         let built_wheel_index = BuiltWheelIndex::new(
             &self.context_config.uv_context.cache,
             &setup.tags,
-            &HashStrategy::None,
+            &self.context_config.uv_context.hash_strategy,
             &setup.config_settings,
             &package_settings,
             &extra_build_requires,
@@ -589,8 +607,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             .with_starting_tasks(remote.iter().map(|(d, _)| format!("{}", d.name())))
             .with_top_level_message("Preparing distributions");
 
-        let dependency_metadata = DependencyMetadata::default();
-        let build_dispatch = self.create_build_dispatch(&dependency_metadata, setup);
+        let build_dispatch = self.create_build_dispatch(&setup);
 
         let distribution_database = DistributionDatabase::new(
             setup.registry_client.as_ref(),
@@ -639,24 +656,21 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
 
     fn create_build_dispatch<'setup>(
         &'setup self,
-        dependency_metadata: &'setup DependencyMetadata,
         setup: &'setup UvInstallerConfig,
     ) -> BuildDispatch<'setup>
     where
         'a: 'setup,
     {
-        static EMPTY_CONSTRAINTS: std::sync::LazyLock<Constraints> =
-            std::sync::LazyLock::new(|| Constraints::default());
         BuildDispatch::new(
             &setup.registry_client,
             &self.context_config.uv_context.cache,
-            &*EMPTY_CONSTRAINTS,
+            &setup.constraints,
             setup.venv.interpreter(),
             &setup.index_locations,
             &setup.flat_index,
-            dependency_metadata,
-            SharedState::default(),
-            IndexStrategy::default(),
+            &setup.dependency_metadata,
+            self.context_config.uv_context.shared_state.fork(),
+            setup.index_strategy,
             &setup.config_settings,
             &self.context_config.uv_context.package_config_settings,
             setup.build_isolation.to_uv(&setup.venv),
@@ -664,9 +678,9 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             LinkMode::default(),
             &setup.build_options,
             &self.context_config.uv_context.hash_strategy,
-            uv_resolver::ExcludeNewer::default(),
+            setup.exclude_newer.clone(),
             self.context_config.uv_context.source_strategy,
-            WorkspaceCache::default(),
+            self.context_config.uv_context.workspace_cache.clone(),
             self.context_config.uv_context.concurrency,
             self.context_config.uv_context.preview,
         )

@@ -473,6 +473,7 @@ pub async fn resolve_pypi(
         &context.hash_strategy,
     )
     .with_index_strategy(index_strategy)
+    .with_exclude_newer(options.exclude_newer.clone())
     // Create a forked shared state that condains the in-memory index.
     // We need two in-memory indexes, one for the build dispatch and one for the
     // resolver. because we manually override requests for the resolver,

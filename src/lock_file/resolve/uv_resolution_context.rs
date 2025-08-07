@@ -5,6 +5,7 @@ use uv_configuration::{Concurrency, PackageConfigSettings, Preview, SourceStrate
 use uv_dispatch::SharedState;
 use uv_distribution_types::{ExtraBuildRequires, IndexCapabilities};
 use uv_types::{HashStrategy, InFlight};
+use uv_workspace::WorkspaceCache;
 
 use crate::Workspace;
 use pixi_config::{self, get_cache_dir};
@@ -29,6 +30,7 @@ pub struct UvResolutionContext {
     pub package_config_settings: PackageConfigSettings,
     pub extra_build_requires: ExtraBuildRequires,
     pub preview: Preview,
+    pub workspace_cache: WorkspaceCache,
 }
 
 impl UvResolutionContext {
@@ -83,6 +85,7 @@ impl UvResolutionContext {
             package_config_settings: PackageConfigSettings::default(),
             extra_build_requires: ExtraBuildRequires::default(),
             preview: Preview::default(),
+            workspace_cache: WorkspaceCache::default(),
         })
     }
 
