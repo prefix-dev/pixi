@@ -74,11 +74,11 @@ pub struct CacheArgs {
     #[arg(long)]
     pub repodata: bool,
 
-    /// Clean only the build backends envs cache.
+    /// Clean only the build backends environments cache.
     #[arg(long)]
     pub build_backends: bool,
 
-    /// Clean only the pixi-build cache
+    /// Clean only the build related cache
     #[arg(long)]
     pub build: bool,
 
@@ -151,7 +151,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         remove_folder_with_progress(workspace.solve_group_environments_dir(), false).await?;
         remove_folder_with_progress(workspace.task_cache_folder(), false).await?;
         remove_folder_with_progress(workspace.activation_env_cache_folder(), false).await?;
-        remove_folder_with_progress(workspace.pixi_dir(), false).await?;
+        remove_folder_with_progress(workspace.pixi_dir().join(consts::WORKSPACE_CACHE_DIR), false).await?;
     }
     Ok(())
 }
@@ -184,6 +184,7 @@ async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
     }
     if args.build {
         dirs.push(cache_dir.join(consts::CACHED_GIT_DIR));
+        dirs.push(cache_dir.join(consts::CACHED_BUILD_TOOL_ENVS_DIR));
         dirs.push(cache_dir.join(consts::CACHED_BUILD_WORK_DIR));
         dirs.push(cache_dir.join(consts::CACHED_BUILD_BACKENDS));
         dirs.push(cache_dir.join(consts::CACHED_SOURCE_BUILDS));
