@@ -49,8 +49,6 @@ pub enum GlobalSpecsConversionError {
         help = "Use a full package specification like `python==3.12` instead of just `==3.12`"
     )]
     NameRequired,
-    #[error("specs cannot be empty if git or path is not specified")]
-    SpecsMissing,
 }
 
 impl GlobalSpecs {
@@ -59,10 +57,6 @@ impl GlobalSpecs {
         &self,
         channel_config: &ChannelConfig,
     ) -> Result<Vec<GlobalSpec>, GlobalSpecsConversionError> {
-        if self.specs.is_empty() && self.git.is_none() && self.path.is_none() {
-            return Err(GlobalSpecsConversionError::SpecsMissing);
-        }
-
         let mut result = Vec::with_capacity(self.specs.len());
         for spec_str in &self.specs {
             // Create PixiSpec based on whether we have git/path dependencies
