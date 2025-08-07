@@ -25,11 +25,14 @@ use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
 use utils::elapsed;
 use uv_auth::store_credentials_from_url;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
-use uv_configuration::{BuildOptions, ConfigSettings, Constraints, IndexStrategy, PreviewMode};
+use uv_configuration::{
+    BuildOptions, ConfigSettings, Constraints, IndexStrategy, PackageConfigSettings,
+};
 use uv_dispatch::{BuildDispatch, SharedState};
 use uv_distribution::{BuiltWheelIndex, DistributionDatabase, RegistryWheelIndex};
 use uv_distribution_types::{
-    CachedDist, DependencyMetadata, Dist, IndexLocations, IndexUrl, InstalledDist, Name, Resolution,
+    CachedDist, DependencyMetadata, Dist, ExtraBuildRequires, IndexLocations, IndexUrl,
+    InstalledDist, Name, Resolution,
 };
 use uv_install_wheel::LinkMode;
 use uv_installer::{Preparer, SitePackages, UninstallError};
@@ -302,11 +305,17 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             &HashStrategy::None,
             &setup.config_settings,
         );
+        // These were added in 0.8.2, we might want to support these
+        // if people ask for them
+        let package_settings = PackageConfigSettings::default();
+        let extra_build_requires = ExtraBuildRequires::default();
         let built_wheel_index = BuiltWheelIndex::new(
             &self.context_config.uv_context.cache,
             &setup.tags,
             &HashStrategy::None,
             &setup.config_settings,
+            &package_settings,
+            &extra_build_requires,
         );
 
         // Partition into those that should be linked from the cache (`cached`), those
@@ -636,10 +645,11 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
     where
         'a: 'setup,
     {
+        static EMPTY_CONSTRAINTS: std::sync::LazyLock<Constraints> = std::sync::LazyLock::new(|| Constraints::default());
         BuildDispatch::new(
             &setup.registry_client,
             &self.context_config.uv_context.cache,
-            Constraints::default(),
+            &*EMPTY_CONSTRAINTS,
             setup.venv.interpreter(),
             &setup.index_locations,
             &setup.flat_index,
@@ -647,15 +657,17 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             SharedState::default(),
             IndexStrategy::default(),
             &setup.config_settings,
+            &self.context_config.uv_context.package_config_settings,
             setup.build_isolation.to_uv(&setup.venv),
+            &self.context_config.uv_context.extra_build_requires,
             LinkMode::default(),
             &setup.build_options,
             &self.context_config.uv_context.hash_strategy,
-            None,
+            uv_resolver::ExcludeNewer::default(),
             self.context_config.uv_context.source_strategy,
             WorkspaceCache::default(),
             self.context_config.uv_context.concurrency,
-            PreviewMode::Disabled,
+            self.context_config.uv_context.preview,
         )
         // Important: this passes any CONDA activation to the uv build process
         .with_build_extra_env_vars(self.context_config.environment_variables.iter())

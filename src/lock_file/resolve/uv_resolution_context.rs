@@ -1,9 +1,9 @@
 use miette::{Context, IntoDiagnostic};
 use uv_cache::Cache;
 use uv_client::ExtraMiddleware;
-use uv_configuration::{Concurrency, SourceStrategy, TrustedHost};
+use uv_configuration::{Concurrency, PackageConfigSettings, Preview, SourceStrategy, TrustedHost};
 use uv_dispatch::SharedState;
-use uv_distribution_types::IndexCapabilities;
+use uv_distribution_types::{ExtraBuildRequires, IndexCapabilities};
 use uv_types::{HashStrategy, InFlight};
 
 use crate::Workspace;
@@ -26,6 +26,9 @@ pub struct UvResolutionContext {
     pub shared_state: SharedState,
     pub extra_middleware: ExtraMiddleware,
     pub proxies: Vec<reqwest::Proxy>,
+    pub package_config_settings: PackageConfigSettings,
+    pub extra_build_requires: ExtraBuildRequires,
+    pub preview: Preview,
 }
 
 impl UvResolutionContext {
@@ -77,6 +80,9 @@ impl UvResolutionContext {
             shared_state: SharedState::default(),
             extra_middleware: ExtraMiddleware(uv_middlewares(project.config())),
             proxies: project.config().get_proxies().into_diagnostic()?,
+            package_config_settings: PackageConfigSettings::default(),
+            extra_build_requires: ExtraBuildRequires::default(),
+            preview: Preview::default(),
         })
     }
 
