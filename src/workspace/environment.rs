@@ -639,12 +639,15 @@ mod tests {
             [feature.foo.activation.env]
             FOO_VAR = "foo"
 
-            [feature.cuda.activation.env]
-            FOO_VAR = "cuda"
+            [feature.cuda1.activation.env]
+            FOO_VAR = "cuda1"
+
+            [feature.cuda2.activation.env]
+            FOO_VAR = "cuda2"
 
             [environments]
             foo = ["foo"]
-            cuda = ["cuda"] 
+            cuda = ["cuda1", "cuda2"] 
             "#,
         )
         .unwrap();
@@ -667,7 +670,7 @@ mod tests {
         assert_eq!(
             cuda_env.activation_env(None),
             indexmap! {
-                "FOO_VAR".to_string() => "cuda",
+                "FOO_VAR".to_string() => "cuda1",
             }
         );
     }
