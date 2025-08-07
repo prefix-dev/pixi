@@ -23,9 +23,9 @@ pixi clean cache [OPTIONS]
 - <a id="arg---repodata" href="#arg---repodata">`--repodata`</a>
 :  Clean only the repodata cache
 - <a id="arg---build-backends" href="#arg---build-backends">`--build-backends`</a>
-:  Clean only the build backends envs cache
+:  Clean only the build backends environments cache
 - <a id="arg---build" href="#arg---build">`--build`</a>
-:  Clean only the pixi-build cache
+:  Clean only the build related cache
 - <a id="arg---yes" href="#arg---yes">`--yes (-y)`</a>
 :  Answer yes to all questions
 
