@@ -57,42 +57,46 @@ impl GlobalSpecs {
         &self,
         channel_config: &ChannelConfig,
     ) -> Result<Vec<GlobalSpec>, GlobalSpecsConversionError> {
-        let mut result = Vec::with_capacity(self.specs.len());
-        for spec_str in &self.specs {
-            // Create PixiSpec based on whether we have git/path dependencies
-            let pixi_spec = if let Some(git_url) = &self.git {
-                // Handle git dependencies
-                let git_spec = pixi_spec::GitSpec {
-                    git: git_url.clone(),
-                    rev: self.rev.clone().map(Into::into),
-                    subdirectory: self.subdir.clone(),
-                };
-
-                PixiSpec::Git(git_spec)
-            } else if let Some(path) = &self.path {
-                // Handle path dependencies
-                PixiSpec::Path(pixi_spec::PathSpec { path: path.clone() })
-            } else {
-                // Handle regular conda/version dependencies - use the new try_from_str method
-                let global_spec =
-                    GlobalSpec::try_from_str(spec_str, channel_config).map_err(Box::new)?;
-                if global_spec.is_nameless() {
-                    return Err(GlobalSpecsConversionError::NameRequired);
-                }
-                result.push(global_spec);
-                continue;
+        let git_or_path_spec = if let Some(git_url) = &self.git {
+            let git_spec = pixi_spec::GitSpec {
+                git: git_url.clone(),
+                rev: self.rev.clone().map(Into::into),
+                subdirectory: self.subdir.clone(),
             };
-
-            // For git/path dependencies, we need to parse the spec to get the name
-            let match_spec = MatchSpec::from_str(spec_str, ParseStrictness::Lenient)?;
-            if let Some(name) = match_spec.name {
-                result.push(GlobalSpec::named(name, pixi_spec));
-            } else {
-                result.push(GlobalSpec::nameless(pixi_spec));
+            Some(PixiSpec::Git(git_spec))
+        } else if let Some(path) = &self.path {
+            Some(PixiSpec::Path(pixi_spec::PathSpec { path: path.clone() }))
+        } else {
+            None
+        };
+        if let Some(pixi_spec) = git_or_path_spec {
+            if self.specs.is_empty() {
+                return Ok(Vec::from([GlobalSpec::Nameless(pixi_spec)]));
             }
-        }
 
-        Ok(result)
+            self.specs
+                .iter()
+                .map(|spec_str| {
+                    MatchSpec::from_str(spec_str, ParseStrictness::Lenient)?
+                        .name
+                        .ok_or(GlobalSpecsConversionError::NameRequired)
+                        .map(|name| GlobalSpec::named(name, pixi_spec.clone()))
+                })
+                .collect()
+        } else {
+            self.specs
+                .iter()
+                .map(|spec_str| {
+                    let global_spec =
+                        GlobalSpec::try_from_str(spec_str, channel_config).map_err(Box::new)?;
+                    if global_spec.is_nameless() {
+                        Err(GlobalSpecsConversionError::NameRequired)
+                    } else {
+                        Ok(global_spec)
+                    }
+                })
+                .collect()
+        }
     }
 }
 
