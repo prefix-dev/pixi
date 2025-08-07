@@ -76,7 +76,7 @@ pub struct CacheArgs {
 
     /// Clean only the build backends envs cache.
     #[arg(long)]
-    pub tool: bool,
+    pub build_backends: bool,
 
     /// Clean only the pixi-build cache
     #[arg(long)]
@@ -176,7 +176,7 @@ async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
     if args.exec {
         dirs.push(cache_dir.join(consts::CACHED_ENVS_DIR));
     }
-    if args.tool {
+    if args.build_backends {
         dirs.push(cache_dir.join(consts::CACHED_BUILD_TOOL_ENVS_DIR));
         // TODO: Let's clean deprecated cache directory.
         // This will be removed in a future release.
