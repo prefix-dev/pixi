@@ -37,12 +37,16 @@ pub struct Args {
     command: Option<Command>,
 
     /// The environment directory to remove.
-    #[arg(long, short, conflicts_with = "command")]
+    #[arg(long, short, conflicts_with_all = ["command", "build"])]
     pub environment: Option<String>,
 
     /// Only remove the activation cache
     #[arg(long)]
     pub activation_cache: bool,
+
+    /// Only remove the pixi-build cache
+    #[arg(long)]
+    pub build: bool,
 }
 
 /// Clean the cache of your system which are touched by pixi.
@@ -70,9 +74,13 @@ pub struct CacheArgs {
     #[arg(long)]
     pub repodata: bool,
 
-    /// Clean only the build backend tools cache.
+    /// Clean only the build backends envs cache.
     #[arg(long)]
     pub tool: bool,
+
+    /// Clean only the pixi-build cache
+    #[arg(long)]
+    pub build: bool,
 
     /// Answer yes to all questions.
     #[clap(short = 'y', long = "yes", alias = "assume-yes")]
@@ -110,7 +118,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     if let Some(explicit_env) = explicit_environment {
         if args.activation_cache {
-            remove_file(explicit_env.activation_cache_file_path(), false).await?;
+            remove_file(explicit_env.activation_cache_file_path(), true).await?;
             tracing::info!(
                 "Only removing activation cache for explicit environment '{}'",
                 explicit_env.name().fancy_display()
@@ -123,6 +131,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 explicit_env.name().fancy_display()
             );
         }
+    } else if args.activation_cache {
+        remove_folder_with_progress(workspace.activation_env_cache_folder(), true).await?;
+    } else if args.build {
+        remove_folder_with_progress(workspace.pixi_dir().join(consts::WORKSPACE_CACHE_DIR), true)
+            .await?;
     } else {
         // Remove all pixi related work from the workspace.
         if !workspace
@@ -138,6 +151,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         remove_folder_with_progress(workspace.solve_group_environments_dir(), false).await?;
         remove_folder_with_progress(workspace.task_cache_folder(), false).await?;
         remove_folder_with_progress(workspace.activation_env_cache_folder(), false).await?;
+        remove_folder_with_progress(workspace.pixi_dir(), false).await?;
     }
     Ok(())
 }
@@ -167,6 +181,14 @@ async fn clean_cache(args: CacheArgs) -> miette::Result<()> {
         // TODO: Let's clean deprecated cache directory.
         // This will be removed in a future release.
         dirs.push(cache_dir.join(consts::_CACHED_BUILD_ENVS_DIR));
+    }
+    if args.build {
+        dirs.push(cache_dir.join(consts::CACHED_GIT_DIR));
+        dirs.push(cache_dir.join(consts::CACHED_BUILD_WORK_DIR));
+        dirs.push(cache_dir.join(consts::CACHED_BUILD_BACKENDS));
+        dirs.push(cache_dir.join(consts::CACHED_SOURCE_BUILDS));
+        dirs.push(cache_dir.join(consts::CACHED_SOURCE_METADATA));
+        dirs.push(cache_dir.join(consts::CACHED_PACKAGES));
     }
     if dirs.is_empty() && (args.assume_yes || dialoguer::Confirm::new()
                 .with_prompt("No cache types specified using the flags.\nDo you really want to remove all cache directories from your machine?")
