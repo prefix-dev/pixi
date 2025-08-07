@@ -898,6 +898,9 @@ Preview features in the documentation will be marked as such on the relevant pag
 !!! warning "Important note"
     `pixi-build` is a [preview feature](#preview-features), and will change until it is stabilized.
     Please keep that in mind when you use it for your workspaces.
+    ```toml
+    --8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:preview"
+    ```
 
 The package section can be added
 to a workspace manifest to define the package that is built by Pixi.
