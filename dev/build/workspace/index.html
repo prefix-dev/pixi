@@ -2782,18 +2782,15 @@ In the case of <code>python_rich</code> we choose to do both, so the only thing 
 <p>We only want to use the <code>workspace</code> table of the top-level manifest.
 Therefore, we can remove the workspace section in the manifest of <code>cpp_math</code>.</p>
 <div class="language-diff highlight"><span class="filename">packages/cpp_math/pixi.toml</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="gd">-[workspace]</span>
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="gd">-channels = [</span>
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="gd">-  &quot;https://prefix.dev/pixi-build-backends&quot;,</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="gd">-  &quot;https://prefix.dev/conda-forge&quot;,</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="gd">-]</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="gd">-platforms = [&quot;osx-arm64&quot;, &quot;osx-64&quot;, &quot;linux-64&quot;, &quot;win-64&quot;]</span>
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="gd">-preview = [&quot;pixi-build&quot;]</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="gd">-channels = [&quot;https://prefix.dev/conda-forge&quot;]</span>
+</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="gd">-platforms = [&quot;osx-arm64&quot;, &quot;osx-64&quot;, &quot;linux-64&quot;, &quot;win-64&quot;]</span>
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="gd">-preview = [&quot;pixi-build&quot;]</span>
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="gd">-</span>
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="gd">-[dependencies]</span>
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="gd">-cpp_math = { path = &quot;.&quot; }</span>
 </span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="gd">-</span>
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="gd">-[dependencies]</span>
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="gd">-cpp_math = { path = &quot;.&quot; }</span>
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="gd">-</span>
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="gd">-[tasks]</span>
-</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="gd">-start = &quot;python -c &#39;import cpp_math as b; print(b.add(1, 2))&#39;&quot;</span>
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="gd">-[tasks]</span>
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="gd">-start = &quot;python -c &#39;import cpp_math as b; print(b.add(1, 2))&#39;&quot;</span>
 </span></code></pre></div>
 <p>There is actually one problem with <code>python_rich</code>.
 The age of every person is off by one year!</p>

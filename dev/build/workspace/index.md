@@ -48,10 +48,7 @@ packages/cpp_math/pixi.toml
 
 ```diff
 -[workspace]
--channels = [
--  "https://prefix.dev/pixi-build-backends",
--  "https://prefix.dev/conda-forge",
--]
+-channels = ["https://prefix.dev/conda-forge"]
 -platforms = ["osx-arm64", "osx-64", "linux-64", "win-64"]
 -preview = ["pixi-build"]
 -

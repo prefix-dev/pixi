@@ -1,14 +1,22 @@
 To decouple the building of a conda package from Pixi we provide something what are called build backends. These are essentially executables following a specific protocol that is implemented for both Pixi and the build backend. This also allows for decoupling of the build backend from Pixi and it's manifest specification.
 
-The backends we are currently developing are available in the following [conda channel](https://prefix.dev/channels/pixi-build-backends). And are being developed in the [pixi-build-backends](https://github.com/prefix-dev/pixi-build-backends) repository.
+The Prefix.dev managed backends are being developed in the [pixi-build-backends](https://github.com/prefix-dev/pixi-build-backends) repository, and have their own [documentation](https://prefix-dev.github.io/pixi-build-backends/).
 
 ### Installation
 
-When looking at the following build-section:
+Install a certain build backend by adding it to the `package.build` section of the manifest file.:
 
 ```toml
 [package.build]
-backend = { name = "pixi-build-python", version = "0.1.*" }
+backend = { name = "pixi-build-python", version = "==0.3.2" }
+
+```
+
+For custom backend channels, you can add the channel to the `channels` section of the manifest file:
+
+```toml
+[package.build]
+backend = { name = "pixi-build-python", version = "==0.3.2" }
 channels = [
   "https://prefix.dev/pixi-build-backends",
   "https://prefix.dev/conda-forge",
@@ -16,11 +24,9 @@ channels = [
 
 ```
 
-1. This will allow Pixi to install desired backends from the `pixi-build-backends` channel, and any requirements from `conda-forge`. Backends are installed into isolated environments, and will be shared across Pixi workspaces.
-
 ### Overriding the Build Backend
 
-Sometimes you want to override the build backend that is used by pixi. Meaning overriding the backend that is specified in the [`[package.build]`](../../reference/pixi_manifest/#the-build-system). We currently have two environment variables that allow for this:
+Sometimes you want to override the build backend that is used by pixi. Meaning overriding the backend that is specified in the [`[package.build]`](../../reference/pixi_manifest/#build-table). We currently have two environment variables that allow for this:
 
 1. `PIXI_BUILD_BACKEND_OVERRIDE`: This environment variable allows for overriding of one or multiple backends. Use `{name}={path}` to specify a backend name mapped to a path and `,` to separate multiple backends. For example: `pixi-build-cmake=/path/to/bin,pixi-build-python` will:
    1. override the `pixi-build-cmake` backend with the executable located at `/path/to/bin`

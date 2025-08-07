@@ -22,10 +22,7 @@ We are now using the `pixi-build-rattler-build` backend instead of the `pixi-bui
 
 ```toml
 [workspace]
-channels = [
-  "https://prefix.dev/pixi-build-backends",
-  "https://prefix.dev/conda-forge",
-]
+channels = ["https://prefix.dev/conda-forge"]
 platforms = ["osx-arm64", "osx-64", "linux-64", "win-64"]
 preview = ["pixi-build"]
 [dependencies]
@@ -37,7 +34,7 @@ start = "python -c 'import cpp_math as b; print(b.add(1, 2))'"
 name = "cpp_math"
 version = "0.1.0"
 [package.build]
-backend = { name = "pixi-build-rattler-build", version = "0.1.*" }
+backend = { name = "pixi-build-rattler-build", version = "0.3.*" }
 
 ```
 

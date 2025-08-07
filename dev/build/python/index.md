@@ -114,10 +114,7 @@ pixi.toml
 
 ```toml
 [workspace] # (1)!
-channels = [
-  "https://prefix.dev/pixi-build-backends",
-  "https://prefix.dev/conda-forge",
-]
+channels = ["https://prefix.dev/conda-forge"]
 platforms = ["win-64", "linux-64", "osx-arm64", "osx-64"]
 preview = ["pixi-build"]
 [dependencies] # (2)!
@@ -128,7 +125,7 @@ start = "rich-example-main"
 name = "python_rich"
 version = "0.1.0"
 [package.build] # (5)!
-backend = { name = "pixi-build-python", version = "0.1.*" }
+backend = { name = "pixi-build-python", version = "==0.3.2" }
 [package.host-dependencies] # (6)!
 hatchling = "==1.26.3"
 [package.run-dependencies] # (7)!

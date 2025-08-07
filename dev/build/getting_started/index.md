@@ -35,11 +35,7 @@ version = "0.1.0"
 # Here the build system of the package is specified
 # We are using `pixi-build-python` in order to build a Python package
 [package.build]
-backend = { name = "pixi-build-python", version = "0.1.*" }
-channels = [
-  "https://prefix.dev/pixi-build-backends",
-  "https://prefix.dev/conda-forge",
-]
+backend = { name = "pixi-build-python", version = "==0.3.2" }
 # The Python package `python_rich` uses `hatchling` as Python build backend
 [package.host-dependencies]
 hatchling = "*"
@@ -81,11 +77,7 @@ Packages are built by using build backends. By specifying `package.build-system.
 
 ```toml
 [package.build]
-backend = { name = "pixi-build-python", version = "0.1.*" }
-channels = [
-  "https://prefix.dev/pixi-build-backends",
-  "https://prefix.dev/conda-forge",
-]
+backend = { name = "pixi-build-python", version = "==0.3.2" }
 
 ```
 
