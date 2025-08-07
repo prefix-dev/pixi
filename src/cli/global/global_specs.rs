@@ -57,53 +57,26 @@ impl GlobalSpecs {
         &self,
         channel_config: &ChannelConfig,
     ) -> Result<Vec<GlobalSpec>, GlobalSpecsConversionError> {
-        let mut result = Vec::with_capacity(self.specs.len());
-        for spec_str in &self.specs {
-            // Create PixiSpec based on whether we have git/path dependencies
-            let pixi_spec = if let Some(git_url) = &self.git {
-                // Handle git dependencies
-                let git_spec = pixi_spec::GitSpec {
-                    git: git_url.clone(),
-                    rev: self.rev.clone().map(Into::into),
-                    subdirectory: self.subdir.clone(),
-                };
-
-                PixiSpec::Git(git_spec)
-            } else if let Some(path) = &self.path {
-                // Handle path dependencies
-                PixiSpec::Path(pixi_spec::PathSpec { path: path.clone() })
-            } else if spec_str.ends_with(".conda")
-                || spec_str.ends_with(".tar.bz2")
-                || spec_str.starts_with("./")
-                || spec_str.starts_with("../")
-                || spec_str.starts_with('/')
-            {
-                // Auto-detect .conda/.tar.bz2 files or path-like specs and handle as path dependencies
-                PixiSpec::Path(pixi_spec::PathSpec {
-                    path: Utf8TypedPathBuf::from(spec_str.to_string()),
-                })
-            } else {
-                // Handle regular conda/version dependencies - use the new try_from_str method
-                let global_spec =
-                    GlobalSpec::try_from_str(spec_str, channel_config).map_err(Box::new)?;
-                if global_spec.is_nameless() {
-                    return Err(GlobalSpecsConversionError::NameRequired);
-                }
-                result.push(global_spec);
-                continue;
+        let git_or_path_spec = if let Some(git_url) = &self.git {
+            let git_spec = pixi_spec::GitSpec {
+                git: git_url.clone(),
+                rev: self.rev.clone().map(Into::into),
+                subdirectory: self.subdir.clone(),
             };
+            Some(PixiSpec::Git(git_spec))
+        } else if let Some(path) = &self.path {
+            Some(PixiSpec::Path(pixi_spec::PathSpec { path: path.clone() }))
+        } else if spec_str.ends_with(".conda") || spec_str.ends_with(".tar.bz2") {
+            // Auto-detect .conda/.tar.bz2 files or path-like specs and handle as path dependencies
+            let pixi_spec = PixiSpec::Path(pixi_spec::PathSpec {
+                path: Utf8TypedPathBuf::from(spec_str.to_string()),
+            });
 
-            // For git/path dependencies, we need to parse the spec to get the name
-            // For auto-detected paths, extract the name from the filename if it's a .conda or .tar.bz2 file
-            if matches!(pixi_spec, PixiSpec::Path(_))
-                && (spec_str.ends_with(".conda")
-                    || spec_str.ends_with(".tar.bz2")
-                    || spec_str.starts_with("./")
-                    || spec_str.starts_with("../")
-                    || spec_str.starts_with('/'))
-            {
-                // For .conda or .tar.bz2 files, extract package name from filename
-                if spec_str.ends_with(".conda") || spec_str.ends_with(".tar.bz2") {
+            return self
+                .specs
+                .iter()
+                .map(|spec_str| {
+                    // For .conda or .tar.bz2 files, extract package name from filename
                     let filename = std::path::Path::new(spec_str)
                         .file_name()
                         .and_then(|name| name.to_str())
@@ -114,29 +87,46 @@ impl GlobalSpecs {
                         if let Ok(package_name) = rattler_conda_types::PackageName::try_from(
                             package_name_part.to_string(),
                         ) {
-                            result.push(GlobalSpec::named(package_name, pixi_spec));
+                            GlobalSpec::named(package_name, pixi_spec)
                         } else {
-                            result.push(GlobalSpec::nameless(pixi_spec));
+                            GlobalSpec::nameless(pixi_spec)
                         }
                     } else {
-                        result.push(GlobalSpec::nameless(pixi_spec));
+                        GlobalSpec::nameless(pixi_spec)
                     }
-                } else {
-                    // For other paths, create nameless spec
-                    result.push(GlobalSpec::nameless(pixi_spec));
-                }
-            } else {
-                // For explicit git/path dependencies, parse the spec to get the name
-                let match_spec = MatchSpec::from_str(spec_str, ParseStrictness::Lenient)?;
-                if let Some(name) = match_spec.name {
-                    result.push(GlobalSpec::named(name, pixi_spec));
-                } else {
-                    result.push(GlobalSpec::nameless(pixi_spec));
-                }
+                })
+                .collect();
+        } else {
+            None
+        };
+        if let Some(pixi_spec) = git_or_path_spec {
+            if self.specs.is_empty() {
+                return Ok(Vec::from([GlobalSpec::Nameless(pixi_spec)]));
             }
-        }
 
-        Ok(result)
+            self.specs
+                .iter()
+                .map(|spec_str| {
+                    MatchSpec::from_str(spec_str, ParseStrictness::Lenient)?
+                        .name
+                        .ok_or(GlobalSpecsConversionError::NameRequired)
+                        .map(|name| GlobalSpec::named(name, pixi_spec.clone()))
+                })
+                .collect()
+        } else {
+            self.specs
+                .iter()
+                .map(|spec_str| {
+                    let global_spec =
+                        GlobalSpec::try_from_str(spec_str, channel_config).map_err(Box::new)?;
+                    if global_spec.is_nameless() {
+                        Err(GlobalSpecsConversionError::NameRequired)
+                    } else {
+                        Ok(global_spec)
+                    }
+                })
+                .collect()
+        }
     }
 }
 
@@ -321,45 +311,46 @@ mod tests {
                 panic!("Expected named spec for absolute path .tar.bz2 file")
             }
         }
-    fn test_parse_from_command_args() {
-        // Test parsing simple package name
-        let args = vec!["foo", "numpy"];
-        let specs = GlobalSpecs::try_parse_from(args).unwrap();
-        assert_eq!(specs.specs, vec!["numpy"]);
-        assert!(specs.git.is_none());
-        assert!(specs.path.is_none());
+        fn test_parse_from_command_args() {
+            // Test parsing simple package name
+            let args = vec!["foo", "numpy"];
+            let specs = GlobalSpecs::try_parse_from(args).unwrap();
+            assert_eq!(specs.specs, vec!["numpy"]);
+            assert!(specs.git.is_none());
+            assert!(specs.path.is_none());
 
-        // Test parsing multiple packages
-        let args = vec!["foo", "numpy", "scipy>=1.7", "matplotlib==3.5.0"];
-        let specs = GlobalSpecs::try_parse_from(args).unwrap();
-        assert_eq!(
-            specs.specs,
-            vec!["numpy", "scipy>=1.7", "matplotlib==3.5.0"]
-        );
+            // Test parsing multiple packages
+            let args = vec!["foo", "numpy", "scipy>=1.7", "matplotlib==3.5.0"];
+            let specs = GlobalSpecs::try_parse_from(args).unwrap();
+            assert_eq!(
+                specs.specs,
+                vec!["numpy", "scipy>=1.7", "matplotlib==3.5.0"]
+            );
 
-        // Test parsing with git option
-        let args = vec![
-            "foo",
-            "--git",
-            "https://github.com/user/repo.git",
-            "mypackage",
-        ];
-        let specs = GlobalSpecs::try_parse_from(args).unwrap();
-        assert_eq!(specs.specs, vec!["mypackage"]);
-        assert_eq!(
-            specs.git.unwrap().as_str(),
-            "https://github.com/user/repo.git"
-        );
+            // Test parsing with git option
+            let args = vec![
+                "foo",
+                "--git",
+                "https://github.com/user/repo.git",
+                "mypackage",
+            ];
+            let specs = GlobalSpecs::try_parse_from(args).unwrap();
+            assert_eq!(specs.specs, vec!["mypackage"]);
+            assert_eq!(
+                specs.git.unwrap().as_str(),
+                "https://github.com/user/repo.git"
+            );
 
-        // Test parsing with path option
-        let args = vec!["foo", "--path", "../local_package", "mypackage"];
-        let specs = GlobalSpecs::try_parse_from(args).unwrap();
-        assert_eq!(specs.specs, vec!["mypackage"]);
-        assert_eq!(specs.path.unwrap().as_str(), "../local_package");
+            // Test parsing with path option
+            let args = vec!["foo", "--path", "../local_package", "mypackage"];
+            let specs = GlobalSpecs::try_parse_from(args).unwrap();
+            assert_eq!(specs.specs, vec!["mypackage"]);
+            assert_eq!(specs.path.unwrap().as_str(), "../local_package");
 
-        // Test error when no packages specified
-        let args = vec!["foo"];
-        let result = GlobalSpecs::try_parse_from(args);
-        assert!(result.is_err());
+            // Test error when no packages specified
+            let args = vec!["foo"];
+            let result = GlobalSpecs::try_parse_from(args);
+            assert!(result.is_err());
+        }
     }
 }
