@@ -461,6 +461,10 @@ impl InstallBuilder {
         self.args.lock_file_usage.frozen = true;
         self
     }
+    pub fn with_skipped(mut self, names: Vec<String>) -> Self {
+        self.args.skip = Some(names);
+        self
+    }
 }
 
 impl IntoFuture for InstallBuilder {

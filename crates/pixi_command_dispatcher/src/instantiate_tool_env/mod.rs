@@ -16,7 +16,9 @@ use pixi_build_types::{
 use pixi_spec::{BinarySpec, PixiSpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_utils::AsyncPrefixGuard;
-use rattler_conda_types::{ChannelConfig, ChannelUrl, PackageName, prefix::Prefix};
+use rattler_conda_types::{
+    ChannelConfig, ChannelUrl, PackageName, VersionWithSource, prefix::Prefix,
+};
 use rattler_solve::{ChannelPriority, SolveStrategy};
 use thiserror::Error;
 use xxhash_rust::xxh3::Xxh3;
@@ -68,6 +70,9 @@ pub struct InstantiateToolEnvironmentSpec {
 pub struct InstantiateToolEnvironmentResult {
     /// The prefix of the tool environment.
     pub prefix: Prefix,
+
+    /// The version of the requirement that was eventually installed.
+    pub version: VersionWithSource,
 
     /// The version of the Pixi build API to use.
     pub api: PixiBuildApiVersion,
@@ -223,6 +228,15 @@ impl InstantiateToolEnvironmentSpec {
             ));
         };
 
+        // Extract the version of the main requirement package.
+        let version = solved_environment
+            .iter()
+            .find(|r| r.package_record().name == self.requirement.0)
+            .expect("The solved environment should always contain the main requirement package")
+            .package_record()
+            .version
+            .clone();
+
         // Construct the prefix for the tool environment.
         let prefix = Prefix::create(command_queue.cache_dirs().build_backends().join(cache_key))
             .map_err(InstantiateToolEnvironmentError::CreatePrefix)
@@ -269,6 +283,7 @@ impl InstantiateToolEnvironmentSpec {
 
         Ok(InstantiateToolEnvironmentResult {
             prefix,
+            version,
             api: api_version,
         })
     }
