@@ -8,11 +8,11 @@ pub async fn execute(mut args: UploadOpts) -> miette::Result<()> {
     let config = Config::load_global();
     match auth_store(&config) {
         Ok(store) => {
-            args.auth_store = Some(Ok(store));
+            args.auth_store = Some(store);
             upload_from_args(args).await
         }
-        Err(e) => {
-            args.auth_store = Some(Err(e));
+        Err(_) => {
+            args.auth_store = None;
             upload_from_args(args).await
         }
     }
