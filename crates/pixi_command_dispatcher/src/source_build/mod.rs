@@ -107,7 +107,14 @@ pub struct BuiltPackage {
 }
 
 impl SourceBuildSpec {
-    #[instrument(skip_all, fields(package = %self.package, source = %self.source))]
+    #[instrument(
+        skip_all,
+        name = "source-build",
+        fields(
+            source= %self.source,
+            package = %self.package,
+        )
+    )]
     pub(crate) async fn build(
         mut self,
         command_dispatcher: CommandDispatcher,
@@ -158,7 +165,9 @@ impl SourceBuildSpec {
         // Instantiate the backend with the discovered information.
         let backend = command_dispatcher
             .instantiate_backend(InstantiateBackendSpec {
-                backend_spec: discovered_backend.backend_spec,
+                backend_spec: discovered_backend
+                    .backend_spec
+                    .resolve(SourceAnchor::from(SourceSpec::from(self.source.clone()))),
                 init_params: discovered_backend.init_params,
                 channel_config: self.channel_config.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),

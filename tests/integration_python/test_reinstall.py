@@ -57,7 +57,7 @@ def test_pixi_reinstall_default_env(pixi: Path, reinstall_workspace: Path) -> No
     )
 
 
-@pytest.mark.slow
+@pytest.mark.extra_slow
 def test_pixi_reinstall_multi_env(pixi: Path, reinstall_workspace: Path) -> None:
     env = {
         "PIXI_CACHE_DIR": str(reinstall_workspace.joinpath("pixi_cache")),

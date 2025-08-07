@@ -259,6 +259,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         &executable_task.run_environment,
                         args.prefix_update_config.update_mode(),
                         &ReinstallPackages::default(),
+                        &[],
                     )
                     .await?;
 
@@ -372,7 +373,7 @@ async fn execute_task(
     command_env: &HashMap<OsString, OsString>,
     kill_signal: KillSignal,
 ) -> Result<(), TaskExecutionError> {
-    let Some(script) = task.as_deno_script()? else {
+    let Some(script) = task.as_deno_script(command_env)? else {
         return Ok(());
     };
     let cwd = task.working_directory()?;
