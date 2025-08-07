@@ -28,6 +28,7 @@ use tempfile::{TempDir, tempdir};
 use tokio::{fs, task::JoinSet};
 use url::Url;
 use uv_configuration::RAYON_INITIALIZE;
+use uv_pep508::PackageName;
 use uv_python::PythonEnvironment;
 
 use crate::common::{
@@ -35,6 +36,7 @@ use crate::common::{
     builders::{
         HasDependencyConfig, HasLockFileUpdateConfig, HasPrefixUpdateConfig, string_from_iter,
     },
+    logging::try_init_test_subscriber,
     package_database::{Package, PackageDatabase},
 };
 
@@ -322,6 +324,112 @@ fn create_uv_environment(prefix: &Path, cache: &uv_cache::Cache) -> PythonEnviro
     uv_python::PythonEnvironment::from_interpreter(interpreter)
 }
 
+// Helper to check if a pypi package is installed.
+fn is_pypi_package_installed(env: &PythonEnvironment, package_name: &str) -> bool {
+    let site_packages = uv_installer::SitePackages::from_environment(env).unwrap();
+    let found_packages = site_packages.get_packages(&PackageName::from_str(package_name).unwrap());
+    !found_packages.is_empty()
+}
+
+// Helper to check if a conda package is installed.
+async fn is_conda_package_installed(prefix_path: &Path, package_name: &str) -> bool {
+    let conda_prefix = pixi::prefix::Prefix::new(prefix_path.to_path_buf());
+    conda_prefix
+        .find_designated_package(&rattler_conda_types::PackageName::try_from(package_name).unwrap())
+        .await
+        .is_ok()
+}
+
+/// Test `pixi install --frozen --skip` functionality
+#[tokio::test]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn install_frozen_skip() {
+    // Create a project with a local python dependency 'no-build-editable'
+    // and a local conda dependency 'python_rich'
+    let current_platform = Platform::current();
+    let manifest = format!(
+        r#"
+        [workspace]
+        channels = ["conda-forge"]
+        description = "Add a short description here"
+        name = "pyproject"
+        platforms = ["{platform}"]
+        preview = ["pixi-build"]
+        version = "0.1.0"
+
+        [dependencies]
+        python = "*"
+        python_rich = {{ path = "./python" }}
+
+        [pypi-dependencies]
+        no-build-editable = {{ path = "./no-build-editable" }}
+        "#,
+        platform = current_platform,
+    );
+
+    let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
+
+    fs_extra::dir::copy(
+        "docs/source_files/pixi_workspaces/pixi_build/python",
+        pixi.workspace_path(),
+        &fs_extra::dir::CopyOptions::new(),
+    )
+    .unwrap();
+
+    fs_extra::dir::copy(
+        "tests/data/satisfiability/no-build-editable",
+        pixi.workspace_path(),
+        &fs_extra::dir::CopyOptions::new(),
+    )
+    .unwrap();
+
+    pixi.update_lock_file().await.unwrap();
+
+    // Check that neither 'python_rich' nor 'no-build-editable' are installed when skipped
+    pixi.install()
+        .with_frozen()
+        .with_skipped(vec!["no-build-editable".into(), "python_rich".into()])
+        .await
+        .unwrap();
+
+    let prefix_path = pixi.default_env_path().unwrap();
+    let cache = uv_cache::Cache::temp().unwrap();
+    let env = create_uv_environment(&prefix_path, &cache);
+
+    assert!(!is_pypi_package_installed(&env, "no-build-editable"));
+    assert!(!is_conda_package_installed(&prefix_path, "python_rich").await);
+
+    // Check that 'no-build-editable' and 'python_rich' are installed after a followup normal install
+    pixi.install().with_frozen().await.unwrap();
+
+    assert!(is_pypi_package_installed(&env, "no-build-editable"));
+    assert!(is_conda_package_installed(&prefix_path, "python_rich").await);
+}
+
+/// Test `pixi install --frozen --skip` functionality with a non existing package
+#[tokio::test]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn install_skip_non_existent_package_warning() {
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().await.unwrap();
+    // Add a dependency to create a lock file
+    pixi.add("python").await.unwrap();
+
+    let log_buffer = try_init_test_subscriber();
+
+    // Install with a skipped package that doesn't exist in the lock file
+    pixi.install()
+        .with_frozen()
+        .with_skipped(vec!["non-existent-package".to_string()])
+        .await
+        .unwrap();
+
+    let output = log_buffer.get_output();
+    assert!(output.contains(
+        "No packages were skipped. 'non-existent-package' did not match any packages in the lockfile."
+    ));
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn pypi_reinstall_python() {
@@ -601,6 +709,7 @@ async fn test_old_lock_install() {
             ..Default::default()
         },
         ReinstallPackages::default(),
+        &[],
     )
     .await
     .unwrap();
@@ -681,6 +790,118 @@ setup(
 
     assert!(has_pkg, "my-pkg is not in no-build-isolation list");
     pixi.install().await.expect("cannot install project");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn test_no_build_isolation_with_dependencies() {
+    let current_platform = Platform::current();
+
+    // Create pyproject.toml for package-tdjager (will be installed with build isolation)
+    let pyproject_toml_a = r#"
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "package-tdjager"
+version = "0.1.0"
+description = "Package Tim de Jager for testing build isolation"
+authors = [{name = "Test Author"}]
+requires-python = ">=3.6"
+dependencies = []
+    "#;
+
+    // Create pyproject.toml for package-b (will be installed WITHOUT build isolation)
+    // package-b depends on package-tdjager at build time
+    let pyproject_toml_b = r#"
+[build-system]
+requires = ["setuptools>=45", "wheel", "package-tdjager"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "package-b"
+version = "0.1.0"
+description = "Package B that depends on Package Tim de Jager during build"
+authors = [{name = "Test Author"}]
+requires-python = ">=3.6"
+dependencies = []
+    "#;
+
+    let manifest = format!(
+        r#"
+        [project]
+        name = "no-build-isolation-deps"
+        channels = ["https://prefix.dev/conda-forge"]
+        platforms = ["{platform}"]
+
+        [pypi-options]
+        no-build-isolation = ["package-b"]
+
+        [dependencies]
+        python = "3.12.*"
+        setuptools = ">=72,<73"
+        
+        [pypi-dependencies.package-b]
+        path = "./package-b"
+
+        [pypi-dependencies.package-tdjager]
+        path = "./package-tdjager"
+        
+        "#,
+        platform = current_platform,
+    );
+
+    let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
+
+    let project_path = pixi.workspace_path();
+
+    // Create package-tdjager directory and pyproject.toml
+    let package_a_dir = project_path.join("package-tdjager");
+    fs_err::create_dir_all(&package_a_dir).unwrap();
+    fs_err::write(package_a_dir.join("pyproject.toml"), pyproject_toml_a).unwrap();
+
+    // Create empty __init__.py for package-tdjager
+    let package_a_pkg_dir = package_a_dir.join("package_tdjager");
+    fs_err::create_dir_all(&package_a_pkg_dir).unwrap();
+    fs_err::write(package_a_pkg_dir.join("__init__.py"), "").unwrap();
+
+    // Create setup.py for package-b that imports package-tdjager at build time
+    let setup_py_b = r#"
+from setuptools import setup
+
+import package_tdjager
+
+setup(
+    name="package-b",
+    version="0.1.0",
+    description="Package B that depends on Package Tim de Jager during build",
+    author="Test Author",
+    python_requires=">=3.6",
+    install_requires=[],
+    setup_requires=["package-tdjager"],
+)
+    "#;
+
+    // Create package-b directory, setup.py and pyproject.toml
+    let package_b_dir = project_path.join("package-b");
+    fs_err::create_dir_all(&package_b_dir).unwrap();
+    fs_err::write(package_b_dir.join("pyproject.toml"), pyproject_toml_b).unwrap();
+    fs_err::write(package_b_dir.join("setup.py"), setup_py_b).unwrap();
+
+    // Create empty __init__.py for package-b
+    let package_b_pkg_dir = package_b_dir.join("package_b");
+    fs_err::create_dir_all(&package_b_pkg_dir).unwrap();
+    fs_err::write(package_b_pkg_dir.join("__init__.py"), "").unwrap();
+
+    // This should succeed with the 3-step installation:
+    // 1. Conda packages (python, setuptools)
+    // 2. PyPI packages with build isolation (package-tdjager) - batch
+    // 3. PyPI packages without build isolation (package-b) - one by one
+    // The key test: package-b should be able to import package-tdjager during its build
+    pixi.install()
+        .await
+        .expect("cannot install project with no-build-isolation dependencies");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

@@ -338,7 +338,9 @@ class DependsOn(StrictBaseModel):
     """The dependencies of a task."""
 
     task: TaskName
-    args: list[NonEmptyStr] | None = Field(None, description="The arguments to pass to the task")
+    args: list[NonEmptyStr, dict[NonEmptyStr, NonEmptyStr]] | None = Field(
+        None, description="The (positional or named) arguments to pass to the task"
+    )
     environment: EnvironmentName | None = Field(
         None, description="The environment to use for the task"
     )

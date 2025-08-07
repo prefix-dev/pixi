@@ -14,7 +14,6 @@ use reqwest::Client;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, Middleware};
 use reqwest_retry::RetryTransientMiddleware;
 use std::collections::HashMap;
-use tracing::debug;
 
 use pixi_config::Config;
 
@@ -163,10 +162,8 @@ pub fn build_reqwest_clients(
     s3_config.extend(s3_config_global);
     s3_config.extend(s3_config_project);
 
-    debug!("Using s3_config: {:?}", s3_config);
     let store = auth_store(&config).into_diagnostic()?;
     let s3_middleware = S3Middleware::new(s3_config, store);
-    debug!("s3_middleware: {:?}", s3_middleware);
     client_builder = client_builder.with(s3_middleware);
 
     client_builder = client_builder.with_arc(Arc::new(

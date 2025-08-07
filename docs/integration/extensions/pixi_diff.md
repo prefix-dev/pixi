@@ -72,3 +72,9 @@ You can view this generated markdown file in your terminal using [`md-tui`](http
 ```bash
 mdt diff.md
 ```
+
+You can also view the markdown file directly from stdin using [`md-tui`](https://github.com/henriklovhaug/md-tui).
+
+```bash
+pixi diff <(git show HEAD~20:pixi.lock) pixi.lock | pixi diff-to-markdown | mdt
+```

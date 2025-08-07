@@ -14,7 +14,7 @@ use rattler::install::Transaction;
 use rattler_conda_types::{PrefixRecord, RepoDataRecord};
 use tokio::sync::mpsc::UnboundedReceiver;
 
-use crate::reporters::{
+use crate::{
     download_verify_reporter::BuildDownloadVerifyReporter,
     main_progress_bar::{MainProgressBar, Tracker},
 };

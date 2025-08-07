@@ -2,6 +2,7 @@ use clap::Parser;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use pixi_config::ConfigCli;
+use std::fmt::Write;
 
 use crate::{
     UpdateLockFileOptions, WorkspaceLocator,
@@ -47,6 +48,11 @@ pub struct Args {
     /// Install all environments
     #[arg(long, short, conflicts_with = "environment")]
     pub all: bool,
+
+    /// Skip installation of specific packages present in the lockfile. Requires --frozen.
+    /// This can be useful for instance in a Dockerfile to skip local source dependencies when installing dependencies.
+    #[arg(long, requires = "frozen")]
+    pub skip: Option<Vec<String>>,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -79,7 +85,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .collect::<Result<Vec<_>, _>>()?;
 
     // Update the prefixes by installing all packages
-    get_update_lock_file_and_prefixes(
+    let (lock_file, _) = get_update_lock_file_and_prefixes(
         &environments,
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
@@ -88,37 +94,68 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         },
         ReinstallPackages::default(),
+        &args.skip.clone().unwrap_or_default(),
     )
     .await?;
 
     let installed_envs = environments
-        .into_iter()
+        .iter()
         .map(|env| env.name())
         .collect::<Vec<_>>();
 
     // Message what's installed
-    let detached_envs_message =
-        if let Ok(Some(path)) = workspace.config().detached_environments().path() {
-            format!(" in '{}'", console::style(path.display()).bold())
-        } else {
-            "".to_string()
-        };
+    let mut message = console::style(console::Emoji("✔ ", "")).green().to_string();
 
     if installed_envs.len() == 1 {
-        eprintln!(
-            "{}The {} environment has been installed{}.",
-            console::style(console::Emoji("✔ ", "")).green(),
+        write!(
+            &mut message,
+            "The {} environment has been installed",
             installed_envs[0].fancy_display(),
-            detached_envs_message
-        );
+        )
+        .unwrap();
     } else {
-        eprintln!(
-            "{}The following environments have been installed: {}\t{}",
-            console::style(console::Emoji("✔ ", "")).green(),
+        write!(
+            &mut message,
+            "The following environments have been installed: {}",
             installed_envs.iter().map(|n| n.fancy_display()).join(", "),
-            detached_envs_message
-        );
+        )
+        .unwrap();
     }
+
+    if let Ok(Some(path)) = workspace.config().detached_environments().path() {
+        write!(
+            &mut message,
+            " in '{}'",
+            console::style(path.display()).bold()
+        )
+        .unwrap()
+    }
+
+    if let Some(skip) = &args.skip {
+        let mut all_skipped_packages = std::collections::HashSet::new();
+        for env in &environments {
+            let skipped_packages = lock_file.get_skipped_package_names(env, skip)?;
+            all_skipped_packages.extend(skipped_packages);
+        }
+
+        if !all_skipped_packages.is_empty() {
+            let mut skipped_packages_vec: Vec<_> = all_skipped_packages.into_iter().collect();
+            skipped_packages_vec.sort();
+            write!(
+                &mut message,
+                " excluding '{}'",
+                skipped_packages_vec.join("', '")
+            )
+            .unwrap();
+        } else {
+            tracing::warn!(
+                "No packages were skipped. '{}' did not match any packages in the lockfile.",
+                skip.join("', '")
+            );
+        }
+    }
+
+    eprintln!("{}.", message);
 
     Ok(())
 }

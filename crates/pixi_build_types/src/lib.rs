@@ -6,6 +6,7 @@ pub mod procedures;
 mod project_model;
 mod stable_hash;
 
+use std::fmt::Display;
 use std::sync::LazyLock;
 
 pub use capabilities::{BackendCapabilities, FrontendCapabilities};
@@ -86,6 +87,12 @@ impl PixiBuildApiVersion {
             },
             _ => BackendCapabilities::default(),
         }
+    }
+}
+
+impl Display for PixiBuildApiVersion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 

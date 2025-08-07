@@ -298,12 +298,21 @@ impl<'p> Environment<'p> {
     /// The environment variables of all features are combined in the order they
     /// are defined for the environment.
     pub(crate) fn activation_env(&self, platform: Option<Platform>) -> IndexMap<String, String> {
-        self.features()
-            .map(|f| f.activation_env(platform))
-            .fold(IndexMap::new(), |mut acc, env| {
+        // As self.features() would put "default" envs in the last item, but the "default" env priority should be the lowest.
+        // Here, we use rfold (reverse fold) to ensure later features override earlier features
+        // for environment variables. Processing features in reverse order means that
+        // features appearing later in the list will have higher precedence.
+        //
+        // Example: If features: [override_feature, user_feature, default]
+        // - rfold processes as: [default, user_feature, override_feature]
+        // - Result: override_feature env vars take precedence over all others
+        self.features().map(|f| f.activation_env(platform)).rfold(
+            IndexMap::new(),
+            |mut acc, env| {
                 acc.extend(env.iter().map(|(k, v)| (k.clone(), v.clone())));
                 acc
-            })
+            },
+        )
     }
 
     /// Validates that the given platform is supported by this environment.
@@ -327,6 +336,44 @@ impl<'p> Environment<'p> {
     /// Returns the channel configuration for this grouped environment
     pub fn channel_config(&self) -> ChannelConfig {
         self.workspace().channel_config()
+    }
+
+    // Extract variable name
+    fn extract_variable_name(value: &str) -> Option<&str> {
+        if let Some(inner) = value.strip_prefix('$') {
+            Some(inner)
+        } else if let Some(inner) = value.strip_prefix('%').and_then(|s| s.strip_suffix('%')) {
+            Some(inner)
+        } else if let Some(inner) = value.strip_prefix("${").and_then(|s| s.strip_suffix('}')) {
+            Some(inner)
+        } else {
+            None
+        }
+    }
+
+    /// Resolves variable references in environment variables
+    pub fn resolve_variable_references<M>(map: &mut M)
+    where
+        M: Clone,
+        for<'a> &'a M: std::iter::IntoIterator<Item = (&'a String, &'a String)>,
+        M: std::iter::Extend<(String, String)>,
+    {
+        let map_clone = map.clone();
+        let keys_to_update: Vec<String> =
+            (&map_clone).into_iter().map(|(k, _)| k.clone()).collect();
+
+        for key in keys_to_update {
+            if let Some((_, value)) = (&map_clone).into_iter().find(|(k, _)| *k == &key) {
+                if let Some(referenced_var) = Self::extract_variable_name(value) {
+                    if let Some((_, actual_value)) = (&map_clone)
+                        .into_iter()
+                        .find(|(k, _)| k.as_str() == referenced_var)
+                    {
+                        map.extend([(key, actual_value.clone())]);
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -610,6 +657,58 @@ mod tests {
             indexmap! {
                 "LINUX_VAR".to_string() => "1".to_string(),
                 "DEFAULT_VAR".to_string() => "1".to_string(),
+            }
+        );
+    }
+
+     #[test]
+    fn test_activation_env_priority() {
+        let manifest = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+            [project]
+            name = "foobar"
+            channels = []
+            platforms = ["linux-64", "osx-64"]
+
+            [activation.env]
+            FOO_VAR = "default"
+
+            [feature.foo.activation.env]
+            FOO_VAR = "foo"
+
+            [feature.cuda1.activation.env]
+            FOO_VAR = "cuda1"
+
+            [feature.cuda2.activation.env]
+            FOO_VAR = "cuda2"
+
+            [environments]
+            foo = ["foo"]
+            cuda = ["cuda1", "cuda2"] 
+            "#,
+        )
+        .unwrap();
+
+        let default_env = manifest.default_environment();
+        let foo_env = manifest.environment("foo").unwrap();
+        let cuda_env = manifest.environment("cuda").unwrap();
+          assert_eq!(
+            default_env.activation_env(None),
+            indexmap! {
+                "FOO_VAR".to_string() => "default",
+            }
+        );
+        assert_eq!(
+            foo_env.activation_env(None),
+            indexmap! {
+                "FOO_VAR".to_string() => "foo",
+            }
+        );
+        assert_eq!(
+            cuda_env.activation_env(None),
+            indexmap! {
+                "FOO_VAR".to_string() => "cuda1",
             }
         );
     }
