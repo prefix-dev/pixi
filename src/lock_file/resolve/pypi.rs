@@ -454,7 +454,9 @@ pub async fn resolve_pypi(
     let options = Options {
         index_strategy,
         build_options: build_options.clone(),
-        exclude_newer: exclude_newer.map(to_exclude_newer).unwrap_or(uv_resolver::ExcludeNewer::default()),
+        exclude_newer: exclude_newer
+            .map(to_exclude_newer)
+            .unwrap_or(uv_resolver::ExcludeNewer::default()),
         ..Options::default()
     };
 

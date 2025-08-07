@@ -645,7 +645,8 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
     where
         'a: 'setup,
     {
-        static EMPTY_CONSTRAINTS: std::sync::LazyLock<Constraints> = std::sync::LazyLock::new(|| Constraints::default());
+        static EMPTY_CONSTRAINTS: std::sync::LazyLock<Constraints> =
+            std::sync::LazyLock::new(|| Constraints::default());
         BuildDispatch::new(
             &setup.registry_client,
             &self.context_config.uv_context.cache,
