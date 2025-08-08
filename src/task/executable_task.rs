@@ -3,6 +3,7 @@ use std::{
     collections::HashMap,
     ffi::OsString,
     fmt::{Display, Formatter},
+    io::Write,
     path::PathBuf,
 };
 
@@ -50,6 +51,9 @@ pub enum FailedToParseShellScript {
     #[error(transparent)]
     #[diagnostic(transparent)]
     ArgumentReplacement(#[from] TemplateStringError),
+
+    #[error("failed to create temporary file for interpreter")]
+    TempFileCreation(#[from] std::io::Error),
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -129,11 +133,11 @@ impl<'p> ExecutableTask<'p> {
         &self.args
     }
 
-    /// Returns the task as script
+    /// Returns the task as script and optional temporary file for cleanup
     fn as_script(
         &self,
         command_env: IndexMap<String, String>,
-    ) -> Result<Option<String>, FailedToParseShellScript> {
+    ) -> Result<Option<(String, Option<tempfile::NamedTempFile>)>, FailedToParseShellScript> {
         // Convert the task into an executable string
         let task = self
             .task
@@ -153,14 +157,41 @@ impl<'p> ExecutableTask<'p> {
                 String::new()
             };
 
-            // Skip the export if it's empty, to avoid newlines
-            let full_script = if export.is_empty() {
-                format!("{} {}", task, cli_args)
-            } else {
-                format!("{}\n{} {}", export, task, cli_args)
-            };
+            // Handle interpreter mode
+            if let Some(interpreter) = self.task().interpreter() {
+                // Create a temporary file to store the script
+                let mut temp_file = tempfile::NamedTempFile::new()?;
+                temp_file.write_all(task.as_bytes())?;
+                temp_file.flush()?;
 
-            Ok(Some(full_script))
+                // Get the temporary file path
+                let temp_path = temp_file.path().to_string_lossy().to_string();
+
+                // Handle {0} placeholder for interpreter command
+                let interpreter_with_file = if interpreter.contains("{0}") {
+                    interpreter.replace("{0}", &temp_path)
+                } else {
+                    format!("{interpreter} {temp_path}")
+                };
+
+                // Build final command with freeargs
+                let full_script = if export.is_empty() {
+                    format!("{interpreter_with_file} {cli_args}")
+                } else {
+                    format!("{export}\n{interpreter_with_file} {cli_args}")
+                };
+
+                Ok(Some((full_script, Some(temp_file))))
+            } else {
+                // Skip the export if it's empty, to avoid newlines
+                let full_script = if export.is_empty() {
+                    format!("{} {}", task, cli_args)
+                } else {
+                    format!("{}\n{} {}", export, task, cli_args)
+                };
+
+                Ok(Some((full_script, None)))
+            }
         } else {
             Ok(None)
         }
@@ -168,27 +199,31 @@ impl<'p> ExecutableTask<'p> {
 
     /// Returns a [`SequentialList`] which can be executed by deno task shell.
     /// Returns `None` if the command is not executable like in the case of
-    /// an alias.
+    /// an alias. Also returns any temporary files that need to be cleaned up.
     pub(crate) fn as_deno_script(
         &self,
         command_env: &HashMap<OsString, OsString>,
-    ) -> Result<Option<SequentialList>, FailedToParseShellScript> {
+    ) -> Result<Option<(SequentialList, Option<tempfile::NamedTempFile>)>, FailedToParseShellScript>
+    {
         let command_env_converted: IndexMap<String, String> = command_env
             .iter()
             .filter_map(|(k, v)| Some((k.to_str()?.to_string(), v.to_str()?.to_string())))
             .collect();
-        let full_script = self.as_script(command_env_converted)?;
+        let script_result = self.as_script(command_env_converted)?;
 
-        if let Some(full_script) = full_script {
+        if let Some((full_script, temp_file)) = script_result {
             tracing::debug!("Parsing shell script: {}", full_script);
 
             // Parse the shell command
-            deno_task_shell::parser::parse(full_script.trim())
-                .map_err(|e| FailedToParseShellScript::ParseError {
-                    source: e,
-                    task: full_script.to_string(),
-                })
-                .map(Some)
+            let sequential_list =
+                deno_task_shell::parser::parse(full_script.trim()).map_err(|e| {
+                    FailedToParseShellScript::ParseError {
+                        source: e,
+                        task: full_script.to_string(),
+                    }
+                })?;
+
+            Ok(Some((sequential_list, temp_file)))
         } else {
             Ok(None)
         }
@@ -248,18 +283,21 @@ impl<'p> ExecutableTask<'p> {
         command_env: &HashMap<OsString, OsString>,
         input: Option<&[u8]>,
     ) -> Result<RunOutput, TaskExecutionError> {
-        let Some(script) = self.as_deno_script(command_env)? else {
+        let Some((script, _temp_file)) = self.as_deno_script(command_env)? else {
             return Ok(RunOutput {
                 exit_code: 0,
                 stdout: String::new(),
                 stderr: String::new(),
             });
         };
+        // Note: _temp_file is kept alive for the duration of this function
+        // and will be automatically cleaned up when it goes out of scope
+
         let cwd = self.working_directory()?;
         let (stdin, mut stdin_writer) = pipe();
-        if let Some(stdin) = input {
+        if let Some(stdin_data) = input {
             stdin_writer
-                .write_all(stdin)
+                .write_all(stdin_data)
                 .expect("should be able to write to stdin");
         }
         drop(stdin_writer); // prevent a deadlock by dropping the writer
@@ -644,7 +682,7 @@ mod tests {
 
         let expected_prefix = "export \"FOO=bar\"";
 
-        let script = result.unwrap().expect("Script should not be None");
+        let (script, temp_file) = result.unwrap().expect("Script should not be None");
         let path_prefix = "export \"PATH=myPath\"";
         let home_prefix = "export \"HOME=myHome\"";
 
@@ -652,6 +690,7 @@ mod tests {
         // keys not defined in the task are not included
         assert!(!script.contains(path_prefix));
         assert!(!script.contains(home_prefix));
+        assert!(temp_file.is_none()); // No interpreter, so no temp file
     }
 
     #[tokio::test]

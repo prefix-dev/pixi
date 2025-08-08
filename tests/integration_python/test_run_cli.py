@@ -1599,9 +1599,74 @@ def test_signal_forwarding(pixi: Path, tmp_pixi_workspace: Path) -> None:
             )
     else:
         raise AssertionError("Output file was not created")
-    
+
+
+def test_task_interpreter_with_args_and_env(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test interpreter working together with args and env variables."""
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+
+    # Test interpreter with args and environment variables
+    manifest_content["tasks"] = {
+        "process-with-env": {
+            "cmd": """
+import os
+print(f'{os.environ['TASK_PREFIX']}: Processing {{ input_file }} with prefix {{ prefix }}')
+            """,
+            "interpreter": "python",
+            "args": [
+                {"arg": "input_file", "default": "default.txt"},
+                {"arg": "prefix", "default": "PROC"},
+            ],
+            "env": {
+                "TASK_PREFIX": "{{ prefix }}",
+            },
+        },
+    }
+
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    # Test with custom arguments
+    verify_cli_command(
+        [
+            pixi,
+            "run",
+            "--manifest-path",
+            manifest_path,
+            "process-with-env",
+            "custom.txt",
+            "CUSTOM",
+        ],
+        stdout_contains=[
+            "{{ prefix }}: Processing custom.txt with prefix CUSTOM",
+        ],
+    )
+
+
+@pytest.mark.skipif(
+    platform.system() != "Windows", reason="Test specific to Windows cmd interpreter"
+)
+def test_windows_cmd_interpreter(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test that cmd.exe can be used as an interpreter on Windows."""
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+    manifest_content["tasks"] = {
+        "cmd-echo": {
+            "cmd": "echo Hello from Windows CMD",
+        },
+    }
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    # Test basic cmd interpreter
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "cmd-echo"],
+        stdout_contains="Hello from Windows CMD",
+    )
+
+
 def test_run_environment_variable_not_be_overridden(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    """Test environment variables should not be overridden by excluded keys.""" 
+    """Test environment variables should not be overridden by excluded keys."""
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     toml = """
     [workspace]
@@ -1625,5 +1690,40 @@ def test_run_environment_variable_not_be_overridden(pixi: Path, tmp_pixi_workspa
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "test"],
         stdout_contains="my_project",
-        stdout_excludes="$(pixi workspace name get)"
+        stdout_excludes="$(pixi workspace name get)",
+    )
+
+
+def test_task_interpreter_advanced(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test complex interpreter functionality."""
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+
+    # Test complex interpreter that removes spaces from input
+    manifest_content["tasks"] = {
+        "remove-spaces-blackbox": {
+            "cmd": """import sys; data=sys.stdin.read(); sys.stdout.write(data.replace(' ',''))""",
+            "interpreter": "python",
+        },
+        "interpreter-as-pipe": {
+            "cmd": "hello world",
+            "interpreter": "pixi run remove-spaces-blackbox < {0}",
+        },
+        "remove-spaces": {
+            "cmd": "hello world",
+            "interpreter": "cat {0} | tr -d ' '",
+        },
+    }
+
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    # Run the task with complex interpreter
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "remove-spaces"],
+        stdout_contains="helloworld",
+    )
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "interpreter-as-pipe"],
+        stdout_contains="helloworld",
     )

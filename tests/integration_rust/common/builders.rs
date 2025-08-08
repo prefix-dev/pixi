@@ -342,6 +342,12 @@ impl TaskAddBuilder {
         self
     }
 
+    /// With this custom interpreter
+    pub fn with_interpreter(mut self, interpreter: impl ToString) -> Self {
+        self.args.interpreter = Some(interpreter.to_string());
+        self
+    }
+
     /// Execute the CLI command
     pub async fn execute(self) -> miette::Result<()> {
         task::execute(task::Args {
