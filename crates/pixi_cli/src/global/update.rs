@@ -185,16 +185,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
         }
 
-        if let Some(expose_type) = expose_type {
-            // Sync executables exposed names with the manifest
-            project.sync_exposed_names(env_name, expose_type).await?;
+        if !dry_run && !json_output {
+            if let Some(expose_type) = expose_type {
+                // Sync executables exposed names with the manifest for auto-expose
+                project.sync_exposed_names(env_name, expose_type).await?;
+            }
 
-            // Expose or prune executables of the new environment
+            // Expose or prune executables of the new environment (always)
             state_changes |= project
                 .expose_executables_from_environment(env_name)
                 .await?;
 
-            // Sync completions
+            // Sync completions (always)
             state_changes |= project.sync_completions(env_name).await?;
         }
 
