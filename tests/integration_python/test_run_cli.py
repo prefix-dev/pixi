@@ -1599,9 +1599,10 @@ def test_signal_forwarding(pixi: Path, tmp_pixi_workspace: Path) -> None:
             )
     else:
         raise AssertionError("Output file was not created")
-    
+
+
 def test_run_environment_variable_not_be_overridden(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    """Test environment variables should not be overridden by excluded keys.""" 
+    """Test environment variables should not be overridden by excluded keys."""
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     toml = """
     [workspace]
@@ -1625,5 +1626,5 @@ def test_run_environment_variable_not_be_overridden(pixi: Path, tmp_pixi_workspa
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "test"],
         stdout_contains="my_project",
-        stdout_excludes="$(pixi workspace name get)"
+        stdout_excludes="$(pixi workspace name get)",
     )

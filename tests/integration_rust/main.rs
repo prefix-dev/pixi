@@ -1,4 +1,5 @@
 mod add_tests;
+mod build_tests;
 mod common;
 mod init_tests;
 mod install_tests;

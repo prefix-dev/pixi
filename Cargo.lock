@@ -5213,6 +5213,8 @@ dependencies = [
  "insta",
  "itertools 0.14.0",
  "miette 7.6.0",
+ "serde",
+ "serde-value",
  "strsim",
  "strum",
  "toml-span",

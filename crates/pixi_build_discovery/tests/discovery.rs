@@ -1,7 +1,9 @@
+use std::ffi::OsStr;
+use std::path::{Path, PathBuf};
+
 use insta::{assert_snapshot, assert_yaml_snapshot, glob};
 use pixi_build_discovery::{DiscoveredBackend, EnabledProtocols};
 use rattler_conda_types::ChannelConfig;
-use std::path::{Path, PathBuf};
 
 fn discovery_directory() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/discovery")
@@ -23,6 +25,16 @@ macro_rules! assert_discover_snapshot {
                 {
                     "[\"init-params\"][\"manifest-path\"]" => insta::dynamic_redaction(|value, _path| {
                         value.as_str().unwrap().replace("\\", "/")
+                     }),
+                    "[\"init-params\"][\"workspace-root\"]" => insta::dynamic_redaction(|value, _path| {
+                        let s = value.as_str().unwrap();
+                        let path = PathBuf::from(s);
+                        let skipped = path.components().skip_while(|c| *c != std::path::Component::Normal(OsStr::new("discovery"))).skip(1).collect::<PathBuf>();
+                        let display_skipped = skipped.display();
+                        let str_skipped = display_skipped.to_string();
+                        let prettified_norm = str_skipped.replace(r"\\", r"/").replace(r"\", r"/");
+                        let prettified = prettified_norm.trim_end_matches(['/', '\\']);
+                        format!("file://<ROOT>/{}", prettified)
                      }),
                     "[\"init-params\"][\"source-dir\"]" => "[SOURCE_PATH]",
                 });
@@ -61,7 +73,6 @@ fn test_discovery() {
         })
     });
 }
-
 #[test]
 fn test_non_existing() {
     assert_discover_snapshot!(Path::new("/non-existing"));

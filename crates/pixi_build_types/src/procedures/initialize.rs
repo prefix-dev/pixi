@@ -37,6 +37,11 @@ pub struct InitializeParams {
     /// This is an absolute path.
     pub source_dir: Option<PathBuf>,
 
+    /// The root directory of the workspace.
+    ///
+    /// This is an absolute path.
+    pub workspace_root: Option<PathBuf>,
+
     /// Optionally the cache directory to use for any caching activity.
     pub cache_directory: Option<PathBuf>,
 
