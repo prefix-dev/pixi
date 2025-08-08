@@ -158,7 +158,6 @@ impl<'a> UvBuildDispatchParams<'a> {
         self
     }
 
-    #[allow(dead_code)]
     pub fn with_workspace_cache(mut self, workspace_cache: WorkspaceCache) -> Self {
         self.workspace_cache = workspace_cache;
         self
@@ -270,6 +269,7 @@ impl IsBuildBackendError for LazyBuildDispatchError {
 
 impl<'a> LazyBuildDispatch<'a> {
     /// Create a new `PixiBuildDispatch` instance.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         params: UvBuildDispatchParams<'a>,
         prefix_updater: CondaPrefixUpdater,
@@ -390,10 +390,7 @@ impl<'a> LazyBuildDispatch<'a> {
                 self.params.link_mode,
                 self.params.build_options,
                 self.params.hasher,
-                self.params
-                    .exclude_newer
-                    .clone()
-                    .unwrap_or(uv_resolver::ExcludeNewer::default()),
+                self.params.exclude_newer.clone().unwrap_or_default(),
                 self.params.sources,
                 self.params.workspace_cache.clone(),
                 self.params.concurrency,

@@ -454,9 +454,7 @@ pub async fn resolve_pypi(
     let options = Options {
         index_strategy,
         build_options: build_options.clone(),
-        exclude_newer: exclude_newer
-            .map(to_exclude_newer)
-            .unwrap_or(uv_resolver::ExcludeNewer::default()),
+        exclude_newer: exclude_newer.map(to_exclude_newer).unwrap_or_default(),
         ..Options::default()
     };
 
@@ -474,6 +472,7 @@ pub async fn resolve_pypi(
     )
     .with_index_strategy(index_strategy)
     .with_exclude_newer(options.exclude_newer.clone())
+    .with_workspace_cache(context.workspace_cache.clone())
     // Create a forked shared state that condains the in-memory index.
     // We need two in-memory indexes, one for the build dispatch and one for the
     // resolver. because we manually override requests for the resolver,

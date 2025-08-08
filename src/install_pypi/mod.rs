@@ -274,8 +274,8 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         let exclude_newer = self
             .build_config
             .exclude_newer
-            .map(|d| to_exclude_newer(d.clone()))
-            .unwrap_or(ExcludeNewer::default());
+            .map(|d| to_exclude_newer(*d))
+            .unwrap_or_default();
 
         Ok(UvInstallerConfig {
             tags,
@@ -607,7 +607,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             .with_starting_tasks(remote.iter().map(|(d, _)| format!("{}", d.name())))
             .with_top_level_message("Preparing distributions");
 
-        let build_dispatch = self.create_build_dispatch(&setup);
+        let build_dispatch = self.create_build_dispatch(setup);
 
         let distribution_database = DistributionDatabase::new(
             setup.registry_client.as_ref(),
