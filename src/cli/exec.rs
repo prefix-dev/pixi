@@ -109,10 +109,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .collect();
 
     if !package_names.is_empty() {
-        let env_name = format!(
-            "temp:{}",
-            package_names.into_iter().format(",")
-        );
+        let env_name = format!("temp:{}", package_names.into_iter().format(","));
 
         activation_env.insert("PIXI_ENVIRONMENT_NAME".into(), env_name.clone());
 
@@ -139,8 +136,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let command_args_vec: Vec<_> = command_iter.collect();
     cmd.args(&command_args_vec);
 
-    // On Windows, when using cmd.exe or cmd, we need to set environment variables in a special way
-    // because cmd.exe has its own environment variable expansion rules
+    // On Windows, when using cmd.exe or cmd, we need to pass the full environment
+    // because cmd.exe requires access to all environment variables (including prompt variables)
+    // to properly display the modified prompt
     if cfg!(windows) && (command.to_lowercase().ends_with("cmd.exe") || command == "cmd") {
         let mut env = std::env::vars().collect::<HashMap<String, String>>();
         env.extend(activation_env);
