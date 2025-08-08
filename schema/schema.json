@@ -537,7 +537,7 @@
       "properties": {
         "args": {
           "title": "Args",
-          "description": "The arguments to pass to the task",
+          "description": "The (positional or named) arguments to pass to the task",
           "type": "array",
           "items": {
             "type": "string",

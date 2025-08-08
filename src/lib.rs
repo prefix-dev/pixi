@@ -7,16 +7,14 @@ pub mod environment;
 mod global;
 mod install_pypi;
 pub mod lock_file;
-mod prefix;
+pub mod prefix;
 mod prompt;
 pub(crate) mod repodata;
 pub mod task;
 pub mod workspace;
 
-mod reporters;
-
 mod rlimit;
-mod uv_reporter;
+mod signals;
 pub mod variants;
 
 pub use lock_file::UpdateLockFileOptions;

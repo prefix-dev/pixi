@@ -19,7 +19,7 @@ pixi import [OPTIONS] <FILE>
 ## Options
 - <a id="arg---format" href="#arg---format">`--format <FORMAT>`</a>
 :  Which format to interpret the file as
-<br>**options**: `conda-env`
+<br>**options**: `conda-env`, `pypi-txt`
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
 :  The platforms for the imported environment
 <br>May be provided more than once.
@@ -69,7 +69,7 @@ pixi import [OPTIONS] <FILE>
 ## Description
 Imports a file into an environment in an existing workspace.
 
-If `--format` isn't provided, `import` will try to guess the format based on the file extension.
+If `--format` isn't provided, `import` will try each format in turn
 
 
 --8<-- "docs/reference/cli/pixi/import_extender:example"

@@ -107,7 +107,14 @@ pub struct BuiltPackage {
 }
 
 impl SourceBuildSpec {
-    #[instrument(skip_all, fields(package = %self.package, source = %self.source))]
+    #[instrument(
+        skip_all,
+        name = "source-build",
+        fields(
+            source= %self.source,
+            package = %self.package,
+        )
+    )]
     pub(crate) async fn build(
         mut self,
         command_dispatcher: CommandDispatcher,
@@ -158,7 +165,9 @@ impl SourceBuildSpec {
         // Instantiate the backend with the discovered information.
         let backend = command_dispatcher
             .instantiate_backend(InstantiateBackendSpec {
-                backend_spec: discovered_backend.backend_spec,
+                backend_spec: discovered_backend
+                    .backend_spec
+                    .resolve(SourceAnchor::from(SourceSpec::from(self.source.clone()))),
                 init_params: discovered_backend.init_params,
                 channel_config: self.channel_config.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
@@ -306,7 +315,6 @@ impl SourceBuildSpec {
                 method: BackendSourceBuildMethod::BuildV0(BackendSourceBuildV0Method {
                     editable: self.editable(),
                     channel_config: self.channel_config,
-                    channels: self.channels,
                     build_environment: self.build_environment,
                     variants: self.variants,
                     output_directory: self.output_directory,
@@ -315,6 +323,7 @@ impl SourceBuildSpec {
                 package: self.package,
                 source: self.source,
                 work_directory,
+                channels: self.channels,
             })
             .await
             .map_err_with(SourceBuildError::from)?;
@@ -347,6 +356,7 @@ impl SourceBuildSpec {
                 build_platform,
                 variant_configuration: self.variants.clone(),
                 work_directory: work_directory.clone(),
+                channels: self.channels.clone(),
             })
             .await
             .map_err(BackendSourceBuildError::BuildError)
@@ -476,6 +486,10 @@ impl SourceBuildSpec {
             CommandDispatcherError::Failed(SourceBuildError::CreateWorkDirectory(err))
         })?;
 
+        // Extract the repodata records from the build and host environments.
+        let build_records = Self::extract_prefix_repodata(build_records, build_prefix);
+        let host_records = Self::extract_prefix_repodata(host_records, host_prefix);
+
         let built_source = command_dispatcher
             .backend_source_build(BackendSourceBuildSpec {
                 method: BackendSourceBuildMethod::BuildV1(BackendSourceBuildV1Method {
@@ -483,12 +497,18 @@ impl SourceBuildSpec {
                     build_prefix: BackendSourceBuildPrefix {
                         platform: self.build_environment.build_platform,
                         prefix: directories.build_prefix,
-                        records: build_records.clone(),
+                        records: build_records
+                            .iter()
+                            .map(|p| p.repodata_record.clone())
+                            .collect(),
                     },
                     host_prefix: BackendSourceBuildPrefix {
                         platform: self.build_environment.host_platform,
                         prefix: directories.host_prefix,
-                        records: host_records.clone(),
+                        records: host_records
+                            .iter()
+                            .map(|p| p.repodata_record.clone())
+                            .collect(),
                     },
                     variant: output.metadata.variant,
                     output_directory: self.output_directory,
@@ -497,52 +517,55 @@ impl SourceBuildSpec {
                 package: self.package,
                 source: self.source,
                 work_directory,
+                channels: self.channels,
             })
             .await
             .map_err_with(SourceBuildError::from)?;
-
-        // Little helper function the build a `BuildHostEnvironment` from expected and
-        // installed records.
-        let build_host_environment =
-            |records: Vec<PixiRecord>, prefix: Option<InstallPixiEnvironmentResult>| {
-                let Some(prefix) = prefix else {
-                    return BuildHostEnvironment { packages: vec![] };
-                };
-
-                BuildHostEnvironment {
-                    packages: records
-                        .into_iter()
-                        .map(|record| match record {
-                            PixiRecord::Binary(repodata_record) => BuildHostPackage {
-                                repodata_record,
-                                source: None,
-                            },
-                            PixiRecord::Source(source) => {
-                                let repodata_record = prefix
-                                    .resolved_source_records
-                                    .get(&source.package_record.name)
-                                    .cloned()
-                                    .expect(
-                                        "the source record should be present in the result sources",
-                                    );
-                                BuildHostPackage {
-                                    repodata_record,
-                                    source: Some(source.source),
-                                }
-                            }
-                        })
-                        .collect(),
-                }
-            };
 
         Ok(BuiltPackage {
             output_file: built_source.output_file,
             metadata: CachedBuildSourceInfo {
                 globs: built_source.input_globs,
-                build: build_host_environment(build_records, build_prefix),
-                host: build_host_environment(host_records, host_prefix),
+                build: BuildHostEnvironment {
+                    packages: build_records,
+                },
+                host: BuildHostEnvironment {
+                    packages: host_records,
+                },
             },
         })
+    }
+
+    /// Little helper function the build a `BuildHostPackage` from expected and
+    /// installed records.
+    fn extract_prefix_repodata(
+        records: Vec<PixiRecord>,
+        prefix: Option<InstallPixiEnvironmentResult>,
+    ) -> Vec<BuildHostPackage> {
+        let Some(prefix) = prefix else {
+            return vec![];
+        };
+
+        records
+            .into_iter()
+            .map(|record| match record {
+                PixiRecord::Binary(repodata_record) => BuildHostPackage {
+                    repodata_record,
+                    source: None,
+                },
+                PixiRecord::Source(source) => {
+                    let repodata_record = prefix
+                        .resolved_source_records
+                        .get(&source.package_record.name)
+                        .cloned()
+                        .expect("the source record should be present in the result sources");
+                    BuildHostPackage {
+                        repodata_record,
+                        source: Some(source.source),
+                    }
+                }
+            })
+            .collect()
     }
 
     async fn solve_dependencies(

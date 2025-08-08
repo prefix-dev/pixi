@@ -86,6 +86,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 max_concurrent_solves: workspace.config().max_concurrent_solves(),
             },
             reinstall_packages.clone(),
+            &[],
         )
         .await?;
 

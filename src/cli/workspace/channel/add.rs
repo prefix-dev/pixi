@@ -32,6 +32,7 @@ pub async fn execute(args: AddRemoveArgs) -> miette::Result<()> {
             max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
         },
         ReinstallPackages::default(),
+        &[],
     )
     .await?;
 

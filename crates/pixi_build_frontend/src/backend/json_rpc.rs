@@ -26,6 +26,7 @@ use pixi_build_types::{
         negotiate_capabilities::{NegotiateCapabilitiesParams, NegotiateCapabilitiesResult},
     },
 };
+use rattler_conda_types::VersionWithSource;
 use thiserror::Error;
 use tokio::{
     io::{AsyncBufReadExt, BufReader, Lines},
@@ -126,6 +127,8 @@ impl CommunicationError {
 pub struct JsonRpcBackend {
     /// The identifier of the backend.
     backend_identifier: String,
+    /// The version of the backend.
+    backend_version: Option<VersionWithSource>,
     /// The capabilities of the backend.
     backend_capabilities: BackendCapabilities,
     /// The JSON-RPC client to communicate with the backend.
@@ -187,6 +190,7 @@ impl JsonRpcBackend {
         let (tx, rx) = stdio_transport(stdin, stdout);
         Self::setup_with_transport(
             backend_identifier,
+            tool.version().cloned(),
             source_dir,
             manifest_path,
             package_manifest,
@@ -204,6 +208,7 @@ impl JsonRpcBackend {
     #[allow(clippy::too_many_arguments)]
     pub(crate) async fn setup_with_transport(
         backend_identifier: String,
+        backend_version: Option<VersionWithSource>,
         source_dir: PathBuf,
         manifest_path: PathBuf,
         project_model: Option<ProjectModelV1>,
@@ -265,6 +270,7 @@ impl JsonRpcBackend {
         Ok(Self {
             client,
             backend_identifier,
+            backend_version,
             backend_capabilities: negotiate_result.capabilities,
             manifest_path,
             stderr: stderr.map(Mutex::new).map(Arc::new),
@@ -478,6 +484,11 @@ impl JsonRpcBackend {
     /// Returns the backend identifier.
     pub fn identifier(&self) -> &str {
         &self.backend_identifier
+    }
+
+    /// Returns the version of the backend, if available.
+    pub fn version(&self) -> Option<&VersionWithSource> {
+        self.backend_version.as_ref()
     }
 
     /// Returns the advertised capabilities of the backend.
