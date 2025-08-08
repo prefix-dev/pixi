@@ -16,6 +16,12 @@ pixi global update [OPTIONS] [ENVIRONMENTS]...
 :  Specifies the environments that are to be updated
 <br>May be provided more than once.
 
+## Options
+- <a id="arg---dry-run" href="#arg---dry-run">`--dry-run (-n)`</a>
+:  Don't actually update any environment
+- <a id="arg---json" href="#arg---json">`--json`</a>
+:  Output the changes in JSON format
+
 ## Config Options
 - <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
 :  Do not verify the TLS certificate of the server
