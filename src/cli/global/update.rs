@@ -186,8 +186,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
 
         if !dry_run && !json_output {
+            // Always prune invalid/outdated mappings
+            project
+                .sync_exposed_names(env_name, ExposedType::Nothing)
+                .await?;
+
             if let Some(expose_type) = expose_type {
-                // Sync executables exposed names with the manifest for auto-expose
+                // When auto-exposing, add new binaries to the manifest
                 project.sync_exposed_names(env_name, expose_type).await?;
             }
 
