@@ -7,8 +7,7 @@ use uv_distribution_types::{ExtraBuildRequires, IndexCapabilities};
 use uv_types::{HashStrategy, InFlight};
 use uv_workspace::WorkspaceCache;
 
-use crate::Workspace;
-use pixi_config::{self, get_cache_dir};
+use pixi_config::{self, Config, get_cache_dir};
 use pixi_consts::consts;
 use pixi_utils::reqwest::uv_middlewares;
 use pixi_uv_conversions::{ConversionError, to_uv_trusted_host};
@@ -34,7 +33,7 @@ pub struct UvResolutionContext {
 }
 
 impl UvResolutionContext {
-    pub(crate) fn from_workspace(project: &Workspace) -> miette::Result<Self> {
+    pub fn from_workspace_config(project_config: &Config) -> miette::Result<Self> {
         let uv_cache = get_cache_dir()?.join(consts::PYPI_CACHE_DIR);
         if !uv_cache.exists() {
             fs_err::create_dir_all(&uv_cache)
@@ -44,7 +43,7 @@ impl UvResolutionContext {
 
         let cache = Cache::from_path(uv_cache);
 
-        let keyring_provider = match project.config().pypi_config().use_keyring() {
+        let keyring_provider = match project_config.pypi_config().use_keyring() {
             pixi_config::KeyringProvider::Subprocess => {
                 tracing::debug!("using uv keyring (subprocess) provider");
                 uv_configuration::KeyringProviderType::Subprocess
@@ -55,8 +54,7 @@ impl UvResolutionContext {
             }
         };
 
-        let allow_insecure_host = project
-            .config()
+        let allow_insecure_host = project_config
             .pypi_config
             .allow_insecure_host
             .iter()
@@ -80,8 +78,8 @@ impl UvResolutionContext {
             capabilities: IndexCapabilities::default(),
             allow_insecure_host,
             shared_state: SharedState::default(),
-            extra_middleware: ExtraMiddleware(uv_middlewares(project.config())),
-            proxies: project.config().get_proxies().into_diagnostic()?,
+            extra_middleware: ExtraMiddleware(uv_middlewares(project_config)),
+            proxies: project_config.get_proxies().into_diagnostic()?,
             package_config_settings: PackageConfigSettings::default(),
             extra_build_requires: ExtraBuildRequires::default(),
             preview: Preview::default(),

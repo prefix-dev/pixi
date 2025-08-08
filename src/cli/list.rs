@@ -11,6 +11,7 @@ use human_bytes::human_bytes;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_consts::consts;
+use pixi_lockfile::UvResolutionContext;
 use pixi_manifest::FeaturesExt;
 use pixi_uv_conversions::{
     ConversionError, pypi_options_to_index_locations, to_uv_normalize, to_uv_version,
@@ -23,11 +24,7 @@ use uv_configuration::ConfigSettings;
 use uv_distribution::RegistryWheelIndex;
 
 use super::cli_config::LockFileUpdateConfig;
-use crate::{
-    WorkspaceLocator,
-    cli::cli_config::WorkspaceConfig,
-    lock_file::{UpdateLockFileOptions, UvResolutionContext},
-};
+use crate::{WorkspaceLocator, cli::cli_config::WorkspaceConfig, lock_file::UpdateLockFileOptions};
 
 // an enum to sort by size or name
 #[derive(clap::ValueEnum, Clone, Debug, Serialize)]
@@ -223,7 +220,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let config_settings = ConfigSettings::default();
     let mut registry_index = if let Some(python_record) = python_record {
         if environment.has_pypi_dependencies() {
-            uv_context = UvResolutionContext::from_workspace(&workspace)?;
+            uv_context = UvResolutionContext::from_workspace_config(workspace.config())?;
             index_locations =
                 pypi_options_to_index_locations(&environment.pypi_options(), workspace.root())
                     .into_diagnostic()?;

@@ -15,6 +15,7 @@ use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
 use pixi_consts::consts;
+use pixi_lockfile::UvResolutionContext;
 use pixi_manifest::{EnvironmentName, SystemRequirements, pypi::pypi_options::PypiOptions};
 use pixi_pypi_spec::PixiPypiSpec;
 use pixi_record::PixiRecord;
@@ -55,7 +56,7 @@ use crate::{
     environment::CondaPrefixUpdated,
     lock_file::{
         CondaPrefixUpdater, LockedPypiPackages, PixiRecordsByName, PypiPackageIdentifier,
-        PypiRecord, UvResolutionContext,
+        PypiRecord,
         records_by_name::HasNameVersion,
         resolve::{
             build_dispatch::{

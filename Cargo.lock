@@ -4716,6 +4716,7 @@ dependencies = [
  "pixi_environment",
  "pixi_git",
  "pixi_glob",
+ "pixi_lockfile",
  "pixi_manifest",
  "pixi_progress",
  "pixi_pty",
@@ -5076,6 +5077,7 @@ dependencies = [
  "pixi_environment",
  "pixi_git",
  "pixi_glob",
+ "pixi_lockfile",
  "pixi_manifest",
  "pixi_progress",
  "pixi_pypi_spec",
@@ -5129,6 +5131,27 @@ dependencies = [
  "uv-resolver",
  "uv-types",
  "uv-workspace",
+]
+
+[[package]]
+name = "pixi_lockfile"
+version = "0.1.0"
+dependencies = [
+ "fs-err",
+ "miette 7.6.0",
+ "pixi_config",
+ "pixi_consts",
+ "pixi_utils",
+ "pixi_uv_conversions",
+ "reqwest",
+ "tracing",
+ "uv-cache",
+ "uv-client",
+ "uv-configuration",
+ "uv-dispatch",
+ "uv-distribution-types",
+ "uv-pep508",
+ "uv-types",
 ]
 
 [[package]]

@@ -8,6 +8,7 @@ use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
 use pixi_consts::consts;
 use pixi_environment::{ContinuePyPIPrefixUpdate, on_python_interpreter_change};
+use pixi_lockfile::UvResolutionContext;
 use pixi_manifest::{
     EnvironmentName, SystemRequirements,
     pypi::pypi_options::{NoBinary, NoBuild, NoBuildIsolation},
@@ -45,7 +46,6 @@ use uv_resolver::{ExcludeNewer, FlatIndex};
 
 use crate::{
     install_pypi::plan::{CachedWheels, RequiredDists},
-    lock_file::UvResolutionContext,
     uv_reporter::{UvReporter, UvReporterOptions},
 };
 use pixi_reporters::{UvReporter, UvReporterOptions};

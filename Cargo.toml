@@ -179,6 +179,7 @@ pixi_default_versions = { path = "crates/pixi_default_versions" }
 pixi_environment = { path = "crates/pixi_environment" }
 pixi_git = { path = "crates/pixi_git" }
 pixi_glob = { path = "crates/pixi_glob" }
+pixi_lockfile = { path = "crates/pixi_lockfile" }
 pixi_manifest = { path = "crates/pixi_manifest" }
 pixi_progress = { path = "crates/pixi_progress" }
 pixi_pypi_spec = { path = "crates/pixi_pypi_spec" }
@@ -310,6 +311,7 @@ pixi_default_versions = { workspace = true }
 pixi_environment = { workspace = true }
 pixi_git = { workspace = true }
 pixi_glob = { workspace = true }
+pixi_lockfile = { workspace = true }
 pixi_manifest = { workspace = true, features = ["rattler_lock"] }
 pixi_progress = { workspace = true }
 pixi_pypi_spec = { workspace = true }

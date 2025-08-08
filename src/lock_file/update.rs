@@ -1,6 +1,6 @@
 use super::{
-    CondaPrefixUpdater, PixiRecordsByName, PypiRecordsByName, UvResolutionContext,
-    outdated::OutdatedEnvironments, utils::IoConcurrencyLimit,
+    CondaPrefixUpdater, PixiRecordsByName, PypiRecordsByName, outdated::OutdatedEnvironments,
+    utils::IoConcurrencyLimit,
 };
 use crate::{
     Workspace,
@@ -32,6 +32,7 @@ use pixi_command_dispatcher::{BuildEnvironment, CommandDispatcher, PixiEnvironme
 use pixi_consts::consts;
 use pixi_environment::PythonStatus;
 use pixi_glob::GlobHashCache;
+use pixi_lockfile::UvResolutionContext;
 use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
 use pixi_record::{ParseLockFileError, PixiRecord};
@@ -493,7 +494,9 @@ impl<'p> LockFileDerivedData<'p> {
 
                 let uv_context = self
                     .uv_context
-                    .get_or_try_init(|| UvResolutionContext::from_workspace(self.workspace))?
+                    .get_or_try_init(|| {
+                        UvResolutionContext::from_workspace_config(self.workspace.config())
+                    })?
                     .clone()
                     .set_cache_refresh(uv_reinstall, uv_packages);
 
@@ -1396,7 +1399,7 @@ impl<'p> UpdateContext<'p> {
             .finish()?;
 
             let uv_context = uv_context
-                .get_or_try_init(|| UvResolutionContext::from_workspace(project))?
+                .get_or_try_init(|| UvResolutionContext::from_workspace_config(project.config()))?
                 .clone();
 
             let locked_group_records = self
