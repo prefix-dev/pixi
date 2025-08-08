@@ -23,9 +23,7 @@ pub enum PythonStatus {
 
 impl PythonStatus {
     /// Determine the [`PythonStatus`] from a [`Transaction`].
-    pub(crate) fn from_transaction(
-        transaction: &Transaction<PrefixRecord, RepoDataRecord>,
-    ) -> Self {
+    pub fn from_transaction(transaction: &Transaction<PrefixRecord, RepoDataRecord>) -> Self {
         match (
             transaction.current_python_info.as_ref(),
             transaction.python_info.as_ref(),
@@ -45,7 +43,7 @@ impl PythonStatus {
 
     /// Returns the info of the current situation (e.g. after the transaction
     /// completed).
-    pub(crate) fn current_info(&self) -> Option<&PythonInfo> {
+    pub fn current_info(&self) -> Option<&PythonInfo> {
         match self {
             PythonStatus::Changed { new, .. }
             | PythonStatus::Unchanged(new)
@@ -56,7 +54,7 @@ impl PythonStatus {
 
     /// Returns the location of the python interpreter relative to the root of
     /// the prefix.
-    pub(crate) fn location(&self) -> Option<&Path> {
+    pub fn location(&self) -> Option<&Path> {
         Some(&self.current_info()?.path)
     }
 }

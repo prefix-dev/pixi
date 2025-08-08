@@ -7,8 +7,8 @@ use crate::{
     activation::CurrentEnvVarBehavior,
     environment::{
         CondaPrefixUpdated, EnvironmentFile, LockFileUsage, LockedEnvironmentHash,
-        PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PythonStatus,
-        read_environment_file, write_environment_file,
+        PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, read_environment_file,
+        write_environment_file,
     },
     install_pypi::{PyPIBuildConfig, PyPIContextConfig, PyPIEnvironmentUpdater, PyPIUpdateConfig},
     lock_file::{
@@ -30,6 +30,7 @@ use itertools::{Either, Itertools};
 use miette::{Diagnostic, IntoDiagnostic, MietteDiagnostic, Report, WrapErr};
 use pixi_command_dispatcher::{BuildEnvironment, CommandDispatcher, PixiEnvironmentSpec};
 use pixi_consts::consts;
+use pixi_environment::PythonStatus;
 use pixi_glob::GlobHashCache;
 use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;

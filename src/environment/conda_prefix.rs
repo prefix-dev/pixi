@@ -3,6 +3,7 @@ use std::{collections::HashSet, sync::Arc};
 use async_once_cell::OnceCell as AsyncOnceCell;
 use miette::IntoDiagnostic;
 use pixi_command_dispatcher::{BuildEnvironment, CommandDispatcher, InstallPixiEnvironmentSpec};
+use pixi_environment::PythonStatus;
 use pixi_manifest::FeaturesExt;
 use pixi_record::PixiRecord;
 use pixi_utils::Prefix;
@@ -16,7 +17,6 @@ use super::{
     try_increase_rlimit_to_sensible,
 };
 use crate::{
-    environment::PythonStatus,
     variants::VariantConfig,
     workspace::{
         HasWorkspaceRef,

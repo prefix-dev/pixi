@@ -1,8 +1,6 @@
 pub(crate) mod conda_metadata;
 mod conda_prefix;
 pub mod list;
-mod pypi_prefix;
-mod python_status;
 pub use conda_prefix::{CondaPrefixUpdated, CondaPrefixUpdater, CondaPrefixUpdaterBuilder};
 use dialoguer::theme::ColorfulTheme;
 use futures::{FutureExt, StreamExt, TryStreamExt, stream};
@@ -14,8 +12,6 @@ use pixi_progress::await_in_progress;
 use pixi_pypi_spec::PixiPypiSpec;
 use pixi_spec::{GitSpec, PixiSpec};
 use pixi_utils::Prefix;
-pub use pypi_prefix::{ContinuePyPIPrefixUpdate, on_python_interpreter_change};
-pub use python_status::PythonStatus;
 use rattler_conda_types::Platform;
 use rattler_lock::LockedPackageRef;
 use serde::{Deserialize, Serialize};

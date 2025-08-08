@@ -7,6 +7,7 @@ use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
 use pixi_consts::consts;
+use pixi_environment::{ContinuePyPIPrefixUpdate, on_python_interpreter_change};
 use pixi_manifest::{
     EnvironmentName, SystemRequirements,
     pypi::pypi_options::{NoBinary, NoBuild, NoBuildIsolation},
@@ -132,7 +133,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         &self,
         pixi_records: &[PixiRecord],
         pypi_records: &[PyPIRecords],
-        python_status: &crate::environment::PythonStatus,
+        python_status: &pixi_environment::PythonStatus,
     ) -> miette::Result<()> {
         // Determine global site-packages status
         let python_info =

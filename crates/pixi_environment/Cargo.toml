@@ -1,0 +1,21 @@
+[package]
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi_environment"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]
+fs-err = { workspace = true }
+miette = { workspace = true }
+pixi_consts = { workspace = true }
+pixi_utils = { workspace = true, default-features = false }
+rattler = { workspace = true }
+rattler_conda_types = { workspace = true }
+rattler_lock = { workspace = true }
+tracing = { workspace = true }
+uv-distribution-types = { workspace = true }
+uv-installer = { workspace = true }
