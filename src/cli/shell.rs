@@ -21,10 +21,9 @@ use crate::{
 use pixi_config::{ConfigCli, ConfigCliActivation, ConfigCliPrompt};
 #[cfg(target_family = "unix")]
 use pixi_pty::unix::PtySession;
+use pixi_utils::Prefix;
 
 #[cfg(target_family = "unix")]
-use crate::prefix::Prefix;
-
 use super::cli_config::LockFileUpdateConfig;
 
 /// Start a shell in a pixi environment, run `exit` to leave the shell.

@@ -1,6 +1,5 @@
 use itertools::Itertools;
 use miette::{Context, Diagnostic, IntoDiagnostic};
-use pixi_utils::{is_binary_folder, strip_executable_extension};
 use rattler_conda_types::{PackageName, Platform, PrefixRecord};
 use rattler_shell::{
     activation::{ActivationVariables, Activator},
@@ -14,6 +13,8 @@ use std::{
 };
 use thiserror::Error;
 use uv_configuration::RAYON_INITIALIZE;
+
+use crate::{is_binary_folder, strip_executable_extension};
 
 #[derive(Error, Debug, Diagnostic)]
 pub enum PrefixError {
@@ -105,7 +106,7 @@ impl Prefix {
     }
 
     /// Checks if the given relative path points to an executable file.
-    pub(crate) fn is_executable(&self, relative_path: &Path) -> bool {
+    pub fn is_executable(&self, relative_path: &Path) -> bool {
         let parent_folder = match relative_path.parent() {
             Some(dir) => dir,
             None => return false,

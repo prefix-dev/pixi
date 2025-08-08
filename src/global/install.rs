@@ -1,16 +1,12 @@
 use super::{EnvDir, EnvironmentName, ExposedName, StateChanges};
-use crate::{
-    global::{
-        BinDir, StateChange,
-        trampoline::{Configuration, Trampoline},
-    },
-    prefix::Executable,
-    prefix::Prefix,
+use crate::global::{
+    BinDir, StateChange,
+    trampoline::{Configuration, Trampoline},
 };
 use indexmap::IndexSet;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use pixi_utils::{executable_from_path, is_binary_folder};
+use pixi_utils::{Executable, Prefix, executable_from_path, is_binary_folder};
 use rattler_conda_types::{
     MatchSpec, Matches, PackageName, ParseStrictness, Platform, RepoDataRecord,
 };

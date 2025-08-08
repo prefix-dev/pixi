@@ -7,10 +7,9 @@ pub(crate) mod project;
 pub(crate) mod trampoline;
 
 pub(crate) use common::{BinDir, EnvChanges, EnvDir, EnvRoot, EnvState, StateChange, StateChanges};
-use pixi_utils::executable_from_path;
 pub(crate) use project::{EnvironmentName, ExposedName, Mapping, Project};
 
-use crate::prefix::{Executable, Prefix};
+use pixi_utils::{Executable, Prefix, executable_from_path};
 use rattler_conda_types::PrefixRecord;
 use std::path::{Path, PathBuf};
 

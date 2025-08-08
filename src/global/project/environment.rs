@@ -101,11 +101,9 @@ pub(crate) async fn environment_specs_in_sync(
 mod tests {
 
     use super::*;
-    use crate::{
-        global::{EnvDir, EnvRoot},
-        prefix::Prefix,
-    };
+    use crate::global::{EnvDir, EnvRoot};
     use fs_err::tokio as tokio_fs;
+    use pixi_utils::Prefix;
     use rattler_conda_types::ParseStrictness;
     use std::path::PathBuf;
 

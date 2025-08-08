@@ -1,6 +1,7 @@
 pub mod cache;
 pub mod conda_environment_file;
 pub mod indicatif;
+pub mod prefix;
 mod prefix_guard;
 pub mod reqwest;
 
@@ -10,4 +11,5 @@ pub use executable_utils::{
 };
 
 pub use cache::EnvironmentHash;
+pub use prefix::{Executable, Prefix};
 pub use prefix_guard::{AsyncPrefixGuard, AsyncWriteGuard};

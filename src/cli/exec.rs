@@ -5,7 +5,7 @@ use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pixi_config::{self, Config, ConfigCli};
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
-use pixi_utils::{AsyncPrefixGuard, EnvironmentHash, reqwest::build_reqwest_clients};
+use pixi_utils::{AsyncPrefixGuard, EnvironmentHash, Prefix, reqwest::build_reqwest_clients};
 use rattler::{
     install::{IndicatifReporter, Installer},
     package_cache::PackageCache,
@@ -17,10 +17,7 @@ use reqwest_middleware::ClientWithMiddleware;
 use uv_configuration::RAYON_INITIALIZE;
 
 use super::cli_config::ChannelsConfig;
-use crate::{
-    environment::list::{PackageToOutput, print_package_table},
-    prefix::Prefix,
-};
+use crate::environment::list::{PackageToOutput, print_package_table};
 
 /// Run a command and install it in a temporary environment.
 ///
