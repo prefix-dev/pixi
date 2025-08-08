@@ -60,6 +60,67 @@ impl PartialEq for Environment<'_> {
 
 impl Eq for Environment<'_> {}
 
+/// Returns the best platform for the current platform & environment.
+pub fn best_platform(platforms: HashSet<Platform>, warn_base_dir: std::path::PathBuf) -> Platform {
+    let current = Platform::current();
+
+    // If the current platform is supported, return it.
+    if platforms.contains(&current) {
+        return current;
+    }
+
+    static WARN_ONCE: Once = Once::new();
+
+    // If the current platform is osx-arm64 and the environment supports osx-64,
+    // return osx-64.
+    if current.is_osx() && platforms.contains(&Platform::Osx64) {
+        WARN_ONCE.call_once(|| {
+            let warn_folder = warn_base_dir.join(consts::ONE_TIME_MESSAGES_DIR);
+            let emulation_warn = warn_folder.join("macos-emulation-warn");
+            if !emulation_warn.exists() {
+                tracing::warn!(
+                    "osx-arm64 (Apple Silicon) is not supported by the pixi.toml, falling back to osx-64 (emulated with Rosetta)"
+                );
+                // Create a file to prevent the warning from showing up multiple times. Also ignore the result.
+                fs_err::create_dir_all(warn_folder).and_then(|_| {
+                    fs_err::File::create(emulation_warn)
+                }).ok();
+            }
+        });
+        return Platform::Osx64;
+    }
+
+    // If the current platform is win-arm64 and the environment supports win-64,
+    // return win-64.
+    if current.is_windows() && platforms.contains(&Platform::Win64) {
+        WARN_ONCE.call_once(|| {
+            let warn_folder = warn_base_dir.join(consts::ONE_TIME_MESSAGES_DIR);
+            let emulation_warn = warn_folder.join("windows-emulation-warn");
+            if !emulation_warn.exists() {
+                tracing::warn!(
+                    "win-arm64 is not supported by the pixi.toml, falling back to win-64 (emulation)"
+                );
+                // Create a file to prevent the warning from showing up multiple times. Also ignore the result.
+                fs_err::create_dir_all(warn_folder).and_then(|_| {
+                    fs_err::File::create(emulation_warn)
+                }).ok();
+            }
+        });
+        return Platform::Win64;
+    }
+
+    if platforms.len() == 1 {
+        // Take the first platform and see if it is a WASM one.
+        if let Some(platform) = platforms.iter().next() {
+            if platform.arch() == Some(Arch::Wasm32) {
+                return *platform;
+            }
+        }
+    }
+
+    current
+}
+
 impl<'p> Environment<'p> {
     /// Return new instance of Environment
     pub(crate) fn new(project: &'p Workspace, environment: &'p manifest::Environment) -> Self {
@@ -118,63 +179,7 @@ impl<'p> Environment<'p> {
 
     /// Returns the best platform for the current platform & environment.
     pub fn best_platform(&self) -> Platform {
-        let current = Platform::current();
-
-        // If the current platform is supported, return it.
-        if self.platforms().contains(&current) {
-            return current;
-        }
-
-        static WARN_ONCE: Once = Once::new();
-
-        // If the current platform is osx-arm64 and the environment supports osx-64,
-        // return osx-64.
-        if current.is_osx() && self.platforms().contains(&Platform::Osx64) {
-            WARN_ONCE.call_once(|| {
-                let warn_folder = self.workspace.pixi_dir().join(consts::ONE_TIME_MESSAGES_DIR);
-                let emulation_warn = warn_folder.join("macos-emulation-warn");
-                if !emulation_warn.exists() {
-                    tracing::warn!(
-                        "osx-arm64 (Apple Silicon) is not supported by the pixi.toml, falling back to osx-64 (emulated with Rosetta)"
-                    );
-                    // Create a file to prevent the warning from showing up multiple times. Also ignore the result.
-                    fs_err::create_dir_all(warn_folder).and_then(|_| {
-                        fs_err::File::create(emulation_warn)
-                    }).ok();
-                }
-            });
-            return Platform::Osx64;
-        }
-
-        // If the current platform is win-arm64 and the environment supports win-64,
-        // return win-64.
-        if current.is_windows() && self.platforms().contains(&Platform::Win64) {
-            WARN_ONCE.call_once(|| {
-                let warn_folder = self.workspace.pixi_dir().join(consts::ONE_TIME_MESSAGES_DIR);
-                let emulation_warn = warn_folder.join("windows-emulation-warn");
-                if !emulation_warn.exists() {
-                    tracing::warn!(
-                        "win-arm64 is not supported by the pixi.toml, falling back to win-64 (emulation)"
-                    );
-                    // Create a file to prevent the warning from showing up multiple times. Also ignore the result.
-                    fs_err::create_dir_all(warn_folder).and_then(|_| {
-                        fs_err::File::create(emulation_warn)
-                    }).ok();
-                }
-            });
-            return Platform::Win64;
-        }
-
-        if self.platforms().len() == 1 {
-            // Take the first platform and see if it is a WASM one.
-            if let Some(platform) = self.platforms().iter().next() {
-                if platform.arch() == Some(Arch::Wasm32) {
-                    return *platform;
-                }
-            }
-        }
-
-        current
+        best_platform(self.platforms(), self.workspace.pixi_dir())
     }
 
     /// Returns the tasks defined for this environment.

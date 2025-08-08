@@ -16,6 +16,7 @@ pub mod cli_config;
 pub mod command_info;
 pub mod completion;
 pub mod config;
+pub mod deploy;
 pub mod exec;
 pub mod global;
 pub mod has_specs;
@@ -134,6 +135,7 @@ pub enum Command {
     Clean(clean::Args),
     Completion(completion::Args),
     Config(config::Args),
+    Deploy(deploy::Args),
     #[clap(visible_alias = "x")]
     Exec(exec::Args),
     #[clap(visible_alias = "g")]
@@ -415,6 +417,7 @@ pub async fn execute_command(
         Command::Exec(args) => exec::execute(args).await,
         Command::Build(args) => build::execute(args).await,
         Command::External(args) => command_info::execute_external_command(args),
+        Command::Deploy(cmd) => deploy::execute(cmd).await,
     }
 }
 
