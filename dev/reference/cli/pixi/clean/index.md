@@ -21,6 +21,7 @@ pixi clean [OPTIONS] [COMMAND]
 
 - [`--environment (-e) <ENVIRONMENT>`](#arg---environment) The environment directory to remove
 - [`--activation-cache`](#arg---activation-cache) Only remove the activation cache
+- [`--build`](#arg---build) Only remove the pixi-build cache
 
 ## Global Options
 

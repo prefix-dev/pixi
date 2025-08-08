@@ -18,7 +18,8 @@ pixi clean cache [OPTIONS]
 - [`--mapping`](#arg---mapping) Clean only the mapping cache
 - [`--exec`](#arg---exec) Clean only `exec` cache
 - [`--repodata`](#arg---repodata) Clean only the repodata cache
-- [`--tool`](#arg---tool) Clean only the build backend tools cache
+- [`--build-backends`](#arg---build-backends) Clean only the build backends environments cache
+- [`--build`](#arg---build) Clean only the build related cache
 - [`--yes (-y)`](#arg---yes) Answer yes to all questions
 
 ## Description
