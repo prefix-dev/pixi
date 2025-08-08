@@ -255,21 +255,9 @@ impl BackendSourceBuildSpec {
             ));
         };
 
-        // Resolve the output file path relative to the work directory if it's relative
-        let output_file = if built_package.output_file.is_relative() {
-            // Rattler-build creates a "work" subdirectory inside the work directory
-            // The output path is relative to this "work" subdirectory
-            let rattler_work_dir = work_directory.join("work");
-            let joined_path = rattler_work_dir.join(built_package.output_file);
-            // Normalize the path by canonicalizing if possible, otherwise just use as-is
-            joined_path.canonicalize().unwrap_or(joined_path)
-        } else {
-            built_package.output_file
-        };
-
         Ok(BackendBuiltSource {
             input_globs: built_package.input_globs,
-            output_file,
+            output_file: built_package.output_file,
         })
     }
 
@@ -350,21 +338,9 @@ impl BackendSourceBuildSpec {
             ));
         };
 
-        // Resolve the output file path relative to the work directory if it's relative
-        let output_file = if built_package.output_file.is_relative() {
-            // Rattler-build creates a "work" subdirectory inside the work directory
-            // The output path is relative to this "work" subdirectory
-            let rattler_work_dir = work_directory.join("work");
-            let joined_path = rattler_work_dir.join(built_package.output_file);
-            // Normalize the path by canonicalizing if possible, otherwise just use as-is
-            joined_path.canonicalize().unwrap_or(joined_path)
-        } else {
-            built_package.output_file
-        };
-
         Ok(BackendBuiltSource {
             input_globs: built_package.input_globs,
-            output_file,
+            output_file: built_package.output_file,
         })
     }
 }
