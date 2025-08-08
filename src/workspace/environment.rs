@@ -661,7 +661,7 @@ mod tests {
         );
     }
 
-     #[test]
+    #[test]
     fn test_activation_env_priority() {
         let manifest = Workspace::from_str(
             Path::new("pixi.toml"),
@@ -693,7 +693,7 @@ mod tests {
         let default_env = manifest.default_environment();
         let foo_env = manifest.environment("foo").unwrap();
         let cuda_env = manifest.environment("cuda").unwrap();
-          assert_eq!(
+        assert_eq!(
             default_env.activation_env(None),
             indexmap! {
                 "FOO_VAR".to_string() => "default",
