@@ -7,7 +7,7 @@ mod release_notes;
 mod repodata_reporter;
 pub mod uv_reporter;
 
-use std::sync::{Arc, LazyLock};
+use std::sync::{LazyLock};
 
 use git::GitCheckoutProgress;
 use indicatif::{MultiProgress, ProgressBar};
@@ -18,7 +18,7 @@ use pixi_command_dispatcher::{
     },
 };
 use pixi_spec::PixiSpec;
-use rattler_repodata_gateway::{Reporter, RunExportsReporter};
+use rattler_repodata_gateway::{Reporter};
 pub use release_notes::format_release_notes;
 use uv_configuration::RAYON_INITIALIZE;
 
@@ -118,14 +118,6 @@ impl pixi_command_dispatcher::Reporter for TopLevelProgress {
         _reason: Option<ReporterContext>,
     ) -> Option<Box<dyn Reporter>> {
         Some(Box::new(self.repodata_reporter.clone()))
-    }
-
-    /// Returns a reporter that run exports fetching progress.
-    fn create_run_exports_reporter(
-        &mut self,
-        _reason: Option<ReporterContext>,
-    ) -> Option<Arc<dyn RunExportsReporter>> {
-        Some(Arc::new(self.repodata_reporter.clone()))
     }
 
     fn create_install_reporter(
