@@ -13,6 +13,7 @@ use pixi_manifest::FeaturesExt;
 use rattler_conda_types::Platform;
 use rattler_lock::LockedPackageRef;
 use regex::Regex;
+use serde::{Deserialize, Serialize};
 
 use crate::{
     WorkspaceLocator, cli::cli_config::WorkspaceConfig, lock_file::UpdateLockFileOptions,
@@ -36,7 +37,7 @@ use super::cli_config::LockFileUpdateConfig;
 ))]
 pub struct Args {
     /// List only packages matching a regular expression
-    #[arg()]
+    #[arg(conflicts_with = "json")]
     pub regex: Option<String>,
 
     /// The platform to list packages for. Defaults to the current platform.
@@ -55,8 +56,12 @@ pub struct Args {
     pub lock_file_update_config: LockFileUpdateConfig,
 
     /// Invert tree and show what depends on given package in the regex argument
-    #[arg(short, long, requires = "regex")]
+    #[arg(short, long, requires = "regex", conflicts_with = "json")]
     pub invert: bool,
+
+    /// Show a JSON representation of the dependency tree
+    #[arg(long)]
+    pub json: bool,
 }
 
 struct Symbols {
@@ -108,7 +113,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let stdout = std::io::stdout();
     let mut handle = stdout.lock();
-    if args.invert {
+    if args.json {
+        print_json_dependency_tree(&mut handle, &dep_map, &direct_deps)?;
+    } else if args.invert {
         print_inverted_dependency_tree(
             &mut handle,
             &invert_dep_map(&dep_map),
@@ -121,6 +128,60 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .wrap_err("Couldn't print the dependency tree")?;
     }
     Ok(())
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct DependencyTreeNode {
+    name: String,
+    version: String,
+    tags: Vec<String>,
+    dependencies: Vec<DependencyTreeNode>,
+}
+
+fn package_to_tree_node(
+    package: &Package,
+    dep_map: &HashMap<String, Package>,
+) -> DependencyTreeNode {
+    let dependencies = package
+        .dependencies
+        .iter()
+        .filter_map(|dep_name| dep_map.get(dep_name))
+        .map(|dep| package_to_tree_node(dep, dep_map))
+        .collect();
+
+    DependencyTreeNode {
+        name: package.name.clone(),
+        version: package.version.clone(),
+        tags: Vec::new(),
+        dependencies,
+    }
+}
+
+/// Print a JSON representation of the dependency tree
+fn print_json_dependency_tree(
+    handle: &mut StdoutLock,
+    dep_map: &HashMap<String, Package>,
+    direct_deps: &HashSet<String>,
+) -> miette::Result<()> {
+    let dependencies: Vec<DependencyTreeNode> = direct_deps
+        .iter()
+        .filter_map(|pkg_name| dep_map.get(pkg_name))
+        .map(|pkg| package_to_tree_node(pkg, dep_map))
+        .collect();
+    let json = serde_json::to_string_pretty(&dependencies)
+        .into_diagnostic()
+        .wrap_err("Failed to serialize dependency tree to JSON")?;
+    writeln!(handle, "{}", json)
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::BrokenPipe {
+                // Exit gracefully
+                std::process::exit(0);
+            } else {
+                e
+            }
+        })
+        .into_diagnostic()
+        .wrap_err("Failed to serialize dependency tree to JSON")
 }
 
 /// Filter and print an inverted dependency tree
