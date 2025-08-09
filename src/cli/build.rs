@@ -28,6 +28,10 @@ pub struct Args {
     #[clap(long, short, default_value_t = Platform::current())]
     pub target_platform: Platform,
 
+    /// The build platform to use for building (defaults to the current platform)
+    #[clap(long, default_value_t = Platform::current())]
+    pub build_platform: Platform,
+
     /// The output directory to place the built artifacts
     #[clap(long, short, default_value = ".")]
     pub output_dir: PathBuf,
@@ -70,7 +74,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Build platform virtual packages
     let build_virtual_packages: Vec<GenericVirtualPackage> = workspace
         .default_environment()
-        .virtual_packages(Platform::current())
+        .virtual_packages(args.build_platform)
         .into_iter()
         .map(GenericVirtualPackage::from)
         .collect();
@@ -85,7 +89,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let build_environment = BuildEnvironment {
         host_platform: args.target_platform,
-        build_platform: Platform::current(),
+        build_platform: args.build_platform,
         build_virtual_packages,
         host_virtual_packages,
     };
