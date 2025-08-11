@@ -1,7 +1,7 @@
 //! Defines the build section for the pixi manifest.
 
 use indexmap::IndexMap;
-use pixi_spec::{PixiSpec, SourceSpec};
+use pixi_spec::{PackageSourceSpec, PixiSpec, SourceSpec};
 use rattler_conda_types::NamedChannelOrUrl;
 
 use crate::TargetSelector;
@@ -24,8 +24,8 @@ pub struct PackageBuild {
     /// channels from the containing workspace should be used.
     pub channels: Option<Vec<NamedChannelOrUrl>>,
 
-    /// Optional source root specification for alternative source locations
-    pub src: Option<SourceSpec>,
+    /// Optional package source specification
+    pub source: Option<PackageSourceSpec>,
 
     /// Additional configuration for the build backend.
     pub configuration: Option<serde_value::Value>,

@@ -343,6 +343,7 @@ impl PixiSpec {
 }
 
 /// A specification for the `source` field of `package.build`
+#[derive(Debug, Clone, Hash, PartialEq, Eq, serde::Serialize)]
 pub struct PackageSourceSpec {
     location: SourceLocationSpec,
 }
