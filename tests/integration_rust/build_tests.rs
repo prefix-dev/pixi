@@ -8,7 +8,7 @@ use crate::common::{
 };
 
 /// Test that verifies build backend receives the correct resolved source path
-/// when a relative path is specified in the src field
+/// when a relative path is specified in the source field
 #[tokio::test]
 async fn test_build_with_relative_source_path() {
     // Create a simple package database for our test
@@ -63,7 +63,7 @@ backend = {{ name = "empty-backend", version = "0.1.0" }}
 channels = [
   "file://{}"
 ]
-src = {{ path = "../alternative-source" }}
+source = {{ path = "../alternative-source" }}
 
 [workspace]
 channels = [
@@ -92,9 +92,9 @@ preview = ["pixi-build"]
     let workspace = dbg!(pixi.workspace()).unwrap();
 
     if let Some(package) = &workspace.package {
-        if let Some(src_spec) = &package.value.build.src {
-            match src_spec {
-                pixi_spec::SourceSpec::Path(path_spec) => {
+        if let Some(source_spec) = &package.value.build.source {
+            match &source_spec.location {
+                pixi_spec::SourceLocationSpec::Path(path_spec) => {
                     // Test that the path resolves to the correct absolute location
                     let resolved_path = path_spec.resolve(pixi.workspace_path()).unwrap();
                     let expected_path = alternative_source_dir.canonicalize().unwrap();
@@ -117,7 +117,7 @@ preview = ["pixi-build"]
                 _ => panic!("Expected a path source spec"),
             }
         } else {
-            panic!("Expected src field to be present in build config");
+            panic!("Expected source field to be present in build config");
         }
     } else {
         panic!("Expected package manifest to be present");
@@ -156,7 +156,7 @@ version = "0.1.0"
 [package.build]
 backend = {{ name = "empty-backend", version = "0.1.0" }}
 channels = ["file://{}"]
-src = {{ path = "{}" }}
+source = {{ path = "{}" }}
 
 [workspace]
 channels = ["file://{}"]
@@ -185,9 +185,9 @@ preview = ["pixi-build"]
     let workspace = dbg!(pixi.workspace()).unwrap();
 
     if let Some(package) = &workspace.package {
-        if let Some(src_spec) = &package.value.build.src {
-            match src_spec {
-                pixi_spec::SourceSpec::Path(path_spec) => {
+        if let Some(source_spec) = &package.value.build.source {
+            match &source_spec.location {
+                pixi_spec::SourceLocationSpec::Path(path_spec) => {
                     let resolved_path = path_spec.resolve(pixi.workspace_path()).unwrap();
                     let expected_path = absolute_source_dir.canonicalize().unwrap();
                     let resolved_canonical = resolved_path.canonicalize().unwrap();
@@ -229,7 +229,7 @@ version = "0.1.0"
 [package.build]
 backend = {{ name = "empty-backend", version = "0.1.0" }}
 channels = ["file://{}"]
-src = {{ path = "./subdir/source" }}
+source = {{ path = "./subdir/source" }}
 
 [workspace]
 channels = ["file://{}"]
@@ -254,9 +254,9 @@ preview = ["pixi-build"]
     let workspace = pixi.workspace().unwrap();
 
     if let Some(package) = &workspace.package {
-        if let Some(src_spec) = &package.value.build.src {
-            match src_spec {
-                pixi_spec::SourceSpec::Path(path_spec) => {
+        if let Some(source_spec) = &package.value.build.source {
+            match &source_spec.location {
+                pixi_spec::SourceLocationSpec::Path(path_spec) => {
                     // Test that the original relative path is preserved
                     assert_eq!(path_spec.path.as_str(), "./subdir/source");
 

@@ -343,23 +343,24 @@ impl PixiSpec {
 }
 
 /// A specification for the `source` field of `package.build`
-#[derive(Debug, Clone, Hash, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct PackageSourceSpec {
-    location: SourceLocationSpec,
+    /// The location of the source.
+    pub location: SourceLocationSpec,
 }
 
 /// A specification for a source package.
 ///
 /// This type only represents source packages. Use [`PixiSpec`] to represent
 /// both binary and source packages.
-#[derive(Debug, Clone, Hash, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SourceSpec {
     /// The location of the source.
     pub location: SourceLocationSpec,
 }
 
 /// A specification for a source location.
-#[derive(Debug, Clone, Hash, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
 pub enum SourceLocationSpec {
     /// The spec is represented as an archive that can be downloaded from the
@@ -398,6 +399,13 @@ impl SourceSpec {
     pub fn to_toml_value(&self) -> toml_edit::Value {
         ::serde::Serialize::serialize(&self.location, toml_edit::ser::ValueSerializer::new())
             .expect("conversion to toml cannot fail")
+    }
+}
+
+impl SourceLocationSpec {
+    /// Returns true if this spec represents a git repository.
+    pub fn is_git(&self) -> bool {
+        matches!(self, SourceLocationSpec::Git(_))
     }
 }
 

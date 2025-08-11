@@ -1,7 +1,7 @@
 //! Defines the build section for the pixi manifest.
 
 use indexmap::IndexMap;
-use pixi_spec::{PackageSourceSpec, PixiSpec, SourceSpec};
+use pixi_spec::{PackageSourceSpec, PixiSpec};
 use rattler_conda_types::NamedChannelOrUrl;
 
 use crate::TargetSelector;
@@ -41,7 +41,7 @@ impl PackageBuild {
             backend,
             channels: Some(channels),
             additional_dependencies: IndexMap::default(),
-            src: None,
+            source: None,
             configuration: None,
             target_configuration: None,
         }
@@ -79,75 +79,75 @@ mod tests {
     }
 
     #[test]
-    fn deserialize_build_with_path_src() {
+    fn deserialize_build_with_path_source() {
         let toml = r#"
             backend = { name = "pixi-build-rattler-build", version = "0.1.*" }
             channels = [
               "https://prefix.dev/pixi-build-backends",
               "https://prefix.dev/conda-forge",
             ]
-            src = { path = "/path/to/source" }
+            source = { path = "/path/to/source" }
             "#;
 
         let build = PackageBuild::from_toml_str(toml).unwrap();
         assert_eq!(build.backend.name.as_source(), "pixi-build-rattler-build");
-        assert!(build.src.is_some());
-        assert!(!build.src.unwrap().is_git());
+        assert!(build.source.is_some());
+        assert!(!build.source.unwrap().location.is_git());
     }
 
     #[test]
-    fn deserialize_build_with_git_src() {
+    fn deserialize_build_with_git_source() {
         let toml = r#"
             backend = { name = "pixi-build-rattler-build", version = "0.1.*" }
             channels = [
               "https://prefix.dev/pixi-build-backends",
               "https://prefix.dev/conda-forge",
             ]
-            src = { git = "https://github.com/conda-forge/numpy-feedstock" }
+            source = { git = "https://github.com/conda-forge/numpy-feedstock" }
             "#;
 
         let build = PackageBuild::from_toml_str(toml).unwrap();
         assert_eq!(build.backend.name.as_source(), "pixi-build-rattler-build");
-        assert!(build.src.is_some());
-        assert!(build.src.unwrap().is_git());
+        assert!(build.source.is_some());
+        assert!(build.source.unwrap().location.is_git());
     }
 
     #[test]
-    fn deserialize_build_with_url_src() {
+    fn deserialize_build_with_url_source() {
         let toml = r#"
             backend = { name = "pixi-build-rattler-build", version = "0.1.*" }
             channels = [
               "https://prefix.dev/pixi-build-backends",
               "https://prefix.dev/conda-forge",
             ]
-            src = { url = "https://github.com/conda-forge/numpy-feedstock/archive/main.zip" }
+            source = { url = "https://github.com/conda-forge/numpy-feedstock/archive/main.zip" }
             "#;
 
         let build = PackageBuild::from_toml_str(toml).unwrap();
         assert_eq!(build.backend.name.as_source(), "pixi-build-rattler-build");
-        assert!(build.src.is_some());
-        assert!(!build.src.as_ref().unwrap().is_git());
+        assert!(build.source.is_some());
+        assert!(!build.source.as_ref().unwrap().location.is_git());
     }
 
     #[test]
-    fn deserialize_build_with_relative_path_src() {
+    fn deserialize_build_with_relative_path_source() {
         let toml = r#"
             backend = { name = "pixi-build-rattler-build", version = "0.1.*" }
             channels = [
               "https://prefix.dev/pixi-build-backends",
               "https://prefix.dev/conda-forge",
             ]
-            src = { path = "../other-source" }
+            source = { path = "../other-source" }
             "#;
 
         let build = PackageBuild::from_toml_str(toml).unwrap();
         assert_eq!(build.backend.name.as_source(), "pixi-build-rattler-build");
-        assert!(build.src.is_some());
+        assert!(build.source.is_some());
 
         // Verify it's a path source and contains the relative path
-        if let Some(src) = &build.src {
-            match src {
-                pixi_spec::SourceSpec::Path(path_spec) => {
+        if let Some(source) = &build.source {
+            match &source.location {
+                pixi_spec::SourceLocationSpec::Path(path_spec) => {
                     assert_eq!(path_spec.path.as_str(), "../other-source");
                 }
                 _ => panic!("Expected a path source spec"),
@@ -156,24 +156,24 @@ mod tests {
     }
 
     #[test]
-    fn deserialize_build_with_home_directory_path_src() {
+    fn deserialize_build_with_home_directory_path_source() {
         let toml = r#"
             backend = { name = "pixi-build-rattler-build", version = "0.1.*" }
             channels = [
               "https://prefix.dev/pixi-build-backends",
               "https://prefix.dev/conda-forge",
             ]
-            src = { path = "~/my-source" }
+            source = { path = "~/my-source" }
             "#;
 
         let build = PackageBuild::from_toml_str(toml).unwrap();
         assert_eq!(build.backend.name.as_source(), "pixi-build-rattler-build");
-        assert!(build.src.is_some());
+        assert!(build.source.is_some());
 
         // Verify it's a path source and contains the home directory path
-        if let Some(src) = &build.src {
-            match src {
-                pixi_spec::SourceSpec::Path(path_spec) => {
+        if let Some(source) = &build.source {
+            match &source.location {
+                pixi_spec::SourceLocationSpec::Path(path_spec) => {
                     assert_eq!(path_spec.path.as_str(), "~/my-source");
                 }
                 _ => panic!("Expected a path source spec"),
@@ -191,15 +191,15 @@ mod tests {
 
         let toml = r#"
             backend = { name = "pixi-build-rattler-build", version = "0.1.*" }
-            src = { path = "../other-source" }
+            source = { path = "../other-source" }
             "#;
 
         let build = PackageBuild::from_toml_str(toml).unwrap();
-        assert!(build.src.is_some());
+        assert!(build.source.is_some());
 
-        if let Some(src) = &build.src {
-            match src {
-                pixi_spec::SourceSpec::Path(path_spec) => {
+        if let Some(source) = &build.source {
+            match &source.location {
+                pixi_spec::SourceLocationSpec::Path(path_spec) => {
                     // Test that the path spec can resolve relative paths correctly
                     let resolved = path_spec.resolve(workspace_root).unwrap();
 
@@ -220,15 +220,15 @@ mod tests {
 
         let toml = r#"
             backend = { name = "pixi-build-rattler-build", version = "0.1.*" }
-            src = { path = "/absolute/path/to/source" }
+            source = { path = "/absolute/path/to/source" }
             "#;
 
         let build = PackageBuild::from_toml_str(toml).unwrap();
-        assert!(build.src.is_some());
+        assert!(build.source.is_some());
 
-        if let Some(src) = &build.src {
-            match src {
-                pixi_spec::SourceSpec::Path(path_spec) => {
+        if let Some(source) = &build.source {
+            match &source.location {
+                pixi_spec::SourceLocationSpec::Path(path_spec) => {
                     // Test that absolute paths are returned as-is during resolution
                     let resolved = path_spec.resolve("/workspace/root").unwrap();
                     assert_eq!(resolved, Path::new("/absolute/path/to/source"));
@@ -255,17 +255,17 @@ mod tests {
             let toml = format!(
                 r#"
                 backend = {{ name = "pixi-build-rattler-build", version = "0.1.*" }}
-                src = {{ path = "{}" }}
+                source = {{ path = "{}" }}
                 "#,
                 path
             );
 
             let build = PackageBuild::from_toml_str(&toml).unwrap();
-            assert!(build.src.is_some(), "Failed for path: {}", path);
+            assert!(build.source.is_some(), "Failed for path: {}", path);
 
-            if let Some(src) = &build.src {
-                match src {
-                    pixi_spec::SourceSpec::Path(path_spec) => {
+            if let Some(source) = &build.source {
+                match &source.location {
+                    pixi_spec::SourceLocationSpec::Path(path_spec) => {
                         // Verify the path is preserved correctly
                         assert_eq!(
                             path_spec.path.as_str(),
