@@ -64,10 +64,10 @@ impl GlobalSpecs {
                 subdirectory: self.subdir.clone(),
             };
             Some(PixiSpec::Git(git_spec))
-        } else if let Some(path) = &self.path {
-            Some(PixiSpec::Path(pixi_spec::PathSpec { path: path.clone() }))
         } else {
-            None
+            self.path
+                .as_ref()
+                .map(|path| PixiSpec::Path(pixi_spec::PathSpec { path: path.clone() }))
         };
         if let Some(pixi_spec) = git_or_path_spec {
             if self.specs.is_empty() {
