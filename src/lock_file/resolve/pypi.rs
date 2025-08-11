@@ -15,7 +15,10 @@ use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
 use pixi_consts::consts;
-use pixi_lockfile::UvResolutionContext;
+use pixi_lockfile::{
+    HasNameVersion, LockedPypiPackages, PixiRecordsByName, PypiPackageIdentifier, PypiRecord,
+    UvResolutionContext,
+};
 use pixi_manifest::{EnvironmentName, SystemRequirements, pypi::pypi_options::PypiOptions};
 use pixi_pypi_spec::PixiPypiSpec;
 use pixi_record::PixiRecord;
@@ -55,9 +58,7 @@ use uv_types::EmptyInstalledPackages;
 use crate::{
     environment::CondaPrefixUpdated,
     lock_file::{
-        CondaPrefixUpdater, LockedPypiPackages, PixiRecordsByName, PypiPackageIdentifier,
-        PypiRecord,
-        records_by_name::HasNameVersion,
+        CondaPrefixUpdater,
         resolve::{
             build_dispatch::{
                 LazyBuildDispatch, LazyBuildDispatchDependencies, UvBuildDispatchParams,

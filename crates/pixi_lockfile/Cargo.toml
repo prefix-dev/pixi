@@ -14,12 +14,20 @@ fs-err = { workspace = true }
 insta = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
+pep440_rs = { workspace = true }
+pep508_rs = { workspace = true }
+pixi_build_discovery = { workspace = true }
 pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
+pixi_glob = { workspace = true }
 pixi_manifest = { workspace = true }
+pixi_pypi_spec = { workspace = true }
+pixi_record = { workspace = true }
+pixi_spec = { workspace = true }
 pixi_test_utils = { workspace = true }
 pixi_utils = { workspace = true, default-features = false }
 pixi_uv_conversions = { workspace = true }
+pypi_mapping = { workspace = true }
 pypi_modifiers = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_lock = { workspace = true }
@@ -27,12 +35,15 @@ rattler_virtual_packages = { workspace = true }
 reqwest = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+url = { workspace = true }
 uv-cache = { workspace = true }
 uv-client = { workspace = true }
 uv-configuration = { workspace = true }
 uv-dispatch = { workspace = true }
 uv-distribution-filename = { workspace = true }
 uv-distribution-types = { workspace = true }
+uv-normalize = { workspace = true }
 uv-pep508 = { workspace = true }
+uv-pypi-types = { workspace = true }
 uv-types = { workspace = true }
 uv-workspace = { workspace = true }

@@ -9,6 +9,7 @@ use std::{
 
 use futures::{Future, FutureExt};
 use pixi_consts::consts;
+use pixi_lockfile::PypiPackageIdentifier;
 use pixi_record::PixiRecord;
 use uv_distribution::{ArchiveMetadata, Metadata};
 use uv_distribution_filename::SourceDistExtension;
@@ -22,8 +23,6 @@ use uv_resolver::{
     VersionsResponse, WheelMetadataResult,
 };
 use uv_types::BuildContext;
-
-use crate::lock_file::PypiPackageIdentifier;
 
 pub(super) struct CondaResolverProvider<'a, Context: BuildContext> {
     pub(super) fallback: DefaultResolverProvider<'a, Context>,

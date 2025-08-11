@@ -1,6 +1,4 @@
 mod outdated;
-mod package_identifier;
-mod records_by_name;
 mod reporter;
 mod resolve;
 mod satisfiability;
@@ -8,30 +6,15 @@ mod update;
 mod utils;
 
 pub use crate::environment::CondaPrefixUpdater;
-pub(crate) use package_identifier::PypiPackageIdentifier;
-use pixi_record::PixiRecord;
-use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};
-pub(crate) use records_by_name::{PixiRecordsByName, PypiRecordsByName};
 pub(crate) use resolve::pypi::resolve_pypi;
 pub use satisfiability::{
-    EnvironmentUnsat, PlatformUnsat, verify_environment_satisfiability,
-    verify_platform_satisfiability,
+    EnvironmentUnsat, verify_environment_satisfiability, verify_platform_satisfiability,
 };
 pub use update::{LockFileDerivedData, ReinstallPackages, UpdateContext};
 pub use update::{UpdateLockFileOptions, UpdateMode};
 pub(crate) use utils::filter_lock_file;
 
 pub use utils::IoConcurrencyLimit;
-
-/// A list of conda packages that are locked for a specific platform.
-pub type LockedCondaPackages = Vec<PixiRecord>;
-
-/// A list of Pypi packages that are locked for a specific platform.
-pub type LockedPypiPackages = Vec<PypiRecord>;
-
-/// A single Pypi record that contains both the package data and the environment
-/// data. In Pixi we basically always need both.
-pub type PypiRecord = (PypiPackageData, PypiPackageEnvironmentData);
 
 #[cfg(test)]
 mod tests {

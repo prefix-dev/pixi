@@ -5,8 +5,8 @@ use rattler_conda_types::{PackageRecord, PackageUrl, RepoDataRecord};
 use std::{collections::HashSet, str::FromStr};
 use thiserror::Error;
 
-use crate::lock_file::PlatformUnsat;
-use crate::lock_file::PlatformUnsat::{
+use crate::satisfiability::PlatformUnsat;
+use crate::satisfiability::PlatformUnsat::{
     DirectUrlDependencyOnCondaInstalledPackage, DirectoryDependencyOnCondaInstalledPackage,
     GitDependencyOnCondaInstalledPackage, PathDependencyOnCondaInstalledPackage,
 };
@@ -26,9 +26,7 @@ pub struct PypiPackageIdentifier {
 impl PypiPackageIdentifier {
     /// Extracts the python packages that will be installed when the specified
     /// conda package is installed.
-    pub(crate) fn from_repodata_record(
-        record: &RepoDataRecord,
-    ) -> Result<Vec<Self>, ConversionError> {
+    pub fn from_repodata_record(record: &RepoDataRecord) -> Result<Vec<Self>, ConversionError> {
         let mut result = Vec::new();
         Self::from_record_into(record, &mut result)?;
 
@@ -99,7 +97,7 @@ impl PypiPackageIdentifier {
     /// Tries to construct an instance from a generic PURL.
     ///
     /// The `fallback_version` is used if the PURL does not contain a version.
-    pub(crate) fn convert_from_purl(
+    pub fn convert_from_purl(
         package_url: &PackageUrl,
         fallback_version: &str,
     ) -> Result<Option<Self>, ConversionError> {
@@ -113,7 +111,7 @@ impl PypiPackageIdentifier {
     /// Constructs a new instance from a PyPI package URL.
     ///
     /// The `fallback_version` is used if the PURL does not contain a version.
-    pub(crate) fn from_pypi_purl(
+    pub fn from_pypi_purl(
         package_url: &PackageUrl,
         fallback_version: &str,
     ) -> Result<Self, ConversionError> {
@@ -139,7 +137,7 @@ impl PypiPackageIdentifier {
 
     /// Checks of a found pypi requirement satisfies with the information
     /// in this package identifier.
-    pub(crate) fn satisfies(
+    pub fn satisfies(
         &self,
         requirement: &uv_distribution_types::Requirement,
     ) -> Result<bool, Box<PlatformUnsat>> {

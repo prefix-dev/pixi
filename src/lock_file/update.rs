@@ -1,7 +1,4 @@
-use super::{
-    CondaPrefixUpdater, PixiRecordsByName, PypiRecordsByName, outdated::OutdatedEnvironments,
-    utils::IoConcurrencyLimit,
-};
+use super::{CondaPrefixUpdater, outdated::OutdatedEnvironments, utils::IoConcurrencyLimit};
 use crate::{
     Workspace,
     activation::CurrentEnvVarBehavior,
@@ -10,7 +7,7 @@ use crate::{
         PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, read_environment_file,
         write_environment_file,
     },
-    lock_file::{self, PypiRecord, reporter::SolveProgressBar},
+    lock_file::{self, reporter::SolveProgressBar},
     workspace::{
         Environment, EnvironmentVars, HasWorkspaceRef, get_activated_environment_variables,
         grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
@@ -31,8 +28,8 @@ use pixi_glob::GlobHashCache;
 use pixi_install_pypi::{
     PyPIBuildConfig, PyPIContextConfig, PyPIEnvironmentUpdater, PyPIUpdateConfig,
 };
-use pixi_lockfile::UvResolutionContext;
 use pixi_lockfile::virtual_packages::validate_system_meets_environment_requirements;
+use pixi_lockfile::{PixiRecordsByName, PypiRecord, PypiRecordsByName, UvResolutionContext};
 use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
 use pixi_record::{ParseLockFileError, PixiRecord};
