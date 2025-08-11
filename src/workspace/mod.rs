@@ -40,6 +40,7 @@ use pixi_manifest::{
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::SourceSpec;
 use pixi_utils::reqwest::build_reqwest_clients;
+use pixi_utils::variants::VariantConfig;
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform, Version};
 use rattler_lock::{LockFile, LockedPackageRef};
@@ -58,7 +59,6 @@ use crate::{
     diff::LockFileDiff,
     lock_file::filter_lock_file,
     repodata::Repodata,
-    variants::VariantConfig,
 };
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();

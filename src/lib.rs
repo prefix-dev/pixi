@@ -11,9 +11,7 @@ pub(crate) mod repodata;
 pub mod task;
 pub mod workspace;
 
-mod rlimit;
 mod signals;
-pub mod variants;
 
 pub use lock_file::UpdateLockFileOptions;
 pub use workspace::{DependencyType, Workspace, WorkspaceLocator};

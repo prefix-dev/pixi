@@ -7,7 +7,7 @@ pub const DESIRED_RLIMIT_NOFILE: u64 = 1024;
 /// for pixi. The desired value is defined by the `DESIRED_RLIMIT_NOFILE`
 /// constant and should suffice for most use cases.
 #[cfg(not(target_os = "windows"))]
-pub(crate) fn try_increase_rlimit_to_sensible() {
+pub fn try_increase_rlimit_to_sensible() {
     static INIT: std::sync::Once = std::sync::Once::new();
     INIT.call_once(
         || match rlimit::increase_nofile_limit(DESIRED_RLIMIT_NOFILE) {
@@ -40,7 +40,7 @@ pub(crate) fn try_increase_rlimit_to_sensible() {
 }
 
 #[cfg(target_os = "windows")]
-pub(crate) fn try_increase_rlimit_to_sensible() {
+pub fn try_increase_rlimit_to_sensible() {
     // On Windows, there is no need to increase the RLIMIT_NOFILE resource
     // limit.
 }

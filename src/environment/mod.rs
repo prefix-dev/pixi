@@ -25,7 +25,6 @@ use xxhash_rust::xxh3::Xxh3;
 use crate::{
     Workspace,
     lock_file::{LockFileDerivedData, ReinstallPackages, UpdateLockFileOptions, UpdateMode},
-    rlimit::try_increase_rlimit_to_sensible,
     workspace::{Environment, HasWorkspaceRef, grouped_environment::GroupedEnvironment},
 };
 

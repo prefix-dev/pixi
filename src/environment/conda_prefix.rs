@@ -4,24 +4,19 @@ use async_once_cell::OnceCell as AsyncOnceCell;
 use miette::IntoDiagnostic;
 use pixi_command_dispatcher::{BuildEnvironment, CommandDispatcher, InstallPixiEnvironmentSpec};
 use pixi_environment::PythonStatus;
+use pixi_environment::conda_metadata::{create_history_file, create_prefix_location_file};
 use pixi_manifest::FeaturesExt;
 use pixi_record::PixiRecord;
-use pixi_utils::Prefix;
+use pixi_utils::variants::VariantConfig;
+use pixi_utils::{Prefix, rlimit::try_increase_rlimit_to_sensible};
 use rattler::install::link_script::LinkScriptType;
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, GenericVirtualPackage, PackageName, Platform,
 };
 
-use super::{
-    conda_metadata::{create_history_file, create_prefix_location_file},
-    try_increase_rlimit_to_sensible,
-};
-use crate::{
-    variants::VariantConfig,
-    workspace::{
-        HasWorkspaceRef,
-        grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
-    },
+use crate::workspace::{
+    HasWorkspaceRef,
+    grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
 };
 
 /// A struct that contains the result of updating a conda prefix.
