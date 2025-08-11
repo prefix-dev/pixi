@@ -979,6 +979,10 @@ Following packages are examples of typical build dependencies:
 - `pkg-config`
 - VSC packages (`git`, `svn`)
 
+Using git SSH URLs
+
+When using SSH URLs in git dependencies, make sure to have your SSH key added to your SSH agent. You can do this by running `ssh-add` which will prompt you for your SSH key passphrase. Make sure that the `ssh-add` agent or service is running and you have a generated public/private SSH key. For more details on how to do this, check the [Github SSH documentation](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent).
+
 ```toml
 [package.build-dependencies]
 cmake = "*"

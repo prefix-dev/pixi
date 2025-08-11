@@ -17,40 +17,35 @@ Currently, the `build` feature has a number of limitations:
 
 ## Setting up the Manifest
 
-This is an overview of the Pixi manifest using `pixi-build`.
+This is an overview of the Pixi manifest using the `pixi-build` feature.
+
+A more in-depth overview of what is available in the `[package]` part of the manifest can be found in the [Manifest Reference](../../reference/pixi_manifest/#the-package-section).
 
 pixi.toml
 
 ```toml
-# Specifies properties for the whole workspace
+### Specifies properties for the whole workspace ###
 [workspace]
 preview = ["pixi-build"]
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["win-64", "linux-64", "osx-arm64", "osx-64"]
-# There can be multiple packages in a workspace
-# In `package` you specify properties specific to the package
+[tasks]
+start = "rich-example-main"
+[dependencies]
+python_rich = { path = "." }
+### Specify the package properties ###
 [package]
 name = "python_rich"
 version = "0.1.0"
-# Here the build system of the package is specified
 # We are using `pixi-build-python` in order to build a Python package
 [package.build]
 backend = { name = "pixi-build-python", version = "==0.3.2" }
 # The Python package `python_rich` uses `hatchling` as Python build backend
 [package.host-dependencies]
 hatchling = "*"
-# We add our package as dependency to the workspace
-[dependencies]
-# We can get source dependencies from a path on our file system
-python_rich_by_folder = { path = "./recipe_by_folder" }
-# as well as from a git repository
-boost-check = { git = "https://github.com/wolfv/pixi-build-examples", branch = "main", subdirectory = "boost-check" }
-# If the directory contains a `pixi.toml`, `pixi-build` will be used to build the package
-python_rich = { path = "./python_rich" }
-# if the directory contains a `recipe.yaml`, `rattler-build` will be used.
-python_rich_by_file = { path = "./recipe_by_file/recipe.yaml" }
+# The Python package `python_rich` has a run dependency on `rich`
 [package.run-dependencies]
-rich = ">=13.9.4,<14"
+rich = "13.9.*"
 
 ```
 
@@ -73,7 +68,11 @@ version = "0.1.0"
 
 ```
 
-Packages are built by using build backends. By specifying `package.build-system.build-backend` and `package.build-system.channels` you determine which backend is used and from which channel it will be downloaded. There are different build backends. Pixi backends can describe how to build a conda package, for a certain language or build tool. In this example, we are using `pixi-build-python` backend in order to build a Python package.
+Packages are built by using build backends. By specifying `package.build.backend` and `package.build.channels` you determine which backend is used and from which channel it will be downloaded.
+
+There are [different build backends available](https://prefix-dev.github.io/pixi-build-backends/).
+
+Pixi backends describe how to build a conda package, for a certain language or build tool. In this example, we are using `pixi-build-python` backend in order to build a Python package.
 
 ```toml
 [package.build]
@@ -83,32 +82,9 @@ backend = { name = "pixi-build-python", version = "==0.3.2" }
 
 We need to add our package `python_rich` as source dependency to the workspace.
 
-Hint
-
-Pixi dependencies fall into two main categories: `binary` and `source` dependencies. `binary` dependencies are pre-built packages, while `source` dependencies are source code that needs to be built.
-
-Source dependencies can be specified either by providing a local path to the directory containing the package or a `git` dependency. When using `git`, you can optionally define a `branch`, `tag`, or `rev` to pin the dependency. If none are specified, the latest commit on the default branch is used. Additionally, a `subdirectory` can be specified to indicate the package’s location within the repository.
-
-Using git SSH URLs
-
-When using SSH URLs in git dependencies, make sure to have your SSH key added to your SSH agent. You can do this by running `ssh-add` which will prompt you for your SSH key passphrase. Make sure that the `ssh-add` agent or service is running and you have a generated public/private SSH key. For more details on how to do this, check the [Github SSH documentation](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent).
-
-Source dependencies are defined in one of two ways:
-
-- `Pixi`-based dependencies are built using the backend specified in the `[package.build]` section of pixi.toml.
-- `rattler-build`-based dependencies are built using a `recipe.yaml` file. You can specify the path to the folder containing the recipe file, or the path to the `recipe.yaml` file itself.
-
 ```toml
-# We add our package as dependency to the workspace
 [dependencies]
-# We can get source dependencies from a path on our file system
-python_rich_by_folder = { path = "./recipe_by_folder" }
-# as well as from a git repository
-boost-check = { git = "https://github.com/wolfv/pixi-build-examples", branch = "main", subdirectory = "boost-check" }
-# If the directory contains a `pixi.toml`, `pixi-build` will be used to build the package
-python_rich = { path = "./python_rich" }
-# if the directory contains a `recipe.yaml`, `rattler-build` will be used.
-python_rich_by_file = { path = "./recipe_by_file/recipe.yaml" }
+python_rich = { path = "." }
 
 ```
 
@@ -128,7 +104,7 @@ We add `rich` as a run dependency to the package. This is necessary because the 
 
 ```toml
 [package.run-dependencies]
-rich = ">=13.9.4,<14"
+rich = "13.9.*"
 
 ```
 

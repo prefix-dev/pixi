@@ -4314,6 +4314,13 @@ Each of these tables has a different purpose and is used to define the dependenc
 <li><code>pkg-config</code></li>
 <li>VSC packages (<code>git</code>, <code>svn</code>)</li>
 </ul>
+<details class="warning">
+<summary>Using git SSH URLs</summary>
+<p>When using SSH URLs in git dependencies, make sure to have your SSH key added to your SSH agent.
+You can do this by running <code>ssh-add</code> which will prompt you for your SSH key passphrase.
+Make sure that the <code>ssh-add</code> agent or service is running and you have a generated public/private SSH key.
+For more details on how to do this, check the <a href="https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent">Github SSH documentation</a>.</p>
+</details>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-55-1"><a id="__codelineno-55-1" name="__codelineno-55-1" href="#__codelineno-55-1"></a><span class="k">[package.build-dependencies]</span>
 </span><span id="__span-55-2"><a id="__codelineno-55-2" name="__codelineno-55-2" href="#__codelineno-55-2"></a><span class="n">cmake</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
 </span><span id="__span-55-3"><a id="__codelineno-55-3" name="__codelineno-55-3" href="#__codelineno-55-3"></a><span class="n">git</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
