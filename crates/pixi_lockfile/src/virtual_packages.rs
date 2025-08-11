@@ -300,7 +300,8 @@ mod test {
     #[test]
     fn test_get_minimal_virtual_packages() {
         let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let lockfile_path = root_dir.join("tests/data/lockfiles/cuda_virtual_dependency.lock");
+        let lockfile_path =
+            root_dir.join("../../tests/data/lockfiles/cuda_virtual_dependency.lock");
         let lockfile = LockFile::from_path(&lockfile_path).unwrap();
         let platform = Platform::Linux64;
         let env = lockfile.default_environment().unwrap();
@@ -328,7 +329,8 @@ mod test {
     #[test]
     fn test_validate_virtual_packages() {
         let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let lockfile_path = root_dir.join("tests/data/lockfiles/cuda_virtual_dependency.lock");
+        let lockfile_path =
+            root_dir.join("../../tests/data/lockfiles/cuda_virtual_dependency.lock");
         let lockfile = LockFile::from_path(&lockfile_path).unwrap();
         let platform = Platform::Linux64;
 
@@ -364,7 +366,7 @@ mod test {
     #[test]
     fn test_validate_wheel_tags() {
         let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let lockfile_path = root_dir.join("tests/data/lockfiles/pypi-numpy.lock");
+        let lockfile_path = root_dir.join("../../tests/data/lockfiles/pypi-numpy.lock");
         let lockfile = LockFile::from_path(&lockfile_path).unwrap();
         let platform = Platform::current();
 
@@ -466,7 +468,7 @@ mod test {
     #[test]
     fn test_archspec_skip() {
         let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let lockfile_path = root_dir.join("tests/data/lockfiles/archspec.lock");
+        let lockfile_path = root_dir.join("../../tests/data/lockfiles/archspec.lock");
         let lockfile = LockFile::from_path(&lockfile_path).unwrap();
         let platform = Platform::Linux64;
 
@@ -488,7 +490,8 @@ mod test {
     #[test]
     fn test_ignored_virtual_packages() {
         let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let lockfile_path = root_dir.join("tests/data/lockfiles/ignored_virtual_packages.lock");
+        let lockfile_path =
+            root_dir.join("../../tests/data/lockfiles/ignored_virtual_packages.lock");
         let lockfile = LockFile::from_path(&lockfile_path).unwrap();
         let platform = Platform::Linux64;
 

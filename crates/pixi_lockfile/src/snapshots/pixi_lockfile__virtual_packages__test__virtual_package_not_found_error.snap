@@ -1,5 +1,5 @@
 ---
-source: src/lock_file/virtual_packages.rs
+source: crates/pixi_lockfile/src/virtual_packages.rs
 expression: "format!(\"With override:\\n{}\\nWithout override:\\n{}\",\nformat_diagnostic(&error1), format_diagnostic(&error2))"
 ---
 With override:
