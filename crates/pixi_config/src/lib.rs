@@ -282,7 +282,7 @@ impl RepodataChannelConfig {
 impl From<RepodataChannelConfig> for SourceConfig {
     fn from(value: RepodataChannelConfig) -> Self {
         SourceConfig {
-            jlap_enabled: !value.disable_jlap.unwrap_or(false),
+            jlap_enabled: !value.disable_jlap.unwrap_or(true),
             zstd_enabled: !value.disable_zstd.unwrap_or(false),
             bz2_enabled: !value.disable_bzip2.unwrap_or(false),
             sharded_enabled: !value.disable_sharded.unwrap_or(false),
