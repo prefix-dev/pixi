@@ -2,7 +2,7 @@ use typed_path::{
     Utf8Component, Utf8Encoding, Utf8Path, Utf8PathBuf, Utf8TypedPath, Utf8TypedPathBuf,
 };
 
-use crate::{GitSpec, PathSourceSpec, SourceSpec, UrlSourceSpec};
+use crate::{GitSpec, PathSourceSpec, SourceLocationSpec, SourceSpec, UrlSourceSpec};
 
 /// `SourceAnchor` represents the resolved base location of a `SourceSpec`.
 /// It serves as a reference point for interpreting relative or recursive
@@ -28,37 +28,52 @@ impl SourceAnchor {
         // If this instance is already anchored to the workspace we can simply return
         // immediately.
         let SourceAnchor::Source(base) = self else {
-            return match spec {
-                SourceSpec::Url(url) => SourceSpec::Url(url),
-                SourceSpec::Git(git) => SourceSpec::Git(git),
-                SourceSpec::Path(PathSourceSpec { path }) => SourceSpec::Path(PathSourceSpec {
-                    // Normalize the input path.
-                    path: normalize_typed(path.to_path()),
-                }),
+            return match spec.location {
+                SourceLocationSpec::Url(url) => SourceSpec {
+                    location: SourceLocationSpec::Url(url),
+                },
+                SourceLocationSpec::Git(git) => SourceSpec {
+                    location: SourceLocationSpec::Git(git),
+                },
+                SourceLocationSpec::Path(PathSourceSpec { path }) => {
+                    SourceSpec {
+                        location: SourceLocationSpec::Path(PathSourceSpec {
+                            // Normalize the input path.
+                            path: normalize_typed(path.to_path()),
+                        }),
+                    }
+                }
             };
         };
 
         // Only path specs can be relative.
-        let SourceSpec::Path(PathSourceSpec { path }) = spec else {
+        let SourceSpec {
+            location: SourceLocationSpec::Path(PathSourceSpec { path }),
+        } = spec
+        else {
             return spec;
         };
 
         // If the path is absolute we can just return it.
         if path.is_absolute() || path.starts_with("~") {
-            return SourceSpec::Path(PathSourceSpec { path });
+            return SourceSpec {
+                location: SourceLocationSpec::Path(PathSourceSpec { path }),
+            };
         }
 
-        match base {
-            SourceSpec::Path(PathSourceSpec { path: base }) => {
+        match &base.location {
+            SourceLocationSpec::Path(PathSourceSpec { path: base }) => {
                 let relative_path = normalize_typed(base.join(path).to_path());
-                SourceSpec::Path(PathSourceSpec {
-                    path: relative_path,
-                })
+                SourceSpec {
+                    location: SourceLocationSpec::Path(PathSourceSpec {
+                        path: relative_path,
+                    }),
+                }
             }
-            SourceSpec::Url(UrlSourceSpec { .. }) => {
+            SourceLocationSpec::Url(UrlSourceSpec { .. }) => {
                 unimplemented!("Cannot resolve relative paths for URL sources")
             }
-            SourceSpec::Git(GitSpec {
+            SourceLocationSpec::Git(GitSpec {
                 git,
                 rev,
                 subdirectory,
@@ -68,11 +83,13 @@ impl SourceAnchor {
                         .join(path)
                         .to_path(),
                 );
-                SourceSpec::Git(GitSpec {
-                    git: git.clone(),
-                    rev: rev.clone(),
-                    subdirectory: Some(relative_subdir.to_string()),
-                })
+                SourceSpec {
+                    location: SourceLocationSpec::Git(GitSpec {
+                        git: git.clone(),
+                        rev: rev.clone(),
+                        subdirectory: Some(relative_subdir.to_string()),
+                    }),
+                }
             }
         }
     }
