@@ -4,4 +4,3 @@
 
 pub(crate) mod build_dispatch;
 pub(crate) mod pypi;
-mod resolver_provider;

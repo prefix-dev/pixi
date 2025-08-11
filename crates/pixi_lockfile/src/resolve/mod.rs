@@ -2,4 +2,5 @@
 //!
 //! See [`resolve_pypi`] and [`resolve_conda`] for more information.
 
+pub(crate) mod resolver_provider;
 pub(crate) mod uv_resolution_context;

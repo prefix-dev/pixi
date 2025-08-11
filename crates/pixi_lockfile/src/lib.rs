@@ -10,7 +10,9 @@ pub mod virtual_packages;
 
 pub use package_identifier::{ConversionError, PypiPackageIdentifier};
 pub use records_by_name::{HasNameVersion, PixiRecordsByName, PypiRecordsByName};
-pub use resolve::uv_resolution_context::UvResolutionContext;
+pub use resolve::{
+    resolver_provider::CondaResolverProvider, uv_resolution_context::UvResolutionContext,
+};
 
 /// A list of conda packages that are locked for a specific platform.
 pub type LockedCondaPackages = Vec<PixiRecord>;

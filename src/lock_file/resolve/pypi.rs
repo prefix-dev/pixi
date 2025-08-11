@@ -16,8 +16,8 @@ use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
 use pixi_consts::consts;
 use pixi_lockfile::{
-    HasNameVersion, LockedPypiPackages, PixiRecordsByName, PypiPackageIdentifier, PypiRecord,
-    UvResolutionContext,
+    CondaResolverProvider, HasNameVersion, LockedPypiPackages, PixiRecordsByName,
+    PypiPackageIdentifier, PypiRecord, UvResolutionContext,
 };
 use pixi_manifest::{EnvironmentName, SystemRequirements, pypi::pypi_options::PypiOptions};
 use pixi_pypi_spec::PixiPypiSpec;
@@ -59,11 +59,8 @@ use crate::{
     environment::CondaPrefixUpdated,
     lock_file::{
         CondaPrefixUpdater,
-        resolve::{
-            build_dispatch::{
-                LazyBuildDispatch, LazyBuildDispatchDependencies, UvBuildDispatchParams,
-            },
-            resolver_provider::CondaResolverProvider,
+        resolve::build_dispatch::{
+            LazyBuildDispatch, LazyBuildDispatchDependencies, UvBuildDispatchParams,
         },
     },
     workspace::{Environment, EnvironmentVars},

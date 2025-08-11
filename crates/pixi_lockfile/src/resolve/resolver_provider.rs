@@ -7,9 +7,9 @@ use std::{
     sync::Arc,
 };
 
+use crate::PypiPackageIdentifier;
 use futures::{Future, FutureExt};
 use pixi_consts::consts;
-use pixi_lockfile::PypiPackageIdentifier;
 use pixi_record::PixiRecord;
 use uv_distribution::{ArchiveMetadata, Metadata};
 use uv_distribution_filename::SourceDistExtension;
@@ -24,13 +24,13 @@ use uv_resolver::{
 };
 use uv_types::BuildContext;
 
-pub(super) struct CondaResolverProvider<'a, Context: BuildContext> {
-    pub(super) fallback: DefaultResolverProvider<'a, Context>,
-    pub(super) conda_python_identifiers:
+pub struct CondaResolverProvider<'a, Context: BuildContext> {
+    pub fallback: DefaultResolverProvider<'a, Context>,
+    pub conda_python_identifiers:
         &'a HashMap<uv_normalize::PackageName, (PixiRecord, PypiPackageIdentifier)>,
 
     /// Saves the number of requests by the uv solver per package
-    pub(super) package_requests: Rc<RefCell<HashMap<uv_normalize::PackageName, u32>>>,
+    pub package_requests: Rc<RefCell<HashMap<uv_normalize::PackageName, u32>>>,
 }
 
 impl<Context: BuildContext> ResolverProvider for CondaResolverProvider<'_, Context> {
