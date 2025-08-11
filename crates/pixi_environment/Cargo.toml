@@ -9,13 +9,17 @@ repository.workspace = true
 version = "0.1.0"
 
 [dependencies]
+console = { workspace = true }
 fs-err = { workspace = true }
+human_bytes = { workspace = true }
 miette = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_utils = { workspace = true, default-features = false }
 rattler = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_lock = { workspace = true }
+serde = { workspace = true }
+tabwriter = { workspace = true }
 tracing = { workspace = true }
 uv-distribution-types = { workspace = true }
 uv-installer = { workspace = true }

@@ -2,16 +2,14 @@ use fancy_display::FancyDisplay;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use pixi_consts::consts;
+use pixi_environment::list::{PackageToOutput, print_package_table};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{PackageName, PrefixRecord, Version};
 use serde::Serialize;
 
 use miette::{IntoDiagnostic, miette};
 
-use crate::{
-    environment::list::{PackageToOutput, print_package_table},
-    global::common::find_package_records,
-};
+use crate::global::common::find_package_records;
 
 use super::{EnvChanges, EnvState, EnvironmentName, Mapping, Project, project::ParsedEnvironment};
 

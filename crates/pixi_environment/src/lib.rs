@@ -1,3 +1,5 @@
+pub mod conda_metadata;
+pub mod list;
 mod pypi_prefix;
 mod python_status;
 

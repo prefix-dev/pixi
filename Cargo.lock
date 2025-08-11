@@ -4991,13 +4991,17 @@ dependencies = [
 name = "pixi_environment"
 version = "0.1.0"
 dependencies = [
+ "console 0.15.11",
  "fs-err",
+ "human_bytes",
  "miette 7.6.0",
  "pixi_consts",
  "pixi_utils",
  "rattler",
  "rattler_conda_types",
  "rattler_lock",
+ "serde",
+ "tabwriter",
  "tracing",
  "uv-distribution-types",
  "uv-installer",
