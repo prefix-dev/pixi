@@ -1,6 +1,5 @@
 import os
 import platform
-import shutil
 import subprocess
 from contextlib import contextmanager
 from enum import IntEnum
@@ -168,35 +167,3 @@ def cwd(path: str | Path) -> Generator[None, None, None]:
         yield
     finally:
         os.chdir(oldpwd)
-
-
-def git_test_repo(source_dir: Path, repo_name: str, target_dir: Path) -> str:
-    """Create a git repository from the source directory in a target directory."""
-    repo_path: Path = target_dir / repo_name
-
-    # Copy source directory to temp
-    shutil.copytree(source_dir, repo_path)
-
-    # Initialize git repository in the copied source
-    subprocess.run(
-        ["git", "init"],
-        cwd=repo_path,
-        check=True,
-        capture_output=True,
-    )
-
-    # Add all files and commit
-    subprocess.run(
-        ["git", "add", "."],
-        cwd=repo_path,
-        check=True,
-        capture_output=True,
-    )
-    subprocess.run(
-        ["git", "commit", "--message", "Initial commit"],
-        cwd=repo_path,
-        check=True,
-        capture_output=True,
-    )
-
-    return f"file://{repo_path}"
