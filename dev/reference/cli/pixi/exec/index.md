@@ -39,6 +39,8 @@ pixi exec [OPTIONS] [COMMAND]...
 
 - [`--list <LIST>`](#arg---list) Before executing the command, list packages in the environment Specify `--list=some_regex` to filter the shown packages
 
+- [`--no-modify-ps1`](#arg---no-modify-ps1) Disable modification of the PS1 prompt to indicate the temporary environment
+
 ## Config Options
 
 - [`--auth-file <AUTH_FILE>`](#arg---auth-file) Path to the file containing the authentication token
