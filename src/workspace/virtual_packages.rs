@@ -1,11 +1,11 @@
-use crate::lock_file::virtual_packages::{
-    MachineValidationError, validate_system_meets_environment_requirements,
-};
 use crate::workspace::{Environment, errors::UnsupportedPlatformError};
 use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_default_versions::{
     default_glibc_version, default_linux_version, default_mac_os_version, default_windows_version,
+};
+use pixi_lockfile::virtual_packages::{
+    MachineValidationError, validate_system_meets_environment_requirements,
 };
 use pixi_manifest::{FeaturesExt, LibCSystemRequirement, SystemRequirements};
 use rattler_conda_types::Platform;

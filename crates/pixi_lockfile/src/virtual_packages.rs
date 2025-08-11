@@ -146,7 +146,7 @@ fn get_wheels_from_pypi_package_data(pypi_packages: Vec<PypiPackageData>) -> Vec
 }
 
 /// Validate that current machine has all the required virtual packages for the given environment
-pub(crate) fn validate_system_meets_environment_requirements(
+pub fn validate_system_meets_environment_requirements(
     lock_file: &LockFile,
     platform: Platform,
     environment_name: &EnvironmentName,

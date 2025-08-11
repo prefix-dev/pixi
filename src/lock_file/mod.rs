@@ -6,7 +6,6 @@ mod resolve;
 mod satisfiability;
 mod update;
 mod utils;
-pub mod virtual_packages;
 
 pub use crate::environment::CondaPrefixUpdater;
 pub(crate) use package_identifier::PypiPackageIdentifier;
