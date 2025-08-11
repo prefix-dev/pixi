@@ -5565,7 +5565,7 @@ Currently, the `build` feature has a number of limitations:
 
 1. Limited set of [build-backends](https://github.com/prefix-dev/pixi-build-backends).
 1. Build-backends are probably missing a lot of parameters/features.
-1. Recursive source dependencies are not supported. ( source dependencies that have source dependencies )
+1. Recursive source dependencies are not supported. (source dependencies that have source dependencies)
 1. Workspace dependencies cannot be inherited.
 
 ## Setting up the Manifest
