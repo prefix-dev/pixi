@@ -30,19 +30,19 @@ use pixi_manifest::EnvironmentName;
 use pixi_manifest::pypi::pypi_options::NoBuildIsolation;
 use pixi_record::PixiRecord;
 use pixi_uv_conversions::BuildIsolation;
-use tokio::runtime::Handle;
 use uv_build_frontend::SourceBuild;
 use uv_cache::Cache;
 use uv_client::RegistryClient;
 use uv_configuration::{
     BuildKind, BuildOptions, BuildOutput, Concurrency, ConfigSettings, Constraints, IndexStrategy,
-    PreviewMode, SourceStrategy,
+    PackageConfigSettings, SourceStrategy,
 };
 use uv_dispatch::{BuildDispatch, BuildDispatchError, SharedState};
 use uv_distribution_filename::DistFilename;
 use uv_distribution_types::Requirement;
 use uv_distribution_types::{
-    CachedDist, DependencyMetadata, IndexLocations, IsBuildBackendError, Resolution, SourceDist,
+    CachedDist, DependencyMetadata, ExtraBuildRequires, IndexLocations, IsBuildBackendError,
+    Resolution, SourceDist,
 };
 use uv_install_wheel::LinkMode;
 use uv_python::{Interpreter, InterpreterError, PythonEnvironment};
@@ -58,7 +58,9 @@ pub struct UvBuildDispatchParams<'a> {
     flat_index: &'a FlatIndex,
     dependency_metadata: &'a DependencyMetadata,
     config_settings: &'a ConfigSettings,
+    package_config_settings: PackageConfigSettings,
     build_options: &'a BuildOptions,
+    extra_build_requires: ExtraBuildRequires,
     hasher: &'a HashStrategy,
     index_strategy: IndexStrategy,
     constraints: Constraints,
@@ -67,7 +69,8 @@ pub struct UvBuildDispatchParams<'a> {
     exclude_newer: Option<ExcludeNewer>,
     sources: SourceStrategy,
     concurrency: Concurrency,
-    preview_mode: PreviewMode,
+    preview: uv_configuration::Preview,
+    workspace_cache: WorkspaceCache,
 }
 
 impl<'a> UvBuildDispatchParams<'a> {
@@ -89,7 +92,9 @@ impl<'a> UvBuildDispatchParams<'a> {
             flat_index,
             dependency_metadata,
             config_settings,
+            package_config_settings: PackageConfigSettings::default(),
             build_options,
+            extra_build_requires: ExtraBuildRequires::default(),
             hasher,
             index_strategy: IndexStrategy::default(),
             shared_state: SharedState::default(),
@@ -98,7 +103,8 @@ impl<'a> UvBuildDispatchParams<'a> {
             exclude_newer: None,
             sources: SourceStrategy::default(),
             concurrency: Concurrency::default(),
-            preview_mode: PreviewMode::default(),
+            preview: uv_configuration::Preview::default(),
+            workspace_cache: WorkspaceCache::default(),
         }
     }
 
@@ -141,15 +147,34 @@ impl<'a> UvBuildDispatchParams<'a> {
     }
 
     /// Set the exclude newer options for the build dispatch
-    #[allow(dead_code)]
-    pub fn with_exclude_newer(mut self, exclude_newer: Option<ExcludeNewer>) -> Self {
-        self.exclude_newer = exclude_newer;
+    pub fn with_exclude_newer(mut self, exclude_newer: ExcludeNewer) -> Self {
+        self.exclude_newer = Some(exclude_newer);
         self
     }
 
     #[allow(dead_code)]
-    pub fn with_preview_mode(mut self, preview_mode: PreviewMode) -> Self {
-        self.preview_mode = preview_mode;
+    pub fn with_preview_mode(mut self, preview: uv_configuration::Preview) -> Self {
+        self.preview = preview;
+        self
+    }
+
+    pub fn with_workspace_cache(mut self, workspace_cache: WorkspaceCache) -> Self {
+        self.workspace_cache = workspace_cache;
+        self
+    }
+
+    #[allow(dead_code)]
+    pub fn with_package_config_settings(
+        mut self,
+        package_config_settings: PackageConfigSettings,
+    ) -> Self {
+        self.package_config_settings = package_config_settings;
+        self
+    }
+
+    #[allow(dead_code)]
+    pub fn with_extra_build_requires(mut self, extra_build_requires: ExtraBuildRequires) -> Self {
+        self.extra_build_requires = extra_build_requires;
         self
     }
 }
@@ -205,6 +230,12 @@ pub struct LazyBuildDispatchDependencies {
     non_isolated_packages: OnceCell<BuildIsolation>,
     /// The python environment
     python_env: OnceCell<PythonEnvironment>,
+    /// The constraints for dependency resolution
+    constraints: OnceCell<Constraints>,
+    /// Extra build requirements
+    extra_build_requires: OnceCell<ExtraBuildRequires>,
+    /// Package-specific configuration settings
+    package_config_settings: OnceCell<PackageConfigSettings>,
 }
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
@@ -266,7 +297,7 @@ impl<'a> LazyBuildDispatch<'a> {
 
     /// Lazy initialization of the `BuildDispatch`. This also implies
     /// initializing the conda prefix.
-    async fn get_or_try_init(&self) -> Result<&BuildDispatch, LazyBuildDispatchError> {
+    async fn get_or_try_init(&self) -> Result<&BuildDispatch<'a>, LazyBuildDispatchError> {
         Box::pin(self.build_dispatch.get_or_try_init(async {
             // Disallow installing if the flag is set.
             if self.disallow_install_conda_prefix {
@@ -327,10 +358,25 @@ impl<'a> LazyBuildDispatch<'a> {
                     .get_or_init(|| PythonEnvironment::from_interpreter(interpreter.clone()))
             });
 
+            let constraints = self
+                .lazy_deps
+                .constraints
+                .get_or_init(|| self.params.constraints.clone());
+
+            let extra_build_requires = self
+                .lazy_deps
+                .extra_build_requires
+                .get_or_init(|| self.params.extra_build_requires.clone());
+
+            let package_config_settings = self
+                .lazy_deps
+                .package_config_settings
+                .get_or_init(|| self.params.package_config_settings.clone());
+
             let build_dispatch = BuildDispatch::new(
                 self.params.client,
                 self.params.cache,
-                self.params.constraints.clone(),
+                constraints,
                 interpreter,
                 self.params.index_locations,
                 self.params.flat_index,
@@ -338,15 +384,17 @@ impl<'a> LazyBuildDispatch<'a> {
                 self.params.shared_state.clone(),
                 self.params.index_strategy,
                 self.params.config_settings,
+                package_config_settings,
                 build_isolation,
+                extra_build_requires,
                 self.params.link_mode,
                 self.params.build_options,
                 self.params.hasher,
-                self.params.exclude_newer,
+                self.params.exclude_newer.clone().unwrap_or_default(),
                 self.params.sources,
-                WorkspaceCache::default(),
+                self.params.workspace_cache.clone(),
                 self.params.concurrency,
-                self.params.preview_mode,
+                self.params.preview,
             )
             .with_build_extra_env_vars(env_vars);
 
@@ -356,54 +404,21 @@ impl<'a> LazyBuildDispatch<'a> {
     }
 }
 
-impl LazyBuildDispatch<'_> {
-    /// Helper method to ensure the build dispatch is initialized from a sync context.
-    /// This handles the async-to-sync conversion needed when the build dispatch is not yet initialized.
-    fn ensure_build_dispatch_initialized(&self) {
-        // Only initialize if not already done to avoid unnecessary work
-        if self.build_dispatch.get().is_none() {
-            // This will usually be called from the multi-threaded runtime, but there might
-            // be tests that calls this in the current thread runtime.
-            // In the current thread runtime we cannot use `block_in_place` as it will panic
-            let handle = Handle::current();
-            match handle.runtime_flavor() {
-                tokio::runtime::RuntimeFlavor::CurrentThread => {
-                    let runtime = tokio::runtime::Builder::new_current_thread()
-                        .enable_all()
-                        .build()
-                        .expect("failed to initialize the runtime");
-                    runtime
-                        .block_on(self.get_or_try_init())
-                        .expect("failed to initialize the build dispatch");
-                }
-                // Others are multi-threaded runtimes
-                _ => {
-                    tokio::task::block_in_place(move || {
-                        handle
-                            .block_on(self.get_or_try_init())
-                            .expect("failed to initialize build dispatch");
-                    });
-                }
-            }
-        }
-    }
-}
-
 impl BuildContext for LazyBuildDispatch<'_> {
     type SourceDistBuilder = SourceBuild;
 
-    fn interpreter(&self) -> &uv_python::Interpreter {
+    async fn interpreter(&self) -> &uv_python::Interpreter {
         // In most cases the interpreter should be initialized, because one of the other
         // trait methods will have been called
         // But in case it is not, we will initialize it here
         //
         // Even though initialize does not initialize twice, we check it beforehand
         // because the initialization takes time
-        self.ensure_build_dispatch_initialized();
-        self.lazy_deps
-            .interpreter
-            .get()
-            .expect("python interpreter not initialized, this is a programming error")
+        self.get_or_try_init()
+            .await
+            .expect("could not initialize build dispatch correctly")
+            .interpreter()
+            .await
     }
 
     fn cache(&self) -> &uv_cache::Cache {
@@ -513,13 +528,24 @@ impl BuildContext for LazyBuildDispatch<'_> {
     }
 
     fn build_arena(&self) -> &BuildArena<Self::SourceDistBuilder> {
-        // Ensure the build dispatch is initialized
-        self.ensure_build_dispatch_initialized();
-
         // Get the inner build dispatch and delegate to its build_arena method
         self.build_dispatch
             .get()
             .expect("build dispatch not initialized, this is a programming error")
             .build_arena()
+    }
+
+    fn config_settings_package(&self) -> &uv_configuration::PackageConfigSettings {
+        self.lazy_deps
+            .package_config_settings
+            .get()
+            .expect("package config settings not initialized, this is a programming error")
+    }
+
+    fn extra_build_requires(&self) -> &uv_distribution_types::ExtraBuildRequires {
+        self.lazy_deps
+            .extra_build_requires
+            .get()
+            .expect("extra build requires not initialized, this is a programming error")
     }
 }
