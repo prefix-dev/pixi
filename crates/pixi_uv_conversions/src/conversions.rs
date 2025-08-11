@@ -470,6 +470,8 @@ pub fn to_uv_trusted_host(
 }
 
 /// Converts a date to a `uv_resolver::ExcludeNewer`
+/// since 0.8.2 uv also allows this per package,
+/// but we only support the global one for now
 pub fn to_exclude_newer(exclude_newer: chrono::DateTime<chrono::Utc>) -> uv_resolver::ExcludeNewer {
     let seconds_since_epoch = exclude_newer.timestamp();
     let nanoseconds = exclude_newer.timestamp_subsec_nanos();
@@ -480,5 +482,7 @@ pub fn to_exclude_newer(exclude_newer: chrono::DateTime<chrono::Utc>) -> uv_reso
             jiff::Timestamp::MAX
         },
     );
-    uv_resolver::ExcludeNewer::from(timestamp)
+    // Will convert into a global ExcludeNewer
+    // ..into is needed to convert into the uv timestamp type
+    uv_resolver::ExcludeNewer::global(timestamp.into())
 }

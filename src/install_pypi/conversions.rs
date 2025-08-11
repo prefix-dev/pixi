@@ -206,7 +206,13 @@ pub fn convert_to_dist(
             let pkg_name =
                 uv_normalize::PackageName::from_str(pkg.name.as_ref()).expect("should be correct");
             if abs_path.is_dir() {
-                Dist::from_directory_url(pkg_name, absolute_url, &abs_path, pkg.editable, false)?
+                Dist::from_directory_url(
+                    pkg_name,
+                    absolute_url,
+                    &abs_path,
+                    Some(pkg.editable),
+                    Some(false),
+                )?
             } else {
                 Dist::from_file_url(
                     pkg_name,

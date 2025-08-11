@@ -454,7 +454,7 @@ pub async fn resolve_pypi(
     let options = Options {
         index_strategy,
         build_options: build_options.clone(),
-        exclude_newer: exclude_newer.map(to_exclude_newer),
+        exclude_newer: exclude_newer.map(to_exclude_newer).unwrap_or_default(),
         ..Options::default()
     };
 
@@ -471,6 +471,8 @@ pub async fn resolve_pypi(
         &context.hash_strategy,
     )
     .with_index_strategy(index_strategy)
+    .with_exclude_newer(options.exclude_newer.clone())
+    .with_workspace_cache(context.workspace_cache.clone())
     // Create a forked shared state that condains the in-memory index.
     // We need two in-memory indexes, one for the build dispatch and one for the
     // resolver. because we manually override requests for the resolver,
@@ -610,7 +612,7 @@ pub async fn resolve_pypi(
         &requires_python,
         AllowedYanks::from_manifest(&manifest, &resolver_env, options.dependency_mode),
         &context.hash_strategy,
-        options.exclude_newer,
+        options.exclude_newer.clone(),
         &build_options,
         &context.capabilities,
     );
@@ -973,7 +975,7 @@ async fn lock_pypi_packages(
                             // instead of from the source path to copy the path that was passed in
                             // from the requirement.
                             let url_or_path = UrlOrPath::Path(install_path);
-                            (url_or_path, hash, dir.editable)
+                            (url_or_path, hash, dir.editable.unwrap_or(false))
                         }
                     };
 
