@@ -102,15 +102,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         Ok(state_changes)
     }
 
-    let mut project_modified = project_original.clone();
-
     let specs = args
         .packages
-        .to_global_specs(project_original.global_channel_config())?
+        .to_global_specs(
+            project_original.global_channel_config(),
+            &project_original.root,
+        )?
         .into_iter()
         // TODO: will allow nameless specs later
         .filter_map(|s| s.into_named())
         .collect_vec();
+
+    let mut project_modified = project_original.clone();
 
     match apply_changes(
         &args.environment,

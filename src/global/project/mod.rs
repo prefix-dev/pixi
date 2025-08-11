@@ -84,7 +84,7 @@ pub(crate) const MANIFESTS_DIR: &str = "manifests";
 #[derive(Clone)]
 pub struct Project {
     /// Root folder of the project
-    root: PathBuf,
+    pub(crate) root: PathBuf,
     /// The manifest for the project
     pub(crate) manifest: Manifest,
     /// The global configuration as loaded from the config file(s)

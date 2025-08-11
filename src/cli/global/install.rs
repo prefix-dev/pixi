@@ -95,7 +95,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let specs = args
         .packages
-        .to_global_specs(&channel_config)?
+        .to_global_specs(&channel_config, &project_original.root)?
         .into_iter()
         // TODO: will allow nameless specs later
         .filter_map(|s| s.into_named())

@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use clap::Parser;
 use miette::Diagnostic;
 use pixi_consts::consts;
@@ -49,6 +51,8 @@ pub enum GlobalSpecsConversionError {
         help = "Use a full package specification like `python==3.12` instead of just `==3.12`"
     )]
     NameRequired,
+    #[error("couldn't construct a relative path from {} to {}", .0, .1)]
+    RelativePath(String, String),
 }
 
 impl GlobalSpecs {
@@ -56,6 +60,7 @@ impl GlobalSpecs {
     pub fn to_global_specs(
         &self,
         channel_config: &ChannelConfig,
+        manifest_root: &Path,
     ) -> Result<Vec<GlobalSpec>, GlobalSpecsConversionError> {
         let git_or_path_spec = if let Some(git_url) = &self.git {
             let git_spec = pixi_spec::GitSpec {
@@ -64,10 +69,20 @@ impl GlobalSpecs {
                 subdirectory: self.subdir.clone(),
             };
             Some(PixiSpec::Git(git_spec))
+        } else if let Some(path) = &self.path {
+            let absolute_path = path.absolutize().unwrap();
+            let path_str = absolute_path.as_str();
+            let relative_path = pathdiff::diff_paths(path_str, manifest_root).ok_or_else(|| {
+                GlobalSpecsConversionError::RelativePath(
+                    path_str.to_string(),
+                    manifest_root.to_string_lossy().to_string(),
+                )
+            })?;
+            Some(PixiSpec::Path(pixi_spec::PathSpec {
+                path: Utf8TypedPathBuf::from(relative_path.to_string_lossy().to_string()),
+            }))
         } else {
-            self.path
-                .as_ref()
-                .map(|path| PixiSpec::Path(pixi_spec::PathSpec { path: path.clone() }))
+            None
         };
         if let Some(pixi_spec) = git_or_path_spec {
             if self.specs.is_empty() {
@@ -118,7 +133,10 @@ mod tests {
         };
 
         let channel_config = ChannelConfig::default_with_root_dir(PathBuf::from("."));
-        let global_specs = specs.to_global_specs(&channel_config).unwrap();
+        let manifest_root = PathBuf::from(".");
+        let global_specs = specs
+            .to_global_specs(&channel_config, &manifest_root)
+            .unwrap();
 
         assert_eq!(global_specs.len(), 2);
     }
@@ -134,7 +152,10 @@ mod tests {
         };
 
         let channel_config = ChannelConfig::default_with_root_dir(PathBuf::from("."));
-        let global_specs = specs.to_global_specs(&channel_config).unwrap();
+        let manifest_root = PathBuf::from(".");
+        let global_specs = specs
+            .to_global_specs(&channel_config, &manifest_root)
+            .unwrap();
 
         assert_eq!(global_specs.len(), 1);
         assert!(matches!(
@@ -154,7 +175,8 @@ mod tests {
         };
 
         let channel_config = ChannelConfig::default_with_root_dir(PathBuf::from("."));
-        let global_specs = specs.to_global_specs(&channel_config);
+        let manifest_root = PathBuf::from(".");
+        let global_specs = specs.to_global_specs(&channel_config, &manifest_root);
         assert!(global_specs.is_err());
     }
 }
