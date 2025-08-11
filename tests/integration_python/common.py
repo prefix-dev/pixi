@@ -4,7 +4,8 @@ import subprocess
 from contextlib import contextmanager
 from enum import IntEnum
 from pathlib import Path
-from typing import Generator
+import sys
+from typing import Generator, Optional, Sequence, Tuple
 
 from rattler import Platform
 
@@ -33,12 +34,12 @@ class ExitCode(IntEnum):
 
 
 class Output:
-    command: list[Path | str]
+    command: Sequence[Path | str]
     stdout: str
     stderr: str
     returncode: int
 
-    def __init__(self, command: list[Path | str], stdout: str, stderr: str, returncode: int):
+    def __init__(self, command: Sequence[Path | str], stdout: str, stderr: str, returncode: int):
         self.command = command
         self.stdout = stdout
         self.stderr = stderr
@@ -49,7 +50,7 @@ class Output:
 
 
 def verify_cli_command(
-    command: list[Path | str],
+    command: Sequence[Path | str],
     expected_exit_code: ExitCode = ExitCode.SUCCESS,
     stdout_contains: str | list[str] | None = None,
     stdout_excludes: str | list[str] | None = None,
@@ -167,3 +168,34 @@ def cwd(path: str | Path) -> Generator[None, None, None]:
         yield
     finally:
         os.chdir(oldpwd)
+
+
+def run_and_get_env(pixi: Path, *args: str, env_var: str) -> Tuple[Optional[str], Output]:
+    if sys.platform.startswith("win"):
+        cmd = [str(pixi), "exec", *args, "--", "cmd", "/c", f"echo %{env_var}%"]
+    else:
+        cmd = [str(pixi), "exec", *args, "--", "printenv", env_var]
+
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+
+        value = result.stdout.strip()
+
+        output = Output(
+            command=cmd,
+            stdout=value,
+            stderr=result.stderr.strip(),
+            returncode=result.returncode,
+        )
+
+        return (value if value and value != f"%{env_var}%" else None, output)
+    except Exception as e:
+        print(f"Error running command: {e}")
+        print(f"Command: {' '.join(cmd)}")
+        raise
