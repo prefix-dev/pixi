@@ -128,11 +128,9 @@ pub trait HasPrefixUpdateConfig: Sized {
 pub trait HasLockFileUpdateConfig: Sized {
     fn lock_file_update_config(&mut self) -> &mut LockFileUpdateConfig;
 
-    /// Skip updating lockfile, this will only check if it can add a
-    /// dependencies. If it can add it will only add it to the manifest.
-    /// Install will be skipped by default.
-    fn without_lockfile_update(mut self) -> Self {
-        self.lock_file_update_config().no_lockfile_update = true;
+    /// Set the frozen flag to skip lock-file updates
+    fn with_frozen(mut self, frozen: bool) -> Self {
+        self.lock_file_update_config().lock_file_usage.frozen = frozen;
         self
     }
 }
@@ -235,8 +233,13 @@ impl AddBuilder {
         self
     }
 
+    /// Deprecated: Use .with_frozen(true).with_install(false) instead
     pub fn with_no_lockfile_update(mut self, no_lockfile_update: bool) -> Self {
-        self.args.lock_file_update_config.no_lockfile_update = no_lockfile_update;
+        if no_lockfile_update {
+            // Since no_lockfile_update is deprecated, we simulate the behavior by setting frozen=true and no_install=true
+            self.args.lock_file_update_config.lock_file_usage.frozen = true;
+            self.args.prefix_update_config.no_install = true;
+        }
         self
     }
 }

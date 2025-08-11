@@ -115,20 +115,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // TODO: update all environments touched by this feature defined.
     // updating prefix after removing from toml
-    if !lock_file_update_config.no_lockfile_update {
-        get_update_lock_file_and_prefix(
-            &workspace.default_environment(),
-            UpdateMode::Revalidate,
-            UpdateLockFileOptions {
-                lock_file_usage: lock_file_update_config.lock_file_usage()?,
-                no_install: prefix_update_config.no_install,
-                max_concurrent_solves: workspace.config().max_concurrent_solves(),
-            },
-            ReinstallPackages::default(),
-            &[],
-        )
-        .await?;
-    }
+    get_update_lock_file_and_prefix(
+        &workspace.default_environment(),
+        UpdateMode::Revalidate,
+        UpdateLockFileOptions {
+            lock_file_usage: lock_file_update_config.lock_file_usage()?,
+            no_install: prefix_update_config.no_install,
+            max_concurrent_solves: workspace.config().max_concurrent_solves(),
+        },
+        ReinstallPackages::default(),
+        &[],
+    )
+    .await?;
 
     dependency_config.display_success("Removed", Default::default());
 

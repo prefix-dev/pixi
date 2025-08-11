@@ -113,16 +113,22 @@ pub struct LockFileUpdateConfig {
 
 impl LockFileUpdateConfig {
     pub fn lock_file_usage(&self) -> miette::Result<LockFileUsage> {
+        // Error on deprecated flag usage
+        if self.no_lockfile_update {
+            return Err(miette::miette!(
+                help =
+                    "Use '--frozen --no-install', to skip both lock-file updates and installation.",
+                "The '--no-lockfile-update' flag has been deprecated due to inconsistent behavior across commands.\n\n\
+                This flag will be removed in a future version."
+            ));
+        }
+
         let usage: LockFileUsage = self
             .lock_file_usage
             .clone()
             .try_into()
             .map_err(|e: crate::cli::LockFileUsageError| miette::miette!(e))?;
-        if self.no_lockfile_update {
-            Ok(LockFileUsage::Frozen)
-        } else {
-            Ok(usage)
-        }
+        Ok(usage)
     }
 }
 

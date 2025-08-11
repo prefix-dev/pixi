@@ -27,8 +27,7 @@ pub async fn execute(args: AddRemoveArgs) -> miette::Result<()> {
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
             lock_file_usage: LockFileUsage::Update,
-            no_install: args.prefix_update_config.no_install
-                && args.lock_file_update_config.no_lockfile_update,
+            no_install: args.prefix_update_config.no_install,
             max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
         },
         ReinstallPackages::default(),

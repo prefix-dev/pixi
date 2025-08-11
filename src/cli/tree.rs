@@ -85,7 +85,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let lock_file = workspace
         .update_lock_file(UpdateLockFileOptions {
             lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
-            no_install: args.lock_file_update_config.no_lockfile_update,
+            no_install: false,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         })
         .await

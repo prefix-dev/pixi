@@ -363,10 +363,7 @@ impl WorkspaceMut {
             was_outdated: _,
         } = UpdateContext::builder(self.workspace())
             .with_lock_file(unlocked_lock_file)
-            .with_no_install(
-                (prefix_update_config.no_install && lock_file_update_config.no_lockfile_update)
-                    || dry_run,
-            )
+            .with_no_install(prefix_update_config.no_install || dry_run)
             .finish()
             .await?
             .update()
@@ -415,11 +412,10 @@ impl WorkspaceMut {
             glob_hash_cache,
             was_outdated: true,
         };
-        if !lock_file_update_config.no_lockfile_update && !dry_run {
+        if !dry_run {
             updated_lock_file.write_to_disk()?;
         }
         if !prefix_update_config.no_install
-            && !lock_file_update_config.no_lockfile_update
             && !dry_run
             && self.workspace().environments().len() == 1
             && default_environment_is_affected
