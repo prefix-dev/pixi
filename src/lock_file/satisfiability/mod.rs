@@ -1,7 +1,6 @@
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
-    fmt::{Display, Formatter},
     hash::Hash,
     ops::Sub,
     path::Path,
@@ -15,7 +14,8 @@ use pixi_build_type_conversions::compute_project_model_hash;
 use pixi_git::url::RepositoryUrl;
 use pixi_glob::{GlobHashCache, GlobHashKey};
 use pixi_lockfile::satisfiability::{
-    EditablePackagesMismatch, PlatformUnsat, SourceTreeHashMismatch,
+    EditablePackagesMismatch, EnvironmentUnsat, ExcludeNewerMismatch, IndexesMismatch,
+    PlatformUnsat, SourceTreeHashMismatch,
 };
 use pixi_lockfile::{ConversionError, PixiRecordsByName, PypiRecord, PypiRecordsByName};
 use pixi_manifest::{FeaturesExt, pypi::pypi_options::NoBuild};
@@ -42,125 +42,6 @@ use uv_distribution_types::RequiresPython;
 use uv_git_types::GitReference;
 
 use crate::workspace::{Environment, grouped_environment::GroupedEnvironment};
-
-#[derive(Debug, Error, Diagnostic)]
-pub enum EnvironmentUnsat {
-    #[error("the channels in the lock-file do not match the environments channels")]
-    ChannelsMismatch,
-
-    #[error("platform(s) '{platforms}' present in the lock-file but not in the environment", platforms = .0.iter().map(|p| p.as_str()).join(", ")
-    )]
-    AdditionalPlatformsInLockFile(HashSet<Platform>),
-
-    #[error(transparent)]
-    IndexesMismatch(#[from] IndexesMismatch),
-
-    #[error(transparent)]
-    InvalidChannel(#[from] ParseChannelError),
-
-    #[error(transparent)]
-    InvalidDistExtensionInNoBuild(#[from] ExtensionError),
-
-    #[error(
-        "the lock-file contains non-binary package: '{0}', but the pypi-option `no-build` is set"
-    )]
-    NoBuildWithNonBinaryPackages(String),
-
-    #[error(
-        "the lock-file was solved with a different strategy ({locked_strategy}) than the one selected ({expected_strategy})",
-        locked_strategy = fmt_solve_strategy(*.locked_strategy),
-        expected_strategy = fmt_solve_strategy(*.expected_strategy),
-    )]
-    SolveStrategyMismatch {
-        locked_strategy: rattler_solve::SolveStrategy,
-        expected_strategy: rattler_solve::SolveStrategy,
-    },
-
-    #[error(
-        "the lock-file was solved with a different channel priority ({locked_priority}) than the one selected ({expected_priority})",
-        locked_priority = fmt_channel_priority(*.locked_priority),
-        expected_priority = fmt_channel_priority(*.expected_priority),
-    )]
-    ChannelPriorityMismatch {
-        locked_priority: rattler_solve::ChannelPriority,
-        expected_priority: rattler_solve::ChannelPriority,
-    },
-
-    #[error(transparent)]
-    ExcludeNewerMismatch(#[from] ExcludeNewerMismatch),
-}
-
-fn fmt_channel_priority(priority: rattler_solve::ChannelPriority) -> &'static str {
-    match priority {
-        rattler_solve::ChannelPriority::Strict => "strict",
-        rattler_solve::ChannelPriority::Disabled => "disabled",
-    }
-}
-
-fn fmt_solve_strategy(strategy: rattler_solve::SolveStrategy) -> &'static str {
-    match strategy {
-        rattler_solve::SolveStrategy::Highest => "highest",
-        rattler_solve::SolveStrategy::LowestVersion => "lowest-version",
-        rattler_solve::SolveStrategy::LowestVersionDirect => "lowest-version-direct",
-    }
-}
-
-#[derive(Debug, Error)]
-pub struct ExcludeNewerMismatch {
-    locked_exclude_newer: Option<chrono::DateTime<chrono::Utc>>,
-    expected_exclude_newer: Option<chrono::DateTime<chrono::Utc>>,
-}
-
-impl Display for ExcludeNewerMismatch {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match (self.locked_exclude_newer, self.expected_exclude_newer) {
-            (Some(locked), None) => {
-                write!(
-                    f,
-                    "the lock-file was solved with exclude-newer set to {locked}, but the environment does not have this option set"
-                )
-            }
-            (None, Some(expected)) => {
-                write!(
-                    f,
-                    "the lock-file was solved without exclude-newer, but the environment has this option set to {expected}"
-                )
-            }
-            (Some(locked), Some(expected)) if locked != expected => {
-                write!(
-                    f,
-                    "the lock-file was solved with exclude-newer set to {locked}, but the environment has this option set to {expected}"
-                )
-            }
-            _ => unreachable!("if we get here the values are the same"),
-        }
-    }
-}
-
-#[derive(Debug, Error)]
-pub struct IndexesMismatch {
-    current: PypiIndexes,
-    previous: Option<PypiIndexes>,
-}
-
-impl Display for IndexesMismatch {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(previous) = &self.previous {
-            write!(
-                f,
-                "the indexes used to previously solve to lock file do not match the environments indexes.\n \
-                Expected: {expected:#?}\n Found: {found:#?}",
-                expected = previous,
-                found = self.current
-            )
-        } else {
-            write!(
-                f,
-                "the indexes used to previously solve to lock file are missing"
-            )
-        }
-    }
-}
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum SolveGroupUnsat {

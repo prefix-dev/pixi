@@ -5105,6 +5105,7 @@ dependencies = [
 name = "pixi_lockfile"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "fancy_display",
  "fs-err",
  "futures",
@@ -5127,6 +5128,7 @@ dependencies = [
  "pypi_modifiers",
  "rattler_conda_types",
  "rattler_lock",
+ "rattler_solve",
  "rattler_virtual_packages",
  "reqwest",
  "thiserror 2.0.12",

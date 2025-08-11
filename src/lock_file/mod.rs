@@ -7,9 +7,7 @@ mod utils;
 
 pub use crate::environment::CondaPrefixUpdater;
 pub(crate) use resolve::pypi::resolve_pypi;
-pub use satisfiability::{
-    EnvironmentUnsat, verify_environment_satisfiability, verify_platform_satisfiability,
-};
+pub use satisfiability::{verify_environment_satisfiability, verify_platform_satisfiability};
 pub use update::{LockFileDerivedData, ReinstallPackages, UpdateContext};
 pub use update::{UpdateLockFileOptions, UpdateMode};
 pub(crate) use utils::filter_lock_file;

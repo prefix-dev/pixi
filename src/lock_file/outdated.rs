@@ -3,13 +3,14 @@ use std::collections::{HashMap, HashSet};
 use super::{verify_environment_satisfiability, verify_platform_satisfiability};
 use crate::{
     Workspace,
-    lock_file::satisfiability::{EnvironmentUnsat, verify_solve_group_satisfiability},
+    lock_file::satisfiability::verify_solve_group_satisfiability,
     workspace::{Environment, SolveGroup},
 };
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use pixi_consts::consts;
 use pixi_glob::GlobHashCache;
+use pixi_lockfile::satisfiability::EnvironmentUnsat;
 use pixi_manifest::FeaturesExt;
 use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, LockedPackageRef};
