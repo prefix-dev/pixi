@@ -47,7 +47,7 @@ By specifying `package.build.backend` and `package.build.channels` you determine
 
 There are different build backends [available](https://prefix-dev.github.io/pixi-build-backends/). 
 
-Pixi backends can describe how to build a conda package, for a certain language or build tool.
+Pixi backends describe how to build a conda package, for a certain language or build tool.
 In this example, we are using `pixi-build-python` backend in order to build a Python package.
 
 ```toml
