@@ -45,7 +45,7 @@ In `package` you specify properties specific to the package you want to build.
 Packages are built by using build backends.
 By specifying `package.build.backend` and `package.build.channels` you determine which backend is used and from which channel it will be downloaded.
 
-There are different build backends [available](https://prefix-dev.github.io/pixi-build-backends/). 
+There are [different build backends available](https://prefix-dev.github.io/pixi-build-backends/). 
 
 Pixi backends describe how to build a conda package, for a certain language or build tool.
 In this example, we are using `pixi-build-python` backend in order to build a Python package.
