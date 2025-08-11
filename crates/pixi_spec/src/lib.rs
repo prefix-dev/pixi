@@ -24,7 +24,6 @@ pub use path::{PathBinarySpec, PathSourceSpec, PathSpec};
 use rattler_conda_types::{
     ChannelConfig, NamedChannelOrUrl, NamelessMatchSpec, ParseChannelError, VersionSpec,
 };
-use serde::{Deserialize, Serialize};
 pub use source_anchor::SourceAnchor;
 use thiserror::Error;
 pub use toml::{TomlSpec, TomlVersionSpecStr};
