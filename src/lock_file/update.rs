@@ -10,7 +10,6 @@ use crate::{
         PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, read_environment_file,
         write_environment_file,
     },
-    install_pypi::{PyPIBuildConfig, PyPIContextConfig, PyPIEnvironmentUpdater, PyPIUpdateConfig},
     lock_file::{
         self, PypiRecord, reporter::SolveProgressBar,
         virtual_packages::validate_system_meets_environment_requirements,
@@ -32,6 +31,9 @@ use pixi_command_dispatcher::{BuildEnvironment, CommandDispatcher, PixiEnvironme
 use pixi_consts::consts;
 use pixi_environment::PythonStatus;
 use pixi_glob::GlobHashCache;
+use pixi_install_pypi::{
+    PyPIBuildConfig, PyPIContextConfig, PyPIEnvironmentUpdater, PyPIUpdateConfig,
+};
 use pixi_lockfile::UvResolutionContext;
 use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;

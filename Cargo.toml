@@ -179,6 +179,7 @@ pixi_default_versions = { path = "crates/pixi_default_versions" }
 pixi_environment = { path = "crates/pixi_environment" }
 pixi_git = { path = "crates/pixi_git" }
 pixi_glob = { path = "crates/pixi_glob" }
+pixi_install_pypi = { path = "crates/pixi_install_pypi" }
 pixi_lockfile = { path = "crates/pixi_lockfile" }
 pixi_manifest = { path = "crates/pixi_manifest" }
 pixi_progress = { path = "crates/pixi_progress" }
@@ -251,7 +252,6 @@ clap_complete_nushell = { workspace = true }
 console = { workspace = true, features = ["windows-console-colors"] }
 console-subscriber = { workspace = true, optional = true }
 crossbeam-channel = { workspace = true }
-csv = { workspace = true }
 dashmap = { workspace = true }
 deno_task_shell = { workspace = true }
 dialoguer = { workspace = true }
@@ -279,7 +279,6 @@ uv-install-wheel = { workspace = true }
 
 pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }
-percent-encoding = { workspace = true }
 rattler = { workspace = true, features = ["cli-tools", "indicatif"] }
 rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true }
@@ -311,6 +310,7 @@ pixi_default_versions = { workspace = true }
 pixi_environment = { workspace = true }
 pixi_git = { workspace = true }
 pixi_glob = { workspace = true }
+pixi_install_pypi = { workspace = true }
 pixi_lockfile = { workspace = true }
 pixi_manifest = { workspace = true, features = ["rattler_lock"] }
 pixi_progress = { workspace = true }
@@ -353,9 +353,7 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 typed-path = { workspace = true }
 url = { workspace = true }
-uv-auth = { workspace = true }
 uv-cache = { workspace = true }
-uv-cache-info = { workspace = true }
 uv-client = { workspace = true }
 uv-configuration = { workspace = true }
 uv-dispatch = { workspace = true }

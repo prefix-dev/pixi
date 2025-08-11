@@ -1,6 +1,5 @@
 use std::{collections::HashMap, path::Path, sync::Arc};
 
-use crate::environment::{ContinuePyPIPrefixUpdate, on_python_interpreter_change};
 use chrono::{DateTime, Utc};
 use conda_pypi_clobber::PypiCondaClobberRegistry;
 use fancy_display::FancyDisplay;
@@ -44,10 +43,7 @@ use uv_installer::{Preparer, SitePackages, UninstallError};
 use uv_python::{Interpreter, PythonEnvironment};
 use uv_resolver::{ExcludeNewer, FlatIndex};
 
-use crate::{
-    install_pypi::plan::{CachedWheels, RequiredDists},
-    uv_reporter::{UvReporter, UvReporterOptions},
-};
+use crate::plan::{CachedWheels, RequiredDists};
 use pixi_reporters::{UvReporter, UvReporterOptions};
 
 pub(crate) mod conda_pypi_clobber;

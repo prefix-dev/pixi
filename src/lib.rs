@@ -5,7 +5,6 @@ pub mod cli;
 pub mod diff;
 pub mod environment;
 mod global;
-mod install_pypi;
 pub mod lock_file;
 mod prompt;
 pub(crate) mod repodata;

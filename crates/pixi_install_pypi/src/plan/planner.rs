@@ -13,7 +13,7 @@ use std::collections::HashSet;
 use uv_cache::Cache;
 use uv_distribution_types::{InstalledDist, Name};
 
-use crate::install_pypi::conversions::ConvertToUvDistError;
+use crate::conversions::ConvertToUvDistError;
 
 use super::{
     NeedReinstall, PyPIInstallationPlan, RequiredDists, cache::DistCache,
