@@ -307,7 +307,6 @@ pub async fn execute() -> miette::Result<()> {
 
     // Extract values we need before moving args
     let no_progress = args.no_progress();
-    let log_level_filter = args.log_level_filter();
 
     set_console_colors(&args);
 
@@ -316,11 +315,6 @@ pub async fn execute() -> miette::Result<()> {
         show_help_with_extensions();
         return Ok(());
     }
-
-    let (Some(command), global_options) = (args.command, args.global_options) else {
-        show_help_with_extensions();
-        return Ok(());
-    };
 
     let use_colors = console::colors_enabled_stderr();
     let in_ci = matches!(env::var("CI").as_deref(), Ok("1" | "true"));
@@ -345,8 +339,13 @@ pub async fn execute() -> miette::Result<()> {
     // Setup logging for the application.
     setup_logging(&args, use_colors)?;
 
+    let (Some(command), global_options) = (args.command, args.global_options) else {
+        show_help_with_extensions();
+        return Ok(());
+    };
+
     // Execute the command
-    execute_command(args.command, &args.global_options).await
+    execute_command(command, &global_options).await
 }
 
 #[cfg(feature = "console-subscriber")]
