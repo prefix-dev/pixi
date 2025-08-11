@@ -22,7 +22,7 @@ The vision is to enable building of packages from source, for any language, on a
 
 This is an overview of the Pixi manifest using the `pixi-build` feature.
 
-A more indepth overview of what is available in the new `package` part of the manifest can be found in the [Manifest Reference](../reference/pixi_manifest.md#the-package-section).
+A more indepth overview of what is available in the `[package]` part of the manifest can be found in the [Manifest Reference](../reference/pixi_manifest.md#the-package-section).
 
 ```toml title="pixi.toml"
 --8<-- "docs/source_files/pixi_workspaces/pixi_build/getting_started/pixi.toml:full"
