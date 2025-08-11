@@ -323,3 +323,31 @@ async fn test_clean_env() {
 
 // When adding another test with an environment variable, please choose a unique
 // name to avoid collisions
+
+#[tokio::test]
+async fn test_task_with_interpreter() {
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().without_channels().await.unwrap();
+
+    pixi.tasks()
+        .add("interpreter-test".into(), None, FeatureName::default())
+        .with_commands(["print('Hello from Python',end='')"])
+        .with_interpreter("python")
+        .execute()
+        .await
+        .unwrap();
+
+    let result = pixi
+        .run(Args {
+            task: vec!["interpreter-test".to_string()],
+            workspace_config: WorkspaceConfig {
+                manifest_path: None,
+            },
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(result.exit_code, 0);
+    assert_eq!(result.stdout, "Hello from Python");
+}

@@ -105,6 +105,10 @@ pub struct AddArgs {
     /// The arguments to pass to the task
     #[arg(long = "arg", action = clap::ArgAction::Append)]
     pub args: Option<Vec<TaskArg>>,
+
+    /// The interpreter to use for executing the command (e.g., "bash", "sh", "nu", "python {0}")
+    #[arg(long)]
+    pub interpreter: Option<String>,
 }
 
 /// Parse a single key-value pair
@@ -193,6 +197,7 @@ impl From<AddArgs> for Task {
             && value.env.is_empty()
             && description.is_none()
             && value.args.is_none()
+            && value.interpreter.is_none()
         {
             Self::Plain(cmd_args.into())
         } else {
@@ -208,6 +213,7 @@ impl From<AddArgs> for Task {
                 Some(env)
             };
             let args = value.args;
+            let interpreter = value.interpreter;
 
             Self::Execute(Box::new(Execute {
                 cmd: CmdArgs::Single(cmd_args.into()),
@@ -219,6 +225,7 @@ impl From<AddArgs> for Task {
                 description,
                 clean_env,
                 args,
+                interpreter,
             }))
         }
     }
@@ -571,6 +578,7 @@ pub struct TaskInfo {
     clean_env: bool,
     inputs: Option<Vec<String>>,
     outputs: Option<Vec<String>>,
+    interpreter: Option<String>,
 }
 
 impl From<&Task> for TaskInfo {
@@ -598,6 +606,7 @@ impl From<&Task> for TaskInfo {
                     .map(|output| output.source().to_string())
                     .collect()
             }),
+            interpreter: task.interpreter().map(|i| i.to_string()),
         }
     }
 }
