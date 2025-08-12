@@ -241,7 +241,7 @@ impl DiscoveredBackend {
 
         // Check if the package build configuration specifies a custom source path
         let (actual_source_dir, manifest_relative_path) =
-            if let Some(SourceLocationSpec::Path(path_spec)) = &build_system.source.map(|s| s) {
+            if let Some(SourceLocationSpec::Path(path_spec)) = &build_system.source {
                 let manifest_dir = provenance
                     .path
                     .parent()
