@@ -690,65 +690,6 @@ impl Project {
         Ok(all_executables)
     }
 
-    #[allow(dead_code)]
-    pub async fn source_metadata(
-        &self,
-        env_name: &EnvironmentName,
-        source_records: &UniquePackageMap,
-    ) -> miette::Result<IndexMap<PackageName, Arc<SourceMetadata>>> {
-        let environment = self
-            .environment(env_name)
-            .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
-
-        let dispatch = self.command_dispatcher()?;
-        let platform = environment.platform.unwrap_or_else(Platform::current);
-
-        let channels = environment
-            .channels()
-            .into_iter()
-            .map(|channel| channel.clone().into_channel(self.global_channel_config()))
-            .collect::<Result<Vec<_>, _>>()
-            .into_diagnostic()?
-            .into_iter()
-            .map(|channel| channel.base_url)
-            .collect_vec();
-
-        let mut metadata_results = IndexMap::new();
-
-        for (name, spec) in source_records.specs.iter() {
-            let source = spec
-                .clone()
-                .try_into_source_spec()
-                .expect("at this point this cannot be a binary spec");
-            let source = dispatch.pin_and_checkout(source).await.into_diagnostic()?;
-
-            let source_metadata_spec = SourceMetadataSpec {
-                package: name.clone(),
-                backend_metadata: BuildBackendMetadataSpec {
-                    source: source.pinned,
-                    channel_config: self.global_channel_config().clone(),
-                    channels: channels.clone(),
-                    build_environment: BuildEnvironment::simple(
-                        platform,
-                        Self::virtual_packages_for(&platform).into_diagnostic()?,
-                    ),
-                    variants: None,
-                    enabled_protocols: EnabledProtocols::default(),
-                },
-            };
-
-            let metadata_result = dispatch
-                .source_metadata(source_metadata_spec)
-                .await
-                .into_diagnostic()?;
-            dispatch.clear_reporter().await;
-
-            metadata_results.insert(name.clone(), metadata_result);
-        }
-
-        Ok(metadata_results)
-    }
-
     /// Get installed executables of direct dependencies of a specific
     /// environment.
     pub async fn executables_of_direct_dependencies(
