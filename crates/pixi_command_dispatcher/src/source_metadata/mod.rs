@@ -67,8 +67,6 @@ impl SourceMetadataSpec {
             .await
             .map_err_with(SourceMetadataError::BuildBackendMetadata);
 
-        tracing::debug!("Build backend metadata is {:#?}", &build_backend_metadata);
-
         let build_backend_metadata = build_backend_metadata?;
 
         match &build_backend_metadata.metadata.metadata {
