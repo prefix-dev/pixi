@@ -336,6 +336,17 @@
           "type": "object",
           "additionalProperties": true
         },
+        "source": {
+          "title": "Source",
+          "description": "The source from which to build the package",
+          "type": "object",
+          "additionalProperties": true,
+          "examples": [
+            {
+              "path": "project"
+            }
+          ]
+        },
         "target": {
           "title": "Target",
           "description": "Target-specific build configuration for different platforms",

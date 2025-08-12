@@ -709,6 +709,11 @@ class Build(StrictBaseModel):
         description="Target-specific build configuration for different platforms",
         examples=[{"linux-64": {"configuration": {"key": "value"}}}],
     )
+    source: dict[str, Any] = Field(
+        None,
+        description="The source from which to build the package",
+        examples=[{"path": "project"}],
+    )
 
 
 class BuildBackend(MatchspecTable):
