@@ -1571,7 +1571,7 @@ platforms = ["{CURRENT_PLATFORM}"]
     fish_completion_file = tmp_pixi_workspace / "pixi.fish"
     fish_completion_file.write_text(out)
 
-    # Check that the file was created
+    # Check that the file can be parsed by fish
     verify_cli_command(
         [
             pixi,
