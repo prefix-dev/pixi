@@ -1,0 +1,143 @@
+---
+source: crates/pixi_spec/src/toml.rs
+assertion_line: 694
+expression: snapshot
+---
+- input: 1.2.3
+  result: "==1.2.3"
+- input:
+    version: 1.2.3
+  result:
+    version: "==1.2.3"
+- input:
+    version: 1.2.3
+    build-number: ">=3"
+  result:
+    version: "==1.2.3"
+    build-number: ">=3"
+- input: "*"
+  result: "*"
+- input:
+    path: foobar
+  result:
+    error: "ERROR: unknown field `path`, expected one of `version`, `location`, `build`, `build-number`, `file-name`, `channel`, `subdir`, `license`"
+- input:
+    path: ~/.cache
+  result:
+    error: "ERROR: unknown field `path`, expected one of `version`, `location`, `build`, `build-number`, `file-name`, `channel`, `subdir`, `license`"
+- input:
+    subdir: linux-64
+  result:
+    subdir: linux-64
+- input:
+    channel: conda-forge
+    subdir: linux-64
+  result:
+    channel: conda-forge
+    subdir: linux-64
+- input:
+    channel: conda-forge
+    subdir: linux-64
+  result:
+    channel: conda-forge
+    subdir: linux-64
+- input:
+    sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
+  result:
+    error: "ERROR: unknown field `sha256`, expected one of `version`, `location`, `build`, `build-number`, `file-name`, `channel`, `subdir`, `license`"
+- input:
+    version: 1.2.3
+    sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
+  result:
+    error: "ERROR: unknown field `sha256`, expected one of `version`, `location`, `build`, `build-number`, `file-name`, `channel`, `subdir`, `license`"
+- input:
+    url: "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda"
+  result:
+    error: "ERROR: unknown field `url`, expected one of `version`, `location`, `build`, `build-number`, `file-name`, `channel`, `subdir`, `license`"
+- input:
+    url: "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda"
+    sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
+  result:
+    error: "ERROR: unknown field `url`, expected one of `version`, `location`, `build`, `build-number`, `file-name`, `channel`, `subdir`, `license`"
+- input:
+    git: "https://github.com/conda-forge/21cmfast-feedstock"
+  result:
+    error: "ERROR: unknown field `git`, expected one of `version`, `location`, `build`, `build-number`, `file-name`, `channel`, `subdir`, `license`"
+- input:
+    git: "https://github.com/conda-forge/21cmfast-feedstock"
+    branch: main
+  result:
+    error: "ERROR: unknown field `git`, expected one of `version`, `location`, `build`, `build-number`, `file-name`, `channel`, `subdir`, `license`"
+- input:
+    ver: 1.2.3
+  result:
+    error: "ERROR: unknown field `ver`, expected one of `version`, `location`, `build`, `build-number`, `file-name`, `channel`, `subdir`, `license`"
+- input:
+    path: foobar
+    version: 1.2.3
+  result:
+    error: "ERROR: unknown field `path`, expected one of `version`, `location`, `build`, `build-number`, `file-name`, `channel`, `subdir`, `license`"
+- input:
+    version: //
+  result:
+    error: "ERROR: 0: at line 1, in Tag:\n//\n^\n\n1: at line 1, in Alt:\n//\n^\n\n2: at line 1, in version:\n//\n^\n\n"
+- input:
+    path: foobar
+    version: //
+  result:
+    error: "ERROR: unknown field `path`, expected one of `version`, `location`, `build`, `build-number`, `file-name`, `channel`, `subdir`, `license`"
+- input:
+    path: foobar
+    sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
+  result:
+    error: "ERROR: unknown field `path`, expected one of `version`, `location`, `build`, `build-number`, `file-name`, `channel`, `subdir`, `license`"
+- input:
+    git: "https://github.com/conda-forge/21cmfast-feedstock"
+    branch: main
+    tag: v1
+  result:
+    error: "ERROR: unknown field `git`, expected one of `version`, `location`, `build`, `build-number`, `file-name`, `channel`, `subdir`, `license`"
+- input:
+    git: "https://github.com/conda-forge/21cmfast-feedstock"
+    sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
+  result:
+    error: "ERROR: unknown field `git`, expected one of `version`, `location`, `build`, `build-number`, `file-name`, `channel`, `subdir`, `license`"
+- input: /path/style
+  result:
+    error: "ERROR: it seems you're trying to add a path dependency, please specify as a table with a `path` key: '{ path = \"/path/style\" }'"
+- input: "./path/style"
+  result:
+    error: "ERROR: it seems you're trying to add a path dependency, please specify as a table with a `path` key: '{ path = \"./path/style\" }'"
+- input: "\\path\\style"
+  result:
+    error: "ERROR: it seems you're trying to add a path dependency, please specify as a table with a `path` key: '{ path = \"\\path\\style\" }'"
+- input: ~/path/style
+  result:
+    error: "ERROR: it seems you're trying to add a path dependency, please specify as a table with a `path` key: '{ path = \"~/path/style\" }'"
+- input: "https://example.com"
+  result:
+    error: "ERROR: it seems you're trying to add a url dependency, please specify as a table with a `url` key: '{ url = \"https://example.com\" }'"
+- input: "https://github.com/conda-forge/21cmfast-feedstock"
+  result:
+    error: "ERROR: it seems you're trying to add a git dependency, please specify as a table with a `git` key: '{ git = \"https://github.com/conda-forge/21cmfast-feedstock\" }'"
+- input: "1.2.3[subdir=linux-64]"
+  result:
+    error: "ERROR: expected a version specifier but looks like a matchspec, did you mean { version = \"==1.2.3\", subdir = \"linux-64\" }?"
+- input: "1.2.3[channel=conda-forge]"
+  result:
+    error: "ERROR: expected a version specifier but looks like a matchspec, did you mean { version = \"==1.2.3\", channel = \"conda-forge\" }?"
+- input: "conda-forge::1.2.3"
+  result:
+    error: "ERROR: expected a version specifier but looks like a matchspec, did you mean { version = \"==1.2.3\", channel = \"conda-forge\" }?"
+- input: "1.2.3[md5=315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3]"
+  result:
+    error: "ERROR: it seems you're trying to add a detailed dependency, please specify as a table with a `md5` key: '{ version = \"<VERSION_SPEC>\", md5 = \"<MD5>\" }'"
+- input: "1.2.3[sha256=315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3]"
+  result:
+    error: "ERROR: expected a version specifier but looks like a matchspec, did you mean { version = \"==1.2.3\", sha256 = \"315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3\" }?"
+- input: "*cpu*"
+  result:
+    error: "ERROR: expected a version specifier but looks like a matchspec, did you mean { version = \"*\", build = \"cpu*\" }?"
+- input: "*=*openblas"
+  result:
+    error: "ERROR: expected a version specifier but looks like a matchspec, did you mean { version = \"*\", build = \"*openblas\" }?"
