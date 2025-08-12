@@ -45,7 +45,7 @@ TomlPackageBuild {
         name_spans: {},
         value_spans: {},
     },
-    src: None,
+    source: None,
     configuration: Some(
         Map(
             {
