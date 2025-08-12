@@ -267,7 +267,6 @@ impl HasNoInstallConfig for AddBuilder {
     }
 }
 
-
 impl HasLockFileUpdateConfig for AddBuilder {
     fn lock_file_update_config(&mut self) -> &mut LockFileUpdateConfig {
         &mut self.args.lock_file_update_config

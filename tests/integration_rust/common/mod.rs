@@ -19,7 +19,10 @@ use pixi::{
     UpdateLockFileOptions, Workspace,
     cli::{
         LockFileUsageConfig, add,
-        cli_config::{ChannelsConfig, LockFileUpdateConfig, NoInstallConfig, RevalidateConfig, WorkspaceConfig},
+        cli_config::{
+            ChannelsConfig, LockFileUpdateConfig, NoInstallConfig, RevalidateConfig,
+            WorkspaceConfig,
+        },
         init::{self, GitAttributes},
         install::Args,
         lock, remove, run, search,
@@ -362,9 +365,7 @@ impl PixiControl {
                     manifest_path: Some(self.manifest_path()),
                 },
                 dependency_config: AddBuilder::dependency_config_with_specs(specs),
-                no_install_config: NoInstallConfig {
-                    no_install: true,
-                },
+                no_install_config: NoInstallConfig { no_install: true },
                 lock_file_update_config: LockFileUpdateConfig {
                     no_lockfile_update: false,
                     lock_file_usage: LockFileUsageConfig::default(),
@@ -399,12 +400,8 @@ impl PixiControl {
                     manifest_path: Some(self.manifest_path()),
                 },
                 dependency_config: AddBuilder::dependency_config_with_specs(vec![spec]),
-                no_install_config: NoInstallConfig {
-                    no_install: true,
-                },
-                revalidate_config: RevalidateConfig {
-                    revalidate: false,
-                },
+                no_install_config: NoInstallConfig { no_install: true },
+                revalidate_config: RevalidateConfig { revalidate: false },
                 lock_file_update_config: LockFileUpdateConfig {
                     no_lockfile_update: false,
                     lock_file_usage: LockFileUsageConfig::default(),
@@ -422,12 +419,8 @@ impl PixiControl {
                     manifest_path: Some(self.manifest_path()),
                 },
                 channel: vec![],
-                no_install_config: NoInstallConfig {
-                    no_install: true,
-                },
-                revalidate_config: RevalidateConfig {
-                    revalidate: false,
-                },
+                no_install_config: NoInstallConfig { no_install: true },
+                revalidate_config: RevalidateConfig { revalidate: false },
                 lock_file_update_config: LockFileUpdateConfig {
                     no_lockfile_update: false,
                     lock_file_usage: LockFileUsageConfig::default(),
@@ -449,12 +442,8 @@ impl PixiControl {
                     manifest_path: Some(self.manifest_path()),
                 },
                 channel: vec![],
-                no_install_config: NoInstallConfig {
-                    no_install: true,
-                },
-                revalidate_config: RevalidateConfig {
-                    revalidate: false,
-                },
+                no_install_config: NoInstallConfig { no_install: true },
+                revalidate_config: RevalidateConfig { revalidate: false },
                 lock_file_update_config: LockFileUpdateConfig {
                     no_lockfile_update: false,
                     lock_file_usage: LockFileUsageConfig::default(),
@@ -630,9 +619,7 @@ impl PixiControl {
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                 },
-                no_install_config: NoInstallConfig {
-                    no_install: false,
-                },
+                no_install_config: NoInstallConfig { no_install: false },
                 check: false,
                 json: false,
             },
