@@ -22,12 +22,11 @@ use parsed_manifest::ParsedManifest;
 pub(crate) use parsed_manifest::{ExposedName, ParsedEnvironment};
 use pixi_build_discovery::EnabledProtocols;
 use pixi_command_dispatcher::{
-    BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, InstallPixiEnvironmentSpec,
-    Limits, PixiEnvironmentSpec, SourceMetadata, SourceMetadataSpec,
+    BuildEnvironment, CommandDispatcher, InstallPixiEnvironmentSpec, Limits, PixiEnvironmentSpec,
 };
 use pixi_config::{Config, RunPostLinkScripts, default_channel_config, pixi_home};
 use pixi_consts::consts::{self};
-use pixi_manifest::{PrioritizedChannel, utils::package_map::UniquePackageMap};
+use pixi_manifest::PrioritizedChannel;
 use pixi_progress::global_multi_progress;
 use pixi_reporters::TopLevelProgress;
 use pixi_spec_containers::DependencyMap;
