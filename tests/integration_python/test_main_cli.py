@@ -1551,6 +1551,7 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
     sys.platform.startswith("win"),
     reason="Fish shell is not supported on Windows",
 )
+@pytest.mark.slow
 def test_fish_completions(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     toml = f"""
