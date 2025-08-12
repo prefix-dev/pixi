@@ -1,0 +1,22 @@
+[workspace]
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["win-64", "linux-64", "osx-arm64", "osx-64"]
+preview = ["pixi-build"]
+
+[package]
+name = "simple_cpp"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "pixi-build-cmake", version = "0.3.*" }
+# --8<-- [start:dependencies]
+[package.build-dependencies]
+cxx-compiler = "*"
+
+[package.host-dependencies]
+catch = "*"
+
+[package.run-dependencies]
+git = "*"
+# --8<-- [end:dependencies]
+# simple_cpp = { path = "." }

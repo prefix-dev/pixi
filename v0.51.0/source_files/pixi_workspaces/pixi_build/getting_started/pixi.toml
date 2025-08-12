@@ -1,0 +1,43 @@
+# --8<-- [start:full]
+### Specifies properties for the whole workspace ###
+# --8<-- [start:preview]
+[workspace]
+preview = ["pixi-build"]
+# --8<-- [end:preview]
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["win-64", "linux-64", "osx-arm64", "osx-64"]
+
+[tasks]
+start = "rich-example-main"
+
+# --8<-- [start:dependencies]
+[dependencies]
+python_rich = { path = "." }
+# --8<-- [end:dependencies]
+
+### Specify the package properties ###
+# --8<-- [start:package-full]
+# --8<-- [start:package]
+[package]
+name = "python_rich"
+version = "0.1.0"
+# --8<-- [end:package]
+
+# We are using `pixi-build-python` in order to build a Python package
+# --8<-- [start:package-build]
+[package.build]
+backend = { name = "pixi-build-python", version = "==0.3.2" }
+# --8<-- [end:package-build]
+
+# The Python package `python_rich` uses `hatchling` as Python build backend
+# --8<-- [start:host-dependencies]
+[package.host-dependencies]
+hatchling = "*"
+# --8<-- [end:host-dependencies]
+
+# The Python package `python_rich` has a run dependency on `rich`
+# --8<-- [start:run-dependencies]
+[package.run-dependencies]
+rich = "13.9.*"
+# --8<-- [end:run-dependencies]
+# --8<-- [end:package-full]
