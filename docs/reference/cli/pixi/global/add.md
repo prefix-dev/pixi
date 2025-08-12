@@ -8,14 +8,13 @@ Adds dependencies to an environment
 
 ## Usage
 ```
-pixi global add [OPTIONS] --environment <ENVIRONMENT> <PACKAGE>...
+pixi global add [OPTIONS] --environment <ENVIRONMENT> [PACKAGE]...
 ```
 
 ## Arguments
 - <a id="arg-<PACKAGE>" href="#arg-<PACKAGE>">`<PACKAGE>`</a>
 :  The dependency as names, conda MatchSpecs
 <br>May be provided more than once.
-<br>**required**: `true`
 
 ## Options
 - <a id="arg---path" href="#arg---path">`--path <PATH>`</a>

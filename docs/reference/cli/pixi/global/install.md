@@ -8,14 +8,13 @@ Installs the defined packages in a globally accessible location and exposes thei
 
 ## Usage
 ```
-pixi global install [OPTIONS] <PACKAGE>...
+pixi global install [OPTIONS] [PACKAGE]...
 ```
 
 ## Arguments
 - <a id="arg-<PACKAGE>" href="#arg-<PACKAGE>">`<PACKAGE>`</a>
 :  The dependency as names, conda MatchSpecs
 <br>May be provided more than once.
-<br>**required**: `true`
 
 ## Options
 - <a id="arg---path" href="#arg---path">`--path <PATH>`</a>
