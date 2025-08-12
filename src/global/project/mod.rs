@@ -870,6 +870,9 @@ impl Project {
                 "Update operation: Environment {} has source dependencies, considering out of sync",
                 env_name.fancy_display()
             );
+            tracing::debug!(
+                "Environment out of sync because update operation has source dependencies"
+            );
             return Ok(false);
         }
 
@@ -886,6 +889,7 @@ impl Project {
         )
         .await?;
         if !specs_in_sync {
+            tracing::debug!("Environment out of sync because package specifications don't match");
             return Ok(false);
         }
 
@@ -899,6 +903,7 @@ impl Project {
                 exec_to_remove,
                 exec_to_add
             );
+            tracing::debug!("Environment out of sync because binaries need to be updated");
             return Ok(false);
         }
 
@@ -919,9 +924,11 @@ impl Project {
                     .map(|s| s.repodata_record.package_record.name.as_normalized())
                     .join(", ")
             );
+            tracing::debug!("Environment out of sync because shortcuts need to be updated");
             return Ok(false);
         }
 
+        tracing::debug!("Environment is in sync");
         Ok(true)
     }
 
