@@ -12,8 +12,9 @@ Pixi now supports `--skip` on install which means you can skip the installation 
 Which can be useful for things like layering Docker images.
 
 Pixi build got a lot of improvements, including the ability to use build backends from source.
-This release will kick of the use of pixi build only through conda-forge, we'll be changing the `pixi-build-backends` channel to a prototype only channel.
-And conda-forge will be the main channel for stable pixi build backends.
+Starting with this release you can get build backends from conda-forge. 
+We will release stable versions of the build backends on conda-forge, and we maintain a rolling distribution on the `pixi-build-backends` channel. 
+The documentation has been updated to reflect this change.
 
 #### ⚠️ Breaking Change
 The environment variable overwriting logic is changed. 
