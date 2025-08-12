@@ -22,6 +22,8 @@ pixi clean [OPTIONS] [COMMAND]
 :  The environment directory to remove
 - <a id="arg---activation-cache" href="#arg---activation-cache">`--activation-cache`</a>
 :  Only remove the activation cache
+- <a id="arg---build" href="#arg---build">`--build`</a>
+:  Only remove the pixi-build cache
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>

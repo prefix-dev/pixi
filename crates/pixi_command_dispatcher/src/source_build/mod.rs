@@ -109,7 +109,14 @@ pub struct BuiltPackage {
 }
 
 impl SourceBuildSpec {
-    #[instrument(skip_all, fields(package = %self.package, source = %self.source))]
+    #[instrument(
+        skip_all,
+        name = "source-build",
+        fields(
+            source= %self.source,
+            package = %self.package,
+        )
+    )]
     pub(crate) async fn build(
         mut self,
         command_dispatcher: CommandDispatcher,

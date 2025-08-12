@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow,
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     ffi::OsString,
     fmt::{Display, Formatter},
     path::PathBuf,
@@ -451,22 +451,7 @@ fn get_export_specific_task_env(task: &Task, command_env: IndexMap<String, Strin
     }
 
     // Define keys that should not be overridden
-    let override_excluded_keys: HashSet<&str> = [
-        "PIXI_PROJECT_ROOT",
-        "PIXI_PROJECT_NAME",
-        "PIXI_PROJECT_VERSION",
-        "PIXI_PROMPT",
-        "PIXI_ENVIRONMENT_NAME",
-        "PIXI_ENVIRONMENT_PLATFORMS",
-        "CONDA_PREFIX",
-        "CONDA_DEFAULT_ENV",
-        "PATH",
-        "INIT_CWD",
-        "PWD",
-    ]
-    .iter()
-    .cloned()
-    .collect();
+    let override_excluded_keys = consts::get_override_excluded_keys();
 
     // Create environment map struct
     let env_map = EnvMap::new(command_env.clone(), task.env());
@@ -476,7 +461,7 @@ fn get_export_specific_task_env(task: &Task, command_env: IndexMap<String, Strin
         .expect("Task environment should exist at this point");
 
     // Determine export strategy
-    let export_merged = if task_env.keys().all(|k| !command_env.contains_key(k)) {
+    let mut export_merged = if task_env.keys().all(|k| !command_env.contains_key(k)) {
         // If task.env() and command_env don't have duplicated keys, simply export task.env().
         task_env.clone()
     } else {
@@ -484,6 +469,7 @@ fn get_export_specific_task_env(task: &Task, command_env: IndexMap<String, Strin
         env_map.merge_by_priority()
     };
 
+    Environment::resolve_variable_references(&mut export_merged);
     // Build export string
     // Put all merged environment variables to export.
     // Only the keys that are in "task_specific_envs" map would be exported.

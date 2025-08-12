@@ -522,6 +522,8 @@ impl<'p> LockFileDerivedData<'p> {
                 // Update the prefix with Pypi records
                 {
                     let pypi_indexes = self.locked_env(environment)?.pypi_indexes().cloned();
+                    let index_strategy = environment.pypi_options().index_strategy.clone();
+                    let exclude_newer = environment.exclude_newer();
 
                     let config = PyPIUpdateConfig {
                         environment_name: environment.name(),
@@ -535,6 +537,8 @@ impl<'p> LockFileDerivedData<'p> {
                         no_build_isolation: &non_isolated_packages,
                         no_build: &no_build,
                         no_binary: &no_binary,
+                        index_strategy: index_strategy.as_ref(),
+                        exclude_newer: exclude_newer.as_ref(),
                     };
 
                     let context_config = PyPIContextConfig {
