@@ -545,12 +545,15 @@
                 "type": "string"
               },
               {
+                "description": "A single item task name/value object",
                 "type": "object",
                 "patternProperties": {
                   "^[a-zA-Z_][a-zA-Z\\d_]*$": {
                     "type": "string"
                   }
                 },
+                "maxProperties": 1,
+                "minProperties": 1,
                 "propertyNames": {
                   "description": "A valid task argument name"
                 }
@@ -1916,10 +1919,7 @@
               "arg2"
             ],
             [
-              {
-                "arg": "arg1",
-                "default": "1"
-              },
+              "arg",
               {
                 "arg": "arg2",
                 "default": "2"

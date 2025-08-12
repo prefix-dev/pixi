@@ -328,6 +328,10 @@ TaskName = Annotated[str, Field(pattern=r"^[^\s\$]+$", description="A valid task
 TaskArgName = Annotated[
     str, Field(pattern=r"^[a-zA-Z_][a-zA-Z\d_]*$", description="A valid task argument name")
 ]
+TaskArgInlineTable = Annotated[
+    dict[TaskArgName, str],
+    Field(min_length=1, max_length=1, description="A single item task name/value object"),
+]
 
 
 class TaskArgs(StrictBaseModel):
@@ -341,7 +345,7 @@ class DependsOn(StrictBaseModel):
     """The dependencies of a task."""
 
     task: TaskName = Field(description="the name of the task to depend on")
-    args: list[str | dict[TaskArgName, str]] | None = Field(
+    args: list[str | TaskArgInlineTable] | None = Field(
         None, description="The (positional or named) arguments to pass to the task"
     )
     environment: EnvironmentName | None = Field(
@@ -394,7 +398,7 @@ class TaskInlineTable(StrictBaseModel):
         description="The arguments to a task",
         examples=[
             ["arg1", "arg2"],
-            [{"arg": "arg1", "default": "1"}, {"arg": "arg2", "default": "2"}],
+            ["arg", {"arg": "arg2", "default": "2"}],
         ],
     )
 

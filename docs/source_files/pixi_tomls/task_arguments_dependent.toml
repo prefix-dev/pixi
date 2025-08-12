@@ -11,7 +11,7 @@ args = [
 ]
 cmd = "echo Installing with manifest {{ path }} and flag {{ flag }}"
 
-# Dependent task specifying arguments for the base task
+# Dependent task specifying positional arguments for the base task
 [tasks.install-release]
 depends-on = [{ task = "install", args = ["/path/to/manifest", "--debug"] }]
 
@@ -19,8 +19,11 @@ depends-on = [{ task = "install", args = ["/path/to/manifest", "--debug"] }]
 [tasks.deploy]
 cmd = "echo Deploying"
 depends-on = [
-  # Override with positional custom path and named verbose flag
-  { task = "install", args = ["/custom/path", { flag = "--verbose" }] },
+  # Override with named custom path and named verbose flag
+  { task = "install", args = [
+    { path = "/custom/path" },
+    { flag = "--verbose" },
+  ] },
   # Other dependent tasks can be added here
 ]
 
