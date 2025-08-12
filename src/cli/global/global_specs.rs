@@ -78,16 +78,16 @@ impl GlobalSpecs {
             };
             Some(PixiSpec::Git(git_spec))
         } else if let Some(path) = &self.path {
-            let absolute_path = path
-                .absolutize()
+            let absolute_path = dunce::canonicalize(path.as_str())
                 .map_err(|_| GlobalSpecsConversionError::AbsolutizePath(path.to_string()))?;
-            let path_str = absolute_path.as_str();
-            let relative_path = pathdiff::diff_paths(path_str, manifest_root).ok_or_else(|| {
-                GlobalSpecsConversionError::RelativePath(
-                    path_str.to_string(),
-                    manifest_root.to_string_lossy().to_string(),
-                )
-            })?;
+
+            let relative_path =
+                pathdiff::diff_paths(&absolute_path, manifest_root).ok_or_else(|| {
+                    GlobalSpecsConversionError::RelativePath(
+                        absolute_path.to_string_lossy().to_string(),
+                        manifest_root.to_string_lossy().to_string(),
+                    )
+                })?;
             Some(PixiSpec::Path(pixi_spec::PathSpec {
                 path: Utf8TypedPathBuf::from(relative_path.to_string_lossy().to_string()),
             }))
