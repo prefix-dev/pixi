@@ -11,7 +11,9 @@ use pixi_git::{
     sha::GitSha,
     url::{RepositoryUrl, redact_credentials},
 };
-use pixi_spec::{GitReference, GitSpec, PathSourceSpec, SourceSpec, UrlSourceSpec};
+use pixi_spec::{
+    GitReference, GitSpec, PathSourceSpec, SourceLocationSpec, SourceSpec, UrlSourceSpec,
+};
 use rattler_digest::{Md5Hash, Sha256Hash};
 use rattler_lock::UrlOrPath;
 use serde::{Deserialize, Serialize};
@@ -694,10 +696,16 @@ impl PinnedSourceSpec {
     #[allow(clippy::result_large_err)]
     /// Verifies if the locked source satisfies the requested source.
     pub fn satisfies(&self, spec: &SourceSpec) -> Result<(), SourceMismatchError> {
-        match (self, spec) {
-            (PinnedSourceSpec::Path(locked), SourceSpec::Path(spec)) => locked.satisfies(spec),
-            (PinnedSourceSpec::Url(locked), SourceSpec::Url(spec)) => locked.satisfies(spec),
-            (PinnedSourceSpec::Git(locked), SourceSpec::Git(spec)) => locked.satisfies(spec),
+        match (self, &spec.location) {
+            (PinnedSourceSpec::Path(locked), SourceLocationSpec::Path(spec)) => {
+                locked.satisfies(spec)
+            }
+            (PinnedSourceSpec::Url(locked), SourceLocationSpec::Url(spec)) => {
+                locked.satisfies(spec)
+            }
+            (PinnedSourceSpec::Git(locked), SourceLocationSpec::Git(spec)) => {
+                locked.satisfies(spec)
+            }
             (_, _) => Err(SourceMismatchError::SourceTypeMismatch),
         }
     }
@@ -734,9 +742,15 @@ impl Display for PinnedGitSpec {
 impl From<PinnedSourceSpec> for SourceSpec {
     fn from(value: PinnedSourceSpec) -> Self {
         match value {
-            PinnedSourceSpec::Url(url) => SourceSpec::Url(url.into()),
-            PinnedSourceSpec::Git(git) => SourceSpec::Git(git.into()),
-            PinnedSourceSpec::Path(path) => SourceSpec::Path(path.into()),
+            PinnedSourceSpec::Url(url) => SourceSpec {
+                location: SourceLocationSpec::Url(url.into()),
+            },
+            PinnedSourceSpec::Git(git) => SourceSpec {
+                location: SourceLocationSpec::Git(git.into()),
+            },
+            PinnedSourceSpec::Path(path) => SourceSpec {
+                location: SourceLocationSpec::Path(path.into()),
+            },
         }
     }
 }

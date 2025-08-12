@@ -77,16 +77,16 @@ Therefore, the build string is the same.
 $ pixi list --environment py311
 Package            Version     Build               Size       Kind   Source
 python             3.11.11     h9e4cc4f_1_cpython  29.2 MiB   conda  python
-cpp_math    0.1.0       py311h43a39b2_0                conda  cpp_math
-python_rich       0.1.0       pyhbf21a9e_0                   conda  python_rich
+cpp_math           0.1.0       py311h43a39b2_0                conda  cpp_math
+python_rich        0.1.0       pyhbf21a9e_0                   conda  python_rich
 ```
 
 ```pwsh
 $ pixi list --environment py312
 Package            Version     Build               Size       Kind   Source
 python             3.12.8      h9e4cc4f_1_cpython  30.1 MiB   conda  python
-cpp_math    0.1.0       py312h2078e5b_0                conda  cpp_math
-python_rich       0.1.0       pyhbf21a9e_0                   conda  python_rich
+cpp_math           0.1.0       py312h2078e5b_0                conda  cpp_math
+python_rich        0.1.0       pyhbf21a9e_0                   conda  python_rich
 ```
 
 

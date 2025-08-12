@@ -3,7 +3,7 @@ use indexmap::IndexMap;
 use miette::IntoDiagnostic;
 use pixi_config::ConfigCli;
 use pixi_manifest::{FeatureName, KnownPreviewFeature, SpecType};
-use pixi_spec::{GitSpec, SourceSpec};
+use pixi_spec::{GitSpec, SourceLocationSpec, SourceSpec};
 use rattler_conda_types::{MatchSpec, PackageName};
 
 use super::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs};
@@ -155,7 +155,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                             rev: Some(git_reference),
                             subdirectory: dependency_config.subdir.clone(),
                         };
-                        (name.clone(), (SourceSpec::Git(git_spec), *spec_type))
+                        (
+                            name.clone(),
+                            (
+                                SourceSpec {
+                                    location: SourceLocationSpec::Git(git_spec),
+                                },
+                                *spec_type,
+                            ),
+                        )
                     })
                     .collect();
                 (IndexMap::default(), source_specs, IndexMap::default())
