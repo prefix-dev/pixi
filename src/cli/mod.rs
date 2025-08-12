@@ -66,31 +66,33 @@ Ask a question on the Prefix Discord server: https://discord.gg/kKV8ZxyzY4
 For more information, see the documentation at: https://pixi.sh
 ", consts::PIXI_VERSION),
 )]
-#[clap(styles=get_styles(), disable_help_flag = true, disable_help_subcommand = true, allow_external_subcommands = true)]
+#[clap(arg_required_else_help = true, styles=get_styles(), disable_help_flag = true, allow_external_subcommands = true)]
 pub struct Args {
     #[command(subcommand)]
     command: Option<Command>,
 
     #[clap(flatten)]
     global_options: GlobalOptions,
+
+    /// List installed commands (built-in and extensions)
+    #[clap(long = "list", help_heading = consts::CLAP_GLOBAL_OPTIONS)]
+    list: bool,
 }
 
 #[derive(Debug, Parser)]
 pub struct GlobalOptions {
     /// Display help information
     #[clap(
-        // long = "help-flag",          // unique internal long name
-        alias = "help",              // users can still write --help
-        short = 'h',
-        // id = "help_flag",
-        // action = clap::ArgAction::Help,
+        long,
+        short,
         global = true,
+        action = clap::ArgAction::Help,
         help_heading = consts::CLAP_GLOBAL_OPTIONS
     )]
-    help: bool,
+    help: Option<bool>,
 
     /// Increase logging verbosity (-v for warnings, -vv for info, -vvv for debug, -vvvv for trace)
-    #[clap(short = 'v', long, action = clap::ArgAction::Count, global = true, help_heading = consts::CLAP_GLOBAL_OPTIONS)]
+    #[clap(short, long, action = clap::ArgAction::Count, global = true, help_heading = consts::CLAP_GLOBAL_OPTIONS)]
     verbose: u8,
 
     /// Decrease logging verbosity (quiet mode)
@@ -154,7 +156,6 @@ pub enum Command {
     #[clap(visible_alias = "ls")]
     List(list::Args),
     Lock(lock::Args),
-    Help,
     Reinstall(reinstall::Args),
     #[clap(visible_alias = "rm")]
     Remove(remove::Args),
@@ -310,12 +311,6 @@ pub async fn execute() -> miette::Result<()> {
 
     set_console_colors(&args);
 
-    // Handle help flag or missing command as both will show help
-    if args.global_options.help {
-        show_help_with_extensions();
-        return Ok(());
-    }
-
     let use_colors = console::colors_enabled_stderr();
     let in_ci = matches!(env::var("CI").as_deref(), Ok("1" | "true"));
     let no_wrap = matches!(env::var("PIXI_NO_WRAP").as_deref(), Ok("1" | "true"));
@@ -336,12 +331,18 @@ pub async fn execute() -> miette::Result<()> {
         global_multi_progress().set_draw_target(ProgressDrawTarget::hidden());
     }
 
+    // Handle `--list`: print installed commands and exit 0
+    if args.list {
+        print_installed_commands();
+        return Ok(());
+    }
+
     // Setup logging for the application.
     setup_logging(&args, use_colors)?;
 
     let (Some(command), global_options) = (args.command, args.global_options) else {
-        show_help_with_extensions();
-        return Ok(());
+        // match CI expectations
+        std::process::exit(2);
     };
 
     // Execute the command
@@ -439,10 +440,6 @@ pub async fn execute_command(
         Command::Lock(cmd) => lock::execute(cmd).await,
         Command::Exec(args) => exec::execute(args).await,
         Command::Build(args) => build::execute(args).await,
-        Command::Help => {
-            show_help_with_extensions();
-            Ok(())
-        }
         Command::External(args) => {
             // if matches!(args.first().map(String::as_str), Some("help")) {
             //     show_help_with_extensions();
@@ -523,43 +520,66 @@ pub fn get_styles() -> clap::builder::Styles {
         .placeholder(Style::new().fg_color(Some(Color::Ansi(AnsiColor::BrightCyan))))
 }
 
-/// Display help with extensions section appended
-fn show_help_with_extensions() {
-    let mut cmd = Args::command();
-    cmd = cmd.styles(get_styles());
+/// Print all installed commands (built-in and external extensions)
+fn print_installed_commands() {
+    use std::collections::BTreeMap;
 
-    if console::colors_enabled_stderr() {
-        cmd = cmd.color(clap::ColorChoice::Always);
+    let use_colors = console::colors_enabled_stderr();
+
+    // Header
+    if use_colors {
+        println!(
+            "{}",
+            console::style("Installed Commands:")
+                .bold()
+                .underlined()
+                .bright()
+                .green()
+        );
     } else {
-        cmd = cmd.color(clap::ColorChoice::Never);
+        println!("Installed Commands:");
     }
 
-    let _ = cmd.print_help();
+    // Built-in commands
+    let mut builtins: BTreeMap<String, Option<String>> = BTreeMap::new();
+    for sc in Args::command().get_subcommands() {
+        builtins.insert(
+            sc.get_name().to_string(),
+            sc.get_about().map(|s| s.to_string()),
+        );
+    }
 
-    // Add extensions section
-    let external_commands = command_info::find_external_commands();
-    if !external_commands.is_empty() {
-        if console::colors_enabled_stderr() {
+    for (name, about) in builtins {
+        let summary = about
+            .as_deref()
+            .and_then(|s| s.lines().next())
+            .unwrap_or("");
+        if use_colors {
             println!(
-                "\n\n{}",
-                console::style("Available Extensions:")
-                    .bold()
-                    .underlined()
-                    .bright()
-                    .green()
+                "    {} {}",
+                console::style(format!("{:<20}", name)).bright().cyan(),
+                summary
             );
-            for (name, _path) in external_commands {
-                println!(
-                    "    {} (via pixi-{})",
-                    console::style(format!("{:<15}", name)).bright().cyan(),
-                    name
-                );
-            }
         } else {
-            println!("\n\nAvailable Extensions:");
-            for (name, _path) in external_commands {
-                println!("    {:<15} (via pixi-{})", name, name);
-            }
+            println!("    {:<20} {}", name, summary);
+        }
+    }
+
+    // External commands (pixi-*)
+    let mut external_names: Vec<String> =
+        command_info::find_external_commands().into_keys().collect();
+    external_names.sort();
+
+    for name in external_names {
+        let via = format!("(via pixi-{})", name);
+        if use_colors {
+            println!(
+                "    {} {}",
+                console::style(format!("{:<20}", name)).bright().cyan(),
+                via
+            );
+        } else {
+            println!("    {:<20} {}", name, via);
         }
     }
 }
