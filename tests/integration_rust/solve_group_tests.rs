@@ -120,7 +120,7 @@ async fn test_purl_are_added_for_pypi() {
     // Add boltons from pypi
     pixi.add("boltons")
         .with_install(true)
-        .set_type(pixi::DependencyType::PypiDependency)
+        .set_type(pixi_core::DependencyType::PypiDependency)
         .await
         .unwrap();
 

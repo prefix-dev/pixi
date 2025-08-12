@@ -1,7 +1,7 @@
 use indexmap::IndexMap;
 use insta::assert_snapshot;
-use pixi::Workspace;
 use pixi::cli::upgrade::{Args, parse_specs};
+use pixi_core::Workspace;
 use rattler_conda_types::Platform;
 
 use crate::common::PixiControl;
@@ -44,8 +44,8 @@ async fn pypi_dependency_index_preserved_on_upgrade() {
             match_specs,
             pypi_deps,
             IndexMap::default(),
-            &args.prefix_update_config,
-            &args.lock_file_update_config,
+            args.prefix_update_config.no_install,
+            &args.lock_file_update_config.lock_file_usage().unwrap(),
             &args.specs.feature,
             &[],
             true,

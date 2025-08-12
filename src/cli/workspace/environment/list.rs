@@ -1,4 +1,4 @@
-use crate::Workspace;
+use pixi_core::Workspace;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use pixi_consts::consts;

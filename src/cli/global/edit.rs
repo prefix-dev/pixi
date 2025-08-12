@@ -1,4 +1,4 @@
-use crate::global::Project;
+use pixi_core::global::Project;
 use clap::Parser;
 use fs_err as fs;
 use miette::IntoDiagnostic;

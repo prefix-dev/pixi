@@ -2,16 +2,14 @@ use clap::Parser;
 use indexmap::IndexMap;
 use miette::IntoDiagnostic;
 use pixi_config::ConfigCli;
+use pixi_core::{WorkspaceLocator, environment::sanity_check_workspace, workspace::DependencyType};
 use pixi_manifest::{FeatureName, KnownPreviewFeature, SpecType};
 use pixi_spec::{GitSpec, SourceLocationSpec, SourceSpec};
 use rattler_conda_types::{MatchSpec, PackageName};
 
-use super::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs};
-use crate::{
-    WorkspaceLocator,
-    cli::cli_config::{DependencyConfig, PrefixUpdateConfig, WorkspaceConfig},
-    environment::sanity_check_workspace,
-    workspace::DependencyType,
+use crate::cli::{
+    cli_config::{DependencyConfig, LockFileUpdateConfig, PrefixUpdateConfig, WorkspaceConfig},
+    has_specs::HasSpecs,
 };
 
 /// Adds dependencies to the workspace
@@ -199,8 +197,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         match_specs,
         pypi_deps,
         source_specs,
-        &prefix_update_config,
-        &lock_file_update_config,
+        prefix_update_config.no_install,
+        &lock_file_update_config.lock_file_usage()?,
         &dependency_config.feature,
         &dependency_config.platforms,
         args.editable,

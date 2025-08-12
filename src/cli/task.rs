@@ -19,12 +19,13 @@ use rattler_conda_types::Platform;
 use serde::Serialize;
 use serde_with::serde_as;
 
-use crate::workspace::virtual_packages::verify_current_platform_can_run_environment;
-use crate::{
+use pixi_core::workspace::virtual_packages::verify_current_platform_can_run_environment;
+use pixi_core::{
     Workspace, WorkspaceLocator,
-    cli::cli_config::WorkspaceConfig,
     workspace::{Environment, WorkspaceMut},
 };
+
+use crate::cli::cli_config::WorkspaceConfig;
 
 #[derive(Parser, Debug)]
 pub enum Operation {

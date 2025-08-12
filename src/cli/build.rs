@@ -7,13 +7,14 @@ use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, BuildEnvironment, BuildProfile, CacheDirs, SourceBuildSpec,
 };
 use pixi_config::ConfigCli;
+use pixi_core::WorkspaceLocator;
 use pixi_manifest::FeaturesExt;
 use pixi_progress::global_multi_progress;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
+use pixi_reporters::TopLevelProgress;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 
-use crate::{WorkspaceLocator, cli::cli_config::WorkspaceConfig};
-use pixi_reporters::TopLevelProgress;
+use crate::cli::cli_config::WorkspaceConfig;
 
 #[derive(Parser, Debug)]
 #[clap(verbatim_doc_comment)]
