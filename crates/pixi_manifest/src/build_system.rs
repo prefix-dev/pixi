@@ -1,7 +1,7 @@
 //! Defines the build section for the pixi manifest.
 
 use indexmap::IndexMap;
-use pixi_spec::{PackageSourceSpec, PixiSpec};
+use pixi_spec::{PixiSpec, SourceLocationSpec};
 use rattler_conda_types::NamedChannelOrUrl;
 
 use crate::TargetSelector;
@@ -25,7 +25,7 @@ pub struct PackageBuild {
     pub channels: Option<Vec<NamedChannelOrUrl>>,
 
     /// Optional package source specification
-    pub source: Option<PackageSourceSpec>,
+    pub source: Option<SourceLocationSpec>,
 
     /// Additional configuration for the build backend.
     pub configuration: Option<serde_value::Value>,
@@ -92,7 +92,7 @@ mod tests {
         let build = PackageBuild::from_toml_str(toml).unwrap();
         assert_eq!(build.backend.name.as_source(), "pixi-build-rattler-build");
         assert!(build.source.is_some());
-        assert!(!build.source.unwrap().location.is_git());
+        assert!(!build.source.unwrap().is_git());
     }
 
     #[test]
@@ -109,7 +109,7 @@ mod tests {
         let build = PackageBuild::from_toml_str(toml).unwrap();
         assert_eq!(build.backend.name.as_source(), "pixi-build-rattler-build");
         assert!(build.source.is_some());
-        assert!(build.source.unwrap().location.is_git());
+        assert!(build.source.unwrap().is_git());
     }
 
     #[test]
@@ -126,7 +126,7 @@ mod tests {
         let build = PackageBuild::from_toml_str(toml).unwrap();
         assert_eq!(build.backend.name.as_source(), "pixi-build-rattler-build");
         assert!(build.source.is_some());
-        assert!(!build.source.as_ref().unwrap().location.is_git());
+        assert!(!build.source.as_ref().unwrap().is_git());
     }
 
     #[test]
@@ -146,7 +146,7 @@ mod tests {
 
         // Verify it's a path source and contains the relative path
         if let Some(source) = &build.source {
-            match &source.location {
+            match &source {
                 pixi_spec::SourceLocationSpec::Path(path_spec) => {
                     assert_eq!(path_spec.path.as_str(), "../other-source");
                 }
@@ -172,7 +172,7 @@ mod tests {
 
         // Verify it's a path source and contains the home directory path
         if let Some(source) = &build.source {
-            match &source.location {
+            match &source {
                 pixi_spec::SourceLocationSpec::Path(path_spec) => {
                     assert_eq!(path_spec.path.as_str(), "~/my-source");
                 }
@@ -198,7 +198,7 @@ mod tests {
         assert!(build.source.is_some());
 
         if let Some(source) = &build.source {
-            match &source.location {
+            match &source {
                 pixi_spec::SourceLocationSpec::Path(path_spec) => {
                     // Test that the path spec can resolve relative paths correctly
                     let resolved = path_spec.resolve(workspace_root).unwrap();
@@ -227,7 +227,7 @@ mod tests {
         assert!(build.source.is_some());
 
         if let Some(source) = &build.source {
-            match &source.location {
+            match &source {
                 pixi_spec::SourceLocationSpec::Path(path_spec) => {
                     // Test that absolute paths are returned as-is during resolution
                     let resolved = path_spec.resolve("/workspace/root").unwrap();
@@ -264,7 +264,7 @@ mod tests {
             assert!(build.source.is_some(), "Failed for path: {}", path);
 
             if let Some(source) = &build.source {
-                match &source.location {
+                match &source {
                     pixi_spec::SourceLocationSpec::Path(path_spec) => {
                         // Verify the path is preserved correctly
                         assert_eq!(

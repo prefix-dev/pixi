@@ -1,5 +1,5 @@
 use indexmap::IndexMap;
-use pixi_spec::{PackageSourceSpec, TomlSpec};
+use pixi_spec::{SourceLocationSpec, TomlSpec};
 use pixi_toml::{Same, Serde, TomlFromStr, TomlIndexMap, TomlWith, convert_toml_to_serde};
 use rattler_conda_types::NamedChannelOrUrl;
 use toml_span::{DeserError, Spanned, Value, de_helpers::TableHelper};
@@ -17,7 +17,7 @@ pub struct TomlPackageBuild {
     pub backend: PixiSpanned<TomlBuildBackend>,
     pub channels: Option<PixiSpanned<Vec<NamedChannelOrUrl>>>,
     pub additional_dependencies: UniquePackageMap,
-    pub source: Option<PackageSourceSpec>,
+    pub source: Option<SourceLocationSpec>,
     pub configuration: Option<serde_value::Value>,
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlPackageBuildTarget>,
 }

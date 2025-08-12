@@ -63,7 +63,7 @@ backend = {{ name = "empty-backend", version = "0.1.0" }}
 channels = [
   "file://{}"
 ]
-source.location.path = "../alternative-source"
+source.path = "../alternative-source"
 
 [workspace]
 channels = [
@@ -93,7 +93,7 @@ preview = ["pixi-build"]
 
     if let Some(package) = &workspace.package {
         if let Some(source_spec) = &package.value.build.source {
-            match &source_spec.location {
+            match &source_spec {
                 pixi_spec::SourceLocationSpec::Path(path_spec) => {
                     // Test that the path resolves to the correct absolute location
                     let resolved_path = path_spec.resolve(pixi.workspace_path()).unwrap();
@@ -156,7 +156,7 @@ version = "0.1.0"
 [package.build]
 backend = {{ name = "empty-backend", version = "0.1.0" }}
 channels = ["file://{}"]
-source.location.path = "{}"
+source.path = "{}"
 
 [workspace]
 channels = ["file://{}"]
@@ -186,7 +186,7 @@ preview = ["pixi-build"]
 
     if let Some(package) = &workspace.package {
         if let Some(source_spec) = &package.value.build.source {
-            match &source_spec.location {
+            match &source_spec {
                 pixi_spec::SourceLocationSpec::Path(path_spec) => {
                     let resolved_path = path_spec.resolve(pixi.workspace_path()).unwrap();
                     let expected_path = absolute_source_dir.canonicalize().unwrap();
@@ -229,7 +229,7 @@ version = "0.1.0"
 [package.build]
 backend = {{ name = "empty-backend", version = "0.1.0" }}
 channels = ["file://{}"]
-source.location.path = "./subdir/source"
+source.path = "./subdir/source"
 
 [workspace]
 channels = ["file://{}"]
@@ -255,7 +255,7 @@ preview = ["pixi-build"]
 
     if let Some(package) = &workspace.package {
         if let Some(source_spec) = &package.value.build.source {
-            match &source_spec.location {
+            match &source_spec {
                 pixi_spec::SourceLocationSpec::Path(path_spec) => {
                     // Test that the original relative path is preserved
                     assert_eq!(path_spec.path.as_str(), "./subdir/source");
