@@ -14,7 +14,6 @@ mod hash_map;
 mod index_map;
 mod index_set;
 mod one_or_many;
-mod serde;
 mod variant;
 mod with;
 
@@ -27,7 +26,6 @@ pub use hash_map::TomlHashMap;
 pub use index_map::TomlIndexMap;
 pub use index_set::TomlIndexSet;
 pub use one_or_many::OneOrMany;
-pub use serde::{Serde, convert_toml_to_serde};
 use toml_span::{DeserError, Spanned, Value, de_helpers::expected, value::ValueInner};
 pub use variant::TomlEnum;
 pub use with::TomlWith;
