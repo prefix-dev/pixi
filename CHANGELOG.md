@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 #### ✨ Highlights
 
 Pixi now supports `--skip` on install which means you can skip the installation of a package. 
-Which is useful for layering Docker images.
+Which can be useful for things like layering Docker images.
 
 Pixi build got a lot of improvements, including the ability to use build backends from source.
 This release will kick of the use of pixi build only through conda-forge, we'll be changing the `pixi-build-backends` channel to a prototype only channel.
