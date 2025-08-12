@@ -73,6 +73,7 @@ pub enum FromMatchSpecError {
 
 impl GlobalSpec {
     /// Creates a new `GlobalSpec` without a package name.
+    #[allow(dead_code)]
     pub fn nameless(spec: PixiSpec) -> Self {
         GlobalSpec::Nameless(spec)
     }

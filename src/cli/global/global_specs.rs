@@ -53,6 +53,8 @@ pub enum GlobalSpecsConversionError {
     NameRequired,
     #[error("couldn't construct a relative path from {} to {}", .0, .1)]
     RelativePath(String, String),
+    #[error("could not absolutize path: {0}")]
+    AbsolutizePath(String),
 }
 
 impl GlobalSpecs {
@@ -70,7 +72,9 @@ impl GlobalSpecs {
             };
             Some(PixiSpec::Git(git_spec))
         } else if let Some(path) = &self.path {
-            let absolute_path = path.absolutize().unwrap();
+            let absolute_path = path
+                .absolutize()
+                .map_err(|_| GlobalSpecsConversionError::AbsolutizePath(path.to_string()))?;
             let path_str = absolute_path.as_str();
             let relative_path = pathdiff::diff_paths(path_str, manifest_root).ok_or_else(|| {
                 GlobalSpecsConversionError::RelativePath(
