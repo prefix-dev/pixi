@@ -204,7 +204,7 @@ repository.workspace = true
 version = "0.51.0"
 
 [features]
-default = ["online_tests", "rustls-tls"]
+default = ["rustls-tls"]
 native-tls = [
   "reqwest/native-tls",
   "reqwest/native-tls-alpn",
