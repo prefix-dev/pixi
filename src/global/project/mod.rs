@@ -6,7 +6,6 @@ use std::{
     sync::Arc,
 };
 
-use ahash::HashSet;
 pub(crate) use environment::EnvironmentName;
 use fancy_display::FancyDisplay;
 use fs::tokio as tokio_fs;
@@ -36,10 +35,12 @@ use rattler_conda_types::{
     ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, PrefixRecord,
     menuinst::MenuMode,
 };
-use rattler_lock::Matches;
 use rattler_repodata_gateway::Gateway;
+use std::collections::HashSet;
 // Removed unused rattler_solve imports
-use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
+use rattler_virtual_packages::{
+    DetectVirtualPackageError, VirtualPackage, VirtualPackageOverrides,
+};
 use reqwest_middleware::ClientWithMiddleware;
 use tokio::sync::Semaphore;
 use toml_edit::DocumentMut;
@@ -82,7 +83,7 @@ pub(crate) const MANIFESTS_DIR: &str = "manifests";
 #[derive(Clone)]
 pub struct Project {
     /// Root folder of the project
-    root: PathBuf,
+    pub(crate) root: PathBuf,
     /// The manifest for the project
     pub(crate) manifest: Manifest,
     /// The global configuration as loaded from the config file(s)
@@ -493,6 +494,27 @@ impl Project {
         self.config.global_channel_config()
     }
 
+    /// Check if the platform matches the current platform (OS)
+    /// We only need to detect virtual packages if the platform is the current one.
+    /// Otherwise, we use an empty list
+    pub(crate) fn virtual_packages_for(
+        platform: &Platform,
+    ) -> Result<Vec<GenericVirtualPackage>, DetectVirtualPackageError> {
+        if platform
+            .only_platform()
+            .map(|p| p == Platform::current().only_platform().unwrap_or(""))
+            .unwrap_or(false)
+        {
+            Ok(VirtualPackage::detect(&VirtualPackageOverrides::default())?
+                .iter()
+                .cloned()
+                .map(GenericVirtualPackage::from)
+                .collect())
+        } else {
+            Ok(vec![])
+        }
+    }
+
     pub(crate) async fn install_environment(
         &self,
         env_name: &EnvironmentName,
@@ -524,37 +546,16 @@ impl Project {
 
         let command_dispatcher = self.command_dispatcher()?;
 
-        // Check if the platform matches the current platform (OS)
-        // We only need to detect virtual packages if the platform is the current one.
-        // Otherwise, we use an empty list
-        let virtual_packages = if platform
-            .only_platform()
-            .map(|p| p == Platform::current().only_platform().unwrap_or(""))
-            .unwrap_or(false)
-        {
-            VirtualPackage::detect(&VirtualPackageOverrides::default())
-                .into_diagnostic()
-                .wrap_err_with(|| {
-                    miette::miette!(
-                        "Failed to determine virtual packages for environment {}",
-                        env_name.fancy_display()
-                    )
-                })?
-                .iter()
-                .cloned()
-                .map(GenericVirtualPackage::from)
-                .collect()
-        } else {
-            vec![]
-        };
-
-        // Create solve spec
         let channels = channels
             .into_iter()
             .map(|channel| channel.base_url.clone())
             .collect::<Vec<_>>();
 
-        let build_environment = BuildEnvironment::simple(platform, virtual_packages);
+        let build_environment = BuildEnvironment::simple(
+            platform,
+            Self::virtual_packages_for(&platform).into_diagnostic()?,
+        );
+        // Create solve spec
         let solve_spec = PixiEnvironmentSpec {
             name: Some(env_name.to_string()),
             dependencies: pixi_specs,
@@ -828,15 +829,25 @@ impl Project {
     /// Validated the specs in the installed environment.
     /// And verifies only and all required exposed binaries are in the bin dir.
     pub async fn environment_in_sync(&self, env_name: &EnvironmentName) -> miette::Result<bool> {
+        self.environment_in_sync_internal(env_name, false).await
+    }
+
+    /// Internal method to check environment sync with update operation control
+    pub(crate) async fn environment_in_sync_internal(
+        &self,
+        env_name: &EnvironmentName,
+        is_update_operation: bool,
+    ) -> miette::Result<bool> {
         let environment = self.environment(env_name).ok_or(miette::miette!(
             "Environment {} not found in manifest.",
             env_name.fancy_display()
         ))?;
 
-        let specs = environment
-            .dependencies
-            .specs
-            .iter()
+        // Split the environment into source and binary requirements
+        let (source_specs, binary_specs) = environment.split_into_source_and_binary_requirements();
+        // Convert binary specs to MatchSpec, these can be matched against the prefix directly
+        let specs = binary_specs
+            .into_iter()
             .map(|(name, spec)| {
                 let match_spec = MatchSpec::from_nameless(
                     spec.clone()
@@ -851,14 +862,34 @@ impl Project {
             })
             .collect::<Result<IndexSet<MatchSpec>, miette::Report>>()?;
 
+        let source_package_names = source_specs.specs.keys().cloned().collect::<HashSet<_>>();
+
+        // For update operations, always consider environments with source dependencies as out of sync
+        if is_update_operation && !source_package_names.is_empty() {
+            tracing::debug!(
+                "Update operation: Environment {} has source dependencies, considering out of sync",
+                env_name.fancy_display()
+            );
+            tracing::debug!(
+                "Environment out of sync because update operation has source dependencies"
+            );
+            return Ok(false);
+        }
+
         let env_dir =
             EnvDir::from_path(self.env_root.clone().path().join(env_name.clone().as_str()));
 
         let prefix = self.environment_prefix(env_name).await?;
         let prefix_records = prefix.find_installed_packages()?;
-        let specs_in_sync =
-            environment_specs_in_sync(&prefix_records, &specs, environment.platform).await?;
+        let specs_in_sync = environment_specs_in_sync(
+            &prefix_records,
+            &specs,
+            &source_package_names,
+            environment.platform,
+        )
+        .await?;
         if !specs_in_sync {
+            tracing::debug!("Environment out of sync because package specifications don't match");
             return Ok(false);
         }
 
@@ -872,6 +903,7 @@ impl Project {
                 exec_to_remove,
                 exec_to_add
             );
+            tracing::debug!("Environment out of sync because binaries need to be updated");
             return Ok(false);
         }
 
@@ -892,9 +924,11 @@ impl Project {
                     .map(|s| s.repodata_record.package_record.name.as_normalized())
                     .join(", ")
             );
+            tracing::debug!("Environment out of sync because shortcuts need to be updated");
             return Ok(false);
         }
 
+        tracing::debug!("Environment is in sync");
         Ok(true)
     }
 
@@ -1096,38 +1130,6 @@ impl Project {
         Ok(state_changes)
     }
 
-    // Figure which packages have been added
-    pub async fn added_packages(
-        &self,
-        specs: &[NamedGlobalSpec],
-        env_name: &EnvironmentName,
-        channel_config: &ChannelConfig,
-    ) -> miette::Result<StateChanges> {
-        // TODO: now just matching binary specs, we need to integrate source specs instead
-        // I think we can just remove this function and couple it to the transaction instead
-        let mut state_changes = StateChanges::default();
-        let match_specs = specs
-            .iter()
-            .filter_map(|s| s.clone().try_into_matchspec(channel_config).ok().flatten())
-            .collect_vec();
-
-        state_changes.push_changes(
-            env_name,
-            self.environment_prefix(env_name)
-                .await?
-                .find_installed_packages()?
-                .into_iter()
-                .filter(|r| {
-                    match_specs
-                        .iter()
-                        .any(|spec| spec.matches(&r.repodata_record))
-                })
-                .map(|r| r.repodata_record.package_record)
-                .map(StateChange::AddedPackage),
-        );
-        Ok(state_changes)
-    }
-
     /// Install shortcuts of a specific environment
     pub async fn sync_shortcuts(&self, env_name: &EnvironmentName) -> miette::Result<StateChanges> {
         let mut state_changes = StateChanges::default();
@@ -1275,11 +1277,14 @@ impl Project {
 
     /// Returns the command dispatcher for this project.
     fn command_dispatcher(&self) -> miette::Result<&CommandDispatcher> {
+        const BUILD_DIR: &str = "bld";
+
         self.command_dispatcher.get_or_try_init(|| {
             let multi_progress = global_multi_progress();
             let anchor_pb = multi_progress.add(ProgressBar::hidden());
             let cache_dirs = pixi_command_dispatcher::CacheDirs::new(
                 pixi_config::get_cache_dir()
+                    .map(|cache_dir| cache_dir.join(BUILD_DIR))
                     .map_err(|e| miette::miette!("Failed to get cache directory: {}", e))?,
             );
 

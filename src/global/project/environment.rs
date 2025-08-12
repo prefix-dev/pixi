@@ -2,12 +2,12 @@ use crate::global::install::local_environment_matches_spec;
 use console::StyledObject;
 use fancy_display::FancyDisplay;
 use indexmap::IndexSet;
-use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_consts::consts;
-use rattler_conda_types::{MatchSpec, Platform, PrefixRecord};
+use rattler_conda_types::{MatchSpec, PackageName, Platform, PrefixRecord};
 use regex::Regex;
 use serde::{self, Deserialize, Deserializer, Serialize};
+use std::collections::HashSet;
 use std::{fmt, str::FromStr};
 use thiserror::Error;
 
@@ -84,14 +84,15 @@ pub struct ParseEnvironmentNameError {
 pub(crate) async fn environment_specs_in_sync(
     prefix_records: &[PrefixRecord],
     specs: &IndexSet<MatchSpec>,
+    source_package_names: &HashSet<PackageName>,
     platform: Option<Platform>,
 ) -> miette::Result<bool> {
-    let repodata_records = prefix_records
+    let package_records = prefix_records
         .iter()
-        .map(|r| r.repodata_record.clone())
-        .collect_vec();
+        .map(|r| r.repodata_record.package_record.clone())
+        .collect();
 
-    if !local_environment_matches_spec(repodata_records, specs, platform) {
+    if !local_environment_matches_spec(package_records, specs, source_package_names, platform) {
         return Ok(false);
     }
     Ok(true)
@@ -120,7 +121,7 @@ mod tests {
         let specs = IndexSet::new();
         let prefix = Prefix::new(env_dir.path());
         let prefix_records = prefix.find_installed_packages().unwrap();
-        let result = environment_specs_in_sync(&prefix_records, &specs, None)
+        let result = environment_specs_in_sync(&prefix_records, &specs, &HashSet::new(), None)
             .await
             .unwrap();
         assert!(result);
@@ -141,7 +142,7 @@ mod tests {
             .unwrap();
 
         let prefix_records = prefix.find_installed_packages().unwrap();
-        let result = environment_specs_in_sync(&prefix_records, &specs, None)
+        let result = environment_specs_in_sync(&prefix_records, &specs, &HashSet::new(), None)
             .await
             .unwrap();
         assert!(result);
