@@ -16,7 +16,8 @@ from .common import (
     PIXI_VERSION,
     ExitCode,
     cwd,
-    verify_cli_command, CONDA_FORGE_CHANNEL,
+    verify_cli_command,
+    CONDA_FORGE_CHANNEL,
 )
 
 
@@ -1545,6 +1546,7 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
         }
     )
 
+
 @pytest.mark.skipif(
     sys.platform.startswith("win"),
     reason="Fish shell is not supported on Windows",
@@ -1562,15 +1564,21 @@ platforms = ["{CURRENT_PLATFORM}"]
     verify_cli_command([pixi, "add", "fish", "--manifest-path", tmp_pixi_workspace])
 
     # Verify that the shell hook generates the correct completions
-    output = verify_cli_command(
-        [pixi, "completion", "--shell", "fish"]
-    )
+    output = verify_cli_command([pixi, "completion", "--shell", "fish"])
     out = output.stdout
     # write output to file
     fish_completion_file = tmp_pixi_workspace / "pixi.fish"
     fish_completion_file.write_text(out)
 
     # Check that the file was created
-    verify_cli_command([pixi, "run", "--manifest-path", tmp_pixi_workspace, "fish", "-c", f"source {fish_completion_file}"],)
-
-
+    verify_cli_command(
+        [
+            pixi,
+            "run",
+            "--manifest-path",
+            tmp_pixi_workspace,
+            "fish",
+            "-c",
+            f"source {fish_completion_file}",
+        ],
+    )
