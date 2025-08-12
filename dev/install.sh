@@ -1,6 +1,6 @@
 #!/bin/sh
 set -eu
-# Version: v0.50.2
+# Version: v0.51.0
 
 __wrap__() {
     VERSION="${PIXI_VERSION:-latest}"
