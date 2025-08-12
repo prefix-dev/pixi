@@ -540,8 +540,25 @@
           "description": "The (positional or named) arguments to pass to the task",
           "type": "array",
           "items": {
-            "type": "string",
-            "minLength": 1
+            "anyOf": [
+              {
+                "description": "A valid task argument name",
+                "type": "string",
+                "pattern": "^[a-zA-Z_][a-zA-Z\\d_]*$"
+              },
+              {
+                "type": "object",
+                "patternProperties": {
+                  "^[a-zA-Z_][a-zA-Z\\d_]*$": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "propertyNames": {
+                  "description": "A valid task argument name"
+                }
+              }
+            ]
           }
         },
         "environment": {
@@ -1863,8 +1880,9 @@
       "properties": {
         "arg": {
           "title": "Arg",
+          "description": "The name of the argument",
           "type": "string",
-          "minLength": 1
+          "pattern": "^[a-zA-Z_][a-zA-Z\\d_]*$"
         },
         "default": {
           "title": "Default",
@@ -1881,7 +1899,7 @@
       "properties": {
         "args": {
           "title": "Args",
-          "description": "The arguments to pass to the task",
+          "description": "The arguments to a task",
           "type": "array",
           "items": {
             "anyOf": [
@@ -1889,14 +1907,27 @@
                 "$ref": "#/$defs/TaskArgs"
               },
               {
+                "description": "A valid task argument name",
                 "type": "string",
-                "minLength": 1
+                "pattern": "^[a-zA-Z_][a-zA-Z\\d_]*$"
               }
             ]
           },
           "examples": [
-            "arg1",
-            "arg2"
+            [
+              "arg1",
+              "arg2"
+            ],
+            [
+              {
+                "arg": "arg1",
+                "default": "1"
+              },
+              {
+                "arg": "arg2",
+                "default": "2"
+              }
+            ]
           ]
         },
         "clean-env": {
