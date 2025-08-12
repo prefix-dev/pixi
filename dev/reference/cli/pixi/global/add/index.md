@@ -7,7 +7,7 @@ Adds dependencies to an environment
 ## Usage
 
 ```text
-pixi global add [OPTIONS] --environment <ENVIRONMENT> <PACKAGE>...
+pixi global add [OPTIONS] --environment <ENVIRONMENT> [PACKAGE]...
 
 ```
 
@@ -17,9 +17,9 @@ pixi global add [OPTIONS] --environment <ENVIRONMENT> <PACKAGE>...
 
   May be provided more than once.
 
-  **required**: `true`
-
 ## Options
+
+- [`--path <PATH>`](#arg---path) The path to the local directory
 
 - [`--environment (-e) <ENVIRONMENT>`](#arg---environment) Specifies the environment that the dependencies need to be added to
 
@@ -50,6 +50,14 @@ pixi global add [OPTIONS] --environment <ENVIRONMENT> <PACKAGE>...
 - [`--tls-no-verify`](#arg---tls-no-verify) Do not verify the TLS certificate of the server
 
 - [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) Use environment activation cache (experimental)
+
+## Git Options
+
+- [`--git <GIT>`](#arg---git) The git url, e.g. `https://github.com/user/repo.git`
+- [`--branch <BRANCH>`](#arg---branch) The git branch
+- [`--tag <TAG>`](#arg---tag) The git tag
+- [`--rev <REV>`](#arg---rev) The git revision
+- [`--subdir <SUBDIR>`](#arg---subdir) The subdirectory within the git repository
 
 ## Description
 

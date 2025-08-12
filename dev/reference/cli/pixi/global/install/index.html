@@ -2664,6 +2664,15 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#git-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      Git Options
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#description" class="md-nav__link">
     <span class="md-ellipsis">
       Description
@@ -2717,7 +2726,7 @@
 </span></code></pre></div></p>
 <p>After using global install, you can use the package you installed anywhere on your system.</p>
 <h2 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">#</a></h2>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi global install [OPTIONS] &lt;PACKAGE&gt;...
+<div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi global install [OPTIONS] [PACKAGE]...
 </span></code></pre></div>
 <h2 id="arguments">Arguments<a class="headerlink" href="#arguments" title="Permanent link">#</a></h2>
 <ul>
@@ -2725,13 +2734,18 @@
 <dl>
 <dt><a id="arg-\<PACKAGE>" href="#arg-\<PACKAGE>"><code>&lt;PACKAGE&gt;</code></a></dt>
 <dd>The dependency as names, conda MatchSpecs
-<br>May be provided more than once.
-<br><strong>required</strong>: <code>true</code></dd>
+<br>May be provided more than once.</dd>
 </dl>
 </li>
 </ul>
 <h2 id="options">Options<a class="headerlink" href="#options" title="Permanent link">#</a></h2>
 <ul>
+<li>
+<dl>
+<dt><a id="arg---path" href="#arg---path"><code>--path &lt;PATH&gt;</code></a></dt>
+<dd>The path to the local directory</dd>
+</dl>
+</li>
 <li>
 <dl>
 <dt><a id="arg---channel" href="#arg---channel"><code>--channel (-c) &lt;CHANNEL&gt;</code></a></dt>
@@ -2828,6 +2842,39 @@
 <dl>
 <dt><a id="arg---use-environment-activation-cache" href="#arg---use-environment-activation-cache"><code>--use-environment-activation-cache</code></a></dt>
 <dd>Use environment activation cache (experimental)</dd>
+</dl>
+</li>
+</ul>
+<h2 id="git-options">Git Options<a class="headerlink" href="#git-options" title="Permanent link">#</a></h2>
+<ul>
+<li>
+<dl>
+<dt><a id="arg---git" href="#arg---git"><code>--git &lt;GIT&gt;</code></a></dt>
+<dd>The git url, e.g. <code>https://github.com/user/repo.git</code></dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---branch" href="#arg---branch"><code>--branch &lt;BRANCH&gt;</code></a></dt>
+<dd>The git branch</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---tag" href="#arg---tag"><code>--tag &lt;TAG&gt;</code></a></dt>
+<dd>The git tag</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---rev" href="#arg---rev"><code>--rev &lt;REV&gt;</code></a></dt>
+<dd>The git revision</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---subdir" href="#arg---subdir"><code>--subdir &lt;SUBDIR&gt;</code></a></dt>
+<dd>The subdirectory within the git repository</dd>
 </dl>
 </li>
 </ul>

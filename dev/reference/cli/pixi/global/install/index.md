@@ -18,7 +18,7 @@ After using global install, you can use the package you installed anywhere on yo
 ## Usage
 
 ```text
-pixi global install [OPTIONS] <PACKAGE>...
+pixi global install [OPTIONS] [PACKAGE]...
 
 ```
 
@@ -28,9 +28,9 @@ pixi global install [OPTIONS] <PACKAGE>...
 
   May be provided more than once.
 
-  **required**: `true`
-
 ## Options
+
+- [`--path <PATH>`](#arg---path) The path to the local directory
 
 - [`--channel (-c) <CHANNEL>`](#arg---channel) The channels to consider as a name or a url. Multiple channels can be specified by using this field multiple times
 
@@ -73,6 +73,14 @@ pixi global install [OPTIONS] <PACKAGE>...
 - [`--tls-no-verify`](#arg---tls-no-verify) Do not verify the TLS certificate of the server
 
 - [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) Use environment activation cache (experimental)
+
+## Git Options
+
+- [`--git <GIT>`](#arg---git) The git url, e.g. `https://github.com/user/repo.git`
+- [`--branch <BRANCH>`](#arg---branch) The git branch
+- [`--tag <TAG>`](#arg---tag) The git tag
+- [`--rev <REV>`](#arg---rev) The git revision
+- [`--subdir <SUBDIR>`](#arg---subdir) The subdirectory within the git repository
 
 ## Description
 
