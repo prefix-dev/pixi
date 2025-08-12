@@ -68,6 +68,7 @@ fn default_build_environment() -> BuildEnvironment {
 }
 
 #[tokio::test]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 pub async fn simple_test() {
     let (reporter, events) = EventReporter::new();
     let (tool_platform, tool_virtual_packages) = tool_platform();
@@ -368,6 +369,7 @@ pub async fn test_stale_host_dependency_triggers_rebuild() {
 }
 
 #[tokio::test]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 pub async fn instantiate_backend_with_from_source() {
     let root_dir = workspaces_dir().join("source-backends");
 
