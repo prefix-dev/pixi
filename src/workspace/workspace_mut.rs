@@ -24,7 +24,7 @@ use toml_edit::DocumentMut;
 
 use crate::{
     Workspace,
-    cli::cli_config::{LockFileUpdateConfig, PrefixUpdateConfig},
+    cli::cli_config::LockFileUpdateConfig,
     diff::LockFileDiff,
     environment::LockFileUsage,
     lock_file::{LockFileDerivedData, ReinstallPackages, UpdateContext, UpdateMode},
@@ -235,7 +235,7 @@ impl WorkspaceMut {
         match_specs: MatchSpecs,
         pypi_deps: PypiDeps,
         source_specs: SourceSpecs,
-        prefix_update_config: &PrefixUpdateConfig,
+        no_install: bool,
         lock_file_update_config: &LockFileUpdateConfig,
         feature_name: &FeatureName,
         platforms: &[Platform],
@@ -360,10 +360,9 @@ impl WorkspaceMut {
             command_dispatcher,
             glob_hash_cache,
             io_concurrency_limit,
-            was_outdated: _,
         } = UpdateContext::builder(self.workspace())
             .with_lock_file(unlocked_lock_file)
-            .with_no_install(prefix_update_config.no_install || dry_run)
+            .with_no_install(no_install || dry_run)
             .finish()
             .await?
             .update()
@@ -410,12 +409,11 @@ impl WorkspaceMut {
             io_concurrency_limit,
             command_dispatcher,
             glob_hash_cache,
-            was_outdated: true,
         };
         if !dry_run {
             updated_lock_file.write_to_disk()?;
         }
-        if !prefix_update_config.no_install
+        if !no_install
             && !dry_run
             && self.workspace().environments().len() == 1
             && default_environment_is_affected

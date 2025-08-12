@@ -14,7 +14,7 @@ use serde_json;
 use crate::{
     UpdateLockFileOptions, Workspace, WorkspaceLocator,
     activation::{CurrentEnvVarBehavior, get_activator},
-    cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
+    cli::cli_config::{NoInstallConfig, RevalidateConfig, WorkspaceConfig},
     environment::get_update_lock_file_and_prefix,
     lock_file::ReinstallPackages,
     prompt,
@@ -38,7 +38,9 @@ pub struct Args {
     pub project_config: WorkspaceConfig,
 
     #[clap(flatten)]
-    pub prefix_update_config: PrefixUpdateConfig,
+    pub no_install_config: NoInstallConfig,
+    #[clap(flatten)]
+    pub revalidate_config: RevalidateConfig,
 
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
@@ -160,10 +162,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let (lock_file_data, _prefix) = get_update_lock_file_and_prefix(
         &environment,
-        args.prefix_update_config.update_mode(),
+        args.revalidate_config.update_mode(),
         UpdateLockFileOptions {
             lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
-            no_install: args.prefix_update_config.no_install,
+            no_install: args.no_install_config.no_install,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         },
         ReinstallPackages::default(),

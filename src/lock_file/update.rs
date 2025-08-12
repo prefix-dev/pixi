@@ -75,7 +75,7 @@ impl Workspace {
     pub async fn update_lock_file(
         &self,
         options: UpdateLockFileOptions,
-    ) -> miette::Result<LockFileDerivedData<'_>> {
+    ) -> miette::Result<(LockFileDerivedData<'_>, bool)> {
         let lock_file = self.load_lock_file().await?;
         let glob_hash_cache = GlobHashCache::default();
 
@@ -97,18 +97,20 @@ impl Workspace {
         if !options.lock_file_usage.should_check_if_out_of_date() {
             tracing::info!("skipping check if lock-file is up-to-date");
 
-            return Ok(LockFileDerivedData {
-                workspace: self,
-                lock_file,
-                package_cache,
-                updated_conda_prefixes: Default::default(),
-                updated_pypi_prefixes: Default::default(),
-                uv_context: Default::default(),
-                io_concurrency_limit: IoConcurrencyLimit::default(),
-                command_dispatcher,
-                glob_hash_cache,
-                was_outdated: false,
-            });
+            return Ok((
+                LockFileDerivedData {
+                    workspace: self,
+                    lock_file,
+                    package_cache,
+                    updated_conda_prefixes: Default::default(),
+                    updated_pypi_prefixes: Default::default(),
+                    uv_context: Default::default(),
+                    io_concurrency_limit: IoConcurrencyLimit::default(),
+                    command_dispatcher,
+                    glob_hash_cache,
+                },
+                false,
+            ));
         }
 
         // Check which environments are out of date.
@@ -122,23 +124,25 @@ impl Workspace {
             tracing::info!("the lock-file is up-to-date");
 
             // If no-environment is outdated we can return early.
-            return Ok(LockFileDerivedData {
-                workspace: self,
-                lock_file,
-                package_cache,
-                updated_conda_prefixes: Default::default(),
-                updated_pypi_prefixes: Default::default(),
-                uv_context: Default::default(),
-                io_concurrency_limit: IoConcurrencyLimit::default(),
-                command_dispatcher,
-                glob_hash_cache,
-                was_outdated: false,
-            });
+            return Ok((
+                LockFileDerivedData {
+                    workspace: self,
+                    lock_file,
+                    package_cache,
+                    updated_conda_prefixes: Default::default(),
+                    updated_pypi_prefixes: Default::default(),
+                    uv_context: Default::default(),
+                    io_concurrency_limit: IoConcurrencyLimit::default(),
+                    command_dispatcher,
+                    glob_hash_cache,
+                },
+                false,
+            ));
         }
 
         // If the lock-file is out of date, but we're not allowed to update it, we
         // should exit.
-        if !options.lock_file_usage.allows_lock_file_updates() {
+        if !options.lock_file_usage.allow_updates() {
             miette::bail!("lock-file not up-to-date with the workspace");
         }
 
@@ -158,7 +162,7 @@ impl Workspace {
         // Write the lock-file to disk
         lock_file_derived_data.write_to_disk()?;
 
-        Ok(lock_file_derived_data)
+        Ok((lock_file_derived_data, true))
     }
 
     /// Loads the lockfile for the workspace or returns `Lockfile::default` if
@@ -258,9 +262,6 @@ pub struct LockFileDerivedData<'p> {
 
     /// An object that caches input hashes
     pub glob_hash_cache: GlobHashCache,
-
-    /// Whether the lock file was outdated
-    pub was_outdated: bool,
 }
 
 /// The mode to use when updating a prefix.
@@ -1723,7 +1724,6 @@ impl<'p> UpdateContext<'p> {
             io_concurrency_limit: self.io_concurrency_limit,
             command_dispatcher: self.command_dispatcher,
             glob_hash_cache: self.glob_hash_cache,
-            was_outdated: true,
         })
     }
 }

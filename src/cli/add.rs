@@ -9,7 +9,7 @@ use rattler_conda_types::{MatchSpec, PackageName};
 use super::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs};
 use crate::{
     WorkspaceLocator,
-    cli::cli_config::{DependencyConfig, PrefixUpdateConfig, WorkspaceConfig},
+    cli::cli_config::{DependencyConfig, NoInstallConfig, WorkspaceConfig},
     environment::sanity_check_workspace,
     workspace::DependencyType,
 };
@@ -83,7 +83,7 @@ pub struct Args {
     pub dependency_config: DependencyConfig,
 
     #[clap(flatten)]
-    pub prefix_update_config: PrefixUpdateConfig,
+    pub no_install_config: NoInstallConfig,
 
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
@@ -97,9 +97,9 @@ pub struct Args {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let (dependency_config, prefix_update_config, lock_file_update_config, workspace_config) = (
+    let (dependency_config, no_install_config, lock_file_update_config, workspace_config) = (
         args.dependency_config,
-        args.prefix_update_config,
+        args.no_install_config,
         args.lock_file_update_config,
         args.workspace_config,
     );
@@ -191,7 +191,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         match_specs,
         pypi_deps,
         source_specs,
-        &prefix_update_config,
+        no_install_config.no_install,
         &lock_file_update_config,
         &dependency_config.feature,
         &dependency_config.platforms,

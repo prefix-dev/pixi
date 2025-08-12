@@ -18,7 +18,7 @@ use thiserror::Error;
 use super::cli_config::LockFileUpdateConfig;
 use crate::{
     WorkspaceLocator,
-    cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
+    cli::cli_config::{NoInstallConfig, RevalidateConfig, WorkspaceConfig},
     environment::sanity_check_workspace,
 };
 
@@ -59,7 +59,9 @@ pub struct Args {
     pub feature: Option<String>,
 
     #[clap(flatten)]
-    pub prefix_update_config: PrefixUpdateConfig,
+    pub no_install_config: NoInstallConfig,
+    #[clap(flatten)]
+    pub revalidate_config: RevalidateConfig,
 
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,

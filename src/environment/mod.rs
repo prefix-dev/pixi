@@ -394,12 +394,9 @@ pub enum LockFileUsage {
 }
 
 impl LockFileUsage {
-    /// Returns true if the lock-file should be updated if it is out of date.
-    pub(crate) fn allows_lock_file_updates(self) -> bool {
-        match self {
-            LockFileUsage::Update => true,
-            LockFileUsage::Locked | LockFileUsage::Frozen => false,
-        }
+    /// Returns true if the process should error when the lock-file
+    pub(crate) fn allow_updates(self) -> bool {
+        !matches!(self, LockFileUsage::Locked)
     }
 
     /// Returns true if the lock-file should be checked if it is out of date.
@@ -480,7 +477,8 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
             no_install,
             max_concurrent_solves: update_lock_file_options.max_concurrent_solves,
         })
-        .await?;
+        .await?
+        .0;
 
     // Get the prefix from the lock-file.
     let lock_file_ref = &lock_file;

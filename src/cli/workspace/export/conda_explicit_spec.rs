@@ -5,7 +5,7 @@ use std::{
 
 use crate::{
     WorkspaceLocator,
-    cli::cli_config::{LockFileUpdateConfig, WorkspaceConfig},
+    cli::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig},
     lock_file::UpdateLockFileOptions,
 };
 use clap::Parser;
@@ -44,6 +44,9 @@ pub struct Args {
 
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
+
+    #[clap(flatten)]
+    pub no_install_config: NoInstallConfig,
 
     #[clap(flatten)]
     config: ConfigCli,
@@ -171,10 +174,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let lockfile = workspace
         .update_lock_file(UpdateLockFileOptions {
             lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
-            no_install: false,
+            no_install: args.no_install_config.no_install,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         })
         .await?
+        .0
         .into_lock_file();
 
     let mut environments = Vec::new();

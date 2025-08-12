@@ -22,7 +22,7 @@ use serde::Serialize;
 use uv_configuration::ConfigSettings;
 use uv_distribution::RegistryWheelIndex;
 
-use super::cli_config::LockFileUpdateConfig;
+use super::cli_config::{LockFileUpdateConfig, NoInstallConfig};
 use crate::{
     WorkspaceLocator,
     cli::cli_config::WorkspaceConfig,
@@ -73,6 +73,9 @@ pub struct Args {
 
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
+
+    #[clap(flatten)]
+    pub no_install_config: NoInstallConfig,
 
     /// Only list packages that are explicitly defined in the workspace.
     #[arg(short = 'x', long)]
@@ -185,10 +188,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let lock_file = workspace
         .update_lock_file(UpdateLockFileOptions {
             lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
-            no_install: false,
+            no_install: args.no_install_config.no_install,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         })
         .await?
+        .0
         .into_lock_file();
 
     // Load the platform

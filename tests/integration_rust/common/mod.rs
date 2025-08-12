@@ -19,7 +19,7 @@ use pixi::{
     UpdateLockFileOptions, Workspace,
     cli::{
         LockFileUsageConfig, add,
-        cli_config::{ChannelsConfig, LockFileUpdateConfig, PrefixUpdateConfig, WorkspaceConfig},
+        cli_config::{ChannelsConfig, LockFileUpdateConfig, NoInstallConfig, RevalidateConfig, WorkspaceConfig},
         init::{self, GitAttributes},
         install::Args,
         lock, remove, run, search,
@@ -362,10 +362,8 @@ impl PixiControl {
                     manifest_path: Some(self.manifest_path()),
                 },
                 dependency_config: AddBuilder::dependency_config_with_specs(specs),
-                prefix_update_config: PrefixUpdateConfig {
+                no_install_config: NoInstallConfig {
                     no_install: true,
-
-                    revalidate: false,
                 },
                 lock_file_update_config: LockFileUpdateConfig {
                     no_lockfile_update: false,
@@ -401,8 +399,10 @@ impl PixiControl {
                     manifest_path: Some(self.manifest_path()),
                 },
                 dependency_config: AddBuilder::dependency_config_with_specs(vec![spec]),
-                prefix_update_config: PrefixUpdateConfig {
+                no_install_config: NoInstallConfig {
                     no_install: true,
+                },
+                revalidate_config: RevalidateConfig {
                     revalidate: false,
                 },
                 lock_file_update_config: LockFileUpdateConfig {
@@ -422,8 +422,10 @@ impl PixiControl {
                     manifest_path: Some(self.manifest_path()),
                 },
                 channel: vec![],
-                prefix_update_config: PrefixUpdateConfig {
+                no_install_config: NoInstallConfig {
                     no_install: true,
+                },
+                revalidate_config: RevalidateConfig {
                     revalidate: false,
                 },
                 lock_file_update_config: LockFileUpdateConfig {
@@ -447,8 +449,10 @@ impl PixiControl {
                     manifest_path: Some(self.manifest_path()),
                 },
                 channel: vec![],
-                prefix_update_config: PrefixUpdateConfig {
+                no_install_config: NoInstallConfig {
                     no_install: true,
+                },
+                revalidate_config: RevalidateConfig {
                     revalidate: false,
                 },
                 lock_file_update_config: LockFileUpdateConfig {
@@ -504,7 +508,8 @@ impl PixiControl {
                 lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
                 ..UpdateLockFileOptions::default()
             })
-            .await?;
+            .await?
+            .0;
 
         // Create a task graph from the command line arguments.
         let search_env = SearchEnvironments::from_opt_env(
@@ -613,6 +618,7 @@ impl PixiControl {
         Ok(project
             .update_lock_file(UpdateLockFileOptions::default())
             .await?
+            .0
             .into_lock_file())
     }
 
@@ -623,6 +629,9 @@ impl PixiControl {
             args: lock::Args {
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
+                },
+                no_install_config: NoInstallConfig {
+                    no_install: false,
                 },
                 check: false,
                 json: false,

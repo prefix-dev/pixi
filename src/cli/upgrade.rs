@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 
-use super::cli_config::{LockFileUpdateConfig, PrefixUpdateConfig};
+use super::cli_config::{LockFileUpdateConfig, NoInstallConfig, RevalidateConfig};
 use crate::{
     WorkspaceLocator,
     cli::cli_config::WorkspaceConfig,
@@ -28,7 +28,9 @@ pub struct Args {
     pub workspace_config: WorkspaceConfig,
 
     #[clap(flatten)]
-    pub prefix_update_config: PrefixUpdateConfig,
+    pub no_install_config: NoInstallConfig,
+    #[clap(flatten)]
+    pub revalidate_config: RevalidateConfig,
 
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
@@ -91,7 +93,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             match_specs,
             pypi_deps,
             IndexMap::default(),
-            &args.prefix_update_config,
+            args.no_install_config.no_install,
             &args.lock_file_update_config,
             &args.specs.feature,
             &[],

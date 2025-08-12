@@ -21,7 +21,7 @@ use tracing::Level;
 use super::cli_config::LockFileUpdateConfig;
 use crate::{
     Workspace, WorkspaceLocator,
-    cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
+    cli::cli_config::{NoInstallConfig, RevalidateConfig, WorkspaceConfig},
     environment::sanity_check_workspace,
     lock_file::{ReinstallPackages, UpdateLockFileOptions},
     task::{
@@ -50,7 +50,9 @@ pub struct Args {
     pub workspace_config: WorkspaceConfig,
 
     #[clap(flatten)]
-    pub prefix_update_config: PrefixUpdateConfig,
+    pub no_install_config: NoInstallConfig,
+    #[clap(flatten)]
+    pub revalidate_config: RevalidateConfig,
 
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
@@ -130,7 +132,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
             ..UpdateLockFileOptions::default()
         })
-        .await?;
+        .await?
+        .0;
 
     // Spawn a task that listens for ctrl+c and resets the cursor.
     tokio::spawn(async {
@@ -257,7 +260,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 lock_file
                     .prefix(
                         &executable_task.run_environment,
-                        args.prefix_update_config.update_mode(),
+                        args.revalidate_config.update_mode(),
                         &ReinstallPackages::default(),
                         &[],
                     )

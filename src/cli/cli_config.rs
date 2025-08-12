@@ -132,19 +132,23 @@ impl LockFileUpdateConfig {
     }
 }
 
-/// Configuration for how to update the prefix
+/// Configuration for skipping installation
 #[derive(Parser, Debug, Default, Clone)]
-pub struct PrefixUpdateConfig {
+pub struct NoInstallConfig {
     /// Don't modify the environment, only modify the lock-file.
     #[arg(long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub no_install: bool,
+}
 
+/// Configuration for environment validation
+#[derive(Parser, Debug, Default, Clone)]
+pub struct RevalidateConfig {
     /// Run the complete environment validation. This will reinstall a broken environment.
     #[arg(long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub revalidate: bool,
 }
 
-impl PrefixUpdateConfig {
+impl RevalidateConfig {
     /// Which `[UpdateMode]` to use
     pub(crate) fn update_mode(&self) -> UpdateMode {
         if self.revalidate {

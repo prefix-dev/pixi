@@ -34,7 +34,7 @@ use uv_python::PythonEnvironment;
 use crate::common::{
     LockFileExt, PixiControl,
     builders::{
-        HasDependencyConfig, HasLockFileUpdateConfig, HasPrefixUpdateConfig, string_from_iter,
+        HasDependencyConfig, HasLockFileUpdateConfig, HasNoInstallConfig, string_from_iter,
     },
     logging::try_init_test_subscriber,
     package_database::{Package, PackageDatabase},

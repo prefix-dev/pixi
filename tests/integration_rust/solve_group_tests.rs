@@ -14,7 +14,7 @@ use url::Url;
 
 use crate::common::{
     LockFileExt, PixiControl,
-    builders::{HasDependencyConfig, HasPrefixUpdateConfig},
+    builders::{HasDependencyConfig, HasNoInstallConfig},
     client::OfflineMiddleware,
     package_database::{Package, PackageDatabase},
 };

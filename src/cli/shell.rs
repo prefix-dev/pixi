@@ -8,14 +8,13 @@ use rattler_shell::{
     shell::{CmdExe, PowerShell, Shell, ShellEnum, ShellScript},
 };
 
-use crate::lock_file::UpdateMode;
 use crate::workspace::get_activated_environment_variables;
 use crate::{
     UpdateLockFileOptions, WorkspaceLocator, activation::CurrentEnvVarBehavior,
     environment::get_update_lock_file_and_prefix, prompt,
 };
 use crate::{
-    cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
+    cli::cli_config::{NoInstallConfig, RevalidateConfig, WorkspaceConfig},
     lock_file::ReinstallPackages,
 };
 use pixi_config::{ConfigCli, ConfigCliActivation, ConfigCliPrompt};
@@ -34,7 +33,9 @@ pub struct Args {
     workspace_config: WorkspaceConfig,
 
     #[clap(flatten)]
-    pub prefix_update_config: PrefixUpdateConfig,
+    pub no_install_config: NoInstallConfig,
+    #[clap(flatten)]
+    pub revalidate_config: RevalidateConfig,
 
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
@@ -280,10 +281,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     #[allow(unused_variables)]
     let (lock_file_data, prefix) = get_update_lock_file_and_prefix(
         &environment,
-        UpdateMode::QuickValidate,
+        args.revalidate_config.update_mode(),
         UpdateLockFileOptions {
             lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
-            no_install: args.prefix_update_config.no_install,
+            no_install: args.no_install_config.no_install,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         },
         ReinstallPackages::default(),

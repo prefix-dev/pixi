@@ -1,7 +1,7 @@
 use crate::{
     UpdateLockFileOptions, WorkspaceLocator,
     environment::{LockFileUsage, get_update_lock_file_and_prefix},
-    lock_file::{ReinstallPackages, UpdateMode},
+    lock_file::ReinstallPackages,
 };
 use miette::IntoDiagnostic;
 
@@ -24,10 +24,10 @@ pub async fn execute(args: AddRemoveArgs) -> miette::Result<()> {
     // TODO: Update all environments touched by the features defined.
     get_update_lock_file_and_prefix(
         &workspace.workspace().default_environment(),
-        UpdateMode::Revalidate,
+        args.revalidate_config.update_mode(),
         UpdateLockFileOptions {
             lock_file_usage: LockFileUsage::Update,
-            no_install: args.prefix_update_config.no_install,
+            no_install: args.no_install_config.no_install,
             max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
         },
         ReinstallPackages::default(),

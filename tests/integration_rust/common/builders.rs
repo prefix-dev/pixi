@@ -24,7 +24,7 @@
 //! ```
 
 use pixi::cli::{
-    cli_config::{GitRev, LockFileUpdateConfig, PrefixUpdateConfig, WorkspaceConfig},
+    cli_config::{GitRev, LockFileUpdateConfig, WorkspaceConfig},
     lock,
 };
 use std::{
@@ -39,7 +39,9 @@ use futures::FutureExt;
 use pixi::{
     DependencyType,
     cli::{
-        add, cli_config::DependencyConfig, init, install, remove, search, task, update, workspace,
+        add,
+        cli_config::{DependencyConfig, NoInstallConfig, RevalidateConfig},
+        init, install, remove, search, task, update, workspace,
     },
 };
 use pixi_manifest::{EnvironmentName, FeatureName, SpecType, task::Dependency};
@@ -111,14 +113,23 @@ impl IntoFuture for InitBuilder {
         .boxed_local()
     }
 }
-/// A trait used by AddBuilder and RemoveBuilder to set their inner
-/// DependencyConfig
-pub trait HasPrefixUpdateConfig: Sized {
-    fn prefix_update_config(&mut self) -> &mut PrefixUpdateConfig;
+/// A trait used by builders to access NoInstallConfig
+pub trait HasNoInstallConfig: Sized {
+    fn no_install_config(&mut self) -> &mut NoInstallConfig;
     /// Set whether to also install the environment. By default, the environment
     /// is NOT installed to reduce test times.
     fn with_install(mut self, install: bool) -> Self {
-        self.prefix_update_config().no_install = !install;
+        self.no_install_config().no_install = !install;
+        self
+    }
+}
+
+/// A trait used by builders to access RevalidateConfig
+pub trait HasRevalidateConfig: Sized {
+    fn revalidate_config(&mut self) -> &mut RevalidateConfig;
+    /// Set whether to revalidate the environment (reinstall broken environment)
+    fn with_revalidate(mut self, revalidate: bool) -> Self {
+        self.revalidate_config().revalidate = revalidate;
         self
     }
 }
@@ -238,7 +249,7 @@ impl AddBuilder {
         if no_lockfile_update {
             // Since no_lockfile_update is deprecated, we simulate the behavior by setting frozen=true and no_install=true
             self.args.lock_file_update_config.lock_file_usage.frozen = true;
-            self.args.prefix_update_config.no_install = true;
+            self.args.no_install_config.no_install = true;
         }
         self
     }
@@ -250,11 +261,12 @@ impl HasDependencyConfig for AddBuilder {
     }
 }
 
-impl HasPrefixUpdateConfig for AddBuilder {
-    fn prefix_update_config(&mut self) -> &mut PrefixUpdateConfig {
-        &mut self.args.prefix_update_config
+impl HasNoInstallConfig for AddBuilder {
+    fn no_install_config(&mut self) -> &mut NoInstallConfig {
+        &mut self.args.no_install_config
     }
 }
+
 
 impl HasLockFileUpdateConfig for AddBuilder {
     fn lock_file_update_config(&mut self) -> &mut LockFileUpdateConfig {
@@ -301,9 +313,15 @@ impl HasDependencyConfig for RemoveBuilder {
     }
 }
 
-impl HasPrefixUpdateConfig for RemoveBuilder {
-    fn prefix_update_config(&mut self) -> &mut PrefixUpdateConfig {
-        &mut self.args.prefix_update_config
+impl HasNoInstallConfig for RemoveBuilder {
+    fn no_install_config(&mut self) -> &mut NoInstallConfig {
+        &mut self.args.no_install_config
+    }
+}
+
+impl HasRevalidateConfig for RemoveBuilder {
+    fn revalidate_config(&mut self) -> &mut RevalidateConfig {
+        &mut self.args.revalidate_config
     }
 }
 

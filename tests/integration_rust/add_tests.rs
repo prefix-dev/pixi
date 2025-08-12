@@ -10,7 +10,7 @@ use url::Url;
 
 use crate::common::{
     LockFileExt, PixiControl,
-    builders::{HasDependencyConfig, HasLockFileUpdateConfig, HasPrefixUpdateConfig},
+    builders::{HasDependencyConfig, HasLockFileUpdateConfig, HasNoInstallConfig},
     package_database::{Package, PackageDatabase},
 };
 
