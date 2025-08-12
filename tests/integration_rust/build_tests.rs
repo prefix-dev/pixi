@@ -63,7 +63,7 @@ backend = {{ name = "empty-backend", version = "0.1.0" }}
 channels = [
   "file://{}"
 ]
-source = {{ path = "../alternative-source" }}
+source.location.path = "../alternative-source"
 
 [workspace]
 channels = [
@@ -156,7 +156,7 @@ version = "0.1.0"
 [package.build]
 backend = {{ name = "empty-backend", version = "0.1.0" }}
 channels = ["file://{}"]
-source = {{ path = "{}" }}
+source.location.path = "{}"
 
 [workspace]
 channels = ["file://{}"]
@@ -229,7 +229,7 @@ version = "0.1.0"
 [package.build]
 backend = {{ name = "empty-backend", version = "0.1.0" }}
 channels = ["file://{}"]
-source = {{ path = "./subdir/source" }}
+source.location.path = "./subdir/source"
 
 [workspace]
 channels = ["file://{}"]
