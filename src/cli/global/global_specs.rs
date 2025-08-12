@@ -55,6 +55,8 @@ pub enum GlobalSpecsConversionError {
     RelativePath(String, String),
     #[error("could not absolutize path: {0}")]
     AbsolutizePath(String),
+    #[error("specs cannot be empty if git or path is not specified")]
+    SpecsMissing,
 }
 
 impl GlobalSpecs {
@@ -64,6 +66,10 @@ impl GlobalSpecs {
         channel_config: &ChannelConfig,
         manifest_root: &Path,
     ) -> Result<Vec<GlobalSpec>, GlobalSpecsConversionError> {
+        if self.specs.is_empty() && self.git.is_none() && self.path.is_none() {
+            return Err(GlobalSpecsConversionError::SpecsMissing);
+        }
+
         let git_or_path_spec = if let Some(git_url) = &self.git {
             let git_spec = pixi_spec::GitSpec {
                 git: git_url.clone(),
