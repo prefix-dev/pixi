@@ -542,16 +542,13 @@
           "items": {
             "anyOf": [
               {
-                "description": "A valid task argument name",
-                "type": "string",
-                "pattern": "^[a-zA-Z_][a-zA-Z\\d_]*$"
+                "type": "string"
               },
               {
                 "type": "object",
                 "patternProperties": {
                   "^[a-zA-Z_][a-zA-Z\\d_]*$": {
-                    "type": "string",
-                    "minLength": 1
+                    "type": "string"
                   }
                 },
                 "propertyNames": {
@@ -569,7 +566,7 @@
         },
         "task": {
           "title": "Task",
-          "description": "A valid task name.",
+          "description": "the name of the task to depend on",
           "type": "string",
           "pattern": "^[^\\s\\$]+$"
         }
