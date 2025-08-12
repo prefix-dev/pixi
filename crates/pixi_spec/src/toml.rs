@@ -19,7 +19,10 @@ use toml_span::{
 };
 use url::Url;
 
-use crate::{BinarySpec, DetailedSpec, GitReference, GitSpec, PathSpec, PixiSpec, UrlSpec};
+use crate::{
+    BinarySpec, DetailedSpec, GitReference, GitSpec, PathSourceSpec, PathSpec, PixiSpec,
+    SourceLocationSpec, UrlSourceSpec, UrlSpec,
+};
 
 /// A TOML representation of a package specification.
 #[serde_as]
@@ -170,6 +173,24 @@ pub enum SpecError {
 }
 
 #[derive(Error, Debug)]
+pub enum SourceLocationSpecError {
+    #[error("`branch`, `rev`, and `tag` are only valid when `git` is specified")]
+    NotAGitSpec,
+
+    #[error("only one of `branch`, `rev`, or `tag` can be specified")]
+    MultipleGitRefs,
+
+    #[error("only one of `url`, `path`, or `git` can be specified")]
+    MultipleIdentifiers,
+
+    #[error("{0} cannot be used with {1}")]
+    InvalidCombination(Cow<'static, str>, Cow<'static, str>),
+
+    #[error("must specify one of `path`, `url`, or `git`")]
+    NoSourceType,
+}
+
+#[derive(Error, Debug)]
 pub enum NotBinary {
     #[error("the url does not refer to a valid conda package archive")]
     Url,
@@ -206,19 +227,21 @@ impl TomlSpec {
         .join(", ");
 
         // Common field checks
-        for (field_name, is_some) in [
-            ("`version`", self.version.is_some()),
-            ("`build`", self.build.is_some()),
-            ("`build_number`", self.build_number.is_some()),
-            ("`file_name`", self.file_name.is_some()),
-            ("`channel`", self.channel.is_some()),
-            ("`subdir`", self.subdir.is_some()),
-        ] {
-            if !non_detailed_keys.is_empty() && is_some {
-                return Err(SpecError::InvalidCombination(
-                    field_name.into(),
-                    non_detailed_keys.into(),
-                ));
+        if !non_detailed_keys.is_empty() {
+            for (field_name, is_some) in [
+                ("`version`", self.version.is_some()),
+                ("`build`", self.build.is_some()),
+                ("`build_number`", self.build_number.is_some()),
+                ("`file_name`", self.file_name.is_some()),
+                ("`channel`", self.channel.is_some()),
+                ("`subdir`", self.subdir.is_some()),
+            ] {
+                if is_some {
+                    return Err(SpecError::InvalidCombination(
+                        field_name.into(),
+                        non_detailed_keys.into(),
+                    ));
+                }
             }
         }
 
@@ -229,15 +252,17 @@ impl TomlSpec {
                 .collect::<Vec<_>>()
                 .join(", ");
 
-            for (field_name, is_some) in [
-                ("`sha256`", loc.sha256.is_some()),
-                ("`md5`", loc.md5.is_some()),
-            ] {
-                if !non_url_keys.is_empty() && is_some {
-                    return Err(SpecError::InvalidCombination(
-                        field_name.into(),
-                        non_url_keys.into(),
-                    ));
+            if !non_url_keys.is_empty() {
+                for (field_name, is_some) in [
+                    ("`sha256`", loc.sha256.is_some()),
+                    ("`md5`", loc.md5.is_some()),
+                ] {
+                    if is_some {
+                        return Err(SpecError::InvalidCombination(
+                            field_name.into(),
+                            non_url_keys.into(),
+                        ));
+                    }
                 }
             }
         }
@@ -417,6 +442,80 @@ impl TomlSpec {
     }
 }
 
+impl TomlLocationSpec {
+    fn validate_field_combinations(&self) -> Result<(), SourceLocationSpecError> {
+        let (is_git, is_path, is_url) = {
+            if self.git.is_none()
+                && (self.branch.is_some() || self.rev.is_some() || self.tag.is_some())
+            {
+                return Err(SourceLocationSpecError::NotAGitSpec);
+            }
+            (self.git.is_some(), self.path.is_some(), self.url.is_some())
+        };
+
+        if !is_git && !is_path && !is_url {
+            return Err(SourceLocationSpecError::NoSourceType);
+        }
+
+        let non_url_keys = [is_git.then_some("`git`"), is_path.then_some("`path`")]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        if !non_url_keys.is_empty() {
+            for (field_name, is_some) in [
+                ("`sha256`", self.sha256.is_some()),
+                ("`md5`", self.md5.is_some()),
+            ] {
+                if is_some {
+                    return Err(SourceLocationSpecError::InvalidCombination(
+                        field_name.into(),
+                        non_url_keys.into(),
+                    ));
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Convert the TOML representation into a `SourceLocationSpec`.
+    pub fn into_source_location_spec(self) -> Result<SourceLocationSpec, SourceLocationSpecError> {
+        self.validate_field_combinations()?;
+
+        let spec = match (self.url, self.path, self.git) {
+            (Some(url), None, None) => SourceLocationSpec::Url(UrlSourceSpec {
+                url,
+                md5: self.md5,
+                sha256: self.sha256,
+            }),
+            (None, Some(path), None) => {
+                SourceLocationSpec::Path(PathSourceSpec { path: path.into() })
+            }
+            (None, None, Some(git)) => {
+                let rev = match (self.branch, self.rev, self.tag) {
+                    (Some(branch), None, None) => Some(GitReference::Branch(branch)),
+                    (None, Some(rev), None) => Some(GitReference::Rev(rev)),
+                    (None, None, Some(tag)) => Some(GitReference::Tag(tag)),
+                    (None, None, None) => None,
+                    _ => {
+                        return Err(SourceLocationSpecError::MultipleGitRefs);
+                    }
+                };
+                let subdirectory = self.subdirectory;
+                SourceLocationSpec::Git(GitSpec {
+                    git,
+                    rev,
+                    subdirectory,
+                })
+            }
+            (_, _, _) => return Err(SourceLocationSpecError::MultipleIdentifiers),
+        };
+        Ok(spec)
+    }
+}
+
 /// A TOML representation wrapper of a [`VersionSpec`]
 /// Used to add custom deserialization for the version spec string
 pub struct TomlVersionSpecStr(VersionSpec);
@@ -499,6 +598,44 @@ impl<'de> toml_span::Deserialize<'de> for TomlSpec {
             channel,
             subdir,
             license,
+        })
+    }
+}
+
+impl<'de> toml_span::Deserialize<'de> for TomlLocationSpec {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        let mut th = TableHelper::new(value)?;
+
+        let url = th
+            .optional::<TomlFromStr<_>>("url")
+            .map(TomlFromStr::into_inner);
+        let git = th
+            .optional::<TomlFromStr<_>>("git")
+            .map(TomlFromStr::into_inner);
+        let path = th.optional("path");
+        let branch = th.optional("branch");
+        let rev = th.optional("rev");
+        let tag = th.optional("tag");
+        let subdirectory = th.optional("subdirectory");
+        let md5 = th
+            .optional::<TomlDigest<rattler_digest::Md5>>("md5")
+            .map(TomlDigest::into_inner);
+        let sha256 = th
+            .optional::<TomlDigest<rattler_digest::Sha256>>("sha256")
+            .map(TomlDigest::into_inner);
+
+        th.finalize(None)?;
+
+        Ok(TomlLocationSpec {
+            url,
+            git,
+            path,
+            branch,
+            rev,
+            tag,
+            subdirectory,
+            md5,
+            sha256,
         })
     }
 }
@@ -638,25 +775,25 @@ mod test {
             json!({ "version": "1.2.3" }),
             json!({ "version": "1.2.3", "build-number": ">=3" }),
             json! { "*" },
-            json!({ "path": "foobar" }),
-            json!({ "path": "~/.cache" }),
+            json!({ "location": { "path": "foobar" } }),
+            json!({ "location": { "path": "~/.cache" } }),
             json!({ "subdir": "linux-64" }),
             json!({ "channel": "conda-forge", "subdir": "linux-64" }),
             json!({ "channel": "conda-forge", "subdir": "linux-64" }),
-            json!({ "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" }),
-            json!({ "version": "1.2.3", "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" }),
-            json!({ "url": "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda" }),
-            json!({ "url": "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda", "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" }),
-            json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock" }),
-            json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock", "branch": "main" }),
+            json!({ "location": { "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" } }),
+            json!({ "version": "1.2.3", "location": { "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" } }),
+            json!({ "location": { "url": "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda" } }),
+            json!({ "location": { "url": "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda", "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" } }),
+            json!({ "location": { "git": "https://github.com/conda-forge/21cmfast-feedstock" } }),
+            json!({ "location": { "git": "https://github.com/conda-forge/21cmfast-feedstock", "branch": "main" } }),
             // Errors:
             json!({ "ver": "1.2.3" }),
-            json!({ "path": "foobar", "version": "1.2.3" }),
+            json!({ "location": { "path": "foobar" } , "version": "1.2.3" }),
             json!({ "version": "//" }),
-            json!({ "path": "foobar", "version": "//" }),
-            json!({ "path": "foobar", "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" }),
-            json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock", "branch": "main", "tag": "v1" }),
-            json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock", "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" }),
+            json!({ "location": { "path": "foobar" }, "version": "//" }),
+            json!({ "location": { "path": "foobar", "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" } }),
+            json!({ "location": { "git": "https://github.com/conda-forge/21cmfast-feedstock", "branch": "main", "tag": "v1" } }),
+            json!({ "location": { "git": "https://github.com/conda-forge/21cmfast-feedstock", "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" } }),
             json! { "/path/style"},
             json! { "./path/style"},
             json! { "\\path\\style"},

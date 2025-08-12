@@ -17,11 +17,13 @@ expression: snapshot
 - input: "*"
   result: "*"
 - input:
-    path: foobar
+    location:
+      path: foobar
   result:
     path: foobar
 - input:
-    path: ~/.cache
+    location:
+      path: ~/.cache
   result:
     path: ~/.cache
 - input:
@@ -41,41 +43,48 @@ expression: snapshot
     channel: conda-forge
     subdir: linux-64
 - input:
-    sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
+    location:
+      sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
   result:
     sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
 - input:
     version: 1.2.3
-    sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
+    location:
+      sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
   result:
     version: "==1.2.3"
     sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
 - input:
-    url: "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda"
+    location:
+      url: "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda"
   result:
     url: "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda"
 - input:
+    location:
+      url: "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda"
+      sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
+  result:
     url: "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda"
     sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
-  result:
-    url: "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda"
-    sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
 - input:
-    git: "https://github.com/conda-forge/21cmfast-feedstock"
+    location:
+      git: "https://github.com/conda-forge/21cmfast-feedstock"
   result:
     git: "https://github.com/conda-forge/21cmfast-feedstock"
 - input:
-    git: "https://github.com/conda-forge/21cmfast-feedstock"
-    branch: main
+    location:
+      git: "https://github.com/conda-forge/21cmfast-feedstock"
+      branch: main
   result:
     git: "https://github.com/conda-forge/21cmfast-feedstock"
     branch: main
 - input:
     ver: 1.2.3
   result:
-    error: "ERROR: unknown field `ver`, expected one of `version`, `url`, `git`, `path`, `branch`, `rev`, `tag`, `subdirectory`, `build`, `build-number`, `file-name`, `channel`, `subdir`, `license`, `md5`, `sha256`"
+    error: "ERROR: unknown field `ver`, expected one of `version`, `location`, `build`, `build-number`, `file-name`, `channel`, `subdir`, `license`"
 - input:
-    path: foobar
+    location:
+      path: foobar
     version: 1.2.3
   result:
     error: "ERROR: `version` cannot be used with `path`"
@@ -84,24 +93,28 @@ expression: snapshot
   result:
     error: "ERROR: 0: at line 1, in Tag:\n//\n^\n\n1: at line 1, in Alt:\n//\n^\n\n2: at line 1, in version:\n//\n^\n\n"
 - input:
-    path: foobar
+    location:
+      path: foobar
     version: //
   result:
     error: "ERROR: 0: at line 1, in Tag:\n//\n^\n\n1: at line 1, in Alt:\n//\n^\n\n2: at line 1, in version:\n//\n^\n\n"
 - input:
-    path: foobar
-    sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
+    location:
+      path: foobar
+      sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
   result:
     error: "ERROR: `sha256` cannot be used with `path`"
 - input:
-    git: "https://github.com/conda-forge/21cmfast-feedstock"
-    branch: main
-    tag: v1
+    location:
+      git: "https://github.com/conda-forge/21cmfast-feedstock"
+      branch: main
+      tag: v1
   result:
     error: "ERROR: only one of `branch`, `rev`, or `tag` can be specified"
 - input:
-    git: "https://github.com/conda-forge/21cmfast-feedstock"
-    sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
+    location:
+      git: "https://github.com/conda-forge/21cmfast-feedstock"
+      sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3
   result:
     error: "ERROR: `sha256` cannot be used with `git`"
 - input: /path/style

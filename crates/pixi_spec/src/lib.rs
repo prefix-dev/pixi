@@ -26,7 +26,7 @@ use rattler_conda_types::{
 };
 pub use source_anchor::SourceAnchor;
 use thiserror::Error;
-pub use toml::{TomlSpec, TomlVersionSpecStr};
+pub use toml::{TomlLocationSpec, TomlSpec, TomlVersionSpecStr};
 pub use url::{UrlBinarySpec, UrlSourceSpec, UrlSpec};
 
 /// An error that is returned when a spec cannot be converted into another spec
@@ -644,8 +644,8 @@ mod test {
             json! { "1.2.3" },
             json!({ "version": "1.2.3" }),
             json! { "*" },
-            json!({ "version": "1.2.3", "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" }),
-            json!({ "url": "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda" }),
+            json!({ "version": "1.2.3", "location": { "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" } }),
+            json!({ "location": { "url": "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda" } }),
         ];
 
         for binary_package in binary_packages {
@@ -661,11 +661,11 @@ mod test {
         }
 
         let source_packages = [
-            json!({ "path": "foobar" }),
-            json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock" }),
-            json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock", "branch": "main" }),
-            json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock", "tag": "v1" }),
-            json!({ "url": "https://github.com/conda-forge/21cmfast-feedstock.zip" }),
+            json!({ "location": { "path": "foobar" } }),
+            json!({ "location": { "git": "https://github.com/conda-forge/21cmfast-feedstock" } }),
+            json!({ "location": { "git": "https://github.com/conda-forge/21cmfast-feedstock", "branch": "main" } }),
+            json!({ "location": { "git": "https://github.com/conda-forge/21cmfast-feedstock", "tag": "v1" } }),
+            json!({ "location": { "url": "https://github.com/conda-forge/21cmfast-feedstock.zip" } }),
         ];
 
         for source_package in source_packages {
@@ -680,23 +680,23 @@ mod test {
         let examples = [
             // Should be identified as binary packages.
             json!({ "version": "1.2.3" }),
-            json!({ "version": "1.2.3", "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" }),
-            json!({ "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" }),
+            json!({ "version": "1.2.3", "location": { "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" } }),
+            json!({ "location": { "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" } }),
             json!({ "subdir": "linux-64" }),
             json!({ "channel": "conda-forge", "subdir": "linux-64" }),
             json!({ "channel": "conda-forge", "subdir": "linux-64" }),
-            json!({ "url": "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda" }),
-            json!({ "url": "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda", "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" }),
-            json!({ "path": "21cmfast-3.3.1-py38h0db86a8_1.conda" }),
-            json!({ "path": "packages/foo/.././21cmfast-3.3.1-py38h0db86a8_1.conda" }),
-            json!({ "url": "file:///21cmfast-3.3.1-py38h0db86a8_1.conda" }),
-            json!({ "path": "~/foo/../21cmfast-3.3.1-py38h0db86a8_1.conda" }),
+            json!({ "location": { "url": "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda" } }),
+            json!({ "location": { "url": "https://conda.anaconda.org/conda-forge/linux-64/21cmfast-3.3.1-py38h0db86a8_1.conda", "sha256": "315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3" } }),
+            json!({ "location": { "path": "21cmfast-3.3.1-py38h0db86a8_1.conda" } }),
+            json!({ "location": { "path": "packages/foo/.././21cmfast-3.3.1-py38h0db86a8_1.conda" } }),
+            json!({ "location": { "url": "file:///21cmfast-3.3.1-py38h0db86a8_1.conda" } }),
+            json!({ "location": { "path": "~/foo/../21cmfast-3.3.1-py38h0db86a8_1.conda" } }),
             // Should not be binary packages.
-            json!({ "path": "foobar" }),
-            json!({ "path": "~/.cache" }),
-            json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock" }),
-            json!({ "git": "https://github.com/conda-forge/21cmfast-feedstock", "branch": "main" }),
-            json!({ "url": "http://github.com/conda-forge/21cmfast-feedstock/releases/21cmfast-3.3.1-py38h0db86a8_1.zip" }),
+            json!({ "location": { "path": "foobar" } }),
+            json!({ "location": { "path": "~/.cache" } }),
+            json!({ "location": { "git": "https://github.com/conda-forge/21cmfast-feedstock" } }),
+            json!({ "location": { "git": "https://github.com/conda-forge/21cmfast-feedstock", "branch": "main" } }),
+            json!({ "location": { "url": "http://github.com/conda-forge/21cmfast-feedstock/releases/21cmfast-3.3.1-py38h0db86a8_1.zip" } }),
         ];
 
         #[derive(Serialize)]
