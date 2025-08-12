@@ -31,26 +31,8 @@ pub struct TomlSpec {
     #[serde_as(as = "Option<serde_with::DisplayFromStr>")]
     pub version: Option<VersionSpec>,
 
-    /// The URL of the package
-    pub url: Option<Url>,
-
-    /// The git url of the package
-    pub git: Option<Url>,
-
-    /// The path to the package
-    pub path: Option<String>,
-
-    /// The git revision of the package
-    pub branch: Option<String>,
-
-    /// The git revision of the package
-    pub rev: Option<String>,
-
-    /// The git revision of the package
-    pub tag: Option<String>,
-
-    /// The git subdirectory of the package
-    pub subdirectory: Option<String>,
+    /// The source location
+    pub location: Option<TomlLocationSpec>,
 
     /// The build string of the package (e.g. `py37_0`, `py37h6de7cb9_0`, `py*`)
     #[serde_as(as = "Option<serde_with::DisplayFromStr>")]
@@ -71,6 +53,34 @@ pub struct TomlSpec {
 
     /// The license
     pub license: Option<String>,
+}
+
+/// A TOML representation of a package specification.
+#[serde_as]
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+#[serde(rename_all = "kebab-case")]
+pub struct TomlLocationSpec {
+    /// The URL of the package
+    pub url: Option<Url>,
+
+    /// The git url of the package
+    pub git: Option<Url>,
+
+    /// The path to the package
+    pub path: Option<String>,
+
+    /// The git revision of the package
+    pub branch: Option<String>,
+
+    /// The git revision of the package
+    pub rev: Option<String>,
+
+    /// The git revision of the package
+    pub tag: Option<String>,
+
+    /// The git subdirectory of the package
+    pub subdirectory: Option<String>,
 
     /// The md5 hash of the package
     #[serde_as(as = "Option<rattler_digest::serde::SerializableHash::<rattler_digest::Md5>>")]
@@ -175,82 +185,61 @@ pub enum NotBinary {
 
 impl TomlSpec {
     fn validate_field_combinations(&self) -> Result<(), SpecError> {
-        if self.git.is_none() && (self.branch.is_some() || self.rev.is_some() || self.tag.is_some())
-        {
-            return Err(SpecError::NotAGitSpec);
+        let (is_git, is_path, is_url) = if let Some(loc) = &self.location {
+            if loc.git.is_none() && (loc.branch.is_some() || loc.rev.is_some() || loc.tag.is_some())
+            {
+                return Err(SpecError::NotAGitSpec);
+            }
+            (loc.git.is_some(), loc.path.is_some(), loc.url.is_some())
+        } else {
+            (false, false, false)
+        };
+
+        let non_detailed_keys = [
+            is_git.then_some("`git`"),
+            is_path.then_some("`path`"),
+            is_url.then_some("`url`"),
+        ]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join(", ");
+
+        // Common field checks
+        for (field_name, is_some) in [
+            ("`version`", self.version.is_some()),
+            ("`build`", self.build.is_some()),
+            ("`build_number`", self.build_number.is_some()),
+            ("`file_name`", self.file_name.is_some()),
+            ("`channel`", self.channel.is_some()),
+            ("`subdir`", self.subdir.is_some()),
+        ] {
+            if !non_detailed_keys.is_empty() && is_some {
+                return Err(SpecError::InvalidCombination(
+                    field_name.into(),
+                    non_detailed_keys.into(),
+                ));
+            }
         }
 
-        let is_git = self.git.is_some();
-        let is_path = self.path.is_some();
-        let is_url = self.url.is_some();
+        if let Some(loc) = &self.location {
+            let non_url_keys = [is_git.then_some("`git`"), is_path.then_some("`path`")]
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>()
+                .join(", ");
 
-        let git_key = is_git.then_some("`git`");
-        let path_key = is_path.then_some("`path`");
-        let url_key = is_url.then_some("`url`");
-        let non_detailed_keys = [git_key, path_key, url_key]
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>()
-            .join(", ");
-
-        if !non_detailed_keys.is_empty() && self.version.is_some() {
-            return Err(SpecError::InvalidCombination(
-                "`version`".into(),
-                non_detailed_keys.into(),
-            ));
-        }
-
-        if !non_detailed_keys.is_empty() && self.build.is_some() {
-            return Err(SpecError::InvalidCombination(
-                "`build`".into(),
-                non_detailed_keys.into(),
-            ));
-        }
-
-        if !non_detailed_keys.is_empty() && self.build_number.is_some() {
-            return Err(SpecError::InvalidCombination(
-                "`build_number`".into(),
-                non_detailed_keys.into(),
-            ));
-        }
-
-        if !non_detailed_keys.is_empty() && self.file_name.is_some() {
-            return Err(SpecError::InvalidCombination(
-                "`file_name`".into(),
-                non_detailed_keys.into(),
-            ));
-        }
-
-        if !non_detailed_keys.is_empty() && self.channel.is_some() {
-            return Err(SpecError::InvalidCombination(
-                "`channel`".into(),
-                non_detailed_keys.into(),
-            ));
-        }
-
-        if !non_detailed_keys.is_empty() && self.subdir.is_some() {
-            return Err(SpecError::InvalidCombination(
-                "`subdir`".into(),
-                non_detailed_keys.into(),
-            ));
-        }
-
-        let non_url_keys = [git_key, path_key]
-            .into_iter()
-            .flatten()
-            .collect::<Vec<_>>()
-            .join(", ");
-        if !non_url_keys.is_empty() && self.sha256.is_some() {
-            return Err(SpecError::InvalidCombination(
-                "`sha256`".into(),
-                non_url_keys.into(),
-            ));
-        }
-        if !non_url_keys.is_empty() && self.md5.is_some() {
-            return Err(SpecError::InvalidCombination(
-                "`md5`".into(),
-                non_url_keys.into(),
-            ));
+            for (field_name, is_some) in [
+                ("`sha256`", loc.sha256.is_some()),
+                ("`md5`", loc.md5.is_some()),
+            ] {
+                if !non_url_keys.is_empty() && is_some {
+                    return Err(SpecError::InvalidCombination(
+                        field_name.into(),
+                        non_url_keys.into(),
+                    ));
+                }
+            }
         }
 
         Ok(())
@@ -260,58 +249,84 @@ impl TomlSpec {
     pub fn into_spec(self) -> Result<PixiSpec, SpecError> {
         self.validate_field_combinations()?;
 
-        let spec = match (self.url, self.path, self.git) {
-            (Some(url), None, None) => PixiSpec::Url(UrlSpec {
-                url,
-                md5: self.md5,
-                sha256: self.sha256,
-            }),
-            (None, Some(path), None) => PixiSpec::Path(PathSpec { path: path.into() }),
-            (None, None, Some(git)) => {
-                let rev = match (self.branch, self.rev, self.tag) {
-                    (Some(branch), None, None) => Some(GitReference::Branch(branch)),
-                    (None, Some(rev), None) => Some(GitReference::Rev(rev)),
-                    (None, None, Some(tag)) => Some(GitReference::Tag(tag)),
-                    (None, None, None) => None,
-                    _ => {
-                        return Err(SpecError::MultipleGitRefs);
-                    }
-                };
-                let subdirectory = self.subdirectory;
-                PixiSpec::Git(GitSpec {
-                    git,
-                    rev,
-                    subdirectory,
-                })
-            }
-            (None, None, None) => {
-                let is_detailed = self.version.is_some()
-                    || self.build.is_some()
-                    || self.build_number.is_some()
-                    || self.file_name.is_some()
-                    || self.channel.is_some()
-                    || self.subdir.is_some()
-                    || self.md5.is_some()
-                    || self.sha256.is_some()
-                    || self.license.is_some();
-                if !is_detailed {
-                    return Err(SpecError::MissingDetailedIdentifier);
+        let spec: PixiSpec;
+        if let Some(loc) = self.location {
+            spec = match (loc.url, loc.path, loc.git) {
+                (Some(url), None, None) => PixiSpec::Url(UrlSpec {
+                    url,
+                    md5: loc.md5,
+                    sha256: loc.sha256,
+                }),
+                (None, Some(path), None) => PixiSpec::Path(PathSpec { path: path.into() }),
+                (None, None, Some(git)) => {
+                    let rev = match (loc.branch, loc.rev, loc.tag) {
+                        (Some(branch), None, None) => Some(GitReference::Branch(branch)),
+                        (None, Some(rev), None) => Some(GitReference::Rev(rev)),
+                        (None, None, Some(tag)) => Some(GitReference::Tag(tag)),
+                        (None, None, None) => None,
+                        _ => {
+                            return Err(SpecError::MultipleGitRefs);
+                        }
+                    };
+                    let subdirectory = loc.subdirectory;
+                    PixiSpec::Git(GitSpec {
+                        git,
+                        rev,
+                        subdirectory,
+                    })
                 }
+                (None, None, None) => {
+                    let is_detailed = self.version.is_some()
+                        || self.build.is_some()
+                        || self.build_number.is_some()
+                        || self.file_name.is_some()
+                        || self.channel.is_some()
+                        || self.subdir.is_some()
+                        || loc.md5.is_some()
+                        || loc.sha256.is_some()
+                        || self.license.is_some();
+                    if !is_detailed {
+                        return Err(SpecError::MissingDetailedIdentifier);
+                    }
 
-                PixiSpec::DetailedVersion(Box::new(DetailedSpec {
-                    version: self.version,
-                    build: self.build,
-                    build_number: self.build_number,
-                    file_name: self.file_name,
-                    channel: self.channel,
-                    subdir: self.subdir,
-                    md5: self.md5,
-                    sha256: self.sha256,
-                    license: self.license,
-                }))
+                    PixiSpec::DetailedVersion(Box::new(DetailedSpec {
+                        version: self.version,
+                        build: self.build,
+                        build_number: self.build_number,
+                        file_name: self.file_name,
+                        channel: self.channel,
+                        subdir: self.subdir,
+                        md5: loc.md5,
+                        sha256: loc.sha256,
+                        license: self.license,
+                    }))
+                }
+                (_, _, _) => return Err(SpecError::MultipleIdentifiers),
+            };
+        } else {
+            let is_detailed = self.version.is_some()
+                || self.build.is_some()
+                || self.build_number.is_some()
+                || self.file_name.is_some()
+                || self.channel.is_some()
+                || self.subdir.is_some()
+                || self.license.is_some();
+            if !is_detailed {
+                return Err(SpecError::MissingDetailedIdentifier);
             }
-            (_, _, _) => return Err(SpecError::MultipleIdentifiers),
-        };
+
+            spec = PixiSpec::DetailedVersion(Box::new(DetailedSpec {
+                version: self.version,
+                build: self.build,
+                build_number: self.build_number,
+                file_name: self.file_name,
+                channel: self.channel,
+                subdir: self.subdir,
+                md5: None,
+                sha256: None,
+                license: self.license,
+            }));
+        }
 
         Ok(spec)
     }
@@ -320,59 +335,84 @@ impl TomlSpec {
     pub fn into_binary_spec(self) -> Result<BinarySpec, SpecError> {
         self.validate_field_combinations()?;
 
-        let spec = match (self.url, self.path, self.git) {
-            (Some(url), None, None) => {
-                let url_spec = UrlSpec {
-                    url,
-                    md5: self.md5,
-                    sha256: self.sha256,
-                };
-                if let Either::Right(binary) = url_spec.into_source_or_binary() {
-                    BinarySpec::Url(binary)
-                } else {
-                    return Err(SpecError::NotABinary(NotBinary::Url));
+        let spec: BinarySpec;
+        if let Some(loc) = self.location {
+            spec = match (loc.url, loc.path, loc.git) {
+                (Some(url), None, None) => {
+                    let url_spec = UrlSpec {
+                        url,
+                        md5: loc.md5,
+                        sha256: loc.sha256,
+                    };
+                    if let Either::Right(binary) = url_spec.into_source_or_binary() {
+                        BinarySpec::Url(binary)
+                    } else {
+                        return Err(SpecError::NotABinary(NotBinary::Url));
+                    }
                 }
-            }
-            (None, Some(path), None) => {
-                let path_spec = PathSpec { path: path.into() };
-                if let Either::Right(binary) = path_spec.into_source_or_binary() {
-                    BinarySpec::Path(binary)
-                } else {
-                    return Err(SpecError::NotABinary(NotBinary::Path));
+                (None, Some(path), None) => {
+                    let path_spec = PathSpec { path: path.into() };
+                    if let Either::Right(binary) = path_spec.into_source_or_binary() {
+                        BinarySpec::Path(binary)
+                    } else {
+                        return Err(SpecError::NotABinary(NotBinary::Path));
+                    }
                 }
-            }
-            (None, None, Some(_git)) => {
-                return Err(SpecError::NotABinary(NotBinary::Git));
-            }
-            (None, None, None) => {
-                let is_detailed = self.version.is_some()
-                    || self.build.is_some()
-                    || self.build_number.is_some()
-                    || self.file_name.is_some()
-                    || self.channel.is_some()
-                    || self.subdir.is_some()
-                    || self.md5.is_some()
-                    || self.sha256.is_some()
-                    || self.license.is_some();
-                if !is_detailed {
-                    return Err(SpecError::MissingDetailedIdentifier);
+                (None, None, Some(_git)) => {
+                    return Err(SpecError::NotABinary(NotBinary::Git));
                 }
+                (None, None, None) => {
+                    let is_detailed = self.version.is_some()
+                        || self.build.is_some()
+                        || self.build_number.is_some()
+                        || self.file_name.is_some()
+                        || self.channel.is_some()
+                        || self.subdir.is_some()
+                        || loc.md5.is_some()
+                        || loc.sha256.is_some()
+                        || self.license.is_some();
+                    if !is_detailed {
+                        return Err(SpecError::MissingDetailedIdentifier);
+                    }
 
-                BinarySpec::DetailedVersion(Box::new(DetailedSpec {
-                    version: self.version,
-                    build: self.build,
-                    build_number: self.build_number,
-                    file_name: self.file_name,
-                    channel: self.channel,
-                    subdir: self.subdir,
-                    md5: self.md5,
-                    sha256: self.sha256,
-                    license: self.license,
-                }))
+                    BinarySpec::DetailedVersion(Box::new(DetailedSpec {
+                        version: self.version,
+                        build: self.build,
+                        build_number: self.build_number,
+                        file_name: self.file_name,
+                        channel: self.channel,
+                        subdir: self.subdir,
+                        md5: loc.md5,
+                        sha256: loc.sha256,
+                        license: self.license,
+                    }))
+                }
+                (_, _, _) => return Err(SpecError::MultipleIdentifiers),
+            };
+        } else {
+            let is_detailed = self.version.is_some()
+                || self.build.is_some()
+                || self.build_number.is_some()
+                || self.file_name.is_some()
+                || self.channel.is_some()
+                || self.subdir.is_some()
+                || self.license.is_some();
+            if !is_detailed {
+                return Err(SpecError::MissingDetailedIdentifier);
             }
-            (_, _, _) => return Err(SpecError::MultipleIdentifiers),
+
+            spec = BinarySpec::DetailedVersion(Box::new(DetailedSpec {
+                version: self.version,
+                build: self.build,
+                build_number: self.build_number,
+                file_name: self.file_name,
+                channel: self.channel,
+                subdir: self.subdir,
+                md5: None,
+                sha256: None,
+                license: self.license,
+            }));
         };
-
         Ok(spec)
     }
 }
@@ -442,20 +482,22 @@ impl<'de> toml_span::Deserialize<'de> for TomlSpec {
 
         Ok(TomlSpec {
             version,
-            url,
-            git,
-            path,
-            branch,
-            rev,
-            tag,
-            subdirectory,
+            location: Some(TomlLocationSpec {
+                url,
+                git,
+                path,
+                branch,
+                rev,
+                tag,
+                subdirectory,
+                md5,
+                sha256,
+            }),
             build,
             build_number,
             file_name,
             channel,
             subdir,
-            md5,
-            sha256,
             license,
         })
     }
