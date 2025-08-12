@@ -102,7 +102,8 @@ impl ChannelsConfig {
 
 #[derive(Parser, Debug, Default, Clone)]
 pub struct LockFileUpdateConfig {
-    /// Don't update lockfile, implies the no-install as well.
+    /// Legacy flag to skip lock-file updates, behavior was inconsistent across commands
+    /// so it has been deprecated.
     #[clap(long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub no_lockfile_update: bool,
 
@@ -116,8 +117,7 @@ impl LockFileUpdateConfig {
         // Error on deprecated flag usage
         if self.no_lockfile_update {
             return Err(miette::miette!(
-                help =
-                    "Use '--frozen --no-install', to skip both lock-file updates and installation.",
+                help = "Use '--frozen' to skip lock-file updates.\n\nUse '--no-install' to skip installation.\n\n",
                 "The '--no-lockfile-update' flag has been deprecated due to inconsistent behavior across commands.\n\n\
                 This flag will be removed in a future version."
             ));
