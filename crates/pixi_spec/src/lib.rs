@@ -346,14 +346,14 @@ impl PixiSpec {
 ///
 /// This type only represents source packages. Use [`PixiSpec`] to represent
 /// both binary and source packages.
-#[derive(Debug, Clone, Hash, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, serde::Serialize)]
 pub struct SourceSpec {
     /// The location of the source.
     pub location: SourceLocationSpec,
 }
 
 /// A specification for a source location.
-#[derive(Debug, Clone, Hash, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, serde::Serialize)]
 #[serde(untagged)]
 pub enum SourceLocationSpec {
     /// The spec is represented as an archive that can be downloaded from the
@@ -378,11 +378,6 @@ impl Display for SourceSpec {
 }
 
 impl SourceSpec {
-    /// Returns true if this spec represents a git repository.
-    pub fn is_git(&self) -> bool {
-        matches!(self.location, SourceLocationSpec::Git(_))
-    }
-
     /// Convert this instance into a nameless match spec.
     pub fn to_nameless_match_spec(&self) -> NamelessMatchSpec {
         NamelessMatchSpec::default()
