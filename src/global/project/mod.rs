@@ -1271,11 +1271,14 @@ impl Project {
 
     /// Returns the command dispatcher for this project.
     fn command_dispatcher(&self) -> miette::Result<&CommandDispatcher> {
+        const BUILD_DIR: &str = "bld";
+
         self.command_dispatcher.get_or_try_init(|| {
             let multi_progress = global_multi_progress();
             let anchor_pb = multi_progress.add(ProgressBar::hidden());
             let cache_dirs = pixi_command_dispatcher::CacheDirs::new(
                 pixi_config::get_cache_dir()
+                    .map(|cache_dir| cache_dir.join(BUILD_DIR))
                     .map_err(|e| miette::miette!("Failed to get cache directory: {}", e))?,
             );
 
