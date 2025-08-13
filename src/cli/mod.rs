@@ -440,13 +440,7 @@ pub async fn execute_command(
         Command::Lock(cmd) => lock::execute(cmd).await,
         Command::Exec(args) => exec::execute(args).await,
         Command::Build(args) => build::execute(args).await,
-        Command::External(args) => {
-            // if matches!(args.first().map(String::as_str), Some("help")) {
-            //     show_help_with_extensions();
-            //     return Ok(());
-            // }
-            command_info::execute_external_command(args)
-        }
+        Command::External(args) => command_info::execute_external_command(args),
     }
 }
 
