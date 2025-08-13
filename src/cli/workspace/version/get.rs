@@ -1,4 +1,4 @@
-use crate::Workspace;
+use pixi_core::Workspace;
 use clap::Parser;
 
 #[derive(Parser, Debug, Default)]

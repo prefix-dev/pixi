@@ -2,14 +2,14 @@ use clap::Parser;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use pixi_config::ConfigCli;
-use std::fmt::Write;
-
-use crate::{
+use pixi_core::{
     UpdateLockFileOptions, WorkspaceLocator,
-    cli::cli_config::WorkspaceConfig,
     environment::get_update_lock_file_and_prefixes,
     lock_file::{ReinstallPackages, UpdateMode},
 };
+use std::fmt::Write;
+
+use crate::cli::cli_config::WorkspaceConfig;
 
 /// Install an environment, both updating the lockfile and installing the
 /// environment.
@@ -36,7 +36,7 @@ pub struct Args {
     pub project_config: WorkspaceConfig,
 
     #[clap(flatten)]
-    pub lock_file_usage: super::LockFileUsageConfig,
+    pub lock_file_usage: crate::cli::LockFileUsageConfig,
 
     /// The environment to install
     #[arg(long, short)]

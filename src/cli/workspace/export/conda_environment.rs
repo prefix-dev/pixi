@@ -1,16 +1,18 @@
 use std::path::PathBuf;
 
-use crate::{WorkspaceLocator, cli::cli_config::WorkspaceConfig, workspace::Environment};
 use clap::Parser;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pep508_rs::ExtraName;
+use pixi_core::{WorkspaceLocator, workspace::Environment};
 use pixi_manifest::{FeaturesExt, pypi::pypi_options::FindLinksUrlOrPath};
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName, VersionOrStar};
 use rattler_conda_types::{
     ChannelConfig, EnvironmentYaml, MatchSpec, MatchSpecOrSubSection, NamedChannelOrUrl,
     ParseStrictness, Platform,
 };
+
+use crate::cli::cli_config::WorkspaceConfig;
 
 #[derive(Debug, Parser)]
 pub struct Args {
@@ -244,7 +246,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Workspace;
+    use pixi_core::Workspace;
     use std::path::Path;
 
     #[test]

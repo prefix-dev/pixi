@@ -8,16 +8,14 @@ use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, Platform};
 
-use crate::{
-    cli::global::{global_specs::GlobalSpecs, revert_environment_after_error},
-    global::{
-        self, EnvChanges, EnvState, EnvironmentName, Mapping, Project, StateChange, StateChanges,
-        common::{NotChangedReason, contains_menuinst_document},
-        list::list_all_global_environments,
-        project::{ExposedType, NamedGlobalSpec},
-    },
-};
+use crate::cli::global::{global_specs::GlobalSpecs, revert_environment_after_error};
 use pixi_config::{self, Config, ConfigCli};
+use pixi_core::global::{
+    self, EnvChanges, EnvState, EnvironmentName, Mapping, Project, StateChange, StateChanges,
+    common::{NotChangedReason, contains_menuinst_document},
+    list::list_all_global_environments,
+    project::{ExposedType, NamedGlobalSpec},
+};
 
 /// Installs the defined packages in a globally accessible location and exposes their command line applications.
 ///

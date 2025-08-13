@@ -16,6 +16,7 @@ repository = "https://github.com/prefix-dev/pixi"
 
 [workspace.dependencies]
 ahash = "0.8.11"
+anyhow = "1.0.97"
 assert_matches = "1.5.0"
 async-fd-lock = "0.2.0"
 async-once-cell = "0.5.4"
@@ -71,6 +72,7 @@ percent-encoding = "2.3.1"
 pin-project-lite = "0.2.16"
 pyproject-toml = "0.13.4"
 rand = { version = "0.9.1", default-features = false }
+rayon = "1.10.0"
 regex = "1.11.1"
 reqwest = { version = "0.12.12", default-features = false }
 reqwest-middleware = "0.4"
@@ -166,6 +168,7 @@ xxhash-rust = "0.8.15"
 zip = { version = "2.4.2", default-features = false }
 zstd = { version = "0.13.3", default-features = false }
 
+barrier_cell = { path = "crates/barrier_cell" }
 fancy_display = { path = "crates/fancy_display" }
 pixi_allocator = { path = "crates/pixi_allocator" }
 pixi_build_discovery = { path = "crates/pixi_build_discovery" }
@@ -175,6 +178,7 @@ pixi_build_types = { path = "crates/pixi_build_types" }
 pixi_command_dispatcher = { path = "crates/pixi_command_dispatcher" }
 pixi_config = { path = "crates/pixi_config" }
 pixi_consts = { path = "crates/pixi_consts" }
+pixi_core = { path = "crates/pixi_core" }
 pixi_default_versions = { path = "crates/pixi_default_versions" }
 pixi_git = { path = "crates/pixi_git" }
 pixi_glob = { path = "crates/pixi_glob" }
@@ -231,9 +235,6 @@ performance = ["pixi_allocator"]
 
 [dependencies]
 ahash = { workspace = true }
-assert_matches = { workspace = true }
-async-once-cell = { workspace = true }
-barrier_cell = { path = "crates/barrier_cell" }
 chrono = { workspace = true }
 clap = { workspace = true, features = [
   "derive",
@@ -248,41 +249,44 @@ clap_complete = { workspace = true }
 clap_complete_nushell = { workspace = true }
 console = { workspace = true, features = ["windows-console-colors"] }
 console-subscriber = { workspace = true, optional = true }
-crossbeam-channel = { workspace = true }
-csv = { workspace = true }
-dashmap = { workspace = true }
+ctrlc = { workspace = true }
 deno_task_shell = { workspace = true }
 dialoguer = { workspace = true }
-dirs = { workspace = true }
 dunce = { workspace = true }
 fancy_display = { workspace = true }
 flate2 = { workspace = true }
+fs-err = { workspace = true, features = ["tokio"] }
 fs_extra = { workspace = true }
 futures = { workspace = true }
 human_bytes = { workspace = true }
-humantime = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
 indicatif = { workspace = true }
 is_executable = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true, features = ["fancy-no-backtrace"] }
 minijinja = { workspace = true, features = ["builtins"] }
-once_cell = { workspace = true }
 pathdiff = { workspace = true }
-rstest = { workspace = true }
-uv-build-frontend = { workspace = true }
-uv-distribution-filename = { workspace = true }
-uv-distribution-types = { workspace = true }
-uv-install-wheel = { workspace = true }
-
-pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }
-percent-encoding = { workspace = true }
+pixi_allocator = { workspace = true, optional = true }
+pixi_command_dispatcher = { workspace = true }
+pixi_config = { workspace = true }
+pixi_consts = { workspace = true }
+pixi_core = { workspace = true }
+pixi_git = { workspace = true }
+pixi_manifest = { workspace = true, features = ["rattler_lock"] }
+pixi_progress = { workspace = true }
+pixi_pypi_spec = { workspace = true }
+pixi_record = { workspace = true }
+pixi_reporters = { workspace = true }
+pixi_spec = { workspace = true }
+pixi_utils = { workspace = true, default-features = false }
+pixi_uv_conversions = { workspace = true }
+pypi_mapping = { workspace = true }
+pypi_modifiers = { workspace = true }
 rattler = { workspace = true, features = ["cli-tools", "indicatif"] }
 rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true }
 rattler_lock = { workspace = true }
-rattler_menuinst = { workspace = true }
 rattler_networking = { workspace = true, default-features = false }
 rattler_repodata_gateway = { workspace = true, features = [
   "sparse",
@@ -290,51 +294,18 @@ rattler_repodata_gateway = { workspace = true, features = [
 ] }
 rattler_shell = { workspace = true, features = ["sysinfo"] }
 rattler_solve = { workspace = true, features = ["resolvo", "serde"] }
-uv-git = { workspace = true }
-uv-pep440 = { workspace = true }
-uv-pep508 = { workspace = true }
-uv-pypi-types = { workspace = true }
-
-anyhow = "1.0.97"
-ctrlc = { workspace = true }
-fs-err = { workspace = true, features = ["tokio"] }
-pixi_allocator = { workspace = true, optional = true }
-pixi_build_discovery = { workspace = true }
-pixi_build_frontend = { workspace = true }
-pixi_build_type_conversions = { workspace = true }
-pixi_command_dispatcher = { workspace = true }
-pixi_config = { workspace = true }
-pixi_consts = { workspace = true }
-pixi_default_versions = { workspace = true }
-pixi_git = { workspace = true }
-pixi_glob = { workspace = true }
-pixi_manifest = { workspace = true, features = ["rattler_lock"] }
-pixi_progress = { workspace = true }
-pixi_pypi_spec = { workspace = true }
-pixi_record = { workspace = true }
-pixi_reporters = { workspace = true }
-pixi_spec = { workspace = true }
-pixi_spec_containers = { workspace = true }
-pixi_toml = { workspace = true }
-pixi_utils = { workspace = true, default-features = false }
-pixi_uv_conversions = { workspace = true }
-pypi_mapping = { workspace = true }
-pypi_modifiers = { workspace = true }
 rattler_virtual_packages = { workspace = true }
-rayon = "1.10.0"
 regex = { workspace = true }
 reqwest = { workspace = true, features = [
   "http2",
   "macos-system-configuration",
 ] }
 reqwest-middleware = { workspace = true }
-rlimit = { workspace = true }
 same-file = { workspace = true }
 self-replace = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_with = { workspace = true, features = ["indexmap"] }
-shlex = { workspace = true }
 strsim = { workspace = true }
 tabwriter = { workspace = true, features = ["ansi_formatting"] }
 tar = { workspace = true }
@@ -343,32 +314,23 @@ tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
 tokio-util = { workspace = true }
-toml-span = { workspace = true }
 toml_edit = { workspace = true, features = ["serde"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 typed-path = { workspace = true }
 url = { workspace = true }
-uv-auth = { workspace = true }
 uv-cache = { workspace = true }
-uv-cache-info = { workspace = true }
 uv-client = { workspace = true }
 uv-configuration = { workspace = true }
-uv-dispatch = { workspace = true }
 uv-distribution = { workspace = true }
-uv-git-types = { workspace = true }
 uv-installer = { workspace = true }
 uv-normalize = { workspace = true }
+uv-pep508 = { workspace = true }
+uv-pypi-types = { workspace = true }
 uv-python = { workspace = true }
-uv-redacted = { workspace = true }
-uv-requirements = { workspace = true }
 uv-requirements-txt = { workspace = true }
-uv-resolver = { workspace = true }
 uv-types = { workspace = true }
-uv-workspace = { workspace = true }
-xxhash-rust = { workspace = true }
 zip = { workspace = true, features = ["deflate", "time"] }
-zstd = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true, default-features = false }

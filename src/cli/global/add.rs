@@ -1,11 +1,11 @@
 use crate::cli::global::global_specs::GlobalSpecs;
 use crate::cli::global::revert_environment_after_error;
 
-use crate::global::project::NamedGlobalSpec;
-use crate::global::{EnvironmentName, Mapping, Project, StateChange, StateChanges};
 use clap::Parser;
 use itertools::Itertools;
 use pixi_config::{Config, ConfigCli};
+use pixi_core::global::project::NamedGlobalSpec;
+use pixi_core::global::{EnvironmentName, Mapping, Project, StateChange, StateChanges};
 
 /// Adds dependencies to an environment
 ///

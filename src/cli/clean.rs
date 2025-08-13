@@ -1,6 +1,6 @@
-use crate::WorkspaceLocator;
 use pixi_config;
 use pixi_consts::consts;
+use pixi_core::WorkspaceLocator;
 use pixi_manifest::EnvironmentName;
 use std::path::PathBuf;
 use std::time::Duration;

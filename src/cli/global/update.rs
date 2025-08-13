@@ -1,11 +1,11 @@
 use crate::cli::global::revert_environment_after_error;
-use crate::global::common::check_all_exposed;
-use crate::global::project::ExposedType;
-use crate::global::{self, StateChanges};
-use crate::global::{EnvironmentName, Project};
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use pixi_config::{Config, ConfigCli};
+use pixi_core::global::common::check_all_exposed;
+use pixi_core::global::project::ExposedType;
+use pixi_core::global::{self, StateChanges};
+use pixi_core::global::{EnvironmentName, Project};
 
 /// Updates environments in the global environment.
 #[derive(Parser, Debug, Clone)]

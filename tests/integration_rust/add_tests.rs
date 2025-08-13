@@ -1,7 +1,8 @@
 use std::str::FromStr;
 
-use pixi::{DependencyType, Workspace, cli::cli_config::GitRev};
+use pixi::cli::cli_config::GitRev;
 use pixi_consts::consts;
+use pixi_core::{DependencyType, Workspace};
 use pixi_manifest::{FeaturesExt, SpecType};
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName, VersionOrStar};
 use rattler_conda_types::{PackageName, Platform};

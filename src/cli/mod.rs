@@ -243,7 +243,7 @@ impl clap::Args for LockFileUsageArgs {
     }
 }
 
-impl From<LockFileUsageArgs> for crate::environment::LockFileUsage {
+impl From<LockFileUsageArgs> for pixi_core::environment::LockFileUsage {
     fn from(value: LockFileUsageArgs) -> Self {
         if value.frozen() {
             Self::Frozen
@@ -255,7 +255,7 @@ impl From<LockFileUsageArgs> for crate::environment::LockFileUsage {
     }
 }
 
-impl TryFrom<LockFileUsageConfig> for crate::environment::LockFileUsage {
+impl TryFrom<LockFileUsageConfig> for pixi_core::environment::LockFileUsage {
     type Error = LockFileUsageError;
 
     fn try_from(value: LockFileUsageConfig) -> Result<Self, LockFileUsageError> {
