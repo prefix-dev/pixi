@@ -19,6 +19,9 @@ use super::{
     errors::{UnknownTask, UnsupportedPlatformError},
 };
 use crate::{Workspace, workspace::HasWorkspaceRef};
+use std::env;
+use std::process::Command;
+use std::process::Stdio;
 
 /// Describes a single environment from a project manifest. This is used to
 /// describe environments that can be installed and activated.
@@ -339,16 +342,106 @@ impl<'p> Environment<'p> {
     }
 
     // Extract variable name
-    fn extract_variable_name(value: &str) -> Option<&str> {
-        if let Some(inner) = value.strip_prefix('$') {
+    pub fn extract_variable_name(value: &str) -> Option<&str> {
+        if let Some(inner) = value.strip_prefix("$(").and_then(|s| s.strip_suffix(")")) {
+            Some(inner)
+        } else if let Some(inner) = value.strip_prefix("${").and_then(|s| s.strip_suffix("}")) {
+            Some(inner)
+        } else if let Some(inner) = value.strip_prefix('$') {
             Some(inner)
         } else if let Some(inner) = value.strip_prefix('%').and_then(|s| s.strip_suffix('%')) {
-            Some(inner)
-        } else if let Some(inner) = value.strip_prefix("${").and_then(|s| s.strip_suffix('}')) {
             Some(inner)
         } else {
             None
         }
+    }
+
+    // Execute shell command directly
+    fn exec_shell_direct(cmd_str: &str) -> Result<String, String> {
+        let current_dir =
+            env::current_dir().map_err(|e| format!("Failed to get current directory: {}", e))?;
+
+        let output = Command::new("pixi")
+            .arg("run")
+            .arg(cmd_str)
+            .stdin(Stdio::null())
+            .current_dir(&current_dir)
+            .output();
+
+        match output {
+            Ok(output) => {
+                if output.status.success() {
+                    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+                } else {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    Err(format!("Shell command failed: {}", stderr))
+                }
+            }
+            Err(e) => Err(format!("Failed to execute shell command: {}", e)),
+        }
+    }
+
+    // Execute a parsed command string
+    fn exec_string_parsed(cmd_str: &str) -> Result<String, String> {
+        let clean_cmd: &str = cmd_str.trim().trim_matches('"');
+        let parts: Vec<&str> = clean_cmd.split_whitespace().collect();
+
+        if parts.is_empty() {
+            return Err("Empty command".to_string());
+        }
+
+        let (cmd, args) = parts
+            .split_first()
+            .expect("Command string should not be empty");
+
+        let formatted_args: Vec<String> = args.iter().map(|arg| arg.to_string()).collect();
+
+        let current_dir =
+            env::current_dir().map_err(|e| format!("Failed to get current directory: {}", e))?;
+
+        let output = Command::new(cmd)
+            .args(&formatted_args)
+            .stdin(std::process::Stdio::null())
+            .current_dir(&current_dir)
+            .output()
+            .map_err(|e| format!("Failed to execute '{}': {}", cmd, e))?;
+
+        if output.status.success() {
+            Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            Err(format!("Command '{}' failed: {}", cmd, stderr))
+        }
+    }
+
+    // Check if string is a command pattern and execute it
+    pub fn expand_variable(value: &str) -> String {
+        let trimmed = value.trim();
+
+        // Check for $(command) pattern
+        if trimmed.starts_with("$(") && trimmed.ends_with(")") {
+            if let Some(command) = Self::extract_variable_name(trimmed) {
+                return Self::exec_string_parsed(command).unwrap_or_else(|_| value.to_string());
+            }
+        }
+
+        // Check for ${VAR} pattern (environment variable)
+        if (trimmed.starts_with("${") && trimmed.ends_with("}"))
+            || trimmed.starts_with("$")
+            || (trimmed.starts_with("%") && trimmed.ends_with("%"))
+        {
+            // Use direct shell execution to expand the environment variable
+            let eval_command = if cfg!(target_os = "windows") {
+                format!("cmd /c echo {}", trimmed)
+            } else {
+                format!("bash -c 'echo {}'", trimmed)
+            };
+
+            return Self::exec_shell_direct(&eval_command).unwrap_or_else(|_| value.to_string());
+        }
+
+        // Return original value if no pattern matches
+        value.to_string()
     }
 
     /// Resolves variable references in environment variables

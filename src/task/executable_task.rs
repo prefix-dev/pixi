@@ -478,8 +478,20 @@ fn get_export_specific_task_env(task: &Task, command_env: IndexMap<String, Strin
         let should_exclude = override_excluded_keys.contains(key.as_str());
 
         if env_map.task_specific_contains_key(&key) && !should_exclude {
-            tracing::info!("Setting environment variable: {}=\"{}\"", key, value);
-            export.push_str(&format!("export \"{}={}\";\n", key, value));
+            // I use `should_use_reference` flag in the expansion logic for two reasons:
+            // 1.If it's the inner variable, it's already evaluated. We don't need to evaluate it again. Just get the referenced value.
+            // 2.In Multiple environment/workspaces case, the inner variable is already set by Pixi(e.g. PIXI_PROJECT_NAME). If we evaluate now, the project name is "default" environment.
+            let should_use_reference: bool =
+                Environment::extract_variable_name(value.clone().as_str())
+                    .is_some_and(|var_name| override_excluded_keys.contains(var_name));
+            if !should_use_reference {
+                let expanded_val = Environment::expand_variable(value.clone().as_str());
+                tracing::info!("Setting environment variable: {}=\"{}\"", key, expanded_val);
+                export.push_str(&format!("export \"{}={}\";\n", key, expanded_val));
+            } else {
+                tracing::info!("Setting environment variable: {}=\"{}\"", key, value);
+                export.push_str(&format!("export \"{}={}\";\n", key, value));
+            }
         }
     }
 

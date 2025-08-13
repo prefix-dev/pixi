@@ -307,11 +307,22 @@ pub async fn run_activation(
         let override_excluded_keys = consts::get_override_excluded_keys();
         // `activator.env_vars` should override `activator_result` for duplicate keys
         new_activator.map(|mut map: HashMap<String, String>| {
-            // First pass: Add all variables from activator.env_vars(as map is unordered, we need to update the referenced value in the second loop)
+            // Add all variables from activator.env_vars
             for (k, v) in &activator.env_vars {
                 let should_exclude = override_excluded_keys.contains(k.as_str());
                 if !should_exclude {
-                    map.insert(k.clone(), v.clone());
+                    // I use `should_use_reference` flag in the expansion logic for two reasons:
+                    // 1.If it's the inner variable, it's already evaluated. We don't need to evaluate it again. Just get the referenced value.
+                    // 2.In Multiple environment/workspaces case, the inner variable is already set by Pixi(e.g. PIXI_PROJECT_NAME). If we evaluate now, the project name is "default" environment.
+                    let should_use_reference: bool =
+                        Environment::extract_variable_name(v.clone().as_str())
+                            .is_some_and(|var_name| override_excluded_keys.contains(var_name));
+                    if !should_use_reference {
+                        let expanded_val = Environment::expand_variable(v.clone().as_str());
+                        map.insert(k.clone(), expanded_val);
+                    } else {
+                        map.insert(k.clone(), v.clone());
+                    }
                 }
             }
 
