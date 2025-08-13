@@ -58,7 +58,7 @@ pub struct TomlSpec {
     pub license: Option<String>,
 }
 
-/// A TOML representation of a package specification.
+/// A TOML representation of a package source location specification.
 #[serde_as]
 #[derive(Debug, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
