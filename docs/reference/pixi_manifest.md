@@ -951,6 +951,8 @@ And to extend the basics, it can also contain the following fields:
 The build system specifies how the package can be built.
 The build system is a table that can contain the following fields:
 
+- `source`: specifies the location of the source code for the package. Default: manifest directory. Currently supported options:
+  - `path`: a string representing a relative or absolute path to the source code.
 - `channels`: specifies the channels to get the build backend from.
 - `backend`: specifies the build backend to use. This is a table that can contain the following fields:
   - `name`: the name of the build backend to use. This will also be the executable name.
