@@ -10,9 +10,9 @@ The packages coming from conda channels are already built and ready to use. If y
 
 ## Let's Get Started
 
-In this tutorial we will showcase how to develop two packages in one workspace. For that we will use the `python_rich` Python package developed in chapter [Building a Python package](../python/) and let it depend on the `python_binding` C++ package developed in chapter [Building a C++ package](../cpp/).
+In this tutorial we will showcase how to develop two packages in one workspace. For that we will use the `python_rich` Python package developed in chapter [Building a Python package](../python/) and let it depend on the `cpp_math` C++ package developed in chapter [Building a C++ package](../cpp/).
 
-We will start with the original setup of `python_rich` and copy `python_binding` into a folder called `packages`. The source directory structure now looks like this:
+We will start with the original setup of `python_rich` and copy `cpp_math` into a folder called `packages`. The source directory structure now looks like this:
 
 ```shell
 .
