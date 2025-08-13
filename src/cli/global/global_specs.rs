@@ -141,12 +141,10 @@ impl GlobalSpecs {
 
 #[cfg(test)]
 mod tests {
-    use pixi_core::global::project::GlobalSpec;
     use std::path::PathBuf;
 
     use super::*;
     use rattler_conda_types::ChannelConfig;
-
 
     #[tokio::test]
     async fn test_to_global_specs_named() {
@@ -160,10 +158,12 @@ mod tests {
 
         let channel_config = ChannelConfig::default_with_root_dir(PathBuf::from("."));
         let manifest_root = PathBuf::from(".");
-        
+
         // Create a dummy project - this test doesn't use path/git specs so project won't be called
-        let project = pixi_core::global::Project::discover_or_create().await.unwrap();
-        
+        let project = pixi_core::global::Project::discover_or_create()
+            .await
+            .unwrap();
+
         let global_specs = specs
             .to_named_global_specs(&channel_config, &manifest_root, &project)
             .await
@@ -184,10 +184,12 @@ mod tests {
 
         let channel_config = ChannelConfig::default_with_root_dir(PathBuf::from("."));
         let manifest_root = PathBuf::from(".");
-        
+
         // Create a dummy project - this test specifies a package name so inference won't be needed
-        let project = pixi_core::global::Project::discover_or_create().await.unwrap();
-        
+        let project = pixi_core::global::Project::discover_or_create()
+            .await
+            .unwrap();
+
         let global_specs = specs
             .to_named_global_specs(&channel_config, &manifest_root, &project)
             .await
@@ -212,11 +214,15 @@ mod tests {
 
         let channel_config = ChannelConfig::default_with_root_dir(PathBuf::from("."));
         let manifest_root = PathBuf::from(".");
-        
+
         // Create a dummy project
-        let project = pixi_core::global::Project::discover_or_create().await.unwrap();
-        
-        let global_specs = specs.to_named_global_specs(&channel_config, &manifest_root, &project).await;
+        let project = pixi_core::global::Project::discover_or_create()
+            .await
+            .unwrap();
+
+        let global_specs = specs
+            .to_named_global_specs(&channel_config, &manifest_root, &project)
+            .await;
         assert!(global_specs.is_err());
     }
 }
