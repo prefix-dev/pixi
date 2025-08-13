@@ -524,16 +524,42 @@ impl WorkspaceMut {
                 );
                 pinning_strategy = Some(PinningStrategy::Minor);
             }
-            let version_constraint = pinning_strategy
-                .unwrap_or_default()
-                .determine_version_constraint(conda_records.iter().filter_map(|record| {
+
+            let mut matching_versions: Vec<Version> = conda_records
+                .iter()
+                .filter_map(|record| {
                     if record.package_record.name == name {
-                        Some(record.package_record.version.version())
+                        Some(record.package_record.version.version().clone())
                     } else {
                         None
                     }
-                }));
+                })
+                .collect();
 
+            // If we didn't find any matching versions in the affected environments,
+            // try to find them from ALL environments in the lock file.
+            // This handles the case where we're adding to a feature that's not used
+            // in any environment yet.
+            if matching_versions.is_empty() {
+                for (env_name, _) in updated_lock_file.environments() {
+                    if let Some(locked_env) = updated_lock_file.environment(env_name) {
+                        for platform in platforms {
+                            if let Ok(records) = locked_env.conda_repodata_records(*platform) {
+                                for record in records.into_iter().flatten() {
+                                    if record.package_record.name == name {
+                                        matching_versions
+                                            .push(record.package_record.version.version().clone());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            let version_constraint = pinning_strategy
+                .unwrap_or_default()
+                .determine_version_constraint(matching_versions.iter());
             if let Some(version_constraint) = version_constraint {
                 implicit_constraints
                     .insert(name.as_source().to_string(), version_constraint.to_string());
