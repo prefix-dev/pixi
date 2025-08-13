@@ -1,6 +1,5 @@
 use super::trampoline::{GlobalExecutable, Trampoline};
 use super::{EnvironmentName, ExposedName, Mapping};
-use crate::prefix::Executable;
 
 use ahash::HashSet;
 use console::StyledObject;
@@ -14,6 +13,7 @@ use miette::{Context, IntoDiagnostic};
 use pixi_config::pixi_home;
 use pixi_manifest::PrioritizedChannel;
 use pixi_utils::executable_from_path;
+use pixi_utils::prefix::Executable;
 use rattler::install::{Transaction, TransactionOperation};
 use rattler_conda_types::{
     Channel, ChannelConfig, NamedChannelOrUrl, PackageName, PackageRecord, PrefixRecord,

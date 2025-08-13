@@ -13,6 +13,7 @@ use pixi_manifest::FeaturesExt;
 use pixi_progress::await_in_progress;
 use pixi_pypi_spec::PixiPypiSpec;
 use pixi_spec::{GitSpec, PixiSpec};
+use pixi_utils::{prefix::Prefix, rlimit::try_increase_rlimit_to_sensible};
 pub use pypi_prefix::{ContinuePyPIPrefixUpdate, on_python_interpreter_change};
 pub use python_status::PythonStatus;
 use rattler_conda_types::Platform;
@@ -30,8 +31,6 @@ use xxhash_rust::xxh3::Xxh3;
 use crate::{
     Workspace,
     lock_file::{LockFileDerivedData, ReinstallPackages, UpdateLockFileOptions, UpdateMode},
-    prefix::Prefix,
-    rlimit::try_increase_rlimit_to_sensible,
     workspace::{Environment, HasWorkspaceRef, grouped_environment::GroupedEnvironment},
 };
 

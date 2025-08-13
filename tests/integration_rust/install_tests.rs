@@ -333,7 +333,7 @@ fn is_pypi_package_installed(env: &PythonEnvironment, package_name: &str) -> boo
 
 // Helper to check if a conda package is installed.
 async fn is_conda_package_installed(prefix_path: &Path, package_name: &str) -> bool {
-    let conda_prefix = pixi_core::prefix::Prefix::new(prefix_path.to_path_buf());
+    let conda_prefix = pixi_utils::prefix::Prefix::new(prefix_path.to_path_buf());
     conda_prefix
         .find_designated_package(&rattler_conda_types::PackageName::try_from(package_name).unwrap())
         .await

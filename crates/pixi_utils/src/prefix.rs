@@ -1,6 +1,6 @@
+use crate::{is_binary_folder, strip_executable_extension};
 use itertools::Itertools;
 use miette::{Context, Diagnostic, IntoDiagnostic};
-use pixi_utils::{is_binary_folder, strip_executable_extension};
 use rattler_conda_types::{PackageName, Platform, PrefixRecord};
 use rattler_shell::{
     activation::{ActivationVariables, Activator},

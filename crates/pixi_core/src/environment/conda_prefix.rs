@@ -5,6 +5,7 @@ use miette::IntoDiagnostic;
 use pixi_command_dispatcher::{BuildEnvironment, CommandDispatcher, InstallPixiEnvironmentSpec};
 use pixi_manifest::FeaturesExt;
 use pixi_record::PixiRecord;
+use pixi_utils::{prefix::Prefix, variants::VariantConfig};
 use rattler::install::link_script::LinkScriptType;
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, GenericVirtualPackage, PackageName, Platform,
@@ -16,8 +17,6 @@ use super::{
 };
 use crate::{
     environment::PythonStatus,
-    prefix::Prefix,
-    variants::VariantConfig,
     workspace::{
         HasWorkspaceRef,
         grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},

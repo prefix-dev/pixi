@@ -13,6 +13,7 @@ use pixi_manifest::{
 };
 use pixi_progress::await_in_progress;
 use pixi_record::PixiRecord;
+use pixi_utils::prefix::Prefix;
 use pixi_uv_conversions::{
     BuildIsolation, locked_indexes_to_index_locations, pypi_options_to_build_options,
     to_exclude_newer, to_index_strategy,
@@ -44,7 +45,6 @@ use uv_resolver::{ExcludeNewer, FlatIndex};
 use crate::{
     install_pypi::plan::{CachedWheels, RequiredDists},
     lock_file::UvResolutionContext,
-    prefix::Prefix,
 };
 use pixi_reporters::{UvReporter, UvReporterOptions};
 

@@ -20,7 +20,7 @@ use pixi_core::{
 use pixi_pty::unix::PtySession;
 
 #[cfg(target_family = "unix")]
-use pixi_core::prefix::Prefix;
+use pixi_utils::prefix::Prefix;
 
 use crate::cli::cli_config::LockFileUpdateConfig;
 use crate::cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig};

@@ -15,7 +15,6 @@ use crate::{
         self, PypiRecord, reporter::SolveProgressBar,
         virtual_packages::validate_system_meets_environment_requirements,
     },
-    prefix::Prefix,
     workspace::{
         Environment, EnvironmentVars, HasWorkspaceRef, get_activated_environment_variables,
         grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
@@ -35,6 +34,7 @@ use pixi_glob::GlobHashCache;
 use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
 use pixi_record::{ParseLockFileError, PixiRecord};
+use pixi_utils::prefix::Prefix;
 use pixi_uv_conversions::{
     ConversionError, to_extra_name, to_marker_environment, to_normalize, to_uv_extra_name,
     to_uv_normalize,

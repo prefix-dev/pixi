@@ -30,6 +30,8 @@ use pixi_manifest::PrioritizedChannel;
 use pixi_progress::global_multi_progress;
 use pixi_reporters::TopLevelProgress;
 use pixi_spec_containers::DependencyMap;
+use pixi_utils::prefix::{Executable, Prefix};
+use pixi_utils::rlimit::try_increase_rlimit_to_sensible;
 use pixi_utils::{executable_from_path, reqwest::build_reqwest_clients};
 use rattler_conda_types::{
     ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, PrefixRecord,
@@ -62,9 +64,7 @@ use crate::{
         install::{create_executable_trampolines, script_exec_mapping},
         project::environment::environment_specs_in_sync,
     },
-    prefix::{Executable, Prefix},
     repodata::Repodata,
-    rlimit::try_increase_rlimit_to_sensible,
 };
 
 mod environment;

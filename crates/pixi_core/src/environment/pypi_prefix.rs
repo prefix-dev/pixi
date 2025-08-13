@@ -3,8 +3,8 @@ use std::path::Path;
 use miette::IntoDiagnostic;
 use rattler::install::PythonInfo;
 
-use crate::prefix::Prefix;
 use pixi_consts::consts;
+use pixi_utils::prefix::Prefix;
 use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};
 use uv_distribution_types::{InstalledDist, Name};
 

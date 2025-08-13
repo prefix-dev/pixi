@@ -5306,6 +5306,7 @@ dependencies = [
  "fs-err",
  "indicatif",
  "insta",
+ "is_executable",
  "itertools 0.14.0",
  "miette 7.6.0",
  "pep508_rs",
@@ -5313,9 +5314,11 @@ dependencies = [
  "pixi_consts",
  "rattler_conda_types",
  "rattler_networking",
+ "rattler_shell",
  "reqwest",
  "reqwest-middleware",
  "reqwest-retry",
+ "rlimit",
  "rstest",
  "serde",
  "serde_json",
@@ -5326,6 +5329,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+ "uv-configuration",
 ]
 
 [[package]]

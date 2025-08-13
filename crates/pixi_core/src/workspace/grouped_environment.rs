@@ -8,11 +8,11 @@ use pixi_manifest::{
     EnvironmentName, Feature, HasFeaturesIter, HasWorkspaceManifest, SystemRequirements,
     WorkspaceManifest,
 };
+use pixi_utils::prefix::Prefix;
 use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, Platform};
 
 use crate::{
     Workspace,
-    prefix::Prefix,
     workspace::{
         Environment, HasWorkspaceRef, SolveGroup, virtual_packages::get_minimal_virtual_packages,
     },
