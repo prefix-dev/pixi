@@ -93,12 +93,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let specs = args
         .packages
-        .to_global_specs(&channel_config, &project_original.root)?
-        .into_iter()
-        // TODO: will allow nameless specs later
-        .filter_map(|s| s.into_named())
-        .collect_vec();
-
+        .to_named_global_specs(&channel_config, &project_original.root, &project_original)
+        .await?;
     let env_to_specs: IndexMap<EnvironmentName, Vec<NamedGlobalSpec>> = match &args.environment {
         Some(env_name) => IndexMap::from([(env_name.clone(), specs)]),
         None => specs
