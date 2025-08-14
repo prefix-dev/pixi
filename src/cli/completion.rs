@@ -306,7 +306,6 @@ _arguments "${_arguments_options[@]}" \
     --pypi-keyring-provider: string@"nu-complete pixi run pypi_keyring_provider" # Specifies if we want to use uv keyring provider
     --concurrent-solves: string # Max concurrent solves, default is the number of CPUs
     --concurrent-downloads: string # Max concurrent network requests, default is 50
-    --revalidate              # Run the complete environment validation. This will reinstall a broken environment
     --force-activate          # Do not use the environment activation cache. (default: true except in experimental mode)
     --environment(-e): string@"nu-complete pixi run environment" # The environment to run the task in
     --clean-env               # Use a clean environment to run the task
