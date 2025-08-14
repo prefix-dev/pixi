@@ -1,7 +1,7 @@
 use miette::IntoDiagnostic;
 use pixi_core::{
     UpdateLockFileOptions, WorkspaceLocator,
-    environment::{LockFileUsage, get_update_lock_file_and_prefix},
+    environment::get_update_lock_file_and_prefix,
     lock_file::{ReinstallPackages, UpdateMode},
 };
 
@@ -26,7 +26,7 @@ pub async fn execute(args: AddRemoveArgs) -> miette::Result<()> {
         &workspace.workspace().default_environment(),
         UpdateMode::QuickValidate,
         UpdateLockFileOptions {
-            lock_file_usage: LockFileUsage::Update,
+            lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
             no_install: args.no_install_config.no_install,
             max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
         },

@@ -126,8 +126,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let lock_file = workspace
         .update_lock_file(UpdateLockFileOptions {
             lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
+            no_install: args.no_install_config.no_install,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
-            ..UpdateLockFileOptions::default()
         })
         .await?
         .0;
@@ -253,15 +253,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let task_env: &_ = match task_envs.entry(executable_task.run_environment.clone()) {
             Entry::Occupied(env) => env.into_mut(),
             Entry::Vacant(entry) => {
-                // Ensure there is a valid prefix
-                lock_file
-                    .prefix(
-                        &executable_task.run_environment,
-                        UpdateMode::QuickValidate,
-                        &ReinstallPackages::default(),
-                        &[],
-                    )
-                    .await?;
+                // Check if we allow installs
+                if args.no_install_config.allow_installs() {
+                    // Ensure there is a valid prefix
+                    lock_file
+                        .prefix(
+                            &executable_task.run_environment,
+                            UpdateMode::QuickValidate,
+                            &ReinstallPackages::default(),
+                            &[],
+                        )
+                        .await?;
+                }
 
                 // Clear the current progress reports.
                 lock_file.command_dispatcher.clear_reporter().await;

@@ -145,14 +145,8 @@ impl NoInstallConfig {
         Self { no_install }
     }
 
-    /// Creates a NoInstallConfig that skips installation
-    pub fn skip_install() -> Self {
-        Self::new(true)
-    }
-
-    /// Creates a NoInstallConfig that allows installation
-    pub fn allow_install() -> Self {
-        Self::new(false)
+    pub fn allow_installs(&self) -> bool {
+        !self.no_install
     }
 }
 
