@@ -14,7 +14,7 @@ use pixi_core::global::{
     self, EnvChanges, EnvState, EnvironmentName, Mapping, Project, StateChange, StateChanges,
     common::{NotChangedReason, contains_menuinst_document},
     list::list_all_global_environments,
-    project::{ExposedType, NamedGlobalSpec},
+    project::{ExposedType, GlobalSpec},
 };
 
 /// Installs the defined packages in a globally accessible location and exposes their command line applications.
@@ -93,13 +93,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let specs = args
         .packages
-        .to_global_specs(&channel_config, &project_original.root)?
-        .into_iter()
-        // TODO: will allow nameless specs later
-        .filter_map(|s| s.into_named())
-        .collect_vec();
-
-    let env_to_specs: IndexMap<EnvironmentName, Vec<NamedGlobalSpec>> = match &args.environment {
+        .to_global_specs(&channel_config, &project_original.root, &project_original)
+        .await?;
+    let env_to_specs: IndexMap<EnvironmentName, Vec<GlobalSpec>> = match &args.environment {
         Some(env_name) => IndexMap::from([(env_name.clone(), specs)]),
         None => specs
             .into_iter()
@@ -172,7 +168,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 async fn setup_environment(
     env_name: &EnvironmentName,
     args: &Args,
-    specs: &[NamedGlobalSpec],
+    specs: &[GlobalSpec],
     project: &mut Project,
 ) -> miette::Result<StateChanges> {
     let mut state_changes = StateChanges::new_with_env(env_name.clone());
@@ -201,7 +197,7 @@ async fn setup_environment(
         .with
         .iter()
         .map(|spec| {
-            NamedGlobalSpec::try_from_matchspec_with_name(
+            GlobalSpec::try_from_matchspec_with_name(
                 spec.clone(),
                 project.config().global_channel_config(),
             )

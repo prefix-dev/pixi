@@ -6,7 +6,7 @@ use pixi_consts::consts;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
 
-use pixi_core::global::project::{FromMatchSpecError, GlobalSpec};
+use pixi_core::global::project::FromMatchSpecError;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{ChannelConfig, MatchSpec, ParseMatchSpecError, ParseStrictness};
 
@@ -56,21 +56,19 @@ pub enum GlobalSpecsConversionError {
     RelativePath(String, String),
     #[error("could not absolutize path: {0}")]
     AbsolutizePath(String),
-    #[error("specs cannot be empty if git or path is not specified")]
-    SpecsMissing,
+    #[error("failed to infer package name")]
+    #[diagnostic(transparent)]
+    PackageNameInference(#[from] pixi_core::global::project::InferPackageNameError),
 }
 
 impl GlobalSpecs {
     /// Convert GlobalSpecs to a vector of GlobalSpec instances
-    pub fn to_global_specs(
+    pub async fn to_global_specs(
         &self,
         channel_config: &ChannelConfig,
         manifest_root: &Path,
-    ) -> Result<Vec<GlobalSpec>, GlobalSpecsConversionError> {
-        if self.specs.is_empty() && self.git.is_none() && self.path.is_none() {
-            return Err(GlobalSpecsConversionError::SpecsMissing);
-        }
-
+        project: &pixi_core::global::Project,
+    ) -> Result<Vec<pixi_core::global::project::GlobalSpec>, GlobalSpecsConversionError> {
         let git_or_path_spec = if let Some(git_url) = &self.git {
             let git_spec = pixi_spec::GitSpec {
                 git: git_url.clone(),
@@ -97,7 +95,12 @@ impl GlobalSpecs {
         };
         if let Some(pixi_spec) = git_or_path_spec {
             if self.specs.is_empty() {
-                return Ok(Vec::from([GlobalSpec::Nameless(pixi_spec)]));
+                // Infer the package name from the path/git spec
+                let inferred_name = project.infer_package_name_from_spec(&pixi_spec).await?;
+                return Ok(vec![pixi_core::global::project::GlobalSpec::new(
+                    inferred_name,
+                    pixi_spec,
+                )]);
             }
 
             self.specs
@@ -106,20 +109,18 @@ impl GlobalSpecs {
                     MatchSpec::from_str(spec_str, ParseStrictness::Lenient)?
                         .name
                         .ok_or(GlobalSpecsConversionError::NameRequired)
-                        .map(|name| GlobalSpec::named(name, pixi_spec.clone()))
+                        .map(|name| {
+                            pixi_core::global::project::GlobalSpec::new(name, pixi_spec.clone())
+                        })
                 })
                 .collect()
         } else {
             self.specs
                 .iter()
                 .map(|spec_str| {
-                    let global_spec =
-                        GlobalSpec::try_from_str(spec_str, channel_config).map_err(Box::new)?;
-                    if global_spec.is_nameless() {
-                        Err(GlobalSpecsConversionError::NameRequired)
-                    } else {
-                        Ok(global_spec)
-                    }
+                    pixi_core::global::project::GlobalSpec::try_from_str(spec_str, channel_config)
+                        .map_err(Box::new)
+                        .map_err(GlobalSpecsConversionError::FromMatchSpec)
                 })
                 .collect()
         }
@@ -128,22 +129,13 @@ impl GlobalSpecs {
 
 #[cfg(test)]
 mod tests {
-    use pixi_core::global::project::GlobalSpec;
     use std::path::PathBuf;
 
     use super::*;
     use rattler_conda_types::ChannelConfig;
 
-    #[cfg(test)]
-    pub fn spec(global_spec: &GlobalSpec) -> &PixiSpec {
-        match global_spec {
-            GlobalSpec::Nameless(spec) => spec,
-            GlobalSpec::Named(named_spec) => &named_spec.spec,
-        }
-    }
-
-    #[test]
-    fn test_to_global_specs_named() {
+    #[tokio::test]
+    async fn test_to_global_specs_named() {
         let specs = GlobalSpecs {
             specs: vec!["numpy==1.21.0".to_string(), "scipy>=1.7".to_string()],
             git: None,
@@ -154,15 +146,22 @@ mod tests {
 
         let channel_config = ChannelConfig::default_with_root_dir(PathBuf::from("."));
         let manifest_root = PathBuf::from(".");
+
+        // Create a dummy project - this test doesn't use path/git specs so project won't be called
+        let project = pixi_core::global::Project::discover_or_create()
+            .await
+            .unwrap();
+
         let global_specs = specs
-            .to_global_specs(&channel_config, &manifest_root)
+            .to_global_specs(&channel_config, &manifest_root, &project)
+            .await
             .unwrap();
 
         assert_eq!(global_specs.len(), 2);
     }
 
-    #[test]
-    fn test_to_global_specs_with_git() {
+    #[tokio::test]
+    async fn test_to_global_specs_with_git() {
         let specs = GlobalSpecs {
             specs: vec!["mypackage".to_string()],
             git: Some("https://github.com/user/repo.git".parse().unwrap()),
@@ -173,19 +172,26 @@ mod tests {
 
         let channel_config = ChannelConfig::default_with_root_dir(PathBuf::from("."));
         let manifest_root = PathBuf::from(".");
+
+        // Create a dummy project - this test specifies a package name so inference won't be needed
+        let project = pixi_core::global::Project::discover_or_create()
+            .await
+            .unwrap();
+
         let global_specs = specs
-            .to_global_specs(&channel_config, &manifest_root)
+            .to_global_specs(&channel_config, &manifest_root, &project)
+            .await
             .unwrap();
 
         assert_eq!(global_specs.len(), 1);
         assert!(matches!(
-            spec(global_specs.first().unwrap()),
+            &global_specs.first().unwrap().spec,
             &PixiSpec::Git(..)
         ))
     }
 
-    #[test]
-    fn test_to_global_specs_nameless() {
+    #[tokio::test]
+    async fn test_to_global_specs_nameless() {
         let specs = GlobalSpecs {
             specs: vec![">=1.0".to_string()],
             git: None,
@@ -196,7 +202,15 @@ mod tests {
 
         let channel_config = ChannelConfig::default_with_root_dir(PathBuf::from("."));
         let manifest_root = PathBuf::from(".");
-        let global_specs = specs.to_global_specs(&channel_config, &manifest_root);
+
+        // Create a dummy project
+        let project = pixi_core::global::Project::discover_or_create()
+            .await
+            .unwrap();
+
+        let global_specs = specs
+            .to_global_specs(&channel_config, &manifest_root, &project)
+            .await;
         assert!(global_specs.is_err());
     }
 }
