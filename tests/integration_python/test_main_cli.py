@@ -1598,7 +1598,12 @@ def test_frozen_no_install_invariant(pixi: Path, tmp_pixi_workspace: Path) -> No
     conda_meta_path = tmp_pixi_workspace / ".pixi" / "envs" / "default" / "conda-meta"
 
     # Common flags for frozen no-install operations
-    frozen_no_install_flags: list[str | Path] = ["--manifest-path", manifest_path, "--frozen", "--no-install"]
+    frozen_no_install_flags: list[str | Path] = [
+        "--manifest-path",
+        manifest_path,
+        "--frozen",
+        "--no-install",
+    ]
 
     # Create a new project with bzip2 (lightweight package)
     verify_cli_command([pixi, "init", tmp_pixi_workspace], ExitCode.SUCCESS)
