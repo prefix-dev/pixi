@@ -1722,6 +1722,15 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#alternate-approach-using-environmentstxt" class="md-nav__link">
+    <span class="md-ellipsis">
+      Alternate approach using environments.txt
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2768,6 +2777,15 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#alternate-approach-using-environmentstxt" class="md-nav__link">
+    <span class="md-ellipsis">
+      Alternate approach using environments.txt
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2817,7 +2835,7 @@ For CLion, you can track <a href="https://youtrack.jetbrains.com/issue/CPP-42761
 <h2 id="pycharm">Pycharm<a class="headerlink" href="#pycharm" title="Permanent link">#</a></h2>
 <!-- Keep in sync with https://github.com/pavelzw/pixi-pycharm/blob/main/README.md -->
 
-<p>You can use PyCharm with Pixi environments by using the <code>conda</code> shim provided by the <a href="https://github.com/pavelzw/pixi-pycharm">pixi-pycharm</a> package.</p>
+<p>You can use PyCharm with Pixi environments by using the <code>conda</code> shim provided by the <a href="https://github.com/pavelzw/pixi-pycharm">pixi-pycharm</a> package. <em>An <a href="#alt-approach">alternate approach</a> that does not use the shim is also described below.</em></p>
 <p>To get started, add <code>pixi-pycharm</code> to your Pixi workspace.</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>pixi-pycharm
 </span></code></pre></div>
@@ -2854,6 +2872,7 @@ If you use multiple Pixi projects, you might have to adjust the path accordingly
 <p>You can now run your programs and tests as usual.</p>
 <p><img alt="PyCharm run tests" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/tests-light.png#only-light" />
 <img alt="PyCharm run tests" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/tests-dark.png#only-dark" /></p>
+<p><a id="exclude-.pixi"><a/></p>
 <div class="admonition tip">
 <p class="admonition-title">Mark <code>.pixi</code> as excluded</p>
 <p>In order for PyCharm to not get confused about the <code>.pixi</code> directory, please mark it as excluded.</p>
@@ -2918,6 +2937,43 @@ To achieve this, we can use <a href="../../../workspace/multi_environment/">mult
 </span></code></pre></div>
 <p>Now you as a user can run <code>pixi shell</code>, which will start the default environment.
 In production, you then just run <code>pixi run -e prod COMMAND</code>, and the minimal prod environment is installed.</p>
+<p><a id="alt-approach"></a></p>
+<h3 id="alternate-approach-using-environmentstxt">Alternate approach using environments.txt<a class="headerlink" href="#alternate-approach-using-environmentstxt" title="Permanent link">#</a></h3>
+<p>There is another approach for configuring PyCharm that avoids the need for the pixi-pycharm shim. It requires that you have conda installed locally (PyCharm will detect it automatically if installed in a standard location).</p>
+<p>To configure an interpreter for a new project:</p>
+<ol>
+<li>
+<p>Edit conda's environment list located at <code>~/.conda/environments.txt</code>. Simply append the full file paths of any pixi
+    environments you wish to include, e.g.:</p>
+<div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>...
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>/Users/jdoe/my-project/.pixi/envs/default
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>/Users/jdoe/my-project/.pixi/envs/dev
+</span></code></pre></div>
+</li>
+<li>
+<p>In PyCharm, when adding the interpreter for your project, scroll down to the bottom of the Python Interpreter
+    dropdown menu and choose <em>Show All ...</em> to bring up the Python Interpreters dialog.</p>
+</li>
+<li>
+<p>Select the <code>+</code> button to add a new local existing conda interpreter using the standard conda location and
+    choose the desired prefix from the list. (If you edited the environment file while PyCharm was running, you
+    may need to reload the environments.) </p>
+</li>
+<li>
+<p>This will add the environment but will automatically give it a name matching the last component of the 
+    directory path, which will often just be <code>default</code> for pixi environments. This is particularly problematic
+    if you work on many projects. You can change PyCharm's name for the environment by clicking on the pencil icon
+    or using the right-click dropdown menu. </p>
+</li>
+<li>
+<p>Once you have added and renamed the environments, select the desired interpreter to use in PyCharm from the list.</p>
+</li>
+</ol>
+<p>If your project uses more than one environment, you can switch between them by selecting interpreter name in the
+status bar at the bottom of the PyCharm window and selecting the interpreter for the desired interpeter from the list.
+Note that this will trigger PyCharm reindexing and might not be very fast.</p>
+<p>As with the pixi-pycharm shim, you should avoid using the PyCharm UI to attempt to add or remove packages from your environments and you should
+make sure to <a href="#exclude-.pixi">exclude the <code>.pixi</code> directory from PyCharm indexing</a>.</p>
 <h2 id="direnv">Direnv<a class="headerlink" href="#direnv" title="Permanent link">#</a></h2>
 <p>In order to use Direnv with <a href="https://www.jetbrains.com/ides/">Jetbrains</a> products you first have to install the <a href="https://plugins.jetbrains.com/plugin/15285-direnv-integration">Direnv plugin</a>.
 Then follow the instructions in our <a href="../../third_party/direnv/">Direnv doc page</a>.
