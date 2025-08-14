@@ -4,6 +4,49 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.52.0] - 2025-08-14
+
+#### ✨ Highlights
+
+You can now use `pixi global` to install source dependencies.
+
+```text
+pixi global install --path path/to/my-package my-package
+
+```
+
+At the moment, you still have to specify the package name, which we will improve on later!
+
+#### ⚠️ Breaking Change
+
+In `v0.51.0` we changed the environment variable overwriting logic. This has be reverted in this release, as there are some issues with it.
+
+#### Features
+
+- Include named source dependencies through `pixi global` by @tdejager in [#4165](https://github.com/prefix-dev/pixi/pull/4165)
+
+#### Documentation
+
+- Fix example package name by @henningkayser in [#4331](https://github.com/prefix-dev/pixi/pull/4331)
+- Add keyring auth support doc and bump setup-pixi action version by @olivier-lacroix in [#4332](https://github.com/prefix-dev/pixi/pull/4332)
+- Pycharm integration via conda environments.txt file by @analog-cbarber in [#4290](https://github.com/prefix-dev/pixi/pull/4290)
+
+#### Fixed
+
+- Fish completion script by @ruben-arts in [#4315](https://github.com/prefix-dev/pixi/pull/4315)
+- Update named arg schema by @bollwyvl in [#4324](https://github.com/prefix-dev/pixi/pull/4324)
+- Revert environment logic changes by @Hofer-Julian in [#4346](https://github.com/prefix-dev/pixi/pull/4346)
+
+#### Refactor
+
+- Move all non cli code into `pixi_core` crate by @haecker-felix in [#4337](https://github.com/prefix-dev/pixi/pull/4337)
+
+#### New Contributors
+
+- @analog-cbarber made their first contribution in [#4290](https://github.com/prefix-dev/pixi/pull/4290)
+- @haecker-felix made their first contribution in [#4337](https://github.com/prefix-dev/pixi/pull/4337)
+- @henningkayser made their first contribution in [#4331](https://github.com/prefix-dev/pixi/pull/4331)
+
 ### [0.51.0] - 2025-08-12
 
 #### ✨ Highlights
