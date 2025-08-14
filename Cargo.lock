@@ -1365,7 +1365,8 @@ checksum = "b94f61472cee1439c0b966b47e3aca9ae07e45d070759512cd390ea2bebc6675"
 [[package]]
 name = "coalesced_map"
 version = "0.1.0"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Fextract-run-export#bda4dcdcc15160229e4137a9b7a4f923ed78a661"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f0367ea8c35eadd742b12b06e914fbbc12c00a84e8416c70d166e2c12255c785"
 dependencies = [
  "dashmap",
  "tokio",
@@ -2184,7 +2185,8 @@ dependencies = [
 [[package]]
 name = "file_url"
 version = "0.2.6"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Fextract-run-export#bda4dcdcc15160229e4137a9b7a4f923ed78a661"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "765662dc0b26e038099a5a1529f5d48443111eea45377c312be892997651710e"
 dependencies = [
  "itertools 0.14.0",
  "percent-encoding",
@@ -2577,9 +2579,9 @@ dependencies = [
 
 [[package]]
 name = "google-cloud-auth"
-version = "0.22.2"
+version = "0.22.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "290a18c1cc7c02934c1b88920af8b55ff588ff2ef47f35dae5fc1f10f2056538"
+checksum = "cb930bdeb70c93de0a8c635a23cfb2447e8da167ffe90eab1330b0a8b6091d2e"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -2599,9 +2601,9 @@ dependencies = [
 
 [[package]]
 name = "google-cloud-gax"
-version = "0.23.2"
+version = "0.23.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5560b3cedeea7041862717175d98733ac81f7bedfdd0c7949bf06d761bf4094f"
+checksum = "876a08b972e05565d562f2575e110092492835bf5f7b76aec4e90f792b581960"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -2619,9 +2621,9 @@ dependencies = [
 
 [[package]]
 name = "google-cloud-rpc"
-version = "0.4.2"
+version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "949f5858642f68efbd836a82400d04f2572e6d18a612c1144d0868832f40996e"
+checksum = "07b375f1a978a69d4e4ebbf673766dc3be4bec01c8f95048896370205f2fe22c"
 dependencies = [
  "bytes",
  "google-cloud-wkt",
@@ -2632,9 +2634,9 @@ dependencies = [
 
 [[package]]
 name = "google-cloud-wkt"
-version = "0.5.2"
+version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e2916ee3f086766d6989abd8a0b1c3910322af60d72352f6cdf5cb8eb951464"
+checksum = "c2c101cb6257433b87908b91b9d16df9288c7dd0fb8c700f2c8e53cfc23ca13e"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -3096,7 +3098,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.59.0",
+ "windows-core 0.61.2",
 ]
 
 [[package]]
@@ -4456,7 +4458,8 @@ checksum = "1e91099d4268b0e11973f036e885d652fb0b21fedcf69738c627f94db6a44f42"
 [[package]]
 name = "path_resolver"
 version = "0.1.2"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Fextract-run-export#bda4dcdcc15160229e4137a9b7a4f923ed78a661"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b0b6f3ea862c0666ad89857fd29d3d86c3f076c4134c0ce62a659d6d33de5ee9"
 dependencies = [
  "fs-err",
  "indexmap 2.10.0",
@@ -5475,7 +5478,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a56d757972c98b346a9b766e3f02746cde6dd1cd1d1d563472929fdd74bec4d"
 dependencies = [
  "anyhow",
- "itertools 0.11.0",
+ "itertools 0.14.0",
  "proc-macro2",
  "quote",
  "syn",
@@ -5781,8 +5784,9 @@ dependencies = [
 
 [[package]]
 name = "rattler"
-version = "0.34.11"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Fextract-run-export#bda4dcdcc15160229e4137a9b7a4f923ed78a661"
+version = "0.34.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "987684ffe53f6c05649596147566eee012027ca617999cf70b5d30ffe880be97"
 dependencies = [
  "anyhow",
  "clap",
@@ -5825,8 +5829,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_cache"
-version = "0.3.29"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Fextract-run-export#bda4dcdcc15160229e4137a9b7a4f923ed78a661"
+version = "0.3.30"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e0a7088529f9ef7ab668e724237900b58c6173517b45c401074b28c2c5cd319d"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -5857,8 +5862,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_conda_types"
-version = "0.37.0"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Fextract-run-export#bda4dcdcc15160229e4137a9b7a4f923ed78a661"
+version = "0.38.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc4c101b12003d7b805aa0237a98a8205508ebf0c4bf04ba036036a29ad93910"
 dependencies = [
  "chrono",
  "core-foundation 0.10.1",
@@ -5898,7 +5904,8 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "1.1.5"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Fextract-run-export#bda4dcdcc15160229e4137a9b7a4f923ed78a661"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f40b746768824bc3306dcb597e549e836eda023dab8d7407d32b9f342c70cc5d"
 dependencies = [
  "blake2",
  "digest",
@@ -5914,8 +5921,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_lock"
-version = "0.23.13"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Fextract-run-export#bda4dcdcc15160229e4137a9b7a4f923ed78a661"
+version = "0.23.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9afe057fc7df24f8add9f50f055a6966922048dd2a8df32277f3bc1e39ae53ec"
 dependencies = [
  "chrono",
  "file_url",
@@ -5940,7 +5948,8 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "1.0.11"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Fextract-run-export#bda4dcdcc15160229e4137a9b7a4f923ed78a661"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "988d5d7ace4fb1d7549008236cf08de95e8ea2f1f80754109324a08c31e6dc6a"
 dependencies = [
  "quote",
  "syn",
@@ -5948,8 +5957,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_menuinst"
-version = "0.2.20"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Fextract-run-export#bda4dcdcc15160229e4137a9b7a4f923ed78a661"
+version = "0.2.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c61a0622d207559cff498243862636ef5e70e74a407ae58766339005542fca20"
 dependencies = [
  "chrono",
  "configparser",
@@ -5977,8 +5987,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_networking"
-version = "0.25.8"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Fextract-run-export#bda4dcdcc15160229e4137a9b7a4f923ed78a661"
+version = "0.25.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8344bdb1203730b149535f3287a482b229ca7757dfaf1d13b85229e758b1634"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -6006,8 +6017,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_package_streaming"
-version = "0.22.48"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Fextract-run-export#bda4dcdcc15160229e4137a9b7a4f923ed78a661"
+version = "0.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e74db41f0f8a688a42190d7bc4a882f3a84e5633cd92f7f0e14e915bc6de4805"
 dependencies = [
  "bzip2 0.6.0",
  "chrono",
@@ -6036,7 +6048,8 @@ dependencies = [
 [[package]]
 name = "rattler_pty"
 version = "0.2.6"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Fextract-run-export#bda4dcdcc15160229e4137a9b7a4f923ed78a661"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "76a7edbf8f23a099ccb32cc4f024886e35a873c462ca83f86c286556c275bf06"
 dependencies = [
  "libc",
  "nix 0.30.1",
@@ -6046,7 +6059,8 @@ dependencies = [
 [[package]]
 name = "rattler_redaction"
 version = "0.1.12"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Fextract-run-export#bda4dcdcc15160229e4137a9b7a4f923ed78a661"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3aa5057629aeb20861919e9ae56875985d58028f3c6f433a20b5ded086e1cec5"
 dependencies = [
  "reqwest",
  "reqwest-middleware",
@@ -6055,8 +6069,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_repodata_gateway"
-version = "0.23.10"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Fextract-run-export#bda4dcdcc15160229e4137a9b7a4f923ed78a661"
+version = "0.24.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9d38dfeea12d58ccaf55a5f1c7223697ef9479ec6acb767cabe651617b2f854"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -6114,8 +6129,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_shell"
-version = "0.24.7"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Fextract-run-export#bda4dcdcc15160229e4137a9b7a4f923ed78a661"
+version = "0.24.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6995e7fef3aa2a16cfcda21d4744060240bf954366d9c164ab5f4ac13f9e94c8"
 dependencies = [
  "anyhow",
  "enum_dispatch",
@@ -6134,8 +6150,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_solve"
-version = "2.1.8"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Fextract-run-export#bda4dcdcc15160229e4137a9b7a4f923ed78a661"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "219053881a02e81e5218604f7f7d67b704c9178632155ee06a7e7317e221754f"
 dependencies = [
  "chrono",
  "futures",
@@ -6151,8 +6168,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_virtual_packages"
-version = "2.1.1"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Fextract-run-export#bda4dcdcc15160229e4137a9b7a4f923ed78a661"
+version = "2.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e45deaea5dbc4564cf8f9b6aab789b3caabba79d11625b9fd00ba7f3fa4ba31d"
 dependencies = [
  "archspec",
  "libloading",
@@ -7240,7 +7258,8 @@ checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
 [[package]]
 name = "simple_spawn_blocking"
 version = "1.1.0"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Fextract-run-export#bda4dcdcc15160229e4137a9b7a4f923ed78a661"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "55c0b0b683828aa9d4f5c0e59b0c856a12c30a65b5f1ca4292664734d76fa9c2"
 dependencies = [
  "tokio",
 ]
@@ -7524,7 +7543,7 @@ dependencies = [
  "ntapi",
  "objc2-core-foundation",
  "objc2-io-kit",
- "windows 0.59.0",
+ "windows 0.61.3",
 ]
 
 [[package]]
@@ -9632,7 +9651,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
