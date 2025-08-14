@@ -1,4 +1,4 @@
-use crate::Workspace;
+use pixi_core::Workspace;
 use miette::IntoDiagnostic;
 
 pub async fn execute(workspace: Workspace) -> miette::Result<()> {

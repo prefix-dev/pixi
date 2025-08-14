@@ -1,7 +1,8 @@
 use std::str::FromStr;
 
-use pixi::{DependencyType, Workspace, cli::cli_config::GitRev};
+use pixi::cli::cli_config::GitRev;
 use pixi_consts::consts;
+use pixi_core::{DependencyType, Workspace};
 use pixi_manifest::{FeaturesExt, SpecType};
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName, VersionOrStar};
 use rattler_conda_types::{PackageName, Platform};
@@ -656,7 +657,6 @@ async fn add_dependency_pinning_strategy() {
 /// Test adding a git dependency with a specific branch
 #[tokio::test]
 #[cfg_attr(not(feature = "online_tests"), ignore)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn add_git_deps() {
     let pixi = PixiControl::from_manifest(
         r#"
@@ -710,7 +710,6 @@ preview = ['pixi-build']
 #[cfg(not(windows))]
 #[tokio::test]
 #[cfg_attr(not(feature = "online_tests"), ignore)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn add_git_deps_with_creds() {
     let pixi = PixiControl::from_manifest(
         r#"
@@ -764,7 +763,6 @@ preview = ['pixi-build']
 /// Test adding a git dependency with a specific commit
 #[tokio::test]
 #[cfg_attr(not(feature = "online_tests"), ignore)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn add_git_with_specific_commit() {
     let pixi = PixiControl::from_manifest(
         r#"
@@ -815,8 +813,6 @@ preview = ['pixi-build']"#,
 /// Test adding a git dependency with a specific tag
 #[tokio::test]
 #[cfg_attr(not(feature = "online_tests"), ignore)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
-
 async fn add_git_with_tag() {
     let pixi = PixiControl::from_manifest(
         r#"

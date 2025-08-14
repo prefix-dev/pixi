@@ -1,6 +1,6 @@
 use clap::Parser;
 
-use crate::global::{self, EnvironmentName};
+use pixi_core::global::{self, EnvironmentName};
 
 mod add;
 mod edit;

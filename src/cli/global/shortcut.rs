@@ -1,12 +1,10 @@
-use crate::global::Project;
-use crate::{
-    cli::global::revert_environment_after_error,
-    global::{EnvironmentName, StateChanges},
-};
+use crate::cli::global::revert_environment_after_error;
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use miette::Context;
 use pixi_config::{Config, ConfigCli};
+use pixi_core::global::Project;
+use pixi_core::global::{EnvironmentName, StateChanges};
 use rattler_conda_types::PackageName;
 use std::collections::HashMap;
 

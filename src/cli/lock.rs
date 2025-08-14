@@ -1,15 +1,15 @@
 use clap::Parser;
 use miette::{Context, IntoDiagnostic};
-
-use crate::cli::cli_config::NoInstallConfig;
-use crate::lock_file::LockFileDerivedData;
-use crate::{
+use pixi_core::{
     WorkspaceLocator,
-    cli::cli_config::WorkspaceConfig,
     diff::{LockFileDiff, LockFileJsonDiff},
     environment::LockFileUsage,
-    lock_file::UpdateLockFileOptions,
+    lock_file::{LockFileDerivedData, UpdateLockFileOptions},
 };
+
+use crate::cli::cli_config::NoInstallConfig;
+
+use crate::cli::cli_config::WorkspaceConfig;
 
 /// Solve environment and update the lock file without installing the
 /// environments.

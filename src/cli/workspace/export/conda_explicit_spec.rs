@@ -3,18 +3,16 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{
-    WorkspaceLocator,
-    cli::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig},
-    lock_file::UpdateLockFileOptions,
-};
 use clap::Parser;
 use miette::{Context, IntoDiagnostic};
 use pixi_config::ConfigCli;
+use pixi_core::{WorkspaceLocator, lock_file::UpdateLockFileOptions};
 use rattler_conda_types::{
     ExplicitEnvironmentEntry, ExplicitEnvironmentSpec, PackageRecord, Platform, RepoDataRecord,
 };
 use rattler_lock::{CondaPackageData, Environment, LockedPackageRef};
+
+use crate::cli::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
 
 #[derive(Debug, Parser)]
 #[clap(arg_required_else_help = false)]

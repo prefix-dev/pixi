@@ -8,16 +8,14 @@ use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, Platform};
 
-use crate::{
-    cli::global::{global_specs::GlobalSpecs, revert_environment_after_error},
-    global::{
-        self, EnvChanges, EnvState, EnvironmentName, Mapping, Project, StateChange, StateChanges,
-        common::{NotChangedReason, contains_menuinst_document},
-        list::list_all_global_environments,
-        project::{ExposedType, NamedGlobalSpec},
-    },
-};
+use crate::cli::global::{global_specs::GlobalSpecs, revert_environment_after_error};
 use pixi_config::{self, Config, ConfigCli};
+use pixi_core::global::{
+    self, EnvChanges, EnvState, EnvironmentName, Mapping, Project, StateChange, StateChanges,
+    common::{NotChangedReason, contains_menuinst_document},
+    list::list_all_global_environments,
+    project::{ExposedType, NamedGlobalSpec},
+};
 
 /// Installs the defined packages in a globally accessible location and exposes their command line applications.
 ///
@@ -93,24 +91,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         ..project_original.global_channel_config().clone()
     };
 
-    let (specs, source): (Vec<_>, Vec<_>) = args
+    let specs = args
         .packages
-        .to_global_specs(&channel_config)?
+        .to_global_specs(&channel_config, &project_original.root)?
         .into_iter()
         // TODO: will allow nameless specs later
         .filter_map(|s| s.into_named())
-        // TODO: Filter out non-binary specs, we are adding support for them later
-        .partition(|s| s.spec().is_binary());
-
-    if !source.is_empty() {
-        tracing::warn!(
-            "Ignoring found source packages {}. Implementation will be added soon.",
-            source.iter().map(|s| s.name().as_source()).join(", ")
-        );
-    }
+        .collect_vec();
 
     let env_to_specs: IndexMap<EnvironmentName, Vec<NamedGlobalSpec>> = match &args.environment {
-        Some(env_name) => IndexMap::from_iter(std::iter::once((env_name.clone(), specs))),
+        Some(env_name) => IndexMap::from([(env_name.clone(), specs)]),
         None => specs
             .into_iter()
             .map(|spec| {
@@ -236,12 +226,12 @@ async fn setup_environment(
         }
     }
 
-    if project.environment_in_sync(env_name).await? {
+    if project.environment_in_sync_internal(env_name, true).await? {
         return Ok(StateChanges::new_with_env(env_name.clone()));
     }
 
     // Installing the environment to be able to find the bin paths later
-    let _ = project.install_environment(env_name).await?;
+    let environment_update = project.install_environment(env_name).await?;
 
     // Sync exposed name
     sync_exposed_names(env_name, project, args).await?;
@@ -259,12 +249,16 @@ async fn setup_environment(
     }
 
     // Figure out added packages and their corresponding versions
-    state_changes |= project
-        .added_packages(
-            &packages_to_add.into_iter().cloned().collect_vec(),
-            env_name,
-            project.global_channel_config(),
-        )
+    let requested_package_names: Vec<_> = packages_to_add
+        .iter()
+        .map(|spec| spec.name().clone())
+        .collect();
+    let user_requested_changes =
+        environment_update.user_requested_changes(&requested_package_names);
+
+    // Convert to StateChange::AddedPackage for packages that were installed or upgraded
+    state_changes
+        .add_packages_from_install_changes(env_name, user_requested_changes, project)
         .await?;
 
     // Expose executables of the new environment

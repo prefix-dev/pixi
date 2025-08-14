@@ -1,14 +1,15 @@
-use super::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs};
-use crate::{
-    DependencyType, UpdateLockFileOptions, WorkspaceLocator,
-    cli::cli_config::{DependencyConfig, NoInstallConfig, RevalidateConfig, WorkspaceConfig},
-    environment::get_update_lock_file_and_prefix,
-    lock_file::ReinstallPackages,
-};
 use clap::Parser;
 use miette::{Context, IntoDiagnostic};
 use pixi_config::ConfigCli;
+use pixi_core::{
+    DependencyType, UpdateLockFileOptions, WorkspaceLocator,
+    environment::get_update_lock_file_and_prefix,
+    lock_file::ReinstallPackages,
+};
 use pixi_manifest::FeaturesExt;
+
+use crate::cli::cli_config::{DependencyConfig, NoInstallConfig, RevalidateConfig, WorkspaceConfig};
+use crate::cli::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs};
 
 /// Removes dependencies from the workspace.
 ///

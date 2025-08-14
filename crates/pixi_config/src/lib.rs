@@ -282,7 +282,7 @@ impl RepodataChannelConfig {
 impl From<RepodataChannelConfig> for SourceConfig {
     fn from(value: RepodataChannelConfig) -> Self {
         SourceConfig {
-            jlap_enabled: !value.disable_jlap.unwrap_or(false),
+            jlap_enabled: !value.disable_jlap.unwrap_or(true),
             zstd_enabled: !value.disable_zstd.unwrap_or(false),
             bz2_enabled: !value.disable_bzip2.unwrap_or(false),
             sharded_enabled: !value.disable_sharded.unwrap_or(false),
@@ -498,20 +498,20 @@ impl PyPIConfig {
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq, Eq, Copy, clap::ValueEnum)]
 #[serde(rename_all = "kebab-case")]
 pub enum PinningStrategy {
-    /// Default semver strategy e.g. "1.2.3" becomes ">=1.2.3, <2" but "0.1.0"
-    /// becomes ">=0.1.0, <0.2"
+    /// Default semver strategy e.g. `1.2.3` becomes `>=1.2.3, <2` but `0.1.0`
+    /// becomes `>=0.1.0, <0.2`
     #[default]
     Semver,
-    /// Pin the latest minor e.g. "1.2.3" becomes ">=1.2.3, <1.3"
+    /// Pin the latest minor e.g. `1.2.3` becomes `>=1.2.3, <1.3`
     Minor,
-    /// Pin the latest major e.g. "1.2.3" becomes ">=1.2.3, <2"
+    /// Pin the latest major e.g. `1.2.3` becomes `>=1.2.3, <2`
     Major,
-    /// Pin to the latest version or higher. e.g. "1.2.3" becomes ">=1.2.3"
+    /// Pin to the latest version or higher. e.g. `1.2.3` becomes `>=1.2.3`
     LatestUp,
-    /// Pin the version chosen by the solver. e.g. "1.2.3" becomes "==1.2.3"
+    /// Pin the version chosen by the solver. e.g. `1.2.3` becomes `==1.2.3`
     // Adding "Version" to the name for future extendability.
     ExactVersion,
-    /// No pinning, keep the requirement empty. e.g. "1.2.3" becomes "*"
+    /// No pinning, keep the requirement empty. e.g. `1.2.3` becomes `*`
     // Calling it no-pin to make it simple to type, as other option was pin-unconstrained.
     NoPin,
 }

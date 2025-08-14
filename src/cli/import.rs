@@ -3,6 +3,7 @@ use std::str::FromStr;
 
 use clap::{Parser, ValueEnum};
 use pixi_config::{Config, ConfigCli};
+use pixi_core::{WorkspaceLocator, environment::sanity_check_workspace};
 use pixi_manifest::{EnvironmentName, FeatureName, HasFeaturesIter, PrioritizedChannel};
 use pixi_utils::conda_environment_file::CondaEnvFile;
 use pixi_uv_conversions::convert_uv_requirements_to_pep508;
@@ -15,12 +16,7 @@ use uv_requirements_txt::RequirementsTxt;
 use miette::{Diagnostic, IntoDiagnostic, Result};
 use thiserror::Error;
 
-use super::cli_config::LockFileUpdateConfig;
-use crate::{
-    WorkspaceLocator,
-    cli::cli_config::{NoInstallConfig, RevalidateConfig, WorkspaceConfig},
-    environment::sanity_check_workspace,
-};
+use crate::cli::cli_config::{LockFileUpdateConfig, NoInstallConfig, RevalidateConfig, WorkspaceConfig};
 
 #[derive(Parser, Debug, Clone, PartialEq, ValueEnum)]
 pub enum ImportFileFormat {

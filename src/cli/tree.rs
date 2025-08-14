@@ -9,17 +9,13 @@ use console::Color;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
+use pixi_core::{WorkspaceLocator, lock_file::UpdateLockFileOptions, workspace::Environment};
 use pixi_manifest::FeaturesExt;
 use rattler_conda_types::Platform;
 use rattler_lock::LockedPackageRef;
 use regex::Regex;
 
-use crate::{
-    WorkspaceLocator, cli::cli_config::WorkspaceConfig, lock_file::UpdateLockFileOptions,
-    workspace::Environment,
-};
-
-use super::cli_config::{LockFileUpdateConfig, NoInstallConfig};
+use crate::cli::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
 
 /// Show a tree of workspace dependencies
 #[derive(Debug, Parser)]

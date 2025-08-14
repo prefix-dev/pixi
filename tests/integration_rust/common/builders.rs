@@ -24,9 +24,14 @@
 //! ```
 
 use pixi::cli::{
-    cli_config::{GitRev, LockFileUpdateConfig, WorkspaceConfig},
-    lock,
+    add,
+    cli_config::{
+        DependencyConfig, GitRev, LockFileUpdateConfig, NoInstallConfig, RevalidateConfig,
+        WorkspaceConfig,
+    },
+    init, install, lock, remove, search, task, update, workspace,
 };
+use pixi_core::DependencyType;
 use std::{
     future::{Future, IntoFuture},
     io,
@@ -36,14 +41,6 @@ use std::{
 };
 
 use futures::FutureExt;
-use pixi::{
-    DependencyType,
-    cli::{
-        add,
-        cli_config::{DependencyConfig, NoInstallConfig, RevalidateConfig},
-        init, install, remove, search, task, update, workspace,
-    },
-};
 use pixi_manifest::{EnvironmentName, FeatureName, SpecType, task::Dependency};
 use rattler_conda_types::{NamedChannelOrUrl, Platform, RepoDataRecord};
 use url::Url;

@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://pixi.sh/v0.50.2/schema/manifest/schema.json",
+  "$id": "https://pixi.sh/v0.51.0/schema/manifest/schema.json",
   "title": "`pixi.toml` manifest file",
   "description": "The configuration for a [`pixi`](https://pixi.sh) project.",
   "type": "object",
@@ -10,7 +10,7 @@
       "title": "Schema",
       "description": "The schema identifier for the project's configuration",
       "type": "string",
-      "default": "https://pixi.sh/v0.50.2/schema/manifest/schema.json",
+      "default": "https://pixi.sh/v0.51.0/schema/manifest/schema.json",
       "format": "uri-reference"
     },
     "activation": {
@@ -540,8 +540,25 @@
           "description": "The (positional or named) arguments to pass to the task",
           "type": "array",
           "items": {
-            "type": "string",
-            "minLength": 1
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "description": "A single item task name/value object",
+                "type": "object",
+                "patternProperties": {
+                  "^[a-zA-Z_][a-zA-Z\\d_]*$": {
+                    "type": "string"
+                  }
+                },
+                "maxProperties": 1,
+                "minProperties": 1,
+                "propertyNames": {
+                  "description": "A valid task argument name"
+                }
+              }
+            ]
           }
         },
         "environment": {
@@ -552,7 +569,7 @@
         },
         "task": {
           "title": "Task",
-          "description": "A valid task name.",
+          "description": "the name of the task to depend on",
           "type": "string",
           "pattern": "^[^\\s\\$]+$"
         }
@@ -1863,8 +1880,9 @@
       "properties": {
         "arg": {
           "title": "Arg",
+          "description": "The name of the argument",
           "type": "string",
-          "minLength": 1
+          "pattern": "^[a-zA-Z_][a-zA-Z\\d_]*$"
         },
         "default": {
           "title": "Default",
@@ -1881,7 +1899,7 @@
       "properties": {
         "args": {
           "title": "Args",
-          "description": "The arguments to pass to the task",
+          "description": "The arguments to a task",
           "type": "array",
           "items": {
             "anyOf": [
@@ -1889,14 +1907,24 @@
                 "$ref": "#/$defs/TaskArgs"
               },
               {
+                "description": "A valid task argument name",
                 "type": "string",
-                "minLength": 1
+                "pattern": "^[a-zA-Z_][a-zA-Z\\d_]*$"
               }
             ]
           },
           "examples": [
-            "arg1",
-            "arg2"
+            [
+              "arg1",
+              "arg2"
+            ],
+            [
+              "arg",
+              {
+                "arg": "arg2",
+                "default": "2"
+              }
+            ]
           ]
         },
         "clean-env": {

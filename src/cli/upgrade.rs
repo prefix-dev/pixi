@@ -1,23 +1,23 @@
 use std::cmp::Ordering;
 
-use super::cli_config::{LockFileUpdateConfig, NoInstallConfig, RevalidateConfig};
-use crate::{
-    WorkspaceLocator,
-    cli::cli_config::WorkspaceConfig,
-    diff::LockFileJsonDiff,
-    workspace::{MatchSpecs, PypiDeps, WorkspaceMut},
-};
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use indexmap::IndexMap;
 use itertools::Itertools;
-use miette::{Context, IntoDiagnostic, MietteDiagnostic};
+use miette::{IntoDiagnostic, MietteDiagnostic, WrapErr};
 use pep508_rs::{MarkerTree, Requirement};
 use pixi_config::ConfigCli;
+use pixi_core::{
+    WorkspaceLocator,
+    diff::LockFileJsonDiff,
+    workspace::{MatchSpecs, PypiDeps, WorkspaceMut},
+};
 use pixi_manifest::{FeatureName, SpecType};
 use pixi_pypi_spec::PixiPypiSpec;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{MatchSpec, StringMatcher};
+
+use crate::cli::cli_config::{LockFileUpdateConfig, NoInstallConfig, RevalidateConfig, WorkspaceConfig};
 
 /// Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file.
 ///
@@ -94,7 +94,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             pypi_deps,
             IndexMap::default(),
             args.no_install_config.no_install,
-            &args.lock_file_update_config,
+            &args.lock_file_update_config.lock_file_usage()?,
             &args.specs.feature,
             &[],
             false,

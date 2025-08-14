@@ -1,12 +1,13 @@
-use crate::cli::global::revert_environment_after_error;
-use crate::cli::has_specs::HasSpecs;
-use crate::global::{EnvironmentName, ExposedName, Project, StateChanges};
 use clap::Parser;
 use itertools::Itertools;
 use miette::Context;
 use pixi_config::{Config, ConfigCli};
+use pixi_core::global::{EnvironmentName, ExposedName, Project, StateChanges};
 use rattler_conda_types::MatchSpec;
 use std::str::FromStr;
+
+use crate::cli::global::revert_environment_after_error;
+use crate::cli::has_specs::HasSpecs;
 
 /// Removes dependencies from an environment
 ///

@@ -3,10 +3,8 @@ use itertools::Itertools;
 use miette::Context;
 use pixi_config::{Config, ConfigCli};
 
-use crate::{
-    cli::global::revert_environment_after_error,
-    global::{self, EnvironmentName, ExposedName, Mapping, StateChanges},
-};
+use crate::cli::global::revert_environment_after_error;
+use pixi_core::global::{self, EnvironmentName, ExposedName, Mapping, StateChanges};
 
 /// Add exposed binaries from an environment to your global environment
 ///
