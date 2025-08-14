@@ -154,6 +154,9 @@ impl JsonRpcBackend {
         cache_dir: Option<PathBuf>,
         tool: Tool,
     ) -> Result<Self, InitializeError> {
+        debug_assert!(source_dir.is_absolute());
+        debug_assert!(manifest_path.is_absolute());
+        debug_assert!(workspace_root.is_absolute());
         // Spawn the tool and capture stdin/stdout.
         let command = tool.command();
         let program_name = command.get_program().to_string_lossy().into_owned();

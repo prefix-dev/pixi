@@ -16,8 +16,9 @@ backend-spec:
       - "https://prefix.dev/pixi-build-backends"
 init-params:
   workspace-root: "file://<ROOT>/nested_recipe_yml"
-  source-dir: "[SOURCE_PATH]"
-  manifest-path: recipe/recipe.yml
+  source: ~
+  source-anchor: file://<ROOT>
+  manifest-path: file://<ROOT>/recipe/recipe.yml
   project-model: ~
   configuration: ~
   target-configuration: ~

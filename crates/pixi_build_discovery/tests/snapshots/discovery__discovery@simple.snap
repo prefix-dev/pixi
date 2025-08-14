@@ -15,8 +15,9 @@ backend-spec:
       - "https://prefix.dev/pixi-build-backends"
 init-params:
   workspace-root: "file://<ROOT>/simple"
-  source-dir: "[SOURCE_PATH]"
-  manifest-path: pixi.toml
+  source: ~
+  source-anchor: file://<ROOT>
+  manifest-path: file://<ROOT>/pixi.toml
   project-model:
     name: simple
     version: 0.1.0
