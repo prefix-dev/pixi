@@ -51,10 +51,8 @@ pixi import [OPTIONS] <FILE>
 ## Update Options
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
 :  Don't modify the environment, only modify the lock-file
-- <a id="arg---revalidate" href="#arg---revalidate">`--revalidate`</a>
-:  Run the complete environment validation. This will reinstall a broken environment
 - <a id="arg---no-lockfile-update" href="#arg---no-lockfile-update">`--no-lockfile-update`</a>
-:  Don't update lockfile, implies the no-install as well
+:  Legacy flag to skip lock-file updates, behavior was inconsistent across commands so it has been deprecated
 - <a id="arg---frozen" href="#arg---frozen">`--frozen`</a>
 :  Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 <br>**env**: `PIXI_FROZEN`
