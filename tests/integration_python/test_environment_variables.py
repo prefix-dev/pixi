@@ -54,5 +54,5 @@ def test_variable_expansion(pixi: Path, tmp_pixi_workspace: Path) -> None:
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "today"],
         stdout_contains="Today is:",
-        stderr_excludes="$(date)",
+        stderr_excludes=["$(date)", "$(Get-Date)"],
     )
