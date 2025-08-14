@@ -5,7 +5,7 @@
 
 ## Usage
 ```
-pixi [OPTIONS] <COMMAND>
+pixi [OPTIONS] [COMMAND]
 ```
 
 ## Subcommands
