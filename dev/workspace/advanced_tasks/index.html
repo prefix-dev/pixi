@@ -1028,7 +1028,7 @@
         <li class="md-nav__item">
   <a href="#environment-variables" class="md-nav__link">
     <span class="md-ellipsis">
-      Environment Variables
+      Environment variables
     </span>
   </a>
   
@@ -2954,7 +2954,7 @@
         <li class="md-nav__item">
   <a href="#environment-variables" class="md-nav__link">
     <span class="md-ellipsis">
-      Environment Variables
+      Environment variables
     </span>
   </a>
   
@@ -3395,39 +3395,27 @@ For example, consider a Pixi workspace structured as follows:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># shows info logs of all files that were selected by the globs</span>
 </span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>pixi<span class="w"> </span>run<span class="w"> </span>-v<span class="w"> </span>start
 </span></code></pre></div>
-<h2 id="environment-variables">Environment Variables<a class="headerlink" href="#environment-variables" title="Permanent link">#</a></h2>
-<p>You can set environment variables directly for a task, as well as by other means.
-See <a href="../../reference/environment_variables/#environment-variable-priority">the environment variable priority documentation</a> for full details of ways to set environment variables,
-and how those ways interact with each other.</p>
-<div class="admonition warning">
-<p class="admonition-title">Warning</p>
-<p>In older versions of Pixi, this priority was not well-defined, and there are a number of known
-deviations from the current priority which exist in some older versions:</p>
-<ul>
-<li><code>activation.scripts</code> used to take priority over <code>activation.env</code></li>
-<li>activation scripts of dependencies used to take priority over <code>activation.env</code></li>
-<li>outside environment variables used to override variables set in <code>task.env</code></li>
-</ul>
-<p>If you previously relied on a certain priority which no longer applies, you may need to change your
-task definitions.</p>
-<p>For the specific case of overriding <code>task.env</code> with outside environment variables, this behaviour can
-now be recreated using <a href="#task-arguments">task arguments</a>. For example, if you were previously using
-a setup like:</p>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="k">[tasks]</span>
+<h2 id="environment-variables">Environment variables<a class="headerlink" href="#environment-variables" title="Permanent link">#</a></h2>
+<p>You can set environment variables for a task.
+These are seen as "default" values for the variables as you can overwrite them from the shell.</p>
+<p><div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="k">[tasks]</span>
 </span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="n">echo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;echo $ARGUMENT&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">env</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">ARGUMENT</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;hello&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
+If you run <code>pixi run echo</code> it will output <code>hello</code>.
+When you set the environment variable <code>ARGUMENT</code> before running the task, it will use that value instead.</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="nv">ARGUMENT</span><span class="o">=</span>world<span class="w"> </span>pixi<span class="w"> </span>run<span class="w"> </span><span class="nb">echo</span>
 </span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>✨<span class="w"> </span>Pixi<span class="w"> </span>task<span class="w"> </span><span class="o">(</span><span class="nb">echo</span><span class="w"> </span><span class="k">in</span><span class="w"> </span>default<span class="o">)</span>:<span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="nv">$ARGUMENT</span>
 </span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a>world
 </span></code></pre></div>
-<p>you can now recreate this behaviour like:</p>
+<p>These variables are not shared over tasks, so you need to define these for every task you want to use them in.</p>
+<div class="admonition note">
+<p class="admonition-title">Extend instead of overwrite</p>
+<p>If you use the same environment variable in the value as in the key of the map you will also overwrite the variable.
+For example overwriting a <code>PATH</code>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="k">[tasks]</span>
-</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="n">echo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;echo {{ ARGUMENT }}&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">args</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">[{</span><span class="s2">&quot;arg&quot;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;ARGUMENT&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;default&quot;</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;hello&quot;</span><span class="w"> </span><span class="p">}]}</span>
+</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="n">echo</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;echo $PATH&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">env</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">PATH</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;/tmp/path:$PATH&quot;</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>pixi<span class="w"> </span>run<span class="w"> </span><span class="nb">echo</span><span class="w"> </span>world
-</span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a>✨<span class="w"> </span>Pixi<span class="w"> </span>task<span class="w"> </span><span class="o">(</span><span class="nb">echo</span><span class="o">)</span>:<span class="w"> </span><span class="nb">echo</span><span class="w"> </span>world
-</span><span id="__span-30-3"><a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a>world
-</span></code></pre></div>
+This will output <code>/tmp/path:/usr/bin:/bin</code> instead of the original <code>/usr/bin:/bin</code>.</p>
 </div>
 <h2 id="clean-environment">Clean environment<a class="headerlink" href="#clean-environment" title="Permanent link">#</a></h2>
 <p>You can make sure the environment of a task is "Pixi only".
@@ -3435,8 +3423,8 @@ Here Pixi will only include the minimal required environment variables for your 
 The environment will contain all variables set by the conda environment like <code>"CONDA_PREFIX"</code>.
 It will however include some default values from the shell, like:
 <code>"DISPLAY"</code>, <code>"LC_ALL"</code>, <code>"LC_TIME"</code>, <code>"LC_NUMERIC"</code>, <code>"LC_MEASUREMENT"</code>, <code>"SHELL"</code>, <code>"USER"</code>, <code>"USERNAME"</code>, <code>"LOGNAME"</code>, <code>"HOME"</code>, <code>"HOSTNAME"</code>,<code>"TMPDIR"</code>, <code>"XPC_SERVICE_NAME"</code>, <code>"XPC_FLAGS"</code></p>
-<p><div class="language-toml highlight"><pre><span></span><code><span id="__span-31-1"><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="k">[tasks]</span>
-</span><span id="__span-31-2"><a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="n">clean_command</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;python run_in_isolated_env.py&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">clean-env</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="p">}</span>
+<p><div class="language-toml highlight"><pre><span></span><code><span id="__span-30-1"><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="k">[tasks]</span>
+</span><span id="__span-30-2"><a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="n">clean_command</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">cmd</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;python run_in_isolated_env.py&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">clean-env</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="kc">true</span><span class="p">}</span>
 </span></code></pre></div>
 This setting can also be set from the command line with <code>pixi run --clean-env TASK_NAME</code>.</p>
 <div class="admonition warning">

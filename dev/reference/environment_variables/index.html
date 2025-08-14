@@ -2473,15 +2473,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#environment-variable-priority" class="md-nav__link">
-    <span class="md-ellipsis">
-      Environment Variable Priority
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -2705,15 +2696,6 @@
   
 </li>
       
-        <li class="md-nav__item">
-  <a href="#environment-variable-priority" class="md-nav__link">
-    <span class="md-ellipsis">
-      Environment Variable Priority
-    </span>
-  </a>
-  
-</li>
-      
     </ul>
   
 </nav>
@@ -2789,87 +2771,6 @@
 <p class="admonition-title">Note</p>
 <p>Even though the variables are environment variables these cannot be overridden. E.g. you can not change the root of the project by setting <code>PIXI_PROJECT_ROOT</code> in the environment.</p>
 </div>
-<h2 id="environment-variable-priority">Environment Variable Priority<a class="headerlink" href="#environment-variable-priority" title="Permanent link">#</a></h2>
-<p>The following priority rule applies for environment variables: <code>task.env</code> &gt; <code>activation.env</code> &gt; <code>activation.scripts</code> &gt; activation scripts of dependencies &gt; outside environment variables.
-Variables defined at a higher priority will override those defined at a lower priority.</p>
-<div class="admonition warning">
-<p class="admonition-title">Warning</p>
-<p>In older versions of Pixi, this priority was not well-defined, and there are a number of known
-deviations from the current priority which exist in some older versions.
-Please see the warning in <a href="../../workspace/advanced_tasks/#environment-variables">the advanced tasks documentation</a>
-for further details and migration guidance.</p>
-</div>
-<h5 id="example-1-taskenv-activationenv">Example 1:  <code>task.env</code> &gt; <code>activation.env</code><a class="headerlink" href="#example-1-taskenv-activationenv" title="Permanent link">#</a></h5>
-<p>In <code>pixi.toml</code>, we defined an environment variable <code>HELLO_WORLD</code> in both <code>tasks.hello</code> and <code>activation.env</code>. </p>
-<p>When we run <code>echo $HELLO_WORLD</code>, it will output:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Hello world!
-</span></code></pre></div></p>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[tasks.hello]</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">cmd</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;echo $HELLO_WORLD&quot;</span>
-</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">env</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">HELLO_WORLD</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;Hello world!&quot;</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="k">[activation.env]</span>
-</span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="n">HELLO_WORLD</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;Activate!&quot;</span>
-</span></code></pre></div>
-<h5 id="example-2-activationenv-activationscripts">Example 2: <code>activation.env</code> &gt; <code>activation.scripts</code><a class="headerlink" href="#example-2-activationenv-activationscripts" title="Permanent link">#</a></h5>
-<p>In <code>pixi.toml</code>, we defined the same environment variable <code>DEBUG_MODE</code> in both <code>activation.env</code> and in the activation script file <code>setup.sh</code>.
-When we run <code>echo Debug mode: $DEBUG_MODE</code>, it will output:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>Debug<span class="w"> </span>mode:<span class="w"> </span>enabled
-</span></code></pre></div></p>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[activation.env]</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">DEBUG_MODE</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;enabled&quot;</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
-</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="k">[activation]</span>
-</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;setup.sh&quot;</span><span class="p">]</span>
-</span></code></pre></div>
-<div class="language-bash highlight"><span class="filename">setup.sh</span><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">DEBUG_MODE</span><span class="o">=</span><span class="s2">&quot;disabled&quot;</span>
-</span></code></pre></div>
-<h5 id="example-3-activationscripts-activation-scripts-of-dependencies">Example 3: <code>activation.scripts</code> &gt; activation scripts of dependencies<a class="headerlink" href="#example-3-activationscripts-activation-scripts-of-dependencies" title="Permanent link">#</a></h5>
-<p>In <code>pixi.toml</code>, we have our local activation script and a dependency <code>my-package</code> that also sets environment variables through its activation scripts.
-When we run <code>echo Library path: $LIB_PATH</code>, it will output:
-<div class="language-text highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>Library path: /my/lib
-</span></code></pre></div></p>
-<p><div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">[activation]</span>
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;local_setup.sh&quot;</span><span class="p">]</span>
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="k">[dependencies]</span>
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="n">my-package</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w">  </span><span class="c1"># This package has its own activation scripts that set LIB_PATH=&quot;/dep/lib&quot;</span>
-</span></code></pre></div>
-<div class="language-bash highlight"><span class="filename">local_setup.sh</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">LIB_PATH</span><span class="o">=</span><span class="s2">&quot;/my/lib&quot;</span>
-</span></code></pre></div></p>
-<h5 id="example-4-activation-scripts-of-dependencies-outside-environment-variable">Example 4: activation scripts of dependencies &gt; outside environment variable<a class="headerlink" href="#example-4-activation-scripts-of-dependencies-outside-environment-variable" title="Permanent link">#</a></h5>
-<p>If we have a dependency that sets <code>PYTHON_PATH</code> and the same variable is already set in the outside environment.
-When we run <code>echo Python path: $PYTHON_PATH</code>, it will output:
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>Python<span class="w"> </span>path:<span class="w"> </span>/pixi/python
-</span></code></pre></div>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a># Outside environment
-</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>export PYTHON_PATH=&quot;/system/python&quot;
-</span></code></pre></div>
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">[dependencies]</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="n">python-utils</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w">  </span><span class="c1"># This package sets PYTHON_PATH=&quot;/pixi/python&quot; in its activation scripts</span>
-</span></code></pre></div></p>
-<h5 id="example-5-complex-example-all-priorities-combined">Example 5: Complex Example - All priorities combined<a class="headerlink" href="#example-5-complex-example-all-priorities-combined" title="Permanent link">#</a></h5>
-<p>In <code>pixi.toml</code>, we define the same variable <code>APP_CONFIG</code> across multiple levels:
-<div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[tasks.start]</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">cmd</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;echo Config: $APP_CONFIG&quot;</span>
-</span><span id="__span-11-3"><a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="n">env</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">APP_CONFIG</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;task-specific&quot;</span><span class="w"> </span><span class="p">}</span>
-</span><span id="__span-11-4"><a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>
-</span><span id="__span-11-5"><a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="k">[activation.env]</span>
-</span><span id="__span-11-6"><a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="n">APP_CONFIG</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;activation-env&quot;</span>
-</span><span id="__span-11-7"><a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a>
-</span><span id="__span-11-8"><a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="k">[activation]</span>
-</span><span id="__span-11-9"><a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;app_setup.sh&quot;</span><span class="p">]</span>
-</span><span id="__span-11-10"><a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a>
-</span><span id="__span-11-11"><a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="k">[dependencies]</span>
-</span><span id="__span-11-12"><a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="n">config-loader</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w">  </span><span class="c1"># Sets APP_CONFIG=&quot;dependency-config&quot;</span>
-</span></code></pre></div>
-<div class="language-bash highlight"><span class="filename">app_setup.sh</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">APP_CONFIG</span><span class="o">=</span><span class="s2">&quot;activation-script&quot;</span>
-</span></code></pre></div>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Outside environment</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">APP_CONFIG</span><span class="o">=</span><span class="s2">&quot;system-config&quot;</span>
-</span></code></pre></div></p>
-<p>Since <code>task.env</code> has the highest priority, when we run <code>pixi run start</code> it will output:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>Config: task-specific
-</span></code></pre></div>
 
 
 

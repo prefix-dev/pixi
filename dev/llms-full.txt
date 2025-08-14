@@ -3869,21 +3869,9 @@ pixi run -v start
 
 ```
 
-## Environment Variables
+## Environment variables
 
-You can set environment variables directly for a task, as well as by other means. See [the environment variable priority documentation](../../reference/environment_variables/#environment-variable-priority) for full details of ways to set environment variables, and how those ways interact with each other.
-
-Warning
-
-In older versions of Pixi, this priority was not well-defined, and there are a number of known deviations from the current priority which exist in some older versions:
-
-- `activation.scripts` used to take priority over `activation.env`
-- activation scripts of dependencies used to take priority over `activation.env`
-- outside environment variables used to override variables set in `task.env`
-
-If you previously relied on a certain priority which no longer applies, you may need to change your task definitions.
-
-For the specific case of overriding `task.env` with outside environment variables, this behaviour can now be recreated using [task arguments](#task-arguments). For example, if you were previously using a setup like:
+You can set environment variables for a task. These are seen as "default" values for the variables as you can overwrite them from the shell.
 
 pixi.toml
 
@@ -3893,6 +3881,8 @@ echo = { cmd = "echo $ARGUMENT", env = { ARGUMENT = "hello" } }
 
 ```
 
+If you run `pixi run echo` it will output `hello`. When you set the environment variable `ARGUMENT` before running the task, it will use that value instead.
+
 ```shell
 ARGUMENT=world pixi run echo
 ✨ Pixi task (echo in default): echo $ARGUMENT
@@ -3900,22 +3890,19 @@ world
 
 ```
 
-you can now recreate this behaviour like:
+These variables are not shared over tasks, so you need to define these for every task you want to use them in.
 
-pixi.toml
+Extend instead of overwrite
+
+If you use the same environment variable in the value as in the key of the map you will also overwrite the variable. For example overwriting a `PATH` pixi.toml
 
 ```toml
 [tasks]
-echo = { cmd = "echo {{ ARGUMENT }}", args = [{"arg" = "ARGUMENT", "default" = "hello" }]}
+echo = { cmd = "echo $PATH", env = { PATH = "/tmp/path:$PATH" } }
 
 ```
 
-```shell
-pixi run echo world
-✨ Pixi task (echo): echo world
-world
-
-```
+This will output `/tmp/path:/usr/bin:/bin` instead of the original `/usr/bin:/bin`.
 
 ## Clean environment
 
@@ -7527,7 +7514,7 @@ To configure an interpreter for a new project:
 
 1. Once you have added and renamed the environments, select the desired interpreter to use in PyCharm from the list.
 
-If your project uses more than one environment, you can switch between them by selecting interpreter name in the status bar at the bottom of the PyCharm window and selecting the interpreter for the desired interpeter from the list. Note that this will trigger PyCharm reindexing and might not be very fast.
+If your project uses more than one environment, you can switch between them by selecting interpreter name in the status bar at the bottom of the PyCharm window and selecting the interpreter for the desired interpreter from the list. Note that this will trigger PyCharm reindexing and might not be very fast.
 
 As with the pixi-pycharm shim, you should avoid using the PyCharm UI to attempt to add or remove packages from your environments and you should make sure to [exclude the `.pixi` directory from PyCharm indexing](#exclude-.pixi).
 
@@ -8655,148 +8642,6 @@ The following environment variables are set by Pixi, when using the `pixi run`, 
 Note
 
 Even though the variables are environment variables these cannot be overridden. E.g. you can not change the root of the project by setting `PIXI_PROJECT_ROOT` in the environment.
-
-## Environment Variable Priority
-
-The following priority rule applies for environment variables: `task.env` > `activation.env` > `activation.scripts` > activation scripts of dependencies > outside environment variables. Variables defined at a higher priority will override those defined at a lower priority.
-
-Warning
-
-In older versions of Pixi, this priority was not well-defined, and there are a number of known deviations from the current priority which exist in some older versions. Please see the warning in [the advanced tasks documentation](../../workspace/advanced_tasks/#environment-variables) for further details and migration guidance.
-
-##### Example 1: `task.env` > `activation.env`
-
-In `pixi.toml`, we defined an environment variable `HELLO_WORLD` in both `tasks.hello` and `activation.env`.
-
-When we run `echo $HELLO_WORLD`, it will output:
-
-```text
-Hello world!
-
-```
-
-pixi.toml
-
-```toml
-[tasks.hello]
-cmd = "echo $HELLO_WORLD"
-env = { HELLO_WORLD = "Hello world!" }
-[activation.env]
-HELLO_WORLD = "Activate!"
-
-```
-
-##### Example 2: `activation.env` > `activation.scripts`
-
-In `pixi.toml`, we defined the same environment variable `DEBUG_MODE` in both `activation.env` and in the activation script file `setup.sh`. When we run `echo Debug mode: $DEBUG_MODE`, it will output:
-
-```bash
-Debug mode: enabled
-
-```
-
-pixi.toml
-
-```toml
-[activation.env]
-DEBUG_MODE = "enabled"
-[activation]
-scripts = ["setup.sh"]
-
-```
-
-setup.sh
-
-```bash
-export DEBUG_MODE="disabled"
-
-```
-
-##### Example 3: `activation.scripts` > activation scripts of dependencies
-
-In `pixi.toml`, we have our local activation script and a dependency `my-package` that also sets environment variables through its activation scripts. When we run `echo Library path: $LIB_PATH`, it will output:
-
-```text
-Library path: /my/lib
-
-```
-
-pixi.toml
-
-```toml
-[activation]
-scripts = ["local_setup.sh"]
-[dependencies]
-my-package = "*"  # This package has its own activation scripts that set LIB_PATH="/dep/lib"
-
-```
-
-local_setup.sh
-
-```bash
-export LIB_PATH="/my/lib"
-
-```
-
-##### Example 4: activation scripts of dependencies > outside environment variable
-
-If we have a dependency that sets `PYTHON_PATH` and the same variable is already set in the outside environment. When we run `echo Python path: $PYTHON_PATH`, it will output:
-
-```bash
-Python path: /pixi/python
-
-```
-
-```text
-# Outside environment
-export PYTHON_PATH="/system/python"
-
-```
-
-pixi.toml
-
-```toml
-[dependencies]
-python-utils = "*"  # This package sets PYTHON_PATH="/pixi/python" in its activation scripts
-
-```
-
-##### Example 5: Complex Example - All priorities combined
-
-In `pixi.toml`, we define the same variable `APP_CONFIG` across multiple levels: pixi.toml
-
-```toml
-[tasks.start]
-cmd = "echo Config: $APP_CONFIG"
-env = { APP_CONFIG = "task-specific" }
-[activation.env]
-APP_CONFIG = "activation-env"
-[activation]
-scripts = ["app_setup.sh"]
-[dependencies]
-config-loader = "*"  # Sets APP_CONFIG="dependency-config"
-
-```
-
-app_setup.sh
-
-```bash
-export APP_CONFIG="activation-script"
-
-```
-
-```bash
-# Outside environment
-export APP_CONFIG="system-config"
-
-```
-
-Since `task.env` has the highest priority, when we run `pixi run start` it will output:
-
-```text
-Config: task-specific
-
-```
 
 # The Configuration of Pixi Itself
 
