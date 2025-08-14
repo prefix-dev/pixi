@@ -8,11 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### [0.52.0] - 2025-08-14
 #### ✨ Highlights
 
-You can now use `pixi global` to install named source dependencies.
+You can now use `pixi global` to install source dependencies.
 ```
 pixi global install --path path/to/my-package my-package
 ```
-Nameless source dependencies will be added later!
+At the moment, you still have to specify the package name, which we will improve on later!
 
 #### ⚠️ Breaking Change
 
