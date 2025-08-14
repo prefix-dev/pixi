@@ -83,10 +83,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         )
     };
 
-    if args.lock_file_update_config.lock_file_usage.frozen
-        || args.lock_file_update_config.lock_file_usage.locked
+    if !args.no_install_config.allow_installs()
+        && (args.lock_file_update_config.lock_file_usage.frozen
+            || args.lock_file_update_config.lock_file_usage.locked)
     {
-        tracing::info!(
+        tracing::warn!(
             "using `--frozen` or `--locked` will not make any changes and does not display results. You probably meant: `--dry-run`"
         )
     }
