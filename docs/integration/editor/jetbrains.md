@@ -169,7 +169,7 @@ To configure an interpreter for a new project:
 5. Once you have added and renamed the environments, select the desired interpreter to use in PyCharm from the list.
 
 If your project uses more than one environment, you can switch between them by selecting interpreter name in the
-status bar at the bottom of the PyCharm window and selecting the interpreter for the desired interpeter from the list.
+status bar at the bottom of the PyCharm window and selecting the interpreter for the desired interpreter from the list.
 Note that this will trigger PyCharm reindexing and might not be very fast.
 
 As with the pixi-pycharm shim, you should avoid using the PyCharm UI to attempt to add or remove packages from your environments and you should
