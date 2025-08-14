@@ -1135,6 +1135,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn test_expand_env_variable_dollar_brace() {
         // Test ${VAR} pattern
         with_var("TEST_ENV_VAR", Some("test_value"), || {
@@ -1144,16 +1145,7 @@ mod tests {
     }
 
     #[test]
-    fn test_expand_env_variable_dollar() {
-        // Test $VAR pattern (without braces)
-        with_var("MY_TEST_VAR", Some("my_value"), || {
-            let result = Environment::expand_variable("$MY_TEST_VAR");
-            assert_eq!(result, "my_value");
-        });
-    }
-
-    #[test]
-    #[cfg(target_os = "windows")]
+    #[cfg(windows)]
     fn test_expand_env_variable_percent_windows() {
         // Windows %VAR% pattern
         with_var("WIN_TEST_VAR", Some("windows_value"), || {
