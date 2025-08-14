@@ -74,7 +74,7 @@ pub struct Args {
     #[clap(flatten)]
     global_options: GlobalOptions,
 
-    /// List installed commands (built-in and extensions)
+    /// List all installed commands (built-in and extensions)
     #[clap(long = "list", help_heading = consts::CLAP_GLOBAL_OPTIONS)]
     list: bool,
 }
