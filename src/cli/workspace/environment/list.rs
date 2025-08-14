@@ -1,7 +1,7 @@
+use pixi_core::Workspace;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use pixi_consts::consts;
-use pixi_core::Workspace;
 use pixi_manifest::HasFeaturesIter;
 
 pub async fn execute(workspace: Workspace) -> miette::Result<()> {

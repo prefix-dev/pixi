@@ -1,7 +1,7 @@
+use pixi_core::global::Project;
 use clap::Parser;
 use fs_err as fs;
 use miette::IntoDiagnostic;
-use pixi_core::global::Project;
 
 /// Edit the global manifest file
 ///

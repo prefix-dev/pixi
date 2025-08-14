@@ -1,6 +1,6 @@
+use pixi_core::Workspace;
 use clap::Parser;
 use miette::IntoDiagnostic;
-use pixi_core::Workspace;
 use pixi_manifest::EnvironmentName;
 
 #[derive(Parser, Debug)]

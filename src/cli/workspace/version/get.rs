@@ -1,5 +1,5 @@
-use clap::Parser;
 use pixi_core::Workspace;
+use clap::Parser;
 
 #[derive(Parser, Debug, Default)]
 pub struct Args {}
