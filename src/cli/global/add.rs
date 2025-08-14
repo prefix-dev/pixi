@@ -3,7 +3,7 @@ use crate::cli::global::revert_environment_after_error;
 
 use clap::Parser;
 use pixi_config::{Config, ConfigCli};
-use pixi_core::global::project::NamedGlobalSpec;
+use pixi_core::global::project::GlobalSpec;
 use pixi_core::global::{EnvironmentName, Mapping, Project, StateChange, StateChanges};
 
 /// Adds dependencies to an environment
@@ -48,7 +48,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     async fn apply_changes(
         env_name: &EnvironmentName,
-        specs: &[NamedGlobalSpec],
+        specs: &[GlobalSpec],
         expose: &[Mapping],
         project: &mut Project,
     ) -> miette::Result<StateChanges> {

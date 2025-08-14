@@ -73,7 +73,7 @@ mod environment;
 mod global_spec;
 mod manifest;
 mod parsed_manifest;
-pub use global_spec::{FromMatchSpecError, GlobalSpec, NamedGlobalSpec};
+pub use global_spec::{FromMatchSpecError, GlobalSpec};
 use pixi_build_frontend::BackendOverride;
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]

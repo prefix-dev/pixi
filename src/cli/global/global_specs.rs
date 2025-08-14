@@ -64,13 +64,13 @@ pub enum GlobalSpecsConversionError {
 }
 
 impl GlobalSpecs {
-    /// Convert GlobalSpecs to a vector of NamedGlobalSpec instances
+    /// Convert GlobalSpecs to a vector of GlobalSpec instances
     pub async fn to_named_global_specs(
         &self,
         channel_config: &ChannelConfig,
         manifest_root: &Path,
         project: &pixi_core::global::Project,
-    ) -> Result<Vec<pixi_core::global::project::NamedGlobalSpec>, GlobalSpecsConversionError> {
+    ) -> Result<Vec<pixi_core::global::project::GlobalSpec>, GlobalSpecsConversionError> {
         if self.specs.is_empty() && self.git.is_none() && self.path.is_none() {
             return Err(GlobalSpecsConversionError::SpecsMissing);
         }
@@ -103,7 +103,7 @@ impl GlobalSpecs {
             if self.specs.is_empty() {
                 // Infer the package name from the path/git spec
                 let inferred_name = project.infer_package_name_from_spec(&pixi_spec).await?;
-                return Ok(vec![pixi_core::global::project::NamedGlobalSpec::new(
+                return Ok(vec![pixi_core::global::project::GlobalSpec::new(
                     inferred_name,
                     pixi_spec,
                 )]);
@@ -116,7 +116,7 @@ impl GlobalSpecs {
                         .name
                         .ok_or(GlobalSpecsConversionError::NameRequired)
                         .map(|name| {
-                            pixi_core::global::project::NamedGlobalSpec::new(
+                            pixi_core::global::project::GlobalSpec::new(
                                 name,
                                 pixi_spec.clone(),
                             )
@@ -127,7 +127,7 @@ impl GlobalSpecs {
             self.specs
                 .iter()
                 .map(|spec_str| {
-                    pixi_core::global::project::NamedGlobalSpec::try_from_str(
+                    pixi_core::global::project::GlobalSpec::try_from_str(
                         spec_str,
                         channel_config,
                     )
