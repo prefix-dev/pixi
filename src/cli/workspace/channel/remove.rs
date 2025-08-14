@@ -1,4 +1,5 @@
 use miette::IntoDiagnostic;
+use pixi_core::lock_file::{ReinstallPackages, UpdateMode};
 use pixi_core::{
     UpdateLockFileOptions, WorkspaceLocator,
     environment::get_update_lock_file_and_prefix,

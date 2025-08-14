@@ -10,7 +10,6 @@ use deno_task_shell::{
     ShellPipeWriter, ShellState, execute_with_pipes, parser::SequentialList, pipe,
 };
 use fs_err::tokio as tokio_fs;
-use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{Context, Diagnostic};
 use pixi_consts::consts;
@@ -130,10 +129,7 @@ impl<'p> ExecutableTask<'p> {
     }
 
     /// Returns the task as script
-    fn as_script(
-        &self,
-        command_env: IndexMap<String, String>,
-    ) -> Result<Option<String>, FailedToParseShellScript> {
+    fn as_script(&self) -> Result<Option<String>, FailedToParseShellScript> {
         // Convert the task into an executable string
         let task = self
             .task
@@ -141,7 +137,7 @@ impl<'p> ExecutableTask<'p> {
             .map_err(FailedToParseShellScript::ArgumentReplacement)?;
         if let Some(task) = task {
             // Get the export specific environment variables
-            let export = get_export_specific_task_env(self.task.as_ref(), command_env);
+            let export = get_export_specific_task_env(self.task.as_ref());
 
             // Append the command line arguments verbatim
             let cli_args = if let ArgValues::FreeFormArgs(additional_args) = &self.args {
@@ -169,15 +165,8 @@ impl<'p> ExecutableTask<'p> {
     /// Returns a [`SequentialList`] which can be executed by deno task shell.
     /// Returns `None` if the command is not executable like in the case of
     /// an alias.
-    pub fn as_deno_script(
-        &self,
-        command_env: &HashMap<OsString, OsString>,
-    ) -> Result<Option<SequentialList>, FailedToParseShellScript> {
-        let command_env_converted: IndexMap<String, String> = command_env
-            .iter()
-            .filter_map(|(k, v)| Some((k.to_str()?.to_string(), v.to_str()?.to_string())))
-            .collect();
-        let full_script = self.as_script(command_env_converted)?;
+    pub fn as_deno_script(&self) -> Result<Option<SequentialList>, FailedToParseShellScript> {
+        let full_script = self.as_script()?;
 
         if let Some(full_script) = full_script {
             tracing::debug!("Parsing shell script: {}", full_script);
@@ -248,7 +237,7 @@ impl<'p> ExecutableTask<'p> {
         command_env: &HashMap<OsString, OsString>,
         input: Option<&[u8]>,
     ) -> Result<RunOutput, TaskExecutionError> {
-        let Some(script) = self.as_deno_script(command_env)? else {
+        let Some(script) = self.as_deno_script()? else {
             return Ok(RunOutput {
                 exit_code: 0,
                 stdout: String::new(),
@@ -393,98 +382,24 @@ fn get_output_writer_and_handle() -> (ShellPipeWriter, JoinHandle<String>) {
     (writer, handle)
 }
 
-struct EnvMap {
-    command_env: IndexMap<String, String>,
-    task_specific_envs: IndexMap<String, String>,
-}
-
-impl EnvMap {
-    fn new(
-        command_env: IndexMap<String, String>,
-        task_specific_envs: Option<&IndexMap<String, String>>,
-    ) -> Self {
-        Self {
-            command_env,
-            task_specific_envs: task_specific_envs.cloned().unwrap_or_default(),
-        }
-    }
-
-    // Get environment by key - returns reference to IndexMap directly
-    fn get(&self, key: &str) -> Option<&IndexMap<String, String>> {
-        match key {
-            "command_env" => Some(&self.command_env),
-            "task_specific_envs" => Some(&self.task_specific_envs),
-            _ => None,
-        }
-    }
-
-    // Priority keys sorted from lowest to highest priority
-    fn priority_keys(&self) -> [&'static str; 2] {
-        ["command_env", "task_specific_envs"]
-    }
-
-    // Check if task_specific_envs contains a key
-    fn task_specific_contains_key(&self, key: &str) -> bool {
-        self.task_specific_envs.contains_key(key)
-    }
-
-    // Merge by priority
-    fn merge_by_priority(&self) -> IndexMap<String, String> {
-        let mut merged = IndexMap::new();
-
-        // Apply priority order: from lowest to highest using priority_keys()
-        for key in self.priority_keys() {
-            if let Some(env_map_key) = self.get(key) {
-                merged.extend(env_map_key.clone());
+/// Task specific environment variables.
+fn get_export_specific_task_env(task: &Task) -> String {
+    // Append the environment variables if they don't exist
+    let mut export = String::new();
+    if let Some(env) = task.env() {
+        for (key, value) in env {
+            if value.contains(format!("${}", key).as_str()) || std::env::var(key.as_str()).is_err()
+            {
+                tracing::info!("Setting environment variable: {}=\"{}\"", key, value);
+                export.push_str(&format!("export \"{}={}\";\n", key, value));
+            } else {
+                tracing::info!("Environment variable {} already set", key);
             }
         }
-
-        merged
     }
-}
-
-/// Get the environment variables based on their priority
-fn get_export_specific_task_env(task: &Task, command_env: IndexMap<String, String>) -> String {
-    // Early return if task.env() is empty
-    if task.env().is_none_or(|map| map.is_empty()) {
-        return String::new();
-    }
-
-    // Define keys that should not be overridden
-    let override_excluded_keys = consts::get_override_excluded_keys();
-
-    // Create environment map struct
-    let env_map = EnvMap::new(command_env.clone(), task.env());
-
-    let task_env = task
-        .env()
-        .expect("Task environment should exist at this point");
-
-    // Determine export strategy
-    let mut export_merged = if task_env.keys().all(|k| !command_env.contains_key(k)) {
-        // If task.env() and command_env don't have duplicated keys, simply export task.env().
-        task_env.clone()
-    } else {
-        // Handle conflicts with priority merging
-        env_map.merge_by_priority()
-    };
-
-    Environment::resolve_variable_references(&mut export_merged);
-    // Build export string
-    // Put all merged environment variables to export.
-    // Only the keys that are in "task_specific_envs" map would be exported.
-    let mut export = String::new();
-    for (key, value) in export_merged {
-        let should_exclude = override_excluded_keys.contains(key.as_str());
-
-        if env_map.task_specific_contains_key(&key) && !should_exclude {
-            tracing::info!("Setting environment variable: {}=\"{}\"", key, value);
-            export.push_str(&format!("export \"{}={}\";\n", key, value));
-        }
-    }
-
     export
 }
+
 /// Determine the environment variables to use when executing a command. The
 /// method combines the activation environment with the system environment
 /// variables.
@@ -544,10 +459,10 @@ mod tests {
         "#;
 
     #[test]
-    fn test_export_specific_task_env_merge() {
+    fn test_export_specific_task_env() {
         let file_contents = r#"
             [tasks]
-            test = {cmd = "test", cwd = "tests", env = {FOO = "bar"}}
+            test = {cmd = "test", cwd = "tests", env = {FOO = "bar", BAR = "$FOO"}}
             "#;
         let workspace = Workspace::from_str(
             Path::new("pixi.toml"),
@@ -559,53 +474,10 @@ mod tests {
             .default_environment()
             .task(&TaskName::from("test"), None)
             .unwrap();
-        // Environment Variables
-        let mut my_map: IndexMap<String, String> = IndexMap::new();
 
-        my_map.insert("PATH".to_string(), "myPath".to_string());
-        my_map.insert("HOME".to_string(), "myHome".to_string());
+        let export = get_export_specific_task_env(task);
 
-        let result = get_export_specific_task_env(task, my_map);
-
-        let expected_prefix = "export \"FOO=bar\"";
-        let path_prefix = "export \"PATH=myPath\"";
-        let home_prefix = "export \"HOME=myHome\"";
-
-        assert!(result.contains(expected_prefix));
-        // keys not defined in the task are not exported
-        assert!(!result.contains(path_prefix));
-        assert!(!result.contains(home_prefix));
-    }
-
-    #[test]
-    fn test_export_specific_task_env_priority() {
-        let file_contents = r#"
-            [tasks]
-            test = {cmd = "test", cwd = "tests", env = {FOO = "bar"}}
-            "#;
-        let workspace = Workspace::from_str(
-            Path::new("pixi.toml"),
-            &format!("{PROJECT_BOILERPLATE}\n{file_contents}"),
-        )
-        .unwrap();
-
-        let task = workspace
-            .default_environment()
-            .task(&TaskName::from("test"), None)
-            .unwrap();
-        // Environment Variables
-        let mut my_map: IndexMap<String, String> = IndexMap::new();
-
-        my_map.insert("FOO".to_string(), "123".to_string());
-        my_map.insert("HOME".to_string(), "myHome".to_string());
-
-        let result = get_export_specific_task_env(task, my_map);
-        // task specific env overrides outside environment variables
-        let expected_prefix = "export \"FOO=bar\"";
-        let home_prefix = "export \"HOME=myHome\"";
-        assert!(result.contains(expected_prefix));
-        // keys not defined in the task are not exported
-        assert!(!result.contains(home_prefix));
+        assert_eq!(export, "export \"FOO=bar\";\nexport \"BAR=$FOO\";\n");
     }
 
     #[test]
@@ -634,24 +506,8 @@ mod tests {
             args: ArgValues::default(),
         };
 
-        // Environment Variables
-        let mut my_map: IndexMap<String, String> = IndexMap::new();
-
-        my_map.insert("PATH".to_string(), "myPath".to_string());
-        my_map.insert("HOME".to_string(), "myHome".to_string());
-
-        let result = executable_task.as_script(my_map);
-
-        let expected_prefix = "export \"FOO=bar\"";
-
-        let script = result.unwrap().expect("Script should not be None");
-        let path_prefix = "export \"PATH=myPath\"";
-        let home_prefix = "export \"HOME=myHome\"";
-
-        assert!(script.contains(expected_prefix));
-        // keys not defined in the task are not included
-        assert!(!script.contains(path_prefix));
-        assert!(!script.contains(home_prefix));
+        let script = executable_task.as_script().unwrap().unwrap();
+        assert_eq!(script, "export \"FOO=bar\";\n\ntest ");
     }
 
     #[tokio::test]
