@@ -5,7 +5,7 @@ from contextlib import contextmanager
 from enum import IntEnum
 from pathlib import Path
 import sys
-from typing import Generator, List, Optional, Sequence, Set, Tuple
+from typing import Generator, Optional, Sequence, Set, Tuple
 
 from rattler import Platform
 
@@ -271,7 +271,7 @@ def check_command_supports_flags(command_parts: list[str], *flag_names: str) -> 
         return tuple(False for _ in flag_names)
 
 
-def find_commands_supporting_flags(*flag_names: str) -> List[str]:
+def find_commands_supporting_flags(*flag_names: str) -> list[str]:
     """Find all pixi commands that support ALL of the specified flags.
 
     Args:
