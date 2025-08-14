@@ -3,13 +3,12 @@ use miette::{Context, IntoDiagnostic};
 use pixi_config::ConfigCli;
 use pixi_core::{
     DependencyType, UpdateLockFileOptions, WorkspaceLocator,
-    environment::get_update_lock_file_and_prefix, lock_file::{ReinstallPackages, UpdateMode},
+    environment::get_update_lock_file_and_prefix,
+    lock_file::{ReinstallPackages, UpdateMode},
 };
 use pixi_manifest::FeaturesExt;
 
-use crate::cli::cli_config::{
-    DependencyConfig, NoInstallConfig, WorkspaceConfig,
-};
+use crate::cli::cli_config::{DependencyConfig, NoInstallConfig, WorkspaceConfig};
 use crate::cli::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs};
 
 /// Removes dependencies from the workspace.
@@ -41,12 +40,7 @@ pub struct Args {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let (
-        dependency_config,
-        no_install_config,
-        lock_file_update_config,
-        workspace_config,
-    ) = (
+    let (dependency_config, no_install_config, lock_file_update_config, workspace_config) = (
         args.dependency_config,
         args.no_install_config,
         args.lock_file_update_config,

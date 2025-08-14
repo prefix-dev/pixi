@@ -26,8 +26,7 @@
 use pixi::cli::{
     add,
     cli_config::{
-        DependencyConfig, GitRev, LockFileUpdateConfig, NoInstallConfig,
-        WorkspaceConfig,
+        DependencyConfig, GitRev, LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig,
     },
     init, install, lock, remove, search, task, update, workspace,
 };
@@ -120,7 +119,6 @@ pub trait HasNoInstallConfig: Sized {
         self
     }
 }
-
 
 /// A trait used by AddBuilder and RemoveBuilder to set their inner
 /// DependencyConfig
@@ -305,7 +303,6 @@ impl HasNoInstallConfig for RemoveBuilder {
         &mut self.args.no_install_config
     }
 }
-
 
 impl IntoFuture for RemoveBuilder {
     type Output = miette::Result<()>;

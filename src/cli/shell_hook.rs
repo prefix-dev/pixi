@@ -20,9 +20,7 @@ use pixi_core::{
     workspace::{Environment, HasWorkspaceRef, get_activated_environment_variables},
 };
 
-use crate::cli::cli_config::{
-    LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig,
-};
+use crate::cli::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
 
 /// Print the pixi environment activation script.
 ///

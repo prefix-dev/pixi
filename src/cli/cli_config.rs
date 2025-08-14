@@ -156,7 +156,6 @@ impl NoInstallConfig {
     }
 }
 
-
 #[derive(Parser, Debug, Default, Clone)]
 pub struct GitRev {
     /// The git branch

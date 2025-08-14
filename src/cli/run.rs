@@ -29,9 +29,7 @@ use pixi_core::{
     workspace::{Environment, errors::UnsupportedPlatformError},
 };
 
-use crate::cli::cli_config::{
-    LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig,
-};
+use crate::cli::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
 
 /// Runs task in the pixi environment.
 ///
