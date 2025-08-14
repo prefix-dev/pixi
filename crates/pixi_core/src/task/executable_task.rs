@@ -165,9 +165,7 @@ impl<'p> ExecutableTask<'p> {
     /// Returns a [`SequentialList`] which can be executed by deno task shell.
     /// Returns `None` if the command is not executable like in the case of
     /// an alias.
-    pub fn as_deno_script(
-        &self,
-    ) -> Result<Option<SequentialList>, FailedToParseShellScript> {
+    pub fn as_deno_script(&self) -> Result<Option<SequentialList>, FailedToParseShellScript> {
         let full_script = self.as_script()?;
 
         if let Some(full_script) = full_script {
