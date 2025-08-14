@@ -1,5 +1,5 @@
-use clap::Parser;
 use clap::builder::styling::{AnsiColor, Color, Style};
+use clap::{CommandFactory, Parser};
 use indicatif::ProgressDrawTarget;
 use miette::{Diagnostic, IntoDiagnostic};
 use pixi_consts::consts;
@@ -69,16 +69,26 @@ For more information, see the documentation at: https://pixi.sh
 #[clap(arg_required_else_help = true, styles=get_styles(), disable_help_flag = true, allow_external_subcommands = true)]
 pub struct Args {
     #[command(subcommand)]
-    command: Command,
+    command: Option<Command>,
 
     #[clap(flatten)]
     global_options: GlobalOptions,
+
+    /// List all installed commands (built-in and extensions)
+    #[clap(long = "list", help_heading = consts::CLAP_GLOBAL_OPTIONS)]
+    list: bool,
 }
 
 #[derive(Debug, Parser)]
 pub struct GlobalOptions {
     /// Display help information
-    #[clap(long, short, global = true, action = clap::ArgAction::Help, help_heading = consts::CLAP_GLOBAL_OPTIONS)]
+    #[clap(
+        long,
+        short,
+        global = true,
+        action = clap::ArgAction::Help,
+        help_heading = consts::CLAP_GLOBAL_OPTIONS
+    )]
     help: Option<bool>,
 
     /// Increase logging verbosity (-v for warnings, -vv for info, -vvv for debug, -vvvv for trace)
@@ -295,7 +305,12 @@ impl LockFileUsageConfig {
 
 pub async fn execute() -> miette::Result<()> {
     let args = Args::parse();
+
+    // Extract values we need before moving args
+    let no_progress = args.no_progress();
+
     set_console_colors(&args);
+
     let use_colors = console::colors_enabled_stderr();
     let in_ci = matches!(env::var("CI").as_deref(), Ok("1" | "true"));
     let no_wrap = matches!(env::var("PIXI_NO_WRAP").as_deref(), Ok("1" | "true"));
@@ -312,15 +327,26 @@ pub async fn execute() -> miette::Result<()> {
     }))?;
 
     // Hide all progress bars if the user requested it.
-    if args.no_progress() {
+    if no_progress {
         global_multi_progress().set_draw_target(ProgressDrawTarget::hidden());
+    }
+
+    // Handle `--list`: print installed commands and exit 0
+    if args.list {
+        print_installed_commands();
+        return Ok(());
     }
 
     // Setup logging for the application.
     setup_logging(&args, use_colors)?;
 
+    let (Some(command), global_options) = (args.command, args.global_options) else {
+        // match CI expectations
+        std::process::exit(2);
+    };
+
     // Execute the command
-    execute_command(args.command, &args.global_options).await
+    execute_command(command, &global_options).await
 }
 
 #[cfg(feature = "console-subscriber")]
@@ -486,6 +512,70 @@ pub fn get_styles() -> clap::builder::Styles {
                 .fg_color(Some(Color::Ansi(AnsiColor::Green))),
         )
         .placeholder(Style::new().fg_color(Some(Color::Ansi(AnsiColor::BrightCyan))))
+}
+
+/// Print all installed commands (built-in and external extensions)
+fn print_installed_commands() {
+    use std::collections::BTreeMap;
+
+    let use_colors = console::colors_enabled_stderr();
+
+    // Header
+    if use_colors {
+        println!(
+            "{}",
+            console::style("Installed Commands:")
+                .bold()
+                .underlined()
+                .bright()
+                .green()
+        );
+    } else {
+        println!("Installed Commands:");
+    }
+
+    // Built-in commands
+    let mut builtins: BTreeMap<String, Option<String>> = BTreeMap::new();
+    for sc in Args::command().get_subcommands() {
+        builtins.insert(
+            sc.get_name().to_string(),
+            sc.get_about().map(|s| s.to_string()),
+        );
+    }
+
+    for (name, about) in builtins {
+        let summary = about
+            .as_deref()
+            .and_then(|s| s.lines().next())
+            .unwrap_or("");
+        if use_colors {
+            println!(
+                "    {} {}",
+                console::style(format!("{:<20}", name)).bright().cyan(),
+                summary
+            );
+        } else {
+            println!("    {:<20} {}", name, summary);
+        }
+    }
+
+    // External commands (pixi-*)
+    let mut external_names: Vec<String> =
+        command_info::find_external_commands().into_keys().collect();
+    external_names.sort();
+
+    for name in external_names {
+        let via = format!("(via pixi-{})", name);
+        if use_colors {
+            println!(
+                "    {} {}",
+                console::style(format!("{:<20}", name)).bright().cyan(),
+                via
+            );
+        } else {
+            println!("    {:<20} {}", name, via);
+        }
+    }
 }
 
 #[cfg(test)]
