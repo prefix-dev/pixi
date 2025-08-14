@@ -236,19 +236,6 @@ async fn try_get_valid_activation_cache(
     }
 }
 
-// Extract variable name
-fn extract_variable_name(value: &str) -> Option<&str> {
-    if let Some(inner) = value.strip_prefix('$') {
-        Some(inner)
-    } else if let Some(inner) = value.strip_prefix('%').and_then(|s| s.strip_suffix('%')) {
-        Some(inner)
-    } else if let Some(inner) = value.strip_prefix("${").and_then(|s| s.strip_suffix('}')) {
-        Some(inner)
-    } else {
-        None
-    }
-}
-
 /// Runs and caches the activation script.
 pub async fn run_activation(
     environment: &Environment<'_>,
@@ -299,7 +286,7 @@ pub async fn run_activation(
         let current_env = std::env::vars().collect::<HashMap<_, _>>();
 
         // Run and cache the activation script
-        let new_activator = activator.run_activation(
+        activator.run_activation(
             ActivationVariables {
                 // Get the current PATH variable
                 path: Default::default(),
@@ -314,29 +301,7 @@ pub async fn run_activation(
                 current_env,
             },
             None,
-        );
-
-        // `activator.env_vars` should override `activator_result` for duplicate keys
-        new_activator.map(|mut map: HashMap<String, String>| {
-            // First pass: Add all variables from activator.env_vars(as map is unordered, we need to update the referenced value in the second loop)
-            for (k, v) in &activator.env_vars {
-                map.insert(k.clone(), v.clone());
-            }
-
-            // Second pass: Loop through the map and resolve variable references
-            let keys_to_update: Vec<String> = map.keys().cloned().collect();
-            for key in keys_to_update {
-                if let Some(value) = map.get(&key).cloned() {
-                    if let Some(referenced_var) = extract_variable_name(&value) {
-                        if let Some(actual_value) = map.get(referenced_var) {
-                            map.insert(key, actual_value.clone());
-                        }
-                    }
-                }
-            }
-
-            map
-        })
+        )
     })
     .await
     .into_diagnostic()?

@@ -1,6 +1,5 @@
 import json
 import os
-import platform
 import shutil
 import signal
 import subprocess
@@ -247,7 +246,7 @@ def test_run_with_activation(pixi: Path, tmp_pixi_workspace: Path) -> None:
         stdout_contains="test123",
     )
 
-    # Validate that without experimental caching it does not use the cache
+    # Validate that without experimental it does not use the cache
     assert not tmp_pixi_workspace.joinpath(".pixi/activation-env-v0").exists()
 
     # Enable the experimental cache config
@@ -1453,106 +1452,6 @@ def test_task_caching_with_multiple_inputs_args(pixi: Path, tmp_pixi_workspace: 
             "file2",
             "cache hit",
         ],
-    )
-
-
-# Run with environment variable and sort the priority
-# variable task.env > activation.env > activation.scripts > activation scripts of dependencies > outside environment variable
-def test_run_with_environment_variable_priority(
-    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
-) -> None:
-    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
-    is_windows = platform.system() == "Windows"
-    script_extension = ".bat" if is_windows else ".sh"
-    script_manifest = tmp_pixi_workspace.joinpath(f"env_setup{script_extension}")
-    toml = f"""
-    [workspace]
-    name = "test"
-    channels = ["{dummy_channel_1}"]
-    platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
-    [activation.env]
-    MY_ENV = "test123"
-    [target.unix.activation]
-    scripts = ["env_setup.sh"]
-    [target.win-64.activation]
-    scripts = ["env_setup.bat"]
-    [tasks.task]
-    cmd = "echo $MY_ENV"
-    env = {{ MY_ENV = "test456" }}
-    [tasks.foo]
-    cmd = "echo $MY_ENV"
-    [tasks.foobar]
-    cmd = "echo $FOO_PATH"
-    [tasks.bar]
-    cmd = "echo $BAR_PATH"
-    [tasks.outside]
-    cmd = "echo $OUTSIDE_ENV"
-    [dependencies]
-    pixi-foobar = "*"
-    """
-
-    manifest.write_text(toml)
-    # Generate platform-specific script content
-    if is_windows:
-        script_content = """@echo off
-    set "MY_ENV=activation script"
-    set "FOO_PATH=activation_script"
-    """
-    else:
-        script_content = """#!/bin/bash
-    # Activation script for Unix-like systems
-    export MY_ENV="activation script"
-    export FOO_PATH="activation_script"
-    """
-    script_manifest.write_text(script_content)
-
-    # Test 1: task.env > activation.env - should use environment variable defined in specific tasks
-    verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "task"],
-        stdout_contains="test456",
-    )
-
-    # Test 2: activation.env > activation.script - should use activation.env
-    verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "foo"],
-        stdout_contains="test123",
-    )
-
-    # Test 3: activation.script > activation scripts from dependencies
-    verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "foobar"],
-        stdout_contains="activation_script",
-    )
-
-    # Test 4: activation scripts from dependencies > outside environment variable
-    verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "bar"],
-        stdout_contains="bar",
-        stdout_excludes="outside_env",
-        env={"BAR_PATH": "outside_env"},
-    )
-
-    # Test 5: if nothing specified, use outside environment variable
-    verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "outside"],
-        stdout_contains="outside_env",
-        env={"OUTSIDE_ENV": "outside_env"},
-    )
-
-    # Test 6: activation.env > outside environment variable - should use activation.env
-    verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "foo"],
-        stdout_contains="test123",
-        stdout_excludes="outside_env",
-        env={"MY_ENV": "outside_env"},
-    )
-
-    # Test 7: task.env > outside environment variable - should use environment variable defined in specific tasks
-    verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "task"],
-        stdout_contains="test456",
-        stdout_excludes="outside_env",
-        env={"MY_ENV": "outside_env"},
     )
 
 
