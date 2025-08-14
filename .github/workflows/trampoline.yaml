@@ -1,11 +1,6 @@
 name: Update Trampoline Binaries
 
 on:
-  push:
-    paths:
-      - "trampoline/**"
-      - ".github/workflows/trampoline.yaml"
-      - "src/global/trampoline.rs"
   workflow_dispatch:
   pull_request:
     paths:
