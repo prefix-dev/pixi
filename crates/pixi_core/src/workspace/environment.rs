@@ -380,7 +380,7 @@ impl<'p> Environment<'p> {
     }
 
     // Execute a parsed command string
-    fn exec_string_parsed(cmd_str: &str) -> Result<String, String> {
+    pub fn exec_string_parsed(cmd_str: &str) -> Result<String, String> {
         let clean_cmd: &str = cmd_str.trim().trim_matches('"');
         let parts: Vec<&str> = clean_cmd.split_whitespace().collect();
 
@@ -513,6 +513,7 @@ mod tests {
     use insta::assert_snapshot;
     use itertools::Itertools;
     use pixi_manifest::CondaDependencies;
+    use temp_env::with_var;
 
     use super::*;
 
@@ -1091,5 +1092,73 @@ mod tests {
             env.validate_platform_support(Some(Platform::EmscriptenWasm32))
                 .is_ok()
         );
+    }
+
+    #[test]
+    fn test_exec_simple_command() {
+        let result = Environment::exec_string_parsed("echo hello").unwrap();
+        assert_eq!(result.trim(), "hello");
+    }
+
+    #[test]
+    fn test_exec_command_with_multiple_args() {
+        let result = Environment::exec_string_parsed("echo arg1 arg2 arg3").unwrap();
+        assert_eq!(result.trim(), "arg1 arg2 arg3");
+    }
+
+    #[test]
+    fn test_exec_empty_command() {
+        let result = Environment::exec_string_parsed("");
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Empty command");
+    }
+
+    #[test]
+    fn test_exec_command_with_leading_trailing_whitespace() {
+        let result = Environment::exec_string_parsed("  echo hello  ").unwrap();
+        assert_eq!(result.trim(), "hello");
+    }
+
+    #[test]
+    fn test_expand_command_substitution() {
+        // Test $(command) pattern
+        let result = Environment::expand_variable("$(echo hello)");
+        assert_eq!(result, "hello");
+
+        // Test with spaces around command
+        let result = Environment::expand_variable("$( echo world )");
+        assert_eq!(result, "world");
+
+        // Test with multiple arguments
+        let result = Environment::expand_variable("$(echo foo bar)");
+        assert_eq!(result, "foo bar");
+    }
+
+    #[test]
+    fn test_expand_env_variable_dollar_brace() {
+        // Test ${VAR} pattern
+        with_var("TEST_ENV_VAR", Some("test_value"), || {
+            let result = Environment::expand_variable("${TEST_ENV_VAR}");
+            assert_eq!(result, "test_value");
+        });
+    }
+
+    #[test]
+    fn test_expand_env_variable_dollar() {
+        // Test $VAR pattern (without braces)
+        with_var("MY_TEST_VAR", Some("my_value"), || {
+            let result = Environment::expand_variable("$MY_TEST_VAR");
+            assert_eq!(result, "my_value");
+        });
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn test_expand_env_variable_percent_windows() {
+        // Windows %VAR% pattern
+        with_var("WIN_TEST_VAR", Some("windows_value"), || {
+            let result = Environment::expand_variable("%WIN_TEST_VAR%");
+            assert_eq!(result, "windows_value");
+        });
     }
 }

@@ -5013,6 +5013,7 @@ dependencies = [
  "serde_with",
  "shlex",
  "tabwriter",
+ "temp-env",
  "tempfile",
  "thiserror 2.0.12",
  "tokio",
