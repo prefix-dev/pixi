@@ -18,7 +18,7 @@ use pixi_spec::PixiSpec;
 use rattler_conda_types::{MatchSpec, StringMatcher};
 
 use crate::cli::cli_config::{
-    LockFileUpdateConfig, NoInstallConfig, RevalidateConfig, WorkspaceConfig,
+    LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig,
 };
 
 /// Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file.
@@ -31,9 +31,6 @@ pub struct Args {
 
     #[clap(flatten)]
     pub no_install_config: NoInstallConfig,
-    #[clap(flatten)]
-    pub revalidate_config: RevalidateConfig,
-
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
 

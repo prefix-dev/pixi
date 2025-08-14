@@ -17,7 +17,7 @@ use indicatif::ProgressDrawTarget;
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use pixi::cli::LockFileUsageConfig;
 use pixi::cli::cli_config::{
-    ChannelsConfig, LockFileUpdateConfig, NoInstallConfig, RevalidateConfig, WorkspaceConfig,
+    ChannelsConfig, LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig,
 };
 use pixi::cli::{
     add,
@@ -401,7 +401,6 @@ impl PixiControl {
                 },
                 dependency_config: AddBuilder::dependency_config_with_specs(vec![spec]),
                 no_install_config: NoInstallConfig { no_install: true },
-                revalidate_config: RevalidateConfig { revalidate: false },
                 lock_file_update_config: LockFileUpdateConfig {
                     no_lockfile_update: false,
                     lock_file_usage: LockFileUsageConfig::default(),
@@ -420,7 +419,6 @@ impl PixiControl {
                 },
                 channel: vec![],
                 no_install_config: NoInstallConfig { no_install: true },
-                revalidate_config: RevalidateConfig { revalidate: false },
                 lock_file_update_config: LockFileUpdateConfig {
                     no_lockfile_update: false,
                     lock_file_usage: LockFileUsageConfig::default(),
@@ -443,7 +441,6 @@ impl PixiControl {
                 },
                 channel: vec![],
                 no_install_config: NoInstallConfig { no_install: true },
-                revalidate_config: RevalidateConfig { revalidate: false },
                 lock_file_update_config: LockFileUpdateConfig {
                     no_lockfile_update: false,
                     lock_file_usage: LockFileUsageConfig::default(),

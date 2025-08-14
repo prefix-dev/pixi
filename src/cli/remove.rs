@@ -3,12 +3,12 @@ use miette::{Context, IntoDiagnostic};
 use pixi_config::ConfigCli;
 use pixi_core::{
     DependencyType, UpdateLockFileOptions, WorkspaceLocator,
-    environment::get_update_lock_file_and_prefix, lock_file::ReinstallPackages,
+    environment::get_update_lock_file_and_prefix, lock_file::{ReinstallPackages, UpdateMode},
 };
 use pixi_manifest::FeaturesExt;
 
 use crate::cli::cli_config::{
-    DependencyConfig, NoInstallConfig, RevalidateConfig, WorkspaceConfig,
+    DependencyConfig, NoInstallConfig, WorkspaceConfig,
 };
 use crate::cli::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs};
 
@@ -34,9 +34,6 @@ pub struct Args {
     #[clap(flatten)]
     pub no_install_config: NoInstallConfig,
     #[clap(flatten)]
-    pub revalidate_config: RevalidateConfig,
-
-    #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
 
     #[clap(flatten)]
@@ -47,13 +44,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let (
         dependency_config,
         no_install_config,
-        revalidate_config,
         lock_file_update_config,
         workspace_config,
     ) = (
         args.dependency_config,
         args.no_install_config,
-        args.revalidate_config,
         args.lock_file_update_config,
         args.workspace_config,
     );
@@ -128,7 +123,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // updating prefix after removing from toml
     get_update_lock_file_and_prefix(
         &workspace.default_environment(),
-        revalidate_config.update_mode(),
+        UpdateMode::QuickValidate,
         UpdateLockFileOptions {
             lock_file_usage: lock_file_update_config.lock_file_usage()?,
             no_install: no_install_config.no_install,

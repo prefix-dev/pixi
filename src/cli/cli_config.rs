@@ -10,7 +10,6 @@ use pixi_consts::consts;
 use pixi_core::DependencyType;
 use pixi_core::Workspace;
 use pixi_core::environment::LockFileUsage;
-use pixi_core::lock_file::UpdateMode;
 use pixi_core::workspace::DiscoveryStart;
 use pixi_manifest::FeaturesExt;
 use pixi_manifest::{FeatureName, SpecType};
@@ -140,24 +139,23 @@ pub struct NoInstallConfig {
     pub no_install: bool,
 }
 
-/// Configuration for environment validation
-#[derive(Parser, Debug, Default, Clone)]
-pub struct RevalidateConfig {
-    /// Run the complete environment validation. This will reinstall a broken environment.
-    #[arg(long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
-    pub revalidate: bool,
-}
+impl NoInstallConfig {
+    /// Creates a new NoInstallConfig with the specified value
+    pub fn new(no_install: bool) -> Self {
+        Self { no_install }
+    }
 
-impl RevalidateConfig {
-    /// Which `[UpdateMode]` to use
-    pub(crate) fn update_mode(&self) -> UpdateMode {
-        if self.revalidate {
-            UpdateMode::Revalidate
-        } else {
-            UpdateMode::QuickValidate
-        }
+    /// Creates a NoInstallConfig that skips installation
+    pub fn skip_install() -> Self {
+        Self::new(true)
+    }
+
+    /// Creates a NoInstallConfig that allows installation
+    pub fn allow_install() -> Self {
+        Self::new(false)
     }
 }
+
 
 #[derive(Parser, Debug, Default, Clone)]
 pub struct GitRev {

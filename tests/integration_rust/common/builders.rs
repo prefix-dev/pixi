@@ -26,7 +26,7 @@
 use pixi::cli::{
     add,
     cli_config::{
-        DependencyConfig, GitRev, LockFileUpdateConfig, NoInstallConfig, RevalidateConfig,
+        DependencyConfig, GitRev, LockFileUpdateConfig, NoInstallConfig,
         WorkspaceConfig,
     },
     init, install, lock, remove, search, task, update, workspace,
@@ -121,15 +121,6 @@ pub trait HasNoInstallConfig: Sized {
     }
 }
 
-/// A trait used by builders to access RevalidateConfig
-pub trait HasRevalidateConfig: Sized {
-    fn revalidate_config(&mut self) -> &mut RevalidateConfig;
-    /// Set whether to revalidate the environment (reinstall broken environment)
-    fn with_revalidate(mut self, revalidate: bool) -> Self {
-        self.revalidate_config().revalidate = revalidate;
-        self
-    }
-}
 
 /// A trait used by AddBuilder and RemoveBuilder to set their inner
 /// DependencyConfig
@@ -315,11 +306,6 @@ impl HasNoInstallConfig for RemoveBuilder {
     }
 }
 
-impl HasRevalidateConfig for RemoveBuilder {
-    fn revalidate_config(&mut self) -> &mut RevalidateConfig {
-        &mut self.args.revalidate_config
-    }
-}
 
 impl IntoFuture for RemoveBuilder {
     type Output = miette::Result<()>;

@@ -11,11 +11,11 @@ use rattler_shell::{
 use pixi_config::{ConfigCli, ConfigCliActivation, ConfigCliPrompt};
 use pixi_core::{
     UpdateLockFileOptions, WorkspaceLocator, activation::CurrentEnvVarBehavior,
-    environment::get_update_lock_file_and_prefix, lock_file::ReinstallPackages, prompt,
+    environment::get_update_lock_file_and_prefix, lock_file::{ReinstallPackages, UpdateMode}, prompt,
     workspace::get_activated_environment_variables,
 };
 
-use crate::cli::cli_config::{NoInstallConfig, RevalidateConfig, WorkspaceConfig};
+use crate::cli::cli_config::{NoInstallConfig, WorkspaceConfig};
 #[cfg(target_family = "unix")]
 use pixi_pty::unix::PtySession;
 
@@ -32,9 +32,6 @@ pub struct Args {
 
     #[clap(flatten)]
     pub no_install_config: NoInstallConfig,
-    #[clap(flatten)]
-    pub revalidate_config: RevalidateConfig,
-
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
 
@@ -279,7 +276,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     #[allow(unused_variables)]
     let (lock_file_data, prefix) = get_update_lock_file_and_prefix(
         &environment,
-        args.revalidate_config.update_mode(),
+        UpdateMode::QuickValidate,
         UpdateLockFileOptions {
             lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
             no_install: args.no_install_config.no_install,

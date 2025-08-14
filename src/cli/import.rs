@@ -17,7 +17,7 @@ use miette::{Diagnostic, IntoDiagnostic, Result};
 use thiserror::Error;
 
 use crate::cli::cli_config::{
-    LockFileUpdateConfig, NoInstallConfig, RevalidateConfig, WorkspaceConfig,
+    LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig,
 };
 
 #[derive(Parser, Debug, Clone, PartialEq, ValueEnum)]
@@ -58,9 +58,6 @@ pub struct Args {
 
     #[clap(flatten)]
     pub no_install_config: NoInstallConfig,
-    #[clap(flatten)]
-    pub revalidate_config: RevalidateConfig,
-
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
 

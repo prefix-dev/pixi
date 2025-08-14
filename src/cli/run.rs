@@ -21,7 +21,7 @@ use tracing::Level;
 use pixi_core::{
     Workspace, WorkspaceLocator,
     environment::sanity_check_workspace,
-    lock_file::{ReinstallPackages, UpdateLockFileOptions},
+    lock_file::{ReinstallPackages, UpdateLockFileOptions, UpdateMode},
     task::{
         AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
         SearchEnvironments, TaskAndEnvironment, TaskGraph, get_task_env,
@@ -30,7 +30,7 @@ use pixi_core::{
 };
 
 use crate::cli::cli_config::{
-    LockFileUpdateConfig, NoInstallConfig, RevalidateConfig, WorkspaceConfig,
+    LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig,
 };
 
 /// Runs task in the pixi environment.
@@ -53,9 +53,6 @@ pub struct Args {
 
     #[clap(flatten)]
     pub no_install_config: NoInstallConfig,
-    #[clap(flatten)]
-    pub revalidate_config: RevalidateConfig,
-
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
 
@@ -262,7 +259,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 lock_file
                     .prefix(
                         &executable_task.run_environment,
-                        args.revalidate_config.update_mode(),
+                        UpdateMode::QuickValidate,
                         &ReinstallPackages::default(),
                         &[],
                     )
