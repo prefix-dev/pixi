@@ -1,24 +1,24 @@
 import json
+import os
+import platform
 import shutil
-import sys
 import signal
-import time
 import subprocess
-import tomli_w
-import pytest
+import sys
+import tempfile
+import time
 from pathlib import Path
+
+import pytest
+import tomli
+import tomli_w
 
 from .common import (
     EMPTY_BOILERPLATE_PROJECT,
-    verify_cli_command,
     ExitCode,
     default_env_path,
+    verify_cli_command,
 )
-
-import tempfile
-import os
-import tomli
-import platform
 
 
 def test_run_in_shell_environment(pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -1599,32 +1599,3 @@ def test_signal_forwarding(pixi: Path, tmp_pixi_workspace: Path) -> None:
             )
     else:
         raise AssertionError("Output file was not created")
-
-
-def test_run_environment_variable_not_be_overridden(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    """Test environment variables should not be overridden by excluded keys."""
-    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
-    toml = """
-    [workspace]
-    name = "my_project"
-    platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
-    channels = []
-    [activation.env]
-    TEST_VAR = "$PIXI_PROJECT_NAME"
-    PROJECT_NAME = "$(pixi workspace name get)"
-    [tasks]
-    start = "echo The project name is $PIXI_PROJECT_NAME"
-    test = "echo The project name is $TEST_VAR"
-    """
-
-    manifest.write_text(toml)
-    verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "start"],
-        stdout_contains="my_project",
-        stdout_excludes="$PIXI_PROJECT_NAME",
-    )
-    verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "test"],
-        stdout_contains="my_project",
-        stdout_excludes="$(pixi workspace name get)",
-    )

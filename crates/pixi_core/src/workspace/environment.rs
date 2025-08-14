@@ -326,44 +326,6 @@ impl<'p> Environment<'p> {
     pub fn channel_config(&self) -> ChannelConfig {
         self.workspace().channel_config()
     }
-
-    // Extract variable name
-    fn extract_variable_name(value: &str) -> Option<&str> {
-        if let Some(inner) = value.strip_prefix('$') {
-            Some(inner)
-        } else if let Some(inner) = value.strip_prefix('%').and_then(|s| s.strip_suffix('%')) {
-            Some(inner)
-        } else if let Some(inner) = value.strip_prefix("${").and_then(|s| s.strip_suffix('}')) {
-            Some(inner)
-        } else {
-            None
-        }
-    }
-
-    /// Resolves variable references in environment variables
-    pub fn resolve_variable_references<M>(map: &mut M)
-    where
-        M: Clone,
-        for<'a> &'a M: std::iter::IntoIterator<Item = (&'a String, &'a String)>,
-        M: std::iter::Extend<(String, String)>,
-    {
-        let map_clone = map.clone();
-        let keys_to_update: Vec<String> =
-            (&map_clone).into_iter().map(|(k, _)| k.clone()).collect();
-
-        for key in keys_to_update {
-            if let Some((_, value)) = (&map_clone).into_iter().find(|(k, _)| *k == &key) {
-                if let Some(referenced_var) = Self::extract_variable_name(value) {
-                    if let Some((_, actual_value)) = (&map_clone)
-                        .into_iter()
-                        .find(|(k, _)| k.as_str() == referenced_var)
-                    {
-                        map.extend([(key, actual_value.clone())]);
-                    }
-                }
-            }
-        }
-    }
 }
 
 impl<'p> HasWorkspaceRef<'p> for Environment<'p> {

@@ -4,7 +4,6 @@ use fs_err::tokio as tokio_fs;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use pixi_consts::consts;
 use pixi_manifest::EnvironmentName;
 use pixi_manifest::FeaturesExt;
 use rattler_conda_types::Platform;
@@ -237,6 +236,19 @@ async fn try_get_valid_activation_cache(
     }
 }
 
+// Extract variable name
+fn extract_variable_name(value: &str) -> Option<&str> {
+    if let Some(inner) = value.strip_prefix('$') {
+        Some(inner)
+    } else if let Some(inner) = value.strip_prefix('%').and_then(|s| s.strip_suffix('%')) {
+        Some(inner)
+    } else if let Some(inner) = value.strip_prefix("${").and_then(|s| s.strip_suffix('}')) {
+        Some(inner)
+    } else {
+        None
+    }
+}
+
 /// Runs and caches the activation script.
 pub async fn run_activation(
     environment: &Environment<'_>,
@@ -304,19 +316,24 @@ pub async fn run_activation(
             None,
         );
 
-        let override_excluded_keys = consts::get_override_excluded_keys();
         // `activator.env_vars` should override `activator_result` for duplicate keys
         new_activator.map(|mut map: HashMap<String, String>| {
             // First pass: Add all variables from activator.env_vars(as map is unordered, we need to update the referenced value in the second loop)
             for (k, v) in &activator.env_vars {
-                let should_exclude = override_excluded_keys.contains(k.as_str());
-                if !should_exclude {
-                    map.insert(k.clone(), v.clone());
-                }
+                map.insert(k.clone(), v.clone());
             }
 
             // Second pass: Loop through the map and resolve variable references
-            Environment::resolve_variable_references(&mut map);
+            let keys_to_update: Vec<String> = map.keys().cloned().collect();
+            for key in keys_to_update {
+                if let Some(value) = map.get(&key).cloned() {
+                    if let Some(referenced_var) = extract_variable_name(&value) {
+                        if let Some(actual_value) = map.get(referenced_var) {
+                            map.insert(key, actual_value.clone());
+                        }
+                    }
+                }
+            }
 
             map
         })
