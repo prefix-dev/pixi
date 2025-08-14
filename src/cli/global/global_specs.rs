@@ -63,7 +63,7 @@ pub enum GlobalSpecsConversionError {
 
 impl GlobalSpecs {
     /// Convert GlobalSpecs to a vector of GlobalSpec instances
-    pub async fn to_named_global_specs(
+    pub async fn to_global_specs(
         &self,
         channel_config: &ChannelConfig,
         manifest_root: &Path,
@@ -153,7 +153,7 @@ mod tests {
             .unwrap();
 
         let global_specs = specs
-            .to_named_global_specs(&channel_config, &manifest_root, &project)
+            .to_global_specs(&channel_config, &manifest_root, &project)
             .await
             .unwrap();
 
@@ -179,7 +179,7 @@ mod tests {
             .unwrap();
 
         let global_specs = specs
-            .to_named_global_specs(&channel_config, &manifest_root, &project)
+            .to_global_specs(&channel_config, &manifest_root, &project)
             .await
             .unwrap();
 
@@ -209,7 +209,7 @@ mod tests {
             .unwrap();
 
         let global_specs = specs
-            .to_named_global_specs(&channel_config, &manifest_root, &project)
+            .to_global_specs(&channel_config, &manifest_root, &project)
             .await;
         assert!(global_specs.is_err());
     }

@@ -103,7 +103,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let specs = args
         .packages
-        .to_named_global_specs(
+        .to_global_specs(
             project_original.global_channel_config(),
             &project_original.root,
             &project_original,
