@@ -575,7 +575,7 @@ impl Project {
             dependencies_names.push(name.clone());
         }
 
-        let command_dispatcher = self.command_dispatcher().into_diagnostic()?;
+        let command_dispatcher = self.command_dispatcher()?;
 
         let channels = channels
             .into_iter()
