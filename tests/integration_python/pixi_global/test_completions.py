@@ -1,5 +1,5 @@
-from pathlib import Path
 import platform
+from pathlib import Path
 
 from ..common import exec_extension, verify_cli_command
 
@@ -16,11 +16,9 @@ def fish_completions(pixi_home: Path, executable: str) -> Path:
     return pixi_home.joinpath("completions", "fish", f"{executable}.fish")
 
 
-def test_sync_exposes_completions(
-    pixi: Path, tmp_pixi_workspace: Path, completions_channel_1: str
-) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
-    manifests = tmp_pixi_workspace.joinpath("manifests")
+def test_sync_exposes_completions(pixi: Path, tmp_path: Path, completions_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
     manifest = manifests.joinpath("pixi-global.toml")
     toml = f"""
@@ -30,12 +28,12 @@ def test_sync_exposes_completions(
     exposed = {{ rg = "rg" }}
     """
     manifest.write_text(toml)
-    rg = tmp_pixi_workspace / "bin" / exec_extension("rg")
+    rg = tmp_path / "bin" / exec_extension("rg")
 
     # Completions
-    bash = bash_completions(tmp_pixi_workspace, "rg")
-    zsh = zsh_completions(tmp_pixi_workspace, "rg")
-    fish = fish_completions(tmp_pixi_workspace, "rg")
+    bash = bash_completions(tmp_path, "rg")
+    zsh = zsh_completions(tmp_path, "rg")
+    fish = fish_completions(tmp_path, "rg")
 
     # Test basic commands
     verify_cli_command([pixi, "global", "sync"], env=env)
@@ -59,9 +57,9 @@ def test_sync_exposes_completions(
 
 
 def test_only_self_expose_have_completions(
-    pixi: Path, tmp_pixi_workspace: Path, completions_channel_1: str
+    pixi: Path, tmp_path: Path, completions_channel_1: str
 ) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+    env = {"PIXI_HOME": str(tmp_path)}
 
     # Install `ripgrep-completions`, but expose `rg` under `ripgrep`
     # Therefore no completions should be installed
@@ -80,9 +78,9 @@ def test_only_self_expose_have_completions(
     )
 
     # Completions
-    bash = bash_completions(tmp_pixi_workspace, "rg")
-    zsh = zsh_completions(tmp_pixi_workspace, "rg")
-    fish = fish_completions(tmp_pixi_workspace, "rg")
+    bash = bash_completions(tmp_path, "rg")
+    zsh = zsh_completions(tmp_path, "rg")
+    fish = fish_completions(tmp_path, "rg")
 
     assert not bash.is_file()
     assert not zsh.is_file()
@@ -112,14 +110,14 @@ def test_only_self_expose_have_completions(
 
 
 def test_installing_same_package_again_without_expose_shouldnt_remove_it(
-    pixi: Path, tmp_pixi_workspace: Path, completions_channel_1: str
+    pixi: Path, tmp_path: Path, completions_channel_1: str
 ) -> None:
-    env = {"PIXI_HOME": str(tmp_pixi_workspace)}
+    env = {"PIXI_HOME": str(tmp_path)}
 
     # Completions
-    bash = bash_completions(tmp_pixi_workspace, "rg")
-    zsh = zsh_completions(tmp_pixi_workspace, "rg")
-    fish = fish_completions(tmp_pixi_workspace, "rg")
+    bash = bash_completions(tmp_path, "rg")
+    zsh = zsh_completions(tmp_path, "rg")
+    fish = fish_completions(tmp_path, "rg")
 
     # Install `ripgrep-completions`, and expose `rg` as `rg`
     # This should install the completions

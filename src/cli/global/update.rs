@@ -1,11 +1,11 @@
 use crate::cli::global::revert_environment_after_error;
-use crate::global::common::check_all_exposed;
-use crate::global::project::ExposedType;
-use crate::global::{self, StateChanges};
-use crate::global::{EnvironmentName, Project};
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use pixi_config::{Config, ConfigCli};
+use pixi_core::global::common::check_all_exposed;
+use pixi_core::global::project::ExposedType;
+use pixi_core::global::{self, StateChanges};
+use pixi_core::global::{EnvironmentName, Project};
 
 /// Updates environments in the global environment.
 #[derive(Parser, Debug, Clone)]
@@ -29,7 +29,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     ) -> miette::Result<StateChanges> {
         let mut state_changes = StateChanges::default();
         // If the environment isn't up-to-date our executable detection afterwards will not work
-        let require_reinstall = if !project.environment_in_sync(env_name).await? {
+        let require_reinstall = if !project.environment_in_sync_internal(env_name, true).await? {
             let environment_update = project.install_environment(env_name).await?;
             state_changes.insert_change(
                 env_name,

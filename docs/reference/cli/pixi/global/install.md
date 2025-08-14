@@ -8,16 +8,17 @@ Installs the defined packages in a globally accessible location and exposes thei
 
 ## Usage
 ```
-pixi global install [OPTIONS] <PACKAGE>...
+pixi global install [OPTIONS] [PACKAGE]...
 ```
 
 ## Arguments
 - <a id="arg-<PACKAGE>" href="#arg-<PACKAGE>">`<PACKAGE>`</a>
 :  The dependency as names, conda MatchSpecs
 <br>May be provided more than once.
-<br>**required**: `true`
 
 ## Options
+- <a id="arg---path" href="#arg---path">`--path <PATH>`</a>
+:  The path to the local directory
 - <a id="arg---channel" href="#arg---channel">`--channel (-c) <CHANNEL>`</a>
 :  The channels to consider as a name or a url. Multiple channels can be specified by using this field multiple times
 <br>May be provided more than once.
@@ -55,6 +56,18 @@ pixi global install [OPTIONS] <PACKAGE>...
 :  Do not verify the TLS certificate of the server
 - <a id="arg---use-environment-activation-cache" href="#arg---use-environment-activation-cache">`--use-environment-activation-cache`</a>
 :  Use environment activation cache (experimental)
+
+## Git Options
+- <a id="arg---git" href="#arg---git">`--git <GIT>`</a>
+:  The git url, e.g. `https://github.com/user/repo.git`
+- <a id="arg---branch" href="#arg---branch">`--branch <BRANCH>`</a>
+:  The git branch
+- <a id="arg---tag" href="#arg---tag">`--tag <TAG>`</a>
+:  The git tag
+- <a id="arg---rev" href="#arg---rev">`--rev <REV>`</a>
+:  The git revision
+- <a id="arg---subdir" href="#arg---subdir">`--subdir <SUBDIR>`</a>
+:  The subdirectory within the git repository
 
 ## Description
 Installs the defined packages in a globally accessible location and exposes their command line applications.

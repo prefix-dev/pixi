@@ -18,10 +18,8 @@ use thiserror::Error;
 use tokio_util::sync::CancellationToken;
 use tracing::Level;
 
-use super::cli_config::LockFileUpdateConfig;
-use crate::{
+use pixi_core::{
     Workspace, WorkspaceLocator,
-    cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
     environment::sanity_check_workspace,
     lock_file::{ReinstallPackages, UpdateLockFileOptions},
     task::{
@@ -30,6 +28,9 @@ use crate::{
     },
     workspace::{Environment, errors::UnsupportedPlatformError},
 };
+
+use crate::cli::cli_config::LockFileUpdateConfig;
+use crate::cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig};
 
 /// Runs task in the pixi environment.
 ///
@@ -499,7 +500,7 @@ async fn listen_ctrl_c(kill_signal: KillSignal) {
 async fn listen_and_forward_all_signals(kill_signal: KillSignal) {
     use futures::FutureExt;
 
-    use crate::signals::SIGNALS;
+    use pixi_core::signals::SIGNALS;
 
     // listen and forward every signal we support
     let mut futures = Vec::with_capacity(SIGNALS.len());

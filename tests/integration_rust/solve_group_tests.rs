@@ -120,7 +120,7 @@ async fn test_purl_are_added_for_pypi() {
     // Add boltons from pypi
     pixi.add("boltons")
         .with_install(true)
-        .set_type(pixi::DependencyType::PypiDependency)
+        .set_type(pixi_core::DependencyType::PypiDependency)
         .await
         .unwrap();
 
@@ -277,8 +277,6 @@ async fn test_compressed_mapping_catch_not_pandoc_not_a_python_package() {
 
 #[tokio::test]
 #[cfg_attr(not(feature = "online_tests"), ignore)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
-
 async fn test_dont_record_not_present_package_as_purl() {
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();

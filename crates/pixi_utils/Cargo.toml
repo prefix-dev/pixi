@@ -27,6 +27,7 @@ rustls-tls = [
 async-fd-lock = { workspace = true }
 fs-err = { workspace = true }
 indicatif = { workspace = true }
+is_executable = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
 pep508_rs = { workspace = true }
@@ -39,9 +40,11 @@ rattler_networking = { workspace = true, features = [
   "netrc-rs",
   "system-integration",
 ] }
+rattler_shell = { workspace = true }
 reqwest = { workspace = true }
 reqwest-middleware = { workspace = true }
 reqwest-retry = { workspace = true }
+rlimit = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
@@ -51,6 +54,7 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 url = { workspace = true }
+uv-configuration = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true }

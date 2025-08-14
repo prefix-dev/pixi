@@ -1,4 +1,4 @@
-use crate::Workspace;
+use pixi_core::Workspace;
 
 pub async fn execute(workspace: Workspace) -> miette::Result<()> {
     println!(
