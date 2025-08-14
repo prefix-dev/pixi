@@ -116,9 +116,8 @@ impl LockFileUpdateConfig {
         // Error on deprecated flag usage
         if self.no_lockfile_update {
             return Err(miette::miette!(
-                help = "Use '--frozen' to skip lock-file updates.\n\nUse '--no-install' to skip installation.\n\n",
-                "The '--no-lockfile-update' flag has been deprecated due to inconsistent behavior across commands.\n\n\
-                This flag will be removed in a future version."
+                help = "Use '--frozen' to skip lock-file updates.\nUse '--no-install' to skip installation.",
+                "The '--no-lockfile-update' flag has been deprecated due to inconsistent behavior across commands. This flag will be removed in a future version."
             ));
         }
 
