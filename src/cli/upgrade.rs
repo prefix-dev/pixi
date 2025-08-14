@@ -83,8 +83,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         )
     };
 
-    let (match_specs, pypi_deps) = parse_specs(feature, &args, &workspace)?;
+    if args.lock_file_update_config.lock_file_usage.frozen
+        || args.lock_file_update_config.lock_file_usage.locked
+    {
+        tracing::info!(
+            "using `--frozen` or `--locked` will not make any changes and does not display results. You probably meant: `--dry-run`"
+        )
+    }
 
+    let (match_specs, pypi_deps) = parse_specs(feature, &args, &workspace)?;
     let (update_deps, workspace) = match workspace
         .update_dependencies(
             match_specs,

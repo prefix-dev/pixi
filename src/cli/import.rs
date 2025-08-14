@@ -16,7 +16,7 @@ use uv_requirements_txt::RequirementsTxt;
 use miette::{Diagnostic, IntoDiagnostic, Result};
 use thiserror::Error;
 
-use crate::cli::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
+use crate::cli::cli_config::WorkspaceConfig;
 
 #[derive(Parser, Debug, Clone, PartialEq, ValueEnum)]
 pub enum ImportFileFormat {
@@ -53,11 +53,6 @@ pub struct Args {
     /// A name for the created feature
     #[clap(long, short)]
     pub feature: Option<String>,
-
-    #[clap(flatten)]
-    pub no_install_config: NoInstallConfig,
-    #[clap(flatten)]
-    pub lock_file_update_config: LockFileUpdateConfig,
 
     #[clap(flatten)]
     pub config: ConfigCli,

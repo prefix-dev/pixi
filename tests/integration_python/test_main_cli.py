@@ -1672,8 +1672,6 @@ dependencies:
             [str(tmp_pixi_workspace / "export_test")],
             "pixi workspace export conda-explicit-spec",
         ),
-        # Import commands - create a simple environment.yml file to import
-        (["import"], [str(tmp_pixi_workspace / "simple_env.yml")], "pixi import"),
         # Upgrade commands
         (["upgrade"], [], "pixi upgrade"),
     ]
