@@ -16,18 +16,20 @@ use indicatif::ProgressBar;
 use is_executable::IsExecutable;
 use itertools::Itertools;
 pub use manifest::{ExposedType, Manifest, Mapping};
-use miette::{Context, IntoDiagnostic};
+use miette::{Context, Diagnostic, IntoDiagnostic};
 use once_cell::sync::OnceCell;
 pub use parsed_manifest::ParsedManifest;
 pub use parsed_manifest::{ExposedName, ParsedEnvironment};
 use pixi_build_discovery::EnabledProtocols;
 use pixi_command_dispatcher::{
-    BuildEnvironment, CommandDispatcher, InstallPixiEnvironmentSpec, Limits, PixiEnvironmentSpec,
+    BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, InstallPixiEnvironmentSpec,
+    Limits, PixiEnvironmentSpec,
 };
 use pixi_config::{Config, RunPostLinkScripts, default_channel_config, pixi_home};
 use pixi_consts::consts::{self};
 use pixi_manifest::PrioritizedChannel;
 use pixi_progress::global_multi_progress;
+use pixi_record::PinnedSourceSpec;
 use pixi_reporters::TopLevelProgress;
 use pixi_spec_containers::DependencyMap;
 use pixi_utils::prefix::{Executable, Prefix};
@@ -71,8 +73,40 @@ mod environment;
 mod global_spec;
 mod manifest;
 mod parsed_manifest;
-pub use global_spec::{FromMatchSpecError, GlobalSpec, NamedGlobalSpec};
+pub use global_spec::{FromMatchSpecError, GlobalSpec};
 use pixi_build_frontend::BackendOverride;
+
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum CommandDispatcherError {
+    #[error("could not determine cache directory")]
+    CacheDirectory(#[source] Box<dyn Diagnostic + Send + Sync>),
+    #[error("failed to initialize repodata gateway")]
+    RepodataGateway(#[source] Box<dyn Diagnostic + Send + Sync>),
+    #[error("failed to initialize authenticated client")]
+    AuthenticatedClient(#[source] Box<dyn Diagnostic + Send + Sync>),
+    #[error("failed to parse backend override from environment")]
+    BackendOverride(#[source] Box<dyn Diagnostic + Send + Sync>),
+}
+
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum InferPackageNameError {
+    #[error("only path and git specifications are supported for package name inference")]
+    UnsupportedSpecType,
+    #[error(
+        "git package name inference is not yet supported. Please specify the package name explicitly"
+    )]
+    GitNotSupported,
+    #[error("failed to get command dispatcher")]
+    CommandDispatcher(#[from] CommandDispatcherError),
+    #[error("failed to get build backend metadata for package name inference")]
+    BuildBackendMetadata(#[source] Box<dyn Diagnostic + Send + Sync>),
+    #[error("no package outputs found in the specified path/repository")]
+    NoPackageOutputs,
+    #[error(
+        "multiple package outputs found: {package_names}. Please specify the package name explicitly"
+    )]
+    MultiplePackageOutputs { package_names: String },
+}
 
 pub(crate) const MANIFESTS_DIR: &str = "manifests";
 
@@ -1273,7 +1307,7 @@ impl Project {
     }
 
     /// Returns the command dispatcher for this project.
-    fn command_dispatcher(&self) -> miette::Result<&CommandDispatcher> {
+    fn command_dispatcher(&self) -> Result<&CommandDispatcher, CommandDispatcherError> {
         const BUILD_DIR: &str = "bld";
 
         self.command_dispatcher.get_or_try_init(|| {
@@ -1282,20 +1316,32 @@ impl Project {
             let cache_dirs = pixi_command_dispatcher::CacheDirs::new(
                 pixi_config::get_cache_dir()
                     .map(|cache_dir| cache_dir.join(BUILD_DIR))
-                    .map_err(|e| miette::miette!("Failed to get cache directory: {}", e))?,
+                    .map_err(|e| CommandDispatcherError::CacheDirectory(e.into()))?,
             );
 
             Ok(pixi_command_dispatcher::CommandDispatcher::builder()
-                .with_gateway(self.repodata_gateway()?.clone())
+                .with_gateway(
+                    self.repodata_gateway()
+                        .map_err(|e| CommandDispatcherError::RepodataGateway(e.into()))?
+                        .clone(),
+                )
                 .with_cache_dirs(cache_dirs)
                 .with_root_dir(self.root.clone())
-                .with_download_client(self.authenticated_client()?.clone())
+                .with_download_client(
+                    self.authenticated_client()
+                        .map_err(|e| CommandDispatcherError::AuthenticatedClient(e.into()))?
+                        .clone(),
+                )
                 .with_max_download_concurrency(self.concurrent_downloads_semaphore())
                 .with_limits(Limits {
                     max_concurrent_solves: self.config().max_concurrent_solves().into(),
                     ..Limits::default()
                 })
-                .with_backend_overrides(BackendOverride::from_env()?.unwrap_or_default())
+                .with_backend_overrides(
+                    BackendOverride::from_env()
+                        .map_err(|e| CommandDispatcherError::BackendOverride(e.into()))?
+                        .unwrap_or_default(),
+                )
                 .execute_link_scripts(match self.config.run_post_link_scripts() {
                     RunPostLinkScripts::Insecure => true,
                     RunPostLinkScripts::False => false,
@@ -1303,6 +1349,78 @@ impl Project {
                 .with_reporter(TopLevelProgress::new(multi_progress, anchor_pb))
                 .finish())
         })
+    }
+
+    /// Infer the package name from a PixiSpec (path or git) by examining build outputs
+    pub async fn infer_package_name_from_spec(
+        &self,
+        pixi_spec: &pixi_spec::PixiSpec,
+    ) -> Result<PackageName, InferPackageNameError> {
+        // Convert PixiSpec to SourceSpec and resolve it to PinnedSourceSpec
+        let pinned_source_spec = match pixi_spec {
+            pixi_spec::PixiSpec::Path(path_spec) => {
+                PinnedSourceSpec::Path(pixi_record::PinnedPathSpec {
+                    path: path_spec.path.clone(),
+                })
+            }
+            pixi_spec::PixiSpec::Git(git_spec) => {
+                // Convert GitSpec to SourceSpec
+                let source_spec = pixi_spec::SourceSpec {
+                    location: pixi_spec::SourceLocationSpec::Git(git_spec.clone()),
+                };
+
+                // Use the command dispatcher to resolve and checkout the git repository
+                let command_dispatcher = self.command_dispatcher()?;
+                let checkout = command_dispatcher
+                    .pin_and_checkout(source_spec)
+                    .await
+                    .map_err(|e| InferPackageNameError::BuildBackendMetadata(Box::new(e)))?;
+
+                checkout.pinned
+            }
+            _ => {
+                return Err(InferPackageNameError::UnsupportedSpecType);
+            }
+        };
+
+        // Create the metadata spec
+        let metadata_spec = BuildBackendMetadataSpec {
+            source: pinned_source_spec,
+            channel_config: self.global_channel_config().clone(),
+            channels: self
+                .config()
+                .default_channels()
+                .iter()
+                .filter_map(|c| c.clone().into_base_url(self.global_channel_config()).ok())
+                .collect(),
+            build_environment: pixi_command_dispatcher::BuildEnvironment::default(),
+            variants: None,
+            enabled_protocols: Default::default(),
+        };
+
+        // Get the metadata using the command dispatcher
+        let command_dispatcher = self.command_dispatcher()?;
+        let metadata = command_dispatcher
+            .build_backend_metadata(metadata_spec)
+            .await
+            .map_err(|e| InferPackageNameError::BuildBackendMetadata(Box::new(e)))?;
+
+        // Get the available outputs and use exactly_one to handle the single output case
+        let packages = metadata.metadata.outputs();
+
+        match packages.len() {
+            0 => Err(InferPackageNameError::NoPackageOutputs),
+            1 => {
+                let package = &packages[0];
+                Ok(package.name.clone())
+            }
+            _ => {
+                let package_names: Vec<_> = packages.iter().map(|p| p.name.as_source()).collect();
+                Err(InferPackageNameError::MultiplePackageOutputs {
+                    package_names: package_names.join(", "),
+                })
+            }
+        }
     }
 }
 
