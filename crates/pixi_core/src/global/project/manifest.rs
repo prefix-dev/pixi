@@ -19,7 +19,7 @@ use toml_span::{DeserError, Value};
 
 use super::{
     EnvironmentName, ExposedName,
-    global_spec::NamedGlobalSpec,
+    global_spec::GlobalSpec,
     parsed_manifest::{ManifestParsingError, ManifestVersion, ParsedManifest},
 };
 use crate::global::project::ParsedEnvironment;
@@ -138,7 +138,7 @@ impl Manifest {
     pub fn add_dependency(
         &mut self,
         env_name: &EnvironmentName,
-        named_spec: &NamedGlobalSpec,
+        named_spec: &GlobalSpec,
     ) -> miette::Result<()> {
         let name = named_spec.name();
         let spec = named_spec.spec();
@@ -949,7 +949,7 @@ mod tests {
         let env_name = EnvironmentName::from_str("test-env").unwrap();
 
         let named_global_spec =
-            NamedGlobalSpec::try_from_str("pythonic ==3.15.0", &channel_config).unwrap();
+            GlobalSpec::try_from_str("pythonic ==3.15.0", &channel_config).unwrap();
 
         // Add environment
         manifest
@@ -999,7 +999,7 @@ mod tests {
         assert_eq!(actual_value, *named_global_spec.spec());
 
         // Add another dependency
-        let build_match_spec = NamedGlobalSpec::try_from_str(
+        let build_match_spec = GlobalSpec::try_from_str(
             "python [version='==3.11.0', build=he550d4f_1_cpython]",
             &channel_config,
         )
@@ -1007,7 +1007,7 @@ mod tests {
         manifest
             .add_dependency(&env_name, &build_match_spec)
             .unwrap();
-        let any_spec = NamedGlobalSpec::try_from_str("any-spec", &channel_config).unwrap();
+        let any_spec = GlobalSpec::try_from_str("any-spec", &channel_config).unwrap();
         manifest.add_dependency(&env_name, &any_spec).unwrap();
 
         assert_snapshot!(manifest.document.to_string());
@@ -1019,7 +1019,7 @@ mod tests {
         let env_name = EnvironmentName::from_str("test-env").unwrap();
 
         let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
-        let spec = NamedGlobalSpec::try_from_str("pythonic ==3.15.0", &channel_config).unwrap();
+        let spec = GlobalSpec::try_from_str("pythonic ==3.15.0", &channel_config).unwrap();
 
         // Add environment
         manifest.add_environment(&env_name, None).unwrap();
@@ -1028,7 +1028,7 @@ mod tests {
         manifest.add_dependency(&env_name, &spec).unwrap();
 
         // Add the same dependency again, with a new match_spec
-        let new_spec = NamedGlobalSpec::try_from_str("pythonic==3.18.0", &channel_config).unwrap();
+        let new_spec = GlobalSpec::try_from_str("pythonic==3.18.0", &channel_config).unwrap();
         manifest.add_dependency(&env_name, &new_spec).unwrap();
 
         // Check document

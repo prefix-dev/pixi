@@ -2,9 +2,8 @@ use crate::cli::global::global_specs::GlobalSpecs;
 use crate::cli::global::revert_environment_after_error;
 
 use clap::Parser;
-use itertools::Itertools;
 use pixi_config::{Config, ConfigCli};
-use pixi_core::global::project::NamedGlobalSpec;
+use pixi_core::global::project::GlobalSpec;
 use pixi_core::global::{EnvironmentName, Mapping, Project, StateChange, StateChanges};
 
 /// Adds dependencies to an environment
@@ -49,7 +48,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     async fn apply_changes(
         env_name: &EnvironmentName,
-        specs: &[NamedGlobalSpec],
+        specs: &[GlobalSpec],
         expose: &[Mapping],
         project: &mut Project,
     ) -> miette::Result<StateChanges> {
@@ -107,11 +106,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .to_global_specs(
             project_original.global_channel_config(),
             &project_original.root,
-        )?
-        .into_iter()
-        // TODO: will allow nameless specs later
-        .filter_map(|s| s.into_named())
-        .collect_vec();
+            &project_original,
+        )
+        .await?;
 
     let mut project_modified = project_original.clone();
 
