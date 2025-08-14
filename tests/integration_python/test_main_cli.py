@@ -18,6 +18,7 @@ from .common import (
     cwd,
     verify_cli_command,
     CONDA_FORGE_CHANNEL,
+    find_commands_supporting_frozen_and_no_install,
 )
 
 
@@ -1588,10 +1589,14 @@ platforms = ["{CURRENT_PLATFORM}"]
 @pytest.mark.slow
 def test_frozen_no_install_invariant(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """Test that --frozen --no-install maintains lockfile invariant and keeps conda-meta empty.
+    This test is made up out of two parts:
 
-    This test verifies that when using --frozen --no-install flags together, the pixi.lock
+    1. This test verifies that when using --frozen --no-install flags together, the pixi.lock
     file does not change and the conda-meta directory stays empty across all commands that
     support these flags.
+    2. It discovers all documented commands that support both --frozen and --no-install flags
+    and checks that they are included in the test. If any command is missing, it fails
+    with a message to add it to the test list.
     """
     manifest_path = tmp_pixi_workspace / "pixi.toml"
     lock_file_path = tmp_pixi_workspace / "pixi.lock"
@@ -1609,14 +1614,24 @@ def test_frozen_no_install_invariant(pixi: Path, tmp_pixi_workspace: Path) -> No
     verify_cli_command([pixi, "init", tmp_pixi_workspace], ExitCode.SUCCESS)
     # Add bzip2 package to keep installation time low
     verify_cli_command([pixi, "add", "--manifest-path", manifest_path, "bzip2"])
+
+    # Create a simple environment.yml file for import testing
+    simple_env_yml = tmp_pixi_workspace / "simple_env.yml"
+    simple_env_yml.write_text("""name: simple-env
+channels:
+  - conda-forge
+dependencies:
+  - sdl2
+""")
+
     # Store the original lockfile content
     original_lock_content = lock_file_path.read_text()
 
-    # Remove conda-meta folder to simulate missing environment
+    # Remove conda-meta folder to simulate something that would normally trigger an install
     if conda_meta_path.exists():
         shutil.rmtree(conda_meta_path)
 
-    # Helper function to check invariants
+    # Helper function to check if the invariants hold after a command execution
     def check_invariants(command_name: str) -> None:
         # Check that lockfile hasn't changed
         current_lock_content = lock_file_path.read_text()
@@ -1633,11 +1648,14 @@ def test_frozen_no_install_invariant(pixi: Path, tmp_pixi_workspace: Path) -> No
     # Define commands as (command_parts, additional_args, command_name_for_invariants)
     commands_to_test: list[tuple[list[str], list[str], str]] = [
         # Let's start with adding a workspace channel because that would trigger a re-solve in most cases
+        # Don't move this!
         (
             ["workspace", "channel", "add"],
             ["https://prefix.dev/bioconda"],
             "pixi workspace channel add",
         ),
+    ]
+    commands_to_test += [
         (["list"], [], "pixi list"),
         (["tree"], [], "pixi tree"),
         (["shell-hook"], [], "pixi shell-hook"),
@@ -1645,15 +1663,29 @@ def test_frozen_no_install_invariant(pixi: Path, tmp_pixi_workspace: Path) -> No
         (["shell"], [], "pixi shell"),
         # Test manifest modifications with --frozen --no-install (these should work)
         # Note: These modify manifest but not lockfile due to --frozen
-        (["add"], ["zlib"], "pixi add"),
-        (["remove"], ["zlib"], "pixi remove"),
+        (["add"], ["python"], "pixi add"),
+        (["remove"], ["python"], "pixi remove"),
         (["run"], ["echo", "test"], "pixi run"),
+        # Export commands - use temporary directory
+        (
+            ["workspace", "export", "conda-explicit-spec"],
+            [str(tmp_pixi_workspace / "export_test")],
+            "pixi workspace export conda-explicit-spec",
+        ),
+        # Import commands - create a simple environment.yml file to import
+        (["import"], [str(tmp_pixi_workspace / "simple_env.yml")], "pixi import"),
+        # Upgrade commands
+        (["upgrade"], [], "pixi upgrade"),
+    ]
+    # This command needs to stay last so we always have something that requires a re-solve
+    # Dont move this!
+    commands_to_test.append(
         (
             ["workspace", "channel", "remove"],
             ["https://prefix.dev/bioconda"],
             "pixi workspace channel remove",
-        ),
-    ]
+        )
+    )
 
     # Execute all commands and check invariants
     for command_parts, additional_args, command_name in commands_to_test:
@@ -1666,3 +1698,22 @@ def test_frozen_no_install_invariant(pixi: Path, tmp_pixi_workspace: Path) -> No
         else:
             verify_cli_command([pixi, *command_parts, *frozen_no_install_flags, *additional_args])
         check_invariants(command_name)
+
+    # Discover all commands that support --frozen and --no-install flags
+    supported_commands = find_commands_supporting_frozen_and_no_install()
+
+    # Extract commands being tested from the test list
+    tested_commands = {command_name for _, _, command_name in commands_to_test}
+
+    # Find commands that support the flags but aren't being tested
+    missing_commands = set(supported_commands) - tested_commands
+
+    if missing_commands:
+        missing_list = "\n  - ".join(sorted(missing_commands))
+        pytest.fail(
+            f"Found {len(missing_commands)} command(s) that support --frozen --no-install "
+            f"but are not included in the test:\n  - {missing_list}\n\n"
+            f"Please add these commands to the commands_to_test list in test_frozen_no_install_invariant "
+            f"to ensure comprehensive coverage.\n"
+            f"If you get here you know all commands that *are* supported correctly listen to --frozen and --no-install flags."
+        )
