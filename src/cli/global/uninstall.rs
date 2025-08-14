@@ -1,10 +1,10 @@
 use crate::cli::global::revert_environment_after_error;
-use crate::global::{self, StateChanges};
-use crate::global::{EnvironmentName, Project};
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use miette::Context;
 use pixi_config::{Config, ConfigCli};
+use pixi_core::global::{self, StateChanges};
+use pixi_core::global::{EnvironmentName, Project};
 
 /// Uninstalls environments from the global environment.
 ///

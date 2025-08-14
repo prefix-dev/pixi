@@ -1,11 +1,11 @@
-use crate::WorkspaceLocator;
 use crate::cli::cli_config::WorkspaceConfig;
-use crate::workspace::WorkspaceLocatorError;
 use clap::Parser;
 use miette::{IntoDiagnostic, WrapErr};
 use pixi_config;
 use pixi_config::Config;
 use pixi_consts::consts;
+use pixi_core::WorkspaceLocator;
+use pixi_core::workspace::WorkspaceLocatorError;
 use rattler_conda_types::NamedChannelOrUrl;
 use std::{path::PathBuf, str::FromStr};
 

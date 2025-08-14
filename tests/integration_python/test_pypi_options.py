@@ -1,8 +1,9 @@
 from pathlib import Path
+
 import pytest
 import yaml
 
-from .common import verify_cli_command, ExitCode, CURRENT_PLATFORM, CONDA_FORGE_CHANNEL
+from .common import CONDA_FORGE_CHANNEL, CURRENT_PLATFORM, ExitCode, verify_cli_command
 
 
 @pytest.mark.extra_slow
@@ -24,6 +25,7 @@ def test_no_build_option(pixi: Path, tmp_pixi_workspace: Path, tmp_path: Path) -
     )
 
 
+@pytest.mark.slow
 def test_pypi_overrides(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """
     Tests the behavior of pixi install command with dependency overrides specified in pixi.toml.

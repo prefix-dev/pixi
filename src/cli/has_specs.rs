@@ -1,7 +1,7 @@
-use crate::Workspace;
 use indexmap::IndexMap;
 use miette::IntoDiagnostic;
 use pep508_rs::Requirement;
+use pixi_core::Workspace;
 use pixi_pypi_spec::PypiPackageName;
 use rattler_conda_types::{MatchSpec, PackageName, ParseStrictness};
 
