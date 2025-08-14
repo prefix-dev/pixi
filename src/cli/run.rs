@@ -374,7 +374,7 @@ async fn execute_task(
     command_env: &HashMap<OsString, OsString>,
     kill_signal: KillSignal,
 ) -> Result<(), TaskExecutionError> {
-    let Some(script) = task.as_deno_script(command_env)? else {
+    let Some(script) = task.as_deno_script()? else {
         return Ok(());
     };
     let cwd = task.working_directory()?;
