@@ -1368,14 +1368,14 @@ impl Project {
                 let source_spec = pixi_spec::SourceSpec {
                     location: pixi_spec::SourceLocationSpec::Git(git_spec.clone()),
                 };
-                
+
                 // Use the command dispatcher to resolve and checkout the git repository
                 let command_dispatcher = self.command_dispatcher()?;
                 let checkout = command_dispatcher
                     .pin_and_checkout(source_spec)
                     .await
                     .map_err(|e| InferPackageNameError::BuildBackendMetadata(Box::new(e)))?;
-                
+
                 checkout.pinned
             }
             _ => {

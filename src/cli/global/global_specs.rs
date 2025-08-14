@@ -56,8 +56,6 @@ pub enum GlobalSpecsConversionError {
     RelativePath(String, String),
     #[error("could not absolutize path: {0}")]
     AbsolutizePath(String),
-    #[error("specs cannot be empty if git or path is not specified")]
-    SpecsMissing,
     #[error("failed to infer package name")]
     #[diagnostic(transparent)]
     PackageNameInference(#[from] pixi_core::global::project::InferPackageNameError),
@@ -71,10 +69,6 @@ impl GlobalSpecs {
         manifest_root: &Path,
         project: &pixi_core::global::Project,
     ) -> Result<Vec<pixi_core::global::project::GlobalSpec>, GlobalSpecsConversionError> {
-        if self.specs.is_empty() && self.git.is_none() && self.path.is_none() {
-            return Err(GlobalSpecsConversionError::SpecsMissing);
-        }
-
         let git_or_path_spec = if let Some(git_url) = &self.git {
             let git_spec = pixi_spec::GitSpec {
                 git: git_url.clone(),
@@ -116,10 +110,7 @@ impl GlobalSpecs {
                         .name
                         .ok_or(GlobalSpecsConversionError::NameRequired)
                         .map(|name| {
-                            pixi_core::global::project::GlobalSpec::new(
-                                name,
-                                pixi_spec.clone(),
-                            )
+                            pixi_core::global::project::GlobalSpec::new(name, pixi_spec.clone())
                         })
                 })
                 .collect()
@@ -127,12 +118,9 @@ impl GlobalSpecs {
             self.specs
                 .iter()
                 .map(|spec_str| {
-                    pixi_core::global::project::GlobalSpec::try_from_str(
-                        spec_str,
-                        channel_config,
-                    )
-                    .map_err(Box::new)
-                    .map_err(GlobalSpecsConversionError::FromMatchSpec)
+                    pixi_core::global::project::GlobalSpec::try_from_str(spec_str, channel_config)
+                        .map_err(Box::new)
+                        .map_err(GlobalSpecsConversionError::FromMatchSpec)
                 })
                 .collect()
         }
