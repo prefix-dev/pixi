@@ -1356,15 +1356,27 @@ impl Project {
         &self,
         pixi_spec: &pixi_spec::PixiSpec,
     ) -> Result<PackageName, InferPackageNameError> {
-        // Convert PixiSpec to PinnedSourceSpec
+        // Convert PixiSpec to SourceSpec and resolve it to PinnedSourceSpec
         let pinned_source_spec = match pixi_spec {
             pixi_spec::PixiSpec::Path(path_spec) => {
                 PinnedSourceSpec::Path(pixi_record::PinnedPathSpec {
                     path: path_spec.path.clone(),
                 })
             }
-            pixi_spec::PixiSpec::Git(_git_spec) => {
-                return Err(InferPackageNameError::GitNotSupported);
+            pixi_spec::PixiSpec::Git(git_spec) => {
+                // Convert GitSpec to SourceSpec
+                let source_spec = pixi_spec::SourceSpec {
+                    location: pixi_spec::SourceLocationSpec::Git(git_spec.clone()),
+                };
+                
+                // Use the command dispatcher to resolve and checkout the git repository
+                let command_dispatcher = self.command_dispatcher()?;
+                let checkout = command_dispatcher
+                    .pin_and_checkout(source_spec)
+                    .await
+                    .map_err(|e| InferPackageNameError::BuildBackendMetadata(Box::new(e)))?;
+                
+                checkout.pinned
             }
             _ => {
                 return Err(InferPackageNameError::UnsupportedSpecType);
