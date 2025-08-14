@@ -17,7 +17,9 @@ use pixi_pypi_spec::PixiPypiSpec;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{MatchSpec, StringMatcher};
 
-use crate::cli::cli_config::{LockFileUpdateConfig, NoInstallConfig, RevalidateConfig, WorkspaceConfig};
+use crate::cli::cli_config::{
+    LockFileUpdateConfig, NoInstallConfig, RevalidateConfig, WorkspaceConfig,
+};
 
 /// Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file.
 ///

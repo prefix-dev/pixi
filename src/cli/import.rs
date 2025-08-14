@@ -16,7 +16,9 @@ use uv_requirements_txt::RequirementsTxt;
 use miette::{Diagnostic, IntoDiagnostic, Result};
 use thiserror::Error;
 
-use crate::cli::cli_config::{LockFileUpdateConfig, NoInstallConfig, RevalidateConfig, WorkspaceConfig};
+use crate::cli::cli_config::{
+    LockFileUpdateConfig, NoInstallConfig, RevalidateConfig, WorkspaceConfig,
+};
 
 #[derive(Parser, Debug, Clone, PartialEq, ValueEnum)]
 pub enum ImportFileFormat {

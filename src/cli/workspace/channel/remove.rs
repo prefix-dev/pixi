@@ -1,9 +1,9 @@
+use miette::IntoDiagnostic;
 use pixi_core::{
     UpdateLockFileOptions, WorkspaceLocator,
     environment::{LockFileUsage, get_update_lock_file_and_prefix},
     lock_file::ReinstallPackages,
 };
-use miette::IntoDiagnostic;
 
 use super::AddRemoveArgs;
 

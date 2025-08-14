@@ -11,8 +11,7 @@ use rattler_shell::{
 use pixi_config::{ConfigCli, ConfigCliActivation, ConfigCliPrompt};
 use pixi_core::{
     UpdateLockFileOptions, WorkspaceLocator, activation::CurrentEnvVarBehavior,
-    environment::get_update_lock_file_and_prefix, prompt,
-    lock_file::ReinstallPackages,
+    environment::get_update_lock_file_and_prefix, lock_file::ReinstallPackages, prompt,
     workspace::get_activated_environment_variables,
 };
 
