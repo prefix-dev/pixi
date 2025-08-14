@@ -1,3 +1,4 @@
+import subprocess
 from pathlib import Path
 
 from .common import ALL_PLATFORMS, verify_cli_command
@@ -6,6 +7,7 @@ from .common import ALL_PLATFORMS, verify_cli_command
 def test_variable_expansion(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     var_pattern = "${BAR}"
+    command = "echo stable-output"
     toml = f"""
         [workspace]
         channels = ["conda-forge"]
@@ -17,15 +19,15 @@ def test_variable_expansion(pixi: Path, tmp_pixi_workspace: Path) -> None:
         TEST_VAR = "$PIXI_PROJECT_NAME"
         BAR = "456"
         ANOTHER_VAR = "{var_pattern}"
-        TODAY="$(date)"
+        COMMAND_OUTPUT="$({command})"
 
         [target.win-64.activation.env]
         TEST_VAR = "%PIXI_PROJECT_NAME%"
-        TODAY="$(Get-Date)"
+        COMMAND_OUTPUT="$({command})"
 
         [tasks]
         start = "echo The project name is $TEST_VAR"
-        today = "echo Today is: $TODAY"
+        cmd_test = "echo Command output: $COMMAND_OUTPUT"
 
         [tasks.foo]
         cmd = "echo $FOO"
@@ -47,12 +49,15 @@ def test_variable_expansion(pixi: Path, tmp_pixi_workspace: Path) -> None:
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "foo"],
         stdout_contains="123",
-        stderr_excludes="$MY_FOO",
+        stdout_excludes="$MY_FOO",
     )
 
     # Test command substitution schema `$(command)` for activation.env
+    # Run the actual command to get expected output
+    expected_output = subprocess.run(command, shell=True, capture_output=True, text=True).stdout
+
     verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "today"],
-        stdout_contains="Today is:",
-        stderr_excludes=["$(date)", "$(Get-Date)"],
+        [pixi, "run", "--manifest-path", manifest, "cmd_test"],
+        stdout_contains=[f"Command output: {expected_output}"],
+        stderr_excludes=["$(echo"],
     )
