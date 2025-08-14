@@ -337,10 +337,8 @@
           "additionalProperties": true
         },
         "source": {
-          "title": "Source",
+          "$ref": "#/$defs/SourceLocation",
           "description": "The source from which to build the package",
-          "type": "object",
-          "additionalProperties": true,
           "examples": [
             {
               "path": "project"
@@ -1638,6 +1636,20 @@
           "examples": [
             "eu-central-1"
           ]
+        }
+      }
+    },
+    "SourceLocation": {
+      "title": "SourceLocation",
+      "description": "The location of a package's source code.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "title": "Path",
+          "description": "The path to the source",
+          "type": "string",
+          "minLength": 1
         }
       }
     },
