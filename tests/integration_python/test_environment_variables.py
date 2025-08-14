@@ -47,12 +47,12 @@ def test_variable_expansion(pixi: Path, tmp_pixi_workspace: Path) -> None:
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "foo"],
         stdout_contains="123",
-        stderr_excludes="$MY_FOO"
+        stderr_excludes="$MY_FOO",
     )
 
     # Test command substitution schema `$(command)` for activation.env
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "today"],
         stdout_contains="Today is:",
-        stderr_excludes="$(date)"
+        stderr_excludes="$(date)",
     )
