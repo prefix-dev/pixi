@@ -16,8 +16,8 @@ backend-spec:
 init-params:
   workspace-root: "file://<ROOT>/nested"
   source: ~
-  source-anchor: file://<ROOT>
-  manifest-path: file://<ROOT>/pixi.toml
+  source-anchor: "file://<ROOT>/nested/nested"
+  manifest-path: "file://<ROOT>/nested/nested/pixi.toml"
   project-model:
     name: simple
     version: 0.1.0

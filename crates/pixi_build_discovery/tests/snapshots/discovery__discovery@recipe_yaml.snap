@@ -17,8 +17,8 @@ backend-spec:
 init-params:
   workspace-root: "file://<ROOT>/recipe_yaml"
   source: ~
-  source-anchor: file://<ROOT>
-  manifest-path: file://<ROOT>/recipe.yaml
+  source-anchor: "file://<ROOT>/recipe_yaml"
+  manifest-path: "file://<ROOT>/recipe_yaml/recipe.yaml"
   project-model: ~
   configuration: ~
   target-configuration: ~

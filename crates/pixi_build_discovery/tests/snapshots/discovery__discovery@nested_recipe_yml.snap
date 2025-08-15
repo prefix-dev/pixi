@@ -17,8 +17,8 @@ backend-spec:
 init-params:
   workspace-root: "file://<ROOT>/nested_recipe_yml"
   source: ~
-  source-anchor: file://<ROOT>
-  manifest-path: file://<ROOT>/recipe/recipe.yml
+  source-anchor: "file://<ROOT>/nested_recipe_yml"
+  manifest-path: "file://<ROOT>/nested_recipe_yml/recipe/recipe.yml"
   project-model: ~
   configuration: ~
   target-configuration: ~
