@@ -59,7 +59,10 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
         build_options: BuildOptions,
     ) -> Result<Option<CachedDist>, DistCacheError> {
         // Check if installation of a binary version of the package should be allowed.
+        // we do not allow to set `no_binary` just yet but lets handle it here
+        // because, then this just works
         let no_binary = build_options.no_binary_package(dist.name());
+        // We can set no-build
         let no_build = build_options.no_build_package(dist.name());
 
         match dist {
