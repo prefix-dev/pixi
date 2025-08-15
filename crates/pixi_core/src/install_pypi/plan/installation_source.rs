@@ -80,7 +80,8 @@ pub fn decide_installation_source<'a>(
     dist: &'a Dist,
     dist_cache: &mut impl DistCache<'a>,
     operation: Operation,
-) -> Result<InstallationSources, uv_distribution::Error> {
+    build_options: uv_configuration::BuildOptions,
+) -> Result<InstallationSources, super::DistCacheError> {
     let mut installation_sources = InstallationSources::new();
     // First, check if we need to revalidate the package
     // then we should get it from the remote
@@ -94,7 +95,7 @@ pub fn decide_installation_source<'a>(
     }
 
     // Check if the distribution is cached
-    match dist_cache.is_cached(dist, uv_cache)? {
+    match dist_cache.is_cached(dist, uv_cache, build_options)? {
         Some(cached_dist) => {
             installation_sources.add_cached(&cached_dist, operation.cached());
         }

@@ -406,7 +406,8 @@ impl<'a> DistCache<'a> for NoCache {
         &mut self,
         _dist: &'a uv_distribution_types::Dist,
         _uv_cache: &uv_cache::Cache,
-    ) -> Result<Option<uv_distribution_types::CachedDist>, uv_distribution::Error> {
+        _build_options: uv_configuration::BuildOptions,
+    ) -> Result<Option<uv_distribution_types::CachedDist>, super::super::DistCacheError> {
         Ok(None)
     }
 }
@@ -418,7 +419,8 @@ impl<'a> DistCache<'a> for AllCached {
         &mut self,
         dist: &'a uv_distribution_types::Dist,
         _uv_cache: &uv_cache::Cache,
-    ) -> Result<Option<uv_distribution_types::CachedDist>, uv_distribution::Error> {
+        _build_options: uv_configuration::BuildOptions,
+    ) -> Result<Option<uv_distribution_types::CachedDist>, super::super::DistCacheError> {
         match dist {
             uv_distribution_types::Dist::Built(BuiltDist::Registry(wheel)) => {
                 let dist = CachedRegistryDist {

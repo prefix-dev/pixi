@@ -6,6 +6,7 @@ use std::{
 use super::{
     installation_source::{self, Operation},
     validation::NeedsReinstallError,
+    cache::DistCacheError,
 };
 use itertools::{Either, Itertools};
 use pixi_consts::consts;
@@ -46,6 +47,8 @@ pub enum InstallPlannerError {
     UvConversion(#[from] pixi_uv_conversions::ConversionError),
     #[error(transparent)]
     RetrieveDistFromCache(#[from] uv_distribution::Error),
+    #[error(transparent)]
+    DistCache(#[from] DistCacheError),
 }
 
 impl InstallPlanner {
@@ -75,6 +78,7 @@ impl InstallPlanner {
         site_packages: &'a Installed,
         mut dist_cache: Cached,
         required_dists: &'a RequiredDists,
+        build_options: uv_configuration::BuildOptions,
     ) -> Result<PyPIInstallationPlan, InstallPlannerError> {
         // Convert RequiredDists to the reference map for internal processing
         let required_dists_map = required_dists.as_ref_map();
@@ -140,6 +144,7 @@ impl InstallPlanner {
                     required_dist,
                     &mut dist_cache,
                     Operation::Reinstall,
+                    build_options.clone(),
                 )
                 .map_err(InstallPlannerError::from)?;
 
@@ -162,6 +167,7 @@ impl InstallPlanner {
                 dist,
                 &mut dist_cache,
                 Operation::Install,
+                build_options.clone(),
             )
             .map_err(InstallPlannerError::from)?;
 
