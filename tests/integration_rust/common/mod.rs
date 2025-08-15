@@ -491,7 +491,7 @@ impl PixiControl {
         // Ensure the lock-file is up-to-date
         let lock_file = project
             .update_lock_file(UpdateLockFileOptions {
-                lock_file_usage: args.lock_file_update_config.lock_file_usage(),
+                lock_file_usage: args.lock_file_update_config.lock_file_usage().unwrap(),
                 ..UpdateLockFileOptions::default()
             })
             .await?
