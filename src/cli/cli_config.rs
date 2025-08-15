@@ -101,7 +101,7 @@ impl ChannelsConfig {
 
 #[derive(Parser, Debug, Default, Clone)]
 pub struct LockFileUpdateConfig {
-    /// [DEPRECATED]: use `--frozen` `--no-install`. Skips lock-file updates
+    /// DEPRECATED: use `--frozen` `--no-install`. Skips lock-file updates
     #[clap(hide = true, long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub no_lockfile_update: bool,
 
