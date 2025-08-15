@@ -4814,7 +4814,6 @@ dependencies = [
  "itertools 0.14.0",
  "miette 7.6.0",
  "ordermap",
- "pathdiff",
  "pixi_build_discovery",
  "pixi_build_type_conversions",
  "pixi_build_types",
