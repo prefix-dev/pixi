@@ -7,7 +7,7 @@ The `pixi` command is the main entry point for the Pixi CLI.
 ## Usage
 
 ```text
-pixi [OPTIONS] <COMMAND>
+pixi [OPTIONS] [COMMAND]
 
 ```
 
@@ -64,3 +64,5 @@ pixi [OPTIONS] <COMMAND>
   **env**: `PIXI_NO_PROGRESS`
 
   **default**: `false`
+
+- [`--list`](#arg---list) List all installed commands (built-in and extensions)
