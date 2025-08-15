@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Once};
 
 use indexmap::IndexMap;
 use pixi_spec::TomlSpec;
@@ -27,6 +27,7 @@ pub struct TomlPackageBuild {
 pub struct TomlBuildBackend {
     pub name: PixiSpanned<rattler_conda_types::PackageName>,
     pub spec: TomlSpec,
+    pub channels: Option<PixiSpanned<Vec<NamedChannelOrUrl>>>,
 }
 
 impl TomlPackageBuild {
@@ -41,15 +42,27 @@ impl TomlPackageBuild {
         // Convert the additional dependencies and make sure that they are binary.
         let additional_dependencies = self.additional_dependencies.specs;
 
-        // Make sure there are no empty channels
-        if let Some(channels) = &self.channels {
-            if channels.value.is_empty() {
+        // Determine the channels to use, prioritizing backend.channels over top-level channels
+        let channels = if let Some(backend_channels) = &self.backend.value.channels {
+            if backend_channels.value.is_empty() {
                 return Err(TomlError::Generic(
                     GenericError::new("No channels specified for the build backend dependencies")
-                        .with_opt_span(channels.span()),
+                        .with_opt_span(backend_channels.span()),
                 ));
             }
-        }
+            Some(backend_channels.value.clone())
+        } else if let Some(legacy_channels) = &self.channels {
+            // Legacy top-level channels which are deprecated for migration purposes
+            if legacy_channels.value.is_empty() {
+                return Err(TomlError::Generic(
+                    GenericError::new("No channels specified for the build backend dependencies")
+                        .with_opt_span(legacy_channels.span()),
+                ));
+            }
+            Some(legacy_channels.value.clone())
+        } else {
+            None
+        };
 
         // Convert target-specific build configurations
         let target_configuration = self
@@ -68,7 +81,7 @@ impl TomlPackageBuild {
                 spec: build_backend_spec,
             },
             additional_dependencies,
-            channels: self.channels.map(|channels| channels.value),
+            channels,
             configuration: self.configuration,
             target_configuration: if target_configuration.is_empty() {
                 None
@@ -109,6 +122,12 @@ impl<'de> toml_span::Deserialize<'de> for TomlBuildBackend {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         let mut th = TableHelper::new(value)?;
         let name = th.required_s::<TomlFromStr<rattler_conda_types::PackageName>>("name")?;
+        let channels = th
+            .optional_s::<TomlWith<_, Vec<TomlFromStr<_>>>>("channels")
+            .map(|s| PixiSpanned {
+                value: s.value.into_inner(),
+                span: Some(s.span.start..s.span.end),
+            });
         th.finalize(Some(value))?;
 
         let spec = toml_span::Deserialize::deserialize(value)?;
@@ -119,14 +138,18 @@ impl<'de> toml_span::Deserialize<'de> for TomlBuildBackend {
                 span: name.span,
             }),
             spec,
+            channels,
         })
     }
 }
 
+static BUILD_CHANNELS_DEPRECATION: Once = Once::new();
+static BOTH_CHANNELS_WARNING: Once = Once::new();
+
 impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         let mut th = TableHelper::new(value)?;
-        let build_backend = th.required_s("backend")?.into();
+        let build_backend: PixiSpanned<TomlBuildBackend> = th.required_s("backend")?.into();
         let channels = th
             .optional_s::<TomlWith<_, Vec<TomlFromStr<_>>>>("channels")
             .map(|s| PixiSpanned {
@@ -146,6 +169,25 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
             .unwrap_or_default();
 
         th.finalize(None)?;
+
+        // Issue a warning if both legacy channels and backend.channels are present
+        if let (Some(_), Some(_)) = (&channels, &build_backend.value.channels) {
+            BOTH_CHANNELS_WARNING.call_once(|| {
+                eprintln!("{}Warning: Both top-level 'channels' and 'backend.channels' are specified. Using 'backend.channels'.",
+                    console::style(console::Emoji("⚠️ ", "")).yellow(),
+                );
+            });
+        }
+
+        // Issue a migration warning if legacy channels are used
+        if channels.is_some() && build_backend.value.channels.is_none() {
+            BUILD_CHANNELS_DEPRECATION.call_once(|| {
+                eprintln!("{}Warning: Top-level 'channels' in [package.build] is deprecated. Please move to 'backend.channels'.",
+                    console::style(console::Emoji("⚠️ ", "")).yellow(),
+                );
+            });
+        }
+
         Ok(Self {
             backend: build_backend,
             channels,
@@ -207,7 +249,7 @@ mod test {
     }
 
     #[test]
-    fn test_empty_channels() {
+    fn test_empty_channels_legacy() {
         assert_snapshot!(expect_parse_failure(
             r#"
             backend = { name = "foobar", version = "*" }
@@ -231,6 +273,59 @@ mod test {
             r#"
             backend = { name = "foobar", version = "*" }
             additional = "key"
+        "#
+        ));
+    }
+
+    #[test]
+    fn test_backend_channels_new_format() {
+        let toml = r#"
+            backend = { name = "foobar", version = "*", channels = ["https://prefix.dev/conda-forge"] }
+        "#;
+        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
+            .and_then(TomlPackageBuild::into_build_system)
+            .expect("parsing should succeed");
+
+        assert_eq!(parsed.channels.unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_backend_channels_legacy_format() {
+        let toml = r#"
+            backend = { name = "foobar", version = "*" }
+            channels = ["https://prefix.dev/conda-forge"]
+        "#;
+        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
+            .and_then(TomlPackageBuild::into_build_system)
+            .expect("parsing should succeed");
+
+        assert_eq!(parsed.channels.unwrap().len(), 1);
+    }
+
+    #[test]
+    fn test_backend_channels_priority() {
+        let toml = r#"
+            backend = { name = "foobar", version = "*", channels = ["https://prefix.dev/pixi-build-backends"] }
+            channels = ["https://prefix.dev/conda-forge"]
+        "#;
+        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
+            .and_then(TomlPackageBuild::into_build_system)
+            .expect("parsing should succeed");
+
+        // Should use backend.channels, not top-level channels
+        let channels = parsed.channels.unwrap();
+        assert_eq!(channels.len(), 1);
+        assert_eq!(
+            channels[0].to_string(),
+            "https://prefix.dev/pixi-build-backends"
+        );
+    }
+
+    #[test]
+    fn test_empty_backend_channels() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+            backend = { name = "foobar", version = "*", channels = [] }
         "#
         ));
     }

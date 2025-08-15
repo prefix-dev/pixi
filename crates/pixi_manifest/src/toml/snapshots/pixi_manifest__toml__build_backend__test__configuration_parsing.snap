@@ -37,6 +37,7 @@ TomlPackageBuild {
                 md5: None,
                 sha256: None,
             },
+            channels: None,
         },
     },
     channels: None,
