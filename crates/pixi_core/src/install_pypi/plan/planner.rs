@@ -4,9 +4,9 @@ use std::{
 };
 
 use super::{
+    cache::DistCacheError,
     installation_source::{self, Operation},
     validation::NeedsReinstallError,
-    cache::DistCacheError,
 };
 use itertools::{Either, Itertools};
 use pixi_consts::consts;
