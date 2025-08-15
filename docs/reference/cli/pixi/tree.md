@@ -24,8 +24,6 @@ pixi tree [OPTIONS] [REGEX]
 :  Invert tree and show what depends on given package in the regex argument
 
 ## Update Options
-- <a id="arg---no-lockfile-update" href="#arg---no-lockfile-update">`--no-lockfile-update`</a>
-:  Legacy flag to skip lock-file updates, behavior was inconsistent across commands so it has been deprecated
 - <a id="arg---frozen" href="#arg---frozen">`--frozen`</a>
 :  Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 <br>**env**: `PIXI_FROZEN`
