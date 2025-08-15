@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 pub use cycle::{Cycle, CycleEnvironment};
 use futures::TryStreamExt;
-use itertools::Either;
+use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_types::procedures::conda_outputs::CondaOutput;
 use pixi_record::{InputHash, PinnedSourceSpec, PixiRecord, SourceRecord};
@@ -180,6 +180,7 @@ impl SourceMetadataSpec {
 
         // Convert the run exports
         let run_exports = PixiRunExports::try_from_protocol(&output.run_exports)
+            .map_err(SourceMetadataError::from)
             .map_err(CommandDispatcherError::Failed)?;
 
         let pixi_spec_to_match_spec = |name: &PackageName,
@@ -330,8 +331,16 @@ impl SourceMetadataSpec {
         match command_dispatcher
             .solve_pixi_environment(PixiEnvironmentSpec {
                 name: Some(format!("{} ({})", pkg_name.as_source(), env_type)),
-                dependencies: dependencies.dependencies,
-                constraints: dependencies.constraints,
+                dependencies: dependencies
+                    .dependencies
+                    .into_specs()
+                    .map(|(name, spec)| (name, spec.value))
+                    .collect(),
+                constraints: dependencies
+                    .constraints
+                    .into_specs()
+                    .map(|(name, spec)| (name, spec.value))
+                    .collect(),
                 installed: vec![], // TODO: To lock build environments, fill this.
                 build_environment,
                 channels: self.backend_metadata.channels.clone(),
@@ -382,14 +391,19 @@ impl PackageRecordDependencies {
     ) -> Result<PackageRecordDependencies, SpecConversionError> {
         let constrains = dependencies
             .constraints
-            .into_match_specs(channel_config)?
-            .into_iter()
-            .map(|spec| spec.to_string())
-            .collect();
+            .into_specs()
+            .map(|(name, spec)| {
+                Ok(MatchSpec::from_nameless(
+                    spec.value.try_into_nameless_match_spec(channel_config)?,
+                    Some(name),
+                ))
+            })
+            .map_ok(|spec| spec.to_string())
+            .collect::<Result<Vec<_>, _>>()?;
         let mut depends = Vec::new();
         let mut sources = HashMap::new();
         for (name, spec) in dependencies.dependencies.into_specs() {
-            match spec.into_source_or_binary() {
+            match spec.value.into_source_or_binary() {
                 Either::Left(source) => {
                     depends.push(
                         MatchSpec {
