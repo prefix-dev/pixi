@@ -4280,6 +4280,10 @@ This means that you can define the <code>description</code>, <code>authors</code
 <p>The build system specifies how the package can be built.
 The build system is a table that can contain the following fields:</p>
 <ul>
+<li><code>source</code>: specifies the location of the source code for the package. Default: manifest directory. Currently supported options:<ul>
+<li><code>path</code>: a string representing a relative or absolute path to the source code.</li>
+</ul>
+</li>
 <li><code>channels</code>: specifies the channels to get the build backend from.</li>
 <li><code>backend</code>: specifies the build backend to use. This is a table that can contain the following fields:<ul>
 <li><code>name</code>: the name of the build backend to use. This will also be the executable name.</li>
