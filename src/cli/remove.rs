@@ -8,7 +8,7 @@ use pixi_core::{
 };
 use pixi_manifest::FeaturesExt;
 
-use crate::cli::cli_config::{DependencyConfig, PrefixUpdateConfig, WorkspaceConfig};
+use crate::cli::cli_config::{DependencyConfig, NoInstallConfig, WorkspaceConfig};
 use crate::cli::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs};
 
 /// Removes dependencies from the workspace.
@@ -31,8 +31,7 @@ pub struct Args {
     pub dependency_config: DependencyConfig,
 
     #[clap(flatten)]
-    pub prefix_update_config: PrefixUpdateConfig,
-
+    pub no_install_config: NoInstallConfig,
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
 
@@ -41,9 +40,9 @@ pub struct Args {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let (dependency_config, prefix_update_config, lock_file_update_config, workspace_config) = (
+    let (dependency_config, no_install_config, lock_file_update_config, workspace_config) = (
         args.dependency_config,
-        args.prefix_update_config,
+        args.no_install_config,
         args.lock_file_update_config,
         args.workspace_config,
     );
@@ -121,8 +120,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             &workspace.default_environment(),
             UpdateMode::Revalidate,
             UpdateLockFileOptions {
-                lock_file_usage: lock_file_update_config.lock_file_usage(),
-                no_install: prefix_update_config.no_install,
+                lock_file_usage: lock_file_update_config.lock_file_usage()?,
+                no_install: no_install_config.no_install,
                 max_concurrent_solves: workspace.config().max_concurrent_solves(),
             },
             ReinstallPackages::default(),

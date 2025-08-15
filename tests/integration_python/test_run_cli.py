@@ -185,50 +185,6 @@ def test_using_prefix_validation(
         assert Path(file).exists()
 
 
-def test_prefix_revalidation(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
-    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
-    toml = f"""
-    [project]
-    name = "test"
-    channels = ["{dummy_channel_1}"]
-    platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
-
-    [dependencies]
-    dummy-a = "*"
-    """
-    manifest.write_text(toml)
-
-    # Run the installation
-    verify_cli_command(
-        [pixi, "install", "--manifest-path", manifest],
-    )
-
-    # Validate creation of the pixi file with the hash
-    pixi_file = default_env_path(tmp_pixi_workspace).joinpath("conda-meta").joinpath("pixi")
-    assert pixi_file.exists()
-    assert "environment_lock_file_hash" in pixi_file.read_text()
-
-    # Break environment on purpose
-    dummy_a_meta_files = (
-        default_env_path(tmp_pixi_workspace).joinpath("conda-meta").glob("dummy-a*.json")
-    )
-
-    for file in dummy_a_meta_files:
-        path = Path(file)
-        if path.exists():
-            path.unlink()  # Removes the file
-
-    # Run with revalidation to force reinstallation
-    verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "--revalidate", "echo", "hello"],
-        stdout_contains="hello",
-    )
-
-    # Validate that the dummy-a files are reinstalled
-    for file in dummy_a_meta_files:
-        assert Path(file).exists()
-
-
 def test_run_with_activation(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     toml = f"""

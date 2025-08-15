@@ -34,7 +34,7 @@ use uv_python::PythonEnvironment;
 use crate::common::{
     LockFileExt, PixiControl,
     builders::{
-        HasDependencyConfig, HasLockFileUpdateConfig, HasPrefixUpdateConfig, string_from_iter,
+        HasDependencyConfig, HasLockFileUpdateConfig, HasNoInstallConfig, string_from_iter,
     },
     logging::try_init_test_subscriber,
     package_database::{Package, PackageDatabase},
@@ -204,7 +204,8 @@ async fn install_locked_with_config() {
 
     // Add new version of python only to the manifest
     pixi.add("python==3.9.0")
-        .without_lockfile_update()
+        .with_frozen(true)
+        .with_install(false)
         .await
         .unwrap();
 
@@ -278,7 +279,8 @@ async fn install_frozen() {
 
     // Add new version of python only to the manifest
     pixi.add("python==3.10.1")
-        .without_lockfile_update()
+        .with_frozen(true)
+        .with_install(false)
         .await
         .unwrap();
 
@@ -841,13 +843,13 @@ dependencies = []
         [dependencies]
         python = "3.12.*"
         setuptools = ">=72,<73"
-        
+
         [pypi-dependencies.package-b]
         path = "./package-b"
 
         [pypi-dependencies.package-tdjager]
         path = "./package-tdjager"
-        
+
         "#,
         platform = current_platform,
     );

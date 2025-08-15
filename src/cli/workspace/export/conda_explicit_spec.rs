@@ -12,7 +12,7 @@ use rattler_conda_types::{
 };
 use rattler_lock::{CondaPackageData, Environment, LockedPackageRef};
 
-use crate::cli::cli_config::{LockFileUpdateConfig, WorkspaceConfig};
+use crate::cli::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
 
 #[derive(Debug, Parser)]
 #[clap(arg_required_else_help = false)]
@@ -42,6 +42,9 @@ pub struct Args {
 
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
+
+    #[clap(flatten)]
+    pub no_install_config: NoInstallConfig,
 
     #[clap(flatten)]
     config: ConfigCli,
@@ -168,11 +171,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let lockfile = workspace
         .update_lock_file(UpdateLockFileOptions {
-            lock_file_usage: args.lock_file_update_config.lock_file_usage(),
-            no_install: args.lock_file_update_config.no_lockfile_update,
+            lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
+            no_install: args.no_install_config.no_install,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         })
         .await?
+        .0
         .into_lock_file();
 
     let mut environments = Vec::new();

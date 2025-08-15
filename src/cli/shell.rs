@@ -9,13 +9,16 @@ use rattler_shell::{
 };
 
 use pixi_config::{ConfigCli, ConfigCliActivation, ConfigCliPrompt};
-use pixi_core::lock_file::ReinstallPackages;
-use pixi_core::lock_file::UpdateMode;
-use pixi_core::workspace::get_activated_environment_variables;
 use pixi_core::{
-    UpdateLockFileOptions, WorkspaceLocator, activation::CurrentEnvVarBehavior,
-    environment::get_update_lock_file_and_prefix, prompt,
+    UpdateLockFileOptions, WorkspaceLocator,
+    activation::CurrentEnvVarBehavior,
+    environment::get_update_lock_file_and_prefix,
+    lock_file::{ReinstallPackages, UpdateMode},
+    prompt,
+    workspace::get_activated_environment_variables,
 };
+
+use crate::cli::cli_config::{NoInstallConfig, WorkspaceConfig};
 #[cfg(target_family = "unix")]
 use pixi_pty::unix::PtySession;
 
@@ -23,7 +26,6 @@ use pixi_pty::unix::PtySession;
 use pixi_utils::prefix::Prefix;
 
 use crate::cli::cli_config::LockFileUpdateConfig;
-use crate::cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig};
 
 /// Start a shell in a pixi environment, run `exit` to leave the shell.
 #[derive(Parser, Debug)]
@@ -32,8 +34,7 @@ pub struct Args {
     workspace_config: WorkspaceConfig,
 
     #[clap(flatten)]
-    pub prefix_update_config: PrefixUpdateConfig,
-
+    pub no_install_config: NoInstallConfig,
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
 
@@ -280,9 +281,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         &environment,
         UpdateMode::QuickValidate,
         UpdateLockFileOptions {
-            lock_file_usage: args.lock_file_update_config.lock_file_usage(),
-            no_install: args.prefix_update_config.no_install
-                && args.lock_file_update_config.no_lockfile_update,
+            lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
+            no_install: args.no_install_config.no_install,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         },
         ReinstallPackages::default(),

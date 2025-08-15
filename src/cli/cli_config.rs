@@ -10,7 +10,6 @@ use pixi_consts::consts;
 use pixi_core::DependencyType;
 use pixi_core::Workspace;
 use pixi_core::environment::LockFileUsage;
-use pixi_core::lock_file::UpdateMode;
 use pixi_core::workspace::DiscoveryStart;
 use pixi_manifest::FeaturesExt;
 use pixi_manifest::{FeatureName, SpecType};
@@ -102,8 +101,8 @@ impl ChannelsConfig {
 
 #[derive(Parser, Debug, Default, Clone)]
 pub struct LockFileUpdateConfig {
-    /// Don't update lockfile, implies the no-install as well.
-    #[clap(long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
+    /// DEPRECATED: use `--frozen` `--no-install`. Skips lock-file updates
+    #[clap(hide = true, long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub no_lockfile_update: bool,
 
     /// Lock file usage from the CLI
@@ -112,36 +111,40 @@ pub struct LockFileUpdateConfig {
 }
 
 impl LockFileUpdateConfig {
-    pub fn lock_file_usage(&self) -> LockFileUsage {
+    pub fn lock_file_usage(&self) -> miette::Result<LockFileUsage> {
+        // Error on deprecated flag usage
+        if self.no_lockfile_update {
+            return Err(miette::miette!(
+                help = "Use '--frozen' to skip lock-file updates.\nUse '--no-install' to skip installation.",
+                "The '--no-lockfile-update' flag has been deprecated due to inconsistent behavior across commands. This flag will be removed in a future version."
+            ));
+        }
+
         let usage: LockFileUsage = self.lock_file_usage.clone().into();
         if self.no_lockfile_update {
-            LockFileUsage::Frozen
+            Ok(LockFileUsage::Frozen)
         } else {
-            usage
+            Ok(usage)
         }
     }
 }
 
-/// Configuration for how to update the prefix
+/// Configuration for skipping installation
 #[derive(Parser, Debug, Default, Clone)]
-pub struct PrefixUpdateConfig {
+pub struct NoInstallConfig {
     /// Don't modify the environment, only modify the lock-file.
     #[arg(long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub no_install: bool,
-
-    /// Run the complete environment validation. This will reinstall a broken environment.
-    #[arg(long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
-    pub revalidate: bool,
 }
 
-impl PrefixUpdateConfig {
-    /// Which `[UpdateMode]` to use
-    pub(crate) fn update_mode(&self) -> UpdateMode {
-        if self.revalidate {
-            UpdateMode::Revalidate
-        } else {
-            UpdateMode::QuickValidate
-        }
+impl NoInstallConfig {
+    /// Creates a new NoInstallConfig with the specified value
+    pub fn new(no_install: bool) -> Self {
+        Self { no_install }
+    }
+
+    pub fn allow_installs(&self) -> bool {
+        !self.no_install
     }
 }
 
