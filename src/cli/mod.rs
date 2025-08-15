@@ -198,11 +198,11 @@ pub struct LockFileUsageArgs {
 struct LockFileUsageArgsRaw {
     /// Install the environment as defined in the lockfile, doesn't update
     /// lockfile if it isn't up-to-date with the manifest file.
-    #[clap(long, env = "PIXI_FROZEN", help_heading = consts::CLAP_UPDATE_OPTIONS)]
+    #[clap(long, env = "PIXI_FROZEN", help_heading = consts::CLAP_UPDATE_OPTIONS, conflicts_with = "locked")]
     frozen: bool,
     /// Check if lockfile is up-to-date before installing the environment,
     /// aborts when lockfile isn't up-to-date with the manifest file.
-    #[clap(long, env = "PIXI_LOCKED", help_heading = consts::CLAP_UPDATE_OPTIONS)]
+    #[clap(long, env = "PIXI_LOCKED", help_heading = consts::CLAP_UPDATE_OPTIONS, conflicts_with = "frozen")]
     locked: bool,
 }
 
@@ -216,15 +216,10 @@ impl LockFileUsageArgs {
     }
 }
 
-// Automatic validation when converting from raw args
-impl TryFrom<LockFileUsageArgsRaw> for LockFileUsageArgs {
-    type Error = LockFileUsageError;
-
-    fn try_from(raw: LockFileUsageArgsRaw) -> Result<Self, LockFileUsageError> {
-        if raw.frozen && raw.locked {
-            return Err(LockFileUsageError::FrozenAndLocked);
-        }
-        Ok(LockFileUsageArgs { inner: raw })
+// Automatic conversion from raw args (conflicts handled by clap)
+impl From<LockFileUsageArgsRaw> for LockFileUsageArgs {
+    fn from(raw: LockFileUsageArgsRaw) -> Self {
+        LockFileUsageArgs { inner: raw }
     }
 }
 
@@ -232,9 +227,7 @@ impl TryFrom<LockFileUsageArgsRaw> for LockFileUsageArgs {
 impl clap::FromArgMatches for LockFileUsageArgs {
     fn from_arg_matches(matches: &clap::ArgMatches) -> Result<Self, clap::Error> {
         let raw = LockFileUsageArgsRaw::from_arg_matches(matches)?;
-        raw.try_into().map_err(|e: LockFileUsageError| {
-            clap::Error::raw(clap::error::ErrorKind::ArgumentConflict, e.to_string())
-        })
+        Ok(raw.into())
     }
 
     fn update_from_arg_matches(&mut self, matches: &clap::ArgMatches) -> Result<(), clap::Error> {
@@ -265,17 +258,14 @@ impl From<LockFileUsageArgs> for pixi_core::environment::LockFileUsage {
     }
 }
 
-impl TryFrom<LockFileUsageConfig> for pixi_core::environment::LockFileUsage {
-    type Error = LockFileUsageError;
-
-    fn try_from(value: LockFileUsageConfig) -> Result<Self, LockFileUsageError> {
-        value.validate()?;
+impl From<LockFileUsageConfig> for pixi_core::environment::LockFileUsage {
+    fn from(value: LockFileUsageConfig) -> Self {
         if value.frozen {
-            Ok(Self::Frozen)
+            Self::Frozen
         } else if value.locked {
-            Ok(Self::Locked)
+            Self::Locked
         } else {
-            Ok(Self::Update)
+            Self::Update
         }
     }
 }
@@ -285,23 +275,14 @@ impl TryFrom<LockFileUsageConfig> for pixi_core::environment::LockFileUsage {
 pub struct LockFileUsageConfig {
     /// Install the environment as defined in the lockfile, doesn't update
     /// lockfile if it isn't up-to-date with the manifest file.
-    #[clap(long, env = "PIXI_FROZEN", help_heading = consts::CLAP_UPDATE_OPTIONS)]
+    #[clap(long, env = "PIXI_FROZEN", help_heading = consts::CLAP_UPDATE_OPTIONS, conflicts_with = "locked")]
     pub frozen: bool,
     /// Check if lockfile is up-to-date before installing the environment,
     /// aborts when lockfile isn't up-to-date with the manifest file.
-    #[clap(long, env = "PIXI_LOCKED", help_heading = consts::CLAP_UPDATE_OPTIONS)]
+    #[clap(long, env = "PIXI_LOCKED", help_heading = consts::CLAP_UPDATE_OPTIONS, conflicts_with = "frozen")]
     pub locked: bool,
 }
 
-impl LockFileUsageConfig {
-    /// Validate that the configuration is valid
-    pub fn validate(&self) -> Result<(), LockFileUsageError> {
-        if self.frozen && self.locked {
-            return Err(LockFileUsageError::FrozenAndLocked);
-        }
-        Ok(())
-    }
-}
 
 pub async fn execute() -> miette::Result<()> {
     let args = Args::parse();
@@ -583,94 +564,7 @@ mod tests {
     use super::*;
     use temp_env;
 
-    #[test]
-    fn test_frozen_and_locked_conflict() {
-        // Test that --frozen and --locked conflict is caught by validation
-        let config_result = LockFileUsageConfig::try_parse_from(["test", "--frozen", "--locked"]);
-        assert!(config_result.is_ok(), "Parsing should succeed");
-        let parsed = config_result.unwrap();
-        assert!(parsed.frozen, "Expected frozen to be true");
-        assert!(parsed.locked, "Expected locked to be true");
-        assert!(
-            parsed.validate().is_err(),
-            "Expected validation to fail when both --frozen and --locked are provided"
-        );
-    }
 
-    #[test]
-    fn test_lockfile_usage_args_try_from_validation() {
-        // Valid case
-        let valid_raw = LockFileUsageArgsRaw {
-            frozen: true,
-            locked: false,
-        };
-        let result = LockFileUsageArgs::try_from(valid_raw);
-        assert!(result.is_ok());
-
-        // Valid case
-        let valid_raw = LockFileUsageArgsRaw {
-            frozen: false,
-            locked: true,
-        };
-        let result = LockFileUsageArgs::try_from(valid_raw);
-        assert!(result.is_ok());
-
-        // Valid case
-        let valid_raw = LockFileUsageArgsRaw {
-            frozen: false,
-            locked: false,
-        };
-        let result = LockFileUsageArgs::try_from(valid_raw);
-        assert!(result.is_ok());
-
-        // Invalid case
-        let invalid_raw = LockFileUsageArgsRaw {
-            frozen: true,
-            locked: true,
-        };
-        let result = LockFileUsageArgs::try_from(invalid_raw);
-        assert!(result.is_err());
-
-        let error = result.unwrap_err();
-        assert!(error.to_string().contains("cannot be used together with"));
-    }
-
-    #[test]
-    fn test_pixi_frozen_true_with_locked_flag_should_fail() {
-        // PIXI_FROZEN=true with --locked should fail validation
-        temp_env::with_var("PIXI_FROZEN", Some("true"), || {
-            let result = LockFileUsageConfig::try_parse_from(["test", "--locked"]);
-
-            assert!(
-                result.is_ok(),
-                "Parsing should succeed, but validation should fail"
-            );
-            let parsed = result.unwrap();
-            assert!(parsed.frozen, "Expected frozen flag to be true");
-            assert!(parsed.locked, "Expected locked flag to be true");
-            assert!(
-                parsed.validate().is_err(),
-                "Expected validation to fail when both frozen and locked are true"
-            );
-        });
-    }
-
-    #[test]
-    fn test_pixi_frozen_false_with_locked_flag_should_pass() {
-        // PIXI_FROZEN=false with --locked should pass validation
-        temp_env::with_var("PIXI_FROZEN", Some("false"), || {
-            let result = LockFileUsageConfig::try_parse_from(["test", "--locked"]);
-
-            assert!(
-                result.is_ok(),
-                "Expected success when PIXI_FROZEN=false and --locked is used"
-            );
-            let parsed = result.unwrap();
-            assert!(parsed.locked, "Expected locked flag to be true");
-            assert!(!parsed.frozen, "Expected frozen flag to be false");
-            assert!(parsed.validate().is_ok(), "Expected validation to pass");
-        });
-    }
 
     #[test]
     fn test_clap_boolean_env_var_behavior() {
