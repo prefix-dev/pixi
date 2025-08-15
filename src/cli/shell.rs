@@ -18,14 +18,12 @@ use pixi_core::{
     workspace::get_activated_environment_variables,
 };
 
-use crate::cli::cli_config::{NoInstallConfig, WorkspaceConfig};
+use crate::cli::cli_config::{LockAndInstallConfig, WorkspaceConfig};
 #[cfg(target_family = "unix")]
 use pixi_pty::unix::PtySession;
 
 #[cfg(target_family = "unix")]
 use pixi_utils::prefix::Prefix;
-
-use crate::cli::cli_config::LockFileUpdateConfig;
 
 /// Start a shell in a pixi environment, run `exit` to leave the shell.
 #[derive(Parser, Debug)]
@@ -34,9 +32,7 @@ pub struct Args {
     workspace_config: WorkspaceConfig,
 
     #[clap(flatten)]
-    pub no_install_config: NoInstallConfig,
-    #[clap(flatten)]
-    pub lock_file_update_config: LockFileUpdateConfig,
+    pub lock_and_install_config: LockAndInstallConfig,
 
     #[clap(flatten)]
     config: ConfigCli,
@@ -281,8 +277,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         &environment,
         UpdateMode::QuickValidate,
         UpdateLockFileOptions {
-            lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
-            no_install: args.no_install_config.no_install,
+            lock_file_usage: args.lock_and_install_config.lock_file_usage()?,
+            no_install: args.lock_and_install_config.no_install(),
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         },
         ReinstallPackages::default(),
