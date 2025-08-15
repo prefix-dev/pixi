@@ -120,12 +120,12 @@ impl LockFileUpdateConfig {
             ));
         }
 
-        let usage: LockFileUsage = self
-            .lock_file_usage
-            .clone()
-            .try_into()
-            .map_err(|e: crate::cli::LockFileUsageError| miette::miette!(e))?;
-        Ok(usage)
+        let usage: LockFileUsage = self.lock_file_usage.clone().into();
+        if self.no_lockfile_update {
+            Ok(LockFileUsage::Frozen)
+        } else {
+            Ok(usage)
+        }
     }
 }
 
