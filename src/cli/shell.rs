@@ -25,7 +25,6 @@ use pixi_pty::unix::PtySession;
 #[cfg(target_family = "unix")]
 use pixi_utils::prefix::Prefix;
 
-
 /// Start a shell in a pixi environment, run `exit` to leave the shell.
 #[derive(Parser, Debug)]
 pub struct Args {
