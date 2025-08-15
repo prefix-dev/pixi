@@ -1,6 +1,7 @@
 ---
 source: crates/pixi_build_type_conversions/src/project_model.rs
 expression: project_model
+snapshot_kind: text
 ---
 {
   "version": "1",
@@ -37,7 +38,7 @@ expression: project_model
         "runDependencies": {
           "rich": {
             "binary": {
-              "version": ">=13.9.4,<14",
+              "version": "13.9.*",
               "build": null,
               "buildNumber": null,
               "fileName": null,

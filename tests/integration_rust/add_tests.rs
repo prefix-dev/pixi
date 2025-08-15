@@ -1,7 +1,8 @@
 use std::str::FromStr;
 
-use pixi::{DependencyType, Workspace, cli::cli_config::GitRev};
+use pixi::cli::cli_config::GitRev;
 use pixi_consts::consts;
+use pixi_core::{DependencyType, Workspace};
 use pixi_manifest::{FeaturesExt, SpecType};
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName, VersionOrStar};
 use rattler_conda_types::{PackageName, Platform};
@@ -10,7 +11,7 @@ use url::Url;
 
 use crate::common::{
     LockFileExt, PixiControl,
-    builders::{HasDependencyConfig, HasLockFileUpdateConfig, HasPrefixUpdateConfig},
+    builders::{HasDependencyConfig, HasLockFileUpdateConfig, HasNoInstallConfig},
     package_database::{Package, PackageDatabase},
 };
 
@@ -85,12 +86,14 @@ async fn add_with_channel() {
     pixi.init().no_fast_prefix_overwrite(true).await.unwrap();
 
     pixi.add("conda-forge::py_rattler")
-        .without_lockfile_update()
+        .with_install(false)
+        .with_frozen(true)
         .await
         .unwrap();
 
     pixi.add("https://prefix.dev/conda-forge::_r-mutex")
-        .without_lockfile_update()
+        .with_install(false)
+        .with_frozen(true)
         .await
         .unwrap();
 
@@ -654,7 +657,6 @@ async fn add_dependency_pinning_strategy() {
 /// Test adding a git dependency with a specific branch
 #[tokio::test]
 #[cfg_attr(not(feature = "online_tests"), ignore)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn add_git_deps() {
     let pixi = PixiControl::from_manifest(
         r#"
@@ -708,7 +710,6 @@ preview = ['pixi-build']
 #[cfg(not(windows))]
 #[tokio::test]
 #[cfg_attr(not(feature = "online_tests"), ignore)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn add_git_deps_with_creds() {
     let pixi = PixiControl::from_manifest(
         r#"
@@ -762,7 +763,6 @@ preview = ['pixi-build']
 /// Test adding a git dependency with a specific commit
 #[tokio::test]
 #[cfg_attr(not(feature = "online_tests"), ignore)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn add_git_with_specific_commit() {
     let pixi = PixiControl::from_manifest(
         r#"
@@ -813,8 +813,6 @@ preview = ['pixi-build']"#,
 /// Test adding a git dependency with a specific tag
 #[tokio::test]
 #[cfg_attr(not(feature = "online_tests"), ignore)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
-
 async fn add_git_with_tag() {
     let pixi = PixiControl::from_manifest(
         r#"
@@ -880,7 +878,8 @@ preview = ['pixi-build']"#,
     // Add a package
     pixi.add("boost-check")
         .with_git_url(Url::parse("git+ssh://git@github.com/wolfv/pixi-build-examples.git").unwrap())
-        .with_no_lockfile_update(true)
+        .with_install(false)
+        .with_frozen(true)
         .await
         .unwrap();
 
@@ -999,7 +998,8 @@ preview = ["pixi-build"]
         .add("boost-check")
         .with_git_url(Url::parse("https://github.com/wolfv/pixi-build-examples.git").unwrap())
         .with_git_subdir("boost-check".to_string())
-        .with_no_lockfile_update(true)
+        .with_install(false)
+        .with_frozen(true)
         .await;
 
     assert!(result.is_ok());

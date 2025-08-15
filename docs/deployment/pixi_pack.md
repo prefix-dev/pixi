@@ -107,7 +107,7 @@ This can be useful if you want to distribute the environment to users that don't
 
 #### Custom pixi-unpack executable path
 
-When creating a self-extracting binary, you can specify a custom path or URL to a `pixi-unpack` executable to avoid downloading it from the [default location](https://github.com/Quantco/pixi-pack/releases/download).
+When creating a self-extracting binary, you can specify a custom path or URL to a `pixi-unpack` executable to avoid downloading it from the [default location](https://github.com/Quantco/pixi-pack/releases/latest).
 
 You can provide one of the following as the `--pixi-unpack-source`:
 

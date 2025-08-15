@@ -11,17 +11,16 @@ use rattler_shell::{
 use serde::Serialize;
 use serde_json;
 
-use crate::{
+use pixi_core::{
     UpdateLockFileOptions, Workspace, WorkspaceLocator,
     activation::{CurrentEnvVarBehavior, get_activator},
-    cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
     environment::get_update_lock_file_and_prefix,
-    lock_file::ReinstallPackages,
+    lock_file::{ReinstallPackages, UpdateMode},
     prompt,
     workspace::{Environment, HasWorkspaceRef, get_activated_environment_variables},
 };
 
-use super::cli_config::LockFileUpdateConfig;
+use crate::cli::cli_config::{LockAndInstallConfig, WorkspaceConfig};
 
 /// Print the pixi environment activation script.
 ///
@@ -38,10 +37,7 @@ pub struct Args {
     pub project_config: WorkspaceConfig,
 
     #[clap(flatten)]
-    pub prefix_update_config: PrefixUpdateConfig,
-
-    #[clap(flatten)]
-    pub lock_file_update_config: LockFileUpdateConfig,
+    pub lock_and_install_config: LockAndInstallConfig,
 
     #[clap(flatten)]
     config: ConfigCli,
@@ -160,11 +156,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let (lock_file_data, _prefix) = get_update_lock_file_and_prefix(
         &environment,
-        args.prefix_update_config.update_mode(),
+        UpdateMode::QuickValidate,
         UpdateLockFileOptions {
-            lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
-            no_install: args.prefix_update_config.no_install
-                && args.lock_file_update_config.no_lockfile_update,
+            lock_file_usage: args.lock_and_install_config.lock_file_usage()?,
+            no_install: args.lock_and_install_config.no_install(),
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         },
         ReinstallPackages::default(),

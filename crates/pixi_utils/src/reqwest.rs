@@ -64,7 +64,7 @@ fn auth_middleware(
 
 pub fn mirror_middleware(config: &Config) -> MirrorMiddleware {
     let mut internal_map = HashMap::new();
-    tracing::info!("Using mirrors: {:?}", config.mirror_map());
+    tracing::debug!("Using mirrors: {:?}", config.mirror_map());
 
     fn ensure_trailing_slash(url: &url::Url) -> url::Url {
         if url.path().ends_with('/') {

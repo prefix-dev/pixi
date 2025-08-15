@@ -178,11 +178,11 @@ pub fn as_uv_req(
             if canonicalized.is_dir() {
                 RequirementSource::Directory {
                     install_path: canonicalized.into_boxed_path(),
-                    editable: editable.unwrap_or_default(),
+                    editable: Some(editable.unwrap_or_default()),
                     url: verbatim,
                     // TODO: we could see if we ever need this
                     // AFAICS it would be useful for constrainging dependencies
-                    r#virtual: false,
+                    r#virtual: Some(false),
                 }
             } else if *editable == Some(true) {
                 {

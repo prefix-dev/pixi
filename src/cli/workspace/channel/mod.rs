@@ -2,12 +2,13 @@ pub mod add;
 pub mod list;
 pub mod remove;
 
-use crate::cli::cli_config::{LockFileUpdateConfig, PrefixUpdateConfig, WorkspaceConfig};
 use clap::Parser;
 use miette::IntoDiagnostic;
 use pixi_config::ConfigCli;
 use pixi_manifest::{FeatureName, PrioritizedChannel};
 use rattler_conda_types::{ChannelConfig, NamedChannelOrUrl};
+
+use crate::cli::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
 
 /// Commands to manage workspace channels.
 #[derive(Parser, Debug, Clone)]
@@ -35,8 +36,7 @@ pub struct AddRemoveArgs {
     pub prepend: bool,
 
     #[clap(flatten)]
-    pub prefix_update_config: PrefixUpdateConfig,
-
+    pub no_install_config: NoInstallConfig,
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
 

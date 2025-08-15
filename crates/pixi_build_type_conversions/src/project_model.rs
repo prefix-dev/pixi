@@ -28,12 +28,12 @@ fn to_pixi_spec_v1(
     // Convert into correct type for pixi
     let pbt_spec = match source_or_binary {
         itertools::Either::Left(source) => {
-            let source = match source {
-                pixi_spec::SourceSpec::Url(url_source_spec) => {
+            let source = match source.location {
+                pixi_spec::SourceLocationSpec::Url(url_source_spec) => {
                     let pixi_spec::UrlSourceSpec { url, md5, sha256 } = url_source_spec;
                     pbt::SourcePackageSpecV1::Url(pbt::UrlSpecV1 { url, md5, sha256 })
                 }
-                pixi_spec::SourceSpec::Git(git_spec) => {
+                pixi_spec::SourceLocationSpec::Git(git_spec) => {
                     let pixi_spec::GitSpec {
                         git,
                         rev,
@@ -50,7 +50,7 @@ fn to_pixi_spec_v1(
                         subdirectory,
                     })
                 }
-                pixi_spec::SourceSpec::Path(path_source_spec) => {
+                pixi_spec::SourceLocationSpec::Path(path_source_spec) => {
                     pbt::SourcePackageSpecV1::Path(pbt::PathSpecV1 {
                         path: path_source_spec.path.to_string(),
                     })

@@ -1,9 +1,10 @@
 pub mod add;
 pub mod list;
 
-use crate::WorkspaceLocator;
-use crate::cli::cli_config::WorkspaceConfig;
 use clap::{Parser, ValueEnum};
+use pixi_core::WorkspaceLocator;
+
+use crate::cli::cli_config::WorkspaceConfig;
 
 /// Enum for valid system requirement names.
 #[derive(Debug, Clone, Copy, ValueEnum)]

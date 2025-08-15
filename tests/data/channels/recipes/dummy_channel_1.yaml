@@ -142,13 +142,7 @@ outputs:
           then:
             - echo "@echo off" > $PREFIX/bin/pixi-foobar.bat
             - echo "echo %*" >> $PREFIX/bin/pixi-foobar.bat
-            - mkdir -p $PREFIX/etc/conda/activate.d
-            - echo "@echo off" > $PREFIX/etc/conda/activate.d/script.bat
-            - echo "set BAR_PATH=bar" >> $PREFIX/etc/conda/activate.d/script.bat
           else:
             - echo '#!/bin/sh' > $PREFIX/bin/pixi-foobar
             - echo 'echo "$@"' >> $PREFIX/bin/pixi-foobar
             - chmod +x $PREFIX/bin/pixi-foobar
-            - mkdir -p $PREFIX/etc/conda/activate.d
-            - echo '#!/bin/sh' > $PREFIX/etc/conda/activate.d/script.sh
-            - echo "export BAR_PATH='bar'" >> $PREFIX/etc/conda/activate.d/script.sh

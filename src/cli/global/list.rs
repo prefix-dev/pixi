@@ -1,10 +1,8 @@
-use crate::global::list::{
-    GlobalSortBy, list_all_global_environments, list_specific_global_environment,
-};
-use crate::global::{EnvironmentName, Project};
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use pixi_config::{Config, ConfigCli};
+use pixi_core::global::list::{list_all_global_environments, list_specific_global_environment};
+use pixi_core::global::{EnvironmentName, Project};
 use std::str::FromStr;
 
 /// Lists global environments with their dependencies and exposed commands. Can also display all packages within a specific global environment when using the --environment flag.
@@ -39,6 +37,14 @@ pub struct Args {
     sort_by: GlobalSortBy,
 }
 
+/// Sorting strategy for the package table
+#[derive(clap::ValueEnum, Clone, Debug, Default, PartialEq)]
+pub enum GlobalSortBy {
+    Size,
+    #[default]
+    Name,
+}
+
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
     let project = Project::discover_or_create()
@@ -55,7 +61,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             );
         }
 
-        list_specific_global_environment(&project, &env_name, args.sort_by, args.regex).await?;
+        list_specific_global_environment(
+            &project,
+            &env_name,
+            args.sort_by == GlobalSortBy::Size,
+            args.regex,
+        )
+        .await?;
     } else {
         // Verify that the environments are in sync with the manifest and report to the user otherwise
         if !project.environments_in_sync().await? {
