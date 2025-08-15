@@ -11,6 +11,10 @@ use human_bytes::human_bytes;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_consts::consts;
+use pixi_core::{
+    WorkspaceLocator,
+    lock_file::{UpdateLockFileOptions, UvResolutionContext},
+};
 use pixi_manifest::FeaturesExt;
 use pixi_uv_conversions::{
     ConversionError, pypi_options_to_index_locations, to_uv_normalize, to_uv_version,
@@ -22,12 +26,8 @@ use serde::Serialize;
 use uv_configuration::ConfigSettings;
 use uv_distribution::RegistryWheelIndex;
 
-use super::cli_config::LockFileUpdateConfig;
-use crate::{
-    WorkspaceLocator,
-    cli::cli_config::WorkspaceConfig,
-    lock_file::{UpdateLockFileOptions, UvResolutionContext},
-};
+use crate::cli::cli_config::LockFileUpdateConfig;
+use crate::cli::cli_config::WorkspaceConfig;
 
 // an enum to sort by size or name
 #[derive(clap::ValueEnum, Clone, Debug, Serialize)]
@@ -184,7 +184,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let lock_file = workspace
         .update_lock_file(UpdateLockFileOptions {
-            lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
+            lock_file_usage: args.lock_file_update_config.lock_file_usage(),
             no_install: false,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         })

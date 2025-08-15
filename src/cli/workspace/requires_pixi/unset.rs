@@ -1,5 +1,5 @@
-use crate::Workspace;
 use miette::IntoDiagnostic;
+use pixi_core::Workspace;
 
 pub async fn execute(workspace: Workspace) -> miette::Result<()> {
     let mut workspace = workspace.modify()?;

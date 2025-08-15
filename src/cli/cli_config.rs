@@ -1,9 +1,4 @@
-use crate::DependencyType;
-use crate::Workspace;
 use crate::cli::has_specs::HasSpecs;
-use crate::environment::LockFileUsage;
-use crate::lock_file::UpdateMode;
-use crate::workspace::DiscoveryStart;
 use clap::Parser;
 use indexmap::IndexMap;
 use indexmap::IndexSet;
@@ -12,6 +7,11 @@ use miette::IntoDiagnostic;
 use pep508_rs::Requirement;
 use pixi_config::Config;
 use pixi_consts::consts;
+use pixi_core::DependencyType;
+use pixi_core::Workspace;
+use pixi_core::environment::LockFileUsage;
+use pixi_core::lock_file::UpdateMode;
+use pixi_core::workspace::DiscoveryStart;
 use pixi_manifest::FeaturesExt;
 use pixi_manifest::{FeatureName, SpecType};
 use pixi_spec::GitReference;
@@ -112,16 +112,12 @@ pub struct LockFileUpdateConfig {
 }
 
 impl LockFileUpdateConfig {
-    pub fn lock_file_usage(&self) -> miette::Result<LockFileUsage> {
-        let usage: LockFileUsage = self
-            .lock_file_usage
-            .clone()
-            .try_into()
-            .map_err(|e: crate::cli::LockFileUsageError| miette::miette!(e))?;
+    pub fn lock_file_usage(&self) -> LockFileUsage {
+        let usage: LockFileUsage = self.lock_file_usage.clone().into();
         if self.no_lockfile_update {
-            Ok(LockFileUsage::Frozen)
+            LockFileUsage::Frozen
         } else {
-            Ok(usage)
+            usage
         }
     }
 }

@@ -108,11 +108,11 @@ pub enum DiscoveryError {
     #[diagnostic(help("This is often caused by an internal error. Please report this issue."))]
     SpecConversionError(pixi_spec::SpecConversionError),
 
-    #[error("the source directory does not contain a supported manifest")]
+    #[error("the source directory '{0}', does not contain a supported manifest")]
     #[diagnostic(help(
         "Ensure that the source directory contains a valid pixi.toml or recipe.yaml file."
     ))]
-    FailedToDiscover,
+    FailedToDiscover(String),
 }
 
 impl DiscoveredBackend {
@@ -151,12 +151,14 @@ impl DiscoveredBackend {
 
         // Try to discover as a rattler-build recipe.
         if enabled_protocols.enable_rattler_build {
-            if let Some(pixi) = Self::discover_rattler_build(source_path, channel_config)? {
+            if let Some(pixi) = Self::discover_rattler_build(source_path.clone(), channel_config)? {
                 return Ok(pixi);
             }
         }
 
-        Err(DiscoveryError::FailedToDiscover)
+        Err(DiscoveryError::FailedToDiscover(
+            source_path.to_string_lossy().to_string(),
+        ))
     }
 
     /// Construct a new instance based on a specific `recipe.yaml` file in the

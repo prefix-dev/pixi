@@ -1,7 +1,7 @@
 use clap::Parser;
 use miette::IntoDiagnostic;
 
-use crate::Workspace;
+use pixi_core::Workspace;
 
 #[derive(Parser, Debug, Default)]
 pub struct Args {

@@ -9,17 +9,14 @@ use console::Color;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
+use pixi_core::{WorkspaceLocator, lock_file::UpdateLockFileOptions, workspace::Environment};
 use pixi_manifest::FeaturesExt;
 use rattler_conda_types::Platform;
 use rattler_lock::LockedPackageRef;
 use regex::Regex;
 
-use crate::{
-    WorkspaceLocator, cli::cli_config::WorkspaceConfig, lock_file::UpdateLockFileOptions,
-    workspace::Environment,
-};
-
-use super::cli_config::LockFileUpdateConfig;
+use crate::cli::cli_config::LockFileUpdateConfig;
+use crate::cli::cli_config::WorkspaceConfig;
 
 /// Show a tree of workspace dependencies
 #[derive(Debug, Parser)]
@@ -84,7 +81,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let lock_file = workspace
         .update_lock_file(UpdateLockFileOptions {
-            lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
+            lock_file_usage: args.lock_file_update_config.lock_file_usage(),
             no_install: args.lock_file_update_config.no_lockfile_update,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         })

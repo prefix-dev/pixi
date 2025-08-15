@@ -5,7 +5,7 @@ use miette::IntoDiagnostic;
 use pixi_manifest::FeatureName;
 use rattler_conda_types::Platform;
 
-use crate::{
+use pixi_core::{
     UpdateLockFileOptions, Workspace,
     environment::{LockFileUsage, get_update_lock_file_and_prefix},
     lock_file::{ReinstallPackages, UpdateMode},

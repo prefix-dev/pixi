@@ -1,7 +1,7 @@
-use crate::global;
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use pixi_config::{Config, ConfigCli};
+use pixi_core::global;
 
 /// Sync global manifest with installed environments
 #[derive(Parser, Debug)]
@@ -25,7 +25,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     #[cfg(unix)]
     {
         // Prune broken completions
-        let completions_dir = crate::global::completions::CompletionsDir::from_env().await?;
+        let completions_dir = pixi_core::global::completions::CompletionsDir::from_env().await?;
         completions_dir.prune_old_completions()?;
     }
 

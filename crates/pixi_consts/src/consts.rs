@@ -1,7 +1,6 @@
 use console::Style;
 use rattler_conda_types::NamedChannelOrUrl;
 use std::{
-    collections::HashSet,
     fmt::{Display, Formatter},
     str::FromStr,
     sync::LazyLock,
@@ -17,7 +16,7 @@ pub const PYPROJECT_MANIFEST: &str = "pyproject.toml";
 pub const CONFIG_FILE: &str = "config.toml";
 pub const PIXI_VERSION: &str = match option_env!("PIXI_VERSION") {
     Some(v) => v,
-    None => "0.50.2",
+    None => "0.52.0",
 };
 pub const PREFIX_FILE_NAME: &str = "pixi_env_prefix";
 pub const ENVIRONMENTS_DIR: &str = "envs";
@@ -140,23 +139,4 @@ impl Display for PypiEmoji {
             write!(f, "(pypi)")
         }
     }
-}
-
-pub const OVERRIDE_EXCLUDED_KEYS: &[&str] = &[
-    "PIXI_PROJECT_ROOT",
-    "PIXI_PROJECT_NAME",
-    "PIXI_PROJECT_VERSION",
-    "PIXI_PROMPT",
-    "PIXI_ENVIRONMENT_NAME",
-    "PIXI_ENVIRONMENT_PLATFORMS",
-    "CONDA_PREFIX",
-    "CONDA_DEFAULT_ENV",
-    "PATH",
-    "INIT_CWD",
-    "PWD",
-    "PROJECT_NAME",
-];
-
-pub fn get_override_excluded_keys() -> HashSet<&'static str> {
-    OVERRIDE_EXCLUDED_KEYS.iter().copied().collect()
 }

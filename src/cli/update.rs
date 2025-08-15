@@ -1,23 +1,24 @@
 use std::{cmp::Ordering, collections::HashSet};
 
-use crate::{
-    Workspace,
-    lock_file::{UpdateContext, filter_lock_file},
-};
-use crate::{
-    WorkspaceLocator,
-    cli::cli_config::WorkspaceConfig,
-    diff::{LockFileDiff, LockFileJsonDiff},
-};
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic, MietteDiagnostic};
 use pixi_config::ConfigCli;
 use pixi_consts::consts;
+use pixi_core::{
+    Workspace,
+    lock_file::{UpdateContext, filter_lock_file},
+};
+use pixi_core::{
+    WorkspaceLocator,
+    diff::{LockFileDiff, LockFileJsonDiff},
+};
 use pixi_manifest::EnvironmentName;
 use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, LockedPackageRef};
+
+use crate::cli::cli_config::WorkspaceConfig;
 
 /// The `update` command checks if there are newer versions of the dependencies and updates the `pixi.lock` file and environments accordingly.
 ///

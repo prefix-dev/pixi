@@ -143,7 +143,7 @@ impl CommandDispatcher {
         };
 
         // Add debug information about what the backend supports.
-        tracing::debug!(
+        tracing::info!(
             "Instantiated backend {}{}, negotiated API version {}",
             tool.executable(),
             tool.version()

@@ -3,9 +3,10 @@ pub mod set;
 pub mod unset;
 pub mod verify;
 
-use crate::WorkspaceLocator;
-use crate::cli::cli_config::WorkspaceConfig;
 use clap::Parser;
+use pixi_core::WorkspaceLocator;
+
+use crate::cli::cli_config::WorkspaceConfig;
 
 /// Commands to manage the pixi minimum version requirement.
 #[derive(Parser, Debug)]

@@ -18,10 +18,8 @@ use thiserror::Error;
 use tokio_util::sync::CancellationToken;
 use tracing::Level;
 
-use super::cli_config::LockFileUpdateConfig;
-use crate::{
+use pixi_core::{
     Workspace, WorkspaceLocator,
-    cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
     environment::sanity_check_workspace,
     lock_file::{ReinstallPackages, UpdateLockFileOptions},
     task::{
@@ -30,6 +28,9 @@ use crate::{
     },
     workspace::{Environment, errors::UnsupportedPlatformError},
 };
+
+use crate::cli::cli_config::LockFileUpdateConfig;
+use crate::cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig};
 
 /// Runs task in the pixi environment.
 ///
@@ -126,7 +127,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Ensure that the lock-file is up-to-date.
     let lock_file = workspace
         .update_lock_file(UpdateLockFileOptions {
-            lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
+            lock_file_usage: args.lock_file_update_config.lock_file_usage(),
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
             ..UpdateLockFileOptions::default()
         })
@@ -373,7 +374,7 @@ async fn execute_task(
     command_env: &HashMap<OsString, OsString>,
     kill_signal: KillSignal,
 ) -> Result<(), TaskExecutionError> {
-    let Some(script) = task.as_deno_script(command_env)? else {
+    let Some(script) = task.as_deno_script()? else {
         return Ok(());
     };
     let cwd = task.working_directory()?;
@@ -499,7 +500,7 @@ async fn listen_ctrl_c(kill_signal: KillSignal) {
 async fn listen_and_forward_all_signals(kill_signal: KillSignal) {
     use futures::FutureExt;
 
-    use crate::signals::SIGNALS;
+    use pixi_core::signals::SIGNALS;
 
     // listen and forward every signal we support
     let mut futures = Vec::with_capacity(SIGNALS.len());
