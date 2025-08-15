@@ -101,8 +101,7 @@ impl ChannelsConfig {
 
 #[derive(Parser, Debug, Default, Clone)]
 pub struct LockFileUpdateConfig {
-    /// Legacy flag to skip lock-file updates, behavior was inconsistent across commands
-    /// so it has been deprecated.
+    /// [DEPRECATED]: use `--frozen` `--no-install`. Skips lock-file updates
     #[clap(long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub no_lockfile_update: bool,
 
