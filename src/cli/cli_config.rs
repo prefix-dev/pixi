@@ -159,7 +159,7 @@ pub struct LockAndInstallConfig {
     pub lock_file_update_config: LockFileUpdateConfig,
 
     /// Shorthand for the combination of --no-install and --frozen.
-    #[arg(long, help_heading = consts::CLAP_UPDATE_OPTIONS, conflicts_with_all = ["frozen", "no_install", "locked"])]
+    #[arg(long, help_heading = consts::CLAP_UPDATE_OPTIONS, conflicts_with_all = ["locked"])]
     pub as_is: bool,
 }
 
