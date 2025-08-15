@@ -16,6 +16,7 @@ pixi workspace export <COMMAND>
 |---------|-------------|
 | [`conda-explicit-spec`](export/conda-explicit-spec.md) | Export workspace environment to a conda explicit specification file |
 | [`conda-environment`](export/conda-environment.md) | Export workspace environment to a conda environment.yaml file |
+| [`split-lockfile`](export/split-lockfile.md) | Split workspace lockfile for each non-empty environment and platform |
 
 
 --8<-- "docs/reference/cli/pixi/workspace/export_extender:example"
