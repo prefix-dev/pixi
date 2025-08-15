@@ -269,15 +269,16 @@ impl<'p> TaskGraph<'p> {
             .clone()
             .unwrap_or_else(|| project.default_environment());
 
-        // Depending on whether we are passing arguments verbatim or now we allow deno
-        // to interpret them or not.
+        // For CLI arguments, we want to construct a proper shell command.
+        // When we have multiple arguments from CLI, they've already been parsed by the shell
+        // and clap, so we reconstruct them into a single shell command to avoid double-quoting.
         let (cmd, additional_args) = if verbatim {
-            let mut args = args.into_iter();
-            (
-                CmdArgs::Single(args.next().expect("must be at least one argument").into()),
-                args.collect(),
-            )
+            // Multiple CLI arguments: reconstruct as a single shell command
+            let command_string = shlex::try_join(args.iter().map(|s| s.as_str()))
+                .map_err(|_| TaskGraphError::InvalidTask)?;
+            (CmdArgs::Single(command_string.into()), vec![])
         } else {
+            // Single argument that was shell-parsed: use as multiple args
             (
                 CmdArgs::Multiple(args.into_iter().map(|arg| arg.into()).collect()),
                 vec![],

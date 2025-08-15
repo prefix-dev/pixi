@@ -1455,6 +1455,46 @@ def test_task_caching_with_multiple_inputs_args(pixi: Path, tmp_pixi_workspace: 
     )
 
 
+def test_shell_quoting_run_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test that shell quoting works correctly for CLI commands with quotes.
+
+    This test addresses GitHub issue #1979 where pixi run required multiple
+    layers of quoting to avoid shell substitution.
+    """
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest.write_text(EMPTY_BOILERPLATE_PROJECT)
+
+    # Test Python command with single quotes inside double quotes
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "python", "-c", "print('hello world')"],
+        stdout_contains="hello world",
+    )
+
+    # Test Python command with double quotes inside single quotes
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "python", "-c", 'print("hello world")'],
+        stdout_contains="hello world",
+    )
+
+    # Test Python command with escaped quotes
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "python", "-c", 'print("hello world")'],
+        stdout_contains="hello world",
+    )
+
+    # Test echo command with quotes
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "echo", "hello world"],
+        stdout_contains="hello world",
+    )
+
+    # Test command with arguments containing spaces
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "echo", "hello", "world", "with spaces"],
+        stdout_contains="hello world with spaces",
+    )
+
+
 @pytest.mark.skipif(
     sys.platform == "win32",
     reason="Signal handling is different on Windows",
