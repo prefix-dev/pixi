@@ -283,7 +283,6 @@ pub struct LockFileUsageConfig {
     pub locked: bool,
 }
 
-
 pub async fn execute() -> miette::Result<()> {
     let args = Args::parse();
 
@@ -563,8 +562,6 @@ fn print_installed_commands() {
 mod tests {
     use super::*;
     use temp_env;
-
-
 
     #[test]
     fn test_clap_boolean_env_var_behavior() {
