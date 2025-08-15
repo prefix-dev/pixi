@@ -2755,12 +2755,6 @@
 <ul>
 <li>
 <dl>
-<dt><a id="arg---no-lockfile-update" href="#arg---no-lockfile-update"><code>--no-lockfile-update</code></a></dt>
-<dd>Don't update lockfile, implies the no-install as well</dd>
-</dl>
-</li>
-<li>
-<dl>
 <dt><a id="arg---frozen" href="#arg---frozen"><code>--frozen</code></a></dt>
 <dd>Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 <br><strong>env</strong>: <code>PIXI_FROZEN</code></dd>
@@ -2771,6 +2765,12 @@
 <dt><a id="arg---locked" href="#arg---locked"><code>--locked</code></a></dt>
 <dd>Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 <br><strong>env</strong>: <code>PIXI_LOCKED</code></dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---no-install" href="#arg---no-install"><code>--no-install</code></a></dt>
+<dd>Don't modify the environment, only modify the lock-file</dd>
 </dl>
 </li>
 </ul>

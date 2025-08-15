@@ -4152,7 +4152,7 @@ On environment installation, Pixi will write a small file to the environment tha
 
 The `environment_lock_file_hash` is used to check if the environment is in sync with the `pixi.lock` file. If the hash of the `pixi.lock` file is different from the hash in the `pixi` file, Pixi will update the environment.
 
-This is used to speedup activation, in order to trigger a full revalidation pass `--revalidate` to the `pixi run` or `pixi shell` command. A broken environment would typically not be found with a hash comparison, but a revalidation would reinstall the environment. By default, all lock file modifying commands will always use the revalidation and on `pixi install` it always revalidates.
+This is used to speedup activation, in order to trigger a full revalidation and installation use `pixi install` or `pixi reinstall`. A broken environment would typically not be found with a hash comparison, but a revalidation would reinstall the environment. By default, all lock file modifying commands will always use the revalidation and on `pixi install` it always revalidates.
 
 ### Cleaning up
 
@@ -10252,10 +10252,6 @@ pixi add [OPTIONS] <SPEC>...
 
 - [`--no-install`](#arg---no-install) Don't modify the environment, only modify the lock-file
 
-- [`--revalidate`](#arg---revalidate) Run the complete environment validation. This will reinstall a broken environment
-
-- [`--no-lockfile-update`](#arg---no-lockfile-update) Don't update lockfile, implies the no-install as well
-
 - [`--frozen`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
   **env**: `PIXI_FROZEN`
@@ -10716,22 +10712,6 @@ pixi import [OPTIONS] <FILE>
 
 - [`--use-environment-activation-cache`](#arg---use-environment-activation-cache) Use environment activation cache (experimental)
 
-## Update Options
-
-- [`--no-install`](#arg---no-install) Don't modify the environment, only modify the lock-file
-
-- [`--revalidate`](#arg---revalidate) Run the complete environment validation. This will reinstall a broken environment
-
-- [`--no-lockfile-update`](#arg---no-lockfile-update) Don't update lockfile, implies the no-install as well
-
-- [`--frozen`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
-
-  **env**: `PIXI_FROZEN`
-
-- [`--locked`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
-
-  **env**: `PIXI_LOCKED`
-
 ## Global Options
 
 - [`--manifest-path <MANIFEST_PATH>`](#arg---manifest-path) The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
@@ -10981,8 +10961,6 @@ pixi list [OPTIONS] [REGEX]
 
 ## Update Options
 
-- [`--no-lockfile-update`](#arg---no-lockfile-update) Don't update lockfile, implies the no-install as well
-
 - [`--frozen`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
   **env**: `PIXI_FROZEN`
@@ -10990,6 +10968,8 @@ pixi list [OPTIONS] [REGEX]
 - [`--locked`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 
   **env**: `PIXI_LOCKED`
+
+- [`--no-install`](#arg---no-install) Don't modify the environment, only modify the lock-file
 
 ## Global Options
 
@@ -11063,6 +11043,10 @@ pixi lock [OPTIONS]
 
 - [`--json`](#arg---json) Output the changes in JSON format
 - [`--check`](#arg---check) Check if any changes have been made to the lock file. If yes, exit with a non-zero code
+
+## Update Options
+
+- [`--no-install`](#arg---no-install) Don't modify the environment, only modify the lock-file
 
 ## Global Options
 
@@ -11223,10 +11207,6 @@ pixi remove [OPTIONS] <SPEC>...
 
 - [`--no-install`](#arg---no-install) Don't modify the environment, only modify the lock-file
 
-- [`--revalidate`](#arg---revalidate) Run the complete environment validation. This will reinstall a broken environment
-
-- [`--no-lockfile-update`](#arg---no-lockfile-update) Don't update lockfile, implies the no-install as well
-
 - [`--frozen`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
   **env**: `PIXI_FROZEN`
@@ -11322,10 +11302,6 @@ pixi run [OPTIONS] [TASK]...
 ## Update Options
 
 - [`--no-install`](#arg---no-install) Don't modify the environment, only modify the lock-file
-
-- [`--revalidate`](#arg---revalidate) Run the complete environment validation. This will reinstall a broken environment
-
-- [`--no-lockfile-update`](#arg---no-lockfile-update) Don't update lockfile, implies the no-install as well
 
 - [`--frozen`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
@@ -11549,10 +11525,6 @@ pixi shell-hook [OPTIONS]
 
 - [`--no-install`](#arg---no-install) Don't modify the environment, only modify the lock-file
 
-- [`--revalidate`](#arg---revalidate) Run the complete environment validation. This will reinstall a broken environment
-
-- [`--no-lockfile-update`](#arg---no-lockfile-update) Don't update lockfile, implies the no-install as well
-
 - [`--frozen`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
   **env**: `PIXI_FROZEN`
@@ -11645,10 +11617,6 @@ pixi shell [OPTIONS]
 
 - [`--no-install`](#arg---no-install) Don't modify the environment, only modify the lock-file
 
-- [`--revalidate`](#arg---revalidate) Run the complete environment validation. This will reinstall a broken environment
-
-- [`--no-lockfile-update`](#arg---no-lockfile-update) Don't update lockfile, implies the no-install as well
-
 - [`--frozen`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
   **env**: `PIXI_FROZEN`
@@ -11724,8 +11692,6 @@ pixi tree [OPTIONS] [REGEX]
 
 ## Update Options
 
-- [`--no-lockfile-update`](#arg---no-lockfile-update) Don't update lockfile, implies the no-install as well
-
 - [`--frozen`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
   **env**: `PIXI_FROZEN`
@@ -11733,6 +11699,8 @@ pixi tree [OPTIONS] [REGEX]
 - [`--locked`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 
   **env**: `PIXI_LOCKED`
+
+- [`--no-install`](#arg---no-install) Don't modify the environment, only modify the lock-file
 
 ## Global Options
 
@@ -12005,10 +11973,6 @@ pixi upgrade [OPTIONS] [PACKAGES]...
 ## Update Options
 
 - [`--no-install`](#arg---no-install) Don't modify the environment, only modify the lock-file
-
-- [`--revalidate`](#arg---revalidate) Run the complete environment validation. This will reinstall a broken environment
-
-- [`--no-lockfile-update`](#arg---no-lockfile-update) Don't update lockfile, implies the no-install as well
 
 - [`--frozen`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
@@ -13837,10 +13801,6 @@ pixi workspace channel add [OPTIONS] <CHANNEL>...
 
 - [`--no-install`](#arg---no-install) Don't modify the environment, only modify the lock-file
 
-- [`--revalidate`](#arg---revalidate) Run the complete environment validation. This will reinstall a broken environment
-
-- [`--no-lockfile-update`](#arg---no-lockfile-update) Don't update lockfile, implies the no-install as well
-
 - [`--frozen`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
   **env**: `PIXI_FROZEN`
@@ -13926,10 +13886,6 @@ pixi workspace channel remove [OPTIONS] <CHANNEL>...
 ## Update Options
 
 - [`--no-install`](#arg---no-install) Don't modify the environment, only modify the lock-file
-
-- [`--revalidate`](#arg---revalidate) Run the complete environment validation. This will reinstall a broken environment
-
-- [`--no-lockfile-update`](#arg---no-lockfile-update) Don't update lockfile, implies the no-install as well
 
 - [`--frozen`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
@@ -14141,8 +14097,6 @@ pixi workspace export conda-explicit-spec [OPTIONS] <OUTPUT_DIR>
 
 ## Update Options
 
-- [`--no-lockfile-update`](#arg---no-lockfile-update) Don't update lockfile, implies the no-install as well
-
 - [`--frozen`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
   **env**: `PIXI_FROZEN`
@@ -14150,6 +14104,8 @@ pixi workspace export conda-explicit-spec [OPTIONS] <OUTPUT_DIR>
 - [`--locked`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 
   **env**: `PIXI_LOCKED`
+
+- [`--no-install`](#arg---no-install) Don't modify the environment, only modify the lock-file
 
 ## Global Options
 

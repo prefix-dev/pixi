@@ -55,10 +55,6 @@ pixi run [OPTIONS] [TASK]...
 
 - [`--no-install`](#arg---no-install) Don't modify the environment, only modify the lock-file
 
-- [`--revalidate`](#arg---revalidate) Run the complete environment validation. This will reinstall a broken environment
-
-- [`--no-lockfile-update`](#arg---no-lockfile-update) Don't update lockfile, implies the no-install as well
-
 - [`--frozen`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
   **env**: `PIXI_FROZEN`

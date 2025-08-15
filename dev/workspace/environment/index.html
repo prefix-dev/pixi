@@ -2981,7 +2981,7 @@ This file contains the following information:</p>
 </span></code></pre></div>
 <p>The <code>environment_lock_file_hash</code> is used to check if the environment is in sync with the <code>pixi.lock</code> file.
 If the hash of the <code>pixi.lock</code> file is different from the hash in the <code>pixi</code> file, Pixi will update the environment.</p>
-<p>This is used to speedup activation, in order to trigger a full revalidation pass <code>--revalidate</code> to the <code>pixi run</code> or <code>pixi shell</code> command.
+<p>This is used to speedup activation, in order to trigger a full revalidation and installation use <code>pixi install</code> or <code>pixi reinstall</code>.
 A broken environment would typically not be found with a hash comparison, but a revalidation would reinstall the environment.
 By default, all lock file modifying commands will always use the revalidation and on <code>pixi install</code> it always revalidates.</p>
 <h3 id="cleaning-up">Cleaning up<a class="headerlink" href="#cleaning-up" title="Permanent link">#</a></h3>
