@@ -1,10 +1,26 @@
+use std::ffi::OsStr;
+use std::path::{Path, PathBuf};
+
 use insta::{assert_snapshot, assert_yaml_snapshot, glob};
 use pixi_build_discovery::{DiscoveredBackend, EnabledProtocols};
 use rattler_conda_types::ChannelConfig;
-use std::path::{Path, PathBuf};
 
 fn discovery_directory() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/discovery")
+}
+
+fn redact_path(value: &str) -> String {
+    let path = PathBuf::from(value);
+    let skipped = path
+        .components()
+        .skip_while(|c| *c != std::path::Component::Normal(OsStr::new("discovery")))
+        .skip(1)
+        .collect::<PathBuf>();
+    let display_skipped = skipped.display();
+    let str_skipped = display_skipped.to_string();
+    let prettified_norm = str_skipped.replace(r"\\", r"/").replace(r"\", r"/");
+    let prettified = prettified_norm.trim_end_matches(['/', '\\']);
+    format!("file://<ROOT>/{}", prettified)
 }
 
 /// This macro is used to assert the discovery of a backend and compare it with a snapshot.
@@ -22,9 +38,14 @@ macro_rules! assert_discover_snapshot {
                 // Perform some redaction on fields that contain paths. We need to make them cross-platform compatible.
                 {
                     "[\"init-params\"][\"manifest-path\"]" => insta::dynamic_redaction(|value, _path| {
-                        value.as_str().unwrap().replace("\\", "/")
+                        redact_path(value.as_str().unwrap())
                      }),
-                    "[\"init-params\"][\"source-dir\"]" => "[SOURCE_PATH]",
+                    "[\"init-params\"][\"workspace-root\"]" => insta::dynamic_redaction(|value, _path| {
+                        redact_path(value.as_str().unwrap())
+                     }),
+                    "[\"init-params\"][\"source-anchor\"]" => insta::dynamic_redaction(|value, _path| {
+                        redact_path(value.as_str().unwrap())
+                     }),
                 });
             }
             Err(err) => {
@@ -61,7 +82,6 @@ fn test_discovery() {
         })
     });
 }
-
 #[test]
 fn test_non_existing() {
     assert_discover_snapshot!(Path::new("/non-existing"));
