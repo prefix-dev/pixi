@@ -28,6 +28,7 @@ pub struct TomlBuildBackend {
     pub name: PixiSpanned<rattler_conda_types::PackageName>,
     pub spec: TomlSpec,
     pub channels: Option<PixiSpanned<Vec<NamedChannelOrUrl>>>,
+    pub additional_dependencies: UniquePackageMap,
 }
 
 impl TomlPackageBuild {
@@ -40,7 +41,15 @@ impl TomlPackageBuild {
         })?;
 
         // Convert the additional dependencies and make sure that they are binary.
-        let additional_dependencies = self.additional_dependencies.specs;
+        // Prioritize backend.additional_dependencies over top-level additional_dependencies
+        let additional_dependencies =
+            if !self.backend.value.additional_dependencies.specs.is_empty() {
+                self.backend.value.additional_dependencies.specs
+            } else if !self.additional_dependencies.specs.is_empty() {
+                self.additional_dependencies.specs
+            } else {
+                Default::default()
+            };
 
         // Determine the channels to use, prioritizing backend.channels over top-level channels
         let channels = if let Some(backend_channels) = &self.backend.value.channels {
@@ -128,6 +137,8 @@ impl<'de> toml_span::Deserialize<'de> for TomlBuildBackend {
                 value: s.value.into_inner(),
                 span: Some(s.span.start..s.span.end),
             });
+        let additional_dependencies: UniquePackageMap =
+            th.optional("additional-dependencies").unwrap_or_default();
         th.finalize(Some(value))?;
 
         let spec = toml_span::Deserialize::deserialize(value)?;
@@ -139,12 +150,15 @@ impl<'de> toml_span::Deserialize<'de> for TomlBuildBackend {
             }),
             spec,
             channels,
+            additional_dependencies,
         })
     }
 }
 
 static BUILD_CHANNELS_DEPRECATION: Once = Once::new();
 static BOTH_CHANNELS_WARNING: Once = Once::new();
+static BUILD_ADDITIONAL_DEPS_DEPRECATION: Once = Once::new();
+static BOTH_ADDITIONAL_DEPS_WARNING: Once = Once::new();
 
 impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
@@ -156,7 +170,8 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
                 value: s.value.into_inner(),
                 span: Some(s.span.start..s.span.end),
             });
-        let additional_dependencies = th.optional("additional-dependencies").unwrap_or_default();
+        let additional_dependencies: UniquePackageMap =
+            th.optional("additional-dependencies").unwrap_or_default();
 
         let configuration = th
             .take("configuration")
@@ -183,6 +198,28 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
         if channels.is_some() && build_backend.value.channels.is_none() {
             BUILD_CHANNELS_DEPRECATION.call_once(|| {
                 eprintln!("{}Warning: Top-level 'channels' in [package.build] is deprecated. Please move to 'backend.channels'.",
+                    console::style(console::Emoji("⚠️ ", "")).yellow(),
+                );
+            });
+        }
+
+        // Issue a warning if both legacy additional-dependencies and backend.additional-dependencies are present
+        if !additional_dependencies.specs.is_empty()
+            && !build_backend.value.additional_dependencies.specs.is_empty()
+        {
+            BOTH_ADDITIONAL_DEPS_WARNING.call_once(|| {
+                eprintln!("{}Warning: Both top-level 'additional-dependencies' and 'backend.additional-dependencies' are specified. Using 'backend.additional-dependencies'.",
+                    console::style(console::Emoji("⚠️ ", "")).yellow(),
+                );
+            });
+        }
+
+        // Issue a migration warning if legacy additional-dependencies are used
+        if !additional_dependencies.specs.is_empty()
+            && build_backend.value.additional_dependencies.specs.is_empty()
+        {
+            BUILD_ADDITIONAL_DEPS_DEPRECATION.call_once(|| {
+                eprintln!("{}Warning: Top-level 'additional-dependencies' in [package.build] is deprecated. Please move to 'backend.additional-dependencies'.",
                     console::style(console::Emoji("⚠️ ", "")).yellow(),
                 );
             });
@@ -328,5 +365,64 @@ mod test {
             backend = { name = "foobar", version = "*", channels = [] }
         "#
         ));
+    }
+
+    #[test]
+    fn test_backend_additional_dependencies() {
+        let toml = r#"
+            backend = { name = "foobar", version = "*", additional-dependencies = { git = "*" } }
+        "#;
+        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
+            .and_then(TomlPackageBuild::into_build_system)
+            .expect("parsing should succeed");
+
+        assert!(!parsed.additional_dependencies.is_empty());
+        assert!(
+            parsed
+                .additional_dependencies
+                .contains_key(&"git".parse::<rattler_conda_types::PackageName>().unwrap())
+        );
+    }
+
+    #[test]
+    fn test_legacy_additional_dependencies() {
+        let toml = r#"
+            backend = { name = "foobar", version = "*" }
+            additional-dependencies = { git = "*" }
+        "#;
+        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
+            .and_then(TomlPackageBuild::into_build_system)
+            .expect("parsing should succeed");
+
+        assert!(!parsed.additional_dependencies.is_empty());
+        assert!(
+            parsed
+                .additional_dependencies
+                .contains_key(&"git".parse::<rattler_conda_types::PackageName>().unwrap())
+        );
+    }
+
+    #[test]
+    fn test_backend_additional_dependencies_priority() {
+        let toml = r#"
+            backend = { name = "foobar", version = "*", additional-dependencies = { rust = "*" } }
+            additional-dependencies = { git = "*" }
+        "#;
+        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
+            .and_then(TomlPackageBuild::into_build_system)
+            .expect("parsing should succeed");
+
+        // Should prioritize backend.additional-dependencies
+        assert!(!parsed.additional_dependencies.is_empty());
+        assert!(
+            parsed
+                .additional_dependencies
+                .contains_key(&"rust".parse::<rattler_conda_types::PackageName>().unwrap())
+        );
+        assert!(
+            !parsed
+                .additional_dependencies
+                .contains_key(&"git".parse::<rattler_conda_types::PackageName>().unwrap())
+        );
     }
 }
