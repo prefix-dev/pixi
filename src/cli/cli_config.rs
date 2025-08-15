@@ -102,7 +102,7 @@ impl ChannelsConfig {
 
 #[derive(Parser, Debug, Default, Clone)]
 pub struct LockFileUpdateConfig {
-    /// Don't update lockfile, implies the no-install as well.
+    /// Don't update lockfile.
     #[clap(long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub no_lockfile_update: bool,
 

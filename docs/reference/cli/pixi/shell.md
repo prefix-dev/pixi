@@ -48,7 +48,7 @@ pixi shell [OPTIONS]
 - <a id="arg---revalidate" href="#arg---revalidate">`--revalidate`</a>
 :  Run the complete environment validation. This will reinstall a broken environment
 - <a id="arg---no-lockfile-update" href="#arg---no-lockfile-update">`--no-lockfile-update`</a>
-:  Don't update lockfile, implies the no-install as well
+:  Don't update lockfile
 - <a id="arg---frozen" href="#arg---frozen">`--frozen`</a>
 :  Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 <br>**env**: `PIXI_FROZEN`
