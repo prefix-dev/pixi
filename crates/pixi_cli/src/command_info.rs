@@ -151,7 +151,7 @@ pub fn execute_external_command(args: Vec<String>) -> miette::Result<()> {
     }
 }
 
-/// Get directories to search for external commands (pixi extensions)
+/// Get directories to search for external commands by looking over PATH and pixi global directory
 fn search_directories() -> Option<Vec<PathBuf>> {
     let mut directories = Vec::new();
 
@@ -163,9 +163,7 @@ fn search_directories() -> Option<Vec<PathBuf>> {
     // pixi global bin directory
     if let Some(pixi_home_path) = pixi_home() {
         let global_bin = pixi_home_path.join("bin");
-        if global_bin.exists() {
-            directories.push(global_bin);
-        }
+        directories.push(global_bin);
     }
 
     if directories.is_empty() {

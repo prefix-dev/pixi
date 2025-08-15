@@ -67,7 +67,7 @@ Ask a question on the Prefix Discord server: https://discord.gg/kKV8ZxyzY4
 For more information, see the documentation at: https://pixi.sh
 ", consts::PIXI_VERSION),
 )]
-#[clap(styles=get_styles(), disable_help_flag = true, disable_help_subcommand = true, allow_external_subcommands = true)]
+#[clap(arg_required_else_help = true, styles=get_styles(), disable_help_flag = true, allow_external_subcommands = true)]
 pub struct Args {
     #[command(subcommand)]
     command: Option<Command>,
@@ -93,7 +93,7 @@ pub struct GlobalOptions {
     help: Option<bool>,
 
     /// Increase logging verbosity (-v for warnings, -vv for info, -vvv for debug, -vvvv for trace)
-    #[clap(short = 'v', long, action = clap::ArgAction::Count, global = true, help_heading = consts::CLAP_GLOBAL_OPTIONS)]
+    #[clap(short, long, action = clap::ArgAction::Count, global = true, help_heading = consts::CLAP_GLOBAL_OPTIONS)]
     verbose: u8,
 
     /// Decrease logging verbosity (quiet mode)
