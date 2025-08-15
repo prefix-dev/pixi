@@ -35,7 +35,7 @@ pub trait DistCache<'a> {
         &mut self,
         dist: &'a Dist,
         uv_cache: &uv_cache::Cache,
-        build_options: BuildOptions,
+        build_options: &BuildOptions,
     ) -> Result<Option<CachedDist>, DistCacheError>;
 }
 
@@ -56,7 +56,7 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
         &mut self,
         dist: &'a Dist,
         uv_cache: &uv_cache::Cache,
-        build_options: BuildOptions,
+        build_options: &BuildOptions,
     ) -> Result<Option<CachedDist>, DistCacheError> {
         // Check if installation of a binary version of the package should be allowed.
         // we do not allow to set `no_binary` just yet but lets handle it here

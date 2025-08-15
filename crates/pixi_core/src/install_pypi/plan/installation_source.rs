@@ -80,7 +80,7 @@ pub fn decide_installation_source<'a>(
     dist: &'a Dist,
     dist_cache: &mut impl DistCache<'a>,
     operation: Operation,
-    build_options: uv_configuration::BuildOptions,
+    build_options: &uv_configuration::BuildOptions,
 ) -> Result<InstallationSources, super::DistCacheError> {
     let mut installation_sources = InstallationSources::new();
     // First, check if we need to revalidate the package

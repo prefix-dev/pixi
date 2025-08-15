@@ -78,7 +78,7 @@ impl InstallPlanner {
         site_packages: &'a Installed,
         mut dist_cache: Cached,
         required_dists: &'a RequiredDists,
-        build_options: uv_configuration::BuildOptions,
+        build_options: &uv_configuration::BuildOptions,
     ) -> Result<PyPIInstallationPlan, InstallPlannerError> {
         // Convert RequiredDists to the reference map for internal processing
         let required_dists_map = required_dists.as_ref_map();
@@ -144,7 +144,7 @@ impl InstallPlanner {
                     required_dist,
                     &mut dist_cache,
                     Operation::Reinstall,
-                    build_options.clone(),
+                    &build_options,
                 )
                 .map_err(InstallPlannerError::from)?;
 
@@ -167,7 +167,7 @@ impl InstallPlanner {
                 dist,
                 &mut dist_cache,
                 Operation::Install,
-                build_options.clone(),
+                &build_options,
             )
             .map_err(InstallPlannerError::from)?;
 

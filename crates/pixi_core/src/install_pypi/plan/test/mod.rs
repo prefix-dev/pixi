@@ -25,7 +25,7 @@ fn test_no_installed_require_one() {
             &site_packages,
             NoCache,
             &required_dists,
-            uv_configuration::BuildOptions::default(),
+            &uv_configuration::BuildOptions::default(),
         )
         .expect("should install");
 
@@ -49,7 +49,7 @@ fn test_no_installed_require_one_cached() {
             &site_packages,
             AllCached,
             &required_dists,
-            uv_configuration::BuildOptions::default(),
+            &uv_configuration::BuildOptions::default(),
         )
         .expect("should install");
 
@@ -79,7 +79,7 @@ fn test_install_required_equivalent() {
             &site_packages,
             NoCache,
             &required_dists,
-            uv_configuration::BuildOptions::default(),
+            &uv_configuration::BuildOptions::default(),
         )
         .expect("should install");
 
@@ -113,7 +113,7 @@ fn test_install_required_mismatch() {
             &site_packages,
             NoCache,
             &required_dists,
-            uv_configuration::BuildOptions::default(),
+            &uv_configuration::BuildOptions::default(),
         )
         .expect("should install");
 
@@ -149,7 +149,7 @@ fn test_install_required_mismatch_cached() {
             &site_packages,
             AllCached,
             &required_dists,
-            uv_configuration::BuildOptions::default(),
+            &uv_configuration::BuildOptions::default(),
         )
         .expect("should install");
 
@@ -184,7 +184,7 @@ fn test_install_required_installer_mismatch() {
             &site_packages,
             NoCache,
             &required_dists,
-            uv_configuration::BuildOptions::default(),
+            &uv_configuration::BuildOptions::default(),
         )
         .expect("should install");
 
@@ -216,7 +216,7 @@ fn test_installed_one_other_installer() {
             &site_packages,
             NoCache,
             &required_dists,
-            uv_configuration::BuildOptions::default(),
+            &uv_configuration::BuildOptions::default(),
         )
         .expect("should install");
 
@@ -245,7 +245,7 @@ fn test_install_required_python_mismatch() {
             &site_packages,
             NoCache,
             &required_dists,
-            uv_configuration::BuildOptions::default(),
+            &uv_configuration::BuildOptions::default(),
         )
         .expect("should install");
 
@@ -280,7 +280,7 @@ fn test_installed_one_none_required() {
             &site_packages,
             NoCache,
             &required_dists,
-            uv_configuration::BuildOptions::default(),
+            &uv_configuration::BuildOptions::default(),
         )
         .expect("should install");
     assert_eq!(install_plan.extraneous.len(), 1);
@@ -310,7 +310,7 @@ fn test_installed_registry_required_local_source() {
             &site_packages,
             NoCache,
             &required_dists,
-            uv_configuration::BuildOptions::default(),
+            &uv_configuration::BuildOptions::default(),
         )
         .expect("should install");
 
@@ -342,7 +342,7 @@ fn test_installed_local_required_registry() {
             &site_packages,
             NoCache,
             &required_dists,
-            uv_configuration::BuildOptions::default(),
+            &uv_configuration::BuildOptions::default(),
         )
         .expect("should install");
 
@@ -382,7 +382,7 @@ fn test_installed_local_required_local() {
             &site_packages,
             NoCache,
             &required_dists,
-            uv_configuration::BuildOptions::default(),
+            &uv_configuration::BuildOptions::default(),
         )
         .expect("should install");
 
@@ -438,7 +438,7 @@ fn test_local_source_newer_than_local_metadata() {
             &site_packages,
             NoCache,
             &required_dists,
-            uv_configuration::BuildOptions::default(),
+            &uv_configuration::BuildOptions::default(),
         )
         .expect("should install");
     assert_matches!(
@@ -486,7 +486,7 @@ fn test_local_source_older_than_local_metadata() {
             &site_packages,
             NoCache,
             &required_dists,
-            uv_configuration::BuildOptions::default(),
+            &uv_configuration::BuildOptions::default(),
         )
         .expect("should install");
     assert_eq!(installs.reinstalls.len(), 0);
@@ -522,7 +522,7 @@ fn test_installed_editable_required_non_editable() {
             &site_packages,
             NoCache,
             &required_dists,
-            uv_configuration::BuildOptions::default(),
+            &uv_configuration::BuildOptions::default(),
         )
         .expect("should install");
 
@@ -557,7 +557,7 @@ fn test_installed_archive_require_registry() {
             &site_packages,
             NoCache,
             &required_dists,
-            uv_configuration::BuildOptions::default(),
+            &uv_configuration::BuildOptions::default(),
         )
         .expect("should install");
 
@@ -571,7 +571,7 @@ fn test_installed_archive_require_registry() {
             &site_packages,
             NoCache,
             &required_dists,
-            uv_configuration::BuildOptions::default(),
+            &uv_configuration::BuildOptions::default(),
         )
         .expect("should install");
     assert!(installs.cached.is_empty());
@@ -603,7 +603,7 @@ fn test_installed_git_require_registry() {
             &site_packages,
             NoCache,
             &required_dists,
-            uv_configuration::BuildOptions::default(),
+            &uv_configuration::BuildOptions::default(),
         )
         .expect("should install");
 
@@ -621,7 +621,7 @@ fn test_installed_git_require_registry() {
             &site_packages,
             NoCache,
             &required_dists,
-            uv_configuration::BuildOptions::default(),
+            &uv_configuration::BuildOptions::default(),
         )
         .expect("should install");
 
@@ -659,7 +659,7 @@ fn test_installed_git_require_git_commit_mismatch() {
             &site_packages,
             NoCache,
             &required_dists,
-            uv_configuration::BuildOptions::default(),
+            &uv_configuration::BuildOptions::default(),
         )
         .expect("should install");
 
@@ -700,7 +700,7 @@ fn test_installed_git_the_same() {
             &site_packages,
             NoCache,
             &required_dists,
-            uv_configuration::BuildOptions::default(),
+            &uv_configuration::BuildOptions::default(),
         )
         .expect("should install");
 
@@ -733,7 +733,7 @@ fn test_uv_refresh() {
             &site_packages,
             AllCached,
             &required_dists,
-            uv_configuration::BuildOptions::default(),
+            &uv_configuration::BuildOptions::default(),
         )
         .expect("should install");
 
@@ -778,7 +778,7 @@ fn test_archive_is_path() {
             &site_packages,
             AllCached,
             &required_dists,
-            uv_configuration::BuildOptions::default(),
+            &uv_configuration::BuildOptions::default(),
         )
         .expect("should install");
     // Should not install package
@@ -809,7 +809,7 @@ fn duplicates_are_not_extraneous() {
             &site_packages,
             NoCache,
             &required_dists,
-            uv_configuration::BuildOptions::default(),
+            &uv_configuration::BuildOptions::default(),
         )
         .expect("should install");
 
