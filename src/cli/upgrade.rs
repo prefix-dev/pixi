@@ -4,7 +4,7 @@ use clap::Parser;
 use fancy_display::FancyDisplay;
 use indexmap::IndexMap;
 use itertools::Itertools;
-use miette::{Context, IntoDiagnostic, MietteDiagnostic};
+use miette::{IntoDiagnostic, MietteDiagnostic, WrapErr};
 use pep508_rs::{MarkerTree, Requirement};
 use pixi_config::ConfigCli;
 use pixi_core::{
@@ -17,8 +17,7 @@ use pixi_pypi_spec::PixiPypiSpec;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{MatchSpec, StringMatcher};
 
-use crate::cli::cli_config::WorkspaceConfig;
-use crate::cli::cli_config::{LockFileUpdateConfig, PrefixUpdateConfig};
+use crate::cli::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
 
 /// Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file.
 ///
@@ -29,8 +28,7 @@ pub struct Args {
     pub workspace_config: WorkspaceConfig,
 
     #[clap(flatten)]
-    pub prefix_update_config: PrefixUpdateConfig,
-
+    pub no_install_config: NoInstallConfig,
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
 
@@ -85,15 +83,23 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         )
     };
 
-    let (match_specs, pypi_deps) = parse_specs(feature, &args, &workspace)?;
+    if !args.no_install_config.allow_installs()
+        && (args.lock_file_update_config.lock_file_usage.frozen
+            || args.lock_file_update_config.lock_file_usage.locked)
+    {
+        tracing::warn!(
+            "using `--frozen` or `--locked` will not make any changes and does not display results. You probably meant: `--dry-run`"
+        )
+    }
 
+    let (match_specs, pypi_deps) = parse_specs(feature, &args, &workspace)?;
     let (update_deps, workspace) = match workspace
         .update_dependencies(
             match_specs,
             pypi_deps,
             IndexMap::default(),
-            args.prefix_update_config.no_install,
-            &args.lock_file_update_config.lock_file_usage(),
+            args.no_install_config.no_install,
+            &args.lock_file_update_config.lock_file_usage()?,
             &args.specs.feature,
             &[],
             false,

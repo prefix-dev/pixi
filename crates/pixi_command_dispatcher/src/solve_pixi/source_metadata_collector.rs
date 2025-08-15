@@ -154,6 +154,8 @@ impl SourceMetadataCollector {
         (Arc<SourceMetadata>, Vec<rattler_conda_types::PackageName>),
         CommandDispatcherError<CollectSourceMetadataError>,
     > {
+        tracing::trace!("Collecting source metadata for {name:#?}");
+
         // Get the source for the particular package.
         let source = self
             .command_queue

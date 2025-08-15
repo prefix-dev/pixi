@@ -55,16 +55,14 @@ pixi run [OPTIONS] [TASK]...
 ## Update Options
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
 :  Don't modify the environment, only modify the lock-file
-- <a id="arg---revalidate" href="#arg---revalidate">`--revalidate`</a>
-:  Run the complete environment validation. This will reinstall a broken environment
-- <a id="arg---no-lockfile-update" href="#arg---no-lockfile-update">`--no-lockfile-update`</a>
-:  Don't update lockfile, implies the no-install as well
 - <a id="arg---frozen" href="#arg---frozen">`--frozen`</a>
 :  Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 <br>**env**: `PIXI_FROZEN`
 - <a id="arg---locked" href="#arg---locked">`--locked`</a>
 :  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 <br>**env**: `PIXI_LOCKED`
+- <a id="arg---as-is" href="#arg---as-is">`--as-is`</a>
+:  Shorthand for the combination of --no-install and --frozen
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>

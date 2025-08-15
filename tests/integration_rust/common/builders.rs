@@ -23,10 +23,14 @@
 //! }
 //! ```
 
-use pixi::cli::cli_config::{
-    DependencyConfig, GitRev, LockFileUpdateConfig, PrefixUpdateConfig, WorkspaceConfig,
+use pixi::cli::{
+    add,
+    cli_config::{
+        DependencyConfig, GitRev, LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig,
+    },
+    init, install, lock, remove, search, task, update, workspace,
 };
-use pixi::cli::lock;
+use pixi_core::DependencyType;
 use std::{
     future::{Future, IntoFuture},
     io,
@@ -36,8 +40,6 @@ use std::{
 };
 
 use futures::FutureExt;
-use pixi::cli::{add, init, install, remove, search, task, update, workspace};
-use pixi_core::DependencyType;
 use pixi_manifest::{EnvironmentName, FeatureName, SpecType, task::Dependency};
 use rattler_conda_types::{NamedChannelOrUrl, Platform, RepoDataRecord};
 use url::Url;
@@ -107,14 +109,13 @@ impl IntoFuture for InitBuilder {
         .boxed_local()
     }
 }
-/// A trait used by AddBuilder and RemoveBuilder to set their inner
-/// DependencyConfig
-pub trait HasPrefixUpdateConfig: Sized {
-    fn prefix_update_config(&mut self) -> &mut PrefixUpdateConfig;
+/// A trait used by builders to access NoInstallConfig
+pub trait HasNoInstallConfig: Sized {
+    fn no_install_config(&mut self) -> &mut NoInstallConfig;
     /// Set whether to also install the environment. By default, the environment
     /// is NOT installed to reduce test times.
     fn with_install(mut self, install: bool) -> Self {
-        self.prefix_update_config().no_install = !install;
+        self.no_install_config().no_install = !install;
         self
     }
 }
@@ -124,11 +125,9 @@ pub trait HasPrefixUpdateConfig: Sized {
 pub trait HasLockFileUpdateConfig: Sized {
     fn lock_file_update_config(&mut self) -> &mut LockFileUpdateConfig;
 
-    /// Skip updating lockfile, this will only check if it can add a
-    /// dependencies. If it can add it will only add it to the manifest.
-    /// Install will be skipped by default.
-    fn without_lockfile_update(mut self) -> Self {
-        self.lock_file_update_config().no_lockfile_update = true;
+    /// Set the frozen flag to skip lock-file updates
+    fn with_frozen(mut self, frozen: bool) -> Self {
+        self.lock_file_update_config().lock_file_usage.frozen = frozen;
         self
     }
 }
@@ -231,8 +230,13 @@ impl AddBuilder {
         self
     }
 
+    /// Deprecated: Use .with_frozen(true).with_install(false) instead
     pub fn with_no_lockfile_update(mut self, no_lockfile_update: bool) -> Self {
-        self.args.lock_file_update_config.no_lockfile_update = no_lockfile_update;
+        if no_lockfile_update {
+            // Since no_lockfile_update is deprecated, we simulate the behavior by setting frozen=true and no_install=true
+            self.args.lock_file_update_config.lock_file_usage.frozen = true;
+            self.args.no_install_config.no_install = true;
+        }
         self
     }
 }
@@ -243,9 +247,9 @@ impl HasDependencyConfig for AddBuilder {
     }
 }
 
-impl HasPrefixUpdateConfig for AddBuilder {
-    fn prefix_update_config(&mut self) -> &mut PrefixUpdateConfig {
-        &mut self.args.prefix_update_config
+impl HasNoInstallConfig for AddBuilder {
+    fn no_install_config(&mut self) -> &mut NoInstallConfig {
+        &mut self.args.no_install_config
     }
 }
 
@@ -294,9 +298,9 @@ impl HasDependencyConfig for RemoveBuilder {
     }
 }
 
-impl HasPrefixUpdateConfig for RemoveBuilder {
-    fn prefix_update_config(&mut self) -> &mut PrefixUpdateConfig {
-        &mut self.args.prefix_update_config
+impl HasNoInstallConfig for RemoveBuilder {
+    fn no_install_config(&mut self) -> &mut NoInstallConfig {
+        &mut self.args.no_install_config
     }
 }
 

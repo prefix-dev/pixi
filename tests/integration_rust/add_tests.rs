@@ -11,7 +11,7 @@ use url::Url;
 
 use crate::common::{
     LockFileExt, PixiControl,
-    builders::{HasDependencyConfig, HasLockFileUpdateConfig, HasPrefixUpdateConfig},
+    builders::{HasDependencyConfig, HasLockFileUpdateConfig, HasNoInstallConfig},
     package_database::{Package, PackageDatabase},
 };
 
@@ -86,12 +86,14 @@ async fn add_with_channel() {
     pixi.init().no_fast_prefix_overwrite(true).await.unwrap();
 
     pixi.add("conda-forge::py_rattler")
-        .without_lockfile_update()
+        .with_install(false)
+        .with_frozen(true)
         .await
         .unwrap();
 
     pixi.add("https://prefix.dev/conda-forge::_r-mutex")
-        .without_lockfile_update()
+        .with_install(false)
+        .with_frozen(true)
         .await
         .unwrap();
 
@@ -876,7 +878,8 @@ preview = ['pixi-build']"#,
     // Add a package
     pixi.add("boost-check")
         .with_git_url(Url::parse("git+ssh://git@github.com/wolfv/pixi-build-examples.git").unwrap())
-        .with_no_lockfile_update(true)
+        .with_install(false)
+        .with_frozen(true)
         .await
         .unwrap();
 
@@ -995,7 +998,8 @@ preview = ["pixi-build"]
         .add("boost-check")
         .with_git_url(Url::parse("https://github.com/wolfv/pixi-build-examples.git").unwrap())
         .with_git_subdir("boost-check".to_string())
-        .with_no_lockfile_update(true)
+        .with_install(false)
+        .with_frozen(true)
         .await;
 
     assert!(result.is_ok());

@@ -10,7 +10,7 @@ use pixi_command_dispatcher::{
     },
 };
 use pixi_progress::ProgressBarPlacement;
-use rattler::install::Transaction;
+use rattler::{install::Transaction, package_cache::CacheReporter};
 use rattler_conda_types::{PrefixRecord, RepoDataRecord};
 use tokio::sync::mpsc::UnboundedReceiver;
 
@@ -19,10 +19,10 @@ use crate::{
     main_progress_bar::{MainProgressBar, Tracker},
 };
 
+#[derive(Clone)]
 pub struct SyncReporter {
     multi_progress: MultiProgress,
     combined_inner: Arc<Mutex<CombinedInstallReporterInner>>,
-    build_output_receiver: Option<UnboundedReceiver<String>>,
 }
 
 impl SyncReporter {
@@ -37,7 +37,6 @@ impl SyncReporter {
         Self {
             multi_progress,
             combined_inner,
-            build_output_receiver: None,
         }
     }
 
@@ -58,6 +57,18 @@ impl SyncReporter {
             id: TransactionId::new(id),
             combined: Arc::clone(&self.combined_inner),
         }
+    }
+
+    /// Creates a new reporter instance that can used to report the progress of
+    /// fetching a single `RepoDataRecord` to the cache.
+    pub fn create_cache_reporter(
+        &self,
+        repo_data_record: &RepoDataRecord,
+    ) -> Box<dyn CacheReporter> {
+        Box::new(SyncCacheReporter::new(
+            repo_data_record,
+            Arc::clone(&self.combined_inner),
+        ))
     }
 }
 
@@ -84,9 +95,13 @@ impl BackendSourceBuildReporter for SyncReporter {
         let print_backend_output = tracing::event_enabled!(tracing::Level::INFO);
         // Stream the progress of the output to the screen.
         let progress_bar = self.multi_progress.clone();
+
+        // Create a sender to buffer the output lines so we can output them later if
+        // needed.
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<String>();
         if !print_backend_output {
-            self.build_output_receiver = Some(rx);
+            let mut inner = self.combined_inner.lock();
+            inner.build_output_receiver = Some(rx);
         }
 
         tokio::spawn(async move {
@@ -106,17 +121,24 @@ impl BackendSourceBuildReporter for SyncReporter {
     }
 
     fn on_finished(&mut self, _id: BackendSourceBuildId, failed: bool) {
-        let Some(mut build_output_receiver) = self.build_output_receiver.take() else {
-            return;
+        // Take the stream that receives the output from the backend so we can drop the
+        // memory.
+        let build_output_receiver = {
+            let mut inner = self.combined_inner.lock();
+            inner.build_output_receiver.take()
         };
+
+        // If the build failed, we want to print the output from the backend.
         let progress_bar = self.multi_progress.clone();
         if failed {
-            tokio::spawn(async move {
-                while let Some(line) = build_output_receiver.recv().await {
-                    // Suspend the main progress bar while we print the line.
-                    progress_bar.suspend(|| eprintln!("{}", line));
-                }
-            });
+            if let Some(mut build_output_receiver) = build_output_receiver {
+                tokio::spawn(async move {
+                    while let Some(line) = build_output_receiver.recv().await {
+                        // Suspend the main progress bar while we print the line.
+                        progress_bar.suspend(|| eprintln!("{}", line));
+                    }
+                });
+            }
         }
     }
 }
@@ -152,6 +174,8 @@ pub struct CombinedInstallReporterInner {
 
     preparing_progress_bar: BuildDownloadVerifyReporter,
     install_progress_bar: MainProgressBar<PackageWithSize>,
+
+    build_output_receiver: Option<UnboundedReceiver<String>>,
 }
 
 #[derive(PartialEq, Eq)]
@@ -204,6 +228,7 @@ impl CombinedInstallReporterInner {
             install_progress_bar: link_progress_bar,
             operation_link_id: HashMap::new(),
             cache_entry_id: HashMap::new(),
+            build_output_receiver: None,
         }
     }
 
@@ -232,6 +257,21 @@ impl CombinedInstallReporterInner {
                 );
             }
         }
+    }
+
+    /// Called to start progress on populating the cache for a single
+    /// `RepoDataRecord`.
+    fn start_populate_single_cache_entry(&mut self, record: &RepoDataRecord) -> TransactionId {
+        let transaction_id = TransactionId(
+            self.next_id
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
+        );
+        let operation_id = 0;
+        self.cache_entry_id.insert(
+            (transaction_id, operation_id),
+            self.preparing_progress_bar.on_entry_start(record),
+        );
+        transaction_id
     }
 
     fn on_transaction_operation_start(&mut self, _id: TransactionId, _operation: usize) {}
@@ -414,5 +454,53 @@ pub struct TransactionId(pub usize);
 impl TransactionId {
     pub fn new(id: usize) -> Self {
         TransactionId(id)
+    }
+}
+
+struct SyncCacheReporter {
+    combined_inner: Arc<Mutex<CombinedInstallReporterInner>>,
+    transaction_id: TransactionId,
+}
+
+impl SyncCacheReporter {
+    pub fn new(
+        record: &RepoDataRecord,
+        combined_inner: Arc<Mutex<CombinedInstallReporterInner>>,
+    ) -> Self {
+        let transaction_id = {
+            let mut inner = combined_inner.lock();
+            inner.start_populate_single_cache_entry(record)
+        };
+        Self {
+            combined_inner,
+            transaction_id,
+        }
+    }
+}
+
+impl CacheReporter for SyncCacheReporter {
+    fn on_validate_start(&self) -> usize {
+        let mut inner = self.combined_inner.lock();
+        inner.on_validate_start(self.transaction_id, 0)
+    }
+
+    fn on_validate_complete(&self, index: usize) {
+        let mut inner = self.combined_inner.lock();
+        inner.on_validate_complete(self.transaction_id, index);
+    }
+
+    fn on_download_start(&self) -> usize {
+        let mut inner = self.combined_inner.lock();
+        inner.on_download_start(self.transaction_id, 0)
+    }
+
+    fn on_download_progress(&self, index: usize, progress: u64, total: Option<u64>) {
+        let mut inner = self.combined_inner.lock();
+        inner.on_download_progress(self.transaction_id, index, progress, total);
+    }
+
+    fn on_download_completed(&self, index: usize) {
+        let mut inner = self.combined_inner.lock();
+        inner.on_download_completed(self.transaction_id, index);
     }
 }
