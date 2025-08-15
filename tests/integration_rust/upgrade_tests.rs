@@ -45,7 +45,7 @@ async fn pypi_dependency_index_preserved_on_upgrade() {
             pypi_deps,
             IndexMap::default(),
             args.prefix_update_config.no_install,
-            &args.lock_file_update_config.lock_file_usage().unwrap(),
+            &args.lock_file_update_config.lock_file_usage(),
             &args.specs.feature,
             &[],
             true,

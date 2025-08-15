@@ -93,7 +93,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             pypi_deps,
             IndexMap::default(),
             args.prefix_update_config.no_install,
-            &args.lock_file_update_config.lock_file_usage()?,
+            &args.lock_file_update_config.lock_file_usage(),
             &args.specs.feature,
             &[],
             false,

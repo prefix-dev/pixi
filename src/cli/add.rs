@@ -198,7 +198,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         pypi_deps,
         source_specs,
         prefix_update_config.no_install,
-        &lock_file_update_config.lock_file_usage()?,
+        &lock_file_update_config.lock_file_usage(),
         &dependency_config.feature,
         &dependency_config.platforms,
         args.editable,

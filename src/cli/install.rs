@@ -89,7 +89,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         &environments,
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
-            lock_file_usage: args.lock_file_usage.try_into()?,
+            lock_file_usage: args.lock_file_usage.into(),
             no_install: false,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         },
