@@ -286,25 +286,6 @@
       ],
       "additionalProperties": false,
       "properties": {
-        "additional-dependencies": {
-          "title": "Additional-Dependencies",
-          "description": "Additional dependencies to install alongside the build backend",
-          "type": "object",
-          "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "$ref": "#/$defs/MatchspecTable"
-              }
-            ]
-          },
-          "propertyNames": {
-            "minLength": 1
-          }
-        },
         "backend": {
           "$ref": "#/$defs/BuildBackend",
           "description": "The build backend to instantiate"
@@ -363,6 +344,25 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "additional-dependencies": {
+          "title": "Additional-Dependencies",
+          "description": "Additional dependencies to install alongside the build backend",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/MatchspecTable"
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
         "branch": {
           "title": "Branch",
           "description": "A git branch to use",
@@ -391,6 +391,27 @@
             "pytorch",
             "https://prefix.dev/conda-forge"
           ]
+        },
+        "channels": {
+          "title": "Channels",
+          "description": "The `conda` channels that are used to fetch the build backend from",
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "string",
+                "format": "uri",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/ChannelInlineTable"
+              }
+            ]
+          }
         },
         "file-name": {
           "title": "File-Name",

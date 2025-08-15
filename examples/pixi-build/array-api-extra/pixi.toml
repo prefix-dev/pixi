@@ -15,9 +15,10 @@ test = "python -c 'import array_api_extra'"
 name = "array-api-extra"
 version = "0.8.0"
 
-[package.build]
-backend = { name = "pixi-build-rattler-build", version = "0.1.*" }
+[package.build.backend]
 channels = [
   "https://prefix.dev/pixi-build-backends",
   "https://prefix.dev/conda-forge",
 ]
+name = "pixi-build-rattler-build"
+version = "0.1.*"

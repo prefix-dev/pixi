@@ -1,5 +1,6 @@
 ---
 source: crates/pixi_manifest/src/toml/build_backend.rs
+assertion_line: 262
 expression: parsed
 ---
 TomlPackageBuild {
@@ -38,6 +39,11 @@ TomlPackageBuild {
                 sha256: None,
             },
             channels: None,
+            additional_dependencies: UniquePackageMap {
+                specs: {},
+                name_spans: {},
+                value_spans: {},
+            },
         },
     },
     channels: None,
