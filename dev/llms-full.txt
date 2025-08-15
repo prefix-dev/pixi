@@ -11311,6 +11311,8 @@ pixi run [OPTIONS] [TASK]...
 
   **env**: `PIXI_LOCKED`
 
+- [`--as-is`](#arg---as-is) Shorthand for the combination of --no-install and --frozen
+
 ## Global Options
 
 - [`--manifest-path <MANIFEST_PATH>`](#arg---manifest-path) The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
@@ -11533,6 +11535,8 @@ pixi shell-hook [OPTIONS]
 
   **env**: `PIXI_LOCKED`
 
+- [`--as-is`](#arg---as-is) Shorthand for the combination of --no-install and --frozen
+
 ## Global Options
 
 - [`--manifest-path <MANIFEST_PATH>`](#arg---manifest-path) The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
@@ -11624,6 +11628,8 @@ pixi shell [OPTIONS]
 - [`--locked`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 
   **env**: `PIXI_LOCKED`
+
+- [`--as-is`](#arg---as-is) Shorthand for the combination of --no-install and --frozen
 
 ## Global Options
 

@@ -57,6 +57,8 @@ pixi shell [OPTIONS]
 
   **env**: `PIXI_LOCKED`
 
+- [`--as-is`](#arg---as-is) Shorthand for the combination of --no-install and --frozen
+
 ## Global Options
 
 - [`--manifest-path <MANIFEST_PATH>`](#arg---manifest-path) The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
