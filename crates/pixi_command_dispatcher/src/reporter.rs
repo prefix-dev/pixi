@@ -1,5 +1,8 @@
+use std::sync::Arc;
+
 use futures::Stream;
 use pixi_git::resolver::RepositoryReference;
+use rattler_repodata_gateway::RunExportsReporter;
 use serde::Serialize;
 
 use crate::{
@@ -274,6 +277,14 @@ pub trait Reporter: Send {
         &mut self,
         _reason: Option<ReporterContext>,
     ) -> Option<Box<dyn rattler_repodata_gateway::Reporter>> {
+        None
+    }
+
+    /// Returns a reporter that run exports fetching progress.
+    fn create_run_exports_reporter(
+        &mut self,
+        _reason: Option<ReporterContext>,
+    ) -> Option<Arc<dyn RunExportsReporter>> {
         None
     }
 
