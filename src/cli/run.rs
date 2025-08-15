@@ -29,7 +29,7 @@ use pixi_core::{
     workspace::{Environment, errors::UnsupportedPlatformError},
 };
 
-use crate::cli::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
+use crate::cli::cli_config::{LockAndInstallConfig, WorkspaceConfig};
 
 /// Runs task in the pixi environment.
 ///
@@ -50,9 +50,7 @@ pub struct Args {
     pub workspace_config: WorkspaceConfig,
 
     #[clap(flatten)]
-    pub no_install_config: NoInstallConfig,
-    #[clap(flatten)]
-    pub lock_file_update_config: LockFileUpdateConfig,
+    pub lock_and_install_config: LockAndInstallConfig,
 
     #[clap(flatten)]
     pub config: ConfigCli,
@@ -125,8 +123,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Ensure that the lock-file is up-to-date.
     let lock_file = workspace
         .update_lock_file(UpdateLockFileOptions {
-            no_install: args.no_install_config.no_install,
-            lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
+            lock_file_usage: args.lock_and_install_config.lock_file_usage()?,
+            no_install: args.lock_and_install_config.no_install(),
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         })
         .await?
@@ -254,7 +252,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             Entry::Occupied(env) => env.into_mut(),
             Entry::Vacant(entry) => {
                 // Check if we allow installs
-                if args.no_install_config.allow_installs() {
+                if args.lock_and_install_config.allow_installs() {
                     // Ensure there is a valid prefix
                     lock_file
                         .prefix(

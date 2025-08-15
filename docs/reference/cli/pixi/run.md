@@ -61,6 +61,8 @@ pixi run [OPTIONS] [TASK]...
 - <a id="arg---locked" href="#arg---locked">`--locked`</a>
 :  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 <br>**env**: `PIXI_LOCKED`
+- <a id="arg---as-is" href="#arg---as-is">`--as-is`</a>
+:  Shorthand for the combination of --no-install and --frozen
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>

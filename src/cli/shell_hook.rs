@@ -20,7 +20,7 @@ use pixi_core::{
     workspace::{Environment, HasWorkspaceRef, get_activated_environment_variables},
 };
 
-use crate::cli::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
+use crate::cli::cli_config::{LockAndInstallConfig, WorkspaceConfig};
 
 /// Print the pixi environment activation script.
 ///
@@ -37,9 +37,7 @@ pub struct Args {
     pub project_config: WorkspaceConfig,
 
     #[clap(flatten)]
-    pub no_install_config: NoInstallConfig,
-    #[clap(flatten)]
-    pub lock_file_update_config: LockFileUpdateConfig,
+    pub lock_and_install_config: LockAndInstallConfig,
 
     #[clap(flatten)]
     config: ConfigCli,
@@ -160,8 +158,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         &environment,
         UpdateMode::QuickValidate,
         UpdateLockFileOptions {
-            lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
-            no_install: args.no_install_config.no_install,
+            lock_file_usage: args.lock_and_install_config.lock_file_usage()?,
+            no_install: args.lock_and_install_config.no_install(),
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         },
         ReinstallPackages::default(),
