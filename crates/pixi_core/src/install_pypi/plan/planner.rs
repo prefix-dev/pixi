@@ -144,7 +144,7 @@ impl InstallPlanner {
                     required_dist,
                     &mut dist_cache,
                     Operation::Reinstall,
-                    &build_options,
+                    build_options,
                 )
                 .map_err(InstallPlannerError::from)?;
 
@@ -167,7 +167,7 @@ impl InstallPlanner {
                 dist,
                 &mut dist_cache,
                 Operation::Install,
-                &build_options,
+                build_options,
             )
             .map_err(InstallPlannerError::from)?;
 
