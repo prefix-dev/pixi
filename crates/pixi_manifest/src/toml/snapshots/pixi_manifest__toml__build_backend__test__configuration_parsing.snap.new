@@ -1,6 +1,6 @@
 ---
 source: crates/pixi_manifest/src/toml/build_backend.rs
-assertion_line: 255
+assertion_line: 262
 expression: parsed
 ---
 TomlPackageBuild {
