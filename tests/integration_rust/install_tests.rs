@@ -10,7 +10,7 @@ use fs_err::tokio as tokio_fs;
 use pixi::cli::run::{self, Args};
 use pixi::cli::{
     LockFileUsageConfig,
-    cli_config::{LockFileUpdateConfig, WorkspaceConfig},
+    cli_config::{LockAndInstallConfig, LockFileUpdateConfig, WorkspaceConfig},
 };
 use pixi_config::{Config, DetachedEnvironments};
 use pixi_consts::consts;
@@ -297,9 +297,12 @@ async fn install_frozen() {
     // Check if running with frozen doesn't suddenly install the latest update.
     let result = pixi
         .run(run::Args {
-            lock_file_update_config: LockFileUpdateConfig {
-                lock_file_usage: LockFileUsageConfig {
-                    frozen: true,
+            lock_and_install_config: LockAndInstallConfig {
+                lock_file_update_config: LockFileUpdateConfig {
+                    lock_file_usage: LockFileUsageConfig {
+                        frozen: true,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 ..Default::default()

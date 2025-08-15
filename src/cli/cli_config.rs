@@ -148,6 +148,44 @@ impl NoInstallConfig {
     }
 }
 
+/// Lock file and installation configuration with --as-is support
+/// Used by shell, shell-hook, and run commands
+#[derive(Parser, Debug, Default, Clone)]
+pub struct LockAndInstallConfig {
+    #[clap(flatten)]
+    pub no_install_config: NoInstallConfig,
+
+    #[clap(flatten)]
+    pub lock_file_update_config: LockFileUpdateConfig,
+
+    /// Shorthand for the combination of --no-install and --frozen.
+    #[arg(long, help_heading = consts::CLAP_UPDATE_OPTIONS, conflicts_with_all = ["frozen", "no_install", "locked"])]
+    pub as_is: bool,
+}
+
+impl LockAndInstallConfig {
+    /// Returns true if the --as-is flag is set or if the no_install flag is set
+    pub fn no_install(&self) -> bool {
+        self.as_is || self.no_install_config.no_install
+    }
+
+    /// Get the effective lock file usage based on the configuration
+    pub fn lock_file_usage(&self) -> miette::Result<pixi_core::environment::LockFileUsage> {
+        // If --as-is is set this is equivalent to --frozen and --no-install
+        if self.as_is {
+            return Ok(LockFileUsage::Frozen);
+        }
+
+        // Otherwise use the normal lock file update config
+        self.lock_file_update_config.lock_file_usage()
+    }
+
+    /// Check if installs are allowed (considering --as-is)
+    pub fn allow_installs(&self) -> bool {
+        !self.as_is && self.no_install_config.allow_installs()
+    }
+}
+
 #[derive(Parser, Debug, Default, Clone)]
 pub struct GitRev {
     /// The git branch
@@ -410,7 +448,10 @@ fn build_vcs_requirement(
 mod tests {
     use url::Url;
 
-    use crate::cli::cli_config::{GitRev, build_vcs_requirement};
+    use crate::cli::cli_config::{
+        GitRev, LockAndInstallConfig, LockFileUpdateConfig, NoInstallConfig, build_vcs_requirement,
+    };
+    use pixi_core::environment::LockFileUsage;
 
     #[test]
     fn test_build_vcs_requirement_with_all_fields() {
@@ -474,5 +515,53 @@ mod tests {
             None,
         );
         assert_eq!(result, "mypackage @ git+file:///home/user/GitHub/mypackage");
+    }
+
+    #[test]
+    fn test_lock_and_install_config_as_is_flag() {
+        // Test --as-is sets both frozen and no_install
+        let config = LockAndInstallConfig {
+            as_is: true,
+            no_install_config: NoInstallConfig::default(),
+            lock_file_update_config: LockFileUpdateConfig::default(),
+        };
+
+        assert!(config.no_install(), "as_is should enable no_install");
+        assert!(!config.allow_installs(), "as_is should disable installs");
+
+        let lock_usage = config.lock_file_usage().unwrap();
+        assert!(
+            matches!(lock_usage, LockFileUsage::Frozen),
+            "as_is should set lock file usage to Frozen"
+        );
+    }
+
+    #[test]
+    fn test_lock_and_install_config_respects_individual_flags() {
+        // Test that individual flags still work when --as-is is not set
+        let config = LockAndInstallConfig {
+            as_is: false,
+            no_install_config: NoInstallConfig::new(true),
+            lock_file_update_config: {
+                let mut lock_config = LockFileUpdateConfig::default();
+                lock_config.lock_file_usage.frozen = true;
+                lock_config
+            },
+        };
+
+        assert!(
+            config.no_install(),
+            "should respect individual no_install flag"
+        );
+        assert!(
+            !config.allow_installs(),
+            "should respect individual no_install flag"
+        );
+
+        let lock_usage = config.lock_file_usage().unwrap();
+        assert!(
+            matches!(lock_usage, LockFileUsage::Frozen),
+            "should respect individual frozen flag"
+        );
     }
 }
