@@ -380,17 +380,6 @@ impl ManifestDocument {
         editable: Option<bool>,
         location: Option<&PypiDependencyLocation>,
     ) -> Result<(), TomlError> {
-        // Pypi dependencies can be stored in different places in pyproject.toml
-        // manifests so we remove any potential dependency of the same name
-        // before adding it back
-        if matches!(self, ManifestDocument::PyProjectToml(_)) {
-            self.remove_pypi_dependency(
-                &PypiPackageName::from_normalized(requirement.name.clone()),
-                platform,
-                feature_name,
-            )?;
-        }
-
         // The '[pypi-dependencies]' or '[tool.pixi.pypi-dependencies]' table is
         // selected
         //  - For 'pixi.toml' manifests where it is the only choice
@@ -409,18 +398,36 @@ impl ManifestDocument {
                 pypi_requirement.set_editable(editable);
             }
 
-            let dependency_table = TableName::new()
+            let dependency_table_name = TableName::new()
                 .with_prefix(self.table_prefix())
                 .with_platform(platform.as_ref())
                 .with_feature_name(Some(feature_name))
                 .with_table(Some(consts::PYPI_DEPENDENCIES));
 
-            self.manifest_mut()
-                .get_or_insert_nested_table(dependency_table.to_string().as_str())?
-                .insert(
-                    requirement.name.as_ref(),
-                    Item::Value(pypi_requirement.into()),
-                );
+            let table = self
+                .manifest_mut()
+                .get_or_insert_nested_table(dependency_table_name.to_string().as_str())?;
+
+            let mut new_value = Value::from(pypi_requirement);
+
+            // Check if there exists an existing entry in the table that we should overwrite
+            // instead.
+            let existing_value = table.iter_mut().find_map(|(key, value)| {
+                let existing_name = pep508_rs::PackageName::from_str(key.get()).ok()?;
+                if existing_name == requirement.name {
+                    value.as_value_mut()
+                } else {
+                    None
+                }
+            });
+
+            // If there exists an existing entry, we overwrite it but keep the decoration.
+            if let Some(existing_value) = existing_value {
+                *new_value.decor_mut() = existing_value.decor().clone();
+                *existing_value = new_value;
+            } else {
+                table.insert(requirement.name.as_ref(), Item::Value(new_value));
+            }
             return Ok(());
         }
 
@@ -430,10 +437,26 @@ impl ManifestDocument {
         //   - optional-dependencies is explicitly requested as location
         let add_requirement =
             |source: &mut ManifestDocument, table, array| -> Result<(), TomlError> {
-                source
+                let array = source
                     .manifest_mut()
-                    .get_or_insert_toml_array_mut(table, array)?
-                    .push(requirement.to_string());
+                    .get_or_insert_toml_array_mut(table, array)?;
+
+                // Check if there is an existing entry that we should replace. Replacing will
+                // preserve any existing formatting.
+                let existing_entry_idx = array.iter().position(|item| {
+                    let Ok(req): Result<pep508_rs::Requirement, _> =
+                        item.as_str().unwrap_or_default().parse()
+                    else {
+                        return false;
+                    };
+                    req.name == requirement.name
+                });
+
+                if let Some(idx) = existing_entry_idx {
+                    array.replace(idx, requirement.to_string());
+                } else {
+                    array.push(requirement.to_string());
+                }
                 Ok(())
             };
         if feature_name.is_default()
