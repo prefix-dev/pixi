@@ -119,7 +119,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
       - name: Machete
-        uses: bnjbvr/cargo-machete@9f0895d780783da0089162cae9668f6ec6e896c4
+        uses: bnjbvr/cargo-machete@7959c845782fed02ee69303126d4a12d64f1db18 # v0.9.1
 
   # Checks for duplicate version of package
   cargo-vendor:
