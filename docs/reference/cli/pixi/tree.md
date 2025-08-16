@@ -22,6 +22,8 @@ pixi tree [OPTIONS] [REGEX]
 :  The environment to list packages for. Defaults to the default environment
 - <a id="arg---invert" href="#arg---invert">`--invert (-i)`</a>
 :  Invert tree and show what depends on given package in the regex argument
+- <a id="arg---json" href="#arg---json">`--json`</a>
+:  Show a JSON representation of the dependency tree
 
 ## Update Options
 - <a id="arg---frozen" href="#arg---frozen">`--frozen`</a>
