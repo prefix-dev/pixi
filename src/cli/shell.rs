@@ -1,11 +1,11 @@
-use std::{collections::HashMap, io::Write};
+use std::{collections::HashMap, io::Write, path::PathBuf};
 
 use clap::Parser;
 use miette::IntoDiagnostic;
 use rattler_conda_types::Platform;
 use rattler_shell::{
     activation::PathModificationBehavior,
-    shell::{CmdExe, PowerShell, Shell, ShellEnum, ShellScript},
+    shell::{Bash, CmdExe, PowerShell, Shell, ShellEnum, ShellScript},
 };
 
 use pixi_config::{ConfigCli, ConfigCliActivation, ConfigCliPrompt};
@@ -22,7 +22,6 @@ use crate::cli::cli_config::{LockAndInstallConfig, WorkspaceConfig};
 #[cfg(target_family = "unix")]
 use pixi_pty::unix::PtySession;
 
-#[cfg(target_family = "unix")]
 use pixi_utils::prefix::Prefix;
 
 /// Start a shell in a pixi environment, run `exit` to leave the shell.
@@ -130,6 +129,69 @@ fn start_cmdexe(
     let mut command = std::process::Command::new(cmdexe.executable());
     command.arg("/K");
     command.arg(&temp_path);
+
+    ignore_ctrl_c();
+
+    let mut process = command.spawn().into_diagnostic()?;
+    Ok(process.wait().into_diagnostic()?.code())
+}
+
+// allowing dead code so that we test this on unix compilation as well
+#[allow(dead_code)]
+fn start_winbash(
+    bash: Bash,
+    env: &HashMap<String, String>,
+    prompt: String,
+    prefix: &Prefix,
+    source_shell_completions: bool,
+) -> miette::Result<Option<i32>> {
+    // create a tempfile for activation
+    let mut temp_file = tempfile::Builder::new()
+        .prefix("pixi_env_")
+        .suffix(&format!(".{}", bash.extension()))
+        .rand_bytes(3)
+        .tempfile()
+        .into_diagnostic()?;
+
+    let mut shell_script = ShellScript::new(bash, Platform::current());
+    for (key, value) in env {
+        if key == "PATH" || key == "Path" {
+            // For Git Bash on Windows, the PATH must be formatted as POSIX paths according
+            // to the cygpath command, and separated by ":" instead of ";". Use the
+            // shell_script.set_path call to handle these details.
+            let paths = value
+                .split(";")
+                .map(PathBuf::from)
+                .collect::<Vec<PathBuf>>();
+            shell_script
+                .set_path(&paths, PathModificationBehavior::Replace)
+                .into_diagnostic()?;
+        } else {
+            shell_script.set_env_var(key, value).into_diagnostic()?;
+        }
+    }
+    if source_shell_completions {
+        if let Some(completions_dir) = bash.completion_script_location() {
+            shell_script
+                .source_completions(&prefix.root().join(completions_dir))
+                .into_diagnostic()?;
+        }
+    }
+    temp_file
+        .write_all(shell_script.contents().into_diagnostic()?.as_bytes())
+        .into_diagnostic()?;
+
+    // Write custom prompt to the env file
+    temp_file.write_all(prompt.as_bytes()).into_diagnostic()?;
+    temp_file.flush().into_diagnostic()?;
+
+    // close the file handle, but keep the path (needed for Windows)
+    let temp_path = temp_file.into_temp_path();
+
+    let mut command = std::process::Command::new(bash.executable());
+    command.arg("--init-file");
+    command.arg(&temp_path);
+    command.arg("-i");
 
     ignore_ctrl_c();
 
@@ -320,11 +382,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         String::new()
     };
 
+    let source_shell_completions = workspace.config().shell.source_completion_scripts();
+
     #[cfg(target_family = "windows")]
     let res = match interactive_shell {
         ShellEnum::NuShell(nushell) => start_nu_shell(nushell, env, prompt_hook).await,
         ShellEnum::PowerShell(pwsh) => start_powershell(pwsh, env, prompt_hook),
         ShellEnum::CmdExe(cmdexe) => start_cmdexe(cmdexe, env, prompt_hook),
+        ShellEnum::Bash(bash) => {
+            start_winbash(bash, env, prompt_hook, &prefix, source_shell_completions)
+        }
         _ => {
             miette::bail!("Unsupported shell: {:?}", interactive_shell);
         }
@@ -332,7 +399,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     #[cfg(target_family = "unix")]
     let res = {
-        let source_shell_completions = workspace.config().shell.source_completion_scripts();
         match interactive_shell {
             ShellEnum::NuShell(nushell) => start_nu_shell(nushell, env, prompt_hook).await,
             ShellEnum::PowerShell(pwsh) => start_powershell(pwsh, env, prompt_hook),
