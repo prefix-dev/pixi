@@ -1,10 +1,5 @@
 use std::{fmt, str::FromStr, sync::Arc};
 
-use crate::{
-    FeatureName, LibCSystemRequirement, ManifestKind, ManifestProvenance, PypiDependencyLocation,
-    SpecType, SystemRequirements, Task, TomlError, manifests::table_name::TableName,
-    toml::TomlDocument, utils::WithSourceCode,
-};
 use miette::{Diagnostic, NamedSource};
 use pixi_consts::consts;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
@@ -12,6 +7,12 @@ use pixi_spec::PixiSpec;
 use rattler_conda_types::{PackageName, Platform};
 use thiserror::Error;
 use toml_edit::{Array, DocumentMut, Item, Table, Value, value};
+
+use crate::{
+    FeatureName, LibCSystemRequirement, ManifestKind, ManifestProvenance, PypiDependencyLocation,
+    SpecType, SystemRequirements, Task, TomlError, manifests::table_name::TableName,
+    toml::TomlDocument, utils::WithSourceCode,
+};
 
 /// Discriminates between a 'pixi.toml' and a 'pyproject.toml' manifest.
 #[derive(Debug, Clone)]
@@ -338,7 +339,30 @@ impl ManifestDocument {
 
         self.manifest_mut()
             .get_or_insert_nested_table(dependency_table.to_string().as_str())
-            .map(|t| t.insert(name.as_normalized(), Item::Value(spec.to_toml_value())))?;
+            .map(|t| {
+                let mut new_value = spec.to_toml_value();
+
+                // Check if there is an existing entry that is represented by an inline value.
+                let existing_value = t.iter_mut().find_map(|(key, value)| {
+                    let package_key_name = PackageName::from_str(key.get()).ok()?;
+                    if package_key_name == *name {
+                        value.as_value_mut()
+                    } else {
+                        None
+                    }
+                });
+
+                // If there exists an existing value, we update it with the new value, but we
+                // keep the decoration.
+                if let Some(existing_value) = existing_value {
+                    *new_value.decor_mut() = existing_value.decor().clone();
+                    *existing_value = new_value;
+                } else {
+                    // Otherwise, just reinsert the value. This might overwrite an existing
+                    // decorations.
+                    t.insert(name.as_normalized(), Item::Value(new_value));
+                }
+            })?;
 
         Ok(())
     }
@@ -747,5 +771,60 @@ impl ManifestDocument {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    /// This test checks that when calling `add_dependency` with a dependency
+    /// that already exists in the document the formatting and comments are
+    /// preserved.
+    ///
+    /// This test also verifies that the name of the dependency is not correctly
+    /// found and kept in the situation where the user has a non-normalized name
+    /// in the document (e.g. "hTTPx" vs 'HtTpX').
+    #[test]
+    pub fn add_dependency_retains_decoration() {
+        let boilerplate = r#"[project]
+name = "test"
+
+[tool.pixi.project]
+channels = []
+platforms = []
+
+[tool.pixi.dependencies]"#;
+
+        let content = r#"# Hello world!
+hTTPx = ">=0.28.1,<0.29" # Some comment.
+
+# newline
+"#;
+
+        let mut document = ManifestDocument::PyProjectToml(TomlDocument::new(
+            DocumentMut::from_str(&format!("{boilerplate}{content}")).unwrap(),
+        ));
+
+        // Overwrite the existing dependency.
+        document
+            .add_dependency(
+                &PackageName::from_str("HtTpX").unwrap(),
+                &PixiSpec::Version("0.1.*".parse().unwrap()),
+                SpecType::Run,
+                None,
+                &FeatureName::default(),
+            )
+            .unwrap();
+
+        let expected_content = r#"# Hello world!
+hTTPx = "0.1.*" # Some comment.
+
+# newline
+"#;
+        assert_eq!(
+            document.to_string(),
+            format!("{boilerplate}{expected_content}")
+        );
     }
 }
