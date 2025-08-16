@@ -246,39 +246,14 @@ impl ManifestDocument {
     ) -> Result<(), TomlError> {
         // For 'pyproject.toml' manifest, try and remove the dependency from native
         // arrays
-        let remove_requirement =
-            |source: &mut ManifestDocument, table, array_name| -> Result<(), TomlError> {
-                let array = source
-                    .manifest_mut()
-                    .get_mut_toml_array(table, array_name)?;
-                if let Some(array) = array {
-                    array.retain(|x| {
-                        let req: pep508_rs::Requirement = x
-                            .as_str()
-                            .unwrap_or("")
-                            .parse()
-                            .expect("should be a valid pep508 dependency");
-                        let name = PypiPackageName::from_normalized(req.name);
-                        name != *dep
-                    });
-                    if array.is_empty() {
-                        source
-                            .manifest_mut()
-                            .get_or_insert_nested_table(table)?
-                            .remove(array_name);
-                    }
-                }
-                Ok(())
-            };
-
         match self {
             ManifestDocument::PyProjectToml(_) if feature_name.is_default() => {
-                remove_requirement(self, "project", "dependencies")?;
+                self.remove_pypi_requirement("project", "dependencies", dep)?;
             }
             ManifestDocument::PyProjectToml(_) => {
                 let name = feature_name.to_string();
-                remove_requirement(self, "project.optional-dependencies", &name)?;
-                remove_requirement(self, "dependency-groups", &name)?;
+                self.remove_pypi_requirement("project.optional-dependencies", &name, dep)?;
+                self.remove_pypi_requirement("dependency-groups", &name, dep)?;
             }
             _ => (),
         };
@@ -294,6 +269,33 @@ impl ManifestDocument {
         self.manifest_mut()
             .get_or_insert_nested_table(table_name.to_string().as_str())
             .map(|t| t.remove(dep.as_source()))?;
+        Ok(())
+    }
+
+    /// Removes a pypi requirement from a particular array.
+    fn remove_pypi_requirement(
+        &mut self,
+        table: &str,
+        array_name: &str,
+        dependency_name: &PypiPackageName,
+    ) -> Result<(), TomlError> {
+        let array = self.manifest_mut().get_mut_toml_array(table, array_name)?;
+        if let Some(array) = array {
+            array.retain(|x| {
+                let req: pep508_rs::Requirement = x
+                    .as_str()
+                    .unwrap_or("")
+                    .parse()
+                    .expect("should be a valid pep508 dependency");
+                let name = PypiPackageName::from_normalized(req.name);
+                name != *dependency_name
+            });
+            if array.is_empty() {
+                self.manifest_mut()
+                    .get_or_insert_nested_table(table)?
+                    .remove(array_name);
+            }
+        }
         Ok(())
     }
 
@@ -378,7 +380,7 @@ impl ManifestDocument {
         platform: Option<Platform>,
         feature_name: &FeatureName,
         editable: Option<bool>,
-        location: Option<&PypiDependencyLocation>,
+        location: Option<PypiDependencyLocation>,
     ) -> Result<(), TomlError> {
         // The '[pypi-dependencies]' or '[tool.pixi.pypi-dependencies]' table is
         // selected
@@ -428,6 +430,14 @@ impl ManifestDocument {
             } else {
                 table.insert(requirement.name.as_ref(), Item::Value(new_value));
             }
+
+            // Remove the entry from the project native array.
+            self.remove_pypi_requirement(
+                "project",
+                "dependencies",
+                &PypiPackageName::from_normalized(requirement.name.clone()),
+            )?;
+
             return Ok(());
         }
 
@@ -805,28 +815,27 @@ mod test {
     /// that already exists in the document the formatting and comments are
     /// preserved.
     ///
-    /// This test also verifies that the name of the dependency is not correctly
+    /// This test also verifies that the name of the dependency is correctly
     /// found and kept in the situation where the user has a non-normalized name
     /// in the document (e.g. "hTTPx" vs 'HtTpX').
     #[test]
     pub fn add_dependency_retains_decoration() {
-        let boilerplate = r#"[project]
+        let manifest_content = r#"[project]
 name = "test"
 
 [tool.pixi.project]
 channels = []
 platforms = []
 
-[tool.pixi.dependencies]"#;
-
-        let content = r#"# Hello world!
+[tool.pixi.dependencies]
+# Hello world!
 hTTPx = ">=0.28.1,<0.29" # Some comment.
 
 # newline
 "#;
 
         let mut document = ManifestDocument::PyProjectToml(TomlDocument::new(
-            DocumentMut::from_str(&format!("{boilerplate}{content}")).unwrap(),
+            DocumentMut::from_str(manifest_content).unwrap(),
         ));
 
         // Overwrite the existing dependency.
@@ -840,14 +849,82 @@ hTTPx = ">=0.28.1,<0.29" # Some comment.
             )
             .unwrap();
 
-        let expected_content = r#"# Hello world!
-hTTPx = "0.1.*" # Some comment.
+        insta::assert_snapshot!(document.to_string());
+    }
 
-# newline
+    /// This test checks that when calling `add_pypi_dependency` with
+    /// dependencies that already exist in different locations the
+    /// formatting and comments are preserved across all PyPI dependency
+    /// storage formats.
+    ///
+    /// This test also verifies that the name of the dependency is correctly
+    /// found and kept in the situation where the user has a non-normalized name
+    /// in the document (e.g. "rEquEsTs" vs 'ReQuEsTs').
+    #[test]
+    pub fn add_pypi_dependency_retains_decoration() {
+        let manifest_content = r#"[project]
+name = "test"
+dependencies = [
+    # Main dependency comment
+    "rEquEsTs>=2.28.1,<3.0", # inline comment
+]
+
+[project.optional-dependencies]
+dev = [
+    # Dev dependency comment  
+    "PyYaML>=6.0", # dev inline comment
+]
+
+[tool.pixi.project]
+channels = []
+platforms = []
+
+[tool.pixi.pypi-dependencies]
+# Table dependency comment
+NumPy = ">=1.20.0" # table inline comment
 "#;
-        assert_eq!(
-            document.to_string(),
-            format!("{boilerplate}{expected_content}")
-        );
+
+        let mut document = ManifestDocument::PyProjectToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        // Update dependencies in different locations
+        let requests_req = pep508_rs::Requirement::from_str("ReQuEsTs>=2.30.0").unwrap();
+        document
+            .add_pypi_dependency(
+                &requests_req,
+                None,
+                None,
+                &FeatureName::default(),
+                None,
+                Some(PypiDependencyLocation::Dependencies),
+            )
+            .unwrap();
+
+        let pyyaml_req = pep508_rs::Requirement::from_str("PyYAML>=6.1.0").unwrap();
+        document
+            .add_pypi_dependency(
+                &pyyaml_req,
+                None,
+                None,
+                &FeatureName::from_str("dev").unwrap(),
+                None,
+                Some(PypiDependencyLocation::OptionalDependencies),
+            )
+            .unwrap();
+
+        let numpy_req = pep508_rs::Requirement::from_str("numpy>=1.21.0").unwrap();
+        document
+            .add_pypi_dependency(
+                &numpy_req,
+                None,
+                None,
+                &FeatureName::default(),
+                None,
+                Some(crate::PypiDependencyLocation::PixiPypiDependencies),
+            )
+            .unwrap();
+
+        insta::assert_snapshot!(document.to_string());
     }
 }
