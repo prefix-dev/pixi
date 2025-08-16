@@ -9,11 +9,22 @@
 
 use uv_cache::{CacheBucket, WheelCache};
 use uv_cache_info::Timestamp;
+use uv_configuration::BuildOptions;
 use uv_distribution::{BuiltWheelIndex, RegistryWheelIndex};
 use uv_distribution::{HttpArchivePointer, LocalArchivePointer};
 use uv_distribution_types::BuiltDist;
 use uv_distribution_types::{CachedDirectUrlDist, CachedDist, Dist, Name, SourceDist};
 use uv_pypi_types::VerbatimParsedUrl;
+
+#[derive(thiserror::Error, Debug)]
+pub enum DistCacheError {
+    #[error("URL dependency points to a wheel which conflicts with `--no-binary` option: {url}")]
+    NoBinaryConflictUrl { url: String },
+    #[error("Path dependency points to a wheel which conflicts with `--no-binary` option: {path}")]
+    NoBinaryConflictPath { path: String },
+    #[error(transparent)]
+    Distribution(#[from] uv_distribution::Error),
+}
 
 /// Provides cache lookup functionality for distributions.
 /// This trait can also be used to mock the cache for testing purposes.
@@ -24,7 +35,8 @@ pub trait DistCache<'a> {
         &mut self,
         dist: &'a Dist,
         uv_cache: &uv_cache::Cache,
-    ) -> Result<Option<CachedDist>, uv_distribution::Error>;
+        build_options: &BuildOptions,
+    ) -> Result<Option<CachedDist>, DistCacheError>;
 }
 
 /// Provides both access to registry dists and locally built dists
@@ -44,11 +56,25 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
         &mut self,
         dist: &'a Dist,
         uv_cache: &uv_cache::Cache,
-    ) -> Result<Option<CachedDist>, uv_distribution::Error> {
+        build_options: &BuildOptions,
+    ) -> Result<Option<CachedDist>, DistCacheError> {
+        // Check if installation of a binary version of the package should be allowed.
+        // we do not allow to set `no_binary` just yet but lets handle it here
+        // because, then this just works
+        let no_binary = build_options.no_binary_package(dist.name());
+        // We can set no-build
+        let no_build = build_options.no_build_package(dist.name());
+
         match dist {
             Dist::Built(BuiltDist::Registry(wheel)) => {
                 let cached = self.registry.get(wheel.name()).find_map(|entry| {
                     if entry.index.url() != &wheel.best_wheel().index {
+                        return None;
+                    }
+                    if entry.built && no_build {
+                        return None;
+                    }
+                    if !entry.built && no_binary {
                         return None;
                     }
                     if entry.dist.filename == wheel.best_wheel().filename {
@@ -65,6 +91,12 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
                 }
             }
             Dist::Built(BuiltDist::DirectUrl(wheel)) => {
+                if no_binary {
+                    return Err(DistCacheError::NoBinaryConflictUrl {
+                        url: wheel.url.to_string(),
+                    });
+                }
+
                 // Find the exact wheel from the cache, since we know the filename in advance.
                 let cache_entry = uv_cache
                     .shard(
@@ -101,6 +133,12 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
                 }
             }
             Dist::Built(BuiltDist::Path(wheel)) => {
+                if no_binary {
+                    return Err(DistCacheError::NoBinaryConflictPath {
+                        path: wheel.url.to_string(),
+                    });
+                }
+
                 // Validate that the path exists.
                 if !wheel.install_path.exists() {
                     return Ok(None);
@@ -173,6 +211,12 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
                                 return None;
                             }
                             if entry.dist.filename.name != *sdist.name() {
+                                return None;
+                            }
+                            if entry.built && no_build {
+                                return None;
+                            }
+                            if !entry.built && no_binary {
                                 return None;
                             }
                             if entry.dist.filename.version == sdist.version {
