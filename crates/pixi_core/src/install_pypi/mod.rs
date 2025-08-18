@@ -346,6 +346,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             &site_packages,
             CachedWheels::new(registry_index, built_wheel_index),
             &required_dists,
+            &setup.build_options,
         )
         .into_diagnostic()
         .context("error while determining PyPI installation plan")?;
