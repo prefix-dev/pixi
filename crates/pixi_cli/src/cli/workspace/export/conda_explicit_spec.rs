@@ -245,7 +245,7 @@ mod tests {
 
     #[test]
     fn test_render_conda_explicit_spec() {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        let path = Path::new(env!("CARGO_WORKSPACE_DIR"))
             .join("tests/data/mock-projects/test-project-export/pixi.lock");
         let lockfile = LockFile::from_path(&path).unwrap();
 

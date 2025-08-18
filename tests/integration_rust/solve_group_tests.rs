@@ -369,7 +369,7 @@ async fn test_dont_record_not_present_package_as_purl() {
 
 fn absolute_custom_mapping_path() -> String {
     dunce::simplified(
-        &Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/mapping_files/custom_mapping.json"),
+        &Path::new(env!("CARGO_WORKSPACE_DIR")).join("tests/data/mapping_files/custom_mapping.json"),
     )
     .display()
     .to_string()
@@ -378,7 +378,7 @@ fn absolute_custom_mapping_path() -> String {
 
 fn absolute_compressed_mapping_path() -> String {
     dunce::simplified(
-        &Path::new(env!("CARGO_MANIFEST_DIR"))
+        &Path::new(env!("CARGO_WORKSPACE_DIR"))
             .join("tests/data/mapping_files/compressed_mapping.json"),
     )
     .display()

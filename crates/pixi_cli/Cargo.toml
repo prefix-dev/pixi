@@ -150,3 +150,7 @@ pixi_test_utils = { workspace = true }
 rstest = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["rt"] }
+
+[[test]]
+name = "integration_rust"
+path = "../../tests/integration_rust/main.rs"

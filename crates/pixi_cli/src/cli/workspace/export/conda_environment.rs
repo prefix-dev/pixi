@@ -251,7 +251,7 @@ mod tests {
 
     #[test]
     fn test_export_conda_env_yaml() {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        let path = Path::new(env!("CARGO_WORKSPACE_DIR"))
             .join("tests/data/mock-projects/test-project-export/pixi.toml");
         let workspace = Workspace::from_path(&path).unwrap();
         let args = Args {
@@ -278,7 +278,7 @@ mod tests {
 
     #[test]
     fn test_export_conda_env_yaml_with_pip_extras() {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/pypi/pixi.toml");
+        let path = Path::new(env!("CARGO_WORKSPACE_DIR")).join("examples/pypi/pixi.toml");
         let workspace = Workspace::from_path(&path).unwrap();
         let args = Args {
             output_path: None,
@@ -305,7 +305,7 @@ mod tests {
     #[test]
     fn test_export_conda_env_yaml_with_pip_source_editable() {
         let path =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/pypi-source-deps/pixi.toml");
+            Path::new(env!("CARGO_WORKSPACE_DIR")).join("examples/pypi-source-deps/pixi.toml");
         let workspace = Workspace::from_path(&path).unwrap();
         let args = Args {
             output_path: None,
@@ -332,7 +332,7 @@ mod tests {
     #[test]
     fn test_export_conda_env_yaml_with_pip_custom_registry() {
         let path =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/pypi-custom-registry/pixi.toml");
+            Path::new(env!("CARGO_WORKSPACE_DIR")).join("examples/pypi-custom-registry/pixi.toml");
         let workspace = match Workspace::from_path(&path) {
             Ok(workspace) => workspace,
             Err(err) => {
@@ -363,7 +363,7 @@ mod tests {
 
     #[test]
     fn test_export_conda_env_yaml_with_pip_find_links() {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/pypi-find-links/pixi.toml");
+        let path = Path::new(env!("CARGO_WORKSPACE_DIR")).join("examples/pypi-find-links/pixi.toml");
         let workspace = Workspace::from_path(&path).unwrap();
         let args = Args {
             output_path: None,
@@ -389,7 +389,7 @@ mod tests {
 
     #[test]
     fn test_export_conda_env_yaml_pyproject_panic() {
-        let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/docker/pyproject.toml");
+        let path = Path::new(env!("CARGO_WORKSPACE_DIR")).join("examples/docker/pyproject.toml");
         let workspace = Workspace::from_path(&path).unwrap();
         let args = Args {
             output_path: None,

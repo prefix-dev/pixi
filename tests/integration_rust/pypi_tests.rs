@@ -13,7 +13,7 @@ use std::fs::File;
 async fn test_flat_links_based_index_returns_path() {
     setup_tracing();
 
-    let pypi_indexes = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/pypi-indexes");
+    let pypi_indexes = Path::new(env!("CARGO_WORKSPACE_DIR")).join("tests/data/pypi-indexes");
     let pixi = PixiControl::from_manifest(&format!(
         r#"
         [project]
@@ -54,7 +54,7 @@ async fn test_flat_links_based_index_returns_path() {
 async fn test_file_based_index_returns_path() {
     setup_tracing();
 
-    let pypi_indexes = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/pypi-indexes");
+    let pypi_indexes = Path::new(env!("CARGO_WORKSPACE_DIR")).join("tests/data/pypi-indexes");
     let pypi_indexes_url = Url::from_directory_path(pypi_indexes.clone()).unwrap();
     let pixi = PixiControl::from_manifest(&format!(
         r#"
@@ -97,7 +97,7 @@ async fn test_file_based_index_returns_path() {
 async fn test_index_strategy() {
     setup_tracing();
 
-    let pypi_indexes = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/pypi-indexes");
+    let pypi_indexes = Path::new(env!("CARGO_WORKSPACE_DIR")).join("tests/data/pypi-indexes");
     let pypi_indexes_url = Url::from_directory_path(pypi_indexes.clone()).unwrap();
 
     let pixi = PixiControl::from_manifest(&format!(
@@ -180,7 +180,7 @@ async fn test_index_strategy() {
 async fn test_pinning_index() {
     setup_tracing();
 
-    let pypi_indexes = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/pypi-indexes");
+    let pypi_indexes = Path::new(env!("CARGO_WORKSPACE_DIR")).join("tests/data/pypi-indexes");
     let pypi_indexes_url = Url::from_directory_path(pypi_indexes.clone()).unwrap();
 
     let pixi = PixiControl::from_manifest(&format!(
@@ -308,7 +308,7 @@ async fn test_allow_insecure_host() {
 async fn test_indexes_are_passed_when_solving_build_pypi_dependencies() {
     setup_tracing();
 
-    let pypi_indexes = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/pypi-indexes");
+    let pypi_indexes = Path::new(env!("CARGO_WORKSPACE_DIR")).join("tests/data/pypi-indexes");
     let pypi_indexes_url = Url::from_directory_path(pypi_indexes.clone()).unwrap();
 
     let pixi = PixiControl::from_pyproject_manifest(&format!(
@@ -406,7 +406,7 @@ async fn test_cross_platform_resolve_with_no_build() {
         Platform::OsxArm64
     };
 
-    let pypi_indexes = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/pypi-indexes");
+    let pypi_indexes = Path::new(env!("CARGO_WORKSPACE_DIR")).join("tests/data/pypi-indexes");
     let pixi = PixiControl::from_manifest(&format!(
         r#"
         [project]

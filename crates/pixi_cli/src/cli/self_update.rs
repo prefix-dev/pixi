@@ -455,8 +455,7 @@ mod tests {
         // This archive contains a single file named "a_file"
         // So we expect the file to be extracted to the target directory
 
-        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let archive_path = manifest_dir
+        let archive_path = PathBuf::from(env!("CARGO_WORKSPACE_DIR"))
             .join("tests")
             .join("data")
             .join("archives")
@@ -481,8 +480,7 @@ mod tests {
         // │   └── some_pixi (file)
         // So we want to test that we can extract only the file to the target directory
         // without parent directory
-        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let archive_path = manifest_dir
+        let archive_path = PathBuf::from(env!("CARGO_WORKSPACE_DIR"))
             .join("tests")
             .join("data")
             .join("archives")
