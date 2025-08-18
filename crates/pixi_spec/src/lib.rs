@@ -26,7 +26,7 @@ use rattler_conda_types::{
 };
 pub use source_anchor::SourceAnchor;
 use thiserror::Error;
-pub use toml::{TomlSpec, TomlVersionSpecStr};
+pub use toml::{TomlLocationSpec, TomlSpec, TomlVersionSpecStr};
 pub use url::{UrlBinarySpec, UrlSourceSpec, UrlSpec};
 
 /// An error that is returned when a spec cannot be converted into another spec
@@ -378,11 +378,6 @@ impl Display for SourceSpec {
 }
 
 impl SourceSpec {
-    /// Returns true if this spec represents a git repository.
-    pub fn is_git(&self) -> bool {
-        matches!(self.location, SourceLocationSpec::Git(_))
-    }
-
     /// Convert this instance into a nameless match spec.
     pub fn to_nameless_match_spec(&self) -> NamelessMatchSpec {
         NamelessMatchSpec::default()
@@ -392,6 +387,13 @@ impl SourceSpec {
     pub fn to_toml_value(&self) -> toml_edit::Value {
         ::serde::Serialize::serialize(&self.location, toml_edit::ser::ValueSerializer::new())
             .expect("conversion to toml cannot fail")
+    }
+}
+
+impl SourceLocationSpec {
+    /// Returns true if this spec represents a git repository.
+    pub fn is_git(&self) -> bool {
+        matches!(self, SourceLocationSpec::Git(_))
     }
 }
 

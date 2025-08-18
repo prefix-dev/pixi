@@ -21,21 +21,25 @@ TomlPackageBuild {
                 version: Some(
                     Any,
                 ),
-                url: None,
-                git: None,
-                path: None,
-                branch: None,
-                rev: None,
-                tag: None,
-                subdirectory: None,
+                location: Some(
+                    TomlLocationSpec {
+                        url: None,
+                        git: None,
+                        path: None,
+                        branch: None,
+                        rev: None,
+                        tag: None,
+                        subdirectory: None,
+                        md5: None,
+                        sha256: None,
+                    },
+                ),
                 build: None,
                 build_number: None,
                 file_name: None,
                 channel: None,
                 subdir: None,
                 license: None,
-                md5: None,
-                sha256: None,
             },
         },
     },
@@ -45,6 +49,7 @@ TomlPackageBuild {
         name_spans: {},
         value_spans: {},
     },
+    source: None,
     configuration: Some(
         Map(
             {

@@ -8,7 +8,7 @@ expression: redacted_content
         exclude-newer = "2025-05-19"
 
         [pypi-dependencies]
-click = { version = ">=8.2.0, <9", index = "https://pypi.tuna.tsinghua.edu.cn/simple" }
+        click = { version = ">=8.2.0, <9", index = "https://pypi.tuna.tsinghua.edu.cn/simple" }
 
         [dependencies]
-python = ">=3.13.3,<3.14"
+        python = ">=3.13.3,<3.14"
