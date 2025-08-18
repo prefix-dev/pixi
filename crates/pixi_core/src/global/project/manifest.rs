@@ -42,19 +42,6 @@ pub struct Manifest {
 }
 
 impl Manifest {
-    /// Helper function to create properly quoted environment keys for TOML paths
-    fn env_key(&self, env_name: &EnvironmentName, subpath: Option<&str>) -> String {
-        let env_part = if env_name.as_str().contains('.') {
-            format!("\"{}\"", env_name.as_str())
-        } else {
-            env_name.as_str().to_string()
-        };
-        
-        match subpath {
-            Some(sub) => format!("envs.{}.{}", env_part, sub),
-            None => format!("envs.{}", env_part),
-        }
-    }
     /// Creates a new manifest from a path
     pub fn from_path(path: impl AsRef<Path>) -> miette::Result<Self> {
         let manifest_path = dunce::canonicalize(path.as_ref()).into_diagnostic()?;
@@ -111,10 +98,10 @@ impl Manifest {
         );
 
         // Update self.document
-        let env_key = self.env_key(env_name, None);
         let channels_array = self
             .document
-            .get_or_insert_toml_array_mut(&env_key, "channels")?;
+            .get_or_insert_toml_array_mut_from_keys(&["envs", env_name.as_str()], "channels")
+            .map_err(|e| miette::miette!("Failed to get channels array: {}", e))?;
         for channel in channels {
             channels_array.push(channel.as_str());
         }
@@ -169,8 +156,8 @@ impl Manifest {
             .insert(name.clone(), spec.clone());
 
         // Update self.document
-        self.document.insert_into_inline_table(
-            &self.env_key(env_name, Some("dependencies")),
+        self.document.insert_into_inline_table_from_keys(
+            &["envs", env_name.as_str(), "dependencies"],
             name.as_normalized(),
             spec.to_toml_value(),
         )?;
@@ -208,7 +195,7 @@ impl Manifest {
 
         // Update self.document
         self.document
-            .get_or_insert_nested_table(&self.env_key(env_name, Some("dependencies")))?
+            .get_or_insert_nested_table_from_keys(&["envs", env_name.as_str(), "dependencies"])?
             .remove(name.as_normalized());
 
         tracing::debug!(
@@ -242,7 +229,7 @@ impl Manifest {
 
         // Update self.document
         self.document
-            .get_or_insert_nested_table(&self.env_key(env_name, None))?
+            .get_or_insert_nested_table_from_keys(&["envs", env_name.as_str()])?
             .insert(
                 "platform",
                 Item::Value(toml_edit::Value::from(platform.to_string())),
@@ -280,7 +267,7 @@ impl Manifest {
         // Update self.document
         let channels_array = self
             .document
-            .get_or_insert_nested_table(&self.env_key(env_name, None))?
+            .get_or_insert_nested_table_from_keys(&["envs", env_name.as_str()])?
             .entry("channels")
             .or_insert_with(|| toml_edit::Item::Value(toml_edit::Value::Array(Default::default())))
             .as_array_mut()
@@ -362,8 +349,8 @@ impl Manifest {
             .insert(mapping.clone());
 
         // Update self.document
-        self.document.insert_into_inline_table(
-            &self.env_key(env_name, Some("exposed")),
+        self.document.insert_into_inline_table_from_keys(
+            &["envs", env_name.as_str(), "exposed"],
             mapping.exposed_name.as_ref(),
             toml_edit::Value::from(mapping.executable_relname.clone()),
         )?;
@@ -395,7 +382,7 @@ impl Manifest {
 
         // Remove from the document
         self.document
-            .get_or_insert_nested_table(&self.env_key(env_name, Some("exposed")))?
+            .get_or_insert_nested_table_from_keys(&["envs", env_name.as_str(), "exposed"])?
             .remove(exposed_name.as_ref())
             .ok_or_else(|| miette::miette!("The exposed name {exposed_name} doesn't exist"))?;
 
@@ -418,7 +405,7 @@ impl Manifest {
 
         // Update self.document
         self.document
-            .get_or_insert_nested_table(&self.env_key(env_name, None))?
+            .get_or_insert_nested_table_from_keys(&["envs", env_name.as_str()])?
             .remove("exposed");
 
         tracing::debug!(
@@ -474,7 +461,7 @@ impl Manifest {
         // Update self.document
         let shortcuts_array = self
             .document
-            .get_or_insert_nested_table(&self.env_key(env_name, None))?
+            .get_or_insert_nested_table_from_keys(&["envs", env_name.as_str()])?
             .entry("shortcuts")
             .or_insert_with(|| toml_edit::Item::Value(toml_edit::Value::Array(Default::default())))
             .as_array_mut()
@@ -530,10 +517,9 @@ impl Manifest {
         }
 
         // Remove from the document
-        let env_key = self.env_key(env_name, None);
         let shortcuts_array = self
             .document
-            .get_mut_toml_array(&env_key, "shortcuts")?
+            .get_mut_toml_array_from_keys(&["envs", env_name.as_str()], "shortcuts")?
             .ok_or_else(|| miette::miette!("No shortcuts found for environment {}", env_name))?;
 
         let shortcut_str = shortcut.as_normalized();
@@ -717,7 +703,7 @@ mod tests {
         // Check document
         let actual_value = manifest
             .document
-            .get_or_insert_nested_table(&manifest.env_key(&env_name, Some("exposed")))
+            .get_or_insert_nested_table_from_keys(&["envs", env_name.as_str(), "exposed"])
             .unwrap()
             .get(exposed_name.as_ref())
             .unwrap()
@@ -760,7 +746,7 @@ mod tests {
         let expected_value1 = "test_executable1";
         let actual_value1 = manifest
             .document
-            .get_or_insert_nested_table(&manifest.env_key(&env_name, Some("exposed")))
+            .get_or_insert_nested_table_from_keys(&["envs", env_name.as_str(), "exposed"])
             .unwrap()
             .get(exposed_name1.as_ref())
             .unwrap()
@@ -785,7 +771,7 @@ mod tests {
         let expected_value2 = "nested/test_executable2";
         let actual_value2 = manifest
             .document
-            .get_or_insert_nested_table(&manifest.env_key(&env_name, Some("exposed")))
+            .get_or_insert_nested_table_from_keys(&["envs", env_name.as_str(), "exposed"])
             .unwrap()
             .get(exposed_name2.as_ref())
             .unwrap()
@@ -827,7 +813,7 @@ mod tests {
         // Check document
         let actual_value = manifest
             .document
-            .get_or_insert_nested_table(&manifest.env_key(&env_name, Some("exposed")))
+            .get_or_insert_nested_table_from_keys(&["envs", env_name.as_str(), "exposed"])
             .unwrap()
             .get(exposed_name.as_ref());
         assert!(actual_value.is_none());
@@ -986,7 +972,7 @@ mod tests {
         // Check document
         let actual_value = manifest
             .document
-            .get_or_insert_nested_table(&manifest.env_key(&env_name, Some("dependencies")))
+            .get_or_insert_nested_table_from_keys(&["envs", env_name.as_str(), "dependencies"])
             .unwrap()
             .get(named_global_spec.name().as_normalized());
         assert!(actual_value.is_some());
@@ -1049,7 +1035,7 @@ mod tests {
         let name = spec.name();
         let actual_value = manifest
             .document
-            .get_or_insert_nested_table(&manifest.env_key(&env_name, Some("dependencies")))
+            .get_or_insert_nested_table_from_keys(&["envs", env_name.as_str(), "dependencies"])
             .unwrap()
             .get(name.as_normalized());
         assert!(actual_value.is_some());
@@ -1090,7 +1076,7 @@ mod tests {
         // Check document
         let actual_platform = manifest
             .document
-            .get_or_insert_nested_table(&format!("envs.{env_name}"))
+            .get_or_insert_nested_table_from_keys(&["envs", env_name.as_str()])
             .unwrap()
             .get("platform")
             .unwrap();
@@ -1124,7 +1110,7 @@ mod tests {
         // Check document
         let actual_channels = manifest
             .document
-            .get_or_insert_nested_table(&format!("envs.{env_name}"))
+            .get_or_insert_nested_table_from_keys(&["envs", env_name.as_str()])
             .unwrap()
             .get("channels")
             .unwrap()
@@ -1194,11 +1180,7 @@ dependencies = { "python" = "*", pytest = "*"}
         let env_name = EnvironmentName::from_str("sdl.example").unwrap();
         let channels = vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()];
 
-        let mut manifest = Manifest::from_str(
-            Path::new("global.toml"),
-            r#"version = 1"#,
-        )
-        .unwrap();
+        let mut manifest = Manifest::from_str(Path::new("global.toml"), r#"version = 1"#).unwrap();
 
         // Add environment with dots in name
         manifest.add_environment(&env_name, Some(channels)).unwrap();

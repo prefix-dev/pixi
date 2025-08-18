@@ -69,10 +69,16 @@ impl TomlDocument {
         table_name: &str,
     ) -> Result<&'a mut dyn TableLike, TomlError> {
         let parts: Vec<&str> = table_name.split('.').collect();
+        self.get_or_insert_nested_table_from_keys(&parts)
+    }
 
+    pub fn get_or_insert_nested_table_from_keys<'a>(
+        &'a mut self,
+        keys: &[&str],
+    ) -> Result<&'a mut dyn TableLike, TomlError> {
         let mut current_table = self.0.as_table_mut() as &mut dyn TableLike;
 
-        for part in parts {
+        for part in keys {
             let entry = current_table.entry(part);
             let item = entry.or_insert(Item::Table(Table::new()));
             if let Some(table) = item.as_table_mut() {
@@ -81,9 +87,44 @@ impl TomlDocument {
             }
             current_table = item
                 .as_table_like_mut()
-                .ok_or_else(|| TomlError::table_error(part, table_name))?;
+                .ok_or_else(|| TomlError::table_error(part, &keys.join(".")))?;
         }
         Ok(current_table)
+    }
+
+    pub fn get_or_insert_toml_array_mut_from_keys<'a>(
+        &'a mut self,
+        keys: &[&str],
+        array_name: &str,
+    ) -> Result<&'a mut Array, TomlError> {
+        self.get_or_insert_nested_table_from_keys(keys)?
+            .entry(array_name)
+            .or_insert(Item::Value(Value::Array(Array::new())))
+            .as_array_mut()
+            .ok_or_else(|| TomlError::array_error(array_name, &keys.join(".")))
+    }
+
+    pub fn insert_into_inline_table_from_keys<'a>(
+        &'a mut self,
+        keys: &[&str],
+        key: &str,
+        value: Value,
+    ) -> Result<&'a mut dyn TableLike, TomlError> {
+        let table = self.get_or_insert_nested_table_from_keys(keys)?;
+        
+        // Insert the value into the table
+        table.insert(key, Item::Value(value));
+        
+        Ok(table)
+    }
+
+    pub fn get_mut_toml_array_from_keys<'a>(
+        &'a mut self,
+        keys: &[&str],
+        array_name: &str,
+    ) -> Result<Option<&'a mut Array>, TomlError> {
+        let table = self.get_or_insert_nested_table_from_keys(keys)?;
+        Ok(table.get_mut(array_name).and_then(|item| item.as_array_mut()))
     }
 
     /// Inserts a value into a certain table
