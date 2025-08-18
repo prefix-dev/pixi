@@ -147,12 +147,16 @@ impl JsonRpcBackend {
     pub async fn setup(
         source_dir: PathBuf,
         manifest_path: PathBuf,
+        workspace_root: PathBuf,
         package_manifest: Option<ProjectModelV1>,
         configuration: Option<serde_json::Value>,
         target_configuration: Option<OrderMap<TargetSelectorV1, serde_json::Value>>,
         cache_dir: Option<PathBuf>,
         tool: Tool,
     ) -> Result<Self, InitializeError> {
+        debug_assert!(source_dir.is_absolute());
+        debug_assert!(manifest_path.is_absolute());
+        debug_assert!(workspace_root.is_absolute());
         // Spawn the tool and capture stdin/stdout.
         let command = tool.command();
         let program_name = command.get_program().to_string_lossy().into_owned();
@@ -193,6 +197,7 @@ impl JsonRpcBackend {
             tool.version().cloned(),
             source_dir,
             manifest_path,
+            workspace_root,
             package_manifest,
             configuration,
             target_configuration,
@@ -211,6 +216,7 @@ impl JsonRpcBackend {
         backend_version: Option<VersionWithSource>,
         source_dir: PathBuf,
         manifest_path: PathBuf,
+        workspace_root: PathBuf,
         project_model: Option<ProjectModelV1>,
         configuration: Option<serde_json::Value>,
         target_configuration: Option<OrderMap<TargetSelectorV1, serde_json::Value>>,
@@ -253,6 +259,7 @@ impl JsonRpcBackend {
                     target_configuration,
                     manifest_path: manifest_path.clone(),
                     source_dir: Some(source_dir),
+                    workspace_root: Some(workspace_root),
                     cache_directory: cache_dir,
                 }),
             )

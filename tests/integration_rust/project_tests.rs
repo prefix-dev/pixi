@@ -3,8 +3,8 @@ use std::path::PathBuf;
 
 use crate::common::{PixiControl, package_database::PackageDatabase};
 use insta::assert_debug_snapshot;
-use pixi::Workspace;
 use pixi_config::Config;
+use pixi_core::Workspace;
 use pixi_manifest::FeaturesExt;
 use rattler_conda_types::{NamedChannelOrUrl, Platform};
 use tempfile::TempDir;

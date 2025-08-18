@@ -2,8 +2,10 @@ pub mod add;
 pub mod list;
 pub mod remove;
 
-use crate::{WorkspaceLocator, cli::cli_config::WorkspaceConfig};
 use clap::Parser;
+use pixi_core::WorkspaceLocator;
+
+use crate::cli::cli_config::WorkspaceConfig;
 
 /// Commands to manage project environments.
 #[derive(Parser, Debug)]

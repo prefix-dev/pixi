@@ -34,6 +34,7 @@ channels = [
   "https://prefix.dev/conda-forge",
 ]
 name = "pixi-build-python"
+source = { path = "my_project" }
 version = "0.1.*"
 
 [tool.pixi-build-python]

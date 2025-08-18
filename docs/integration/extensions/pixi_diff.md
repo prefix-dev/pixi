@@ -4,13 +4,13 @@
 It can happen that you want to know what changed in your lockfile after repeatedly adding and removing dependencies within a pull request.
 For this, you can use [pavelzw/pixi-diff](https://github.com/pavelzw/pixi-diff) to calculate the differences between two lockfiles.
 This can be leveraged in combination with [pavelzw/pixi-diff-to-markdown](https://github.com/pavelzw/pixi-diff-to-markdown) to generate a markdown file that shows the diff in a human-readable format.
-With [henriklovhaug/md-tui](https://github.com/henriklovhaug/md-tui), you can even render the markdown file in the terminal.
+With [charmbracelet/glow](https://github.com/charmbracelet/glow), you can even render the markdown file in the terminal.
 
 !!!tip "Install the tools globally"
     All of the above-mentioned tools are available on conda-forge and can be installed using [`pixi global install`](../../global_tools/introduction.md).
 
     ```bash
-    pixi global install pixi-diff pixi-diff-to-markdown md-tui
+    pixi global install pixi-diff pixi-diff-to-markdown glow-md
     ```
 
 `pixi diff --before pixi.lock.old --after pixi.lock.new` will output a JSON object that contains the differences between the two lockfiles similar to [`pixi update --json`](../../reference/cli/pixi/update.md).
@@ -67,14 +67,14 @@ pixi diff <(git show HEAD~20:pixi.lock) pixi.lock | pixi diff-to-markdown > diff
 !!!tip "pixi-diff-to-markdown in GitHub Actions updates"
     For other usages of [`pixi-diff-to-markdown`](https://github.com/pavelzw/pixi-diff-to-markdown), see also our page about [updating lockfiles using GitHub Actions](../ci/updates_github_actions.md).
 
-You can view this generated markdown file in your terminal using [`md-tui`](https://github.com/henriklovhaug/md-tui).
+You can view this generated markdown file in your terminal using [`glow`](https://github.com/charmbracelet/glow).
 
 ```bash
-mdt diff.md
+glow diff.md --tui
 ```
 
-You can also view the markdown file directly from stdin using [`md-tui`](https://github.com/henriklovhaug/md-tui).
+You can also view the markdown file directly from stdin using [`glow`](https://github.com/charmbracelet/glow).
 
 ```bash
-pixi diff <(git show HEAD~20:pixi.lock) pixi.lock | pixi diff-to-markdown | mdt
+pixi diff <(git show HEAD~20:pixi.lock) pixi.lock | pixi diff-to-markdown | glow --tui
 ```

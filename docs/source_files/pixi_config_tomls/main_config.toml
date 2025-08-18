@@ -34,7 +34,7 @@ tool-platform = "win-64" # force tools like build backends to be installed for a
 # This should only be used for specific old versions of artifactory and other non-compliant
 # servers.
 disable-bzip2 = true   # don't try to download repodata.json.bz2
-disable-jlap = true    # don't try to download repodata.jlap
+disable-jlap = true    # don't try to download repodata.jlap [default: true]
 disable-sharded = true # don't try to download sharded repodata
 disable-zstd = true    # don't try to download repodata.json.zst
 # --8<-- [end:repodata-config]
@@ -95,6 +95,13 @@ use-environment-activation-cache = true
   "https://prefix.dev/bioconda",
 ]
 #  --8<-- [end:mirrors]
+
+#  --8<-- [start:proxy-config]
+[proxy-config]
+http = "http://proxy.example.com:8080/"
+https = "http://proxy.example.com:8080/"
+non-proxy-hosts = [".cn", "localhost", "[::1]"]
+#  --8<-- [end:proxy-config]
 
 # --8<-- [start:shell]
 [shell]

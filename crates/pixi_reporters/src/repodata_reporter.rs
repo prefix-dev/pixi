@@ -7,6 +7,7 @@ use std::{
 use indicatif::{MultiProgress, ProgressBar, ProgressState, ProgressStyle, style::ProgressTracker};
 use parking_lot::RwLock;
 use pixi_progress::ProgressBarPlacement;
+use rattler_repodata_gateway::{DownloadReporter, JLAPReporter};
 use url::Url;
 
 #[derive(Clone)]
@@ -15,22 +16,13 @@ pub struct RepodataReporter {
 }
 
 impl rattler_repodata_gateway::Reporter for RepodataReporter {
-    fn on_download_start(&self, url: &Url) -> usize {
-        self.inner.write().on_download_start(url)
+    fn download_reporter(&self) -> Option<&dyn DownloadReporter> {
+        Some(self)
     }
-    fn on_download_progress(
-        &self,
-        url: &Url,
-        index: usize,
-        bytes_downloaded: usize,
-        total_bytes: Option<usize>,
-    ) {
-        self.inner
-            .write()
-            .on_download_progress(url, index, bytes_downloaded, total_bytes);
-    }
-    fn on_download_complete(&self, url: &Url, index: usize) {
-        self.inner.write().on_download_complete(url, index);
+
+    fn jlap_reporter(&self) -> Option<&dyn JLAPReporter> {
+        // TODO: Implement JLAPReporter for RepodataReporter in the future
+        None
     }
 }
 
@@ -248,5 +240,28 @@ impl ProgressTracker for DurationTracker {
             )
             .unwrap();
         }
+    }
+}
+
+impl DownloadReporter for RepodataReporter {
+    fn on_download_complete(&self, url: &Url, index: usize) {
+        let mut inner = self.inner.write();
+        inner.on_download_complete(url, index);
+    }
+
+    fn on_download_progress(
+        &self,
+        url: &Url,
+        index: usize,
+        bytes_downloaded: usize,
+        total_bytes: Option<usize>,
+    ) {
+        let mut inner = self.inner.write();
+        inner.on_download_progress(url, index, bytes_downloaded, total_bytes);
+    }
+
+    fn on_download_start(&self, url: &Url) -> usize {
+        let mut inner = self.inner.write();
+        inner.on_download_start(url)
     }
 }

@@ -18,18 +18,18 @@ use thiserror::Error;
 use tokio_util::sync::CancellationToken;
 use tracing::Level;
 
-use super::cli_config::LockFileUpdateConfig;
-use crate::{
+use pixi_core::{
     Workspace, WorkspaceLocator,
-    cli::cli_config::{PrefixUpdateConfig, WorkspaceConfig},
     environment::sanity_check_workspace,
-    lock_file::{ReinstallPackages, UpdateLockFileOptions},
+    lock_file::{ReinstallPackages, UpdateLockFileOptions, UpdateMode},
     task::{
         AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
         SearchEnvironments, TaskAndEnvironment, TaskGraph, get_task_env,
     },
     workspace::{Environment, errors::UnsupportedPlatformError},
 };
+
+use crate::cli::cli_config::{LockAndInstallConfig, WorkspaceConfig};
 
 /// Runs task in the pixi environment.
 ///
@@ -50,10 +50,7 @@ pub struct Args {
     pub workspace_config: WorkspaceConfig,
 
     #[clap(flatten)]
-    pub prefix_update_config: PrefixUpdateConfig,
-
-    #[clap(flatten)]
-    pub lock_file_update_config: LockFileUpdateConfig,
+    pub lock_and_install_config: LockAndInstallConfig,
 
     #[clap(flatten)]
     pub config: ConfigCli,
@@ -126,11 +123,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Ensure that the lock-file is up-to-date.
     let lock_file = workspace
         .update_lock_file(UpdateLockFileOptions {
-            lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
+            lock_file_usage: args.lock_and_install_config.lock_file_usage()?,
+            no_install: args.lock_and_install_config.no_install(),
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
-            ..UpdateLockFileOptions::default()
         })
-        .await?;
+        .await?
+        .0;
 
     // Spawn a task that listens for ctrl+c and resets the cursor.
     tokio::spawn(async {
@@ -253,15 +251,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let task_env: &_ = match task_envs.entry(executable_task.run_environment.clone()) {
             Entry::Occupied(env) => env.into_mut(),
             Entry::Vacant(entry) => {
-                // Ensure there is a valid prefix
-                lock_file
-                    .prefix(
-                        &executable_task.run_environment,
-                        args.prefix_update_config.update_mode(),
-                        &ReinstallPackages::default(),
-                        &[],
-                    )
-                    .await?;
+                // Check if we allow installs
+                if args.lock_and_install_config.allow_installs() {
+                    // Ensure there is a valid prefix
+                    lock_file
+                        .prefix(
+                            &executable_task.run_environment,
+                            UpdateMode::QuickValidate,
+                            &ReinstallPackages::default(),
+                            &[],
+                        )
+                        .await?;
+                }
 
                 // Clear the current progress reports.
                 lock_file.command_dispatcher.clear_reporter().await;
@@ -373,7 +374,7 @@ async fn execute_task(
     command_env: &HashMap<OsString, OsString>,
     kill_signal: KillSignal,
 ) -> Result<(), TaskExecutionError> {
-    let Some(script) = task.as_deno_script(command_env)? else {
+    let Some(script) = task.as_deno_script()? else {
         return Ok(());
     };
     let cwd = task.working_directory()?;
@@ -499,7 +500,7 @@ async fn listen_ctrl_c(kill_signal: KillSignal) {
 async fn listen_and_forward_all_signals(kill_signal: KillSignal) {
     use futures::FutureExt;
 
-    use crate::signals::SIGNALS;
+    use pixi_core::signals::SIGNALS;
 
     // listen and forward every signal we support
     let mut futures = Vec::with_capacity(SIGNALS.len());

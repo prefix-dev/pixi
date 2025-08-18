@@ -1,11 +1,10 @@
 use crate::cli::global::global_specs::GlobalSpecs;
 use crate::cli::global::revert_environment_after_error;
 
-use crate::global::project::NamedGlobalSpec;
-use crate::global::{EnvironmentName, Mapping, Project, StateChanges};
 use clap::Parser;
-use itertools::Itertools;
 use pixi_config::{Config, ConfigCli};
+use pixi_core::global::project::GlobalSpec;
+use pixi_core::global::{EnvironmentName, Mapping, Project, StateChange, StateChanges};
 
 /// Adds dependencies to an environment
 ///
@@ -49,7 +48,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     async fn apply_changes(
         env_name: &EnvironmentName,
-        specs: &[NamedGlobalSpec],
+        specs: &[GlobalSpec],
         expose: &[Mapping],
         project: &mut Project,
     ) -> miette::Result<StateChanges> {
@@ -66,12 +65,34 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
 
         // Sync environment
-        state_changes |= project.sync_environment(env_name, None).await?;
+        let sync_changes = project.sync_environment(env_name, None).await?;
 
-        // Figure out added packages and their corresponding versions
-        state_changes |= project
-            .added_packages(specs, env_name, project.global_channel_config())
-            .await?;
+        // Figure out added packages and their corresponding versions from EnvironmentUpdate
+        let requested_package_names: Vec<_> =
+            specs.iter().map(|spec| spec.name().clone()).collect();
+
+        // Extract EnvironmentUpdate from sync changes if present
+        if let Some(changes_for_env) = sync_changes.changes_for_env(env_name) {
+            for change in changes_for_env {
+                if let StateChange::UpdatedEnvironment(environment_update) = change {
+                    let user_requested_changes =
+                        environment_update.user_requested_changes(&requested_package_names);
+
+                    // Convert to StateChange::AddedPackage for packages that were installed or upgraded
+                    state_changes
+                        .add_packages_from_install_changes(
+                            env_name,
+                            user_requested_changes,
+                            project,
+                        )
+                        .await?;
+                    break;
+                }
+            }
+        }
+
+        // Add the sync changes
+        state_changes |= sync_changes;
 
         state_changes |= project.sync_completions(env_name).await?;
 
@@ -80,23 +101,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         Ok(state_changes)
     }
 
-    let mut project_modified = project_original.clone();
-
-    let (specs, source): (Vec<_>, Vec<_>) = args
+    let specs = args
         .packages
-        .to_global_specs(project_original.global_channel_config())?
-        .into_iter()
-        // TODO: will allow nameless specs later
-        .filter_map(|s| s.into_named())
-        // TODO: Filter out non-binary specs, we are adding support for them later
-        .partition(|s| s.spec().is_binary());
+        .to_global_specs(
+            project_original.global_channel_config(),
+            &project_original.root,
+            &project_original,
+        )
+        .await?;
 
-    if !source.is_empty() {
-        tracing::warn!(
-            "Ignoring found source packages {}. Implementation will be added soon.",
-            source.iter().map(|s| s.name().as_source()).join(", ")
-        );
-    }
+    let mut project_modified = project_original.clone();
 
     match apply_changes(
         &args.environment,

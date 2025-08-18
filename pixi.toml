@@ -38,7 +38,7 @@ test-all-extra-slow = { depends-on = [
 test-all-fast = { depends-on = ["test-fast", "test-integration-fast"] }
 test-all-slow = { depends-on = ["test-slow", "test-integration-slow"] }
 test-fast = "cargo nextest run --workspace --all-targets"
-test-slow = """cargo nextest run --workspace --all-targets --features slow_integration_tests
+test-slow = """cargo nextest run --workspace --all-targets --features slow_integration_tests,online_tests
               --status-level skip --failure-output immediate-final --no-fail-fast --final-status-level slow"""
 
 [feature.pytest.dependencies]

@@ -1,5 +1,7 @@
 use crate::common::PixiControl;
-use pixi::{activation::CurrentEnvVarBehavior, workspace::get_activated_environment_variables};
+use pixi_core::{
+    activation::CurrentEnvVarBehavior, workspace::get_activated_environment_variables,
+};
 
 #[cfg(windows)]
 const HOME: &str = "HOMEPATH";

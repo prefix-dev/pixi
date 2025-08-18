@@ -325,20 +325,27 @@ Dependencies = dict[CondaPackageName, MatchSpec] | None
 # Task section #
 ################
 TaskName = Annotated[str, Field(pattern=r"^[^\s\$]+$", description="A valid task name.")]
+TaskArgName = Annotated[
+    str, Field(pattern=r"^[a-zA-Z_][a-zA-Z\d_]*$", description="A valid task argument name")
+]
+TaskArgInlineTable = Annotated[
+    dict[TaskArgName, str],
+    Field(min_length=1, max_length=1, description="A single item task name/value object"),
+]
 
 
 class TaskArgs(StrictBaseModel):
     """The arguments of a task."""
 
-    arg: NonEmptyStr
+    arg: TaskArgName = Field(description="The name of the argument")
     default: str | None = Field(None, description="The default value of the argument")
 
 
 class DependsOn(StrictBaseModel):
     """The dependencies of a task."""
 
-    task: TaskName
-    args: list[NonEmptyStr, dict[NonEmptyStr, NonEmptyStr]] | None = Field(
+    task: TaskName = Field(description="the name of the task to depend on")
+    args: list[str | TaskArgInlineTable] | None = Field(
         None, description="The (positional or named) arguments to pass to the task"
     )
     environment: EnvironmentName | None = Field(
@@ -386,10 +393,13 @@ class TaskInlineTable(StrictBaseModel):
         None,
         description="Whether to run in a clean environment, removing all environment variables except those defined in `env` and by pixi itself.",
     )
-    args: list[TaskArgs | NonEmptyStr] | None = Field(
+    args: list[TaskArgs | TaskArgName] | None = Field(
         None,
-        description="The arguments to pass to the task",
-        examples=["arg1", "arg2"],
+        description="The arguments to a task",
+        examples=[
+            ["arg1", "arg2"],
+            ["arg", {"arg": "arg2", "default": "2"}],
+        ],
     )
 
 
@@ -693,6 +703,23 @@ class BuildTarget(StrictBaseModel):
     )
 
 
+class SourceLocation(StrictBaseModel):
+    """The location of a package's source code."""
+
+    path: NonEmptyStr | None = Field(None, description="The path to the source")
+
+    # TODO: url and git source
+    # url: NonEmptyStr | None = Field(None, description="The URL to the source")
+    # md5: Md5Sum | None = Field(None, description="The md5 hash of the source")
+    # sha256: Sha256Sum | None = Field(None, description="The sha256 hash of the source")
+
+    # git: NonEmptyStr | None = Field(None, description="The git URL to the source repo")
+    # rev: NonEmptyStr | None = Field(None, description="A git SHA revision to use")
+    # tag: NonEmptyStr | None = Field(None, description="A git tag to use")
+    # branch: NonEmptyStr | None = Field(None, description="A git branch to use")
+    # subdirectory: NonEmptyStr | None = Field(None, description="A subdirectory to use in the repo")
+
+
 class Build(StrictBaseModel):
     backend: BuildBackend = Field(..., description="The build backend to instantiate")
     channels: list[Channel] = Field(
@@ -705,6 +732,11 @@ class Build(StrictBaseModel):
         None,
         description="Target-specific build configuration for different platforms",
         examples=[{"linux-64": {"configuration": {"key": "value"}}}],
+    )
+    source: SourceLocation = Field(
+        None,
+        description="The source from which to build the package",
+        examples=[{"path": "project"}],
     )
 
 

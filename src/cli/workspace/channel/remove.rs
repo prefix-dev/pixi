@@ -1,9 +1,9 @@
-use crate::lock_file::{ReinstallPackages, UpdateMode};
-use crate::{
-    UpdateLockFileOptions, WorkspaceLocator,
-    environment::{LockFileUsage, get_update_lock_file_and_prefix},
-};
 use miette::IntoDiagnostic;
+use pixi_core::{
+    UpdateLockFileOptions, WorkspaceLocator,
+    environment::get_update_lock_file_and_prefix,
+    lock_file::{ReinstallPackages, UpdateMode},
+};
 
 use super::AddRemoveArgs;
 
@@ -24,9 +24,8 @@ pub async fn execute(args: AddRemoveArgs) -> miette::Result<()> {
         &workspace.workspace().default_environment(),
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
-            lock_file_usage: LockFileUsage::Update,
-            no_install: args.prefix_update_config.no_install
-                && args.lock_file_update_config.no_lockfile_update,
+            lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
+            no_install: args.no_install_config.no_install,
             max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
         },
         ReinstallPackages::default(),

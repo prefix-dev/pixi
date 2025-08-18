@@ -11,6 +11,7 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, Report};
 use pixi_config::{Config, default_channel_config};
+use pixi_core::{WorkspaceLocator, workspace::WorkspaceLocatorError};
 use pixi_progress::await_in_progress;
 use pixi_utils::reqwest::build_reqwest_clients;
 use rattler_conda_types::{MatchSpec, PackageName, ParseStrictness, Platform, RepoDataRecord};
@@ -21,8 +22,8 @@ use strsim::jaro;
 use tracing::{debug, error};
 use url::Url;
 
-use super::cli_config::ChannelsConfig;
-use crate::{WorkspaceLocator, cli::cli_config::WorkspaceConfig, workspace::WorkspaceLocatorError};
+use crate::cli::cli_config::ChannelsConfig;
+use crate::cli::cli_config::WorkspaceConfig;
 
 /// Search a conda package
 ///

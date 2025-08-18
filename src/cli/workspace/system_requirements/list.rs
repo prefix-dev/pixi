@@ -1,8 +1,8 @@
-use crate::Workspace;
-use crate::workspace::Environment;
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use miette::IntoDiagnostic;
+use pixi_core::Workspace;
+use pixi_core::workspace::Environment;
 use pixi_manifest::{EnvironmentName, SystemRequirements};
 use serde::Serialize;
 

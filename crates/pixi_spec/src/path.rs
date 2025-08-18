@@ -78,19 +78,55 @@ impl Display for PathSpec {
     }
 }
 
+// TODO: Contribute `impl FromStr for Utf8TypedPathBuf` to typed-path
+// to continue using `serde_as` and remove manual implementations of
+// serialization and deserialization below. See git blame history
+// right before this line was added.
+
 /// Path to a source package. Different from [`PathSpec`] in that this type only
 /// refers to source packages.
-#[serde_as]
-#[derive(Debug, Clone, Hash, Eq, PartialEq, serde::Serialize)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct PathSourceSpec {
     /// The path to the package. Either a directory or an archive.
-    #[serde_as(as = "serde_with::DisplayFromStr")]
     pub path: Utf8TypedPathBuf,
 }
 
 impl Display for PathSourceSpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.path)
+    }
+}
+
+impl serde::Serialize for PathSourceSpec {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        #[derive(serde::Serialize)]
+        struct Raw {
+            path: String,
+        }
+
+        Raw {
+            path: self.path.to_string(),
+        }
+        .serialize(serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for PathSourceSpec {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(serde::Deserialize)]
+        struct Raw {
+            path: String,
+        }
+
+        Raw::deserialize(deserializer).map(|raw| PathSourceSpec {
+            path: raw.path.into(),
+        })
     }
 }
 

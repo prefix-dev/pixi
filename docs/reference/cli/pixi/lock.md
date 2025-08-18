@@ -17,6 +17,10 @@ pixi lock [OPTIONS]
 - <a id="arg---check" href="#arg---check">`--check`</a>
 :  Check if any changes have been made to the lock file. If yes, exit with a non-zero code
 
+## Update Options
+- <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
+:  Don't modify the environment, only modify the lock-file
+
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
 :  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
