@@ -55,14 +55,14 @@ impl<'a> TableName<'a> {
 }
 
 impl TableName<'_> {
-    /// Returns the table name parts as a vector of string references.
+    /// Returns the table name keys as a vector of string references.
     /// This is the primary implementation that other methods build upon.
-    pub fn as_parts(&self) -> Vec<&str> {
-        let mut parts = Vec::new();
+    pub fn as_keys(&self) -> Vec<&str> {
+        let mut keys = Vec::new();
 
         if let Some(prefix) = self.prefix {
             // Split the prefix on dots to handle cases like "tool.pixi"
-            parts.extend(prefix.split('.'));
+            keys.extend(prefix.split('.'));
         }
 
         if self
@@ -70,8 +70,8 @@ impl TableName<'_> {
             .as_ref()
             .is_some_and(|feature_name| !feature_name.is_default())
         {
-            parts.push("feature");
-            parts.push(
+            keys.push("feature");
+            keys.push(
                 self.feature_name
                     .as_ref()
                     .expect("we already verified")
@@ -79,13 +79,13 @@ impl TableName<'_> {
             );
         }
         if let Some(platform) = self.platform {
-            parts.push("target");
-            parts.push(platform.as_str());
+            keys.push("target");
+            keys.push(platform.as_str());
         }
         if let Some(table) = self.table {
-            parts.push(table);
+            keys.push(table);
         }
-        parts
+        keys
     }
 
     /// Returns the name of the table in dotted form (e.g.
@@ -95,7 +95,7 @@ impl TableName<'_> {
     /// - the platform if it is not `None`
     /// - the name of a nested TOML table if it is not `None`
     fn to_toml_table_name(&self) -> String {
-        self.as_parts().join(".")
+        self.as_keys().join(".")
     }
 }
 

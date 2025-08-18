@@ -223,7 +223,7 @@ impl ManifestDocument {
             .with_table(table);
 
         self.manifest_mut()
-            .get_or_insert_toml_array_mut(&table_name.as_parts(), array_name)
+            .get_or_insert_toml_array_mut(&table_name.as_keys(), array_name)
     }
 
     fn as_table_mut(&mut self) -> &mut Table {
@@ -267,7 +267,7 @@ impl ManifestDocument {
             .with_table(Some(consts::PYPI_DEPENDENCIES));
 
         self.manifest_mut()
-            .get_or_insert_nested_table(&table_name.as_parts())
+            .get_or_insert_nested_table(&table_name.as_keys())
             .map(|t| t.remove(dep.as_source()))?;
         Ok(())
     }
@@ -319,7 +319,7 @@ impl ManifestDocument {
             .with_table(Some(spec_type.name()));
 
         self.manifest_mut()
-            .get_or_insert_nested_table(&table_name.as_parts())
+            .get_or_insert_nested_table(&table_name.as_keys())
             .map(|t| t.remove(dep.as_source()))?;
         Ok(())
     }
@@ -342,7 +342,7 @@ impl ManifestDocument {
             .with_table(Some(spec_type.name()));
 
         self.manifest_mut()
-            .get_or_insert_nested_table(&dependency_table.as_parts())
+            .get_or_insert_nested_table(&dependency_table.as_keys())
             .map(|t| {
                 let mut new_value = spec.to_toml_value();
 
@@ -410,7 +410,7 @@ impl ManifestDocument {
 
             let table = self
                 .manifest_mut()
-                .get_or_insert_nested_table(&dependency_table_name.as_parts())?;
+                .get_or_insert_nested_table(&dependency_table_name.as_keys())?;
 
             let mut new_value = Value::from(pypi_requirement);
 
@@ -525,7 +525,7 @@ impl ManifestDocument {
 
         let pypi_dependency_table = self
             .manifest()
-            .get_nested_table(&table_name.as_parts())
+            .get_nested_table(&table_name.as_keys())
             .ok();
 
         if pypi_dependency_table
@@ -580,7 +580,7 @@ impl ManifestDocument {
             .with_table(Some("tasks"));
 
         self.manifest_mut()
-            .get_or_insert_nested_table(&task_table.as_parts())?
+            .get_or_insert_nested_table(&task_table.as_keys())?
             .remove(name);
 
         Ok(())
@@ -602,7 +602,7 @@ impl ManifestDocument {
             .with_table(Some("tasks"));
 
         self.manifest_mut()
-            .get_or_insert_nested_table(&task_table.as_parts())?
+            .get_or_insert_nested_table(&task_table.as_keys())?
             .insert(name, task.into());
 
         Ok(())
@@ -642,7 +642,7 @@ impl ManifestDocument {
 
         // Insert into the environment table
         self.manifest_mut()
-            .get_or_insert_nested_table(&env_table.as_parts())?
+            .get_or_insert_nested_table(&env_table.as_keys())?
             .insert(&name.into(), item);
 
         Ok(())
@@ -658,7 +658,7 @@ impl ManifestDocument {
 
         Ok(self
             .manifest_mut()
-            .get_or_insert_nested_table(&env_table.as_parts())?
+            .get_or_insert_nested_table(&env_table.as_keys())?
             .remove(name)
             .is_some())
     }
@@ -678,7 +678,7 @@ impl ManifestDocument {
         if let Some(linux) = &system_requirements.linux {
             inserted |= self
                 .manifest_mut()
-                .get_or_insert_nested_table(&system_requirements_table.as_parts())?
+                .get_or_insert_nested_table(&system_requirements_table.as_keys())?
                 .insert("linux", toml_edit::Item::from(linux.to_string()))
                 .is_some();
         }
@@ -686,7 +686,7 @@ impl ManifestDocument {
         if let Some(cuda) = &system_requirements.cuda {
             inserted |= self
                 .manifest_mut()
-                .get_or_insert_nested_table(&system_requirements_table.as_parts())?
+                .get_or_insert_nested_table(&system_requirements_table.as_keys())?
                 .insert("cuda", toml_edit::Item::from(cuda.to_string()))
                 .is_some();
         }
@@ -694,7 +694,7 @@ impl ManifestDocument {
         if let Some(macos) = &system_requirements.macos {
             inserted |= self
                 .manifest_mut()
-                .get_or_insert_nested_table(&system_requirements_table.as_parts())?
+                .get_or_insert_nested_table(&system_requirements_table.as_keys())?
                 .insert("macos", toml_edit::Item::from(macos.to_string()))
                 .is_some();
         }
@@ -704,7 +704,7 @@ impl ManifestDocument {
                 LibCSystemRequirement::GlibC(version) => {
                     inserted |= self
                         .manifest_mut()
-                        .get_or_insert_nested_table(&system_requirements_table.as_parts())?
+                        .get_or_insert_nested_table(&system_requirements_table.as_keys())?
                         .insert("libc", toml_edit::Item::from(version.to_string()))
                         .is_some();
                 }
@@ -718,7 +718,7 @@ impl ManifestDocument {
                         );
                         inserted |= self
                             .manifest_mut()
-                            .get_or_insert_nested_table(&system_requirements_table.as_parts())?
+                            .get_or_insert_nested_table(&system_requirements_table.as_keys())?
                             .insert(
                                 "libc",
                                 toml_edit::Item::from(libc_table.into_inline_table()),
@@ -727,7 +727,7 @@ impl ManifestDocument {
                     } else {
                         inserted |= self
                             .manifest_mut()
-                            .get_or_insert_nested_table(&system_requirements_table.as_parts())?
+                            .get_or_insert_nested_table(&system_requirements_table.as_keys())?
                             .insert(
                                 "libc",
                                 toml_edit::Item::from(
@@ -743,7 +743,7 @@ impl ManifestDocument {
         if let Some(archspec) = &system_requirements.archspec {
             inserted |= self
                 .manifest_mut()
-                .get_or_insert_nested_table(&system_requirements_table.as_parts())?
+                .get_or_insert_nested_table(&system_requirements_table.as_keys())?
                 .insert("archspec", archspec.into())
                 .is_some();
         }
@@ -791,7 +791,7 @@ impl ManifestDocument {
 
         let table = self
             .manifest_mut()
-            .get_or_insert_nested_table(&table_name.as_parts())?;
+            .get_or_insert_nested_table(&table_name.as_keys())?;
 
         if let Some(version) = version {
             if let Some(item) = table.get_mut("requires-pixi") {
