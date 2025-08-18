@@ -90,6 +90,38 @@ impl TableName<'_> {
         }
         parts.join(".")
     }
+
+    /// Returns the table name parts as a vector of string references.
+    /// This is useful for APIs that require key arrays instead of dotted strings.
+    pub fn as_parts(&self) -> Vec<&str> {
+        let mut parts = Vec::new();
+
+        if self.prefix.is_some() {
+            parts.push(self.prefix.unwrap());
+        }
+
+        if self
+            .feature_name
+            .as_ref()
+            .is_some_and(|feature_name| !feature_name.is_default())
+        {
+            parts.push("feature");
+            parts.push(
+                self.feature_name
+                    .as_ref()
+                    .expect("we already verified")
+                    .as_str(),
+            );
+        }
+        if let Some(platform) = self.platform {
+            parts.push("target");
+            parts.push(platform.as_str());
+        }
+        if let Some(table) = self.table {
+            parts.push(table);
+        }
+        parts
+    }
 }
 
 #[cfg(test)]

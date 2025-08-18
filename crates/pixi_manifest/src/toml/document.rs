@@ -41,22 +41,16 @@ impl TomlDocument {
         self.0.entry(key).or_insert(item)
     }
 
-    /// Retrieve a  reference to a target table `table_name`
-    /// in dotted form (e.g. `table1.table2`) from the root of the document.
-    pub fn get_nested_table<'a>(
-        &'a self,
-        table_name: &str,
-    ) -> Result<&'a dyn TableLike, TomlError> {
-        let parts: Vec<&str> = table_name.split('.').collect();
-
+    /// Retrieve a reference to a target table using key array.
+    pub fn get_nested_table<'a>(&'a self, keys: &[&str]) -> Result<&'a dyn TableLike, TomlError> {
         let mut current_table = self.0.as_table() as &dyn TableLike;
 
-        for part in parts {
+        for part in keys {
             current_table = current_table
                 .get(part)
-                .ok_or_else(|| TomlError::table_error(part, table_name))?
+                .ok_or_else(|| TomlError::table_error(part, &keys.join(".")))?
                 .as_table_like()
-                .ok_or_else(|| TomlError::table_error(part, table_name))?;
+                .ok_or_else(|| TomlError::table_error(part, &keys.join(".")))?;
         }
         Ok(current_table)
     }
@@ -121,16 +115,16 @@ impl TomlDocument {
     }
 
     /// Retrieves a reference to a target array `array_name`
-    /// in table `table_name` in dotted form (e.g. `table1.table2.array`).
+    /// using key array for table access.
     ///
     /// If the array is not found, returns None.
     pub fn get_toml_array<'a>(
         &'a self,
-        table_name: &str,
+        keys: &[&str],
         array_name: &str,
     ) -> Result<Option<&'a Array>, TomlError> {
         let array = self
-            .get_nested_table(table_name)?
+            .get_nested_table(keys)?
             .get(array_name)
             .and_then(|a| a.as_array());
         Ok(array)
