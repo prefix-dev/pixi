@@ -55,49 +55,13 @@ impl<'a> TableName<'a> {
 }
 
 impl TableName<'_> {
-    /// Returns the name of the table in dotted form (e.g.
-    /// `table1.table2.array`). It is composed of
-    /// - the 'tool.pixi' prefix if the manifest is a 'pyproject.toml' file
-    /// - the feature if it is not the default feature
-    /// - the platform if it is not `None`
-    /// - the name of a nested TOML table if it is not `None`
-    fn to_toml_table_name(&self) -> String {
-        let mut parts = Vec::new();
-
-        if self.prefix.is_some() {
-            parts.push(self.prefix.unwrap());
-        }
-
-        if self
-            .feature_name
-            .as_ref()
-            .is_some_and(|feature_name| !feature_name.is_default())
-        {
-            parts.push("feature");
-            parts.push(
-                self.feature_name
-                    .as_ref()
-                    .expect("we already verified")
-                    .as_str(),
-            );
-        }
-        if let Some(platform) = self.platform {
-            parts.push("target");
-            parts.push(platform.as_str());
-        }
-        if let Some(table) = self.table {
-            parts.push(table);
-        }
-        parts.join(".")
-    }
-
     /// Returns the table name parts as a vector of string references.
-    /// This is useful for APIs that require key arrays instead of dotted strings.
+    /// This is the primary implementation that other methods build upon.
     pub fn as_parts(&self) -> Vec<&str> {
         let mut parts = Vec::new();
 
-        if self.prefix.is_some() {
-            parts.push(self.prefix.unwrap());
+        if let Some(prefix) = self.prefix {
+            parts.push(prefix);
         }
 
         if self
@@ -121,6 +85,16 @@ impl TableName<'_> {
             parts.push(table);
         }
         parts
+    }
+
+    /// Returns the name of the table in dotted form (e.g.
+    /// `table1.table2.array`). It is composed of
+    /// - the 'tool.pixi' prefix if the manifest is a 'pyproject.toml' file
+    /// - the feature if it is not the default feature
+    /// - the platform if it is not `None`
+    /// - the name of a nested TOML table if it is not `None`
+    fn to_toml_table_name(&self) -> String {
+        self.as_parts().join(".")
     }
 }
 
