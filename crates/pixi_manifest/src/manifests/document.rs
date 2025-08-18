@@ -222,8 +222,10 @@ impl ManifestDocument {
             .with_feature_name(Some(feature_name))
             .with_table(table);
 
+        let table_name_str = table_name.to_string();
+        let parts: Vec<&str> = table_name_str.split('.').collect();
         self.manifest_mut()
-            .get_or_insert_toml_array_mut(table_name.to_string().as_str(), array_name)
+            .get_or_insert_toml_array_mut(&parts, array_name)
     }
 
     fn as_table_mut(&mut self) -> &mut Table {
@@ -267,7 +269,7 @@ impl ManifestDocument {
             .with_table(Some(consts::PYPI_DEPENDENCIES));
 
         self.manifest_mut()
-            .get_or_insert_nested_table(table_name.to_string().as_str())
+            .get_or_insert_nested_table(&table_name.to_string().split('.').collect::<Vec<&str>>())
             .map(|t| t.remove(dep.as_source()))?;
         Ok(())
     }
@@ -279,7 +281,8 @@ impl ManifestDocument {
         array_name: &str,
         dependency_name: &PypiPackageName,
     ) -> Result<(), TomlError> {
-        let array = self.manifest_mut().get_mut_toml_array(table, array_name)?;
+        let parts: Vec<&str> = table.split('.').collect();
+        let array = self.manifest_mut().get_mut_toml_array(&parts, array_name)?;
         if let Some(array) = array {
             array.retain(|x| {
                 let req: pep508_rs::Requirement = x
@@ -292,7 +295,7 @@ impl ManifestDocument {
             });
             if array.is_empty() {
                 self.manifest_mut()
-                    .get_or_insert_nested_table(table)?
+                    .get_or_insert_nested_table(&table.split('.').collect::<Vec<&str>>())?
                     .remove(array_name);
             }
         }
@@ -317,7 +320,7 @@ impl ManifestDocument {
             .with_table(Some(spec_type.name()));
 
         self.manifest_mut()
-            .get_or_insert_nested_table(table_name.to_string().as_str())
+            .get_or_insert_nested_table(&table_name.to_string().split('.').collect::<Vec<&str>>())
             .map(|t| t.remove(dep.as_source()))?;
         Ok(())
     }
@@ -340,7 +343,12 @@ impl ManifestDocument {
             .with_table(Some(spec_type.name()));
 
         self.manifest_mut()
-            .get_or_insert_nested_table(dependency_table.to_string().as_str())
+            .get_or_insert_nested_table(
+                &dependency_table
+                    .to_string()
+                    .split('.')
+                    .collect::<Vec<&str>>(),
+            )
             .map(|t| {
                 let mut new_value = spec.to_toml_value();
 
@@ -406,9 +414,12 @@ impl ManifestDocument {
                 .with_feature_name(Some(feature_name))
                 .with_table(Some(consts::PYPI_DEPENDENCIES));
 
-            let table = self
-                .manifest_mut()
-                .get_or_insert_nested_table(dependency_table_name.to_string().as_str())?;
+            let table = self.manifest_mut().get_or_insert_nested_table(
+                &dependency_table_name
+                    .to_string()
+                    .split('.')
+                    .collect::<Vec<&str>>(),
+            )?;
 
             let mut new_value = Value::from(pypi_requirement);
 
@@ -446,10 +457,11 @@ impl ManifestDocument {
         //   - the [dependency-groups.feature_name] array is selected unless
         //   - optional-dependencies is explicitly requested as location
         let add_requirement =
-            |source: &mut ManifestDocument, table, array| -> Result<(), TomlError> {
+            |source: &mut ManifestDocument, table: &str, array: &str| -> Result<(), TomlError> {
+                let table_parts: Vec<&str> = table.split('.').collect();
                 let array = source
                     .manifest_mut()
-                    .get_or_insert_toml_array_mut(table, array)?;
+                    .get_or_insert_toml_array_mut(&table_parts, array)?;
 
                 // Check if there is an existing entry that we should replace. Replacing will
                 // preserve any existing formatting.
@@ -576,7 +588,7 @@ impl ManifestDocument {
             .with_table(Some("tasks"));
 
         self.manifest_mut()
-            .get_or_insert_nested_table(task_table.to_string().as_str())?
+            .get_or_insert_nested_table(&task_table.to_string().split('.').collect::<Vec<&str>>())?
             .remove(name);
 
         Ok(())
@@ -598,7 +610,7 @@ impl ManifestDocument {
             .with_table(Some("tasks"));
 
         self.manifest_mut()
-            .get_or_insert_nested_table(task_table.to_string().as_str())?
+            .get_or_insert_nested_table(&task_table.to_string().split('.').collect::<Vec<&str>>())?
             .insert(name, task.into());
 
         Ok(())
@@ -638,7 +650,7 @@ impl ManifestDocument {
 
         // Insert into the environment table
         self.manifest_mut()
-            .get_or_insert_nested_table(env_table.to_string().as_str())?
+            .get_or_insert_nested_table(&env_table.to_string().split('.').collect::<Vec<&str>>())?
             .insert(&name.into(), item);
 
         Ok(())
@@ -654,7 +666,7 @@ impl ManifestDocument {
 
         Ok(self
             .manifest_mut()
-            .get_or_insert_nested_table(env_table.to_string().as_str())?
+            .get_or_insert_nested_table(&env_table.to_string().split('.').collect::<Vec<&str>>())?
             .remove(name)
             .is_some())
     }
@@ -674,7 +686,12 @@ impl ManifestDocument {
         if let Some(linux) = &system_requirements.linux {
             inserted |= self
                 .manifest_mut()
-                .get_or_insert_nested_table(system_requirements_table.to_string().as_str())?
+                .get_or_insert_nested_table(
+                    &system_requirements_table
+                        .to_string()
+                        .split('.')
+                        .collect::<Vec<&str>>(),
+                )?
                 .insert("linux", toml_edit::Item::from(linux.to_string()))
                 .is_some();
         }
@@ -682,7 +699,12 @@ impl ManifestDocument {
         if let Some(cuda) = &system_requirements.cuda {
             inserted |= self
                 .manifest_mut()
-                .get_or_insert_nested_table(system_requirements_table.to_string().as_str())?
+                .get_or_insert_nested_table(
+                    &system_requirements_table
+                        .to_string()
+                        .split('.')
+                        .collect::<Vec<&str>>(),
+                )?
                 .insert("cuda", toml_edit::Item::from(cuda.to_string()))
                 .is_some();
         }
@@ -690,7 +712,12 @@ impl ManifestDocument {
         if let Some(macos) = &system_requirements.macos {
             inserted |= self
                 .manifest_mut()
-                .get_or_insert_nested_table(system_requirements_table.to_string().as_str())?
+                .get_or_insert_nested_table(
+                    &system_requirements_table
+                        .to_string()
+                        .split('.')
+                        .collect::<Vec<&str>>(),
+                )?
                 .insert("macos", toml_edit::Item::from(macos.to_string()))
                 .is_some();
         }
@@ -700,7 +727,12 @@ impl ManifestDocument {
                 LibCSystemRequirement::GlibC(version) => {
                     inserted |= self
                         .manifest_mut()
-                        .get_or_insert_nested_table(system_requirements_table.to_string().as_str())?
+                        .get_or_insert_nested_table(
+                            &system_requirements_table
+                                .to_string()
+                                .split('.')
+                                .collect::<Vec<&str>>(),
+                        )?
                         .insert("libc", toml_edit::Item::from(version.to_string()))
                         .is_some();
                 }
@@ -715,7 +747,10 @@ impl ManifestDocument {
                         inserted |= self
                             .manifest_mut()
                             .get_or_insert_nested_table(
-                                system_requirements_table.to_string().as_str(),
+                                &system_requirements_table
+                                    .to_string()
+                                    .split('.')
+                                    .collect::<Vec<&str>>(),
                             )?
                             .insert(
                                 "libc",
@@ -726,7 +761,10 @@ impl ManifestDocument {
                         inserted |= self
                             .manifest_mut()
                             .get_or_insert_nested_table(
-                                system_requirements_table.to_string().as_str(),
+                                &system_requirements_table
+                                    .to_string()
+                                    .split('.')
+                                    .collect::<Vec<&str>>(),
                             )?
                             .insert(
                                 "libc",
@@ -743,7 +781,12 @@ impl ManifestDocument {
         if let Some(archspec) = &system_requirements.archspec {
             inserted |= self
                 .manifest_mut()
-                .get_or_insert_nested_table(system_requirements_table.to_string().as_str())?
+                .get_or_insert_nested_table(
+                    &system_requirements_table
+                        .to_string()
+                        .split('.')
+                        .collect::<Vec<&str>>(),
+                )?
                 .insert("archspec", archspec.into())
                 .is_some();
         }
@@ -789,9 +832,9 @@ impl ManifestDocument {
             .with_prefix(self.table_prefix())
             .with_table(Some(self.detect_table_name()));
 
-        let table = self
-            .manifest_mut()
-            .get_or_insert_nested_table(table_name.to_string().as_str())?;
+        let table = self.manifest_mut().get_or_insert_nested_table(
+            &table_name.to_string().split('.').collect::<Vec<&str>>(),
+        )?;
 
         if let Some(version) = version {
             if let Some(item) = table.get_mut("requires-pixi") {

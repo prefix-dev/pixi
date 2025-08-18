@@ -61,18 +61,9 @@ impl TomlDocument {
         Ok(current_table)
     }
 
-    /// Retrieve a mutable reference to a target table `table_name`
-    /// in dotted form (e.g. `table1.table2`) from the root of the document.
+    /// Retrieve a mutable reference to a target table using key array.
     /// If the table is not found, it is inserted into the document.
     pub fn get_or_insert_nested_table<'a>(
-        &'a mut self,
-        table_name: &str,
-    ) -> Result<&'a mut dyn TableLike, TomlError> {
-        let parts: Vec<&str> = table_name.split('.').collect();
-        self.get_or_insert_nested_table_from_keys(&parts)
-    }
-
-    pub fn get_or_insert_nested_table_from_keys<'a>(
         &'a mut self,
         keys: &[&str],
     ) -> Result<&'a mut dyn TableLike, TomlError> {
@@ -92,114 +83,41 @@ impl TomlDocument {
         Ok(current_table)
     }
 
-    pub fn get_or_insert_toml_array_mut_from_keys<'a>(
+    pub fn get_or_insert_toml_array_mut<'a>(
         &'a mut self,
         keys: &[&str],
         array_name: &str,
     ) -> Result<&'a mut Array, TomlError> {
-        self.get_or_insert_nested_table_from_keys(keys)?
+        self.get_or_insert_nested_table(keys)?
             .entry(array_name)
             .or_insert(Item::Value(Value::Array(Array::new())))
             .as_array_mut()
             .ok_or_else(|| TomlError::array_error(array_name, &keys.join(".")))
     }
 
-    pub fn insert_into_inline_table_from_keys<'a>(
+    pub fn insert_into_inline_table<'a>(
         &'a mut self,
         keys: &[&str],
         key: &str,
         value: Value,
     ) -> Result<&'a mut dyn TableLike, TomlError> {
-        let table = self.get_or_insert_nested_table_from_keys(keys)?;
-        
+        let table = self.get_or_insert_nested_table(keys)?;
+
         // Insert the value into the table
         table.insert(key, Item::Value(value));
-        
+
         Ok(table)
     }
 
-    pub fn get_mut_toml_array_from_keys<'a>(
+    pub fn get_mut_toml_array<'a>(
         &'a mut self,
         keys: &[&str],
         array_name: &str,
     ) -> Result<Option<&'a mut Array>, TomlError> {
-        let table = self.get_or_insert_nested_table_from_keys(keys)?;
-        Ok(table.get_mut(array_name).and_then(|item| item.as_array_mut()))
-    }
-
-    /// Inserts a value into a certain table
-    /// If the most inner table doesn't exist, an inline table will be created.
-    /// If it already exists, the formatting of the table will be preserved
-    pub fn insert_into_inline_table<'a>(
-        &'a mut self,
-        table_name: &str,
-        key: &str,
-        value: Value,
-    ) -> Result<&'a mut dyn TableLike, TomlError> {
-        let mut parts: Vec<&str> = table_name.split('.').collect();
-
-        let last = parts.pop();
-
-        let mut current_table = self.0.as_table_mut() as &mut dyn TableLike;
-
-        for part in parts {
-            let entry = current_table.entry(part);
-            let item = entry.or_insert(Item::Table(Table::new()));
-            if let Some(table) = item.as_table_mut() {
-                // Avoid creating empty tables
-                table.set_implicit(true);
-            }
-            current_table = item
-                .as_table_like_mut()
-                .ok_or_else(|| TomlError::table_error(part, table_name))?;
-        }
-
-        // Add dependency as inline table if it doesn't exist
-        if let Some(last) = last {
-            if let Some(dependency) = current_table.get_mut(last) {
-                dependency
-                    .as_table_like_mut()
-                    .map(|table| table.insert(key, Item::Value(value)));
-            } else {
-                let mut dependency = toml_edit::InlineTable::new();
-                dependency.insert(key, value);
-                current_table.insert(last, toml_edit::value(dependency));
-            }
-        }
-
-        Ok(current_table)
-    }
-
-    /// Retrieves a mutable reference to a target array `array_name`
-    /// in table `table_name` in dotted form (e.g. `table1.table2.array`).
-    ///
-    /// If the array is not found, it is inserted into the document.
-    pub fn get_or_insert_toml_array_mut<'a>(
-        &'a mut self,
-        table_name: &str,
-        array_name: &str,
-    ) -> Result<&'a mut Array, TomlError> {
-        self.get_or_insert_nested_table(table_name)?
-            .entry(array_name)
-            .or_insert(Item::Value(Value::Array(Array::new())))
-            .as_array_mut()
-            .ok_or_else(|| TomlError::array_error(array_name, table_name.to_string().as_str()))
-    }
-
-    /// Retrieves a mutable reference to a target array `array_name`
-    /// in table `table_name` in dotted form (e.g. `table1.table2.array`).
-    ///
-    /// If the array is not found, returns None.
-    pub fn get_mut_toml_array<'a>(
-        &'a mut self,
-        table_name: &str,
-        array_name: &str,
-    ) -> Result<Option<&'a mut Array>, TomlError> {
-        let array = self
-            .get_or_insert_nested_table(table_name)?
+        let table = self.get_or_insert_nested_table(keys)?;
+        Ok(table
             .get_mut(array_name)
-            .and_then(|a| a.as_array_mut());
-        Ok(array)
+            .and_then(|item| item.as_array_mut()))
     }
 
     /// Retrieves a reference to a target array `array_name`
@@ -238,12 +156,12 @@ dummy = "3.11.*"
         let dep_name = "test";
         let mut manifest = TomlDocument::new(DocumentMut::from_str(toml).unwrap());
         manifest
-            .get_or_insert_nested_table("envs.python.dependencies")
+            .get_or_insert_nested_table(&["envs", "python", "dependencies"])
             .unwrap()
             .insert(dep_name, Item::Value(toml_edit::Value::from("6.6")));
 
         let dep = manifest
-            .get_or_insert_nested_table("envs.python.dependencies")
+            .get_or_insert_nested_table(&["envs", "python", "dependencies"])
             .unwrap()
             .get(dep_name);
 
@@ -260,12 +178,12 @@ dependencies = { dummy = "3.11.*" }
         let dep_name = "test";
         let mut manifest = TomlDocument::new(DocumentMut::from_str(toml).unwrap());
         manifest
-            .get_or_insert_nested_table("envs.python.dependencies")
+            .get_or_insert_nested_table(&["envs", "python", "dependencies"])
             .unwrap()
             .insert(dep_name, Item::Value(toml_edit::Value::from("6.6")));
 
         let dep = manifest
-            .get_or_insert_nested_table("envs.python.dependencies")
+            .get_or_insert_nested_table(&["envs", "python", "dependencies"])
             .unwrap()
             .get(dep_name);
 
@@ -273,7 +191,7 @@ dependencies = { dummy = "3.11.*" }
 
         // Existing entries are also still there
         let dummy = manifest
-            .get_or_insert_nested_table("envs.python.dependencies")
+            .get_or_insert_nested_table(&["envs", "python", "dependencies"])
             .unwrap()
             .get("dummy");
 
@@ -288,7 +206,7 @@ channels = ["dummy-channel"]
 "#;
         let table_name = "test";
         let mut manifest = TomlDocument::new(DocumentMut::from_str(toml).unwrap());
-        manifest.get_or_insert_nested_table(table_name).unwrap();
+        manifest.get_or_insert_nested_table(&[table_name]).unwrap();
 
         // No empty table is being created
         assert!(!manifest.0.to_string().contains("[test]"));
