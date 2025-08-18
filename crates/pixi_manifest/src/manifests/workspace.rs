@@ -507,7 +507,7 @@ impl WorkspaceManifestMut<'_> {
         feature_name: &FeatureName,
         editable: Option<bool>,
         overwrite_behavior: DependencyOverwriteBehavior,
-        location: Option<&PypiDependencyLocation>,
+        location: Option<PypiDependencyLocation>,
     ) -> miette::Result<bool> {
         let mut any_added = false;
         for platform in to_options(platforms) {

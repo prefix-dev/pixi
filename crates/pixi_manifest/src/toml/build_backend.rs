@@ -1,10 +1,11 @@
 use std::collections::BTreeMap;
 
 use indexmap::IndexMap;
-use pixi_spec::TomlSpec;
+use pixi_spec::{SourceLocationSpec, TomlLocationSpec, TomlSpec};
 use pixi_toml::{Same, TomlFromStr, TomlIndexMap, TomlWith};
 use rattler_conda_types::NamedChannelOrUrl;
-use toml_span::{DeserError, Spanned, Value, de_helpers::TableHelper, value::ValueInner};
+use std::borrow::Cow;
+use toml_span::{DeserError, Error, Spanned, Value, de_helpers::TableHelper, value::ValueInner};
 
 use crate::{
     PackageBuild, TargetSelector, TomlError,
@@ -19,6 +20,7 @@ pub struct TomlPackageBuild {
     pub backend: PixiSpanned<TomlBuildBackend>,
     pub channels: Option<PixiSpanned<Vec<NamedChannelOrUrl>>>,
     pub additional_dependencies: UniquePackageMap,
+    pub source: Option<SourceLocationSpec>,
     pub configuration: Option<serde_value::Value>,
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlPackageBuildTarget>,
 }
@@ -69,6 +71,7 @@ impl TomlPackageBuild {
             },
             additional_dependencies,
             channels: self.channels.map(|channels| channels.value),
+            source: self.source,
             configuration: self.configuration,
             target_configuration: if target_configuration.is_empty() {
                 None
@@ -123,6 +126,21 @@ impl<'de> toml_span::Deserialize<'de> for TomlBuildBackend {
     }
 }
 
+fn spec_from_spanned_toml_location(
+    spanned_toml: Spanned<TomlLocationSpec>,
+) -> Result<SourceLocationSpec, DeserError> {
+    spanned_toml
+        .value
+        .into_source_location_spec()
+        .map_err(|err| {
+            DeserError::from(Error {
+                kind: toml_span::ErrorKind::Custom(Cow::Owned(err.to_string())),
+                span: spanned_toml.span,
+                line_info: None,
+            })
+        })
+}
+
 impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         let mut th = TableHelper::new(value)?;
@@ -134,6 +152,11 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
                 span: Some(s.span.start..s.span.end),
             });
         let additional_dependencies = th.optional("additional-dependencies").unwrap_or_default();
+
+        let source = th
+            .optional_s::<TomlLocationSpec>("source")
+            .map(spec_from_spanned_toml_location)
+            .transpose()?;
 
         let configuration = th
             .take("configuration")
@@ -150,6 +173,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
             backend: build_backend,
             channels,
             additional_dependencies,
+            source,
             configuration,
             target,
         })

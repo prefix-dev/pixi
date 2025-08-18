@@ -1,6 +1,5 @@
-use std::{fmt::Display, hash::Hash, str::FromStr};
+use std::{fmt::Display, hash::Hash, str::FromStr, sync::Arc};
 
-use super::conversion;
 use itertools::Either;
 use pixi_build_types::{
     BinaryPackageSpecV1, NamedSpecV1, PackageSpecV1,
@@ -15,7 +14,10 @@ use rattler_conda_types::{
     InvalidPackageNameError, MatchSpec, NamedChannelOrUrl, NamelessMatchSpec, PackageName,
     ParseStrictness, Platform, VersionSpec,
 };
+use rattler_repodata_gateway::{Gateway, RunExportExtractorError, RunExportsReporter};
 use serde::Serialize;
+
+use super::conversion;
 
 #[derive(Debug)]
 pub enum DependenciesError {
@@ -211,88 +213,38 @@ impl Dependencies {
     }
 
     /// Extract run exports from the solved environments.
-    pub fn extract_run_exports(
+    pub async fn extract_run_exports(
         &self,
-        records: &[PixiRecord],
+        records: &mut [PixiRecord],
         ignore: &CondaOutputIgnoreRunExports,
-    ) -> Vec<(PackageName, PixiRunExports)> {
+        gateway: &Gateway,
+        reporter: Option<Arc<dyn RunExportsReporter>>,
+    ) -> Result<Vec<(PackageName, PixiRunExports)>, RunExportExtractorError> {
         let mut combined_run_exports = Vec::new();
 
-        fn filter_match_specs<T: From<BinarySpec> + Clone + Hash + Eq + PartialEq>(
-            specs: &[String],
-            ignore: &CondaOutputIgnoreRunExports,
-        ) -> DependencyMap<PackageName, T> {
-            specs
-                .iter()
-                .filter_map(move |spec| {
-                    let (Some(name), spec) = MatchSpec::from_str(spec, ParseStrictness::Lenient)
-                        .ok()?
-                        .into_nameless()
-                    else {
-                        return None;
-                    };
-                    if ignore.by_name.contains(&name) {
-                        return None;
-                    }
+        // Find all the records that are relevant for run exports.
+        let mut relevant_records = records
+            .iter_mut()
+            // Only record run exports for packages that are direct dependencies.
+            .filter(|r| self.dependencies.contains_key(&r.package_record().name))
+            // Filter based on whether we want to ignore run exports for a particular
+            // package.
+            .filter(|r| !ignore.from_package.contains(&r.package_record().name))
+            .collect::<Vec<_>>();
 
-                    let binary_spec = match spec {
-                        NamelessMatchSpec {
-                            url: Some(url),
-                            sha256,
-                            md5,
-                            ..
-                        } => BinarySpec::Url(UrlBinarySpec { url, sha256, md5 }),
-                        NamelessMatchSpec {
-                            version,
-                            build: None,
-                            build_number: None,
-                            file_name: None,
-                            extras: None,
-                            channel: None,
-                            subdir: None,
-                            namespace: None,
-                            md5: None,
-                            sha256: None,
-                            url: _,
-                            license: None,
-                        } => BinarySpec::Version(version.unwrap_or(VersionSpec::Any)),
-                        NamelessMatchSpec {
-                            version,
-                            build,
-                            build_number,
-                            file_name,
-                            channel,
-                            subdir,
-                            md5,
-                            sha256,
-                            license,
+        // Determine the records that have missing run exports.
+        let records_missing_run_exports = relevant_records
+            .iter_mut()
+            .flat_map(|r| match *r {
+                PixiRecord::Binary(repo_data_record) => Some(repo_data_record),
+                PixiRecord::Source(_source_record) => None,
+            })
+            .filter(|r| r.package_record.run_exports.is_none());
+        gateway
+            .ensure_run_exports(records_missing_run_exports.into_iter(), reporter)
+            .await?;
 
-                            // Caught in the above case
-                            url: _,
-
-                            // Explicitly ignored
-                            namespace: _,
-                            extras: _,
-                        } => BinarySpec::DetailedVersion(Box::new(DetailedSpec {
-                            version,
-                            build,
-                            build_number,
-                            file_name,
-                            channel: channel
-                                .map(|c| NamedChannelOrUrl::Url(c.base_url.clone().into())),
-                            subdir,
-                            md5,
-                            sha256,
-                            license,
-                        })),
-                    };
-
-                    Some((name, binary_spec.into()))
-                })
-                .collect()
-        }
-
-        for record in records {
+        for record in relevant_records {
             // Only record run exports for packages that are direct dependencies.
             if !self
                 .dependencies
@@ -309,7 +261,8 @@ impl Dependencies {
 
             // Make sure we have valid run exports.
             let Some(run_exports) = &record.package_record().run_exports else {
-                unimplemented!("Extracting run exports from other places is not implemented yet");
+                // No run-exports found
+                continue;
             };
 
             let filtered_run_exports = PixiRunExports {
@@ -323,8 +276,81 @@ impl Dependencies {
             combined_run_exports.push((record.name().clone(), filtered_run_exports));
         }
 
-        combined_run_exports
+        Ok(combined_run_exports)
     }
+}
+
+fn filter_match_specs<T: From<BinarySpec> + Clone + Hash + Eq + PartialEq>(
+    specs: &[String],
+    ignore: &CondaOutputIgnoreRunExports,
+) -> DependencyMap<PackageName, T> {
+    specs
+        .iter()
+        .filter_map(move |spec| {
+            let (Some(name), spec) = MatchSpec::from_str(spec, ParseStrictness::Lenient)
+                .ok()?
+                .into_nameless()
+            else {
+                return None;
+            };
+            if ignore.by_name.contains(&name) {
+                return None;
+            }
+
+            let binary_spec = match spec {
+                NamelessMatchSpec {
+                    url: Some(url),
+                    sha256,
+                    md5,
+                    ..
+                } => BinarySpec::Url(UrlBinarySpec { url, sha256, md5 }),
+                NamelessMatchSpec {
+                    version,
+                    build: None,
+                    build_number: None,
+                    file_name: None,
+                    extras: None,
+                    channel: None,
+                    subdir: None,
+                    namespace: None,
+                    md5: None,
+                    sha256: None,
+                    url: _,
+                    license: None,
+                } => BinarySpec::Version(version.unwrap_or(VersionSpec::Any)),
+                NamelessMatchSpec {
+                    version,
+                    build,
+                    build_number,
+                    file_name,
+                    channel,
+                    subdir,
+                    md5,
+                    sha256,
+                    license,
+
+                    // Caught in the above case
+                    url: _,
+
+                    // Explicitly ignored
+                    namespace: _,
+                    extras: _,
+                } => BinarySpec::DetailedVersion(Box::new(DetailedSpec {
+                    version,
+                    build,
+                    build_number,
+                    file_name,
+                    channel: channel.map(|c| NamedChannelOrUrl::Url(c.base_url.clone().into())),
+                    subdir,
+                    md5,
+                    sha256,
+                    license,
+                })),
+            };
+
+            Some((name, binary_spec.into()))
+        })
+        .collect()
 }
 
 /// A variant of [`rattler_conda_types::package::RunExportsJson`] but with pixi

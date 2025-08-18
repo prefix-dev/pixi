@@ -10,7 +10,7 @@ use fs_err::tokio as tokio_fs;
 use pixi::cli::run::{self, Args};
 use pixi::cli::{
     LockFileUsageConfig,
-    cli_config::{LockFileUpdateConfig, WorkspaceConfig},
+    cli_config::{LockAndInstallConfig, LockFileUpdateConfig, WorkspaceConfig},
 };
 use pixi_config::{Config, DetachedEnvironments};
 use pixi_consts::consts;
@@ -34,7 +34,7 @@ use uv_python::PythonEnvironment;
 use crate::common::{
     LockFileExt, PixiControl,
     builders::{
-        HasDependencyConfig, HasLockFileUpdateConfig, HasPrefixUpdateConfig, string_from_iter,
+        HasDependencyConfig, HasLockFileUpdateConfig, HasNoInstallConfig, string_from_iter,
     },
     logging::try_init_test_subscriber,
     package_database::{Package, PackageDatabase},
@@ -204,7 +204,8 @@ async fn install_locked_with_config() {
 
     // Add new version of python only to the manifest
     pixi.add("python==3.9.0")
-        .without_lockfile_update()
+        .with_frozen(true)
+        .with_install(false)
         .await
         .unwrap();
 
@@ -278,7 +279,8 @@ async fn install_frozen() {
 
     // Add new version of python only to the manifest
     pixi.add("python==3.10.1")
-        .without_lockfile_update()
+        .with_frozen(true)
+        .with_install(false)
         .await
         .unwrap();
 
@@ -295,9 +297,12 @@ async fn install_frozen() {
     // Check if running with frozen doesn't suddenly install the latest update.
     let result = pixi
         .run(run::Args {
-            lock_file_update_config: LockFileUpdateConfig {
-                lock_file_usage: LockFileUsageConfig {
-                    frozen: true,
+            lock_and_install_config: LockAndInstallConfig {
+                lock_file_update_config: LockFileUpdateConfig {
+                    lock_file_usage: LockFileUsageConfig {
+                        frozen: true,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 ..Default::default()
@@ -841,13 +846,13 @@ dependencies = []
         [dependencies]
         python = "3.12.*"
         setuptools = ">=72,<73"
-        
+
         [pypi-dependencies.package-b]
         path = "./package-b"
 
         [pypi-dependencies.package-tdjager]
         path = "./package-tdjager"
-        
+
         "#,
         platform = current_platform,
     );

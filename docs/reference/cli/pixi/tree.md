@@ -24,14 +24,14 @@ pixi tree [OPTIONS] [REGEX]
 :  Invert tree and show what depends on given package in the regex argument
 
 ## Update Options
-- <a id="arg---no-lockfile-update" href="#arg---no-lockfile-update">`--no-lockfile-update`</a>
-:  Don't update lockfile, implies the no-install as well
 - <a id="arg---frozen" href="#arg---frozen">`--frozen`</a>
 :  Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 <br>**env**: `PIXI_FROZEN`
 - <a id="arg---locked" href="#arg---locked">`--locked`</a>
 :  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 <br>**env**: `PIXI_LOCKED`
+- <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
+:  Don't modify the environment, only modify the lock-file
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>

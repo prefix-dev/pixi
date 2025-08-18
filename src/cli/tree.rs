@@ -15,8 +15,7 @@ use rattler_conda_types::Platform;
 use rattler_lock::LockedPackageRef;
 use regex::Regex;
 
-use crate::cli::cli_config::LockFileUpdateConfig;
-use crate::cli::cli_config::WorkspaceConfig;
+use crate::cli::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
 
 /// Show a tree of workspace dependencies
 #[derive(Debug, Parser)]
@@ -51,6 +50,9 @@ pub struct Args {
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
 
+    #[clap(flatten)]
+    pub no_install_config: NoInstallConfig,
+
     /// Invert tree and show what depends on given package in the regex argument
     #[arg(short, long, requires = "regex")]
     pub invert: bool,
@@ -81,12 +83,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let lock_file = workspace
         .update_lock_file(UpdateLockFileOptions {
-            lock_file_usage: args.lock_file_update_config.lock_file_usage(),
-            no_install: args.lock_file_update_config.no_lockfile_update,
+            lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
+            no_install: args.no_install_config.no_install,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         })
         .await
         .wrap_err("Failed to update lock file")?
+        .0
         .into_lock_file();
 
     let platform = args.platform.unwrap_or_else(|| environment.best_platform());

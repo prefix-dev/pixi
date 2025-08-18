@@ -1,6 +1,7 @@
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use miette::Diagnostic;
@@ -14,6 +15,7 @@ use rattler_conda_types::{
     Platform, RepoDataRecord, prefix::Prefix,
 };
 use rattler_digest::Sha256Hash;
+use rattler_repodata_gateway::{RunExportExtractorError, RunExportsReporter};
 use serde::Serialize;
 use thiserror::Error;
 use tracing::instrument;
@@ -118,6 +120,7 @@ impl SourceBuildSpec {
     pub(crate) async fn build(
         mut self,
         command_dispatcher: CommandDispatcher,
+        reporter: Option<Arc<dyn RunExportsReporter>>,
     ) -> Result<SourceBuildResult, CommandDispatcherError<SourceBuildError>> {
         // If the output directory is not set, we want to use the build cache. Read the
         // build cache in that case.
@@ -202,7 +205,7 @@ impl SourceBuildSpec {
 
         // Build the package based on the support backend capabilities.
         let mut built_source = if backend.capabilities().provides_conda_build_v1() {
-            self.build_v1(command_dispatcher, backend, work_directory)
+            self.build_v1(command_dispatcher, backend, work_directory, reporter)
                 .await?
         } else {
             self.build_v0(command_dispatcher, backend, work_directory)
@@ -343,6 +346,7 @@ impl SourceBuildSpec {
         command_dispatcher: CommandDispatcher,
         backend: Backend,
         work_directory: PathBuf,
+        reporter: Option<Arc<dyn RunExportsReporter>>,
     ) -> Result<BuiltPackage, CommandDispatcherError<SourceBuildError>> {
         let source_anchor = SourceAnchor::from(SourceSpec::from(self.source.clone()));
         let host_platform = self.build_environment.host_platform;
@@ -394,7 +398,7 @@ impl SourceBuildSpec {
             .map_err(SourceBuildError::from)
             .map_err(CommandDispatcherError::Failed)?
             .unwrap_or_default();
-        let build_records = self
+        let mut build_records = self
             .solve_dependencies(
                 format!("{} (build)", self.package.name.as_source()),
                 &command_dispatcher,
@@ -404,8 +408,18 @@ impl SourceBuildSpec {
             .await
             .map_err_with(Box::new)
             .map_err_with(SourceBuildError::SolveBuildEnvironment)?;
-        let build_run_exports =
-            build_dependencies.extract_run_exports(&build_records, &output.ignore_run_exports);
+
+        let gateway = command_dispatcher.gateway();
+        let build_run_exports = build_dependencies
+            .extract_run_exports(
+                &mut build_records,
+                &output.ignore_run_exports,
+                gateway,
+                reporter.clone(),
+            )
+            .await
+            .map_err(SourceBuildError::from)
+            .map_err(CommandDispatcherError::Failed)?;
 
         // Solve the host environment for the output.
         let host_dependencies = output
@@ -418,7 +432,7 @@ impl SourceBuildSpec {
             .unwrap_or_default()
             // Extend with the run exports from the build environment.
             .extend_with_run_exports_from_build(&build_run_exports);
-        let host_records = self
+        let mut host_records = self
             .solve_dependencies(
                 format!("{} (host)", self.package.name.as_source()),
                 &command_dispatcher,
@@ -428,8 +442,16 @@ impl SourceBuildSpec {
             .await
             .map_err_with(Box::new)
             .map_err_with(SourceBuildError::SolveBuildEnvironment)?;
-        let host_run_exports =
-            host_dependencies.extract_run_exports(&host_records, &output.ignore_run_exports);
+        let host_run_exports = host_dependencies
+            .extract_run_exports(
+                &mut host_records,
+                &output.ignore_run_exports,
+                command_dispatcher.gateway(),
+                reporter,
+            )
+            .await
+            .map_err(SourceBuildError::from)
+            .map_err(CommandDispatcherError::Failed)?;
 
         // Install the build environment
         let build_prefix = if build_records.is_empty() {
@@ -688,6 +710,9 @@ pub enum SourceBuildError {
 
     #[error(transparent)]
     BuildCache(#[from] BuildCacheError),
+
+    #[error("failed to amend run exports: {0}")]
+    RunExportsExtraction(#[from] RunExportExtractorError),
 
     #[error(transparent)]
     CreateWorkDirectory(std::io::Error),

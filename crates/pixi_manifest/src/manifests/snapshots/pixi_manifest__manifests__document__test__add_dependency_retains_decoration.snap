@@ -1,0 +1,16 @@
+---
+source: crates/pixi_manifest/src/manifests/document.rs
+expression: document.to_string()
+---
+[project]
+name = "test"
+
+[tool.pixi.project]
+channels = []
+platforms = []
+
+[tool.pixi.dependencies]
+# Hello world!
+hTTPx = "0.1.*" # Some comment.
+
+# newline

@@ -67,9 +67,13 @@ pub struct CondaBuildV1Params {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CondaBuildV1Dependency {
+    /// The match spec of the dependency.
     #[serde_as(as = "DisplayFromStr")]
     pub spec: MatchSpec,
 
+    /// What introduced this dependency? If the value of this field is
+    /// unrecognized, it will default to `None`. This ensures backwards
+    /// compatibility.
     #[serde_as(as = "DefaultOnError<_>")]
     pub source: Option<CondaBuildV1DependencySource>,
 }

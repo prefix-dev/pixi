@@ -89,6 +89,7 @@ pub enum DependencyOverwriteBehavior {
     Error,
 }
 
+#[derive(Copy, Clone)]
 pub enum PypiDependencyLocation {
     /// [pypi-dependencies] in pixi.toml or [tool.pixi.pypi-dependencies] in
     /// pyproject.toml

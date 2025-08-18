@@ -210,7 +210,7 @@ impl BackendSourceBuildSpec {
                     variant_configuration: params
                         .variants
                         .map(|variants| variants.into_iter().collect()),
-                    work_directory,
+                    work_directory: work_directory.clone(),
                     host_platform: Some(PlatformAndVirtualPackages {
                         platform: params.build_environment.host_platform,
                         virtual_packages: Some(
@@ -395,7 +395,7 @@ impl BackendSourceBuildSpec {
                             .expect("found a package record with an unparsable subdir"),
                         variant: params.variant,
                     },
-                    work_directory,
+                    work_directory: work_directory.clone(),
                     output_directory: params.output_directory,
                     editable: Some(params.editable),
                 },

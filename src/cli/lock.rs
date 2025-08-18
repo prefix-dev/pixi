@@ -1,13 +1,13 @@
 use clap::Parser;
 use miette::{Context, IntoDiagnostic};
-
-use pixi_core::lock_file::LockFileDerivedData;
 use pixi_core::{
     WorkspaceLocator,
     diff::{LockFileDiff, LockFileJsonDiff},
     environment::LockFileUsage,
-    lock_file::UpdateLockFileOptions,
+    lock_file::{LockFileDerivedData, UpdateLockFileOptions},
 };
+
+use crate::cli::cli_config::NoInstallConfig;
 
 use crate::cli::cli_config::WorkspaceConfig;
 
@@ -18,6 +18,9 @@ use crate::cli::cli_config::WorkspaceConfig;
 pub struct Args {
     #[clap(flatten)]
     pub workspace_config: WorkspaceConfig,
+
+    #[clap(flatten)]
+    pub no_install_config: NoInstallConfig,
 
     /// Output the changes in JSON format.
     #[clap(long)]
@@ -37,14 +40,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Update the lock-file, and extract it from the derived data to drop additional resources
     // created for the solve.
     let original_lock_file = workspace.load_lock_file().await?;
-    let LockFileDerivedData {
-        lock_file,
-        was_outdated,
-        ..
-    } = workspace
+    let (LockFileDerivedData { lock_file, .. }, lock_updated) = workspace
         .update_lock_file(UpdateLockFileOptions {
             lock_file_usage: LockFileUsage::Update,
-            no_install: false,
+            no_install: args.no_install_config.no_install,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         })
         .await?;
@@ -58,7 +57,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let json_diff = LockFileJsonDiff::new(Some(&workspace), diff);
         let json = serde_json::to_string_pretty(&json_diff).expect("failed to convert to json");
         println!("{}", json);
-    } else if was_outdated {
+    } else if lock_updated {
         eprintln!(
             "{}Updated lock-file",
             console::style(console::Emoji("✔ ", "")).green()

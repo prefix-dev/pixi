@@ -8,7 +8,7 @@ use pixi_spec::{GitSpec, SourceLocationSpec, SourceSpec};
 use rattler_conda_types::{MatchSpec, PackageName};
 
 use crate::cli::{
-    cli_config::{DependencyConfig, LockFileUpdateConfig, PrefixUpdateConfig, WorkspaceConfig},
+    cli_config::{DependencyConfig, LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig},
     has_specs::HasSpecs,
 };
 
@@ -81,7 +81,7 @@ pub struct Args {
     pub dependency_config: DependencyConfig,
 
     #[clap(flatten)]
-    pub prefix_update_config: PrefixUpdateConfig,
+    pub no_install_config: NoInstallConfig,
 
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
@@ -95,9 +95,9 @@ pub struct Args {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let (dependency_config, prefix_update_config, lock_file_update_config, workspace_config) = (
+    let (dependency_config, no_install_config, lock_file_update_config, workspace_config) = (
         args.dependency_config,
-        args.prefix_update_config,
+        args.no_install_config,
         args.lock_file_update_config,
         args.workspace_config,
     );
@@ -197,8 +197,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         match_specs,
         pypi_deps,
         source_specs,
-        prefix_update_config.no_install,
-        &lock_file_update_config.lock_file_usage(),
+        no_install_config.no_install,
+        &lock_file_update_config.lock_file_usage()?,
         &dependency_config.feature,
         &dependency_config.platforms,
         args.editable,
