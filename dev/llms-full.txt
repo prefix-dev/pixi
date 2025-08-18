@@ -8854,6 +8854,23 @@ config.toml
 
 ```
 
+### `proxy-config`
+
+`pixi` respects the proxy environments such as `https_proxy` with the highest priority. Also we can set the proxies in `proxy-config` table of the `pixi` config, which affect all the pixi network actions, such as resolve, self-update, download, etc. Now `proxy-config` table supports the following options:
+
+- `https` and `http`: The proxy url for https:// or http:// url, works like `https_proxy` and `http_proxy` environments.
+- `non-proxy-hosts`: A list of domains which should bypass proxies.
+
+config.toml
+
+```toml
+[proxy-config]
+http = "http://proxy.example.com:8080/"
+https = "http://proxy.example.com:8080/"
+non-proxy-hosts = [".cn", "localhost", "[::1]"]
+
+```
+
 ### `repodata-config`
 
 Configuration for repodata fetching.

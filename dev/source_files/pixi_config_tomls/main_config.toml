@@ -96,6 +96,13 @@ use-environment-activation-cache = true
 ]
 #  --8<-- [end:mirrors]
 
+#  --8<-- [start:proxy-config]
+[proxy-config]
+http = "http://proxy.example.com:8080/"
+https = "http://proxy.example.com:8080/"
+non-proxy-hosts = [".cn", "localhost", "[::1]"]
+#  --8<-- [end:proxy-config]
+
 # --8<-- [start:shell]
 [shell]
 change-ps1 = false
