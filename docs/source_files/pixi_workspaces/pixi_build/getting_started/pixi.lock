@@ -695,11 +695,12 @@ packages:
 - conda: .
   name: python_rich
   version: 0.1.0
-  build: pyhbf21a9e_0
+  build: pyh4616a5c_0
   subdir: noarch
   depends:
-  - rich 13.9.*
   - python
+  - python
+  - rich 13.9.*
   input:
     hash: 0ca0e061fed72fef38ea5d178e341c05054d06941ad89c1b8addbedeeffb54e5
     globs: []
