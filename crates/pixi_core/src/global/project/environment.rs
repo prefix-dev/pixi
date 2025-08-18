@@ -54,8 +54,9 @@ impl FromStr for EnvironmentName {
     type Err = ParseEnvironmentNameError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         static REGEX: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
-        let regex = REGEX
-            .get_or_init(|| Regex::new(r"^[a-z0-9-_.]+$").expect("Regex should be able to compile"));
+        let regex = REGEX.get_or_init(|| {
+            Regex::new(r"^[a-z0-9-_.]+$").expect("Regex should be able to compile")
+        });
 
         if !regex.is_match(s) {
             // Return an error if the string doesn't match the regex
@@ -115,12 +116,12 @@ mod tests {
         assert!(EnvironmentName::from_str("test-name").is_ok());
         assert!(EnvironmentName::from_str("test_name").is_ok());
         assert!(EnvironmentName::from_str("test123").is_ok());
-        
+
         // Test that environment names with dots should work (for package names)
         assert!(EnvironmentName::from_str("my.package").is_ok());
         assert!(EnvironmentName::from_str("package.with.dots").is_ok());
         assert!(EnvironmentName::from_str("test-123.version").is_ok());
-        
+
         // Test invalid characters are still rejected
         assert!(EnvironmentName::from_str("test/name").is_err());
         assert!(EnvironmentName::from_str("test name").is_err());
