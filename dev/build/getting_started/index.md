@@ -38,8 +38,13 @@ python_rich = { path = "." }
 name = "python_rich"
 version = "0.1.0"
 # We are using `pixi-build-python` in order to build a Python package
-[package.build]
-backend = { name = "pixi-build-python", version = "==0.3.2" }
+[package.build.backend]
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+name = "pixi-build-python"
+version = "0.1.*"
 # The Python package `python_rich` uses `hatchling` as Python build backend
 [package.host-dependencies]
 hatchling = "*"
@@ -75,8 +80,7 @@ There are [different build backends available](https://prefix-dev.github.io/pixi
 Pixi backends describe how to build a conda package, for a certain language or build tool. In this example, we are using `pixi-build-python` backend in order to build a Python package.
 
 ```toml
-[package.build]
-backend = { name = "pixi-build-python", version = "==0.3.2" }
+
 
 ```
 

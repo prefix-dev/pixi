@@ -7,8 +7,13 @@ The Prefix.dev managed backends are being developed in the [pixi-build-backends]
 Install a certain build backend by adding it to the `package.build` section of the manifest file.:
 
 ```toml
-[package.build]
-backend = { name = "pixi-build-python", version = "==0.3.2" }
+[package.build.backend]
+channels = [
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
+]
+name = "pixi-build-python"
+version = "0.1.*"
 
 ```
 
