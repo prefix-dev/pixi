@@ -248,7 +248,7 @@ dependencies = { dummy = "3.11.*" }
             .insert_into_inline_table(
                 &["envs", "python", "dependencies"],
                 "test",
-                toml_edit::Value::from("6.6")
+                toml_edit::Value::from("6.6"),
             )
             .unwrap();
 
@@ -268,13 +268,37 @@ dependencies = { dummy = "3.11.*" }
             .insert_into_inline_table(
                 &["envs", "sdl.example", "dependencies"],
                 "test",
-                toml_edit::Value::from("1.0")
+                toml_edit::Value::from("1.0"),
             )
             .unwrap();
 
         // Should create proper quoted section names
         let result = manifest.0.to_string();
         println!("Result: {}", result);
-        assert!(result.contains("[envs.\"sdl.example\"]") || result.contains("[envs.'sdl.example']"));
+        assert!(
+            result.contains("[envs.\"sdl.example\"]") || result.contains("[envs.'sdl.example']")
+        );
+    }
+
+    #[test]
+    fn test_get_or_insert_nested_table_with_quoted_keys() {
+        let toml = r#"
+[envs]
+"#;
+        let mut manifest = TomlDocument::new(DocumentMut::from_str(toml).unwrap());
+        let result_table = manifest
+            .get_or_insert_nested_table(&["envs", "sdl.example", "dependencies"])
+            .unwrap();
+        
+        // Add something to the table to make it non-empty
+        result_table.insert("test", toml_edit::Item::Value(toml_edit::Value::from("1.0")));
+
+        // Should create proper quoted section names  
+        let result = manifest.0.to_string();
+        println!("get_or_insert_nested_table Result: {}", result);
+        // The key should be properly quoted in the section header
+        assert!(
+            result.contains("[envs.\"sdl.example\".dependencies]") || result.contains("[envs.'sdl.example'.dependencies]")
+        );
     }
 }
