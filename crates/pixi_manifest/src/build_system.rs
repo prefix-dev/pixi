@@ -90,7 +90,10 @@ mod tests {
             "#;
 
         let build = PackageBuild::from_toml_str(toml).unwrap();
-        assert_eq!(build.value.backend.name.as_source(), "pixi-build-rattler-build");
+        assert_eq!(
+            build.value.backend.name.as_source(),
+            "pixi-build-rattler-build"
+        );
         assert!(build.value.source.is_some());
         assert!(!build.value.source.unwrap().is_git());
     }
@@ -107,7 +110,10 @@ mod tests {
             "#;
 
         let build = PackageBuild::from_toml_str(toml).unwrap();
-        assert_eq!(build.value.backend.name.as_source(), "pixi-build-rattler-build");
+        assert_eq!(
+            build.value.backend.name.as_source(),
+            "pixi-build-rattler-build"
+        );
         assert!(build.value.source.is_some());
         assert!(build.value.source.unwrap().is_git());
     }
@@ -124,7 +130,10 @@ mod tests {
             "#;
 
         let build = PackageBuild::from_toml_str(toml).unwrap();
-        assert_eq!(build.value.backend.name.as_source(), "pixi-build-rattler-build");
+        assert_eq!(
+            build.value.backend.name.as_source(),
+            "pixi-build-rattler-build"
+        );
         assert!(build.value.source.is_some());
         assert!(!build.value.source.as_ref().unwrap().is_git());
     }
@@ -141,7 +150,10 @@ mod tests {
             "#;
 
         let build = PackageBuild::from_toml_str(toml).unwrap();
-        assert_eq!(build.value.backend.name.as_source(), "pixi-build-rattler-build");
+        assert_eq!(
+            build.value.backend.name.as_source(),
+            "pixi-build-rattler-build"
+        );
         assert!(build.value.source.is_some());
 
         // Verify it's a path source and contains the relative path
@@ -167,7 +179,10 @@ mod tests {
             "#;
 
         let build = PackageBuild::from_toml_str(toml).unwrap();
-        assert_eq!(build.value.backend.name.as_source(), "pixi-build-rattler-build");
+        assert_eq!(
+            build.value.backend.name.as_source(),
+            "pixi-build-rattler-build"
+        );
         assert!(build.value.source.is_some());
 
         // Verify it's a path source and contains the home directory path

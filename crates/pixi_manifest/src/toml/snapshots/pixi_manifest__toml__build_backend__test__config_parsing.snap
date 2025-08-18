@@ -27,6 +27,7 @@ PackageBuild {
     },
     additional_dependencies: {},
     channels: None,
+    source: None,
     config: Some(
         Map(
             {
