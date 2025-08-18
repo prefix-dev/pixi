@@ -247,12 +247,12 @@ impl DiscoveredBackend {
                 ),
                 source_dir,
                 project_model: Some(project_model),
-                configuration: build_system.configuration.map(|config| {
+                configuration: build_system.config.map(|config| {
                     config
                         .deserialize_into()
                         .expect("Configuration dictionary needs to be serializable to JSON")
                 }),
-                target_configuration: build_system.target_configuration.map(|c| {
+                target_configuration: build_system.target_config.map(|c| {
                     c.into_iter()
                         .map(|(selector, config)| {
                             (

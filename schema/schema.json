@@ -330,8 +330,8 @@
             ]
           }
         },
-        "configuration": {
-          "title": "Configuration",
+        "config": {
+          "title": "Config",
           "description": "The configuration of the build backend",
           "type": "object",
           "additionalProperties": true
@@ -349,7 +349,7 @@
           "examples": [
             {
               "linux-64": {
-                "configuration": {
+                "config": {
                   "key": "value"
                 }
               }
@@ -478,8 +478,8 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "configuration": {
-          "title": "Configuration",
+        "config": {
+          "title": "Config",
           "description": "Target-specific configuration for the build backend",
           "type": "object",
           "additionalProperties": true

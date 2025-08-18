@@ -6,7 +6,7 @@ use rattler_conda_types::NamedChannelOrUrl;
 
 use crate::TargetSelector;
 use crate::{
-    TomlError,
+    TomlError, WithWarnings,
     toml::{FromTomlStr, TomlPackageBuild},
 };
 
@@ -25,10 +25,10 @@ pub struct PackageBuild {
     pub channels: Option<Vec<NamedChannelOrUrl>>,
 
     /// Additional configuration for the build backend.
-    pub configuration: Option<serde_value::Value>,
+    pub config: Option<serde_value::Value>,
 
     /// Target-specific configuration for different platforms
-    pub target_configuration: Option<IndexMap<TargetSelector, serde_value::Value>>,
+    pub target_config: Option<IndexMap<TargetSelector, serde_value::Value>>,
 }
 
 impl PackageBuild {
@@ -38,8 +38,8 @@ impl PackageBuild {
             backend,
             channels: Some(channels),
             additional_dependencies: IndexMap::default(),
-            configuration: None,
-            target_configuration: None,
+            config: None,
+            target_config: None,
         }
     }
 }
@@ -55,7 +55,7 @@ pub struct BuildBackend {
 
 impl PackageBuild {
     /// Parses the specified string as a toml representation of a build system.
-    pub fn from_toml_str(source: &str) -> Result<Self, TomlError> {
+    pub fn from_toml_str(source: &str) -> Result<WithWarnings<Self>, TomlError> {
         TomlPackageBuild::from_toml_str(source).and_then(TomlPackageBuild::into_build_system)
     }
 }
@@ -71,6 +71,6 @@ mod tests {
             "#;
 
         let build = PackageBuild::from_toml_str(toml).unwrap();
-        assert_eq!(build.backend.name.as_source(), "pixi-build-python");
+        assert_eq!(build.value.backend.name.as_source(), "pixi-build-python");
     }
 }

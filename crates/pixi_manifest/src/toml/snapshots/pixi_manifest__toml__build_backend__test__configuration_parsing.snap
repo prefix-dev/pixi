@@ -1,6 +1,7 @@
 ---
 source: crates/pixi_manifest/src/toml/build_backend.rs
 expression: parsed
+snapshot_kind: text
 ---
 TomlPackageBuild {
     backend: PixiSpanned {
@@ -85,4 +86,26 @@ TomlPackageBuild {
         ),
     ),
     target: {},
+    warnings: [
+        Deprecation(
+            Deprecation {
+                message: "The `configuration` field is deprecated. Use `config` instead.",
+                labels: [
+                    LabeledSpan {
+                        label: Some(
+                            "replace this with 'config'",
+                        ),
+                        span: SourceSpan {
+                            offset: SourceOffset(
+                                70,
+                            ),
+                            length: 13,
+                        },
+                        primary: true,
+                    },
+                ],
+                help: None,
+            },
+        ),
+    ],
 }

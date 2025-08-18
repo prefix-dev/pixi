@@ -351,7 +351,10 @@ impl TomlPackage {
         preview: &Preview,
         root_directory: Option<&Path>,
     ) -> Result<WithWarnings<PackageManifest>, TomlError> {
-        let warnings = Vec::new();
+        let mut warnings = Vec::new();
+
+        let build_result = self.build.into_build_system()?;
+        warnings.extend(build_result.warnings);
 
         // Resolve fields with 3-tier hierarchy: direct → workspace → package defaults →
         // error
@@ -496,7 +499,7 @@ impl TomlPackage {
                     "documentation",
                 )?,
             },
-            build: self.build.into_build_system()?,
+            build: build_result.value,
             targets: Targets::from_default_and_user_defined(default_package_target, targets),
         })
         .with_warnings(warnings))
