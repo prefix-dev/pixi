@@ -54,8 +54,9 @@ impl FromStr for EnvironmentName {
     type Err = ParseEnvironmentNameError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         static REGEX: std::sync::OnceLock<Regex> = std::sync::OnceLock::new();
-        let regex = REGEX
-            .get_or_init(|| Regex::new(r"^[a-z0-9-_]+$").expect("Regex should be able to compile"));
+        let regex = REGEX.get_or_init(|| {
+            Regex::new(r"^[a-z0-9-_.]+$").expect("Regex should be able to compile")
+        });
 
         if !regex.is_match(s) {
             // Return an error if the string doesn't match the regex
@@ -72,7 +73,7 @@ impl FromStr for EnvironmentName {
 /// This error is returned when a string fails to be parsed as an environment name.
 #[derive(Debug, Clone, Error, Diagnostic, PartialEq)]
 #[error(
-    "Failed to parse environment name '{attempted_parse}', please use only lowercase letters, numbers, dashes and underscores"
+    "Failed to parse environment name '{attempted_parse}', please use only lowercase letters, numbers, dashes, underscores and dots"
 )]
 pub struct ParseEnvironmentNameError {
     /// The string that was attempted to be parsed.
@@ -107,6 +108,26 @@ mod tests {
     use pixi_utils::prefix::Prefix;
     use rattler_conda_types::ParseStrictness;
     use std::path::PathBuf;
+
+    #[test]
+    fn test_environment_name_parsing() {
+        // Test that environment names allow basic characters
+        assert!(EnvironmentName::from_str("test").is_ok());
+        assert!(EnvironmentName::from_str("test-name").is_ok());
+        assert!(EnvironmentName::from_str("test_name").is_ok());
+        assert!(EnvironmentName::from_str("test123").is_ok());
+
+        // Test that environment names with dots should work (for package names)
+        assert!(EnvironmentName::from_str("my.package").is_ok());
+        assert!(EnvironmentName::from_str("package.with.dots").is_ok());
+        assert!(EnvironmentName::from_str("test-123.version").is_ok());
+
+        // Test invalid characters are still rejected
+        assert!(EnvironmentName::from_str("test/name").is_err());
+        assert!(EnvironmentName::from_str("test name").is_err());
+        assert!(EnvironmentName::from_str("Test").is_err()); // uppercase
+        assert!(EnvironmentName::from_str("test:name").is_err());
+    }
 
     #[tokio::test]
     async fn test_environment_specs_in_sync() {
