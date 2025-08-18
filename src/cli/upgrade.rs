@@ -244,7 +244,7 @@ pub fn parse_specs(
                     workspace.document()
                 {
                     if document
-                        .get_nested_table("[tool.pixi.dependencies.python]")
+                        .get_nested_table(&["tool", "pixi", "dependencies", "python"])
                         .is_err()
                     {
                         return false;

@@ -353,6 +353,16 @@ lto = false
 opt-level = 3
 strip = false
 
+[profile.profiling]
+codegen-units = 1    # better line info (slower build, clearer profiles)
+debug = 2            # full debug info
+inherits = "release"
+lto = false          # avoid over-inlining across crates
+opt-level = 1        # less inlining, easier stepping/backtraces
+panic = "unwind"     # needed for backtraces
+# macOS only:
+split-debuginfo = "unpacked"
+strip = "none"               # or "debuginfo" to separate
 
 [dev-dependencies]
 async-trait = { workspace = true }

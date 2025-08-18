@@ -223,7 +223,7 @@ impl ManifestDocument {
             .with_table(table);
 
         self.manifest_mut()
-            .get_or_insert_toml_array_mut(table_name.to_string().as_str(), array_name)
+            .get_or_insert_toml_array_mut(&table_name.as_keys(), array_name)
     }
 
     fn as_table_mut(&mut self) -> &mut Table {
@@ -248,12 +248,12 @@ impl ManifestDocument {
         // arrays
         match self {
             ManifestDocument::PyProjectToml(_) if feature_name.is_default() => {
-                self.remove_pypi_requirement("project", "dependencies", dep)?;
+                self.remove_pypi_requirement(&["project"], "dependencies", dep)?;
             }
             ManifestDocument::PyProjectToml(_) => {
                 let name = feature_name.to_string();
-                self.remove_pypi_requirement("project.optional-dependencies", &name, dep)?;
-                self.remove_pypi_requirement("dependency-groups", &name, dep)?;
+                self.remove_pypi_requirement(&["project", "optional-dependencies"], &name, dep)?;
+                self.remove_pypi_requirement(&["dependency-groups"], &name, dep)?;
             }
             _ => (),
         };
@@ -267,7 +267,7 @@ impl ManifestDocument {
             .with_table(Some(consts::PYPI_DEPENDENCIES));
 
         self.manifest_mut()
-            .get_or_insert_nested_table(table_name.to_string().as_str())
+            .get_or_insert_nested_table(&table_name.as_keys())
             .map(|t| t.remove(dep.as_source()))?;
         Ok(())
     }
@@ -275,11 +275,13 @@ impl ManifestDocument {
     /// Removes a pypi requirement from a particular array.
     fn remove_pypi_requirement(
         &mut self,
-        table: &str,
+        table_parts: &[&str],
         array_name: &str,
         dependency_name: &PypiPackageName,
     ) -> Result<(), TomlError> {
-        let array = self.manifest_mut().get_mut_toml_array(table, array_name)?;
+        let array = self
+            .manifest_mut()
+            .get_mut_toml_array(table_parts, array_name)?;
         if let Some(array) = array {
             array.retain(|x| {
                 let req: pep508_rs::Requirement = x
@@ -292,7 +294,7 @@ impl ManifestDocument {
             });
             if array.is_empty() {
                 self.manifest_mut()
-                    .get_or_insert_nested_table(table)?
+                    .get_or_insert_nested_table(table_parts)?
                     .remove(array_name);
             }
         }
@@ -317,7 +319,7 @@ impl ManifestDocument {
             .with_table(Some(spec_type.name()));
 
         self.manifest_mut()
-            .get_or_insert_nested_table(table_name.to_string().as_str())
+            .get_or_insert_nested_table(&table_name.as_keys())
             .map(|t| t.remove(dep.as_source()))?;
         Ok(())
     }
@@ -340,7 +342,7 @@ impl ManifestDocument {
             .with_table(Some(spec_type.name()));
 
         self.manifest_mut()
-            .get_or_insert_nested_table(dependency_table.to_string().as_str())
+            .get_or_insert_nested_table(&dependency_table.as_keys())
             .map(|t| {
                 let mut new_value = spec.to_toml_value();
 
@@ -408,7 +410,7 @@ impl ManifestDocument {
 
             let table = self
                 .manifest_mut()
-                .get_or_insert_nested_table(dependency_table_name.to_string().as_str())?;
+                .get_or_insert_nested_table(&dependency_table_name.as_keys())?;
 
             let mut new_value = Value::from(pypi_requirement);
 
@@ -433,7 +435,7 @@ impl ManifestDocument {
 
             // Remove the entry from the project native array.
             self.remove_pypi_requirement(
-                "project",
+                &["project"],
                 "dependencies",
                 &PypiPackageName::from_normalized(requirement.name.clone()),
             )?;
@@ -445,42 +447,44 @@ impl ManifestDocument {
         //   - the [project.dependencies] array is selected for the default feature
         //   - the [dependency-groups.feature_name] array is selected unless
         //   - optional-dependencies is explicitly requested as location
-        let add_requirement =
-            |source: &mut ManifestDocument, table, array| -> Result<(), TomlError> {
-                let array = source
-                    .manifest_mut()
-                    .get_or_insert_toml_array_mut(table, array)?;
+        let add_requirement = |source: &mut ManifestDocument,
+                               table_parts: &[&str],
+                               array: &str|
+         -> Result<(), TomlError> {
+            let array = source
+                .manifest_mut()
+                .get_or_insert_toml_array_mut(table_parts, array)?;
 
-                // Check if there is an existing entry that we should replace. Replacing will
-                // preserve any existing formatting.
-                let existing_entry_idx = array.iter().position(|item| {
-                    let Ok(req): Result<pep508_rs::Requirement, _> =
-                        item.as_str().unwrap_or_default().parse()
-                    else {
-                        return false;
-                    };
-                    req.name == requirement.name
-                });
+            // Check if there is an existing entry that we should replace. Replacing will
+            // preserve any existing formatting.
+            let existing_entry_idx = array.iter().position(|item| {
+                let Ok(req): Result<pep508_rs::Requirement, _> =
+                    item.as_str().unwrap_or_default().parse()
+                else {
+                    return false;
+                };
+                req.name == requirement.name
+            });
 
-                if let Some(idx) = existing_entry_idx {
-                    array.replace(idx, requirement.to_string());
-                } else {
-                    array.push(requirement.to_string());
-                }
-                Ok(())
-            };
+            if let Some(idx) = existing_entry_idx {
+                array.replace(idx, requirement.to_string());
+            } else {
+                array.push(requirement.to_string());
+            }
+            Ok(())
+        };
         if feature_name.is_default()
             || matches!(location, Some(PypiDependencyLocation::Dependencies))
         {
-            add_requirement(self, "project", "dependencies")?
+            add_requirement(self, &["project"], "dependencies")?
         } else if matches!(location, Some(PypiDependencyLocation::OptionalDependencies)) {
             add_requirement(
                 self,
-                "project.optional-dependencies",
+                &["project", "optional-dependencies"],
                 &feature_name.to_string(),
             )?
         } else {
-            add_requirement(self, "dependency-groups", &feature_name.to_string())?
+            add_requirement(self, &["dependency-groups"], &feature_name.to_string())?
         }
         Ok(())
     }
@@ -519,10 +523,7 @@ impl ManifestDocument {
             .with_platform(platform.as_ref())
             .with_table(Some(consts::PYPI_DEPENDENCIES));
 
-        let pypi_dependency_table = self
-            .manifest()
-            .get_nested_table(table_name.to_string().as_str())
-            .ok();
+        let pypi_dependency_table = self.manifest().get_nested_table(&table_name.as_keys()).ok();
 
         if pypi_dependency_table
             .and_then(|table| table.get(package_name.as_source()))
@@ -533,7 +534,7 @@ impl ManifestDocument {
 
         if self
             .manifest()
-            .get_toml_array("project", "dependencies")
+            .get_toml_array(&["project"], "dependencies")
             .is_ok()
         {
             return Some(PypiDependencyLocation::Dependencies);
@@ -542,7 +543,7 @@ impl ManifestDocument {
 
         if self
             .manifest()
-            .get_toml_array("project.optional-dependencies", &name)
+            .get_toml_array(&["project", "optional-dependencies"], &name)
             .is_ok()
         {
             return Some(PypiDependencyLocation::OptionalDependencies);
@@ -550,7 +551,7 @@ impl ManifestDocument {
 
         if self
             .manifest()
-            .get_toml_array("dependency-groups", &name)
+            .get_toml_array(&["dependency-groups"], &name)
             .is_ok()
         {
             return Some(PypiDependencyLocation::DependencyGroups);
@@ -576,7 +577,7 @@ impl ManifestDocument {
             .with_table(Some("tasks"));
 
         self.manifest_mut()
-            .get_or_insert_nested_table(task_table.to_string().as_str())?
+            .get_or_insert_nested_table(&task_table.as_keys())?
             .remove(name);
 
         Ok(())
@@ -598,7 +599,7 @@ impl ManifestDocument {
             .with_table(Some("tasks"));
 
         self.manifest_mut()
-            .get_or_insert_nested_table(task_table.to_string().as_str())?
+            .get_or_insert_nested_table(&task_table.as_keys())?
             .insert(name, task.into());
 
         Ok(())
@@ -638,7 +639,7 @@ impl ManifestDocument {
 
         // Insert into the environment table
         self.manifest_mut()
-            .get_or_insert_nested_table(env_table.to_string().as_str())?
+            .get_or_insert_nested_table(&env_table.as_keys())?
             .insert(&name.into(), item);
 
         Ok(())
@@ -654,7 +655,7 @@ impl ManifestDocument {
 
         Ok(self
             .manifest_mut()
-            .get_or_insert_nested_table(env_table.to_string().as_str())?
+            .get_or_insert_nested_table(&env_table.as_keys())?
             .remove(name)
             .is_some())
     }
@@ -674,7 +675,7 @@ impl ManifestDocument {
         if let Some(linux) = &system_requirements.linux {
             inserted |= self
                 .manifest_mut()
-                .get_or_insert_nested_table(system_requirements_table.to_string().as_str())?
+                .get_or_insert_nested_table(&system_requirements_table.as_keys())?
                 .insert("linux", toml_edit::Item::from(linux.to_string()))
                 .is_some();
         }
@@ -682,7 +683,7 @@ impl ManifestDocument {
         if let Some(cuda) = &system_requirements.cuda {
             inserted |= self
                 .manifest_mut()
-                .get_or_insert_nested_table(system_requirements_table.to_string().as_str())?
+                .get_or_insert_nested_table(&system_requirements_table.as_keys())?
                 .insert("cuda", toml_edit::Item::from(cuda.to_string()))
                 .is_some();
         }
@@ -690,7 +691,7 @@ impl ManifestDocument {
         if let Some(macos) = &system_requirements.macos {
             inserted |= self
                 .manifest_mut()
-                .get_or_insert_nested_table(system_requirements_table.to_string().as_str())?
+                .get_or_insert_nested_table(&system_requirements_table.as_keys())?
                 .insert("macos", toml_edit::Item::from(macos.to_string()))
                 .is_some();
         }
@@ -700,7 +701,7 @@ impl ManifestDocument {
                 LibCSystemRequirement::GlibC(version) => {
                     inserted |= self
                         .manifest_mut()
-                        .get_or_insert_nested_table(system_requirements_table.to_string().as_str())?
+                        .get_or_insert_nested_table(&system_requirements_table.as_keys())?
                         .insert("libc", toml_edit::Item::from(version.to_string()))
                         .is_some();
                 }
@@ -714,9 +715,7 @@ impl ManifestDocument {
                         );
                         inserted |= self
                             .manifest_mut()
-                            .get_or_insert_nested_table(
-                                system_requirements_table.to_string().as_str(),
-                            )?
+                            .get_or_insert_nested_table(&system_requirements_table.as_keys())?
                             .insert(
                                 "libc",
                                 toml_edit::Item::from(libc_table.into_inline_table()),
@@ -725,9 +724,7 @@ impl ManifestDocument {
                     } else {
                         inserted |= self
                             .manifest_mut()
-                            .get_or_insert_nested_table(
-                                system_requirements_table.to_string().as_str(),
-                            )?
+                            .get_or_insert_nested_table(&system_requirements_table.as_keys())?
                             .insert(
                                 "libc",
                                 toml_edit::Item::from(
@@ -743,7 +740,7 @@ impl ManifestDocument {
         if let Some(archspec) = &system_requirements.archspec {
             inserted |= self
                 .manifest_mut()
-                .get_or_insert_nested_table(system_requirements_table.to_string().as_str())?
+                .get_or_insert_nested_table(&system_requirements_table.as_keys())?
                 .insert("archspec", archspec.into())
                 .is_some();
         }
@@ -791,7 +788,7 @@ impl ManifestDocument {
 
         let table = self
             .manifest_mut()
-            .get_or_insert_nested_table(table_name.to_string().as_str())?;
+            .get_or_insert_nested_table(&table_name.as_keys())?;
 
         if let Some(version) = version {
             if let Some(item) = table.get_mut("requires-pixi") {
