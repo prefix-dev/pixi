@@ -26,12 +26,8 @@ version = "0.1.0"
 # We are using `pixi-build-python` in order to build a Python package
 # --8<-- [start:build-system]
 [package.build.backend]
-channels = [
-  "https://prefix.dev/pixi-build-backends",
-  "https://prefix.dev/conda-forge",
-]
 name = "pixi-build-python"
-version = "0.1.*"
+version = "==0.3.2"
 # --8<-- [end:build-system]
 
 
