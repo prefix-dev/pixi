@@ -95,12 +95,42 @@ impl TomlDocument {
         key: &str,
         value: Value,
     ) -> Result<&'a mut dyn TableLike, TomlError> {
-        let table = self.get_or_insert_nested_table(keys)?;
+        if keys.is_empty() {
+            return Err(TomlError::table_error("", "empty keys array"));
+        }
 
-        // Insert the value into the table
-        table.insert(key, Item::Value(value));
+        // Split the keys into all but the last, and the last key
+        let (parent_keys, last_key) = keys.split_at(keys.len() - 1);
 
-        Ok(table)
+        let mut current_table = self.0.as_table_mut() as &mut dyn TableLike;
+
+        // Navigate to the parent table
+        for part in parent_keys {
+            let entry = current_table.entry(part);
+            let item = entry.or_insert(Item::Table(Table::new()));
+            if let Some(table) = item.as_table_mut() {
+                // Avoid creating empty tables
+                table.set_implicit(true);
+            }
+            current_table = item
+                .as_table_like_mut()
+                .ok_or_else(|| TomlError::table_error(part, &keys.join(".")))?;
+        }
+
+        let last_key = last_key[0];
+
+        // Add dependency as inline table if it doesn't exist
+        if let Some(dependency) = current_table.get_mut(last_key) {
+            dependency
+                .as_table_like_mut()
+                .map(|table| table.insert(key, Item::Value(value)));
+        } else {
+            let mut dependency = toml_edit::InlineTable::new();
+            dependency.insert(key, value);
+            current_table.insert(last_key, toml_edit::value(dependency));
+        }
+
+        Ok(current_table)
     }
 
     pub fn get_mut_toml_array<'a>(
@@ -204,5 +234,47 @@ channels = ["dummy-channel"]
 
         // No empty table is being created
         assert!(!manifest.0.to_string().contains("[test]"));
+    }
+
+    #[test]
+    fn test_insert_into_inline_table_preserves_inline_format() {
+        let toml = r#"
+[envs.python]
+channels = ["dummy-channel"]
+dependencies = { dummy = "3.11.*" }
+"#;
+        let mut manifest = TomlDocument::new(DocumentMut::from_str(toml).unwrap());
+        manifest
+            .insert_into_inline_table(
+                &["envs", "python", "dependencies"],
+                "test",
+                toml_edit::Value::from("6.6")
+            )
+            .unwrap();
+
+        // Should preserve inline table format
+        let result = manifest.0.to_string();
+        assert!(result.contains("dependencies = {"));
+        assert!(result.contains("test = \"6.6\""));
+    }
+
+    #[test]
+    fn test_insert_into_inline_table_with_quoted_keys() {
+        let toml = r#"
+[envs]
+"#;
+        let mut manifest = TomlDocument::new(DocumentMut::from_str(toml).unwrap());
+        manifest
+            .insert_into_inline_table(
+                &["envs", "sdl.example", "dependencies"],
+                "test",
+                toml_edit::Value::from("1.0")
+            )
+            .unwrap();
+
+        // Should create proper quoted section names
+        let result = manifest.0.to_string();
+        println!("Result: {}", result);
+        assert!(result.contains("[envs.\"sdl.example\"]") || result.contains("[envs.'sdl.example']"));
     }
 }

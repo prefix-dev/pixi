@@ -523,10 +523,7 @@ impl ManifestDocument {
             .with_platform(platform.as_ref())
             .with_table(Some(consts::PYPI_DEPENDENCIES));
 
-        let pypi_dependency_table = self
-            .manifest()
-            .get_nested_table(&table_name.as_keys())
-            .ok();
+        let pypi_dependency_table = self.manifest().get_nested_table(&table_name.as_keys()).ok();
 
         if pypi_dependency_table
             .and_then(|table| table.get(package_name.as_source()))
