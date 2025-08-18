@@ -725,6 +725,9 @@ class Build(StrictBaseModel):
     channels: list[Channel] = Field(
         None, description="The `conda` channels that are used to fetch the build backend from"
     )
+    additional_dependencies: Dependencies = Field(
+        None, description="Additional dependencies to install alongside the build backend"
+    )
     configuration: dict[str, Any] = Field(
         None, description="The configuration of the build backend"
     )
