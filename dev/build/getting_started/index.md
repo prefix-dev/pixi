@@ -39,12 +39,8 @@ name = "python_rich"
 version = "0.1.0"
 # We are using `pixi-build-python` in order to build a Python package
 [package.build.backend]
-channels = [
-  "https://prefix.dev/pixi-build-backends",
-  "https://prefix.dev/conda-forge",
-]
 name = "pixi-build-python"
-version = "0.1.*"
+version = "==0.3.2"
 # The Python package `python_rich` uses `hatchling` as Python build backend
 [package.host-dependencies]
 hatchling = "*"
