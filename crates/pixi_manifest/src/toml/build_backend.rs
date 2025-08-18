@@ -92,7 +92,7 @@ impl TomlPackageBuild {
                 spec: build_backend_spec,
             },
             additional_dependencies,
-            channels: self.channels.map(|channels| channels.value),
+            channels,
             source: self.source,
             configuration: self.configuration,
             target_configuration: if target_configuration.is_empty() {
