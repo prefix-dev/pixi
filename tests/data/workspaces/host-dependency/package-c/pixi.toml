@@ -8,5 +8,5 @@ backend = { name = "in-memory", version = "*" }
 [package.run-dependencies]
 package-b = { path = "../package-b" }
 
-[package.build.configuration]
+[package.build.config]
 package = "package-c-0.1.0-h4616a5c_0.conda"
