@@ -305,4 +305,59 @@ dependencies = { dummy = "3.11.*" }
                 || result.contains("[envs.'sdl.example'.dependencies]")
         );
     }
+
+    #[test]
+    fn test_feature_names_with_dots_issue_3171() {
+        // Test case for issue #3171: Feature names with dots should be properly quoted
+        let toml = r#"
+[tool.pixi.project]
+"#;
+        let mut manifest = TomlDocument::new(DocumentMut::from_str(toml).unwrap());
+        let result_table = manifest
+            .get_or_insert_nested_table(&["tool", "pixi", "feature", "test.test", "dependencies"])
+            .unwrap();
+        
+        // Add a dependency like "rich = '*'"
+        result_table.insert("rich", toml_edit::Item::Value(toml_edit::Value::from("*")));
+
+        let result = manifest.0.to_string();
+        println!("Feature with dots result: {}", result);
+        
+        // Should create [tool.pixi.feature."test.test".dependencies] not [tool.pixi.feature.test.test.dependencies]
+        assert!(
+            result.contains("[tool.pixi.feature.\"test.test\".dependencies]") || 
+            result.contains("[tool.pixi.feature.'test.test'.dependencies]")
+        );
+        
+        // Verify the dependency was added
+        assert!(result.contains("rich = \"*\""));
+    }
+
+    #[test]
+    fn test_feature_names_with_dots_inline_table_issue_3171() {
+        // Test case for issue #3171 using insert_into_inline_table
+        let toml = r#"
+[tool.pixi.project]
+"#;
+        let mut manifest = TomlDocument::new(DocumentMut::from_str(toml).unwrap());
+        manifest
+            .insert_into_inline_table(
+                &["tool", "pixi", "feature", "test.test", "dependencies"],
+                "rich",
+                toml_edit::Value::from("*")
+            )
+            .unwrap();
+
+        let result = manifest.0.to_string();
+        println!("Feature with dots inline table result: {}", result);
+        
+        // Should create [tool.pixi.feature."test.test"] with dependencies = { rich = "*" }
+        assert!(
+            result.contains("[tool.pixi.feature.\"test.test\"]") || 
+            result.contains("[tool.pixi.feature.'test.test']")
+        );
+        
+        // Verify the dependency was added as inline table
+        assert!(result.contains("dependencies = { rich = \"*\" }"));
+    }
 }
