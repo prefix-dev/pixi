@@ -4,10 +4,14 @@ description = "A package management and workflow tool"
 edition.workspace = true
 homepage.workspace = true
 license.workspace = true
-name = "pixi"
+name = "pixi_cli"
 readme.workspace = true
 repository.workspace = true
 version = "0.53.0"
+
+[[bin]]
+name = "pixi"
+path = "src/main.rs"
 
 [features]
 default = ["rustls-tls"]

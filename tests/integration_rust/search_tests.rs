@@ -1,5 +1,5 @@
 use insta::assert_snapshot;
-use pixi::cli::search;
+use pixi_cli::cli::search;
 use rattler_conda_types::Platform;
 use tempfile::TempDir;
 use url::Url;

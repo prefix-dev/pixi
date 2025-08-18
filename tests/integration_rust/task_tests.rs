@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
-use pixi::cli::cli_config::WorkspaceConfig;
-use pixi::cli::run::Args;
+use pixi_cli::cli::cli_config::WorkspaceConfig;
+use pixi_cli::cli::run::Args;
 use pixi_core::task::TaskName;
 use pixi_manifest::{
     FeatureName, Task,
