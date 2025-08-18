@@ -10,8 +10,11 @@ use std::{
     path::PathBuf,
 };
 
-use rattler_conda_types::{ChannelUrl, PackageName, Platform, RepoDataRecord, VersionWithSource};
+use rattler_conda_types::{
+    ChannelUrl, MatchSpec, PackageName, Platform, RepoDataRecord, VersionWithSource,
+};
 use serde::{Deserialize, Serialize};
+use serde_with::{DefaultOnError, DisplayFromStr, serde_as};
 
 pub const METHOD_NAME: &str = "conda/build_v1";
 
@@ -32,6 +35,15 @@ pub struct CondaBuildV1Params {
     /// The path to the host prefix, or `None` if no host prefix is created.
     pub host_prefix: Option<CondaBuildV1Prefix>,
 
+    /// The run dependencies of the package.
+    pub run_dependencies: Option<Vec<CondaBuildV1Dependency>>,
+
+    /// The run constraints of the package.
+    pub run_constraints: Option<Vec<CondaBuildV1Dependency>>,
+
+    /// The run exports
+    pub run_exports: Option<CondaBuildV1RunExports>,
+
     /// The output to build.
     pub output: CondaBuildV1Output,
 
@@ -51,6 +63,63 @@ pub struct CondaBuildV1Params {
     pub editable: Option<bool>,
 }
 
+#[serde_as]
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct CondaBuildV1Dependency {
+    /// The match spec of the dependency.
+    #[serde_as(as = "DisplayFromStr")]
+    pub spec: MatchSpec,
+
+    /// What introduced this dependency? If the value of this field is
+    /// unrecognized, it will default to `None`. This ensures backwards
+    /// compatibility.
+    #[serde_as(as = "DefaultOnError<_>")]
+    pub source: Option<CondaBuildV1DependencySource>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase", tag = "type")]
+pub enum CondaBuildV1DependencySource {
+    RunExport(CondaBuildV1DependencyRunExportSource),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct CondaBuildV1DependencyRunExportSource {
+    /// The environment from which the run export was taken ("host", or
+    /// "build")
+    pub from: String,
+
+    /// The name of the package that provided the run export.
+    #[serde(rename = "runExport")]
+    pub package_name: PackageName,
+}
+
+#[serde_as]
+#[derive(Debug, Default, Deserialize, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct CondaBuildV1RunExports {
+    /// weak run exports apply a dependency from host to run
+    pub weak: Vec<CondaBuildV1Dependency>,
+
+    /// strong run exports apply a dependency from build to host and run
+    pub strong: Vec<CondaBuildV1Dependency>,
+
+    /// noarch run exports apply a run export only to noarch packages (other run
+    /// exports are ignored) for example, python uses this to apply a
+    /// dependency on python to all noarch packages, but not to
+    /// the python_abi package
+    pub noarch: Vec<CondaBuildV1Dependency>,
+
+    /// weak constrains apply a constrain dependency from host to run
+    pub weak_constrains: Vec<CondaBuildV1Dependency>,
+
+    /// strong constrains apply a constrain dependency from build to host and
+    /// run
+    pub strong_constrains: Vec<CondaBuildV1Dependency>,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct CondaBuildV1Prefix {
@@ -59,6 +128,14 @@ pub struct CondaBuildV1Prefix {
 
     /// The platform for which the packages were installed.
     pub platform: Platform,
+
+    /// The specs that were used to solve the packages in the prefix.
+    #[serde(default)]
+    pub dependencies: Vec<CondaBuildV1Dependency>,
+
+    /// The constraints that were used to solve the packages in the prefix.
+    #[serde(default)]
+    pub constraints: Vec<CondaBuildV1Dependency>,
 
     /// The packages that are installed in the prefix.
     #[serde(default)]
@@ -71,8 +148,6 @@ pub struct CondaBuildV1PrefixPackage {
     /// The repodata record of the package that was installed in the prefix.
     #[serde(flatten)]
     pub repodata_record: RepoDataRecord,
-    // TODO: Add information about how the package was introduced into the prefix. E.g. it was
-    //  directly requested in the spec, or as a run_export, etc.
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

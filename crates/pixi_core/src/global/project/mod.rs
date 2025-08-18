@@ -1,4 +1,5 @@
 use std::{
+    collections::HashSet,
     ffi::OsStr,
     fmt::{Debug, Formatter},
     path::{Path, PathBuf},
@@ -18,8 +19,7 @@ use itertools::{Either, Itertools};
 pub use manifest::{ExposedType, Manifest, Mapping};
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use once_cell::sync::OnceCell;
-pub use parsed_manifest::ParsedManifest;
-pub use parsed_manifest::{ExposedName, ParsedEnvironment};
+pub use parsed_manifest::{ExposedName, ParsedEnvironment, ParsedManifest};
 use pixi_build_discovery::EnabledProtocols;
 use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, InstallPixiEnvironmentSpec,
@@ -31,15 +31,17 @@ use pixi_manifest::PrioritizedChannel;
 use pixi_progress::global_multi_progress;
 use pixi_reporters::TopLevelProgress;
 use pixi_spec_containers::DependencyMap;
-use pixi_utils::prefix::{Executable, Prefix};
-use pixi_utils::rlimit::try_increase_rlimit_to_sensible;
-use pixi_utils::{executable_from_path, reqwest::build_reqwest_clients};
+use pixi_utils::{
+    executable_from_path,
+    prefix::{Executable, Prefix},
+    reqwest::build_reqwest_clients,
+    rlimit::try_increase_rlimit_to_sensible,
+};
 use rattler_conda_types::{
     ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, PrefixRecord,
     menuinst::MenuMode,
 };
 use rattler_repodata_gateway::Gateway;
-use std::collections::HashSet;
 // Removed unused rattler_solve imports
 use rattler_virtual_packages::{
     DetectVirtualPackageError, VirtualPackage, VirtualPackageOverrides,
@@ -525,8 +527,8 @@ impl Project {
     }
 
     /// Check if the platform matches the current platform (OS)
-    /// We only need to detect virtual packages if the platform is the current one.
-    /// Otherwise, we use an empty list
+    /// We only need to detect virtual packages if the platform is the current
+    /// one. Otherwise, we use an empty list
     pub(crate) fn virtual_packages_for(
         platform: &Platform,
     ) -> Result<Vec<GenericVirtualPackage>, DetectVirtualPackageError> {
@@ -875,7 +877,8 @@ impl Project {
 
         // Split the environment into source and binary requirements
         let (source_specs, binary_specs) = environment.split_into_source_and_binary_requirements();
-        // Convert binary specs to MatchSpec, these can be matched against the prefix directly
+        // Convert binary specs to MatchSpec, these can be matched against the prefix
+        // directly
         let specs = binary_specs
             .into_iter()
             .map(|(name, spec)| {
@@ -894,7 +897,8 @@ impl Project {
 
         let source_package_names = source_specs.specs.keys().cloned().collect::<HashSet<_>>();
 
-        // For update operations, always consider environments with source dependencies as out of sync
+        // For update operations, always consider environments with source dependencies
+        // as out of sync
         if is_update_operation && !source_package_names.is_empty() {
             tracing::debug!(
                 "Update operation: Environment {} has source dependencies, considering out of sync",
@@ -1350,7 +1354,8 @@ impl Project {
         })
     }
 
-    /// Infer the package name from a PixiSpec (path or git) by examining build outputs
+    /// Infer the package name from a PixiSpec (path or git) by examining build
+    /// outputs
     pub async fn infer_package_name_from_spec(
         &self,
         pixi_spec: &pixi_spec::PixiSpec,
@@ -1392,7 +1397,8 @@ impl Project {
             .await
             .map_err(|e| InferPackageNameError::BuildBackendMetadata(Box::new(e)))?;
 
-        // Get the available outputs and use exactly_one to handle the single output case
+        // Get the available outputs and use exactly_one to handle the single output
+        // case
         let packages = metadata.metadata.outputs();
 
         match packages.len() {
@@ -1683,14 +1689,7 @@ mod tests {
                 "test-channel"
             )),
         };
-        let prefix_record = PrefixRecord::from_repodata_record(
-            repodata_record,
-            None,
-            None,
-            vec![],
-            Default::default(),
-            None,
-        );
+        let prefix_record = PrefixRecord::from_repodata_record(repodata_record, vec![]);
 
         // Test with default channel alias
         let (platform, channel, package) =
@@ -1709,14 +1708,7 @@ mod tests {
             url: Url::from_str("https://also_doesnt_matter").unwrap(),
             channel: Some("https://test-channel.com/idk".to_string()),
         };
-        let prefix_record = PrefixRecord::from_repodata_record(
-            repodata_record,
-            None,
-            None,
-            vec![],
-            Default::default(),
-            None,
-        );
+        let prefix_record = PrefixRecord::from_repodata_record(repodata_record, vec![]);
 
         let (_platform, channel, package) =
             convert_record_to_metadata(&prefix_record, &channel_config).unwrap();
