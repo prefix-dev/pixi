@@ -14,7 +14,7 @@ use futures::stream::StreamExt;
 use indexmap::{IndexMap, IndexSet};
 use indicatif::ProgressBar;
 use is_executable::IsExecutable;
-use itertools::Itertools;
+use itertools::{Either, Itertools};
 pub use manifest::{ExposedType, Manifest, Mapping};
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use once_cell::sync::OnceCell;
@@ -29,7 +29,6 @@ use pixi_config::{Config, RunPostLinkScripts, default_channel_config, pixi_home}
 use pixi_consts::consts::{self};
 use pixi_manifest::PrioritizedChannel;
 use pixi_progress::global_multi_progress;
-use pixi_record::PinnedSourceSpec;
 use pixi_reporters::TopLevelProgress;
 use pixi_spec_containers::DependencyMap;
 use pixi_utils::prefix::{Executable, Prefix};
@@ -90,7 +89,7 @@ pub enum CommandDispatcherError {
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
 pub enum InferPackageNameError {
-    #[error("only path and git specifications are supported for package name inference")]
+    #[error("only source specifications are supported")]
     UnsupportedSpecType,
     #[error(
         "git package name inference is not yet supported. Please specify the package name explicitly"
@@ -1356,20 +1355,8 @@ impl Project {
         &self,
         pixi_spec: &pixi_spec::PixiSpec,
     ) -> Result<PackageName, InferPackageNameError> {
-        // Convert PixiSpec to SourceSpec and resolve it to PinnedSourceSpec
-        let pinned_source_spec = match pixi_spec {
-            pixi_spec::PixiSpec::Path(path_spec) => {
-                PinnedSourceSpec::Path(pixi_record::PinnedPathSpec {
-                    path: path_spec.path.clone(),
-                })
-            }
-            pixi_spec::PixiSpec::Git(git_spec) => {
-                // Convert GitSpec to SourceSpec
-                let source_spec = pixi_spec::SourceSpec {
-                    location: pixi_spec::SourceLocationSpec::Git(git_spec.clone()),
-                };
-
-                // Use the command dispatcher to resolve and checkout the git repository
+        let pinned_source_spec = match pixi_spec.clone().into_source_or_binary() {
+            Either::Left(source_spec) => {
                 let command_dispatcher = self.command_dispatcher()?;
                 let checkout = command_dispatcher
                     .pin_and_checkout(source_spec)
@@ -1378,7 +1365,7 @@ impl Project {
 
                 checkout.pinned
             }
-            _ => {
+            Either::Right(_) => {
                 return Err(InferPackageNameError::UnsupportedSpecType);
             }
         };
