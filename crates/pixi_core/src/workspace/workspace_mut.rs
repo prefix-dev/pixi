@@ -288,7 +288,7 @@ impl WorkspaceMut {
                 feature_name,
                 Some(editable),
                 DependencyOverwriteBehavior::Overwrite,
-                location.as_ref(),
+                location,
             )?;
             if added {
                 if spec.version_or_url.is_none() {
@@ -623,7 +623,7 @@ impl WorkspaceMut {
                     feature_name,
                     Some(editable),
                     DependencyOverwriteBehavior::Overwrite,
-                    location.as_ref(),
+                    location,
                 )?;
             }
         }

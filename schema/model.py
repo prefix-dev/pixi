@@ -703,6 +703,23 @@ class BuildTarget(StrictBaseModel):
     )
 
 
+class SourceLocation(StrictBaseModel):
+    """The location of a package's source code."""
+
+    path: NonEmptyStr | None = Field(None, description="The path to the source")
+
+    # TODO: url and git source
+    # url: NonEmptyStr | None = Field(None, description="The URL to the source")
+    # md5: Md5Sum | None = Field(None, description="The md5 hash of the source")
+    # sha256: Sha256Sum | None = Field(None, description="The sha256 hash of the source")
+
+    # git: NonEmptyStr | None = Field(None, description="The git URL to the source repo")
+    # rev: NonEmptyStr | None = Field(None, description="A git SHA revision to use")
+    # tag: NonEmptyStr | None = Field(None, description="A git tag to use")
+    # branch: NonEmptyStr | None = Field(None, description="A git branch to use")
+    # subdirectory: NonEmptyStr | None = Field(None, description="A subdirectory to use in the repo")
+
+
 class Build(StrictBaseModel):
     backend: BuildBackend = Field(..., description="The build backend to instantiate")
     channels: list[Channel] = Field(
@@ -716,6 +733,11 @@ class Build(StrictBaseModel):
         None,
         description="Target-specific build configuration for different platforms",
         examples=[{"linux-64": {"config": {"key": "value"}}}],
+    )
+    source: SourceLocation = Field(
+        None,
+        description="The source from which to build the package",
+        examples=[{"path": "project"}],
     )
 
 

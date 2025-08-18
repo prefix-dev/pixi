@@ -15,8 +15,10 @@ backend-spec:
       - "https://conda.anaconda.org/conda-forge"
       - "https://prefix.dev/pixi-build-backends"
 init-params:
-  source-dir: "[SOURCE_PATH]"
-  manifest-path: recipe/recipe.yml
+  workspace-root: "file://<ROOT>/nested_recipe_yml"
+  source: ~
+  source-anchor: "file://<ROOT>/nested_recipe_yml"
+  manifest-path: "file://<ROOT>/nested_recipe_yml/recipe/recipe.yml"
   project-model: ~
   configuration: ~
   target-configuration: ~
