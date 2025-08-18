@@ -366,6 +366,7 @@ strip = "none"               # or "debuginfo" to separate
 
 [dev-dependencies]
 async-trait = { workspace = true }
+divan = { version = "3.0.5", package = "codspeed-divan-compat" }
 fake = "4.0.0"
 http = { workspace = true }
 insta = { workspace = true, features = ["yaml", "glob", "filters"] }
@@ -379,3 +380,7 @@ tokio = { workspace = true, features = ["rt"] }
 reqwest-middleware = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "ad8b9d332d1773fde8b4cd008486de5973e0a3f8" }
 reqwest-retry = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "ad8b9d332d1773fde8b4cd008486de5973e0a3f8" }
 version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "06ec5a5f59ffaeb6cf5079c6cb184467da06c9db" }
+
+[[bench]]
+harness = false
+name = "my_benchmark"
