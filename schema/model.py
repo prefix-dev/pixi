@@ -745,6 +745,12 @@ class Build(StrictBaseModel):
 
 class BuildBackend(MatchspecTable):
     name: NonEmptyStr = Field(None, description="The name of the build backend package")
+    channels: list[Channel] | None = Field(
+        None, description="The `conda` channels that are used to fetch the build backend from"
+    )
+    additional_dependencies: Dependencies = Field(
+        None, description="Additional dependencies to install alongside the build backend"
+    )
 
 
 class PackageTarget(StrictBaseModel):
