@@ -1,7 +1,11 @@
 ---
-source: src/global/project/manifest.rs
+source: crates/pixi_core/src/global/project/manifest.rs
 expression: manifest.document.to_string()
 ---
 [envs.test-env]
 channels = ["conda-forge"]
-dependencies = { pythonic = "==3.15.0", python = { version = "==3.11.0", build = "he550d4f_1_cpython" }, any-spec = "*" }
+
+[envs.test-env.dependencies]
+pythonic = "==3.15.0"
+python = { version = "==3.11.0", build = "he550d4f_1_cpython" }
+any-spec = "*"

@@ -61,7 +61,8 @@ impl TableName<'_> {
         let mut parts = Vec::new();
 
         if let Some(prefix) = self.prefix {
-            parts.push(prefix);
+            // Split the prefix on dots to handle cases like "tool.pixi"
+            parts.extend(prefix.split('.'));
         }
 
         if self
