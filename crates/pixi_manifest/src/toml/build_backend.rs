@@ -8,11 +8,12 @@ use std::borrow::Cow;
 use toml_span::{DeserError, Error, Spanned, Value, de_helpers::TableHelper, value::ValueInner};
 
 use crate::{
-    PackageBuild, TargetSelector, TomlError,
+    PackageBuild, TargetSelector, TomlError, WithWarnings,
     build_system::BuildBackend,
     error::GenericError,
     toml::build_target::TomlPackageBuildTarget,
     utils::{PixiSpanned, package_map::UniquePackageMap},
+    warning::Deprecation,
 };
 
 #[derive(Debug)]
@@ -23,6 +24,7 @@ pub struct TomlPackageBuild {
     pub source: Option<SourceLocationSpec>,
     pub configuration: Option<serde_value::Value>,
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlPackageBuildTarget>,
+    pub warnings: Vec<crate::Warning>,
 }
 
 #[derive(Debug)]
@@ -34,7 +36,7 @@ pub struct TomlBuildBackend {
 }
 
 impl TomlPackageBuild {
-    pub fn into_build_system(self) -> Result<PackageBuild, TomlError> {
+    pub fn into_build_system(self) -> Result<WithWarnings<PackageBuild>, TomlError> {
         // Parse the build backend and ensure it is a binary spec.
         let build_backend_spec = self.backend.value.spec.into_spec().map_err(|e| {
             TomlError::Generic(
@@ -76,7 +78,7 @@ impl TomlPackageBuild {
         };
 
         // Convert target-specific build configurations
-        let target_configuration = self
+        let target_config = self
             .target
             .into_iter()
             .flat_map(|(selector, target)| {
@@ -86,20 +88,23 @@ impl TomlPackageBuild {
             })
             .collect::<IndexMap<_, _>>();
 
-        Ok(PackageBuild {
-            backend: BuildBackend {
-                name: self.backend.value.name.value,
-                spec: build_backend_spec,
+        Ok(WithWarnings {
+            value: PackageBuild {
+                backend: BuildBackend {
+                    name: self.backend.value.name.value,
+                    spec: build_backend_spec,
+                },
+                additional_dependencies,
+                channels,
+                source: self.source,
+                config: self.configuration,
+                target_config: if target_config.is_empty() {
+                    None
+                } else {
+                    Some(target_config)
+                },
             },
-            additional_dependencies,
-            channels,
-            source: self.source,
-            configuration: self.configuration,
-            target_configuration: if target_configuration.is_empty() {
-                None
-            } else {
-                Some(target_configuration)
-            },
+            warnings: self.warnings,
         })
     }
 }
@@ -181,6 +186,8 @@ fn spec_from_spanned_toml_location(
 impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         let mut th = TableHelper::new(value)?;
+        let mut warnings = Vec::new();
+
         let build_backend: PixiSpanned<TomlBuildBackend> = th.required_s("backend")?.into();
         let channels = th
             .optional_s::<TomlWith<_, Vec<TomlFromStr<_>>>>("channels")
@@ -196,10 +203,15 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
             .map(spec_from_spanned_toml_location)
             .transpose()?;
 
-        let configuration = th
-            .take("configuration")
-            .map(|(_, mut value)| convert_toml_to_serde(&mut value))
-            .transpose()?;
+        // Try the new "config" key first, then fall back to deprecated "configuration"
+        let configuration = if let Some((_, mut value)) = th.take("config") {
+            Some(convert_toml_to_serde(&mut value)?)
+        } else if let Some((key, mut value)) = th.table.remove_entry("configuration") {
+            warnings.push(Deprecation::renamed_field("configuration", "config", key.span).into());
+            Some(convert_toml_to_serde(&mut value)?)
+        } else {
+            None
+        };
 
         let target = th
             .optional::<TomlWith<_, TomlIndexMap<_, Same>>>("target")
@@ -255,6 +267,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageBuild {
             source,
             configuration,
             target,
+            warnings,
         })
     }
 }
@@ -284,6 +297,37 @@ mod test {
             .expect("parsing should succeed");
 
         insta::assert_debug_snapshot!(parsed);
+    }
+
+    #[test]
+    fn test_config_parsing() {
+        let toml = r#"
+            backend = { name = "foobar", version = "*" }
+            config = { key = "value", other = ["foo", "bar"], integer = 1234, nested = { abc = "def" } }
+        "#;
+        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
+            .and_then(TomlPackageBuild::into_build_system)
+            .expect("parsing should succeed");
+
+        assert!(parsed.warnings.is_empty());
+        insta::assert_debug_snapshot!(parsed.value);
+    }
+
+    #[test]
+    fn test_configuration_deprecation_warning() {
+        let toml = r#"
+            backend = { name = "foobar", version = "*" }
+            configuration = { key = "value" }
+        "#;
+        let parsed = <TomlPackageBuild as crate::toml::FromTomlStr>::from_toml_str(toml)
+            .and_then(TomlPackageBuild::into_build_system)
+            .expect("parsing should succeed");
+
+        assert_eq!(parsed.warnings.len(), 1);
+        insta::assert_snapshot!(format_parse_error(
+            toml,
+            parsed.warnings.into_iter().next().unwrap()
+        ));
     }
 
     #[test]
@@ -347,7 +391,7 @@ mod test {
             .and_then(TomlPackageBuild::into_build_system)
             .expect("parsing should succeed");
 
-        assert_eq!(parsed.channels.unwrap().len(), 1);
+        assert_eq!(parsed.value.channels.unwrap().len(), 1);
     }
 
     #[test]
@@ -360,7 +404,7 @@ mod test {
             .and_then(TomlPackageBuild::into_build_system)
             .expect("parsing should succeed");
 
-        assert_eq!(parsed.channels.unwrap().len(), 1);
+        assert_eq!(parsed.value.channels.unwrap().len(), 1);
     }
 
     #[test]
@@ -374,7 +418,7 @@ mod test {
             .expect("parsing should succeed");
 
         // Should use backend.channels, not top-level channels
-        let channels = parsed.channels.unwrap();
+        let channels = parsed.value.channels.unwrap();
         assert_eq!(channels.len(), 1);
         assert_eq!(
             channels[0].to_string(),
@@ -400,9 +444,10 @@ mod test {
             .and_then(TomlPackageBuild::into_build_system)
             .expect("parsing should succeed");
 
-        assert!(!parsed.additional_dependencies.is_empty());
+        assert!(!parsed.value.additional_dependencies.is_empty());
         assert!(
             parsed
+                .value
                 .additional_dependencies
                 .contains_key(&"git".parse::<rattler_conda_types::PackageName>().unwrap())
         );
@@ -418,9 +463,10 @@ mod test {
             .and_then(TomlPackageBuild::into_build_system)
             .expect("parsing should succeed");
 
-        assert!(!parsed.additional_dependencies.is_empty());
+        assert!(!parsed.value.additional_dependencies.is_empty());
         assert!(
             parsed
+                .value
                 .additional_dependencies
                 .contains_key(&"git".parse::<rattler_conda_types::PackageName>().unwrap())
         );
@@ -437,14 +483,16 @@ mod test {
             .expect("parsing should succeed");
 
         // Should prioritize backend.additional-dependencies
-        assert!(!parsed.additional_dependencies.is_empty());
+        assert!(!parsed.value.additional_dependencies.is_empty());
         assert!(
             parsed
+                .value
                 .additional_dependencies
                 .contains_key(&"rust".parse::<rattler_conda_types::PackageName>().unwrap())
         );
         assert!(
             !parsed
+                .value
                 .additional_dependencies
                 .contains_key(&"git".parse::<rattler_conda_types::PackageName>().unwrap())
         );
