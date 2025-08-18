@@ -16,7 +16,9 @@ pub use build_cache::{
     BuildInput, CachedBuild, CachedBuildSourceInfo,
 };
 pub use build_environment::BuildEnvironment;
-pub use dependencies::{Dependencies, DependenciesError, PixiRunExports};
+pub use dependencies::{
+    Dependencies, DependenciesError, DependencySource, KnownEnvironment, PixiRunExports, WithSource,
+};
 pub(crate) use move_file::{MoveError, move_file};
 use pixi_record::PinnedSourceSpec;
 use url::Url;

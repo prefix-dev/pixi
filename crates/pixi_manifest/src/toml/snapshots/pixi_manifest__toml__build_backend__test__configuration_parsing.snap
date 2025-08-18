@@ -42,6 +42,12 @@ TomlPackageBuild {
                 subdir: None,
                 license: None,
             },
+            channels: None,
+            additional_dependencies: UniquePackageMap {
+                specs: {},
+                name_spans: {},
+                value_spans: {},
+            },
         },
     },
     channels: None,

@@ -31,8 +31,8 @@ use crate::{
     SourceBuildCacheStatusSpec, SourceCheckoutError,
     build::{
         BuildCacheError, BuildHostEnvironment, BuildHostPackage, CachedBuild,
-        CachedBuildSourceInfo, Dependencies, DependenciesError, MoveError, SourceRecordOrCheckout,
-        WorkDirKey, move_file,
+        CachedBuildSourceInfo, Dependencies, DependenciesError, MoveError, PixiRunExports,
+        SourceRecordOrCheckout, WorkDirKey, move_file,
     },
     package_identifier::PackageIdentifier,
 };
@@ -317,7 +317,6 @@ impl SourceBuildSpec {
             .backend_source_build(BackendSourceBuildSpec {
                 method: BackendSourceBuildMethod::BuildV0(BackendSourceBuildV0Method {
                     editable: self.editable(),
-                    channel_config: self.channel_config,
                     build_environment: self.build_environment,
                     variants: self.variants,
                     output_directory: self.output_directory,
@@ -327,6 +326,7 @@ impl SourceBuildSpec {
                 source: self.source,
                 work_directory,
                 channels: self.channels,
+                channel_config: self.channel_config,
             })
             .await
             .map_err_with(SourceBuildError::from)?;
@@ -415,7 +415,7 @@ impl SourceBuildSpec {
                 &mut build_records,
                 &output.ignore_run_exports,
                 gateway,
-                reporter,
+                reporter.clone(),
             )
             .await
             .map_err(SourceBuildError::from)
@@ -432,7 +432,7 @@ impl SourceBuildSpec {
             .unwrap_or_default()
             // Extend with the run exports from the build environment.
             .extend_with_run_exports_from_build(&build_run_exports);
-        let host_records = self
+        let mut host_records = self
             .solve_dependencies(
                 format!("{} (host)", self.package.name.as_source()),
                 &command_dispatcher,
@@ -442,6 +442,16 @@ impl SourceBuildSpec {
             .await
             .map_err_with(Box::new)
             .map_err_with(SourceBuildError::SolveBuildEnvironment)?;
+        let host_run_exports = host_dependencies
+            .extract_run_exports(
+                &mut host_records,
+                &output.ignore_run_exports,
+                command_dispatcher.gateway(),
+                reporter,
+            )
+            .await
+            .map_err(SourceBuildError::from)
+            .map_err(CommandDispatcherError::Failed)?;
 
         // Install the build environment
         let build_prefix = if build_records.is_empty() {
@@ -500,6 +510,21 @@ impl SourceBuildSpec {
             CommandDispatcherError::Failed(SourceBuildError::CreateWorkDirectory(err))
         })?;
 
+        // Gather the dependencies for the output.
+        let dependencies = Dependencies::new(&output.run_dependencies, None)
+            .map_err(SourceBuildError::from)
+            .map_err(CommandDispatcherError::Failed)?
+            .extend_with_run_exports_from_build_and_host(
+                host_run_exports,
+                build_run_exports,
+                output.metadata.subdir,
+            );
+
+        // Convert the run exports
+        let run_exports = PixiRunExports::try_from_protocol(&output.run_exports)
+            .map_err(SourceBuildError::from)
+            .map_err(CommandDispatcherError::Failed)?;
+
         // Extract the repodata records from the build and host environments.
         let build_records = Self::extract_prefix_repodata(build_records, build_prefix);
         let host_records = Self::extract_prefix_repodata(host_records, host_prefix);
@@ -508,9 +533,12 @@ impl SourceBuildSpec {
             .backend_source_build(BackendSourceBuildSpec {
                 method: BackendSourceBuildMethod::BuildV1(BackendSourceBuildV1Method {
                     editable: self.editable(),
+                    dependencies,
+                    run_exports,
                     build_prefix: BackendSourceBuildPrefix {
                         platform: self.build_environment.build_platform,
                         prefix: directories.build_prefix,
+                        dependencies: build_dependencies,
                         records: build_records
                             .iter()
                             .map(|p| p.repodata_record.clone())
@@ -519,6 +547,7 @@ impl SourceBuildSpec {
                     host_prefix: BackendSourceBuildPrefix {
                         platform: self.build_environment.host_platform,
                         prefix: directories.host_prefix,
+                        dependencies: host_dependencies,
                         records: host_records
                             .iter()
                             .map(|p| p.repodata_record.clone())
@@ -532,6 +561,7 @@ impl SourceBuildSpec {
                 source: self.source,
                 work_directory,
                 channels: self.channels,
+                channel_config: self.channel_config,
             })
             .await
             .map_err_with(SourceBuildError::from)?;
@@ -595,8 +625,16 @@ impl SourceBuildSpec {
         command_dispatcher
             .solve_pixi_environment(PixiEnvironmentSpec {
                 name: Some(name),
-                dependencies: dependencies.dependencies,
-                constraints: dependencies.constraints,
+                dependencies: dependencies
+                    .dependencies
+                    .into_specs()
+                    .map(|(name, spec)| (name, spec.value))
+                    .collect(),
+                constraints: dependencies
+                    .constraints
+                    .into_specs()
+                    .map(|(name, spec)| (name, spec.value))
+                    .collect(),
                 installed: vec![], // TODO: To lock build environments, fill this.
                 build_environment,
                 channels: self.channels.clone(),
