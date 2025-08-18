@@ -957,7 +957,7 @@ More documentation on the backends can be found in the [build backend documentat
 backend = { name = "pixi-build-cmake", version = "0.3.*" }
 # not required:
 channels = ["https://prefix.dev/conda-forge"]
-configuration = { key = "value" }             # Optional configuration, specific to the build backend
+config = { key = "value" }                    # Optional configuration, specific to the build backend
 
 ```
 
