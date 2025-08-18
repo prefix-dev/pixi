@@ -12,3 +12,5 @@ pytest-temp
 /vendor
 *.conda
 *.local.*
+.history
+/__*
