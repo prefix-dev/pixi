@@ -236,10 +236,12 @@ pub struct LazyBuildDispatchDependencies {
     extra_build_requires: OnceCell<ExtraBuildRequires>,
     /// Package-specific configuration settings
     package_config_settings: OnceCell<PackageConfigSettings>,
+    /// The last initialization error that occurred
+    last_error: OnceCell<LazyBuildDispatchError>,
 }
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
-enum LazyBuildDispatchError {
+pub enum LazyBuildDispatchError {
     #[error(
         "installation of conda environment is required to solve PyPI source dependencies but `--no-install` flag has been set"
     )]
@@ -268,6 +270,11 @@ impl IsBuildBackendError for LazyBuildDispatchError {
 }
 
 impl<'a> LazyBuildDispatch<'a> {
+    /// Get the last initialization error if available
+    pub fn last_initialization_error(&self) -> Option<&LazyBuildDispatchError> {
+        self.lazy_deps.last_error.get()
+    }
+
     /// Create a new `PixiBuildDispatch` instance.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -414,11 +421,14 @@ impl BuildContext for LazyBuildDispatch<'_> {
         //
         // Even though initialize does not initialize twice, we check it beforehand
         // because the initialization takes time
-        self.get_or_try_init()
-            .await
-            .expect("could not initialize build dispatch correctly")
-            .interpreter()
-            .await
+        match self.get_or_try_init().await {
+            Ok(dispatch) => dispatch.interpreter().await,
+            Err(e) => {
+                // Store the error for later retrieval
+                let _ = self.lazy_deps.last_error.set(e);
+                panic!("could not initialize build dispatch correctly")
+            }
+        }
     }
 
     fn cache(&self) -> &uv_cache::Cache {
