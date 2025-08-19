@@ -261,17 +261,19 @@ impl CombinedInstallReporterInner {
 
     /// Called to start progress on populating the cache for a single
     /// `RepoDataRecord`.
-    fn start_populate_single_cache_entry(&mut self, record: &RepoDataRecord) -> TransactionId {
+    fn start_populate_single_cache_entry(
+        &mut self,
+        record: &RepoDataRecord,
+    ) -> (TransactionId, usize) {
         let transaction_id = TransactionId(
             self.next_id
                 .fetch_add(1, std::sync::atomic::Ordering::SeqCst),
         );
         let operation_id = 0;
-        self.cache_entry_id.insert(
-            (transaction_id, operation_id),
-            self.preparing_progress_bar.on_entry_start(record),
-        );
-        transaction_id
+        let cache_entry_id = self.preparing_progress_bar.on_entry_start(record);
+        self.cache_entry_id
+            .insert((transaction_id, operation_id), cache_entry_id);
+        (transaction_id, cache_entry_id)
     }
 
     fn on_transaction_operation_start(&mut self, _id: TransactionId, _operation: usize) {}
@@ -460,6 +462,7 @@ impl TransactionId {
 struct SyncCacheReporter {
     combined_inner: Arc<Mutex<CombinedInstallReporterInner>>,
     transaction_id: TransactionId,
+    cache_entry_id: usize,
 }
 
 impl SyncCacheReporter {
@@ -467,13 +470,14 @@ impl SyncCacheReporter {
         record: &RepoDataRecord,
         combined_inner: Arc<Mutex<CombinedInstallReporterInner>>,
     ) -> Self {
-        let transaction_id = {
+        let (transaction_id, cache_entry_id) = {
             let mut inner = combined_inner.lock();
             inner.start_populate_single_cache_entry(record)
         };
         Self {
             combined_inner,
             transaction_id,
+            cache_entry_id,
         }
     }
 }
@@ -481,7 +485,7 @@ impl SyncCacheReporter {
 impl CacheReporter for SyncCacheReporter {
     fn on_validate_start(&self) -> usize {
         let mut inner = self.combined_inner.lock();
-        inner.on_validate_start(self.transaction_id, 0)
+        inner.on_validate_start(self.transaction_id, self.cache_entry_id)
     }
 
     fn on_validate_complete(&self, index: usize) {
@@ -491,7 +495,7 @@ impl CacheReporter for SyncCacheReporter {
 
     fn on_download_start(&self) -> usize {
         let mut inner = self.combined_inner.lock();
-        inner.on_download_start(self.transaction_id, 0)
+        inner.on_download_start(self.transaction_id, self.cache_entry_id)
     }
 
     fn on_download_progress(&self, index: usize, progress: u64, total: Option<u64>) {

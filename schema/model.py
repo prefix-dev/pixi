@@ -19,7 +19,7 @@ from pydantic import (
 
 #: latest version currently supported by the `taplo` TOML linter and language server
 SCHEMA_DRAFT = "http://json-schema.org/draft-07/schema#"
-CARGO_TOML = Path(__file__).parent.parent / "Cargo.toml"
+CARGO_TOML = Path(__file__).parent.parent / "crates" / "pixi" / "Cargo.toml"
 CARGO_TOML_DATA = tomllib.loads(CARGO_TOML.read_text(encoding="utf-8"))
 VERSION = CARGO_TOML_DATA["package"]["version"]
 SCHEMA_URI = f"https://pixi.sh/v{VERSION}/schema/manifest/schema.json"
