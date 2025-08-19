@@ -180,12 +180,19 @@ pub fn build_reqwest_clients(
 }
 
 pub fn uv_middlewares(config: &Config) -> Vec<Arc<dyn Middleware>> {
-    if config.mirror_map().is_empty() {
+    let mut middlewares: Vec<Arc<dyn Middleware>> = if config.mirror_map().is_empty() {
         vec![]
     } else {
         vec![
             Arc::new(mirror_middleware(config)),
             Arc::new(oci_middleware()),
         ]
+    };
+
+    // Add authentication middleware after mirror rewriting so it can authenticate
+    // against the rewritten URLs (important for mirrors that require different credentials)
+    if let Ok(auth_middleware) = auth_middleware(config) {
+        middlewares.push(Arc::new(auth_middleware));
     }
+    middlewares
 }
