@@ -205,7 +205,7 @@ license.workspace = true
 name = "pixi"
 readme.workspace = true
 repository.workspace = true
-version = "0.52.0"
+version = "0.53.0"
 
 [features]
 default = ["rustls-tls"]
