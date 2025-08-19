@@ -7,8 +7,8 @@ use std::{
 };
 
 use fs_err::tokio as tokio_fs;
-use pixi::cli::run::{self, Args};
-use pixi::cli::{
+use pixi_cli::cli::run::{self, Args};
+use pixi_cli::cli::{
     LockFileUsageConfig,
     cli_config::{LockAndInstallConfig, LockFileUpdateConfig, WorkspaceConfig},
 };
@@ -385,15 +385,17 @@ async fn install_frozen_skip() {
 
     let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
 
+    let workspace_root = PathBuf::from(env!("CARGO_WORKSPACE_DIR"));
+
     fs_extra::dir::copy(
-        "docs/source_files/pixi_workspaces/pixi_build/python",
+        workspace_root.join("docs/source_files/pixi_workspaces/pixi_build/python"),
         pixi.workspace_path(),
         &fs_extra::dir::CopyOptions::new(),
     )
     .unwrap();
 
     fs_extra::dir::copy(
-        "tests/data/satisfiability/no-build-editable",
+        workspace_root.join("tests/data/satisfiability/no-build-editable"),
         pixi.workspace_path(),
         &fs_extra::dir::CopyOptions::new(),
     )
@@ -724,11 +726,14 @@ async fn test_installer_name() {
 async fn test_old_lock_install() {
     setup_tracing();
 
-    let lock_str =
-        fs_err::read_to_string("tests/data/satisfiability/old_lock_file/pixi.lock").unwrap();
-    let project = Workspace::from_path(Path::new(
-        "tests/data/satisfiability/old_lock_file/pyproject.toml",
-    ))
+    let workspace_root = PathBuf::from(env!("CARGO_WORKSPACE_DIR"));
+    let lock_str = fs_err::read_to_string(
+        workspace_root.join("tests/data/satisfiability/old_lock_file/pixi.lock"),
+    )
+    .unwrap();
+    let project = Workspace::from_path(
+        &workspace_root.join("tests/data/satisfiability/old_lock_file/pyproject.toml"),
+    )
     .unwrap();
     pixi_core::environment::get_update_lock_file_and_prefix(
         &project.default_environment(),
@@ -745,7 +750,10 @@ async fn test_old_lock_install() {
     .unwrap();
     assert_eq!(
         lock_str,
-        fs_err::read_to_string("tests/data/satisfiability/old_lock_file/pixi.lock").unwrap()
+        fs_err::read_to_string(
+            workspace_root.join("tests/data/satisfiability/old_lock_file/pixi.lock")
+        )
+        .unwrap()
     );
 }
 

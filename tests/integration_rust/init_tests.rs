@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use pixi::cli;
+use pixi_cli::cli;
 use pixi_manifest::FeaturesExt;
 use rattler_conda_types::{NamedChannelOrUrl, Platform, Version};
 
