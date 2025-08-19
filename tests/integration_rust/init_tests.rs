@@ -1,6 +1,5 @@
 use std::str::FromStr;
 
-use pixi_cli::cli;
 use pixi_manifest::FeaturesExt;
 use rattler_conda_types::{NamedChannelOrUrl, Platform, Version};
 
@@ -81,7 +80,7 @@ async fn init_from_existing_pyproject_toml() {
 
     // Init a new project
     pixi.init()
-        .with_format(cli::init::ManifestFormat::Pyproject)
+        .with_format(pixi_cli::init::ManifestFormat::Pyproject)
         .await
         .unwrap();
 

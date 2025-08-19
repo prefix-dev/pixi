@@ -116,7 +116,7 @@ async fn parse_valid_schema_projects() {
         let path = entry.path();
         if path.extension().map(|ext| ext == "toml").unwrap_or(false) {
             let pixi_toml = fs_err::read_to_string(&path).unwrap();
-            // Fake manifest path to be CARGO_WORKSPACE_DIR/pixi.toml 
+            // Fake manifest path to be CARGO_WORKSPACE_DIR/pixi.toml
             // so the test is able to find a valid LICENSE file.
             let manifest_path = PathBuf::from(env!("CARGO_WORKSPACE_DIR")).join("pixi.toml");
             if let Err(e) = Workspace::from_str(&manifest_path, &pixi_toml) {
@@ -131,13 +131,14 @@ fn parse_valid_docs_manifests() {
     setup_tracing();
 
     // Test all files in the docs/source_files/pixi_tomls directory
-    let schema_dir = PathBuf::from(env!("CARGO_WORKSPACE_DIR")).join("docs/source_files/pixi_tomls");
+    let schema_dir =
+        PathBuf::from(env!("CARGO_WORKSPACE_DIR")).join("docs/source_files/pixi_tomls");
     for entry in fs_err::read_dir(schema_dir).unwrap() {
         let entry = entry.unwrap();
         let path = entry.path();
         if path.extension().map(|ext| ext == "toml").unwrap_or(false) {
             let pixi_toml = fs_err::read_to_string(&path).unwrap();
-            // Fake manifest path to be CARGO_WORKSPACE_DIR/pixi.toml 
+            // Fake manifest path to be CARGO_WORKSPACE_DIR/pixi.toml
             // so the test is able to find a valid LICENSE file.
             let manifest_path = PathBuf::from(env!("CARGO_WORKSPACE_DIR")).join("pixi.toml");
             if let Err(e) = Workspace::from_str(&manifest_path, &pixi_toml) {
