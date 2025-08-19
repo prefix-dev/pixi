@@ -581,19 +581,26 @@ impl<'p> LockFileDerivedData<'p> {
     }
 
     /// Filters out packages that are in the `skipped` list.
+    /// so it this will return the packages that should *not* be skipped
     pub fn filter_skipped_packages<'lock>(
-        packages: Option<
-            impl DoubleEndedIterator<Item = LockedPackageRef<'lock>> + ExactSizeIterator + 'lock,
-        >,
-        skipped: &'lock [String],
+        packages: Option<impl IntoIterator<Item = LockedPackageRef<'lock>> + 'lock>,
+        skipped: &[String],
     ) -> Vec<LockedPackageRef<'lock>> {
-        match (packages, skipped.is_empty()) {
-            (Some(packages), true) => packages.collect(),
-            (Some(packages), false) => packages
-                .filter(|p| !skipped.iter().any(|s| s == p.name()))
-                .collect(),
-            (None, _) => Vec::new(),
+        // No packages to skip
+        let Some(packages) = packages else {
+            return Vec::new();
+        };
+
+        // Skip list is empty
+        if skipped.is_empty() {
+            return packages.into_iter().collect();
         }
+
+        // Otherwise, lets filter out
+        packages
+            .into_iter()
+            .filter(|package| !skipped.contains(&package.name().to_string()))
+            .collect()
     }
 
     async fn conda_prefix(
