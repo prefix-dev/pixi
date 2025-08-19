@@ -4663,6 +4663,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixi"
+version = "0.53.0"
+dependencies = [
+ "miette 7.6.0",
+ "pixi_allocator",
+ "pixi_cli",
+ "tokio",
+]
+
+[[package]]
 name = "pixi_allocator"
 version = "0.1.0"
 dependencies = [
@@ -4744,7 +4754,7 @@ dependencies = [
 
 [[package]]
 name = "pixi_cli"
-version = "0.53.0"
+version = "0.1.0"
 dependencies = [
  "ahash",
  "async-trait",
@@ -4777,7 +4787,6 @@ dependencies = [
  "nix 0.29.0",
  "pathdiff",
  "pep508_rs",
- "pixi_allocator",
  "pixi_command_dispatcher",
  "pixi_config",
  "pixi_consts",

@@ -1,20 +1,15 @@
 [package]
 authors.workspace = true
-description = "A package management and workflow tool"
 edition.workspace = true
 homepage.workspace = true
 license.workspace = true
 name = "pixi_cli"
 readme.workspace = true
 repository.workspace = true
-version = "0.53.0"
-
-[[bin]]
-name = "pixi"
-path = "src/main.rs"
+version = "0.1.0"
 
 [features]
-default = ["rustls-tls"]
+default = []
 native-tls = [
   "reqwest/native-tls",
   "reqwest/native-tls-alpn",
@@ -35,9 +30,6 @@ self_update = []
 slow_integration_tests = []
 tokio-console = ["console-subscriber", "tokio/tracing"]
 
-# This feature enables performance optimizations but at the cost of increased
-# compile times. By default, it is only used when building the release binary.
-performance = ["pixi_allocator"]
 
 [dependencies]
 ahash = { workspace = true }
@@ -73,7 +65,6 @@ miette = { workspace = true, features = ["fancy-no-backtrace"] }
 minijinja = { workspace = true, features = ["builtins"] }
 pathdiff = { workspace = true }
 pep508_rs = { workspace = true }
-pixi_allocator = { workspace = true, optional = true }
 pixi_command_dispatcher = { workspace = true }
 pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
