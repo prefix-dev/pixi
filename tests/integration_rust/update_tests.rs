@@ -6,9 +6,12 @@ use crate::common::{
     LockFileExt, PixiControl,
     package_database::{Package, PackageDatabase},
 };
+use crate::setup_tracing;
 
 #[tokio::test]
 async fn test_update() {
+    setup_tracing();
+
     let mut package_database = PackageDatabase::default();
 
     // Add a package
@@ -83,6 +86,8 @@ async fn test_update() {
 
 #[tokio::test]
 async fn test_update_single_package() {
+    setup_tracing();
+
     let mut package_database = PackageDatabase::default();
 
     // Add packages

@@ -39,12 +39,15 @@ use crate::common::{
     logging::try_init_test_subscriber,
     package_database::{Package, PackageDatabase},
 };
+use crate::setup_tracing;
 
 /// Should add a python version to the environment and lock file that matches
 /// the specified version and run it
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn install_run_python() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
     pixi.add("python==3.11.0").with_install(true).await.unwrap();
@@ -92,6 +95,8 @@ async fn install_run_python() {
 /// solution to keep using version `1` of bar.
 #[tokio::test]
 async fn test_incremental_lock_file() {
+    setup_tracing();
+
     let mut package_database = PackageDatabase::default();
 
     // Add a package `foo` that depends on `bar` both set to version 1.
@@ -172,6 +177,8 @@ async fn test_incremental_lock_file() {
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn install_locked_with_config() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
 
@@ -272,6 +279,8 @@ async fn install_locked_with_config() {
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn install_frozen() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
     // Add and update lockfile with this version of python
@@ -349,6 +358,8 @@ async fn is_conda_package_installed(prefix_path: &Path, package_name: &str) -> b
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn install_frozen_skip() {
+    setup_tracing();
+
     // Create a project with a local python dependency 'no-build-editable'
     // and a local conda dependency 'python_rich'
     let current_platform = Platform::current();
@@ -415,6 +426,8 @@ async fn install_frozen_skip() {
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn install_skip_non_existent_package_warning() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
     // Add a dependency to create a lock file
@@ -438,6 +451,8 @@ async fn install_skip_non_existent_package_warning() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn pypi_reinstall_python() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
     // Add and update lockfile with this version of python
@@ -494,6 +509,8 @@ async fn pypi_reinstall_python() {
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 // Check if we add and remove a pypi package that the site-packages is cleared
 async fn pypi_add_remove() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
     // Add and update lockfile with this version of python
@@ -527,6 +544,8 @@ async fn pypi_add_remove() {
 
 #[tokio::test]
 async fn test_channels_changed() {
+    setup_tracing();
+
     // Write a channel with a package `bar` with only one version
     let mut package_database_a = PackageDatabase::default();
     package_database_a.add_package(Package::build("bar", "2").finish());
@@ -582,6 +601,8 @@ async fn test_channels_changed() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn install_conda_meta_history() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
     pixi.install().await.unwrap();
@@ -595,6 +616,8 @@ async fn install_conda_meta_history() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn minimal_lockfile_update_pypi() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
 
@@ -639,6 +662,8 @@ async fn minimal_lockfile_update_pypi() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_installer_name() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
 
@@ -699,6 +724,8 @@ async fn test_installer_name() {
 /// Makes sure the lockfile isn't touched and the environment is still
 /// installed.
 async fn test_old_lock_install() {
+    setup_tracing();
+
     let lock_str =
         fs_err::read_to_string("tests/data/satisfiability/old_lock_file/pixi.lock").unwrap();
     let project = Workspace::from_path(Path::new(
@@ -727,6 +754,8 @@ async fn test_old_lock_install() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_no_build_isolation() {
+    setup_tracing();
+
     let current_platform = Platform::current();
     let setup_py = r#"
 from setuptools import setup, find_packages
@@ -800,6 +829,8 @@ setup(
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_no_build_isolation_with_dependencies() {
+    setup_tracing();
+
     let current_platform = Platform::current();
 
     // Create pyproject.toml for package-tdjager (will be installed with build isolation)
@@ -912,6 +943,8 @@ setup(
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_setuptools_override_failure() {
+    setup_tracing();
+
     // This was causing issues like: https://github.com/prefix-dev/pixi/issues/1686
     let manifest = format!(
         r#"
@@ -944,6 +977,8 @@ async fn test_setuptools_override_failure() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_many_linux_wheel_tag() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     #[cfg(not(target_os = "linux"))]
     pixi.init_with_platforms(vec![
@@ -967,6 +1002,8 @@ async fn test_many_linux_wheel_tag() {
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_ensure_gitignore_file_creation() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
     let gitignore_path = pixi.workspace().unwrap().pixi_dir().join(".gitignore");
@@ -1019,6 +1056,8 @@ async fn test_ensure_gitignore_file_creation() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn pypi_prefix_is_not_created_when_whl() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
 
@@ -1058,6 +1097,8 @@ async fn pypi_prefix_is_not_created_when_whl() {
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn conda_pypi_override_correct_per_platform() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init_with_platforms(vec![
         Platform::OsxArm64.to_string(),
@@ -1113,6 +1154,8 @@ async fn conda_pypi_override_correct_per_platform() {
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 
 async fn test_multiple_prefix_update() {
+    setup_tracing();
+
     let current_platform = Platform::current();
     let virtual_packages = VirtualPackages::detect(&VirtualPackageOverrides::default())
         .unwrap()
@@ -1253,6 +1296,8 @@ async fn test_multiple_prefix_update() {
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn install_s3() {
+    setup_tracing();
+
     let r2_access_key_id = std::env::var("PIXI_TEST_R2_ACCESS_KEY_ID").ok();
     let r2_secret_access_key = std::env::var("PIXI_TEST_R2_SECRET_ACCESS_KEY").ok();
     if r2_access_key_id.is_none()
@@ -1330,6 +1375,8 @@ async fn install_s3() {
 
 #[tokio::test]
 async fn test_exclude_newer() {
+    setup_tracing();
+
     let mut package_database = PackageDatabase::default();
 
     // Create a channel with two packages with different timestamps
@@ -1401,6 +1448,8 @@ async fn test_exclude_newer() {
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_exclude_newer_pypi() {
+    setup_tracing();
+
     let pixi = PixiControl::from_manifest(&format!(
         r#"
     [workspace]
