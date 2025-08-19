@@ -2,10 +2,10 @@ use crate::global::revert_environment_after_error;
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use pixi_config::{Config, ConfigCli};
-use pixi_core::global::common::check_all_exposed;
-use pixi_core::global::project::ExposedType;
-use pixi_core::global::{self, StateChanges};
-use pixi_core::global::{EnvironmentName, Project};
+use pixi_global::StateChanges;
+use pixi_global::common::check_all_exposed;
+use pixi_global::project::ExposedType;
+use pixi_global::{EnvironmentName, Project};
 
 /// Updates environments in the global environment.
 #[derive(Parser, Debug, Clone)]
@@ -19,7 +19,7 @@ pub struct Args {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
-    let project_original = global::Project::discover_or_create()
+    let project_original = pixi_global::Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
 
@@ -33,7 +33,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             let environment_update = project.install_environment(env_name).await?;
             state_changes.insert_change(
                 env_name,
-                global::StateChange::UpdatedEnvironment(environment_update),
+                pixi_global::StateChange::UpdatedEnvironment(environment_update),
             );
             false
         } else {
@@ -62,7 +62,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
             state_changes.insert_change(
                 env_name,
-                global::StateChange::UpdatedEnvironment(environment_update),
+                pixi_global::StateChange::UpdatedEnvironment(environment_update),
             );
         }
         // Sync executables exposed names with the manifest
@@ -88,7 +88,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             state_changes.report();
             #[cfg(unix)]
             {
-                let completions_dir = global::completions::CompletionsDir::from_env().await?;
+                let completions_dir = pixi_global::completions::CompletionsDir::from_env().await?;
                 completions_dir.prune_old_completions()?;
             }
             project_original.environments().keys().cloned().collect()

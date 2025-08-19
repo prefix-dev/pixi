@@ -3,8 +3,8 @@ use crate::global::revert_environment_after_error;
 
 use clap::Parser;
 use pixi_config::{Config, ConfigCli};
-use pixi_core::global::project::GlobalSpec;
-use pixi_core::global::{EnvironmentName, Mapping, Project, StateChange, StateChanges};
+use pixi_global::project::GlobalSpec;
+use pixi_global::{EnvironmentName, Mapping, Project, StateChange, StateChanges};
 
 /// Adds dependencies to an environment
 ///

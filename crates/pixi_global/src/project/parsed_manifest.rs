@@ -16,7 +16,7 @@ use thiserror::Error;
 use toml_span::{DeserError, Deserialize, Value, de_helpers::TableHelper};
 
 use super::{ExposedData, environment::EnvironmentName};
-use crate::global::{Mapping, project::manifest::TomlMapping};
+use crate::{Mapping, project::manifest::TomlMapping};
 
 pub const GLOBAL_MANIFEST_VERSION: i64 = 1;
 

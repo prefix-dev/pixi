@@ -164,9 +164,9 @@ checksum = "9b34d609dfbaf33d6889b2b7106d3ca345eacad44200913df5ba02bfd31d2ba9"
 
 [[package]]
 name = "astral-tokio-tar"
-version = "0.5.2"
+version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1abb2bfba199d9ec4759b797115ba6ae435bdd920ce99783bb53aeff57ba919b"
+checksum = "0036af73142caf1291d4ec8ed667d3a1145bd55c8189517bd5aa07b3167ae1e1"
 dependencies = [
  "filetime",
  "futures-core",
@@ -4792,6 +4792,7 @@ dependencies = [
  "pixi_consts",
  "pixi_core",
  "pixi_git",
+ "pixi_global",
  "pixi_manifest",
  "pixi_progress",
  "pixi_pty",
@@ -4960,7 +4961,6 @@ dependencies = [
  "dashmap",
  "deno_task_shell",
  "dialoguer",
- "dirs",
  "dunce",
  "fake",
  "fancy_display",
@@ -4973,7 +4973,6 @@ dependencies = [
  "indexmap 2.10.0",
  "indicatif",
  "insta",
- "is_executable",
  "itertools 0.14.0",
  "libc",
  "miette 7.6.0",
@@ -4997,9 +4996,7 @@ dependencies = [
  "pixi_record",
  "pixi_reporters",
  "pixi_spec",
- "pixi_spec_containers",
  "pixi_test_utils",
- "pixi_toml",
  "pixi_utils",
  "pixi_uv_conversions",
  "pypi_mapping",
@@ -5008,27 +5005,23 @@ dependencies = [
  "rattler_conda_types",
  "rattler_digest",
  "rattler_lock",
- "rattler_menuinst",
  "rattler_networking",
  "rattler_repodata_gateway",
  "rattler_shell",
  "rattler_solve",
  "rattler_virtual_packages",
  "rayon",
- "regex",
  "reqwest",
  "reqwest-middleware",
  "rlimit",
  "rstest",
  "serde",
  "serde_json",
- "serde_with",
  "shlex",
  "tabwriter",
  "tempfile",
  "thiserror 2.0.15",
  "tokio",
- "toml-span",
  "toml_edit 0.22.27",
  "tracing",
  "typed-path",
@@ -5059,7 +5052,6 @@ dependencies = [
  "uv-types",
  "uv-workspace",
  "xxhash-rust",
- "zstd",
 ]
 
 [[package]]
@@ -5114,6 +5106,63 @@ dependencies = [
  "thiserror 2.0.15",
  "tokio",
  "wax",
+]
+
+[[package]]
+name = "pixi_global"
+version = "0.1.0"
+dependencies = [
+ "ahash",
+ "console 0.15.11",
+ "dirs",
+ "dunce",
+ "fake",
+ "fancy_display",
+ "fs-err",
+ "futures",
+ "indexmap 2.10.0",
+ "indicatif",
+ "insta",
+ "is_executable",
+ "itertools 0.14.0",
+ "libc",
+ "miette 7.6.0",
+ "once_cell",
+ "pixi_build_discovery",
+ "pixi_build_frontend",
+ "pixi_command_dispatcher",
+ "pixi_config",
+ "pixi_consts",
+ "pixi_core",
+ "pixi_manifest",
+ "pixi_progress",
+ "pixi_reporters",
+ "pixi_spec",
+ "pixi_spec_containers",
+ "pixi_toml",
+ "pixi_utils",
+ "rattler",
+ "rattler_conda_types",
+ "rattler_lock",
+ "rattler_menuinst",
+ "rattler_repodata_gateway",
+ "rattler_shell",
+ "rattler_virtual_packages",
+ "regex",
+ "reqwest",
+ "reqwest-middleware",
+ "rstest",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "tempfile",
+ "thiserror 2.0.15",
+ "tokio",
+ "toml-span",
+ "toml_edit 0.22.27",
+ "tracing",
+ "url",
+ "zstd",
 ]
 
 [[package]]
