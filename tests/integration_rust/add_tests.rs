@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use pixi_cli::cli::cli_config::GitRev;
+use pixi_cli::cli_config::GitRev;
 use pixi_consts::consts;
 use pixi_core::{DependencyType, Workspace};
 use pixi_manifest::{FeaturesExt, SpecType};

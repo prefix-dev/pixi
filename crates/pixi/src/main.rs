@@ -37,7 +37,7 @@ pub fn main() -> miette::Result<()> {
             .expect("Failed building the Runtime");
 
         // Box the large main future to avoid stack overflows.
-        runtime.block_on(Box::pin(pixi_cli::cli::execute()))
+        runtime.block_on(Box::pin(pixi_cli::execute()))
     };
 
     std::thread::Builder::new()

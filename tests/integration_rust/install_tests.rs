@@ -7,8 +7,8 @@ use std::{
 };
 
 use fs_err::tokio as tokio_fs;
-use pixi_cli::cli::run::{self, Args};
-use pixi_cli::cli::{
+use pixi_cli::run::{self, Args};
+use pixi_cli::{
     LockFileUsageConfig,
     cli_config::{LockAndInstallConfig, LockFileUpdateConfig, WorkspaceConfig},
 };

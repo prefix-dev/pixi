@@ -23,7 +23,7 @@
 //! }
 //! ```
 
-use pixi_cli::cli::{
+use pixi_cli::{
     add,
     cli_config::{
         DependencyConfig, GitRev, LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig,
