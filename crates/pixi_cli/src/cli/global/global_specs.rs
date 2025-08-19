@@ -3,12 +3,11 @@ use std::path::Path;
 use clap::Parser;
 use miette::Diagnostic;
 use pixi_consts::consts;
-use typed_path::Utf8TypedPathBuf;
-use url::Url;
-
 use pixi_core::global::project::FromMatchSpecError;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{ChannelConfig, MatchSpec, ParseMatchSpecError, ParseStrictness};
+use typed_path::Utf8NativePathBuf;
+use url::Url;
 
 use crate::cli::has_specs::HasSpecs;
 
@@ -32,7 +31,7 @@ pub struct GlobalSpecs {
 
     /// The path to the local directory
     #[clap(long, conflicts_with = "git")]
-    pub path: Option<Utf8TypedPathBuf>,
+    pub path: Option<Utf8NativePathBuf>,
 }
 
 impl HasSpecs for GlobalSpecs {
@@ -88,7 +87,8 @@ impl GlobalSpecs {
                     )
                 })?;
             Some(PixiSpec::Path(pixi_spec::PathSpec {
-                path: Utf8TypedPathBuf::from(relative_path.to_string_lossy().to_string()),
+                path: Utf8NativePathBuf::from(relative_path.to_string_lossy().to_string())
+                    .to_typed_path_buf(),
             }))
         } else {
             None
@@ -131,8 +131,9 @@ impl GlobalSpecs {
 mod tests {
     use std::path::PathBuf;
 
-    use super::*;
     use rattler_conda_types::ChannelConfig;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_to_global_specs_named() {
@@ -147,7 +148,8 @@ mod tests {
         let channel_config = ChannelConfig::default_with_root_dir(PathBuf::from("."));
         let manifest_root = PathBuf::from(".");
 
-        // Create a dummy project - this test doesn't use path/git specs so project won't be called
+        // Create a dummy project - this test doesn't use path/git specs so project
+        // won't be called
         let project = pixi_core::global::Project::discover_or_create()
             .await
             .unwrap();
@@ -173,7 +175,8 @@ mod tests {
         let channel_config = ChannelConfig::default_with_root_dir(PathBuf::from("."));
         let manifest_root = PathBuf::from(".");
 
-        // Create a dummy project - this test specifies a package name so inference won't be needed
+        // Create a dummy project - this test specifies a package name so inference
+        // won't be needed
         let project = pixi_core::global::Project::discover_or_create()
             .await
             .unwrap();
