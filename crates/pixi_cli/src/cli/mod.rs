@@ -41,6 +41,7 @@ pub mod workspace;
 
 #[derive(Parser, Debug)]
 #[command(
+    name = "pixi",
     version(consts::PIXI_VERSION),
     about = format!("
 Pixi [version {}] - Developer Workflow and Environment Management for Multi-Platform, Language-Agnostic Workspaces.

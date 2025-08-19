@@ -15,11 +15,11 @@ use std::{
 use builders::{LockBuilder, SearchBuilder};
 use indicatif::ProgressDrawTarget;
 use miette::{Context, Diagnostic, IntoDiagnostic};
-use pixi::cli::LockFileUsageConfig;
-use pixi::cli::cli_config::{
+use pixi_cli::cli::LockFileUsageConfig;
+use pixi_cli::cli::cli_config::{
     ChannelsConfig, LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig,
 };
-use pixi::cli::{
+use pixi_cli::cli::{
     add,
     init::{self, GitAttributes},
     install::Args,

@@ -377,5 +377,5 @@ fn arguments(options: &[&clap::Arg], parents: &[String]) -> String {
 
 /// Loads the CLI command structure from pixi
 fn get_command() -> Command {
-    pixi::cli::Args::command()
+    pixi_cli::cli::Args::command()
 }

@@ -21,12 +21,14 @@ pub struct BuildDownloadVerifyReporter {
     next_entry_id: usize,
 }
 
+#[derive(Debug)]
 struct Entry {
     name: String,
     size: Option<u64>,
     state: EntryState,
 }
 
+#[derive(Debug)]
 pub enum EntryState {
     Building,
     Pending,
@@ -211,7 +213,10 @@ impl BuildDownloadVerifyReporter {
             .get_mut(&index)
             .expect("entry is missing from tracker");
         let EntryState::Validating = entry.state else {
-            panic!("Expected entry to be in downloading state");
+            panic!(
+                "Expected entry to be in downloading state, actual: {:?}",
+                entry
+            );
         };
         entry.state = EntryState::Finished { download: None };
         drop(entries);
