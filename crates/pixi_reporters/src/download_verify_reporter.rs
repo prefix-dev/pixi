@@ -21,6 +21,7 @@ pub struct BuildDownloadVerifyReporter {
     next_entry_id: usize,
 }
 
+#[derive(Debug)]
 struct Entry {
     name: String,
     size: Option<u64>,
@@ -214,7 +215,7 @@ impl BuildDownloadVerifyReporter {
         let EntryState::Validating = entry.state else {
             panic!(
                 "Expected entry to be in downloading state, actual: {:?}",
-                entry.state
+                entry
             );
         };
         entry.state = EntryState::Finished { download: None };
