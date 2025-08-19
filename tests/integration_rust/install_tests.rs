@@ -426,8 +426,6 @@ async fn install_frozen_skip() {
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn install_skip_non_existent_package_warning() {
-    setup_tracing();
-
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
     // Add a dependency to create a lock file
