@@ -5,11 +5,14 @@ use typed_path::Utf8TypedPath;
 use url::Url;
 
 use crate::common::{LockFileExt, PixiControl};
+use crate::setup_tracing;
 use std::fs::File;
 
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_flat_links_based_index_returns_path() {
+    setup_tracing();
+
     let pypi_indexes = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/pypi-indexes");
     let pixi = PixiControl::from_manifest(&format!(
         r#"
@@ -49,6 +52,8 @@ async fn test_flat_links_based_index_returns_path() {
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_file_based_index_returns_path() {
+    setup_tracing();
+
     let pypi_indexes = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/pypi-indexes");
     let pypi_indexes_url = Url::from_directory_path(pypi_indexes.clone()).unwrap();
     let pixi = PixiControl::from_manifest(&format!(
@@ -90,6 +95,8 @@ async fn test_file_based_index_returns_path() {
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_index_strategy() {
+    setup_tracing();
+
     let pypi_indexes = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/pypi-indexes");
     let pypi_indexes_url = Url::from_directory_path(pypi_indexes.clone()).unwrap();
 
@@ -171,6 +178,8 @@ async fn test_index_strategy() {
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 /// This test checks if we can pin a package from a PyPI index, by explicitly specifying the index.
 async fn test_pinning_index() {
+    setup_tracing();
+
     let pypi_indexes = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/pypi-indexes");
     let pypi_indexes_url = Url::from_directory_path(pypi_indexes.clone()).unwrap();
 
@@ -210,6 +219,8 @@ async fn test_pinning_index() {
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 /// This test checks if we can receive torch correctly from the whl/cu124 index.
 async fn pin_torch() {
+    setup_tracing();
+
     // Do some platform magic, as the index does not contain wheels for each platform.
     let platform = Platform::current();
     let platforms = match platform {
@@ -251,6 +262,8 @@ async fn pin_torch() {
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_allow_insecure_host() {
+    setup_tracing();
+
     let pixi = PixiControl::from_manifest(&format!(
         r#"
         [project]
@@ -293,6 +306,8 @@ async fn test_allow_insecure_host() {
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_indexes_are_passed_when_solving_build_pypi_dependencies() {
+    setup_tracing();
+
     let pypi_indexes = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/pypi-indexes");
     let pypi_indexes_url = Url::from_directory_path(pypi_indexes.clone()).unwrap();
 
@@ -382,6 +397,8 @@ async fn test_indexes_are_passed_when_solving_build_pypi_dependencies() {
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_cross_platform_resolve_with_no_build() {
+    setup_tracing();
+
     // non-current platform
     let resolve_platform = if Platform::current().is_osx() {
         Platform::Linux64
@@ -431,6 +448,8 @@ async fn test_cross_platform_resolve_with_no_build() {
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_pinned_help_message() {
+    setup_tracing();
+
     let pixi = PixiControl::from_manifest(
         r#"
         [workspace]

@@ -2,6 +2,7 @@ use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 use crate::common::{PixiControl, package_database::PackageDatabase};
+use crate::setup_tracing;
 use insta::assert_debug_snapshot;
 use pixi_config::Config;
 use pixi_core::Workspace;
@@ -12,6 +13,8 @@ use url::Url;
 
 #[tokio::test]
 async fn add_remove_channel() {
+    setup_tracing();
+
     // Create a local package database with no entries and write it to disk. This
     // ensures that we have a valid channel.
     let package_database = PackageDatabase::default();
@@ -84,6 +87,8 @@ async fn add_remove_channel() {
 
 #[tokio::test]
 async fn parse_project() {
+    setup_tracing();
+
     fn dependency_names(project: &Workspace, platform: Platform) -> Vec<String> {
         project
             .default_environment()
@@ -102,6 +107,8 @@ async fn parse_project() {
 
 #[tokio::test]
 async fn parse_valid_schema_projects() {
+    setup_tracing();
+
     // Test all files in the schema/examples/valid directory
     let schema_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("schema/examples/valid");
     for entry in fs_err::read_dir(schema_dir).unwrap() {
@@ -118,6 +125,8 @@ async fn parse_valid_schema_projects() {
 
 #[test]
 fn parse_valid_docs_manifests() {
+    setup_tracing();
+
     // Test all files in the docs/source_files/pixi_tomls directory
     let schema_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("docs/source_files/pixi_tomls");
     for entry in fs_err::read_dir(schema_dir).unwrap() {
@@ -133,6 +142,8 @@ fn parse_valid_docs_manifests() {
 }
 #[test]
 fn parse_valid_docs_pyproject_manifests() {
+    setup_tracing();
+
     // Test all files in the docs/source_files/pyproject_tomls directory
     let schema_dir =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("docs/source_files/pyproject_tomls");
@@ -149,6 +160,8 @@ fn parse_valid_docs_pyproject_manifests() {
 
 #[test]
 fn parse_valid_docs_configs() {
+    setup_tracing();
+
     // Test all files in the docs/source_files/pixi_config_tomls directory
     let schema_dir =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("docs/source_files/pixi_config_tomls");

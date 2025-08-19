@@ -6,11 +6,14 @@ use crate::common::{
     PixiControl,
     package_database::{Package, PackageDatabase},
 };
+use crate::setup_tracing;
 
 /// Test that verifies build backend receives the correct resolved source path
 /// when a relative path is specified in the source field
 #[tokio::test]
 async fn test_build_with_relative_source_path() {
+    setup_tracing();
+
     // Create a simple package database for our test
     let mut package_database = PackageDatabase::default();
     package_database.add_package(Package::build("empty-backend", "0.1.0").finish());
@@ -127,6 +130,8 @@ preview = ["pixi-build"]
 /// Test that verifies absolute paths work correctly
 #[tokio::test]
 async fn test_build_with_absolute_source_path() {
+    setup_tracing();
+
     let mut package_database = PackageDatabase::default();
     package_database.add_package(Package::build("empty-backend", "0.1.0").finish());
 
@@ -204,6 +209,8 @@ preview = ["pixi-build"]
 /// Test that verifies subdirectory relative paths work correctly
 #[tokio::test]
 async fn test_build_with_subdirectory_source_path() {
+    setup_tracing();
+
     let mut package_database = PackageDatabase::default();
     package_database.add_package(Package::build("empty-backend", "0.1.0").finish());
 
