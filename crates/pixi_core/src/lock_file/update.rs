@@ -664,7 +664,6 @@ impl<'p> LockFileDerivedData<'p> {
     }
 }
 
-
 fn locked_packages_to_pixi_records(
     conda_packages: Vec<LockedPackageRef<'_>>,
 ) -> Result<Vec<PixiRecord>, Report> {

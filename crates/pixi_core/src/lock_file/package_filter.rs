@@ -1,5 +1,5 @@
-use std::collections::{HashMap, HashSet};
 use rattler_lock::LockedPackageRef;
+use std::collections::{HashMap, HashSet};
 
 /// A filter for packages that can handle both skipping packages and selecting
 /// a target package with its dependencies.
@@ -94,12 +94,13 @@ impl<'a> PackageFilter<'a> {
                             &source_data.package_record.depends
                         }
                     };
-                    
+
                     depends
                         .iter()
                         .filter_map(|dep_spec| {
                             // Parse as MatchSpec to get the package name
-                            dep_spec.parse::<rattler_conda_types::MatchSpec>()
+                            dep_spec
+                                .parse::<rattler_conda_types::MatchSpec>()
                                 .ok()
                                 .and_then(|spec| spec.name.map(|name| name.as_str().to_string()))
                         })
