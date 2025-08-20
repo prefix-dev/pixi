@@ -13,7 +13,7 @@ impl<'a> PackageNode<'a> {
     /// Convert a LockedPackageRef to a PackageNode for efficient processing.
     pub fn from_locked_package_ref(package_ref: &'a LockedPackageRef<'a>) -> Self {
         let name = Cow::Owned(package_ref.name().to_string());
-        
+
         let dependency_names: Vec<String> = match package_ref {
             LockedPackageRef::Conda(conda_data) => {
                 // Extract dependencies from conda data and parse as MatchSpec
@@ -33,9 +33,7 @@ impl<'a> PackageNode<'a> {
                         dep_spec
                             .parse::<rattler_conda_types::MatchSpec>()
                             .ok()
-                            .and_then(|spec| {
-                                spec.name.map(|name| name.as_normalized().to_string())
-                            })
+                            .and_then(|spec| spec.name.map(|name| name.as_normalized().to_string()))
                     })
                     .collect()
             }
@@ -87,7 +85,11 @@ impl<'a> PackageFilter<'a> {
         match self.target_package {
             Some(target) => {
                 // Target mode: Collect target + dependencies with skip short-circuiting
-                DependencyCollector::collect_target_dependencies(&all_packages, target, self.skip_packages)
+                DependencyCollector::collect_target_dependencies(
+                    &all_packages,
+                    target,
+                    self.skip_packages,
+                )
             }
             None => {
                 // Skip mode: Collect each skip package + dependencies, then invert
@@ -95,7 +97,6 @@ impl<'a> PackageFilter<'a> {
             }
         }
     }
-
 
     /// Filter out skip packages and all their dependencies from the full set.
     fn filter_skip_with_dependencies<'lock>(
@@ -115,7 +116,8 @@ impl<'a> PackageFilter<'a> {
         // Collect all packages to skip (skip packages + their dependencies)
         let mut packages_to_skip = HashSet::new();
         for skip_package in self.skip_packages {
-            let skip_deps = DependencyCollector::collect_dependencies(&package_nodes, skip_package, &[]);
+            let skip_deps =
+                DependencyCollector::collect_dependencies(&package_nodes, skip_package, &[]);
             packages_to_skip.extend(skip_deps);
         }
 
@@ -126,7 +128,6 @@ impl<'a> PackageFilter<'a> {
             .copied()
             .collect()
     }
-
 }
 
 /// Helper for collecting package dependencies from lock file data.
@@ -192,7 +193,8 @@ impl DependencyCollector {
             .collect();
 
         // Collect target + dependencies with exclusions
-        let required_packages = Self::collect_dependencies(&package_nodes, target, exclude_packages);
+        let required_packages =
+            Self::collect_dependencies(&package_nodes, target, exclude_packages);
 
         // Return packages that are in required set
         all_packages
