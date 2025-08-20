@@ -124,7 +124,7 @@ impl<'a> PackageFilter<'a> {
         // Return packages that are NOT in the skip set
         all_packages
             .iter()
-            .filter(|pkg| !packages_to_skip.contains(&pkg.name()))
+            .filter(|pkg| !packages_to_skip.contains(pkg.name()))
             .copied()
             .collect()
     }
@@ -199,7 +199,7 @@ impl DependencyCollector {
         // Return packages that are in required set
         all_packages
             .iter()
-            .filter(|pkg| required_packages.contains(&pkg.name().to_string()))
+            .filter(|pkg| required_packages.contains(pkg.name()))
             .copied()
             .collect()
     }
