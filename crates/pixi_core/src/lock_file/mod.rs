@@ -1,4 +1,5 @@
 mod outdated;
+mod package_filter;
 mod package_identifier;
 mod records_by_name;
 mod reporter;
@@ -18,6 +19,7 @@ pub use satisfiability::{
     EnvironmentUnsat, PlatformUnsat, verify_environment_satisfiability,
     verify_platform_satisfiability,
 };
+pub use package_filter::PackageFilter;
 pub use update::{LockFileDerivedData, ReinstallPackages, UpdateContext};
 pub use update::{UpdateLockFileOptions, UpdateMode};
 pub use utils::filter_lock_file;

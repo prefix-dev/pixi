@@ -30,7 +30,7 @@ use xxhash_rust::xxh3::Xxh3;
 
 use crate::{
     Workspace,
-    lock_file::{LockFileDerivedData, ReinstallPackages, UpdateLockFileOptions, UpdateMode},
+    lock_file::{LockFileDerivedData, PackageFilter, ReinstallPackages, UpdateLockFileOptions, UpdateMode},
     workspace::{Environment, HasWorkspaceRef, grouped_environment::GroupedEnvironment},
 };
 
@@ -115,7 +115,7 @@ impl LockedEnvironmentHash {
         let mut hasher = Xxh3::new();
 
         for package in
-            LockFileDerivedData::filter_skipped_packages(environment.packages(platform), skipped)
+            PackageFilter::new(skipped, None).filter(environment.packages(platform))
         {
             // Always has the url or path
             package.location().to_owned().to_string().hash(&mut hasher);

@@ -53,6 +53,10 @@ pub struct Args {
     /// This can be useful for instance in a Dockerfile to skip local source dependencies when installing dependencies.
     #[arg(long, requires = "frozen")]
     pub skip: Option<Vec<String>>,
+
+    /// Install and build only this package and its dependencies
+    #[arg(long)]
+    pub package: Option<String>,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {

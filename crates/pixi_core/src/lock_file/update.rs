@@ -1,5 +1,5 @@
 use super::{
-    CondaPrefixUpdater, PixiRecordsByName, PypiRecordsByName, UvResolutionContext,
+    CondaPrefixUpdater, PackageFilter, PixiRecordsByName, PypiRecordsByName, UvResolutionContext,
     outdated::OutdatedEnvironments, utils::IoConcurrencyLimit,
 };
 use crate::{
@@ -432,8 +432,8 @@ impl<'p> LockFileDerivedData<'p> {
 
                 let platform = environment.best_platform();
                 let locked_env = self.locked_env(environment)?;
-                let packages =
-                    Self::filter_skipped_packages(locked_env.packages(platform), skipped);
+                let filter = PackageFilter::new(skipped, None);
+                let packages = filter.filter(locked_env.packages(platform));
 
                 // Separate the packages into conda and pypi packages
                 let (conda_packages, pypi_packages) = packages
@@ -580,29 +580,6 @@ impl<'p> LockFileDerivedData<'p> {
             .ok_or_else(|| UpdateError::LockFileMissingEnv(environment.name().clone()))
     }
 
-    /// Filters out packages that are in the `skipped` list.
-    /// so it this will return the packages that should *not* be skipped
-    pub fn filter_skipped_packages<'lock>(
-        packages: Option<impl IntoIterator<Item = LockedPackageRef<'lock>> + 'lock>,
-        skipped: &[String],
-    ) -> Vec<LockedPackageRef<'lock>> {
-        // No packages to skip
-        let Some(packages) = packages else {
-            return Vec::new();
-        };
-
-        // Skip list is empty
-        if skipped.is_empty() {
-            return packages.into_iter().collect();
-        }
-
-        // Otherwise, lets filter out
-        packages
-            .into_iter()
-            .filter(|package| !skipped.contains(&package.name().to_string()))
-            .collect()
-    }
-
     async fn conda_prefix(
         &self,
         environment: &Environment<'p>,
@@ -635,8 +612,8 @@ impl<'p> LockFileDerivedData<'p> {
 
                 // Get the locked environment from the lock-file.
                 let locked_env = self.locked_env(environment)?;
-                let packages =
-                    Self::filter_skipped_packages(locked_env.packages(platform), skipped);
+                let filter = PackageFilter::new(skipped, None);
+                let packages = filter.filter(locked_env.packages(platform));
                 let records = locked_packages_to_pixi_records(packages)?;
 
                 // Update the conda prefix
@@ -672,11 +649,12 @@ impl<'p> LockFileDerivedData<'p> {
             .collect();
 
         // Get kept package names
-        let kept_package_names: HashSet<String> =
-            Self::filter_skipped_packages(locked_env.packages(platform), skipped)
-                .into_iter()
-                .map(|p| p.name().to_string())
-                .collect();
+        let filter = PackageFilter::new(skipped, None);
+        let kept_package_names: HashSet<String> = filter
+            .filter(locked_env.packages(platform))
+            .into_iter()
+            .map(|p| p.name().to_string())
+            .collect();
 
         Ok(all_package_names
             .difference(&kept_package_names)
@@ -685,6 +663,7 @@ impl<'p> LockFileDerivedData<'p> {
             .collect())
     }
 }
+
 
 fn locked_packages_to_pixi_records(
     conda_packages: Vec<LockedPackageRef<'_>>,
