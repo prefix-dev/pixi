@@ -124,7 +124,7 @@ impl<'a> PackageFilter<'a> {
         // Return packages that are NOT in the skip set
         all_packages
             .iter()
-            .filter(|pkg| !packages_to_skip.contains(&pkg.name().to_string()))
+            .filter(|pkg| !packages_to_skip.contains(&pkg.name()))
             .copied()
             .collect()
     }
