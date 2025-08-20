@@ -1,10 +1,12 @@
 [workspace]
+default-members = ["crates/pixi"]
 exclude = [
   # Only pulled in when enabling certain features. We do not want to include
   # these crates when running workspace wide commands.
   "crates/pixi_allocator",
 ]
 members = ["crates/*"]
+resolver = "3"
 
 [workspace.package]
 authors = ["pixi contributors <hi@prefix.dev>"]
@@ -170,11 +172,13 @@ zstd = { version = "0.13.3", default-features = false }
 
 barrier_cell = { path = "crates/barrier_cell" }
 fancy_display = { path = "crates/fancy_display" }
+pixi = { path = "crates/pixi" }
 pixi_allocator = { path = "crates/pixi_allocator" }
 pixi_build_discovery = { path = "crates/pixi_build_discovery" }
 pixi_build_frontend = { path = "crates/pixi_build_frontend" }
 pixi_build_type_conversions = { path = "crates/pixi_build_type_conversions" }
 pixi_build_types = { path = "crates/pixi_build_types" }
+pixi_cli = { path = "crates/pixi_cli" }
 pixi_command_dispatcher = { path = "crates/pixi_command_dispatcher" }
 pixi_config = { path = "crates/pixi_config" }
 pixi_consts = { path = "crates/pixi_consts" }
@@ -182,6 +186,7 @@ pixi_core = { path = "crates/pixi_core" }
 pixi_default_versions = { path = "crates/pixi_default_versions" }
 pixi_git = { path = "crates/pixi_git" }
 pixi_glob = { path = "crates/pixi_glob" }
+pixi_global = { path = "crates/pixi_global" }
 pixi_manifest = { path = "crates/pixi_manifest" }
 pixi_progress = { path = "crates/pixi_progress" }
 pixi_pypi_spec = { path = "crates/pixi_pypi_spec" }
@@ -195,149 +200,6 @@ pixi_utils = { path = "crates/pixi_utils", default-features = false }
 pixi_uv_conversions = { path = "crates/pixi_uv_conversions" }
 pypi_mapping = { path = "crates/pypi_mapping" }
 pypi_modifiers = { path = "crates/pypi_modifiers" }
-
-[package]
-authors.workspace = true
-description = "A package management and workflow tool"
-edition.workspace = true
-homepage.workspace = true
-license.workspace = true
-name = "pixi"
-readme.workspace = true
-repository.workspace = true
-version = "0.53.0"
-
-[features]
-default = ["rustls-tls"]
-native-tls = [
-  "reqwest/native-tls",
-  "reqwest/native-tls-alpn",
-  "rattler_repodata_gateway/native-tls",
-  "rattler/native-tls",
-  "pixi_utils/native-tls",
-]
-# run tests connecting to remote Internet services
-online_tests = []
-rustls-tls = [
-  "reqwest/rustls-tls",
-  "reqwest/rustls-tls-native-roots",
-  "rattler_repodata_gateway/rustls-tls",
-  "rattler/rustls-tls",
-  "pixi_utils/rustls-tls",
-]
-self_update = []
-slow_integration_tests = []
-tokio-console = ["console-subscriber", "tokio/tracing"]
-
-# This feature enables performance optimizations but at the cost of increased
-# compile times. By default, it is only used when building the release binary.
-performance = ["pixi_allocator"]
-
-[dependencies]
-ahash = { workspace = true }
-chrono = { workspace = true }
-clap = { workspace = true, features = [
-  "derive",
-  "usage",
-  "wrap_help",
-  "std",
-  "color",
-  "error-context",
-  "env",
-] }
-clap_complete = { workspace = true }
-clap_complete_nushell = { workspace = true }
-console = { workspace = true, features = ["windows-console-colors"] }
-console-subscriber = { workspace = true, optional = true }
-ctrlc = { workspace = true }
-deno_task_shell = { workspace = true }
-dialoguer = { workspace = true }
-dunce = { workspace = true }
-fancy_display = { workspace = true }
-flate2 = { workspace = true }
-fs-err = { workspace = true, features = ["tokio"] }
-fs_extra = { workspace = true }
-futures = { workspace = true }
-human_bytes = { workspace = true }
-indexmap = { workspace = true, features = ["serde"] }
-indicatif = { workspace = true }
-is_executable = { workspace = true }
-itertools = { workspace = true }
-miette = { workspace = true, features = ["fancy-no-backtrace"] }
-minijinja = { workspace = true, features = ["builtins"] }
-pathdiff = { workspace = true }
-pep508_rs = { workspace = true }
-pixi_allocator = { workspace = true, optional = true }
-pixi_command_dispatcher = { workspace = true }
-pixi_config = { workspace = true }
-pixi_consts = { workspace = true }
-pixi_core = { workspace = true }
-pixi_git = { workspace = true }
-pixi_manifest = { workspace = true, features = ["rattler_lock"] }
-pixi_progress = { workspace = true }
-pixi_pypi_spec = { workspace = true }
-pixi_record = { workspace = true }
-pixi_reporters = { workspace = true }
-pixi_spec = { workspace = true }
-pixi_utils = { workspace = true, default-features = false }
-pixi_uv_conversions = { workspace = true }
-pypi_mapping = { workspace = true }
-pypi_modifiers = { workspace = true }
-rattler = { workspace = true, features = ["cli-tools", "indicatif"] }
-rattler_conda_types = { workspace = true }
-rattler_digest = { workspace = true }
-rattler_lock = { workspace = true }
-rattler_networking = { workspace = true, default-features = false }
-rattler_repodata_gateway = { workspace = true, features = [
-  "sparse",
-  "gateway",
-] }
-rattler_shell = { workspace = true, features = ["sysinfo"] }
-rattler_solve = { workspace = true, features = ["resolvo", "serde"] }
-rattler_virtual_packages = { workspace = true }
-regex = { workspace = true }
-reqwest = { workspace = true, features = [
-  "http2",
-  "macos-system-configuration",
-] }
-reqwest-middleware = { workspace = true }
-same-file = { workspace = true }
-self-replace = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
-serde_with = { workspace = true, features = ["indexmap"] }
-strsim = { workspace = true }
-tabwriter = { workspace = true, features = ["ansi_formatting"] }
-tar = { workspace = true }
-temp-env = { workspace = true }
-tempfile = { workspace = true }
-thiserror = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
-tokio-util = { workspace = true }
-toml_edit = { workspace = true, features = ["serde"] }
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true, features = ["env-filter"] }
-typed-path = { workspace = true }
-url = { workspace = true }
-uv-cache = { workspace = true }
-uv-client = { workspace = true }
-uv-configuration = { workspace = true }
-uv-distribution = { workspace = true }
-uv-installer = { workspace = true }
-uv-normalize = { workspace = true }
-uv-pep508 = { workspace = true }
-uv-pypi-types = { workspace = true }
-uv-python = { workspace = true }
-uv-requirements-txt = { workspace = true }
-uv-types = { workspace = true }
-zip = { workspace = true, features = ["deflate", "time"] }
-
-[target.'cfg(unix)'.dependencies]
-libc = { workspace = true, default-features = false }
-nix = { workspace = true, features = ["poll", "term"] }
-pixi_pty = { path = "crates/pixi_pty" }
-sha2 = { workspace = true, features = ["asm"] }
-signal-hook = { workspace = true }
 
 [profile.dist]
 codegen-units = 1
@@ -363,16 +225,6 @@ panic = "unwind"     # needed for backtraces
 # macOS only:
 split-debuginfo = "unpacked"
 strip = "none"               # or "debuginfo" to separate
-
-[dev-dependencies]
-async-trait = { workspace = true }
-fake = "4.0.0"
-http = { workspace = true }
-insta = { workspace = true, features = ["yaml", "glob", "filters"] }
-pixi_test_utils = { workspace = true }
-rstest = { workspace = true }
-serde_json = { workspace = true }
-tokio = { workspace = true, features = ["rt"] }
 
 [patch.crates-io]
 # This is a temporary patch to get `cargo vendor` to work with the `uv` and pep508_rs` crates.

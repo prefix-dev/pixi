@@ -164,9 +164,9 @@ checksum = "9b34d609dfbaf33d6889b2b7106d3ca345eacad44200913df5ba02bfd31d2ba9"
 
 [[package]]
 name = "astral-tokio-tar"
-version = "0.5.2"
+version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1abb2bfba199d9ec4759b797115ba6ae435bdd920ce99783bb53aeff57ba919b"
+checksum = "0036af73142caf1291d4ec8ed667d3a1145bd55c8189517bd5aa07b3167ae1e1"
 dependencies = [
  "filetime",
  "futures-core",
@@ -656,9 +656,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-eventstream"
-version = "0.60.10"
+version = "0.60.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "604c7aec361252b8f1c871a7641d5e0ba3a7f5a586e51b66bc9510a5519594d9"
+checksum = "182b03393e8c677347fb5705a04a9392695d47d20ef0a2f8cfe28c8e6b9b9778"
 dependencies = [
  "aws-smithy-types",
  "bytes",
@@ -708,9 +708,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-client"
-version = "1.0.6"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f108f1ca850f3feef3009bdcc977be201bca9a91058864d9de0684e64514bee0"
+checksum = "4fdbad9bd9dbcc6c5e68c311a841b54b70def3ca3b674c42fbebb265980539f8"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-runtime-api",
@@ -757,9 +757,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.8.6"
+version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e107ce0783019dbff59b3a244aa0c114e4a8c9d93498af9162608cd5474e796"
+checksum = "a3d57c8b53a72d15c8e190475743acf34e4996685e346a3448dd54ef696fc6e0"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-http 0.62.3",
@@ -781,9 +781,9 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime-api"
-version = "1.8.7"
+version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75d52251ed4b9776a3e8487b2a01ac915f73b2da3af8fc1e77e0fce697a550d4"
+checksum = "07f5e0fc8a6b3f2303f331b94504bbf754d85488f402d6f1dd7a6080f99afe56"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-types",
@@ -2978,13 +2978,14 @@ dependencies = [
 
 [[package]]
 name = "hyper"
-version = "1.6.0"
+version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc2b571658e38e0c01b1fdca3bbbe93c00d3d71693ff2770043f8c29bc7d6f80"
+checksum = "eb3aa54a13a0dfe7fbe3a59e0c76093041720fdc77b110cc0fc260fafb4dc51e"
 dependencies = [
+ "atomic-waker",
  "bytes",
  "futures-channel",
- "futures-util",
+ "futures-core",
  "h2 0.4.12",
  "http 1.3.1",
  "http-body 1.0.1",
@@ -2992,6 +2993,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
+ "pin-utils",
  "smallvec",
  "tokio",
  "want",
@@ -3020,7 +3022,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3c93eb611681b207e1fe55d5a71ecf91572ec8a6705cdb6857f7d8d5242cf58"
 dependencies = [
  "http 1.3.1",
- "hyper 1.6.0",
+ "hyper 1.7.0",
  "hyper-util",
  "log",
  "rustls 0.23.31",
@@ -3038,7 +3040,7 @@ version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b90d566bffbce6a75bd8b09a05aa8c2cb1fabb6cb348f8840c9e4c90a0d83b0"
 dependencies = [
- "hyper 1.6.0",
+ "hyper 1.7.0",
  "hyper-util",
  "pin-project-lite",
  "tokio",
@@ -3053,7 +3055,7 @@ checksum = "70206fc6890eaca9fde8a0bf71caa2ddfc9fe045ac9e5c70df101a7dbde866e0"
 dependencies = [
  "bytes",
  "http-body-util",
- "hyper 1.6.0",
+ "hyper 1.7.0",
  "hyper-util",
  "native-tls",
  "tokio",
@@ -3074,7 +3076,7 @@ dependencies = [
  "futures-util",
  "http 1.3.1",
  "http-body 1.0.1",
- "hyper 1.6.0",
+ "hyper 1.7.0",
  "ipnet",
  "libc",
  "percent-encoding",
@@ -3576,7 +3578,7 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "http-body 1.0.1",
- "hyper 1.6.0",
+ "hyper 1.7.0",
  "hyper-rustls 0.27.7",
  "hyper-util",
  "jsonrpsee-core",
@@ -4664,100 +4666,10 @@ dependencies = [
 name = "pixi"
 version = "0.53.0"
 dependencies = [
- "ahash",
- "async-trait",
- "chrono",
- "clap",
- "clap_complete",
- "clap_complete_nushell",
- "console 0.15.11",
- "console-subscriber",
- "ctrlc",
- "deno_task_shell",
- "dialoguer",
- "dunce",
- "fake",
- "fancy_display",
- "flate2",
- "fs-err",
- "fs_extra",
- "futures",
- "http 1.3.1",
- "human_bytes",
- "indexmap 2.10.0",
- "indicatif",
- "insta",
- "is_executable",
- "itertools 0.14.0",
- "libc",
  "miette 7.6.0",
- "minijinja",
- "nix 0.29.0",
- "pathdiff",
- "pep508_rs",
  "pixi_allocator",
- "pixi_command_dispatcher",
- "pixi_config",
- "pixi_consts",
- "pixi_core",
- "pixi_git",
- "pixi_manifest",
- "pixi_progress",
- "pixi_pty",
- "pixi_pypi_spec",
- "pixi_record",
- "pixi_reporters",
- "pixi_spec",
- "pixi_test_utils",
- "pixi_utils",
- "pixi_uv_conversions",
- "pypi_mapping",
- "pypi_modifiers",
- "rattler",
- "rattler_conda_types",
- "rattler_digest",
- "rattler_lock",
- "rattler_networking",
- "rattler_repodata_gateway",
- "rattler_shell",
- "rattler_solve",
- "rattler_virtual_packages",
- "regex",
- "reqwest",
- "reqwest-middleware",
- "rstest",
- "same-file",
- "self-replace",
- "serde",
- "serde_json",
- "serde_with",
- "sha2",
- "signal-hook",
- "strsim",
- "tabwriter",
- "tar",
- "temp-env",
- "tempfile",
- "thiserror 2.0.15",
+ "pixi_cli",
  "tokio",
- "tokio-util",
- "toml_edit 0.22.27",
- "tracing",
- "tracing-subscriber",
- "typed-path",
- "url",
- "uv-cache",
- "uv-client",
- "uv-configuration",
- "uv-distribution",
- "uv-installer",
- "uv-normalize",
- "uv-pep508",
- "uv-pypi-types",
- "uv-python",
- "uv-requirements-txt",
- "uv-types",
- "zip 2.4.2",
 ]
 
 [[package]]
@@ -4838,6 +4750,106 @@ dependencies = [
  "serde_json",
  "serde_with",
  "url",
+]
+
+[[package]]
+name = "pixi_cli"
+version = "0.1.0"
+dependencies = [
+ "ahash",
+ "async-trait",
+ "chrono",
+ "clap",
+ "clap_complete",
+ "clap_complete_nushell",
+ "console 0.15.11",
+ "console-subscriber",
+ "ctrlc",
+ "deno_task_shell",
+ "dialoguer",
+ "dunce",
+ "fake",
+ "fancy_display",
+ "flate2",
+ "fs-err",
+ "fs_extra",
+ "futures",
+ "http 1.3.1",
+ "human_bytes",
+ "indexmap 2.10.0",
+ "indicatif",
+ "insta",
+ "is_executable",
+ "itertools 0.14.0",
+ "libc",
+ "miette 7.6.0",
+ "minijinja",
+ "nix 0.29.0",
+ "pathdiff",
+ "pep508_rs",
+ "pixi_command_dispatcher",
+ "pixi_config",
+ "pixi_consts",
+ "pixi_core",
+ "pixi_git",
+ "pixi_global",
+ "pixi_manifest",
+ "pixi_progress",
+ "pixi_pty",
+ "pixi_pypi_spec",
+ "pixi_record",
+ "pixi_reporters",
+ "pixi_spec",
+ "pixi_test_utils",
+ "pixi_utils",
+ "pixi_uv_conversions",
+ "pypi_mapping",
+ "pypi_modifiers",
+ "rattler",
+ "rattler_conda_types",
+ "rattler_digest",
+ "rattler_lock",
+ "rattler_networking",
+ "rattler_repodata_gateway",
+ "rattler_shell",
+ "rattler_solve",
+ "rattler_virtual_packages",
+ "regex",
+ "reqwest",
+ "reqwest-middleware",
+ "rstest",
+ "same-file",
+ "self-replace",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "sha2",
+ "signal-hook",
+ "strsim",
+ "tabwriter",
+ "tar",
+ "temp-env",
+ "tempfile",
+ "thiserror 2.0.15",
+ "tokio",
+ "tokio-util",
+ "toml_edit 0.22.27",
+ "tracing",
+ "tracing-subscriber",
+ "typed-path",
+ "url",
+ "uv-cache",
+ "uv-client",
+ "uv-configuration",
+ "uv-distribution",
+ "uv-installer",
+ "uv-normalize",
+ "uv-pep508",
+ "uv-pypi-types",
+ "uv-python",
+ "uv-requirements-txt",
+ "uv-types",
+ "zip 2.4.2",
 ]
 
 [[package]]
@@ -4949,7 +4961,6 @@ dependencies = [
  "dashmap",
  "deno_task_shell",
  "dialoguer",
- "dirs",
  "dunce",
  "fake",
  "fancy_display",
@@ -4962,7 +4973,6 @@ dependencies = [
  "indexmap 2.10.0",
  "indicatif",
  "insta",
- "is_executable",
  "itertools 0.14.0",
  "libc",
  "miette 7.6.0",
@@ -4986,9 +4996,7 @@ dependencies = [
  "pixi_record",
  "pixi_reporters",
  "pixi_spec",
- "pixi_spec_containers",
  "pixi_test_utils",
- "pixi_toml",
  "pixi_utils",
  "pixi_uv_conversions",
  "pypi_mapping",
@@ -4997,27 +5005,23 @@ dependencies = [
  "rattler_conda_types",
  "rattler_digest",
  "rattler_lock",
- "rattler_menuinst",
  "rattler_networking",
  "rattler_repodata_gateway",
  "rattler_shell",
  "rattler_solve",
  "rattler_virtual_packages",
  "rayon",
- "regex",
  "reqwest",
  "reqwest-middleware",
  "rlimit",
  "rstest",
  "serde",
  "serde_json",
- "serde_with",
  "shlex",
  "tabwriter",
  "tempfile",
  "thiserror 2.0.15",
  "tokio",
- "toml-span",
  "toml_edit 0.22.27",
  "tracing",
  "typed-path",
@@ -5048,7 +5052,6 @@ dependencies = [
  "uv-types",
  "uv-workspace",
  "xxhash-rust",
- "zstd",
 ]
 
 [[package]]
@@ -5065,7 +5068,7 @@ dependencies = [
  "clap",
  "fs-err",
  "itertools 0.14.0",
- "pixi",
+ "pixi_cli",
  "rattler_conda_types",
 ]
 
@@ -5103,6 +5106,63 @@ dependencies = [
  "thiserror 2.0.15",
  "tokio",
  "wax",
+]
+
+[[package]]
+name = "pixi_global"
+version = "0.1.0"
+dependencies = [
+ "ahash",
+ "console 0.15.11",
+ "dirs",
+ "dunce",
+ "fake",
+ "fancy_display",
+ "fs-err",
+ "futures",
+ "indexmap 2.10.0",
+ "indicatif",
+ "insta",
+ "is_executable",
+ "itertools 0.14.0",
+ "libc",
+ "miette 7.6.0",
+ "once_cell",
+ "pixi_build_discovery",
+ "pixi_build_frontend",
+ "pixi_command_dispatcher",
+ "pixi_config",
+ "pixi_consts",
+ "pixi_core",
+ "pixi_manifest",
+ "pixi_progress",
+ "pixi_reporters",
+ "pixi_spec",
+ "pixi_spec_containers",
+ "pixi_toml",
+ "pixi_utils",
+ "rattler",
+ "rattler_conda_types",
+ "rattler_lock",
+ "rattler_menuinst",
+ "rattler_repodata_gateway",
+ "rattler_shell",
+ "rattler_virtual_packages",
+ "regex",
+ "reqwest",
+ "reqwest-middleware",
+ "rstest",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "tempfile",
+ "thiserror 2.0.15",
+ "tokio",
+ "toml-span",
+ "toml_edit 0.22.27",
+ "tracing",
+ "url",
+ "zstd",
 ]
 
 [[package]]
@@ -5465,9 +5525,9 @@ dependencies = [
 
 [[package]]
 name = "prettyplease"
-version = "0.2.36"
+version = "0.2.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff24dfcda44452b9816fff4cd4227e1bb73ff5a2f1bc1105aa92fb8565ce44d2"
+checksum = "479ca8adacdd7ce8f1fb39ce9ecccbfe93a3f1344b3d0d97f20bc0196208f62b"
 dependencies = [
  "proc-macro2",
  "syn",
@@ -6422,7 +6482,7 @@ dependencies = [
  "http 1.3.1",
  "http-body 1.0.1",
  "http-body-util",
- "hyper 1.6.0",
+ "hyper 1.7.0",
  "hyper-rustls 0.27.7",
  "hyper-tls",
  "hyper-util",
@@ -6479,7 +6539,7 @@ dependencies = [
  "futures",
  "getrandom 0.2.16",
  "http 1.3.1",
- "hyper 1.6.0",
+ "hyper 1.7.0",
  "reqwest",
  "reqwest-middleware",
  "retry-policies",
@@ -7099,9 +7159,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.142"
+version = "1.0.143"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "030fedb782600dcbd6f02d479bf0d817ac3bb40d644745b769d6a96bc3afc5a7"
+checksum = "d401abef1d108fbd9cbaebc3e46611f4b1021f714a0597a71f41ee463f5f4a5a"
 dependencies = [
  "indexmap 2.10.0",
  "itoa",
@@ -7845,9 +7905,9 @@ dependencies = [
 
 [[package]]
 name = "tinyvec"
-version = "1.9.0"
+version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09b3661f17e86524eccd4371ab0429194e0d7c008abb45f7a7495b1719463c71"
+checksum = "bfa5fdc3bce6191a1dbc8c02d5c8bffcf557bafa17c124c5264a458f1b0613fa"
 dependencies = [
  "tinyvec_macros",
 ]
@@ -8071,7 +8131,7 @@ dependencies = [
  "http 1.3.1",
  "http-body 1.0.1",
  "http-body-util",
- "hyper 1.6.0",
+ "hyper 1.7.0",
  "hyper-timeout",
  "hyper-util",
  "percent-encoding",

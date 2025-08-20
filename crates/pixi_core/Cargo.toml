@@ -24,7 +24,6 @@ csv = { workspace = true }
 dashmap = { workspace = true }
 deno_task_shell = { workspace = true }
 dialoguer = { workspace = true }
-dirs = { workspace = true }
 dunce = { workspace = true }
 fancy_display = { workspace = true }
 fs-err = { workspace = true }
@@ -34,7 +33,6 @@ human_bytes = { workspace = true }
 humantime = { workspace = true }
 indexmap = { workspace = true }
 indicatif = { workspace = true }
-is_executable = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
 once_cell = { workspace = true }
@@ -51,14 +49,12 @@ pixi_consts = { workspace = true }
 pixi_default_versions = { workspace = true }
 pixi_git = { workspace = true }
 pixi_glob = { workspace = true }
-pixi_manifest = { workspace = true }
+pixi_manifest = { workspace = true, features = ["rattler_lock"] }
 pixi_progress = { workspace = true }
 pixi_pypi_spec = { workspace = true }
 pixi_record = { workspace = true }
 pixi_reporters = { workspace = true }
 pixi_spec = { workspace = true }
-pixi_spec_containers = { workspace = true }
-pixi_toml = { workspace = true }
 pixi_utils = { workspace = true, default-features = false }
 pixi_uv_conversions = { workspace = true }
 pypi_mapping = { workspace = true }
@@ -67,27 +63,23 @@ rattler = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true }
 rattler_lock = { workspace = true }
-rattler_menuinst = { workspace = true }
 rattler_networking = { workspace = true, default-features = false }
 rattler_repodata_gateway = { workspace = true }
 rattler_shell = { workspace = true }
 rattler_solve = { workspace = true }
 rattler_virtual_packages = { workspace = true }
 rayon = { workspace = true }
-regex = { workspace = true }
 reqwest = { workspace = true }
 reqwest-middleware = { workspace = true }
 rlimit = { workspace = true }
 rstest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-serde_with = { workspace = true }
 shlex = { workspace = true }
 tabwriter = { workspace = true }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
-toml-span = { workspace = true }
 toml_edit = { workspace = true }
 tracing = { workspace = true }
 typed-path = { workspace = true }
@@ -118,7 +110,6 @@ uv-resolver = { workspace = true }
 uv-types = { workspace = true }
 uv-workspace = { workspace = true }
 xxhash-rust = { workspace = true }
-zstd = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true }
