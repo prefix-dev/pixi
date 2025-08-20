@@ -27,6 +27,7 @@ use pixi_command_dispatcher::{
 };
 use pixi_config::{Config, RunPostLinkScripts, default_channel_config, pixi_home};
 use pixi_consts::consts::{self};
+use pixi_core::repodata::Repodata;
 use pixi_manifest::PrioritizedChannel;
 use pixi_progress::global_multi_progress;
 use pixi_reporters::TopLevelProgress;
@@ -58,16 +59,13 @@ use super::{
     trampoline::{self, GlobalExecutable},
 };
 use crate::{
-    global::{
-        EnvDir,
-        common::{
-            channel_url_to_prioritized_channel, expose_scripts_sync_status, find_package_records,
-        },
-        find_executables, find_executables_for_many_records,
-        install::{create_executable_trampolines, script_exec_mapping},
-        project::environment::environment_specs_in_sync,
+    EnvDir,
+    common::{
+        channel_url_to_prioritized_channel, expose_scripts_sync_status, find_package_records,
     },
-    repodata::Repodata,
+    find_executables, find_executables_for_many_records,
+    install::{create_executable_trampolines, script_exec_mapping},
+    project::environment::environment_specs_in_sync,
 };
 
 mod environment;
@@ -1263,7 +1261,7 @@ impl Project {
             .map(|exec| exec.name)
             .collect();
 
-        let completions_dir = crate::global::completions::CompletionsDir::from_env().await?;
+        let completions_dir = crate::completions::CompletionsDir::from_env().await?;
         let (completions_to_remove, completions_to_add) =
             super::completions::completions_sync_status(
                 environment.exposed.clone(),
@@ -1446,7 +1444,7 @@ mod tests {
     use url::Url;
 
     use super::*;
-    use crate::global::trampoline::{Configuration, Trampoline};
+    use crate::trampoline::{Configuration, Trampoline};
 
     const SIMPLE_MANIFEST: &str = r#"
         [envs.python]

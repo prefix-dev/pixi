@@ -1,5 +1,5 @@
 use super::{EnvDir, EnvironmentName, ExposedName, StateChanges};
-use crate::global::{
+use crate::{
     BinDir, StateChange,
     trampoline::{Configuration, Trampoline},
 };
@@ -358,7 +358,7 @@ mod tests {
     use rattler_lock::LockFile;
     use rstest::{fixture, rstest};
 
-    use crate::global::EnvRoot;
+    use crate::EnvRoot;
 
     use super::*;
 
@@ -539,7 +539,7 @@ mod tests {
     #[cfg(windows)]
     #[tokio::test]
     async fn test_extract_executable_from_script_windows() {
-        use crate::global::trampoline::GlobalExecutable;
+        use crate::trampoline::GlobalExecutable;
         use std::path::Path;
         let script_without_quote = r#"
 @SET "PATH=C:\Users\USER\.pixi/envs\hyperfine\bin:%PATH%"
@@ -577,7 +577,7 @@ mod tests {
     async fn test_extract_executable_from_script_unix() {
         use std::path::Path;
 
-        use crate::global::trampoline::GlobalExecutable;
+        use crate::trampoline::GlobalExecutable;
 
         let script = r#"#!/bin/sh
 export PATH="/home/user/.pixi/envs/nushell/bin:${PATH}"

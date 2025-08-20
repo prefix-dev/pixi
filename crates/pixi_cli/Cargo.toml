@@ -70,6 +70,7 @@ pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_core = { workspace = true }
 pixi_git = { workspace = true }
+pixi_global = { workspace = true }
 pixi_manifest = { workspace = true, features = ["rattler_lock"] }
 pixi_progress = { workspace = true }
 pixi_pypi_spec = { workspace = true }

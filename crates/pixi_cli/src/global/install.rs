@@ -10,7 +10,7 @@ use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, Platform};
 
 use crate::global::{global_specs::GlobalSpecs, revert_environment_after_error};
 use pixi_config::{self, Config, ConfigCli};
-use pixi_core::global::{
+use pixi_global::{
     self, EnvChanges, EnvState, EnvironmentName, Mapping, Project, StateChange, StateChanges,
     common::{NotChangedReason, contains_menuinst_document},
     list::list_all_global_environments,
@@ -78,7 +78,7 @@ pub struct Args {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
-    let project_original = global::Project::discover_or_create()
+    let project_original = pixi_global::Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
 

@@ -1,18 +1,14 @@
 use fancy_display::FancyDisplay;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
+use miette::{IntoDiagnostic, miette};
 use pixi_consts::consts;
+use pixi_core::environment::list::{PackageToOutput, print_package_table};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{PackageName, PrefixRecord, Version};
 
-use miette::{IntoDiagnostic, miette};
-
-use crate::{
-    environment::list::{PackageToOutput, print_package_table},
-    global::common::find_package_records,
-};
-
 use super::{EnvChanges, EnvState, EnvironmentName, Mapping, Project, project::ParsedEnvironment};
+use crate::common::find_package_records;
 
 /// Creating the ASCII art representation of a section.
 pub fn format_asciiart_section(label: &str, content: String, last: bool, more: bool) -> String {

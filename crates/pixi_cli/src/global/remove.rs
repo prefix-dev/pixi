@@ -2,7 +2,7 @@ use clap::Parser;
 use itertools::Itertools;
 use miette::Context;
 use pixi_config::{Config, ConfigCli};
-use pixi_core::global::{EnvironmentName, ExposedName, Project, StateChanges};
+use pixi_global::{EnvironmentName, ExposedName, Project, StateChanges};
 use rattler_conda_types::MatchSpec;
 use std::str::FromStr;
 

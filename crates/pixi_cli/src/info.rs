@@ -7,11 +7,8 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_config;
 use pixi_consts::consts;
-use pixi_core::{
-    WorkspaceLocator, global,
-    global::{BinDir, EnvRoot},
-    task::TaskName,
-};
+use pixi_core::{WorkspaceLocator, task::TaskName};
+use pixi_global::{BinDir, EnvRoot};
 use pixi_manifest::{EnvironmentName, FeatureName, SystemRequirements};
 use pixi_manifest::{FeaturesExt, HasFeaturesIter};
 use pixi_progress::await_in_progress;
@@ -455,7 +452,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let global_info = Some(GlobalInfo {
         bin_dir: BinDir::from_env().await?.path().to_path_buf(),
         env_dir: EnvRoot::from_env().await?.path().to_path_buf(),
-        manifest: global::Project::manifest_dir()?.join(consts::GLOBAL_MANIFEST_DEFAULT_NAME),
+        manifest: pixi_global::Project::manifest_dir()?.join(consts::GLOBAL_MANIFEST_DEFAULT_NAME),
     });
 
     let virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::from_env())
