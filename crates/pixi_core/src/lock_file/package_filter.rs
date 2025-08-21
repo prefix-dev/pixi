@@ -173,7 +173,7 @@ impl<'a> InstallSubset<'a> {
     }
 
     /// Build a reachability analyzer for a set of packages.
-    fn build_reachability<'lock>(all_packages: &[LockedPackageRef<'lock>]) -> PackageReachability {
+    fn build_reachability(all_packages: &[LockedPackageRef<'_>]) -> PackageReachability {
         let nodes: Vec<PackageNode> = all_packages.iter().copied().map(Into::into).collect();
         PackageReachability::new(nodes)
     }
