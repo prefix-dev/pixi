@@ -1,6 +1,5 @@
-use crate::task::{ExecutableTask, FileHashes, FileHashesError, InvalidWorkingDirectory};
-use crate::workspace;
 use miette::Diagnostic;
+use pixi_core::environment::EnvironmentHash;
 use pixi_manifest::task::TemplateStringError;
 use rattler_lock::LockFile;
 use serde::{Deserialize, Serialize};
@@ -9,6 +8,8 @@ use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use thiserror::Error;
 use xxhash_rust::xxh3::Xxh3;
+
+use crate::{ExecutableTask, FileHashes, FileHashesError, InvalidWorkingDirectory};
 
 /// The computation hash is a combined hash of all the inputs and outputs of a task.
 ///
@@ -58,66 +59,6 @@ impl Display for NameHash {
 pub struct TaskCache {
     /// The hash of the task.
     pub hash: ComputationHash,
-}
-
-#[derive(Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub struct EnvironmentHash(String);
-
-impl EnvironmentHash {
-    pub(crate) fn from_environment(
-        run_environment: &workspace::Environment<'_>,
-        input_environment_variables: &HashMap<String, Option<String>>,
-        lock_file: &LockFile,
-    ) -> Self {
-        let mut hasher = Xxh3::new();
-
-        // Hash the environment variables
-        let mut sorted_input_environment_variables: Vec<_> =
-            input_environment_variables.iter().collect();
-        sorted_input_environment_variables.sort_by_key(|(key, _)| *key);
-        for (key, value) in sorted_input_environment_variables {
-            key.hash(&mut hasher);
-            value.hash(&mut hasher);
-        }
-
-        // Hash the activation scripts
-        let activation_scripts =
-            run_environment.activation_scripts(Some(run_environment.best_platform()));
-        for script in activation_scripts {
-            script.hash(&mut hasher);
-        }
-
-        // Hash the environment variables
-        let project_activation_env =
-            run_environment.activation_env(Some(run_environment.best_platform()));
-        let mut env_vars: Vec<_> = project_activation_env.iter().collect();
-        env_vars.sort_by_key(|(key, _)| *key);
-
-        for (key, value) in env_vars {
-            key.hash(&mut hasher);
-            value.hash(&mut hasher);
-        }
-
-        // Hash the packages
-        let mut urls = Vec::new();
-        if let Some(env) = lock_file.environment(run_environment.name().as_str()) {
-            if let Some(packages) = env.packages(run_environment.best_platform()) {
-                for package in packages {
-                    urls.push(package.location().to_string())
-                }
-            }
-        }
-        urls.sort();
-        urls.hash(&mut hasher);
-
-        EnvironmentHash(format!("{:x}", hasher.finish()))
-    }
-}
-
-impl Display for EnvironmentHash {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
 }
 
 /// The [`TaskHash`] group all the hashes of a task. It can be converted to a [`ComputationHash`]
