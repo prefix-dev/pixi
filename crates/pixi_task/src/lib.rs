@@ -7,7 +7,7 @@ mod task_hash;
 
 pub use file_hashes::{FileHashes, FileHashesError};
 pub use pixi_manifest::{Task, TaskName};
-pub use task_hash::{ComputationHash, EnvironmentHash, InputHashes, TaskHash};
+pub use task_hash::{ComputationHash, InputHashes, TaskHash};
 
 pub use executable_task::{
     CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory, RunOutput,

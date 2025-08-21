@@ -1,13 +1,13 @@
 use miette::Diagnostic;
+use pixi_core::{
+    Workspace,
+    workspace::{Environment, virtual_packages::verify_current_platform_can_run_environment},
+};
 use pixi_manifest::{Task, TaskName};
 use rattler_conda_types::Platform;
 use thiserror::Error;
 
-use crate::{
-    Workspace,
-    task::error::{AmbiguousTaskError, MissingTaskError},
-    workspace::{Environment, virtual_packages::verify_current_platform_can_run_environment},
-};
+use crate::error::{AmbiguousTaskError, MissingTaskError};
 
 /// Defines where the task was defined when looking for a task.
 #[derive(Debug, Clone)]
