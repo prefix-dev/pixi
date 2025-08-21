@@ -10,7 +10,7 @@ mod utils;
 pub mod virtual_packages;
 
 pub use crate::environment::CondaPrefixUpdater;
-pub use package_filter::PackageFilter;
+pub use package_filter::{FilteredPackages, InstallSubset};
 pub use package_identifier::PypiPackageIdentifier;
 use pixi_record::PixiRecord;
 use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};

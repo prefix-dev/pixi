@@ -1,5 +1,5 @@
 use super::{
-    CondaPrefixUpdater, PackageFilter, PixiRecordsByName, PypiRecordsByName, UvResolutionContext,
+    CondaPrefixUpdater, InstallSubset, PixiRecordsByName, PypiRecordsByName, UvResolutionContext,
     outdated::OutdatedEnvironments, utils::IoConcurrencyLimit,
 };
 use crate::{
@@ -432,8 +432,9 @@ impl<'p> LockFileDerivedData<'p> {
 
                 let platform = environment.best_platform();
                 let locked_env = self.locked_env(environment)?;
-                let filter = PackageFilter::new(skipped, None);
-                let packages = filter.filter(locked_env.packages(platform));
+                let filter = InstallSubset::new(skipped, &[], None);
+                let result = filter.filter(locked_env.packages(platform));
+                let packages = result.install;
 
                 // Separate the packages into conda and pypi packages
                 let (conda_packages, pypi_packages) = packages
@@ -612,8 +613,9 @@ impl<'p> LockFileDerivedData<'p> {
 
                 // Get the locked environment from the lock-file.
                 let locked_env = self.locked_env(environment)?;
-                let filter = PackageFilter::new(skipped, None);
-                let packages = filter.filter(locked_env.packages(platform));
+                let filter = InstallSubset::new(skipped, &[], None);
+                let result = filter.filter(locked_env.packages(platform));
+                let packages = result.install;
                 let records = locked_packages_to_pixi_records(packages)?;
 
                 // Update the conda prefix
@@ -649,9 +651,10 @@ impl<'p> LockFileDerivedData<'p> {
             .collect();
 
         // Get kept package names
-        let filter = PackageFilter::new(skipped, None);
-        let kept_package_names: HashSet<String> = filter
-            .filter(locked_env.packages(platform))
+        let filter = InstallSubset::new(skipped, &[], None);
+        let kept = filter.filter(locked_env.packages(platform));
+        let kept_package_names: HashSet<String> = kept
+            .install
             .into_iter()
             .map(|p| p.name().to_string())
             .collect();
