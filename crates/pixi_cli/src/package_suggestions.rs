@@ -67,15 +67,16 @@ impl PackageSuggester {
             }
 
             // Quick wins first (fast string operations)
-            let score = if name_lower.starts_with(&failed_lower) || failed_lower.starts_with(&name_lower) {
-                0.9 // Prefix match (high priority)
-            } else if name_lower.contains(&failed_lower) {
-                0.8 // Substring match (medium priority) 
-            } else {
-                // Only compute expensive Jaro for potential matches
-                let jaro_score = jaro(&name_lower, &failed_lower);
-                if jaro_score > 0.6 { jaro_score } else { 0.0 }
-            };
+            let score =
+                if name_lower.starts_with(&failed_lower) || failed_lower.starts_with(&name_lower) {
+                    0.9 // Prefix match (high priority)
+                } else if name_lower.contains(&failed_lower) {
+                    0.8 // Substring match (medium priority) 
+                } else {
+                    // Only compute expensive Jaro for potential matches
+                    let jaro_score = jaro(&name_lower, &failed_lower);
+                    if jaro_score > 0.6 { jaro_score } else { 0.0 }
+                };
 
             if score > 0.0 {
                 matches.push((score, name.to_string()));
@@ -93,32 +94,6 @@ impl PackageSuggester {
 
         Ok(suggestions)
     }
-}
-
-/// Get suggestions using CEP-0016 shard index with strict timeout for sub-second response
-pub async fn get_fast_suggestions(
-    failed_package: &str,
-    suggester: &PackageSuggester,
-) -> miette::Report {
-    use tokio::time::{timeout, Duration};
-
-    // Very strict timeout - mentor wants sub-second response
-    let suggestion_timeout = Duration::from_millis(500); // 0.5 second max
-
-    let suggestions = match timeout(suggestion_timeout, suggester.suggest_similar(failed_package)).await {
-        Ok(Ok(suggestions)) if !suggestions.is_empty() => suggestions,
-        Ok(Ok(_)) => vec![], // No suggestions found
-        Ok(Err(_)) => {
-            tracing::debug!("Network error getting suggestions, showing tip only");
-            vec![]
-        }
-        Err(_) => {
-            tracing::debug!("Suggestion lookup timed out after 500ms, showing tip only");
-            vec![]
-        }
-    };
-
-    create_enhanced_package_error(failed_package, &suggestions)
 }
 
 pub fn create_enhanced_package_error(
