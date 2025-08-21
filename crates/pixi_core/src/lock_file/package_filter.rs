@@ -1,3 +1,4 @@
+use itertools::Itertools;
 use rattler_lock::LockedPackageRef;
 use std::collections::{HashMap, HashSet, VecDeque};
 
@@ -196,8 +197,6 @@ struct PackageReachability {
     nodes: Vec<PackageNode>,
     /// Map package name -> index into `nodes`.
     name_to_index: HashMap<String, usize>,
-    /// Names of original root nodes (indegree == 0).
-    roots: Vec<String>,
 }
 
 impl PackageReachability {
@@ -209,32 +208,9 @@ impl PackageReachability {
             .map(|(idx, node)| (node.name.clone(), idx))
             .collect();
 
-        // Compute indegree to determine original roots.
-        // indegree == 0 are the initial roots.
-        let mut indegree: HashMap<&str, usize> =
-            name_to_index.keys().map(|k| (k.as_str(), 0usize)).collect();
-        for node in &nodes {
-            for dep in &node.dependencies {
-                if let Some(entry) = indegree.get_mut(dep.as_str()) {
-                    *entry += 1;
-                }
-            }
-        }
-        let roots = indegree
-            .into_iter()
-            .filter_map(|(name, deg)| {
-                if deg == 0 {
-                    Some(name.to_string())
-                } else {
-                    None
-                }
-            })
-            .collect();
-
         Self {
             nodes,
             name_to_index,
-            roots,
         }
     }
 
@@ -290,6 +266,31 @@ impl PackageReachability {
         stop_set: &[String],
         passthrough_set: &[String],
     ) -> HashSet<String> {
+        // Compute indegree to determine original roots.
+        // indegree == 0 are the initial roots.
+        let mut indegree: HashMap<&str, usize> = self
+            .name_to_index
+            .keys()
+            .map(|k| (k.as_str(), 0usize))
+            .collect();
+        for node in &self.nodes {
+            for dep in &node.dependencies {
+                if let Some(entry) = indegree.get_mut(dep.as_str()) {
+                    *entry += 1;
+                }
+            }
+        }
+        let roots = indegree
+            .into_iter()
+            .filter_map(|(name, deg)| {
+                if deg == 0 {
+                    Some(name.to_string())
+                } else {
+                    None
+                }
+            })
+            .collect_vec();
+
         let stop_set: HashSet<&str> = stop_set.iter().map(|s| s.as_str()).collect();
         let passthrough_set: HashSet<&str> = passthrough_set.iter().map(|s| s.as_str()).collect();
 
@@ -297,7 +298,7 @@ impl PackageReachability {
         let mut queue = VecDeque::new();
 
         // Initialize the queue with all non-skipped original roots.
-        for name in &self.roots {
+        for name in &roots {
             if !stop_set.contains(name.as_str()) {
                 queue.push_back(name.clone());
             }
