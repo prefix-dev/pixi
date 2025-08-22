@@ -212,13 +212,15 @@ mod tests {
             Url::parse("https://pypi.org/simple/").unwrap(),
             vec![Url::parse("https://my-mirror.example.com/simple/").unwrap()],
         );
-        
+
         let middlewares = uv_middlewares(&config);
-        
+
         // Should have: mirror + OCI + auth middleware
-        assert!(middlewares.len() >= 3, 
-               "Expected at least 3 middlewares (mirror, OCI, auth) when mirrors configured, got {}", 
-               middlewares.len());
+        assert!(
+            middlewares.len() >= 3,
+            "Expected at least 3 middlewares (mirror, OCI, auth) when mirrors configured, got {}",
+            middlewares.len()
+        );
     }
 
     #[test]
@@ -227,10 +229,13 @@ mod tests {
         // This ensures existing non-mirror auth scenarios continue to work
         let config = Config::default();
         let middlewares = uv_middlewares(&config);
-        
+
         // Should have: auth middleware only
-        assert_eq!(middlewares.len(), 1, 
-                  "Expected exactly 1 middleware (auth) when no mirrors configured, got {}", 
-                  middlewares.len());
+        assert_eq!(
+            middlewares.len(),
+            1,
+            "Expected exactly 1 middleware (auth) when no mirrors configured, got {}",
+            middlewares.len()
+        );
     }
 }
