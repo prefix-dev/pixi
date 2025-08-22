@@ -1,7 +1,7 @@
 use miette::IntoDiagnostic;
 use pixi_core::{
     UpdateLockFileOptions, WorkspaceLocator,
-    environment::{get_update_lock_file_and_prefix, InstallFilter},
+    environment::{InstallFilter, get_update_lock_file_and_prefix},
     lock_file::{ReinstallPackages, UpdateMode},
 };
 

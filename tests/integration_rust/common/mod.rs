@@ -29,13 +29,12 @@ use pixi_cli::{
 };
 use pixi_consts::consts;
 use pixi_core::{
-    UpdateLockFileOptions, Workspace,
+    InstallFilter, UpdateLockFileOptions, Workspace,
     lock_file::{ReinstallPackages, UpdateMode},
     task::{
         ExecutableTask, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph,
         TaskGraphError, TaskName, get_task_env,
     },
-    InstallFilter,
 };
 use pixi_manifest::{EnvironmentName, FeatureName};
 use pixi_progress::global_multi_progress;
