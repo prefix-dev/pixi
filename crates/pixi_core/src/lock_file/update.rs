@@ -6,7 +6,7 @@ use crate::{
     Workspace,
     activation::CurrentEnvVarBehavior,
     environment::{
-        CondaPrefixUpdated, EnvironmentFile, LockFileUsage, LockedEnvironmentHash,
+        CondaPrefixUpdated, EnvironmentFile, InstallFilter, LockFileUsage, LockedEnvironmentHash,
         PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PythonStatus,
         read_environment_file, write_environment_file,
     },
@@ -304,7 +304,7 @@ impl<'p> LockFileDerivedData<'p> {
     fn locked_environment_hash(
         &self,
         environment: &Environment<'p>,
-        skipped: &[String],
+        filter: &InstallFilter,
     ) -> miette::Result<LockedEnvironmentHash> {
         let locked_environment = self
             .lock_file
@@ -313,7 +313,7 @@ impl<'p> LockFileDerivedData<'p> {
         Ok(LockedEnvironmentHash::from_environment(
             locked_environment,
             environment.best_platform(),
-            skipped,
+            &filter.skip_with_deps,
         ))
     }
 
@@ -323,11 +323,11 @@ impl<'p> LockFileDerivedData<'p> {
         environment: &Environment<'p>,
         update_mode: UpdateMode,
         reinstall_packages: &ReinstallPackages,
-        skipped: &[String],
+        filter: &InstallFilter,
     ) -> miette::Result<Prefix> {
         // Check if the prefix is already up-to-date by validating the hash with the
         // environment file
-        let hash = self.locked_environment_hash(environment, skipped)?;
+        let hash = self.locked_environment_hash(environment, filter)?;
         if update_mode == UpdateMode::QuickValidate {
             if let Some(prefix) = self.cached_prefix(environment, &hash) {
                 return prefix;
@@ -336,7 +336,7 @@ impl<'p> LockFileDerivedData<'p> {
 
         // Get the up-to-date prefix
         let prefix = self
-            .update_prefix(environment, reinstall_packages, skipped)
+            .update_prefix(environment, reinstall_packages, filter)
             .await?;
 
         // Save an environment file to the environment directory after the update.
@@ -407,7 +407,7 @@ impl<'p> LockFileDerivedData<'p> {
         &self,
         environment: &Environment<'p>,
         reinstall_packages: &ReinstallPackages,
-        skipped: &[String],
+        filter: &InstallFilter,
     ) -> miette::Result<Prefix> {
         let prefix_once_cell = self
             .updated_pypi_prefixes
@@ -432,8 +432,12 @@ impl<'p> LockFileDerivedData<'p> {
 
                 let platform = environment.best_platform();
                 let locked_env = self.locked_env(environment)?;
-                let filter = InstallSubset::new(skipped, &[], None);
-                let result = filter.filter(locked_env.packages(platform));
+                let subset = InstallSubset::new(
+                    &filter.skip_with_deps,
+                    &filter.skip_direct,
+                    filter.target_package.as_deref(),
+                );
+                let result = subset.filter(locked_env.packages(platform));
                 let packages = result.install;
 
                 // Separate the packages into conda and pypi packages
@@ -464,7 +468,11 @@ impl<'p> LockFileDerivedData<'p> {
 
                 // Get the prefix with the conda packages installed.
                 let (prefix, python_status) = self
-                    .conda_prefix(environment, conda_reinstall_packages, skipped)
+                    .conda_prefix(
+                        environment,
+                        conda_reinstall_packages,
+                        &filter.skip_with_deps,
+                    )
                     .await?;
 
                 // No `uv` support for WASM right now
@@ -638,7 +646,7 @@ impl<'p> LockFileDerivedData<'p> {
     pub fn get_skipped_package_names(
         &self,
         environment: &Environment<'p>,
-        skipped: &[String],
+        filter: &InstallFilter,
     ) -> miette::Result<Vec<String>> {
         let platform = environment.best_platform();
         let locked_env = self.locked_env(environment)?;
@@ -651,8 +659,8 @@ impl<'p> LockFileDerivedData<'p> {
             .collect();
 
         // Get kept package names
-        let filter = InstallSubset::new(skipped, &[], None);
-        let kept = filter.filter(locked_env.packages(platform));
+        let subset = InstallSubset::new(&filter.skip_with_deps, &filter.skip_direct, None);
+        let kept = subset.filter(locked_env.packages(platform));
         let kept_package_names: HashSet<String> = kept
             .install
             .into_iter()

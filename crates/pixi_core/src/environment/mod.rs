@@ -408,6 +408,38 @@ impl LockFileUsage {
     }
 }
 
+/// Options to select a subset of packages to install or skip.
+#[derive(Debug, Default, Clone)]
+pub struct InstallFilter {
+    /// Packages to skip directly but still traverse through their dependencies
+    pub skip_direct: Vec<String>,
+    /// Packages to skip together with their dependencies (hard stop)
+    pub skip_with_deps: Vec<String>,
+    /// Target a single package (and its deps) to install
+    pub target_package: Option<String>,
+}
+
+impl InstallFilter {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn skip_direct(mut self, packages: impl Into<Vec<String>>) -> Self {
+        self.skip_direct = packages.into();
+        self
+    }
+
+    pub fn skip_with_deps(mut self, packages: impl Into<Vec<String>>) -> Self {
+        self.skip_with_deps = packages.into();
+        self
+    }
+
+    pub fn target_package(mut self, package: Option<String>) -> Self {
+        self.target_package = package;
+        self
+    }
+}
+
 /// Update the prefix if it doesn't exist or if it is not up-to-date.
 ///
 /// To updated multiple prefixes at once, use [`get_update_lock_file_and_prefixes`].
@@ -416,14 +448,14 @@ pub async fn get_update_lock_file_and_prefix<'env>(
     update_mode: UpdateMode,
     update_lock_file_options: UpdateLockFileOptions,
     reinstall_packages: ReinstallPackages,
-    skipped: &[String],
+    filter: &InstallFilter,
 ) -> miette::Result<(LockFileDerivedData<'env>, Prefix)> {
     let (lock_file, prefixes) = get_update_lock_file_and_prefixes(
         &[environment.clone()],
         update_mode,
         update_lock_file_options,
         reinstall_packages,
-        skipped,
+        filter,
     )
     .await?;
     Ok((
@@ -442,7 +474,7 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
     update_mode: UpdateMode,
     update_lock_file_options: UpdateLockFileOptions,
     reinstall_packages: ReinstallPackages,
-    skipped: &[String],
+    filter: &InstallFilter,
 ) -> miette::Result<(LockFileDerivedData<'env>, Vec<Prefix>)> {
     if environments.is_empty() {
         return Err(miette::miette!("No environments provided to install."));
@@ -489,7 +521,7 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
                 std::future::ready(Ok(Prefix::new(env.dir()))).left_future()
             } else {
                 lock_file_ref
-                    .prefix(env, update_mode, reinstall_packages, skipped)
+                    .prefix(env, update_mode, reinstall_packages, filter)
                     .right_future()
             }
         })

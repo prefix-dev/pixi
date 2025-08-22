@@ -4,7 +4,7 @@ use itertools::Itertools;
 use pixi_config::ConfigCli;
 use pixi_core::{
     UpdateLockFileOptions, WorkspaceLocator,
-    environment::get_update_lock_file_and_prefixes,
+    environment::{InstallFilter, get_update_lock_file_and_prefixes},
     lock_file::{ReinstallPackages, UpdateMode},
 };
 use std::fmt::Write;
@@ -49,10 +49,14 @@ pub struct Args {
     #[arg(long, short, conflicts_with = "environment")]
     pub all: bool,
 
-    /// Skip installation of specific packages present in the lockfile. Requires --frozen.
+    /// Skip installation of specific packages present in the lockfile.
+    /// This uses a soft exclusion: the package will be skipped but its dependencies are installed.
     /// This can be useful for instance in a Dockerfile to skip local source dependencies when installing dependencies.
-    #[arg(long, requires = "frozen")]
     pub skip: Option<Vec<String>>,
+
+    /// Skip a package and its entire dependency subtree.
+    /// This performs a hard exclusion: the package and its dependencies are not installed unless reachable from another non-skipped root.
+    pub skip_with_deps: Option<Vec<String>>,
 
     /// Install and build only this package and its dependencies
     #[arg(long)]
@@ -88,6 +92,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .map(|env| workspace.environment_from_name_or_env_var(Some(env)))
         .collect::<Result<Vec<_>, _>>()?;
 
+    // Build the install filter from CLI args
+    let filter = InstallFilter::new()
+        .skip_direct(args.skip.clone().unwrap_or_default())
+        .skip_with_deps(args.skip_with_deps.clone().unwrap_or_default())
+        .target_package(args.package.clone());
+
     // Update the prefixes by installing all packages
     let (lock_file, _) = get_update_lock_file_and_prefixes(
         &environments,
@@ -98,7 +108,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         },
         ReinstallPackages::default(),
-        &args.skip.clone().unwrap_or_default(),
+        &filter,
     )
     .await?;
 
@@ -135,10 +145,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .unwrap()
     }
 
-    if let Some(skip) = &args.skip {
+    if args.skip.is_some() || args.skip_with_deps.is_some() {
         let mut all_skipped_packages = std::collections::HashSet::new();
         for env in &environments {
-            let skipped_packages = lock_file.get_skipped_package_names(env, skip)?;
+            let skipped_packages = lock_file.get_skipped_package_names(env, &filter)?;
             all_skipped_packages.extend(skipped_packages);
         }
 
@@ -153,8 +163,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .unwrap();
         } else {
             tracing::warn!(
-                "No packages were skipped. '{}' did not match any packages in the lockfile.",
-                skip.join("', '")
+                "No packages were skipped. '{}' '{}' did not match any packages in the lockfile.",
+                args.skip.clone().unwrap_or_default().join("', '"),
+                args.skip_with_deps.clone().unwrap_or_default().join("', '")
             );
         }
     }

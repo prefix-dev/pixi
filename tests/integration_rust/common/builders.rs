@@ -465,6 +465,14 @@ impl InstallBuilder {
         self.args.skip = Some(names);
         self
     }
+    pub fn with_skipped_with_deps(mut self, names: Vec<String>) -> Self {
+        self.args.skip_with_deps = Some(names);
+        self
+    }
+    pub fn with_package(mut self, pkg: impl Into<String>) -> Self {
+        self.args.package = Some(pkg.into());
+        self
+    }
 }
 
 impl IntoFuture for InstallBuilder {

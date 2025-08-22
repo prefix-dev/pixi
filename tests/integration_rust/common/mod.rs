@@ -35,6 +35,7 @@ use pixi_core::{
         ExecutableTask, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph,
         TaskGraphError, TaskName, get_task_env,
     },
+    InstallFilter,
 };
 use pixi_manifest::{EnvironmentName, FeatureName};
 use pixi_progress::global_multi_progress;
@@ -523,7 +524,7 @@ impl PixiControl {
                             &task.run_environment,
                             UpdateMode::Revalidate,
                             &ReinstallPackages::default(),
-                            &[],
+                            &InstallFilter::default(),
                         )
                         .await?;
                     let env =
@@ -567,6 +568,7 @@ impl PixiControl {
                 config: Default::default(),
                 all: false,
                 skip: None,
+                skip_with_deps: None,
                 package: None,
             },
         }
