@@ -631,7 +631,14 @@ mod test {
                         writeln!(
                             &mut snapshot,
                             "Package: {} @ {}",
-                            &package.value.package.name, &package.value.package.version,
+                            &package.clone().value.package.name.unwrap_or("None".into()),
+                            &package
+                                .value
+                                .package
+                                .version
+                                .as_ref()
+                                .map(|v| v.to_string())
+                                .unwrap_or_else(|| "None".to_string()),
                         )
                         .unwrap();
                     }
@@ -696,7 +703,14 @@ mod test {
                     writeln!(
                         &mut snapshot,
                         "Package: {} @ {}",
-                        &package.value.package.name, &package.value.package.version,
+                        &package.clone().value.package.name.unwrap_or("None".into()),
+                        &package
+                            .value
+                            .package
+                            .version
+                            .as_ref()
+                            .map(|v| v.to_string())
+                            .unwrap_or_else(|| "None".to_string()),
                     )
                     .unwrap();
                 }

@@ -1124,6 +1124,9 @@ pub(crate) async fn verify_package_platform_satisfiability(
                                         ParseChannelError::InvalidPath(p).into()
                                     }
                                     SpecConversionError::InvalidChannel(_name, p) => p.into(),
+                                    SpecConversionError::MissingName => {
+                                        ParseMatchSpecError::MissingPackageName
+                                    }
                                 };
                                 return Err(Box::new(PlatformUnsat::FailedToParseMatchSpec(
                                     name.as_source().to_string(),

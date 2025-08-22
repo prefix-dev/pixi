@@ -49,7 +49,8 @@ pub enum SpecConversionError {
     #[error("the channel '{0}' could not be resolved")]
     InvalidChannel(String, #[source] ParseChannelError),
 
-    #[error("the `name` must be provided")]
+    /// The `name` field is missing in the spec.
+    #[error("the `package.name` must be provided in versions of pixi-build-api-version <2")]
     MissingName,
 }
 

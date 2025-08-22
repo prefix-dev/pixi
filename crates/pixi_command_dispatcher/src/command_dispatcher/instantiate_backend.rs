@@ -156,6 +156,7 @@ impl CommandDispatcher {
             && spec
                 .init_params
                 .project_model
+                .as_ref()
                 .is_some_and(|p| p.name.is_none())
         {
             return Err(CommandDispatcherError::Failed(
