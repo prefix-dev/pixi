@@ -17,9 +17,10 @@ use pixi_utils::{prefix::Prefix, rlimit::try_increase_rlimit_to_sensible};
 pub use pypi_prefix::{ContinuePyPIPrefixUpdate, on_python_interpreter_change};
 pub use python_status::PythonStatus;
 use rattler_conda_types::Platform;
-use rattler_lock::LockedPackageRef;
+use rattler_lock::{LockFile, LockedPackageRef};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use std::fmt::{Display, Formatter};
 use std::{
     collections::HashMap,
     hash::{Hash, Hasher},
@@ -28,6 +29,7 @@ use std::{
 };
 use xxhash_rust::xxh3::Xxh3;
 
+use crate::workspace;
 use crate::{
     Workspace,
     lock_file::{
@@ -103,6 +105,66 @@ async fn prefix_location_changed(
             "The environment directory has moved from `{}` to `{}`. Environments are non-relocatable, moving them can cause issues.", previous_dir.display(), environment_dir.display()
         )
             .into())
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct EnvironmentHash(String);
+
+impl EnvironmentHash {
+    pub fn from_environment(
+        run_environment: &workspace::Environment<'_>,
+        input_environment_variables: &HashMap<String, Option<String>>,
+        lock_file: &LockFile,
+    ) -> Self {
+        let mut hasher = Xxh3::new();
+
+        // Hash the environment variables
+        let mut sorted_input_environment_variables: Vec<_> =
+            input_environment_variables.iter().collect();
+        sorted_input_environment_variables.sort_by_key(|(key, _)| *key);
+        for (key, value) in sorted_input_environment_variables {
+            key.hash(&mut hasher);
+            value.hash(&mut hasher);
+        }
+
+        // Hash the activation scripts
+        let activation_scripts =
+            run_environment.activation_scripts(Some(run_environment.best_platform()));
+        for script in activation_scripts {
+            script.hash(&mut hasher);
+        }
+
+        // Hash the environment variables
+        let project_activation_env =
+            run_environment.activation_env(Some(run_environment.best_platform()));
+        let mut env_vars: Vec<_> = project_activation_env.iter().collect();
+        env_vars.sort_by_key(|(key, _)| *key);
+
+        for (key, value) in env_vars {
+            key.hash(&mut hasher);
+            value.hash(&mut hasher);
+        }
+
+        // Hash the packages
+        let mut urls = Vec::new();
+        if let Some(env) = lock_file.environment(run_environment.name().as_str()) {
+            if let Some(packages) = env.packages(run_environment.best_platform()) {
+                for package in packages {
+                    urls.push(package.location().to_string())
+                }
+            }
+        }
+        urls.sort();
+        urls.hash(&mut hasher);
+
+        EnvironmentHash(format!("{:x}", hasher.finish()))
+    }
+}
+
+impl Display for EnvironmentHash {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 

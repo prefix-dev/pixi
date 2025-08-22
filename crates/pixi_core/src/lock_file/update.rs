@@ -44,6 +44,7 @@ use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Arch, GenericVirtualPackage, PackageName, Platform};
 use rattler_lock::{LockFile, LockedPackageRef, ParseCondaLockError};
+use std::collections::hash_map::Entry;
 use std::{
     cmp::PartialEq,
     collections::{HashMap, HashSet},
@@ -1334,6 +1335,7 @@ impl<'p> UpdateContext<'p> {
 
         // Spawn tasks to update the pypi packages.
         let uv_context = once_cell::sync::OnceCell::new();
+        let mut pypi_conda_prefix_updaters = HashMap::new();
         for (environment, platform) in
             self.outdated_envs
                 .pypi
@@ -1377,19 +1379,26 @@ impl<'p> UpdateContext<'p> {
                 .get_latest_group_repodata_records(&group, environment.best_platform())
                 .ok_or_else(|| make_unsupported_pypi_platform_error(environment, false));
 
-            // Creates an object to initiate an update at a later point
-            let prefix_platform = environment.best_platform();
-            let conda_prefix_updater = CondaPrefixUpdater::builder(
-                group.clone(),
-                prefix_platform,
-                environment
-                    .virtual_packages(prefix_platform)
-                    .into_iter()
-                    .map(GenericVirtualPackage::from)
-                    .collect(),
-                self.command_dispatcher.clone(),
-            )
-            .finish()?;
+            // Creates an object to initiate an update at a later point. Make sure to only create a single entry if we are solving for multiple platforms.
+            let conda_prefix_updater =
+                match pypi_conda_prefix_updaters.entry(environment.name().clone()) {
+                    Entry::Vacant(entry) => {
+                        let prefix_platform = environment.best_platform();
+                        let conda_prefix_updater = CondaPrefixUpdater::builder(
+                            group.clone(),
+                            prefix_platform,
+                            environment
+                                .virtual_packages(prefix_platform)
+                                .into_iter()
+                                .map(GenericVirtualPackage::from)
+                                .collect(),
+                            self.command_dispatcher.clone(),
+                        )
+                        .finish()?;
+                        entry.insert(conda_prefix_updater).clone()
+                    }
+                    Entry::Occupied(entry) => entry.get().clone(),
+                };
 
             let uv_context = uv_context
                 .get_or_try_init(|| UvResolutionContext::from_workspace(project))?

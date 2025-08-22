@@ -31,13 +31,13 @@ use pixi_consts::consts;
 use pixi_core::{
     InstallFilter, UpdateLockFileOptions, Workspace,
     lock_file::{ReinstallPackages, UpdateMode},
-    task::{
-        ExecutableTask, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph,
-        TaskGraphError, TaskName, get_task_env,
-    },
 };
 use pixi_manifest::{EnvironmentName, FeatureName};
 use pixi_progress::global_multi_progress;
+use pixi_task::{
+    ExecutableTask, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph, TaskGraphError,
+    TaskName, get_task_env,
+};
 use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform};
 use rattler_lock::{LockFile, LockedPackageRef, UrlOrPath};
 use tempfile::TempDir;

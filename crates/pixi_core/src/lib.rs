@@ -7,7 +7,6 @@ mod install_pypi;
 pub mod lock_file;
 pub mod prompt;
 pub mod repodata;
-pub mod task;
 pub mod workspace;
 
 pub mod signals;
