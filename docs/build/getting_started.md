@@ -51,7 +51,7 @@ Pixi backends describe how to build a conda package, for a certain language or b
 In this example, we are using `pixi-build-python` backend in order to build a Python package.
 
 ```toml
---8<-- "docs/source_files/pixi_workspaces/pixi_build/getting_started/pixi.toml:package-build"
+--8<-- "docs/source_files/pixi_workspaces/pixi_build/getting_started/pixi.toml:package.build.backend"
 ```
 
 We need to add our package `python_rich` as source dependency to the workspace.
