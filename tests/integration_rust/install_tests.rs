@@ -12,6 +12,7 @@ use pixi_cli::{
     LockFileUsageConfig,
     cli_config::{LockAndInstallConfig, LockFileUpdateConfig, WorkspaceConfig},
 };
+use pixi_core::InstallFilter;
 use pixi_config::{Config, DetachedEnvironments};
 use pixi_consts::consts;
 use pixi_core::{
@@ -744,7 +745,7 @@ async fn test_old_lock_install() {
             ..Default::default()
         },
         ReinstallPackages::default(),
-        &[],
+        &InstallFilter::default(),
     )
     .await
     .unwrap();
