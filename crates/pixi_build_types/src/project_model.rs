@@ -176,17 +176,18 @@ impl TargetsV1 {
 }
 
 impl IsDefault for TargetsV1 {
-    fn is_default(&self) -> bool {
-        self.is_empty()
+    type Item = Self;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        if !self.is_empty() { Some(self) } else { None }
     }
 }
 
 impl<T: IsDefault> IsDefault for Option<T> {
-    fn is_default(&self) -> bool {
-        match self {
-            None => true,
-            Some(value) => value.is_default(),
-        }
+    type Item = T::Item;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        self.as_ref()?.is_non_default()
     }
 }
 
@@ -219,8 +220,10 @@ impl TargetV1 {
 }
 
 impl IsDefault for TargetV1 {
-    fn is_default(&self) -> bool {
-        self.is_empty()
+    type Item = Self;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        if !self.is_empty() { Some(self) } else { None }
     }
 }
 
@@ -601,8 +604,10 @@ impl Hash for GitReferenceV1 {
 }
 
 impl IsDefault for GitReferenceV1 {
-    fn is_default(&self) -> bool {
-        false // Never skip GitReferenceV1 fields
+    type Item = Self;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        Some(self) // Never skip GitReferenceV1 fields
     }
 }
 
