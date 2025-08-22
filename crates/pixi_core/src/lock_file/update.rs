@@ -1346,7 +1346,7 @@ impl<'p> UpdateContext<'p> {
 
         // Spawn tasks to update the pypi packages.
         let uv_context = once_cell::sync::OnceCell::new();
-        let mut pypi_conda_prefix_updaters = HashMap::<EnvironmentName, CondaPrefixUpdater>::new();
+        let mut pypi_conda_prefix_updaters = HashMap::new();
         for (environment, platform) in
             self.outdated_envs
                 .pypi
@@ -1393,7 +1393,6 @@ impl<'p> UpdateContext<'p> {
             // Creates an object to initiate an update at a later point. Make sure to only create a single entry if we are solving for multiple platforms.
             let conda_prefix_updater =
                 match pypi_conda_prefix_updaters.entry(environment.name().clone()) {
-                    Entry::Occupied(entry) => entry.get().clone(),
                     Entry::Vacant(entry) => {
                         let prefix_platform = environment.best_platform();
                         let conda_prefix_updater = CondaPrefixUpdater::builder(
@@ -1409,6 +1408,7 @@ impl<'p> UpdateContext<'p> {
                         .finish()?;
                         entry.insert(conda_prefix_updater).clone()
                     }
+                    Entry::Occupied(entry) => entry.get().clone(),
                 };
 
             let uv_context = uv_context
