@@ -12,9 +12,9 @@ use pixi_cli::{
     LockFileUsageConfig,
     cli_config::{LockAndInstallConfig, LockFileUpdateConfig, WorkspaceConfig},
 };
-use pixi_core::InstallFilter;
 use pixi_config::{Config, DetachedEnvironments};
 use pixi_consts::consts;
+use pixi_core::InstallFilter;
 use pixi_core::{
     UpdateLockFileOptions, Workspace,
     environment::LockFileUsage,
