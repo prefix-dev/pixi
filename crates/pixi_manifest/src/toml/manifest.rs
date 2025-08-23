@@ -390,7 +390,7 @@ impl TomlManifest {
 
             warnings.push(Warning::from(
                 GenericError::new(format!(
-                    "The feature '{}' is defined but not used in any environment",
+                    "The feature '{}' is defined but not used in any environment. Dependencies of unused features are not resolved or checked, and use wildcard (*) version specifiers by default, disregarding any set `pinning-strategy`",
                     feature_name
                 ))
                 .with_opt_span(span)
