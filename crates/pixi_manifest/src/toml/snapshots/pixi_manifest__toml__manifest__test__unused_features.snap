@@ -2,7 +2,8 @@
 source: crates/pixi_manifest/src/toml/manifest.rs
 expression: "expect_parse_warnings(r#\"\n        [workspace]\n        name = \"foo\"\n        channels = []\n        platforms = ['osx-64']\n\n        [feature.foobar.dependencies]\n\n        [feature.generic.target.osx.dependencies]\n        \"#,)"
 ---
-  ⚠ The feature 'foobar' is defined but not used in any environment
+  ⚠ The feature 'foobar' is defined but not used in any environment. Dependencies of unused features are not resolved or checked, and use wildcard (*) version specifiers by default, disregarding any
+  │ set `pinning-strategy`
    ╭─[pixi.toml:7:18]
  6 │
  7 │         [feature.foobar.dependencies]
@@ -11,7 +12,8 @@ expression: "expect_parse_warnings(r#\"\n        [workspace]\n        name = \"f
    ╰────
   help: Remove the feature from the manifest or add it to an environment
 
-  ⚠ The feature 'generic' is defined but not used in any environment
+  ⚠ The feature 'generic' is defined but not used in any environment. Dependencies of unused features are not resolved or checked, and use wildcard (*) version specifiers by default, disregarding
+  │ any set `pinning-strategy`
     ╭─[pixi.toml:9:18]
   8 │
   9 │         [feature.generic.target.osx.dependencies]
