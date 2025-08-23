@@ -1,16 +1,37 @@
 #!/bin/sh
-set -eu
+# Don't exit due to unset vars
+set -e
 # Version: v0.53.0
+#
+readonly VERSION="${PIXI_VERSION:-latest}"
+readonly REPOURL="${PIXI_REPOURL:-https://github.com/prefix-dev/pixi}"
 
-__wrap__() {
-    VERSION="${PIXI_VERSION:-latest}"
+
+__check__(){
+    local bin="$1"
+    command -v "${bin}" &> /dev/null|| return 1
+
+}
+__info__(){
+    echo -e "[$(date "+%Y-%m-%d %H:%M:%S")][INFO]:["${1}"]"
+}
+
+__warn__(){
+    echo -e "[$(date "+%Y-%m-%d %H:%M:%S")][WARN]:["${1}"]" >&2
+}
+
+__error__(){
+    echo -e "[$(date "+%Y-%m-%d %H:%M:%S")][ERROR]:["${1}"]" >&2
+}
+
+__main__() {
     PIXI_HOME="${PIXI_HOME:-$HOME/.pixi}"
     case "$PIXI_HOME" in
     '~' | '~'/*) PIXI_HOME="${HOME-}${PIXI_HOME#\~}" ;; # expand tilde
     esac
     BIN_DIR="$PIXI_HOME/bin"
 
-    REPOURL="${PIXI_REPOURL:-https://github.com/prefix-dev/pixi}"
+
     PLATFORM="$(uname -s)"
     ARCH="${PIXI_ARCH:-$(uname -m)}"
     IS_MSYS=false
@@ -31,10 +52,10 @@ __wrap__() {
     BINARY="pixi-${ARCH}-${PLATFORM}"
     if $IS_MSYS; then
         EXTENSION=".zip"
-        hash unzip 2>/dev/null || EXTENSION=".exe"
+        __check__ unzip || EXTENSION=".exe"
     else
         EXTENSION=".tar.gz"
-        hash tar 2>/dev/null || EXTENSION=''
+        __check__ tar || EXTENSION=''
     fi
 
     if [ "$VERSION" = "latest" ]; then
@@ -44,11 +65,11 @@ __wrap__() {
         DOWNLOAD_URL="${REPOURL%/}/releases/download/v${VERSION#v}/${BINARY}${EXTENSION-}"
     fi
 
-    printf "This script will automatically download and install Pixi (%s) for you.\nGetting it from this url: %s\n" "$VERSION" "$DOWNLOAD_URL"
+    __info__ "This script will automatically download and install Pixi ($VERSION) for you.\nGetting it from this url: $DOWNLOAD_URL"
 
     HAVE_CURL=false
     HAVE_CURL_8_8_0=false
-    if hash curl 2>/dev/null; then
+    if __check__ "curl" ; then
         # Check that the curl version is not 8.8.0, which is broken for --write-out
         # https://github.com/curl/curl/issues/13845
         if [ "$(curl --version | (
@@ -62,15 +83,15 @@ __wrap__() {
     fi
 
     HAVE_WGET=true
-    hash wget 2>/dev/null || HAVE_WGET=false
+    __check__ wget || HAVE_WGET=false
 
     if ! $HAVE_CURL && ! $HAVE_WGET; then
-        echo "error: you need either 'curl' or 'wget' installed for this script." >&2
+        __error__ "you need either 'curl' or 'wget' installed for this script."
         if $HAVE_CURL_8_8_0; then
-            echo "error: curl 8.8.0 is known to be broken, please use a different version" >&2
+            __error__ "curl 8.8.0 is known to be broken, please use a different version"
             if $IS_MSYS; then
-                echo "A common way to get an updated version of curl is to upgrade Git for Windows:" >&2
-                echo "      https://gitforwindows.org/" >&2
+                __info__ "A common way to get an updated version of curl is to upgrade Git for Windows:"
+                __info__ "https://gitforwindows.org/"
             fi
         fi
         exit 1
@@ -85,12 +106,11 @@ __wrap__() {
     trap cleanup EXIT
 
     # Test if stdout is a terminal before showing progress
+    CURL_OPTIONS="--no-silent"
+    WGET_OPTIONS="--show-progress"
     if [ ! -t 1 ]; then
         CURL_OPTIONS="--silent" # --no-progress-meter is better, but only available in 7.67+
         WGET_OPTIONS="--no-verbose"
-    else
-        CURL_OPTIONS="--no-silent"
-        WGET_OPTIONS="--show-progress"
     fi
 
     if $HAVE_CURL; then
@@ -99,34 +119,31 @@ __wrap__() {
         case "$CURL_ERR" in
         35 | 53 | 54 | 59 | 66 | 77)
             if ! $HAVE_WGET; then
-                echo "error: when download '${DOWNLOAD_URL}', curl has some local ssl problems with error $CURL_ERR" >&2
-                exit 1
+                __error__ "when download '${DOWNLOAD_URL}', curl has some local ssl problems with error $CURL_ERR" && exit 1
+
             fi
             # fallback to wget
             ;;
         0)
             if [ "${HTTP_CODE}" -lt 200 ] || [ "${HTTP_CODE}" -gt 299 ]; then
-                echo "error: '${DOWNLOAD_URL}' is not available" >&2
-                exit 1
+                __error__ " '${DOWNLOAD_URL}' is not available"&& exit 1
             fi
             HAVE_WGET=false # download success, skip wget
             ;;
         *)
-            echo "error: when download '${DOWNLOAD_URL}', curl fails with with error $CURL_ERR" >&2
-            exit 1
+            __error__ "when download '${DOWNLOAD_URL}', curl fails with with error $CURL_ERR" && exit 1
             ;;
         esac
     fi
 
     if $HAVE_WGET && ! wget $WGET_OPTIONS --output-document="$TEMP_FILE" "$DOWNLOAD_URL"; then
-        echo "error: '${DOWNLOAD_URL}' is not available" >&2
-        exit 1
+        __error__ "error: '${DOWNLOAD_URL}' is not available"&& exit 1
     fi
 
     # Check that file was correctly created (https://github.com/prefix-dev/pixi/issues/446)
     if [ ! -s "$TEMP_FILE" ]; then
-        echo "error: temporary file ${TEMP_FILE} not correctly created." >&2
-        echo "       As a workaround, you can try set TMPDIR env variable to directory with write permissions." >&2
+        __error__ "temporary file ${TEMP_FILE} not correctly created."
+        __info__ "As a workaround, you can try set TMPDIR env variable to directory with write permissions."
         exit 1
     fi
 
@@ -155,11 +172,11 @@ __wrap__() {
         cp -f "$TEMP_FILE" "$BIN_DIR/pixi"
     fi
 
-    echo "The 'pixi' binary is installed into '${BIN_DIR}'"
+    __info__ "The 'pixi' binary is installed into '${BIN_DIR}'"
 
     # shell update can be suppressed by `PIXI_NO_PATH_UPDATE` env var
     if [ -n "${PIXI_NO_PATH_UPDATE:-}" ]; then
-        echo "No path update because PIXI_NO_PATH_UPDATE is set"
+        __warn__ "No path update because PIXI_NO_PATH_UPDATE is set"
     else
         update_shell() {
             FILE="$1"
@@ -172,9 +189,9 @@ __wrap__() {
 
             # Append the line if not already present
             if ! grep -Fxq "$LINE" "$FILE"; then
-                echo "Updating '${FILE}'"
+                __info__ "Updating '${FILE}'"
                 echo "$LINE" >>"$FILE"
-                echo "Please restart or source your shell."
+                __info__ "Please restart or source your shell."
             fi
         }
 
@@ -201,14 +218,20 @@ __wrap__() {
             ;;
 
         '')
-            echo "warn: Could not detect shell type." >&2
-            echo "      Please permanently add '${BIN_DIR}' to your \$PATH to enable the 'pixi' command." >&2
+            __warn__ "Could not detect shell type."
+            __info__  "Please permanently add '${BIN_DIR}' to your \$PATH to enable the 'pixi' command."
             ;;
 
         *)
-            echo "warn: Could not update shell $(basename "$SHELL")" >&2
-            echo "      Please permanently add '${BIN_DIR}' to your \$PATH to enable the 'pixi' command." >&2
+                __warn__ "Could not update shell $(basename "$SHELL")"
+                __info__ "Please permanently add '${BIN_DIR}' to your \$PATH to enable the 'pixi' command."
             ;;
         esac
     fi
-} && __wrap__
+}
+
+{
+   ## Load all script before execution
+   __main__
+
+}
