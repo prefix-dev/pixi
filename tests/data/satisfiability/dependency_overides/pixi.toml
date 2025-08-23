@@ -11,4 +11,4 @@ python = "3.12"
 foo = { path = "./projects/foo", editable = true }
 
 [pypi-options.dependency-overrides]
-dummy_test="==0.1.2"
+dummy_test = "==0.1.2"

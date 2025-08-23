@@ -1239,7 +1239,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
                         Ok(Some(idx)) => {
                             let record = &locked_pypi_environment.records[idx];
 
-                            // use the overrided requirements if we specified
+                            // use the overridden requirements if we specified
                             let requirement = dependency_overrides
                                 .get(&requirement.name)
                                 .cloned()

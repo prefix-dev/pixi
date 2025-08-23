@@ -43,7 +43,7 @@ packages:
 - pypi: ./projects/foo
   name: foo
   version: 0.1.0
-  sha256: d3a602323051e3571d4059ece9087fafba7f36eaf1975c1685f24ccc7ddcb024
+  sha256: fc902a9e46771169f2ce5d04b55d766bac66e1a951d287649225768dfa5df455
   requires_dist:
   - dummy-test==0.1.3
   requires_python: '>=3.11'
