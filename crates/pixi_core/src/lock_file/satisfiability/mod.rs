@@ -1005,6 +1005,27 @@ pub(crate) async fn verify_package_platform_satisfiability(
         return Err(Box::new(PlatformUnsat::TooManyCondaPackages(Vec::new())));
     }
 
+    // get pypi-options dependency overrides
+    // we map it to name: requirement for latter matching
+    let dependency_overrides: indexmap::IndexMap<
+        uv_normalize::PackageName,
+        uv_distribution_types::Requirement,
+    > = environment
+        .pypi_options()
+        .dependency_overrides
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(name, req)| -> Result<_, Box<PlatformUnsat>> {
+            let uv_req = as_uv_req(&req, name.as_source(), project_root).map_err(|e| {
+                Box::new(PlatformUnsat::AsPep508Error(
+                    name.as_normalized().clone(),
+                    e,
+                ))
+            })?;
+            Ok((uv_req.name.clone(), uv_req))
+        })
+        .collect::<Result<_, _>>()?;
+
     // Transform from PyPiPackage name into UV Requirement type
     let pypi_requirements = environment
         .pypi_dependencies(Some(platform))
@@ -1217,6 +1238,13 @@ pub(crate) async fn verify_package_platform_satisfiability(
                     {
                         Ok(Some(idx)) => {
                             let record = &locked_pypi_environment.records[idx];
+
+                            // use the overrided requirements if we specified
+                            let requirement = dependency_overrides
+                                .get(&requirement.name)
+                                .cloned()
+                                .unwrap_or(requirement);
+
                             if requirement.is_editable() {
                                 if let Err(err) =
                                     pypi_satifisfies_editable(&requirement, &record.0, project_root)
