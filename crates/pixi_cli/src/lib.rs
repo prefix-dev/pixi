@@ -21,6 +21,7 @@ use tracing::level_filters::LevelFilter;
 
 pub mod add;
 mod build;
+mod shared;
 pub mod clean;
 pub mod cli_config;
 pub mod command_info;

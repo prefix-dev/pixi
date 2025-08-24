@@ -4,13 +4,13 @@ use console::Color;
 use itertools::Itertools;
 use miette::Context;
 use pixi_consts::consts;
-use pixi_core::global::common::find_package_records;
-use pixi_core::global::{EnvRoot, EnvironmentName, Project};
-use pixi_core::shared::tree::{
+use crate::shared::tree::{
     build_reverse_dependency_map, print_dependency_tree, print_inverted_dependency_tree, Package, PackageSource,
 };
 use std::collections::HashMap;
 use std::str::FromStr;
+use pixi_global::common::find_package_records;
+use pixi_global::{EnvRoot, EnvironmentName, Project};
 
 /// Show a tree of dependencies for a specific global environment.
 #[derive(Debug, Parser)]

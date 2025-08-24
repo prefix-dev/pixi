@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 use ahash::HashSet;
-use crate::cli::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
+use crate::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
 use clap::Parser;
 use console::Color;
 use itertools::Itertools;
 use fancy_display::FancyDisplay;
 use miette::WrapErr;
-use pixi_core::shared::tree::{build_reverse_dependency_map, print_dependency_tree, print_inverted_dependency_tree, Package, PackageSource};
+use crate::shared::tree::{build_reverse_dependency_map, print_dependency_tree, print_inverted_dependency_tree, Package, PackageSource};
 use pixi_core::{lock_file::UpdateLockFileOptions, WorkspaceLocator};
 use rattler_conda_types::Platform;
 use rattler_lock::LockedPackageRef;
