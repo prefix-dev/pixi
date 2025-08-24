@@ -21,7 +21,6 @@ use tracing::level_filters::LevelFilter;
 
 pub mod add;
 mod build;
-mod shared;
 pub mod clean;
 pub mod cli_config;
 pub mod command_info;
@@ -41,6 +40,7 @@ pub mod remove;
 pub mod run;
 pub mod search;
 pub mod self_update;
+mod shared;
 pub mod shell;
 pub mod shell_hook;
 pub mod task;

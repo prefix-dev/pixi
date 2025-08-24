@@ -1,11 +1,11 @@
 //! This file contains the logic to pretty-print dependency lists in a tree-like structure.
 
-use std::collections::HashMap;
-use std::io::{StdoutLock, Write};
 use ahash::{HashSet, HashSetExt};
 use console::Color;
 use miette::{Context, IntoDiagnostic};
 use regex::Regex;
+use std::collections::HashMap;
+use std::io::{StdoutLock, Write};
 
 /// Defines the source of a package. Global packages can only have Conda dependencies.
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -47,7 +47,7 @@ static UTF8_SYMBOLS: Symbols = Symbols {
 /// # Arguments
 ///
 /// * `handle` - A mutable lock on stdout for writing the output
-/// * `dep_map` - A map of package names to their dependency information 
+/// * `dep_map` - A map of package names to their dependency information
 /// * `direct_deps` - A set of package names that should be highlighted.
 /// * `regex` - Optional regex pattern to filter which dependencies to display
 ///
@@ -261,20 +261,17 @@ pub fn print_package(
         },
         if visited { "(*)" } else { "" }
     )
-        .map_err(|e| {
-            if e.kind() == std::io::ErrorKind::BrokenPipe {
-                // Exit gracefully
-                std::process::exit(0);
-            } else {
-                e
-            }
-        })
-        .into_diagnostic()
-        .wrap_err("Failed to write package information")
+    .map_err(|e| {
+        if e.kind() == std::io::ErrorKind::BrokenPipe {
+            // Exit gracefully
+            std::process::exit(0);
+        } else {
+            e
+        }
+    })
+    .into_diagnostic()
+    .wrap_err("Failed to write package information")
 }
-
-
-
 
 /// Prints an inverted hierarchical tree of dependencies to the provided output handle.
 /// Dependencies with a name matching the passed regex are shown at the top level, with the packages that require them indented below.
@@ -335,7 +332,6 @@ pub fn print_inverted_dependency_tree(
 
     Ok(())
 }
-
 
 /// Prints a dependency tree node for a given package and its dependents.
 ///
@@ -408,7 +404,6 @@ fn print_inverted_node(
     Ok(())
 }
 
-
 /// Creates an inverted dependency graph by populating each package's `needed_by` field with the packages
 /// that directly depend on it. Used to support the generation of reverse dependency trees.
 ///
@@ -422,7 +417,9 @@ fn print_inverted_node(
 /// # Returns
 ///
 /// A new dependency graph with `needed_by` fields populated to show reverse dependencies
-pub fn build_reverse_dependency_map(dep_map: &HashMap<String, Package>) -> HashMap<String, Package> {
+pub fn build_reverse_dependency_map(
+    dep_map: &HashMap<String, Package>,
+) -> HashMap<String, Package> {
     let mut inverted_deps = dep_map.clone();
 
     for pkg in dep_map.values() {

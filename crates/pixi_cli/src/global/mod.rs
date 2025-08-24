@@ -11,11 +11,11 @@ mod list;
 mod remove;
 mod shortcut;
 mod sync;
+mod tree;
 mod uninstall;
 mod update;
 mod upgrade;
 mod upgrade_all;
-mod tree;
 
 #[derive(Debug, Parser)]
 pub enum Command {

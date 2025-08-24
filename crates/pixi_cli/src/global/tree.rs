@@ -1,16 +1,17 @@
+use crate::shared::tree::{
+    Package, PackageSource, build_reverse_dependency_map, print_dependency_tree,
+    print_inverted_dependency_tree,
+};
 use ahash::HashSet;
 use clap::Parser;
 use console::Color;
 use itertools::Itertools;
 use miette::Context;
 use pixi_consts::consts;
-use crate::shared::tree::{
-    build_reverse_dependency_map, print_dependency_tree, print_inverted_dependency_tree, Package, PackageSource,
-};
-use std::collections::HashMap;
-use std::str::FromStr;
 use pixi_global::common::find_package_records;
 use pixi_global::{EnvRoot, EnvironmentName, Project};
+use std::collections::HashMap;
+use std::str::FromStr;
 
 /// Show a tree of dependencies for a specific global environment.
 #[derive(Debug, Parser)]
@@ -26,7 +27,7 @@ pub struct Args {
     /// The environment to list packages for.
     #[arg(short, long)]
     pub environment: String,
-    
+
     /// List only packages matching a regular expression
     #[arg()]
     pub regex: Option<String>,
@@ -40,7 +41,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::discover_or_create().await?;
     let stdout = std::io::stdout();
     let mut handle = stdout.lock();
-    let env_name = EnvironmentName::from_str(&args.environment.as_str())?;
+    let env_name = EnvironmentName::from_str(args.environment.as_str())?;
     let environment = project
         .environment(&env_name)
         .wrap_err("Environment not found")?;
@@ -77,7 +78,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .as_ref()
                     .depends
                     .iter()
-                    .filter_map(|dep| dep.split([' ', '=']).next().map(|dep_name| dep_name.to_string()))
+                    .filter_map(|dep| {
+                        dep.split([' ', '='])
+                            .next()
+                            .map(|dep_name| dep_name.to_string())
+                    })
                     .filter(|dep_name| !dep_name.starts_with("__")) // Filter virtual packages
                     .unique() // A package may be listed with multiple constraints
                     .collect(),

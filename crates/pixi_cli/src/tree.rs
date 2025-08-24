@@ -1,17 +1,20 @@
-use std::collections::HashMap;
-use ahash::HashSet;
 use crate::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
+use crate::shared::tree::{
+    Package, PackageSource, build_reverse_dependency_map, print_dependency_tree,
+    print_inverted_dependency_tree,
+};
+use ahash::HashSet;
 use clap::Parser;
 use console::Color;
-use itertools::Itertools;
 use fancy_display::FancyDisplay;
+use itertools::Itertools;
 use miette::WrapErr;
-use crate::shared::tree::{build_reverse_dependency_map, print_dependency_tree, print_inverted_dependency_tree, Package, PackageSource};
-use pixi_core::{lock_file::UpdateLockFileOptions, WorkspaceLocator};
+use pixi_core::workspace::Environment;
+use pixi_core::{WorkspaceLocator, lock_file::UpdateLockFileOptions};
+use pixi_manifest::FeaturesExt;
 use rattler_conda_types::Platform;
 use rattler_lock::LockedPackageRef;
-use pixi_core::workspace::Environment;
-use pixi_manifest::FeaturesExt;
+use std::collections::HashMap;
 
 /// Show a tree of workspace dependencies
 #[derive(Debug, Parser)]
@@ -53,7 +56,6 @@ pub struct Args {
     #[arg(short, long, requires = "regex")]
     pub invert: bool,
 }
-
 
 /// Simplified package information extracted from the lock file
 pub struct PackageInfo {
@@ -113,9 +115,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     Ok(())
 }
 
-
 /// Helper function to extract package information from a package reference obtained from a lock file.
-pub(crate) fn extract_package_info(package: rattler_lock::LockedPackageRef<'_>) -> Option<PackageInfo> {
+pub(crate) fn extract_package_info(
+    package: rattler_lock::LockedPackageRef<'_>,
+) -> Option<PackageInfo> {
     if let Some(conda_package) = package.as_conda() {
         let name = conda_package.record().name.as_normalized().to_string();
 
@@ -164,11 +167,8 @@ pub(crate) fn extract_package_info(package: rattler_lock::LockedPackageRef<'_>) 
     }
 }
 
-
 /// Generate a map of dependencies from a list of locked packages.
-pub fn generate_dependency_map(
-    locked_deps: &[LockedPackageRef<'_>],
-) -> HashMap<String, Package> {
+pub fn generate_dependency_map(locked_deps: &[LockedPackageRef<'_>]) -> HashMap<String, Package> {
     let mut package_dependencies_map = HashMap::new();
 
     for &package in locked_deps {
@@ -183,7 +183,12 @@ pub fn generate_dependency_map(
                         }
                         LockedPackageRef::Pypi(pypi_data, _) => pypi_data.version.to_string(),
                     },
-                    dependencies: package_info.dependencies.into_iter().filter(|pkg| !pkg.starts_with("__")).unique().collect(),
+                    dependencies: package_info
+                        .dependencies
+                        .into_iter()
+                        .filter(|pkg| !pkg.starts_with("__"))
+                        .unique()
+                        .collect(),
                     needed_by: Vec::new(),
                     source: package_info.source,
                 },
@@ -192,7 +197,6 @@ pub fn generate_dependency_map(
     }
     package_dependencies_map
 }
-
 
 /// Extract the direct Conda and PyPI dependencies from the environment
 pub fn direct_dependencies(
