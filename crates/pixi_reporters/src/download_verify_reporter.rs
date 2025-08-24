@@ -21,12 +21,14 @@ pub struct BuildDownloadVerifyReporter {
     next_entry_id: usize,
 }
 
+#[derive(Debug)]
 struct Entry {
     name: String,
     size: Option<u64>,
     state: EntryState,
 }
 
+#[derive(Debug)]
 pub enum EntryState {
     Building,
     Pending,
@@ -117,8 +119,13 @@ impl BuildDownloadVerifyReporter {
         // Clear all items that have finished processing.
         entries.retain(|_, item| !item.is_finished());
 
+        // Drop the write lock to the entries. The progress bar also requires access to
+        // entries so holding on to the write lock might deadlock!
+        let is_empty = entries.is_empty();
+        drop(entries);
+
         // Clear or update the progress bar.
-        if entries.is_empty() {
+        if is_empty {
             // We cannot clear the progress bar and restart it later, so replacing it with a
             // new hidden one is currently the only option.
             self.title = Some(self.pb.prefix());
@@ -128,7 +135,6 @@ impl BuildDownloadVerifyReporter {
             self.pb.finish_and_clear();
             self.pb = new_pb;
         } else {
-            drop(entries);
             self.update()
         }
     }
@@ -211,7 +217,10 @@ impl BuildDownloadVerifyReporter {
             .get_mut(&index)
             .expect("entry is missing from tracker");
         let EntryState::Validating = entry.state else {
-            panic!("Expected entry to be in downloading state");
+            panic!(
+                "Expected entry to be in downloading state, actual: {:?}",
+                entry
+            );
         };
         entry.state = EntryState::Finished { download: None };
         drop(entries);

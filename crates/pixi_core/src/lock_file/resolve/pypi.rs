@@ -3,11 +3,14 @@ use std::{
     collections::{HashMap, HashSet},
     iter::once,
     ops::Deref,
+    panic,
     path::{Path, PathBuf},
     rc::Rc,
     str::FromStr,
     sync::Arc,
 };
+
+use futures::FutureExt;
 
 use chrono::{DateTime, Utc};
 use indexmap::{IndexMap, IndexSet};
@@ -212,6 +215,10 @@ pub enum SolveError {
     },
     #[error("failed to resolve pypi dependencies")]
     Other(#[from] ResolveError),
+    #[error("build dispatch initialization failed: {message}")]
+    BuildDispatchPanic { message: String },
+    #[error("unexpected panic during PyPI resolution: {message}")]
+    GeneralPanic { message: String },
 }
 
 /// Creates a custom `SolveError` from a `ResolveError`.
@@ -626,30 +633,70 @@ pub async fn resolve_pypi(
     // We need a new in-memory index for the resolver so that it does not conflict
     // with the build dispatch one. As we have noted in the comment above.
     let resolver_in_memory_index = InMemoryIndex::default();
-    let resolution = Resolver::new_custom_io(
-        manifest,
-        options,
-        &context.hash_strategy,
-        resolver_env,
-        &marker_environment,
-        Some(tags),
-        &PythonRequirement::from_marker_environment(&marker_environment, requires_python.clone()),
-        Conflicts::default(),
-        &resolver_in_memory_index,
-        context.shared_state.git(),
-        &context.capabilities,
-        &index_locations,
-        provider,
-        EmptyInstalledPackages,
-    )
-    .into_diagnostic()
-    .context("failed to resolve pypi dependencies")?
-    .with_reporter(UvReporter::new_arc(
-        UvReporterOptions::new().with_existing(pb.clone()),
-    ))
-    .resolve()
-    .await
-    .map_err(|e| create_solve_error(e, &conda_python_packages))?;
+
+    // Wrap the resolution in panic catching to handle conda prefix initialization failures
+    let resolution_future = panic::AssertUnwindSafe(async {
+        let resolver = Resolver::new_custom_io(
+            manifest,
+            options,
+            &context.hash_strategy,
+            resolver_env,
+            &marker_environment,
+            Some(tags),
+            &PythonRequirement::from_marker_environment(
+                &marker_environment,
+                requires_python.clone(),
+            ),
+            Conflicts::default(),
+            &resolver_in_memory_index,
+            context.shared_state.git(),
+            &context.capabilities,
+            &index_locations,
+            provider,
+            EmptyInstalledPackages,
+        )
+        .into_diagnostic()
+        .context("failed to resolve pypi dependencies")
+        .map_err(|e| SolveError::GeneralPanic {
+            message: format!("Failed to create resolver: {}", e),
+        })?
+        .with_reporter(UvReporter::new_arc(
+            UvReporterOptions::new().with_existing(pb.clone()),
+        ));
+
+        resolver
+            .resolve()
+            .await
+            .map_err(|e| create_solve_error(e, &conda_python_packages))
+    });
+
+    // We try to distinguis between build dispatch panics and any other panics that occur
+    let resolution = match resolution_future.catch_unwind().await {
+        Ok(result) => result?,
+        Err(panic_payload) => {
+            // Try to get the stored initialization error from the lazy build dispatch
+            if let Some(stored_error) = lazy_build_dispatch.last_initialization_error() {
+                return Err(SolveError::BuildDispatchPanic {
+                    message: format!("{}", stored_error),
+                }
+                .into());
+            } else {
+                // Use the original panic message for general panics
+                let panic_message = if let Some(s) = panic_payload.downcast_ref::<String>() {
+                    s.clone()
+                } else if let Some(&s) = panic_payload.downcast_ref::<&str>() {
+                    s.to_string()
+                } else {
+                    "unknown panic occurred during PyPI resolution".to_string()
+                };
+
+                return Err(SolveError::GeneralPanic {
+                    message: panic_message,
+                }
+                .into());
+            }
+        }
+    };
     let resolution = Resolution::from(resolution);
 
     // Print the overridden package requests

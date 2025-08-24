@@ -252,7 +252,7 @@ plugins:
     # javascript_dir: js
   # llmstxt must come after the mike plugin:
   - llmstxt:
-      enabled: true
+      enabled: !ENV [CI, false]
       full_output: llms-full.txt
       markdown_description: |-
         Pixi is a fast, modern, and reproducible package management tool

@@ -1,5 +1,5 @@
 use insta::assert_snapshot;
-use pixi::cli::search;
+use pixi_cli::search;
 use rattler_conda_types::Platform;
 use tempfile::TempDir;
 use url::Url;
@@ -8,9 +8,12 @@ use crate::common::{
     PixiControl,
     package_database::{Package, PackageDatabase},
 };
+use crate::setup_tracing;
 
 #[tokio::test]
 async fn search_return_latest_across_everything() {
+    setup_tracing();
+
     let mut package_database = PackageDatabase::default();
 
     // Add a package `foo` with 4 different versions, on different platforms
@@ -70,6 +73,8 @@ async fn search_return_latest_across_everything() {
 
 #[tokio::test]
 async fn search_using_match_spec() {
+    setup_tracing();
+
     let mut package_database = PackageDatabase::default();
 
     // Add a package `foo` with different versions and different builds
@@ -140,6 +145,8 @@ async fn search_using_match_spec() {
 
 #[tokio::test]
 async fn test_search_multiple_versions() {
+    setup_tracing();
+
     let mut package_database = PackageDatabase::default();
 
     // Add package with multiple versions and build strings

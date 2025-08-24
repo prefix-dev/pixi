@@ -15,11 +15,11 @@ use std::{
 use builders::{LockBuilder, SearchBuilder};
 use indicatif::ProgressDrawTarget;
 use miette::{Context, Diagnostic, IntoDiagnostic};
-use pixi::cli::LockFileUsageConfig;
-use pixi::cli::cli_config::{
+use pixi_cli::LockFileUsageConfig;
+use pixi_cli::cli_config::{
     ChannelsConfig, LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig,
 };
-use pixi::cli::{
+use pixi_cli::{
     add,
     init::{self, GitAttributes},
     install::Args,
@@ -31,13 +31,13 @@ use pixi_consts::consts;
 use pixi_core::{
     UpdateLockFileOptions, Workspace,
     lock_file::{ReinstallPackages, UpdateMode},
-    task::{
-        ExecutableTask, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph,
-        TaskGraphError, TaskName, get_task_env,
-    },
 };
 use pixi_manifest::{EnvironmentName, FeatureName};
 use pixi_progress::global_multi_progress;
+use pixi_task::{
+    ExecutableTask, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph, TaskGraphError,
+    TaskName, get_task_env,
+};
 use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform};
 use rattler_lock::{LockFile, LockedPackageRef, UrlOrPath};
 use tempfile::TempDir;

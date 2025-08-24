@@ -21,7 +21,12 @@ fn test_no_installed_require_one() {
     let plan = harness::install_planner();
     let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required_dists)
+        .plan(
+            &site_packages,
+            NoCache,
+            &required_dists,
+            &uv_configuration::BuildOptions::default(),
+        )
         .expect("should install");
 
     // We should install a single package
@@ -40,7 +45,12 @@ fn test_no_installed_require_one_cached() {
     let plan = harness::install_planner();
     let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, AllCached, &required_dists)
+        .plan(
+            &site_packages,
+            AllCached,
+            &required_dists,
+            &uv_configuration::BuildOptions::default(),
+        )
         .expect("should install");
 
     // We should install a single package
@@ -65,7 +75,12 @@ fn test_install_required_equivalent() {
     let plan = harness::install_planner();
     let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required_dists)
+        .plan(
+            &site_packages,
+            NoCache,
+            &required_dists,
+            &uv_configuration::BuildOptions::default(),
+        )
         .expect("should install");
 
     // Should not install package
@@ -94,7 +109,12 @@ fn test_install_required_mismatch() {
     let plan = harness::install_planner();
     let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required_dists)
+        .plan(
+            &site_packages,
+            NoCache,
+            &required_dists,
+            &uv_configuration::BuildOptions::default(),
+        )
         .expect("should install");
 
     // We should install a single package
@@ -125,7 +145,12 @@ fn test_install_required_mismatch_cached() {
     let plan = harness::install_planner();
     let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, AllCached, &required_dists)
+        .plan(
+            &site_packages,
+            AllCached,
+            &required_dists,
+            &uv_configuration::BuildOptions::default(),
+        )
         .expect("should install");
 
     // We should install a single package
@@ -155,7 +180,12 @@ fn test_install_required_installer_mismatch() {
     let plan = harness::install_planner();
     let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required_dists)
+        .plan(
+            &site_packages,
+            NoCache,
+            &required_dists,
+            &uv_configuration::BuildOptions::default(),
+        )
         .expect("should install");
 
     assert_matches!(
@@ -182,7 +212,12 @@ fn test_installed_one_other_installer() {
     let plan = harness::install_planner();
     let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required_dists)
+        .plan(
+            &site_packages,
+            NoCache,
+            &required_dists,
+            &uv_configuration::BuildOptions::default(),
+        )
         .expect("should install");
 
     // We should not do anything
@@ -206,7 +241,12 @@ fn test_install_required_python_mismatch() {
     let plan = harness::install_planner();
     let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required_dists)
+        .plan(
+            &site_packages,
+            NoCache,
+            &required_dists,
+            &uv_configuration::BuildOptions::default(),
+        )
         .expect("should install");
 
     assert_matches!(
@@ -236,7 +276,12 @@ fn test_installed_one_none_required() {
     let plan = harness::install_planner();
     let required_dists = required.to_required_dists();
     let install_plan = plan
-        .plan(&site_packages, NoCache, &required_dists)
+        .plan(
+            &site_packages,
+            NoCache,
+            &required_dists,
+            &uv_configuration::BuildOptions::default(),
+        )
         .expect("should install");
     assert_eq!(install_plan.extraneous.len(), 1);
 }
@@ -261,7 +306,12 @@ fn test_installed_registry_required_local_source() {
     let plan = harness::install_planner();
     let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required_dists)
+        .plan(
+            &site_packages,
+            NoCache,
+            &required_dists,
+            &uv_configuration::BuildOptions::default(),
+        )
         .expect("should install");
 
     assert_matches!(
@@ -288,7 +338,12 @@ fn test_installed_local_required_registry() {
     let plan = harness::install_planner();
     let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required_dists)
+        .plan(
+            &site_packages,
+            NoCache,
+            &required_dists,
+            &uv_configuration::BuildOptions::default(),
+        )
         .expect("should install");
 
     assert_matches!(
@@ -323,7 +378,12 @@ fn test_installed_local_required_local() {
     let plan = harness::install_planner();
     let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required_dists)
+        .plan(
+            &site_packages,
+            NoCache,
+            &required_dists,
+            &uv_configuration::BuildOptions::default(),
+        )
         .expect("should install");
 
     assert_eq!(
@@ -374,7 +434,12 @@ fn test_local_source_newer_than_local_metadata() {
     let plan = harness::install_planner();
     let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required_dists)
+        .plan(
+            &site_packages,
+            NoCache,
+            &required_dists,
+            &uv_configuration::BuildOptions::default(),
+        )
         .expect("should install");
     assert_matches!(
         installs.reinstalls[0].1,
@@ -417,7 +482,12 @@ fn test_local_source_older_than_local_metadata() {
     let plan = harness::install_planner();
     let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required_dists)
+        .plan(
+            &site_packages,
+            NoCache,
+            &required_dists,
+            &uv_configuration::BuildOptions::default(),
+        )
         .expect("should install");
     assert_eq!(installs.reinstalls.len(), 0);
     assert_eq!(installs.cached.len(), 0);
@@ -448,7 +518,12 @@ fn test_installed_editable_required_non_editable() {
     let plan = harness::install_planner();
     let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required_dists)
+        .plan(
+            &site_packages,
+            NoCache,
+            &required_dists,
+            &uv_configuration::BuildOptions::default(),
+        )
         .expect("should install");
 
     assert_matches!(
@@ -478,7 +553,12 @@ fn test_installed_archive_require_registry() {
     let plan = harness::install_planner();
     let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required_dists)
+        .plan(
+            &site_packages,
+            NoCache,
+            &required_dists,
+            &uv_configuration::BuildOptions::default(),
+        )
         .expect("should install");
 
     assert_matches!(installs.reinstalls[0].1, NeedReinstall::UrlMismatch { .. });
@@ -487,7 +567,12 @@ fn test_installed_archive_require_registry() {
     let required = RequiredPackages::new().add_archive("aiofiles", "0.6.0", remote_url.clone());
     let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required_dists)
+        .plan(
+            &site_packages,
+            NoCache,
+            &required_dists,
+            &uv_configuration::BuildOptions::default(),
+        )
         .expect("should install");
     assert!(installs.cached.is_empty());
     assert!(installs.remote.is_empty());
@@ -514,7 +599,12 @@ fn test_installed_git_require_registry() {
     let plan = harness::install_planner();
     let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required_dists)
+        .plan(
+            &site_packages,
+            NoCache,
+            &required_dists,
+            &uv_configuration::BuildOptions::default(),
+        )
         .expect("should install");
 
     assert_matches!(installs.reinstalls[0].1, NeedReinstall::UrlMismatch { .. });
@@ -527,7 +617,12 @@ fn test_installed_git_require_registry() {
     let required = RequiredPackages::new().add_git("pip", "1.0.0", locked_git_url.clone());
     let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required_dists)
+        .plan(
+            &site_packages,
+            NoCache,
+            &required_dists,
+            &uv_configuration::BuildOptions::default(),
+        )
         .expect("should install");
 
     assert!(
@@ -560,7 +655,12 @@ fn test_installed_git_require_git_commit_mismatch() {
     let plan = harness::install_planner();
     let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required_dists)
+        .plan(
+            &site_packages,
+            NoCache,
+            &required_dists,
+            &uv_configuration::BuildOptions::default(),
+        )
         .expect("should install");
 
     assert_matches!(
@@ -596,7 +696,12 @@ fn test_installed_git_the_same() {
     let required = RequiredPackages::new().add_git("pip", "1.0.0", locked_git_url.clone());
     let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required_dists)
+        .plan(
+            &site_packages,
+            NoCache,
+            &required_dists,
+            &uv_configuration::BuildOptions::default(),
+        )
         .expect("should install");
 
     assert!(
@@ -624,7 +729,12 @@ fn test_uv_refresh() {
     ));
     let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, AllCached, &required_dists)
+        .plan(
+            &site_packages,
+            AllCached,
+            &required_dists,
+            &uv_configuration::BuildOptions::default(),
+        )
         .expect("should install");
 
     // Should not install package
@@ -664,7 +774,12 @@ fn test_archive_is_path() {
     let plan = harness::install_planner_with_lock_dir(tmp.path().to_path_buf());
     let required_dists = required.to_required_dists_with_lock_dir(tmp.path());
     let installs = plan
-        .plan(&site_packages, AllCached, &required_dists)
+        .plan(
+            &site_packages,
+            AllCached,
+            &required_dists,
+            &uv_configuration::BuildOptions::default(),
+        )
         .expect("should install");
     // Should not install package
     assert!(installs.reinstalls.is_empty());
@@ -690,7 +805,12 @@ fn duplicates_are_not_extraneous() {
     let plan = harness::install_planner();
     let required_dists = required.to_required_dists();
     let installs = plan
-        .plan(&site_packages, NoCache, &required_dists)
+        .plan(
+            &site_packages,
+            NoCache,
+            &required_dists,
+            &uv_configuration::BuildOptions::default(),
+        )
         .expect("should install");
 
     assert!(installs.extraneous.is_empty());
