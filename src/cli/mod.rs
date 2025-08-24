@@ -1,3 +1,11 @@
+//! # Pixi CLI
+//!
+//! This module implements the CLI interface of Pixi.
+//!
+//! ## Structure
+//!
+//! - The [`Command`] enum defines the top-level commands available.
+//! - The [`execute_command`] function matches on [`Command`] and calls the corresponding logic.
 use clap::builder::styling::{AnsiColor, Color, Style};
 use clap::{CommandFactory, Parser};
 use indicatif::ProgressDrawTarget;
@@ -339,8 +347,8 @@ fn setup_logging(_args: &Args, _use_colors: bool) -> miette::Result<()> {
 fn setup_logging(args: &Args, use_colors: bool) -> miette::Result<()> {
     use pixi_utils::indicatif::IndicatifWriter;
     use tracing_subscriber::{
-        EnvFilter, filter::LevelFilter, prelude::__tracing_subscriber_SubscriberExt,
-        util::SubscriberInitExt,
+        filter::LevelFilter, prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt,
+        EnvFilter,
     };
 
     let (low_level_filter, level_filter, pixi_level) = match args.log_level_filter() {
@@ -384,7 +392,7 @@ fn setup_logging(args: &Args, use_colors: bool) -> miette::Result<()> {
     Ok(())
 }
 
-/// Execute the actual command
+/// Maps command enum variants to their actual function handlers.
 pub async fn execute_command(
     command: Command,
     global_options: &GlobalOptions,

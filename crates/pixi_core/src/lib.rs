@@ -12,6 +12,7 @@ pub mod task;
 pub mod workspace;
 
 pub mod signals;
+pub mod shared;
 
 pub use lock_file::UpdateLockFileOptions;
 pub use workspace::{DependencyType, Workspace, WorkspaceLocator};
