@@ -70,12 +70,14 @@ pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_core = { workspace = true }
 pixi_git = { workspace = true }
+pixi_global = { workspace = true }
 pixi_manifest = { workspace = true, features = ["rattler_lock"] }
 pixi_progress = { workspace = true }
 pixi_pypi_spec = { workspace = true }
 pixi_record = { workspace = true }
 pixi_reporters = { workspace = true }
 pixi_spec = { workspace = true }
+pixi_task = { workspace = true }
 pixi_utils = { workspace = true, default-features = false }
 pixi_uv_conversions = { workspace = true }
 pypi_mapping = { workspace = true }

@@ -3,8 +3,8 @@ use clap::Parser;
 use fancy_display::FancyDisplay;
 use miette::Context;
 use pixi_config::{Config, ConfigCli};
-use pixi_core::global::{self, StateChanges};
-use pixi_core::global::{EnvironmentName, Project};
+use pixi_global::StateChanges;
+use pixi_global::{EnvironmentName, Project};
 
 /// Uninstalls environments from the global environment.
 ///
@@ -22,7 +22,7 @@ pub struct Args {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
-    let project_original = global::Project::discover_or_create()
+    let project_original = pixi_global::Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
 

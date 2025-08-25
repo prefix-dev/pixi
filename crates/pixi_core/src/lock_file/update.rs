@@ -1,3 +1,46 @@
+use std::{
+    cmp::PartialEq,
+    collections::{HashMap, HashSet, hash_map::Entry},
+    future::{Future, ready},
+    iter,
+    path::PathBuf,
+    str::FromStr,
+    sync::Arc,
+    time::{Duration, Instant},
+};
+
+use barrier_cell::BarrierCell;
+use dashmap::DashMap;
+use fancy_display::FancyDisplay;
+use futures::{FutureExt, StreamExt, TryFutureExt, stream::FuturesUnordered};
+use indexmap::{IndexMap, IndexSet};
+use indicatif::ProgressBar;
+use itertools::{Either, Itertools};
+use miette::{Diagnostic, IntoDiagnostic, MietteDiagnostic, Report, WrapErr};
+use pixi_command_dispatcher::{
+    BuildEnvironment, CommandDispatcher, CommandDispatcherError, PixiEnvironmentSpec,
+    SolvePixiEnvironmentError,
+};
+use pixi_consts::consts;
+use pixi_glob::GlobHashCache;
+use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
+use pixi_progress::global_multi_progress;
+use pixi_record::{ParseLockFileError, PixiRecord};
+use pixi_utils::prefix::Prefix;
+use pixi_uv_conversions::{
+    ConversionError, to_extra_name, to_marker_environment, to_normalize, to_uv_extra_name,
+    to_uv_normalize,
+};
+use pypi_mapping::{self, MappingClient};
+use pypi_modifiers::pypi_marker_env::determine_marker_environment;
+use rattler::package_cache::PackageCache;
+use rattler_conda_types::{Arch, GenericVirtualPackage, PackageName, ParseChannelError, Platform};
+use rattler_lock::{LockFile, LockedPackageRef, ParseCondaLockError};
+use thiserror::Error;
+use tokio::sync::Semaphore;
+use tracing::Instrument;
+use uv_normalize::ExtraName;
+
 use super::{
     CondaPrefixUpdater, PixiRecordsByName, PypiRecordsByName, UvResolutionContext,
     outdated::OutdatedEnvironments, utils::IoConcurrencyLimit,
@@ -20,44 +63,6 @@ use crate::{
         grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
     },
 };
-use barrier_cell::BarrierCell;
-use dashmap::DashMap;
-use fancy_display::FancyDisplay;
-use futures::{FutureExt, StreamExt, stream::FuturesUnordered};
-use indexmap::{IndexMap, IndexSet};
-use indicatif::ProgressBar;
-use itertools::{Either, Itertools};
-use miette::{Diagnostic, IntoDiagnostic, MietteDiagnostic, Report, WrapErr};
-use pixi_command_dispatcher::{BuildEnvironment, CommandDispatcher, PixiEnvironmentSpec};
-use pixi_consts::consts;
-use pixi_glob::GlobHashCache;
-use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
-use pixi_progress::global_multi_progress;
-use pixi_record::{ParseLockFileError, PixiRecord};
-use pixi_utils::prefix::Prefix;
-use pixi_uv_conversions::{
-    ConversionError, to_extra_name, to_marker_environment, to_normalize, to_uv_extra_name,
-    to_uv_normalize,
-};
-use pypi_mapping::{self, MappingClient};
-use pypi_modifiers::pypi_marker_env::determine_marker_environment;
-use rattler::package_cache::PackageCache;
-use rattler_conda_types::{Arch, GenericVirtualPackage, PackageName, Platform};
-use rattler_lock::{LockFile, LockedPackageRef, ParseCondaLockError};
-use std::{
-    cmp::PartialEq,
-    collections::{HashMap, HashSet},
-    future::{Future, ready},
-    iter,
-    path::PathBuf,
-    str::FromStr,
-    sync::Arc,
-    time::{Duration, Instant},
-};
-use thiserror::Error;
-use tokio::sync::Semaphore;
-use tracing::Instrument;
-use uv_normalize::ExtraName;
 
 impl Workspace {
     /// Ensures that the lock-file is up-to-date with the project.
@@ -204,6 +209,25 @@ enum UpdateError {
     LockFileMissingEnv(EnvironmentName),
     #[error("some information from the lockfile could not be parsed")]
     ParseLockFileError(#[from] ParseLockFileError),
+}
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum SolveCondaEnvironmentError {
+    #[error("failed to solve requirements of environment '{}' for platform '{}'", .environment_name.fancy_display(), .platform)]
+    SolveFailed {
+        environment_name: GroupedEnvironmentName,
+        platform: Platform,
+        #[source]
+        #[diagnostic_source]
+        source: CommandDispatcherError<SolvePixiEnvironmentError>,
+    },
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    PypiMappingFailed(Box<dyn Diagnostic + Send + Sync + 'static>),
+
+    #[error(transparent)]
+    ParseChannels(#[from] ParseChannelError),
 }
 
 /// Options to pass to [`Workspace::update_lock_file`].
@@ -1325,6 +1349,7 @@ impl<'p> UpdateContext<'p> {
                     channel_priority,
                     self.command_dispatcher.clone(),
                 )
+                .map_err(Report::new)
                 .boxed_local();
 
                 // Store the task so we can poll it later.
@@ -1345,6 +1370,7 @@ impl<'p> UpdateContext<'p> {
 
         // Spawn tasks to update the pypi packages.
         let uv_context = once_cell::sync::OnceCell::new();
+        let mut pypi_conda_prefix_updaters = HashMap::new();
         for (environment, platform) in
             self.outdated_envs
                 .pypi
@@ -1388,19 +1414,26 @@ impl<'p> UpdateContext<'p> {
                 .get_latest_group_repodata_records(&group, environment.best_platform())
                 .ok_or_else(|| make_unsupported_pypi_platform_error(environment, false));
 
-            // Creates an object to initiate an update at a later point
-            let prefix_platform = environment.best_platform();
-            let conda_prefix_updater = CondaPrefixUpdater::builder(
-                group.clone(),
-                prefix_platform,
-                environment
-                    .virtual_packages(prefix_platform)
-                    .into_iter()
-                    .map(GenericVirtualPackage::from)
-                    .collect(),
-                self.command_dispatcher.clone(),
-            )
-            .finish()?;
+            // Creates an object to initiate an update at a later point. Make sure to only create a single entry if we are solving for multiple platforms.
+            let conda_prefix_updater =
+                match pypi_conda_prefix_updaters.entry(environment.name().clone()) {
+                    Entry::Vacant(entry) => {
+                        let prefix_platform = environment.best_platform();
+                        let conda_prefix_updater = CondaPrefixUpdater::builder(
+                            group.clone(),
+                            prefix_platform,
+                            environment
+                                .virtual_packages(prefix_platform)
+                                .into_iter()
+                                .map(GenericVirtualPackage::from)
+                                .collect(),
+                            self.command_dispatcher.clone(),
+                        )
+                        .finish()?;
+                        entry.insert(conda_prefix_updater).clone()
+                    }
+                    Entry::Occupied(entry) => entry.get().clone(),
+                };
 
             let uv_context = uv_context
                 .get_or_try_init(|| UvResolutionContext::from_workspace(project))?
@@ -1819,7 +1852,7 @@ async fn spawn_solve_conda_environment_task(
     platform: Platform,
     channel_priority: ChannelPriority,
     command_dispatcher: CommandDispatcher,
-) -> miette::Result<TaskResult> {
+) -> Result<TaskResult, SolveCondaEnvironmentError> {
     // Get the dependencies for this platform
     let dependencies = group.combined_dependencies(Some(platform));
 
@@ -1850,7 +1883,11 @@ async fn spawn_solve_conda_environment_task(
     let has_pypi_dependencies = group.has_pypi_dependencies();
 
     // Whether we should use custom mapping location
-    let pypi_name_mapping_location = group.workspace().pypi_name_mapping_source()?.clone();
+    let pypi_name_mapping_location = group
+        .workspace()
+        .pypi_name_mapping_source()
+        .map_err(|err| SolveCondaEnvironmentError::PypiMappingFailed(err.into()))?
+        .clone();
 
     // Get the channel configuration
     let channel_config = group.workspace().channel_config();
@@ -1859,8 +1896,7 @@ async fn spawn_solve_conda_environment_task(
     let channels = channels
         .iter()
         .map(|c| c.clone().into_base_url(&channel_config))
-        .collect::<Result<Vec<_>, _>>()
-        .into_diagnostic()?;
+        .collect::<Result<Vec<_>, _>>()?;
 
     // Determine the build variants
     let variants = group.workspace().variants(platform);
@@ -1884,12 +1920,10 @@ async fn spawn_solve_conda_environment_task(
             enabled_protocols: Default::default(),
         })
         .await
-        .with_context(|| {
-            format!(
-                "failed to solve requirements of environment '{}' for platform '{}'",
-                group.name().fancy_display(),
-                platform
-            )
+        .map_err(|source| SolveCondaEnvironmentError::SolveFailed {
+            environment_name: group_name.clone(),
+            platform,
+            source,
         })?;
 
     // Add purl's for the conda packages that are also available as pypi packages if
@@ -1902,7 +1936,8 @@ async fn spawn_solve_conda_environment_task(
                 records.iter_mut().filter_map(PixiRecord::as_binary_mut),
                 None,
             )
-            .await?;
+            .await
+            .map_err(|err| SolveCondaEnvironmentError::PypiMappingFailed(err.into()))?;
     }
 
     // Turn the records into a map by name

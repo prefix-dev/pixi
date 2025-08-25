@@ -1,8 +1,8 @@
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use pixi_config::{Config, ConfigCli};
-use pixi_core::global::list::{list_all_global_environments, list_specific_global_environment};
-use pixi_core::global::{EnvironmentName, Project};
+use pixi_global::list::{list_all_global_environments, list_specific_global_environment};
+use pixi_global::{EnvironmentName, Project};
 use std::str::FromStr;
 
 /// Lists global environments with their dependencies and exposed commands. Can also display all packages within a specific global environment when using the --environment flag.

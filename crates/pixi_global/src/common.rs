@@ -179,7 +179,7 @@ pub(crate) fn is_binary(file_path: impl AsRef<Path>) -> miette::Result<bool> {
 }
 
 /// Finds the package record from the `conda-meta` directory.
-pub(crate) async fn find_package_records(conda_meta: &Path) -> miette::Result<Vec<PrefixRecord>> {
+pub async fn find_package_records(conda_meta: &Path) -> miette::Result<Vec<PrefixRecord>> {
     let read_dir = tokio_fs::read_dir(conda_meta).await;
     let mut records = Vec::new();
 
@@ -1094,7 +1094,7 @@ pub(crate) fn get_install_changes(
 
 #[cfg(test)]
 mod tests {
-    use crate::global::trampoline::Configuration;
+    use crate::trampoline::Configuration;
 
     use super::*;
     use rstest::rstest;
@@ -1125,9 +1125,10 @@ mod tests {
     #[tokio::test]
     async fn test_find_package_record() {
         // Get meta file from test data folder relative to the current file
-        let dummy_conda_meta_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        let dummy_conda_meta_path = PathBuf::from(env!("CARGO_WORKSPACE_DIR"))
+            .join("crates")
+            .join("pixi_global")
             .join("src")
-            .join("global")
             .join("test_data")
             .join("conda-meta");
         // Find the package record

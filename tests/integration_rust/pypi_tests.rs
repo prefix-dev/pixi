@@ -460,7 +460,7 @@ async fn test_pinned_help_message() {
 
         [dependencies]
         python = "3.12.*"
-        pandas = "*"
+        pandas = "2.3.2"
 
         [pypi-dependencies]
         databricks-sql-connector = ">=4.0.0"
@@ -472,6 +472,6 @@ async fn test_pinned_help_message() {
     // Second, it should contain a help message
     assert_eq!(
         format!("{}", err.help().unwrap()),
-        "The following PyPI packages have been pinned by the conda solve, and this version may be causing a conflict:\npandas==2.3.1"
+        "The following PyPI packages have been pinned by the conda solve, and this version may be causing a conflict:\npandas==2.3.2"
     );
 }

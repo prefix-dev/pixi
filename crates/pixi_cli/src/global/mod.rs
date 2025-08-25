@@ -1,6 +1,6 @@
 use clap::Parser;
 
-use pixi_core::global::{self, EnvironmentName};
+use pixi_global::EnvironmentName;
 
 mod add;
 mod edit;
@@ -11,6 +11,7 @@ mod list;
 mod remove;
 mod shortcut;
 mod sync;
+mod tree;
 mod uninstall;
 mod update;
 mod upgrade;
@@ -41,6 +42,8 @@ pub enum Command {
     #[clap(alias = "ua")]
     #[command(hide = true)]
     UpgradeAll(upgrade_all::Args),
+    #[clap(visible_alias = "t")]
+    Tree(tree::Args),
 }
 
 /// Subcommand for global package management actions.
@@ -53,6 +56,7 @@ pub struct Args {
     command: Command,
 }
 
+/// Maps global command enum variants to their function handlers.
 pub async fn execute(cmd: Args) -> miette::Result<()> {
     match cmd.command {
         Command::Add(args) => add::execute(args).await?,
@@ -67,6 +71,7 @@ pub async fn execute(cmd: Args) -> miette::Result<()> {
         Command::Update(args) => update::execute(args).await?,
         Command::Upgrade(args) => upgrade::execute(args).await?,
         Command::UpgradeAll(args) => upgrade_all::execute(args).await?,
+        Command::Tree(args) => tree::execute(args).await?,
     };
     Ok(())
 }
@@ -74,7 +79,7 @@ pub async fn execute(cmd: Args) -> miette::Result<()> {
 /// Reverts the changes made to the project for a specific environment after an error occurred.
 async fn revert_environment_after_error(
     env_name: &EnvironmentName,
-    project_to_revert_to: &global::Project,
+    project_to_revert_to: &pixi_global::Project,
 ) -> miette::Result<()> {
     if project_to_revert_to.environment(env_name).is_some() {
         // We don't want to report on changes done by the reversion

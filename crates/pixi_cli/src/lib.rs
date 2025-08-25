@@ -1,3 +1,11 @@
+//! # Pixi CLI
+//!
+//! This module implements the CLI interface of Pixi.
+//!
+//! ## Structure
+//!
+//! - The [`Command`] enum defines the top-level commands available.
+//! - The [`execute_command`] function matches on [`Command`] and calls the corresponding logic.
 #![deny(clippy::dbg_macro, clippy::unwrap_used)]
 
 use clap::builder::styling::{AnsiColor, Color, Style};
@@ -32,6 +40,7 @@ pub mod remove;
 pub mod run;
 pub mod search;
 pub mod self_update;
+mod shared;
 pub mod shell;
 pub mod shell_hook;
 pub mod task;
@@ -387,7 +396,7 @@ fn setup_logging(args: &Args, use_colors: bool) -> miette::Result<()> {
     Ok(())
 }
 
-/// Execute the actual command
+/// Maps command enum variants to their actual function handlers.
 pub async fn execute_command(
     command: Command,
     global_options: &GlobalOptions,

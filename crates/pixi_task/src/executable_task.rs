@@ -13,20 +13,20 @@ use fs_err::tokio as tokio_fs;
 use itertools::Itertools;
 use miette::{Context, Diagnostic};
 use pixi_consts::consts;
+use pixi_core::{
+    Workspace,
+    activation::CurrentEnvVarBehavior,
+    workspace::get_activated_environment_variables,
+    workspace::{Environment, HasWorkspaceRef},
+};
 use pixi_manifest::{Task, TaskName, task::ArgValues, task::TemplateStringError};
 use pixi_progress::await_in_progress;
 use rattler_lock::LockFile;
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
-use super::task_hash::{InputHashesError, NameHash, TaskCache, TaskHash};
-use crate::{
-    Workspace,
-    activation::CurrentEnvVarBehavior,
-    task::task_graph::{TaskGraph, TaskId},
-    workspace::get_activated_environment_variables,
-    workspace::{Environment, HasWorkspaceRef},
-};
+use crate::task_graph::{TaskGraph, TaskId};
+use crate::task_hash::{InputHashesError, NameHash, TaskCache, TaskHash};
 
 /// Runs task in project.
 #[derive(Default, Debug)]

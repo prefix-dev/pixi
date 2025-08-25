@@ -127,7 +127,7 @@ which = "8.0.0"
 
 # Rattler crates
 file_url = "0.2.6"
-rattler = { version = "0.34.12", default-features = false }
+rattler = { version = "0.35.0", default-features = false }
 rattler_cache = { version = "0.3.30", default-features = false }
 rattler_conda_types = { version = "0.39.0", default-features = false, features = [
   "rayon",
@@ -186,6 +186,7 @@ pixi_core = { path = "crates/pixi_core" }
 pixi_default_versions = { path = "crates/pixi_default_versions" }
 pixi_git = { path = "crates/pixi_git" }
 pixi_glob = { path = "crates/pixi_glob" }
+pixi_global = { path = "crates/pixi_global" }
 pixi_manifest = { path = "crates/pixi_manifest" }
 pixi_progress = { path = "crates/pixi_progress" }
 pixi_pypi_spec = { path = "crates/pixi_pypi_spec" }
@@ -193,6 +194,7 @@ pixi_record = { path = "crates/pixi_record" }
 pixi_reporters = { path = "crates/pixi_reporters" }
 pixi_spec = { path = "crates/pixi_spec" }
 pixi_spec_containers = { path = "crates/pixi_spec_containers" }
+pixi_task = { path = "crates/pixi_task" }
 pixi_test_utils = { path = "crates/pixi_test_utils" }
 pixi_toml = { path = "crates/pixi_toml" }
 pixi_utils = { path = "crates/pixi_utils", default-features = false }

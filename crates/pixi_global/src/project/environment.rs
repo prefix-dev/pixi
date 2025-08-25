@@ -1,4 +1,4 @@
-use crate::global::install::local_environment_matches_spec;
+use crate::install::local_environment_matches_spec;
 use console::StyledObject;
 use fancy_display::FancyDisplay;
 use indexmap::IndexSet;
@@ -103,7 +103,7 @@ pub(crate) async fn environment_specs_in_sync(
 mod tests {
 
     use super::*;
-    use crate::global::{EnvDir, EnvRoot};
+    use crate::{EnvDir, EnvRoot};
     use fs_err::tokio as tokio_fs;
     use pixi_utils::prefix::Prefix;
     use rattler_conda_types::ParseStrictness;
@@ -153,8 +153,8 @@ mod tests {
         let target_dir = PathBuf::from(env_dir.path()).join("conda-meta");
         tokio_fs::create_dir_all(&target_dir).await.unwrap();
         let test_data_target = target_dir.join(file_name);
-        let test_data_source = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("src/global/test_data/conda-meta")
+        let test_data_source = PathBuf::from(env!("CARGO_WORKSPACE_DIR"))
+            .join("crates/pixi_global/src/test_data/conda-meta")
             .join(file_name);
         tokio_fs::copy(test_data_source, test_data_target)
             .await

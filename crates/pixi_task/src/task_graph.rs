@@ -8,6 +8,7 @@ use std::{
 
 use itertools::Itertools;
 use miette::Diagnostic;
+use pixi_core::{Workspace, workspace::Environment};
 use pixi_manifest::{
     EnvironmentName, Task, TaskName,
     task::{
@@ -18,13 +19,9 @@ use pixi_manifest::{
 use thiserror::Error;
 
 use crate::{
-    Workspace,
-    task::{
-        TaskDisambiguation,
-        error::{AmbiguousTaskError, MissingTaskError},
-        task_environment::{FindTaskError, FindTaskSource, SearchEnvironments},
-    },
-    workspace::Environment,
+    TaskDisambiguation,
+    error::{AmbiguousTaskError, MissingTaskError},
+    task_environment::{FindTaskError, FindTaskSource, SearchEnvironments},
 };
 
 /// A task ID is a unique identifier for a [`TaskNode`] in a [`TaskGraph`].
@@ -570,13 +567,11 @@ pub enum TaskGraphError {
 mod test {
     use std::path::Path;
 
+    use pixi_core::Workspace;
     use pixi_manifest::EnvironmentName;
     use rattler_conda_types::Platform;
 
-    use crate::{
-        Workspace,
-        task::{task_environment::SearchEnvironments, task_graph::TaskGraph},
-    };
+    use crate::{task_environment::SearchEnvironments, task_graph::TaskGraph};
 
     fn commands_in_order(
         project_str: &str,

@@ -22,7 +22,7 @@ use super::{
     global_spec::GlobalSpec,
     parsed_manifest::{ManifestParsingError, ManifestVersion, ParsedManifest},
 };
-use crate::global::project::ParsedEnvironment;
+use crate::project::ParsedEnvironment;
 
 /// Handles the global project's manifest file.
 /// This struct is responsible for reading, parsing, editing, and saving the
