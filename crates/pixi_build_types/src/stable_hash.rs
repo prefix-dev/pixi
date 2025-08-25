@@ -35,7 +35,9 @@ impl Hash for FieldDiscriminant {
 /// Trait to determine if a value should be considered "default" and thus skipped in hash calculations.
 /// This helps maintain forward/backward compatibility by only including discriminants for meaningful values.
 pub(crate) trait IsDefault {
-    fn is_default(&self) -> bool;
+    type Item;
+
+    fn is_non_default(&self) -> Option<&Self::Item>;
 }
 
 /// A dyn-compatible hashing trait that works with any hasher type
@@ -66,9 +68,12 @@ impl<'a, H: std::hash::Hasher> StableHashBuilder<'a, H> {
 
     /// Add a field to the hash if it's not in its default state.
     /// Fields will be automatically sorted alphabetically before hashing.
-    pub fn field<T: Hash + IsDefault>(mut self, name: &'static str, value: &'a T) -> Self {
-        if !value.is_default() {
-            self.fields.insert(name, value);
+    pub fn field<T: IsDefault>(mut self, name: &'static str, value: &'a T) -> Self
+    where
+        T::Item: Hash,
+    {
+        if let Some(item) = value.is_non_default() {
+            self.fields.insert(name, item);
         }
         self
     }
@@ -83,61 +88,81 @@ impl<'a, H: std::hash::Hasher> StableHashBuilder<'a, H> {
 }
 
 impl<K, V> IsDefault for OrderMap<K, V> {
-    fn is_default(&self) -> bool {
-        self.is_empty()
+    type Item = Self;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        if !self.is_empty() { Some(self) } else { None }
     }
 }
 
 impl IsDefault for String {
-    fn is_default(&self) -> bool {
-        false // Never skip required string fields
+    type Item = Self;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        Some(self) // Never skip required string fields
     }
 }
 
 impl IsDefault for url::Url {
-    fn is_default(&self) -> bool {
-        false // Never skip required URL fields
+    type Item = Self;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        Some(self) // Never skip required URL fields
     }
 }
 
 impl IsDefault for std::path::PathBuf {
-    fn is_default(&self) -> bool {
-        false // Never skip PathBuf fields
+    type Item = Self;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        Some(self) // Never skip PathBuf fields
     }
 }
 
 impl<T> IsDefault for Vec<T> {
-    fn is_default(&self) -> bool {
-        self.is_empty()
+    type Item = Self;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        if !self.is_empty() { Some(self) } else { None }
     }
 }
 
 impl IsDefault for rattler_conda_types::Version {
-    fn is_default(&self) -> bool {
-        false // Never skip version fields
+    type Item = Self;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        Some(self) // Never skip version fields
     }
 }
 
 impl IsDefault for rattler_conda_types::StringMatcher {
-    fn is_default(&self) -> bool {
-        false // Never skip StringMatcher fields
+    type Item = Self;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        Some(self) // Never skip StringMatcher fields
     }
 }
 
 impl IsDefault for rattler_conda_types::BuildNumberSpec {
-    fn is_default(&self) -> bool {
-        false // Never skip BuildNumberSpec fields
+    type Item = Self;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        Some(self) // Never skip BuildNumberSpec fields
     }
 }
 
 impl IsDefault for rattler_conda_types::VersionSpec {
-    fn is_default(&self) -> bool {
-        false // Never skip VersionSpec fields
+    type Item = Self;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        Some(self) // Never skip VersionSpec fields
     }
 }
 
 impl<U, T: rattler_digest::digest::generic_array::ArrayLength<U>> IsDefault for GenericArray<U, T> {
-    fn is_default(&self) -> bool {
-        false // Never skip digest output fields
+    type Item = Self;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        Some(self) // Never skip digest output fields
     }
 }
