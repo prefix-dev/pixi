@@ -66,11 +66,22 @@ impl<'a> From<LockedPackageRef<'a>> for PackageNode {
 /// When `target_package` is set, the target acts as the sole root of traversal.
 /// The result returns both the packages to install/process and to ignore,
 /// preserving the original package order.
+///
+/// ## Note for implementers
+/// One thing that I had is that when creating this code, it was tripping me up that `skip_with_deps` maps into the
+/// `stop_set` while the `skip_direct` maps into the passthrough set. Intuitively it feels like the opposite.
+/// To make sense of this, first consider that the algorithms is interested in finding what can still be reached under new constraints.
+///
+/// So while the user is interested in what to *skip*, we are interested in what we can still *reach*. Thats why things are the inverse.
+/// 1. Hence, think of the `skip_with_deps` as pruning parts of the the tree so the place for it is the `stop_set`.
+/// 2. And think of `skip_direct` as edge joining two nodes, basically ignoring the skipped node, so the place for it is the `passthrough_set`.
+/// 3. Finally, think of the `target` node as zooming into the tree selecting that nodes and its dependencies and basically ignoring the rest.
 pub struct InstallSubset<'a> {
     /// Packages to skip together with their dependencies (hard stop)
     skip_with_deps: &'a [String],
     /// Packages to skip directly but traverse through (passthrough)
     skip_direct: &'a [String],
+    /// What package should be targeted directly (zooming in)
     target_package: Option<&'a str>,
 }
 
@@ -427,9 +438,9 @@ mod tests {
             node("D", &[]),
         ];
         let dc = PackageReachability::new(nodes);
-        let kept = dc.collect_reachable_from_non_skipped(&[], &[]);
+        let kept = dc.collect_reachable_from_non_skipped(&["B".to_string()], &[]);
         assert!(
-            kept.contains("A") && kept.contains("B") && kept.contains("C") && kept.contains("D")
+            kept.contains("A") && !kept.contains("B") && kept.contains("C") && kept.contains("D")
         );
     }
 

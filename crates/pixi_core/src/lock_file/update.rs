@@ -463,9 +463,15 @@ impl<'p> LockFileDerivedData<'p> {
                 );
                 let result = subset.filter(locked_env.packages(platform));
                 let packages = result.install;
+                let ignored = result.ignore;
 
                 // Separate the packages into conda and pypi packages
                 let (conda_packages, pypi_packages) = packages
+                    .into_iter()
+                    .partition::<Vec<_>, _>(|p| p.as_conda().is_some());
+
+                // TODO: use the same ignore logic for PyPI
+                let (ignored_conda, _ignored_pypi) = ignored
                     .into_iter()
                     .partition::<Vec<_>, _>(|p| p.as_conda().is_some());
 
@@ -490,13 +496,22 @@ impl<'p> LockFileDerivedData<'p> {
                     }
                 };
 
+                let ignored_conda_names = Some(
+                    ignored_conda
+                        .iter()
+                        .map(|c| {
+                            c.as_conda()
+                                .expect("these have been filtered before")
+                                .record()
+                                .name
+                                .clone()
+                        })
+                        .collect(),
+                );
+
                 // Get the prefix with the conda packages installed.
                 let (prefix, python_status) = self
-                    .conda_prefix(
-                        environment,
-                        conda_reinstall_packages,
-                        &filter.skip_with_deps,
-                    )
+                    .conda_prefix(environment, conda_reinstall_packages, ignored_conda_names)
                     .await?;
 
                 // No `uv` support for WASM right now
@@ -617,7 +632,7 @@ impl<'p> LockFileDerivedData<'p> {
         &self,
         environment: &Environment<'p>,
         reinstall_packages: Option<HashSet<PackageName>>,
-        skipped: &[String],
+        ignore_packages: Option<HashSet<PackageName>>,
     ) -> miette::Result<(Prefix, PythonStatus)> {
         // If we previously updated this environment, early out.
         let prefix_once_cell = self
@@ -645,9 +660,12 @@ impl<'p> LockFileDerivedData<'p> {
 
                 // Get the locked environment from the lock-file.
                 let locked_env = self.locked_env(environment)?;
-                let filter = InstallSubset::new(skipped, &[], None);
-                let result = filter.filter(locked_env.packages(platform));
-                let packages = result.install;
+                let packages = locked_env.packages(platform);
+                let packages = if let Some(iter) = packages {
+                    iter.collect_vec()
+                } else {
+                    Vec::new()
+                };
                 let records = locked_packages_to_pixi_records(packages)?;
 
                 // Update the conda prefix
@@ -656,7 +674,7 @@ impl<'p> LockFileDerivedData<'p> {
                     python_status,
                     ..
                 } = conda_prefix_updater
-                    .update(records, reinstall_packages)
+                    .update(records, reinstall_packages, ignore_packages)
                     .await?;
 
                 Ok((prefix.clone(), *python_status.clone()))
@@ -682,6 +700,7 @@ impl<'p> LockFileDerivedData<'p> {
             .flat_map(|p| p.map(|p| p.name().to_string()))
             .collect();
 
+        // TODO: check if this logic is still correct
         // Get kept package names
         let subset = InstallSubset::new(&filter.skip_with_deps, &filter.skip_direct, None);
         let kept = subset.filter(locked_env.packages(platform));
