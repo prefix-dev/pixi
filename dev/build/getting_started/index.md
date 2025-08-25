@@ -76,7 +76,9 @@ There are [different build backends available](https://prefix-dev.github.io/pixi
 Pixi backends describe how to build a conda package, for a certain language or build tool. In this example, we are using `pixi-build-python` backend in order to build a Python package.
 
 ```toml
-
+[package.build.backend]
+name = "pixi-build-python"
+version = "==0.3.2"
 
 ```
 

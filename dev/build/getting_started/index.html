@@ -2790,7 +2790,9 @@ By specifying <code>package.build.backend</code> and <code>package.build.channel
 <p>There are <a href="https://prefix-dev.github.io/pixi-build-backends/">different build backends available</a>. </p>
 <p>Pixi backends describe how to build a conda package, for a certain language or build tool.
 In this example, we are using <code>pixi-build-python</code> backend in order to build a Python package.</p>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[package.build.backend]</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;pixi-build-python&quot;</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;==0.3.2&quot;</span>
 </span></code></pre></div>
 <p>We need to add our package <code>python_rich</code> as source dependency to the workspace.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">[dependencies]</span>
