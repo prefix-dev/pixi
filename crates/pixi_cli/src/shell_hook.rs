@@ -163,7 +163,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         },
         ReinstallPackages::default(),
-        &[],
+        &pixi_core::environment::InstallFilter::default(),
     )
     .await?;
 

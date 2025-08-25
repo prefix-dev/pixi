@@ -14,6 +14,7 @@ use pixi_cli::{
 };
 use pixi_config::{Config, DetachedEnvironments};
 use pixi_consts::consts;
+use pixi_core::InstallFilter;
 use pixi_core::{
     UpdateLockFileOptions, Workspace,
     environment::LockFileUsage,
@@ -744,7 +745,7 @@ async fn test_old_lock_install() {
             ..Default::default()
         },
         ReinstallPackages::default(),
-        &[],
+        &InstallFilter::default(),
     )
     .await
     .unwrap();
@@ -1269,7 +1270,7 @@ async fn test_multiple_prefix_update() {
         let pixi_records = pixi_records.clone();
         // tasks.push(conda_prefix_updater.update(pixi_records));
         let updater = conda_prefix_updater.clone();
-        sets.spawn(async move { updater.update(pixi_records, None).await.cloned() });
+        sets.spawn(async move { updater.update(pixi_records, None, None).await.cloned() });
     }
 
     let mut first_modified = None;

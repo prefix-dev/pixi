@@ -501,6 +501,7 @@ pub async fn resolve_pypi(
         repodata_building_records.map(|r| r.records.clone()),
         pypi_options.no_build_isolation.clone(),
         &lazy_build_dispatch_dependencies,
+        None,
         disallow_install_conda_prefix,
     );
 

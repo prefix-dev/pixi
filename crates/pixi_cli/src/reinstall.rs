@@ -2,7 +2,7 @@ use clap::Parser;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use pixi_config::ConfigCli;
-use pixi_core::environment::get_update_lock_file_and_prefix;
+use pixi_core::environment::{InstallFilter, get_update_lock_file_and_prefix};
 use pixi_core::lock_file::{ReinstallPackages, UpdateMode};
 use pixi_core::{UpdateLockFileOptions, WorkspaceLocator};
 
@@ -87,7 +87,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 max_concurrent_solves: workspace.config().max_concurrent_solves(),
             },
             reinstall_packages.clone(),
-            &[],
+            &InstallFilter::default(),
         )
         .await?;
 

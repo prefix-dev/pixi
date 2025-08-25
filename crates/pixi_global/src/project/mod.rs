@@ -616,6 +616,7 @@ impl Project {
                 channel_config: self.config.global_channel_config().clone(),
                 enabled_protocols: EnabledProtocols::default(),
                 installed: None,
+                ignore_packages: None,
                 force_reinstall: Default::default(),
                 variants: None,
             })
