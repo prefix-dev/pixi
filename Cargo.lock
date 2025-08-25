@@ -4460,11 +4460,12 @@ checksum = "1e91099d4268b0e11973f036e885d652fb0b21fedcf69738c627f94db6a44f42"
 
 [[package]]
 name = "path_resolver"
-version = "0.1.2"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0b6f3ea862c0666ad89857fd29d3d86c3f076c4134c0ce62a659d6d33de5ee9"
+checksum = "493dd224adc6163e40a1e58cefbeec27dabb69696017677406417b3516c800fa"
 dependencies = [
  "fs-err",
+ "fxhash",
  "indexmap 2.10.0",
  "itertools 0.14.0",
  "proptest",
@@ -5955,9 +5956,9 @@ dependencies = [
 
 [[package]]
 name = "rattler"
-version = "0.34.13"
+version = "0.35.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "174f5eae5f731bccd3f448e7e37d7f8b3a958bb7c442316ddf58dd59c02c4063"
+checksum = "48febbcf33fff4df8131f86a373f57689a6cee4b1b52e3cad35938e47358820c"
 dependencies = [
  "anyhow",
  "clap",
