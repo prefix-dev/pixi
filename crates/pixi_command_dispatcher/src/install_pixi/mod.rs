@@ -138,9 +138,11 @@ impl InstallPixiEnvironmentSpec {
         let mut build_futures = ExecutorFutures::new(command_dispatcher.executor());
         for source_record in source_records {
             // Do not build if package is explicitly ignored
-            if self.ignore_packages.as_ref().map_or(false, |ignore| {
-                ignore.contains(&source_record.package_record.name)
-            }) {
+            if self
+                .ignore_packages
+                .as_ref()
+                .is_some_and(|ignore| ignore.contains(&source_record.package_record.name))
+            {
                 continue;
             }
             build_futures.push(async {
