@@ -141,6 +141,7 @@ for further details on how to use the software.
 - [Remove](https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/global/remove/index.md)
 - [Shortcut](https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/global/shortcut/index.md)
 - [Sync](https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/global/sync/index.md)
+- [Tree](https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/global/tree/index.md)
 - [Uninstall](https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/global/uninstall/index.md)
 - [Update](https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/global/update/index.md)
 - [Upgrade all](https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/global/upgrade-all/index.md)

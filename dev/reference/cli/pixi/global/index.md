@@ -31,6 +31,7 @@ pixi global <COMMAND>
 | [`expose`](expose/)       | Interact with the exposure of binaries in the global environment                                                                                                              |
 | [`shortcut`](shortcut/)   | Interact with the shortcuts on your machine                                                                                                                                   |
 | [`update`](update/)       | Updates environments in the global environment                                                                                                                                |
+| [`tree`](tree/)           | Show a tree of dependencies for a specific global environment                                                                                                                 |
 
 ## Description
 
