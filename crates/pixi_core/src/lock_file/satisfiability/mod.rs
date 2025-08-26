@@ -1005,8 +1005,8 @@ pub(crate) async fn verify_package_platform_satisfiability(
         return Err(Box::new(PlatformUnsat::TooManyCondaPackages(Vec::new())));
     }
 
-    // get pypi-options dependency overrides
-    // we map it to name: requirement for latter matching
+    // retrieve dependency-overrides
+    // map it to (name => requirement) for later matching
     let dependency_overrides = environment
         .pypi_options()
         .dependency_overrides
