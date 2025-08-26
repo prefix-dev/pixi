@@ -5,7 +5,6 @@ use crate::common::{
     PixiControl,
     package_database::{Package, PackageDatabase},
 };
-use fs_err;
 use pixi_utils::prefix::Prefix as CondaPrefix;
 use rattler_conda_types::PackageName;
 
