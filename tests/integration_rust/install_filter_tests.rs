@@ -5,6 +5,7 @@ use crate::common::{
     PixiControl,
     package_database::{Package, PackageDatabase},
 };
+use fs_err;
 use pixi_utils::prefix::Prefix as CondaPrefix;
 use rattler_conda_types::PackageName;
 
@@ -161,7 +162,7 @@ async fn install_subset_e2e_skip_with_deps() {
     let platform = Platform::current();
     let channel_path: PathBuf = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/data/channels/channels/dummy_channel_1");
-    let channel_path = std::fs::canonicalize(channel_path).expect("canonicalize channel path");
+    let channel_path = fs_err::canonicalize(channel_path).expect("canonicalize channel path");
     let channel_url = Url::from_directory_path(&channel_path).expect("valid file url");
     let manifest = format!(
         r#"
