@@ -342,6 +342,11 @@
           "examples": [
             {
               "path": "project"
+            },
+            {
+              "git": "https://github.com/user/repo.git",
+              "rev": "bd62770509b8afd792e98d20f8b458e2a7f19ec2",
+              "subdirectory": "subproject/src"
             }
           ]
         },
@@ -1702,9 +1707,39 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "branch": {
+          "title": "Branch",
+          "description": "A git branch to use",
+          "type": "string",
+          "minLength": 1
+        },
+        "git": {
+          "title": "Git",
+          "description": "The git URL to the source repo",
+          "type": "string",
+          "minLength": 1
+        },
         "path": {
           "title": "Path",
           "description": "The path to the source",
+          "type": "string",
+          "minLength": 1
+        },
+        "rev": {
+          "title": "Rev",
+          "description": "A git SHA revision to use",
+          "type": "string",
+          "minLength": 1
+        },
+        "subdirectory": {
+          "title": "Subdirectory",
+          "description": "A subdirectory to use in the repo",
+          "type": "string",
+          "minLength": 1
+        },
+        "tag": {
+          "title": "Tag",
+          "description": "A git tag to use",
           "type": "string",
           "minLength": 1
         }
