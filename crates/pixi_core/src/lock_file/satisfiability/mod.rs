@@ -1954,7 +1954,6 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    // #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
     async fn test_example_satisfiability(
         #[files("../../examples/**/p*.toml")] manifest_path: PathBuf,
     ) {
