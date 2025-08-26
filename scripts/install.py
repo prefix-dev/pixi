@@ -25,11 +25,7 @@ def main() -> None:
         default=DEFAULT_DESTINATION_DIR,
         help=f"Destination directory for the executable, default: {DEFAULT_DESTINATION_DIR}",
     )
-    parser.add_argument(
-        "--debug",
-        action="store_true",
-        help="Use the debug dir instead of release"
-    )
+    parser.add_argument("--debug", action="store_true", help="Use the debug dir instead of release")
 
     print(os.environ["CARGO_TARGET_DIR"])
     args = parser.parse_args()
