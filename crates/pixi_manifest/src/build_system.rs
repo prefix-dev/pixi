@@ -12,7 +12,7 @@ use crate::{
 
 /// A build section in the pixi manifest.
 /// that defines what backend is used to build the project.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PackageBuild {
     /// Information about the build backend
     pub backend: BuildBackend,
@@ -48,7 +48,7 @@ impl PackageBuild {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct BuildBackend {
     /// The name of the build backend to install
     pub name: rattler_conda_types::PackageName,
