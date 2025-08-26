@@ -5,7 +5,7 @@ snapshot_kind: text
 ---
 Globs:
 - tests/data/satisfiability/source-dependency/**/*
-Hash: e68b399a514a004da6e76ea916d9b948fac641ac3aee43765c6efee3b2d43820
+Hash: 15638d2bfdb15971bb19d0593ee872437fb6a5c88b143e01f3044e473888e39c
 Matched files:
 - tests/data/satisfiability/source-dependency/child-package/pixi.toml
 - tests/data/satisfiability/source-dependency/pixi.lock
