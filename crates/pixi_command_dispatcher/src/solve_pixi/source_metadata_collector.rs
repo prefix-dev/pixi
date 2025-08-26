@@ -163,7 +163,7 @@ impl SourceMetadataCollector {
         // Get the source for the particular package.
         let source = self
             .command_queue
-            .pin_and_checkout(spec)
+            .pin_and_checkout(spec.location)
             .await
             .map_err(|err| CollectSourceMetadataError::SourceCheckoutError {
                 name: name.as_source().to_string(),
