@@ -8,7 +8,7 @@ use crate::common::{
 use pixi_utils::prefix::Prefix as CondaPrefix;
 use rattler_conda_types::PackageName;
 
-// Helper to check if a conda package is installed in a prefix
+/// Helper to check if a conda package is installed in a prefix
 async fn is_conda_package_installed(prefix_path: &std::path::Path, package_name: &str) -> bool {
     let conda_prefix = CondaPrefix::new(prefix_path.to_path_buf());
     conda_prefix
