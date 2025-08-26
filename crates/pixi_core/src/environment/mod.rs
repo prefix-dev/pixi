@@ -32,9 +32,7 @@ use xxhash_rust::xxh3::Xxh3;
 use crate::workspace;
 use crate::{
     Workspace,
-    lock_file::{
-        InstallSubset, LockFileDerivedData, ReinstallPackages, UpdateLockFileOptions, UpdateMode,
-    },
+    lock_file::{LockFileDerivedData, ReinstallPackages, UpdateLockFileOptions, UpdateMode},
     workspace::{Environment, HasWorkspaceRef, grouped_environment::GroupedEnvironment},
 };
 
@@ -174,27 +172,30 @@ impl LockedEnvironmentHash {
     pub(crate) fn from_environment(
         environment: rattler_lock::Environment,
         platform: Platform,
-        skipped: &[String],
     ) -> Self {
         let mut hasher = Xxh3::new();
 
-        let result = InstallSubset::new(skipped, &[], None).filter(environment.packages(platform));
-        for package in result.install {
-            // Always has the url or path
-            package.location().to_owned().to_string().hash(&mut hasher);
+        // Intentionally ignore `skipped` here: the quick-validate cache is only
+        // used during runs, and should not vary based on transient install
+        // filters.
+        if let Some(packages) = environment.packages(platform) {
+            for package in packages {
+                // Always has the url or path
+                package.location().to_owned().to_string().hash(&mut hasher);
 
-            match package {
-                // A select set of fields are used to hash the package
-                LockedPackageRef::Conda(pack) => {
-                    if let Some(sha) = pack.record().sha256 {
-                        sha.hash(&mut hasher);
-                    } else if let Some(md5) = pack.record().md5 {
-                        md5.hash(&mut hasher);
+                match package {
+                    // A select set of fields are used to hash the package
+                    LockedPackageRef::Conda(pack) => {
+                        if let Some(sha) = pack.record().sha256 {
+                            sha.hash(&mut hasher);
+                        } else if let Some(md5) = pack.record().md5 {
+                            md5.hash(&mut hasher);
+                        }
                     }
-                }
-                LockedPackageRef::Pypi(pack, env) => {
-                    pack.editable.hash(&mut hasher);
-                    env.extras.hash(&mut hasher);
+                    LockedPackageRef::Pypi(pack, env) => {
+                        pack.editable.hash(&mut hasher);
+                        env.extras.hash(&mut hasher);
+                    }
                 }
             }
         }
