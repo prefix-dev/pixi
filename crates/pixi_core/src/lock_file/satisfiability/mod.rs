@@ -1007,10 +1007,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
 
     // get pypi-options dependency overrides
     // we map it to name: requirement for latter matching
-    let dependency_overrides: indexmap::IndexMap<
-        uv_normalize::PackageName,
-        uv_distribution_types::Requirement,
-    > = environment
+    let dependency_overrides = environment
         .pypi_options()
         .dependency_overrides
         .unwrap_or_default()
@@ -1024,7 +1021,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
             })?;
             Ok((uv_req.name.clone(), uv_req))
         })
-        .collect::<Result<_, _>>()?;
+        .collect::<Result<indexmap::IndexMap<_, _>, _>>()?;
 
     // Transform from PyPiPackage name into UV Requirement type
     let pypi_requirements = environment
