@@ -112,6 +112,7 @@ pub(crate) fn package_metadata_to_source_records(
             SourceRecord {
                 input_hash: input_hash.clone(),
                 source: source.clone(),
+                pinned_source_spec: None,
                 sources: p
                     .sources
                     .iter()

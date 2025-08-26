@@ -29,6 +29,7 @@ pub struct SourceMetadataCollector {
     enabled_protocols: EnabledProtocols,
     variants: Option<BTreeMap<String, Vec<String>>>,
     variant_files: Option<Vec<PathBuf>>,
+    pin_overrides: BTreeMap<rattler_conda_types::PackageName, PinnedSourceSpec>,
 }
 
 #[derive(Default)]
@@ -76,6 +77,7 @@ impl SourceMetadataCollector {
         variants: Option<BTreeMap<String, Vec<String>>>,
         variant_files: Option<Vec<PathBuf>>,
         enabled_protocols: EnabledProtocols,
+        pin_overrides: BTreeMap<rattler_conda_types::PackageName, PinnedSourceSpec>,
     ) -> Self {
         Self {
             command_queue,
@@ -85,6 +87,7 @@ impl SourceMetadataCollector {
             channel_config,
             variants,
             variant_files,
+            pin_overrides,
         }
     }
 
@@ -160,7 +163,11 @@ impl SourceMetadataCollector {
     > {
         tracing::trace!("Collecting source metadata for {name:#?}");
 
-        // Get the source for the particular package.
+        // Determine if we should override the build_source pin for this package.
+        let override_pin = self.pin_overrides.get(&name).cloned();
+
+        // Always checkout the manifest-defined source location (root), discovery
+        // will pick build_source; we only override the build pin later.
         let source = self
             .command_queue
             .pin_and_checkout(spec.location)
@@ -177,13 +184,14 @@ impl SourceMetadataCollector {
             .source_metadata(SourceMetadataSpec {
                 package: name.clone(),
                 backend_metadata: BuildBackendMetadataSpec {
-                    source: source.pinned,
+                    manifest_source: source.pinned,
                     channel_config: self.channel_config.clone(),
                     channels: self.channels.clone(),
                     build_environment: self.build_environment.clone(),
                     variants: self.variants.clone(),
                     variant_files: self.variant_files.clone(),
                     enabled_protocols: self.enabled_protocols.clone(),
+                    pin_override: override_pin,
                 },
             })
             .await

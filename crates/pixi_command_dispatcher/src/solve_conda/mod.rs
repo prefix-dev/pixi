@@ -155,6 +155,8 @@ impl SolveCondaEnvironmentSpec {
                         ),
                         channel: None,
                     };
+                    let mut record = record.clone();
+                    record.pinned_source_spec = source_metadata.pinned_build_source.clone();
                     url_to_source_package.insert(url, (record, repodata_record));
                 }
             }

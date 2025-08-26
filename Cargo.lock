@@ -1017,7 +1017,7 @@ version = "3.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77e9d642a7e3a318e37c2c9427b5a6a48aa1ad55dcd986f3034ab2239045a645"
 dependencies = [
- "darling 0.21.3",
+ "darling",
  "ident_case",
  "prettyplease",
  "proc-macro2",
@@ -1317,8 +1317,7 @@ checksum = "a1d728cc89cf3aee9ff92b05e62b19ee65a02b5702cff7d5a377e32c6ae29d8d"
 [[package]]
 name = "coalesced_map"
 version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cf5a7a58a9d5b914bddb0a3a2bd920af2be897114dc8128af022af81fc43b8b"
+source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#e9d77c11c0a79c62185351d76848aecaf0abcc5f"
 dependencies = [
  "dashmap",
  "tokio",
@@ -1612,22 +1611,8 @@ version = "0.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9cdf337090841a411e2a7f3deb9187445851f91b309c0c0a29e05f74a00a48c0"
 dependencies = [
- "darling_core 0.21.3",
- "darling_macro 0.21.3",
-]
-
-[[package]]
-name = "darling_core"
-version = "0.20.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d00b9596d185e565c2207a0b01f8bd1a135483d02d9b7b0a54b11da8d53412e"
-dependencies = [
- "fnv",
- "ident_case",
- "proc-macro2",
- "quote",
- "strsim",
- "syn",
+ "darling_core",
+ "darling_macro",
 ]
 
 [[package]]
@@ -1646,22 +1631,11 @@ dependencies = [
 
 [[package]]
 name = "darling_macro"
-version = "0.20.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc34b93ccb385b40dc71c6fceac4b2ad23662c7eeb248cf10d529b7e055b6ead"
-dependencies = [
- "darling_core 0.20.11",
- "quote",
- "syn",
-]
-
-[[package]]
-name = "darling_macro"
 version = "0.21.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d38308df82d1080de0afee5d069fa14b0326a88c14f15c5ccda35b4a6c414c81"
 dependencies = [
- "darling_core 0.21.3",
+ "darling_core",
  "quote",
  "syn",
 ]
@@ -2126,8 +2100,7 @@ dependencies = [
 [[package]]
 name = "file_url"
 version = "0.2.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "765662dc0b26e038099a5a1529f5d48443111eea45377c312be892997651710e"
+source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#e9d77c11c0a79c62185351d76848aecaf0abcc5f"
 dependencies = [
  "itertools 0.14.0",
  "percent-encoding",
@@ -2994,7 +2967,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.62.2",
+ "windows-core 0.59.0",
 ]
 
 [[package]]
@@ -4327,8 +4300,7 @@ checksum = "1e91099d4268b0e11973f036e885d652fb0b21fedcf69738c627f94db6a44f42"
 [[package]]
 name = "path_resolver"
 version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67957e099f5b76f4cad98e0d41dd53746ab3a2debc1da12ee5b1cccb1d7b8dc8"
+source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#e9d77c11c0a79c62185351d76848aecaf0abcc5f"
 dependencies = [
  "fs-err",
  "fxhash",
@@ -4525,6 +4497,7 @@ dependencies = [
  "reqwest",
  "reqwest-middleware",
  "rstest",
+ "serde_derive",
  "serde_json",
  "temp-env",
  "tempfile",
@@ -4795,6 +4768,7 @@ dependencies = [
  "rattler",
  "rattler_conda_types",
  "rattler_digest",
+ "rattler_lock",
  "rattler_networking",
  "rattler_package_streaming",
  "rattler_repodata_gateway",
@@ -5074,6 +5048,7 @@ dependencies = [
  "regex",
  "rstest",
  "serde",
+ "serde_derive",
  "serde_json",
  "serde_with",
  "tempfile",
@@ -5253,6 +5228,7 @@ dependencies = [
  "rattler_digest",
  "rattler_lock",
  "serde",
+ "serde_json",
  "serde_with",
  "thiserror 2.0.17",
  "typed-path",
@@ -6139,8 +6115,7 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "1.0.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "988d5d7ace4fb1d7549008236cf08de95e8ea2f1f80754109324a08c31e6dc6a"
+source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#e9d77c11c0a79c62185351d76848aecaf0abcc5f"
 dependencies = [
  "quote",
  "syn",
@@ -6253,8 +6228,7 @@ dependencies = [
 [[package]]
 name = "rattler_redaction"
 version = "0.1.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3aa5057629aeb20861919e9ae56875985d58028f3c6f433a20b5ded086e1cec5"
+source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#e9d77c11c0a79c62185351d76848aecaf0abcc5f"
 dependencies = [
  "reqwest",
  "reqwest-middleware",
@@ -7227,9 +7201,9 @@ dependencies = [
 
 [[package]]
 name = "serde_with"
-version = "3.14.0"
+version = "3.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2c45cd61fefa9db6f254525d46e392b852e0e61d9a1fd36e5bd183450a556d5"
+checksum = "6093cd8c01b25262b84927e0f7151692158fab02d961e04c979d3903eba7ecc5"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -7238,8 +7212,7 @@ dependencies = [
  "indexmap 2.11.4",
  "schemars 0.9.0",
  "schemars 1.0.4",
- "serde",
- "serde_derive",
+ "serde_core",
  "serde_json",
  "serde_with_macros",
  "time",
@@ -7247,11 +7220,11 @@ dependencies = [
 
 [[package]]
 name = "serde_with_macros"
-version = "3.14.0"
+version = "3.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de90945e6565ce0d9a25098082ed4ee4002e047cb59892c318d66821e14bb30f"
+checksum = "a7e6c180db0816026a61afa1cff5344fb7ebded7e4d3062772179f2501481c27"
 dependencies = [
- "darling 0.20.11",
+ "darling",
  "proc-macro2",
  "quote",
  "syn",
@@ -7416,8 +7389,7 @@ checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
 [[package]]
 name = "simple_spawn_blocking"
 version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55c0b0b683828aa9d4f5c0e59b0c856a12c30a65b5f1ca4292664734d76fa9c2"
+source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#e9d77c11c0a79c62185351d76848aecaf0abcc5f"
 dependencies = [
  "tokio",
 ]
@@ -7684,7 +7656,7 @@ dependencies = [
  "ntapi",
  "objc2-core-foundation",
  "objc2-io-kit",
- "windows 0.61.3",
+ "windows 0.59.0",
 ]
 
 [[package]]
@@ -10691,3 +10663,8 @@ dependencies = [
  "quote",
  "syn",
 ]
+
+[[patch.unused]]
+name = "rattler_virtual_packages"
+version = "2.2.0"
+source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#e9d77c11c0a79c62185351d76848aecaf0abcc5f"
