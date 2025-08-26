@@ -751,7 +751,11 @@ class Build(StrictBaseModel):
         description="The source from which to build the package",
         examples=[
             {"path": "project"},
-            {"git": "https://github.com/user/repo.git", "rev": "bd62770509b8afd792e98d20f8b458e2a7f19ec2", "subdirectory": "subproject/src"}
+            {
+                "git": "https://github.com/user/repo.git",
+                "rev": "bd62770509b8afd792e98d20f8b458e2a7f19ec2",
+                "subdirectory": "subproject/src",
+            },
         ],
     )
 
