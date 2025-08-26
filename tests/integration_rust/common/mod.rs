@@ -567,6 +567,8 @@ impl PixiControl {
                 config: Default::default(),
                 all: false,
                 skip: None,
+                to_prefix: None,
+                platform: None,
             },
         }
     }

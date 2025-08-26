@@ -5,8 +5,11 @@ pub mod diff;
 pub mod environment;
 mod install_pypi;
 pub mod lock_file;
+mod prefix;
+pub mod prefix_override;
 pub mod prompt;
 pub mod repodata;
+
 pub mod workspace;
 
 pub mod signals;
