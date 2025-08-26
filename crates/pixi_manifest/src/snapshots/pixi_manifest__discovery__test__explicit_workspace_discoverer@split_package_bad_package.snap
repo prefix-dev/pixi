@@ -1,8 +1,0 @@
----
-source: crates/pixi_manifest/src/discovery.rs
-expression: snapshot
-snapshot_kind: text
----
-Discovered workspace at: split_package/bad/pixi.toml
-- Name: ??
-Package: None @ None

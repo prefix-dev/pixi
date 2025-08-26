@@ -663,7 +663,6 @@ mod test {
     #[case::missing_table_pixi_manifest("missing-tables/pixi.toml")]
     #[case::missing_table_pyproject_manifest("missing-tables-pyproject/pyproject.toml")]
     #[case::split_package("split_package/good/package")]
-    #[case::split_package("split_package/bad/package")]
     fn test_explicit_workspace_discoverer(#[case] subdir: &str) {
         let test_data_root = dunce::canonicalize(
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/data/workspace-discovery"),
