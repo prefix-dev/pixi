@@ -19,8 +19,8 @@ use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Diagnostic, IntoDiagnostic, MietteDiagnostic, Report, WrapErr};
 use pixi_command_dispatcher::{
-    BuildEnvironment, CommandDispatcher, CommandDispatcherError, PixiEnvironmentSpec,
-    SolvePixiEnvironmentError,
+    BuildEnvironment, CommandDispatcher, CommandDispatcherError, PackageIdentifier,
+    PixiEnvironmentSpec, SolvePixiEnvironmentError,
 };
 use pixi_consts::consts;
 use pixi_glob::GlobHashCache;
@@ -30,7 +30,7 @@ use pixi_install_pypi::{
 };
 use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
-use pixi_record::{ParseLockFileError, PixiRecord};
+use pixi_record::{ParseLockFileError, PinnedSourceSpec, PixiRecord, SourceRecord};
 use pixi_utils::prefix::Prefix;
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
@@ -689,6 +689,37 @@ impl<'p> LockFileDerivedData<'p> {
             .await
             .map(|(prefix, python_status)| (prefix.clone(), python_status.clone()))
     }
+
+    /// Returns `PinnedSourceSpec` that can be used to build pixi build package.
+    pub fn pinned_build_source(&self, package: &PackageIdentifier) -> Option<PinnedSourceSpec> {
+        // Determine the platform from the package identifier subdir.
+        let platform = Platform::from_str(&package.subdir).ok()?;
+
+        // Walk through all environments and return the first pinned source spec for the given
+        // package identifier. Assume that in all environments information is equivalent.
+        for (_, env) in self.lock_file.environments() {
+            if let Some(packages) = env.packages(platform) {
+                for locked in packages {
+                    if let Some(conda_data) = locked.as_conda() {
+                        if let Some(source_data) = conda_data.as_source() {
+                            let ident: PackageIdentifier = (&source_data.package_record).into();
+                            if &ident == package {
+                                // Convert to a pixi SourceRecord to use the existing mapping logic,
+                                // then return its pinned source spec (if any).
+                                if let Ok(src_record) = SourceRecord::try_from(source_data.clone())
+                                {
+                                    return src_record.pinned_source_spec;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // If we can't find the package, return None.
+        None
+    }
 }
 
 /// A trait to lazily evaluate the environment variables for a given pixi environment.
@@ -845,6 +876,9 @@ pub struct UpdateContext<'p> {
     /// The progress bar where all the command dispatcher progress will be
     /// placed.
     dispatcher_progress_bar: ProgressBar,
+
+    /// Optional list of packages explicitly targeted for update.
+    update_targets: Option<std::collections::HashSet<String>>,
 }
 
 impl<'p> UpdateContext<'p> {
@@ -1021,6 +1055,9 @@ pub struct UpdateContextBuilder<'p> {
 
     /// Set the command dispatcher to use for the update process.
     command_dispatcher: Option<CommandDispatcher>,
+
+    /// Optional list of package names explicitly targeted for update.
+    update_targets: Option<std::collections::HashSet<String>>,
 }
 
 impl<'p> UpdateContextBuilder<'p> {
@@ -1057,6 +1094,17 @@ impl<'p> UpdateContextBuilder<'p> {
     pub(crate) fn with_command_dispatcher(self, command_dispatcher: CommandDispatcher) -> Self {
         Self {
             command_dispatcher: Some(command_dispatcher),
+            ..self
+        }
+    }
+
+    /// Sets the packages explicitly targeted for update.
+    pub fn with_update_targets(
+        self,
+        update_targets: Option<std::collections::HashSet<String>>,
+    ) -> Self {
+        Self {
+            update_targets,
             ..self
         }
     }
@@ -1303,6 +1351,7 @@ impl<'p> UpdateContextBuilder<'p> {
             dispatcher_progress_bar: anchor_pb,
 
             no_install: self.no_install,
+            update_targets: self.update_targets,
         })
     }
 }
@@ -1320,6 +1369,7 @@ impl<'p> UpdateContext<'p> {
             glob_hash_cache: None,
             mapping_client: None,
             command_dispatcher: None,
+            update_targets: None,
         }
     }
 
@@ -1390,6 +1440,32 @@ impl<'p> UpdateContext<'p> {
                     .unwrap_or_default();
 
                 // Spawn a task to solve the group.
+                // Determine override pinned source for current package when performing
+                // a targeted update that does not include the current package.
+                let override_pinned = (|| {
+                    let pkg_name_str = source
+                        .workspace()
+                        .package
+                        .as_ref()
+                        .and_then(|p| p.value.package.name.clone())?;
+                    let targets = self.update_targets.as_ref()?;
+                    if targets.is_empty() || targets.contains(&pkg_name_str) {
+                        return None;
+                    }
+
+                    // Find the previous pin in the existing locked group records.
+                    let rec = locked_group_records.records.iter().find_map(|r| match r {
+                        PixiRecord::Source(src)
+                            if src.package_record.name.as_source() == pkg_name_str =>
+                        {
+                            Some(src)
+                        }
+                        _ => None,
+                    })?;
+                    let prev_pin = rec.pinned_source_spec.clone()?;
+                    Some((rec.package_record.name.clone(), prev_pin))
+                })();
+
                 let group_solve_task = spawn_solve_conda_environment_task(
                     source.clone(),
                     locked_group_records,
@@ -1397,6 +1473,7 @@ impl<'p> UpdateContext<'p> {
                     platform,
                     channel_priority,
                     self.command_dispatcher.clone(),
+                    override_pinned,
                 )
                 .map_err(Report::new)
                 .boxed_local();
@@ -1902,6 +1979,10 @@ async fn spawn_solve_conda_environment_task(
     platform: Platform,
     channel_priority: ChannelPriority,
     command_dispatcher: CommandDispatcher,
+    override_pinned_source_for_package: Option<(
+        rattler_conda_types::PackageName,
+        pixi_record::PinnedSourceSpec,
+    )>,
 ) -> Result<TaskResult, SolveCondaEnvironmentError> {
     // Get the dependencies for this platform
     let dependencies = group.combined_dependencies(Some(platform));
@@ -1954,6 +2035,7 @@ async fn spawn_solve_conda_environment_task(
     let start = Instant::now();
 
     // Solve the environment using the command dispatcher.
+    // Determine if we should override the pinned source for the current package
     let mut records = command_dispatcher
         .solve_pixi_environment(PixiEnvironmentSpec {
             name: Some(group_name.to_string()),
@@ -1968,6 +2050,7 @@ async fn spawn_solve_conda_environment_task(
             channel_config,
             variants: Some(variants),
             enabled_protocols: Default::default(),
+            override_pinned_source_for_package,
         })
         .await
         .map_err(|source| SolveCondaEnvironmentError::SolveFailed {

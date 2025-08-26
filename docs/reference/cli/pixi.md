@@ -13,7 +13,7 @@ pixi [OPTIONS] [COMMAND]
 |---------|-------------|
 | [`add`](pixi/add.md) | Adds dependencies to the workspace |
 | [`auth`](pixi/auth.md) | Login to prefix.dev or anaconda.org servers to access private channels |
-| [`build`](pixi/build.md) | Workspace configuration |
+| [`build`](pixi/build.md) | Lock file and installation configuration with --as-is support Used by shell, shell-hook, and run commands |
 | [`clean`](pixi/clean.md) | Cleanup the environments |
 | [`completion`](pixi/completion.md) | Generates a completion script for a shell |
 | [`config`](pixi/config.md) | Configuration management |

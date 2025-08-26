@@ -188,7 +188,10 @@ impl InstallPixiEnvironmentSpec {
             .map_err(CommandDispatcherError::Failed)?;
 
         Ok(InstallPixiEnvironmentResult {
-            transaction: result.transaction,
+            transaction: result
+                .transaction
+                .into_prefix_record(self.prefix.path())
+                .unwrap(),
             post_link_script_result: result.post_link_script_result,
             pre_link_script_result: result.pre_link_script_result,
             resolved_source_records,
@@ -216,6 +219,7 @@ impl InstallPixiEnvironmentSpec {
                 clean: false,
                 // When we install a pixi environment we always build in development mode.
                 build_profile: BuildProfile::Development,
+                pinned_build_source: None,
             })
             .await?;
 

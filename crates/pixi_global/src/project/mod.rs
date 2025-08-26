@@ -1391,6 +1391,7 @@ impl Project {
             build_environment: pixi_command_dispatcher::BuildEnvironment::default(),
             variants: None,
             enabled_protocols: Default::default(),
+            override_pinned_build_source: None,
         };
 
         // Get the metadata using the command dispatcher
