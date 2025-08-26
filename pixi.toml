@@ -25,6 +25,9 @@ install = { cmd = "cargo install --path crates/pixi --locked", description = "In
 install-as = { cmd = "python scripts/install.py", depends-on = [
   "build-release",
 ] }
+install-debug-as = { cmd = "python scripts/install.py --debug", depends-on = [
+  "build-debug",
+] }
 pypi-proxy = "python scripts/pypi-proxy.py"
 release = "python scripts/release.py"
 run-all-examples = { cmd = "python tests/scripts/run-all-examples.py --pixi-exec $CARGO_TARGET_DIR/release/pixi", depends-on = [

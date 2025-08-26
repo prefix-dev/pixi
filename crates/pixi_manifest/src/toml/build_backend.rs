@@ -77,14 +77,12 @@ impl TomlPackageBuild {
             None
         };
 
-        // Convert target-specific build configurations
+        // Convert target-specific build config
         let target_config = self
             .target
             .into_iter()
             .flat_map(|(selector, target)| {
-                target
-                    .configuration
-                    .map(|config| (selector.into_inner(), config))
+                target.config.map(|config| (selector.into_inner(), config))
             })
             .collect::<IndexMap<_, _>>();
 
