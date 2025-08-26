@@ -52,15 +52,15 @@ impl CommandDispatcher {
 
         let source_dir = if let Some(source_location_spec) = spec.init_params.source {
             // Use pin_and_checkout to handle all source types (path, git, url)
-            let checkout = self
-                .pin_and_checkout(source_location_spec)
-                .await
-                .map_err(|e| match e {
-                    CommandDispatcherError::Failed(err) => {
-                        CommandDispatcherError::Failed(InstantiateBackendError::SourceCheckout(err))
-                    }
-                    CommandDispatcherError::Cancelled => CommandDispatcherError::Cancelled,
-                })?;
+            let checkout =
+                self.pin_and_checkout(source_location_spec)
+                    .await
+                    .map_err(|e| match e {
+                        CommandDispatcherError::Failed(err) => CommandDispatcherError::Failed(
+                            InstantiateBackendError::SourceCheckout(err),
+                        ),
+                        CommandDispatcherError::Cancelled => CommandDispatcherError::Cancelled,
+                    })?;
             checkout.path
         } else {
             spec.init_params.source_anchor
