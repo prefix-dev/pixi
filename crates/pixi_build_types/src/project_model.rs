@@ -74,7 +74,7 @@ pub type SourcePackageName = String;
 #[serde(rename_all = "camelCase")]
 pub struct ProjectModelV1 {
     /// The name of the project
-    pub name: String,
+    pub name: Option<String>,
 
     /// The version of the project
     pub version: Option<Version>,
@@ -176,17 +176,18 @@ impl TargetsV1 {
 }
 
 impl IsDefault for TargetsV1 {
-    fn is_default(&self) -> bool {
-        self.is_empty()
+    type Item = Self;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        if !self.is_empty() { Some(self) } else { None }
     }
 }
 
 impl<T: IsDefault> IsDefault for Option<T> {
-    fn is_default(&self) -> bool {
-        match self {
-            None => true,
-            Some(value) => value.is_default(),
-        }
+    type Item = T::Item;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        self.as_ref()?.is_non_default()
     }
 }
 
@@ -219,8 +220,10 @@ impl TargetV1 {
 }
 
 impl IsDefault for TargetV1 {
-    fn is_default(&self) -> bool {
-        self.is_empty()
+    type Item = Self;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        if !self.is_empty() { Some(self) } else { None }
     }
 }
 
@@ -601,8 +604,10 @@ impl Hash for GitReferenceV1 {
 }
 
 impl IsDefault for GitReferenceV1 {
-    fn is_default(&self) -> bool {
-        false // Never skip GitReferenceV1 fields
+    type Item = Self;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        Some(self) // Never skip GitReferenceV1 fields
     }
 }
 
@@ -642,7 +647,7 @@ mod tests {
     fn test_hash_stability_with_default_values() {
         // Create a minimal ProjectModelV1 instance
         let mut project_model = ProjectModelV1 {
-            name: "test-project".to_string(),
+            name: Some("test-project".to_string()),
             version: None,
             description: None,
             authors: None,
@@ -698,7 +703,7 @@ mod tests {
     fn test_hash_changes_with_meaningful_values() {
         // Create a minimal ProjectModelV1 instance
         let mut project_model = ProjectModelV1 {
-            name: "test-project".to_string(),
+            name: Some("test-project".to_string()),
             version: None,
             description: None,
             authors: None,
@@ -993,14 +998,14 @@ mod tests {
     fn test_hash_collision_bug_project_model() {
         // Test the same issue in ProjectModelV1
         let project1 = ProjectModelV1 {
-            name: "test".to_string(),
+            name: Some("test".to_string()),
             description: Some("test description".to_string()),
             license: None,
             ..Default::default()
         };
 
         let project2 = ProjectModelV1 {
-            name: "test".to_string(),
+            name: Some("test".to_string()),
             description: None,
             license: Some("test description".to_string()),
             ..Default::default()

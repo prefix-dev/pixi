@@ -111,7 +111,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/win-64/vc14_runtime-14.44.35208-h818238b_31.conda
       - conda: https://prefix.dev/conda-forge/win-64/vcomp14-14.44.35208-h818238b_31.conda
       - conda: .
-        build: h9352c13_0
+        subdir: win-64
 packages:
 - conda: https://prefix.dev/conda-forge/linux-64/_libgcc_mutex-0.1-conda_forge.tar.bz2
   sha256: fe51de6107f9edc7aa4f786a70f4a883943bc9d39b3bb7307c04c41410990726
@@ -1031,19 +1031,6 @@ packages:
 - conda: .
   name: sdl_example
   version: 0.1.0
-  build: h9352c13_0
-  subdir: win-64
-  depends:
-  - vc >=14.2,<15
-  - vc14_runtime >=14.29.30139
-  - ucrt >=10.0.20348.0
-  - sdl2 >=2.32.54,<3.0a0
-  input:
-    hash: 31ce6534707ac3b31b85d64591e46cb491b3da9ce64fcc66e64b8952d8d810f2
-    globs: []
-- conda: .
-  name: sdl_example
-  version: 0.1.0
   build: hbf21a9e_0
   subdir: linux-64
   depends:
@@ -1051,7 +1038,7 @@ packages:
   - libgcc >=15
   - sdl2 >=2.32.54,<3.0a0
   input:
-    hash: 31ce6534707ac3b31b85d64591e46cb491b3da9ce64fcc66e64b8952d8d810f2
+    hash: edfac7bd3233d95d1173e54bb2b8900757a662b8a553d89225c1a81ea98796af
     globs: []
 - conda: .
   name: sdl_example
@@ -1062,7 +1049,7 @@ packages:
   - libcxx >=20
   - sdl2 >=2.32.54,<3.0a0
   input:
-    hash: 31ce6534707ac3b31b85d64591e46cb491b3da9ce64fcc66e64b8952d8d810f2
+    hash: edfac7bd3233d95d1173e54bb2b8900757a662b8a553d89225c1a81ea98796af
     globs: []
 - conda: .
   name: sdl_example
@@ -1073,7 +1060,20 @@ packages:
   - libcxx >=20
   - sdl2 >=2.32.54,<3.0a0
   input:
-    hash: 31ce6534707ac3b31b85d64591e46cb491b3da9ce64fcc66e64b8952d8d810f2
+    hash: edfac7bd3233d95d1173e54bb2b8900757a662b8a553d89225c1a81ea98796af
+    globs: []
+- conda: .
+  name: sdl_example
+  version: 0.1.0
+  build: hbf21a9e_0
+  subdir: win-64
+  depends:
+  - vc >=14.2,<15
+  - vc14_runtime >=14.29.30139
+  - ucrt >=10.0.20348.0
+  - sdl2 >=2.32.54,<3.0a0
+  input:
+    hash: edfac7bd3233d95d1173e54bb2b8900757a662b8a553d89225c1a81ea98796af
     globs: []
 - conda: https://prefix.dev/conda-forge/win-64/ucrt-10.0.22621.0-h57928b3_1.conda
   sha256: db8dead3dd30fb1a032737554ce91e2819b43496a0db09927edf01c32b577450
