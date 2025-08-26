@@ -826,4 +826,61 @@ mod test {
             .unwrap_err();
         assert_snapshot!(format_parse_error(input, parse_error));
     }
+
+    #[test]
+    fn test_target_specific_build_config() {
+        let input = r#"
+        name = "package-name"
+        version = "1.0.0"
+        
+        [build.config]
+        test = "test_normal"
+        
+        [build.target.unix.config]
+        test = "test_unix"
+        
+        [build]
+        backend = { name = "bla", version = "1.0" }
+        "#;
+        let package = TomlPackage::from_toml_str(input).unwrap();
+        let workspace = WorkspacePackageProperties::default();
+
+        let parsed = package
+            .into_manifest(
+                workspace,
+                PackageDefaults::default(),
+                &Preview::default(),
+                None,
+            )
+            .unwrap();
+
+        // Now check if we can also parse the deprecated `configuration` key
+        let input = r#"
+        name = "package-name"
+        version = "1.0.0"
+        
+        [build.configuration]
+        test = "test_normal"
+        
+        [build.target.unix.configuration]
+        test = "test_unix"
+        
+        [build]
+        backend = { name = "bla", version = "1.0" }
+        "#;
+        let package = TomlPackage::from_toml_str(input).unwrap();
+        let workspace = WorkspacePackageProperties::default();
+
+        let parsed_deprecated = package
+            .into_manifest(
+                workspace,
+                PackageDefaults::default(),
+                &Preview::default(),
+                None,
+            )
+            .unwrap();
+
+        assert!(!parsed_deprecated.warnings.is_empty());
+        assert_eq!(parsed.value.build, parsed_deprecated.value.build);
+    }
 }
