@@ -5,6 +5,7 @@ mod build_tests;
 mod common;
 mod init_tests;
 mod install_tests;
+mod install_subset_tests;
 mod project_tests;
 mod pypi_tests;
 mod search_tests;

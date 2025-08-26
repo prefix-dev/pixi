@@ -700,9 +700,13 @@ impl<'p> LockFileDerivedData<'p> {
             .flat_map(|p| p.map(|p| p.name().to_string()))
             .collect();
 
-        // TODO: check if this logic is still correct
-        // Get kept package names
-        let subset = InstallSubset::new(&filter.skip_with_deps, &filter.skip_direct, None);
+        // Determine kept packages using the full install filter
+        let subset = InstallSubset::new(
+            &filter.skip_with_deps,
+            &filter.skip_direct,
+            filter.target_package.as_deref(),
+        );
+        // Which packages are kept
         let kept = subset.filter(locked_env.packages(platform));
         let kept_package_names: HashSet<String> = kept
             .install

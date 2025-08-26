@@ -49,14 +49,11 @@ pub struct Args {
     #[arg(long, short, conflicts_with = "environment")]
     pub all: bool,
 
-    /// Skip installation of specific packages present in the lockfile.
-    /// This uses a soft exclusion: the package will be skipped but its dependencies are installed.
-    /// This can be useful for instance in a Dockerfile to skip local source dependencies when installing dependencies.
+    /// Skip installation of specific packages present in the lockfile. This uses a soft exclusion: the package will be skipped but its dependencies are installed.
     #[arg(long)]
     pub skip: Option<Vec<String>>,
 
-    /// Skip a package and its entire dependency subtree.
-    /// This performs a hard exclusion: the package and its dependencies are not installed unless reachable from another non-skipped root.
+    /// Skip a package and its entire dependency subtree. This performs a hard exclusion: the package and its dependencies are not installed unless reachable from another non-skipped root.
     #[arg(long)]
     pub skip_with_deps: Option<Vec<String>>,
 
