@@ -162,9 +162,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .unwrap();
         } else {
             tracing::warn!(
-                "No packages were skipped. '{}' '{}' did not match any packages in the lockfile.",
-                args.skip.clone().unwrap_or_default().join("', '"),
-                args.skip_with_deps.clone().unwrap_or_default().join("', '")
+                "No packages were skipped. '{}' did not match any packages in the lockfile.",
+                args.skip
+                    .into_iter()
+                    .flatten()
+                    .chain(args.skip_with_deps.into_iter().flatten())
+                    .collect_vec()
+                    .join(", ")
             );
         }
     }
