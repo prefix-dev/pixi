@@ -50,11 +50,6 @@ fn pixi_add_package(package: &str) -> Duration {
         );
     }
 
-    println!(
-        "✅ pixi add {} completed in {:.2}s",
-        package,
-        duration.as_secs_f64()
-    );
     duration
 }
 
@@ -66,8 +61,16 @@ fn bench_add_small(c: &mut Criterion) {
 
     c.bench_function("add_small", |b| {
         b.iter(|| {
-            // Representative small package
-            black_box(pixi_add_package("click"))
+            // Test multiple small packages and average the time
+            let packages = ["click"];
+            let mut total_duration = Duration::new(0, 0);
+
+            for package in packages {
+                let duration = pixi_add_package(black_box(package));
+                total_duration += duration;
+            }
+
+            black_box(total_duration / packages.len() as u32)
         })
     });
 }
@@ -75,8 +78,16 @@ fn bench_add_small(c: &mut Criterion) {
 fn bench_add_medium(c: &mut Criterion) {
     c.bench_function("add_medium", |b| {
         b.iter(|| {
-            // Representative medium package
-            black_box(pixi_add_package("numpy"))
+            // Test multiple medium packages and average the time
+            let packages = ["numpy", "pandas", "flask"];
+            let mut total_duration = Duration::new(0, 0);
+
+            for package in packages {
+                let duration = pixi_add_package(black_box(package));
+                total_duration += duration;
+            }
+
+            black_box(total_duration / packages.len() as u32)
         })
     });
 }
@@ -84,8 +95,25 @@ fn bench_add_medium(c: &mut Criterion) {
 fn bench_add_large(c: &mut Criterion) {
     c.bench_function("add_large", |b| {
         b.iter(|| {
-            // Representative large package
-            black_box(pixi_add_package("matplotlib"))
+            // Test multiple large packages and average the time
+            let packages = [
+                "matplotlib",
+                "scipy",
+                "jupyter",
+                "pyyaml",
+                "requests",
+                "numpy",
+                "pandas",
+                "flask",
+            ];
+            let mut total_duration = Duration::new(0, 0);
+
+            for package in packages {
+                let duration = pixi_add_package(black_box(package));
+                total_duration += duration;
+            }
+
+            black_box(total_duration / packages.len() as u32)
         })
     });
 }
