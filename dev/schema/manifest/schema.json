@@ -2311,6 +2311,17 @@
             "$ref": "#/$defs/S3Options"
           }
         },
+        "target": {
+          "title": "Target",
+          "description": "The workspace targets",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/WorkspaceTarget"
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
         "version": {
           "title": "Version",
           "description": "The version of the project; we advise use of [SemVer](https://semver.org)",
@@ -2336,6 +2347,28 @@
           "description": "Must be true to inherit from workspace",
           "type": "boolean",
           "const": true
+        }
+      }
+    },
+    "WorkspaceTarget": {
+      "title": "WorkspaceTarget",
+      "description": "Target-specific configuration for a workspace",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "build-variants": {
+          "title": "Build-Variants",
+          "description": "The build variants for this workspace target",
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
         }
       }
     }

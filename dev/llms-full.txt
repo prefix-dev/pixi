@@ -9435,6 +9435,67 @@ Both PyPi and conda packages are considered.
 
 !! note Note that for Pypi package indexes the package index must support the `upload-time` field as specified in [`PEP 700`](https://peps.python.org/pep-0700/). If the field is not present for a given distribution, the distribution will be treated as unavailable. PyPI provides `upload-time` for all packages.
 
+### `build-variants` (optional)
+
+Preview Feature
+
+Build variants require the `pixi-build` preview feature to be enabled:
+
+```toml
+[workspace]
+preview = ["pixi-build"]
+
+```
+
+Build variants allow you to specify different dependency versions for building packages in your workspace, creating a "build matrix" that targets multiple configurations. This is particularly useful for testing packages against different compiler versions, Python versions, or other critical dependencies.
+
+Build variants are defined as key-value pairs where each key represents a dependency name and the value is a list of version specifications to build against.
+
+#### Basic Usage
+
+```toml
+[workspace.build-variants]
+python = ["3.11.*", "3.12.*"]
+c_compiler_version = ["11.4", "14.0"]
+
+```
+
+#### How Build Variants Work
+
+When build variants are specified, Pixi will:
+
+1. **Create variant combinations**: Generate all possible combinations of the specified variants
+1. **Build separate packages**: Create distinct package builds for each variant combination
+1. **Resolve dependencies**: Ensure each variant resolves with compatible dependency versions
+1. **Generate unique build strings**: Each variant gets a unique build identifier in the package name
+
+#### Platform-Specific Variants
+
+Build variants can also be specified per-platform:
+
+```toml
+[workspace.build-variants]
+python = ["3.11.*", "3.12.*"]
+# Windows-specific variants
+[workspace.target.win-64.build-variants]
+python = ["3.11.*"]  # Only Python 3.11 on Windows
+c_compiler = ["vs2019"]
+# Linux-specific variants  
+[workspace.target.linux-64.build-variants]
+c_compiler = ["gcc"]
+c_compiler_version = ["11.4", "13.0"]
+
+```
+
+#### Common Use Cases
+
+- **Multi-version Python packages**: Build against Python 3.11 and 3.12
+- **Compiler variants**: Test with different compiler versions for C/C++ packages
+- **Dependency compatibility**: Ensure packages work with different versions of key dependencies
+- **Cross-platform builds**: Different build configurations per operating system
+
+For detailed examples and tutorials, see the [build variants documentation](../../build/variants/).
+
 ## The `tasks` table
 
 Tasks are a way to automate certain custom commands in your workspace. For example, a `lint` or `format` step. Tasks in a Pixi workspace are essentially cross-platform shell commands, with a unified syntax across platforms. For more in-depth information, check the [Advanced tasks documentation](../../workspace/advanced_tasks/). Pixi's tasks are run in a Pixi environment using `pixi run` and are executed using the [`deno_task_shell`](../../workspace/advanced_tasks/#our-task-runner-deno_task_shell).
