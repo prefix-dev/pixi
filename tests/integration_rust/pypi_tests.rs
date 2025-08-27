@@ -5,12 +5,15 @@ use typed_path::Utf8TypedPath;
 use url::Url;
 
 use crate::common::{LockFileExt, PixiControl};
+use crate::setup_tracing;
 use std::fs::File;
 
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_flat_links_based_index_returns_path() {
-    let pypi_indexes = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/pypi-indexes");
+    setup_tracing();
+
+    let pypi_indexes = Path::new(env!("CARGO_WORKSPACE_DIR")).join("tests/data/pypi-indexes");
     let pixi = PixiControl::from_manifest(&format!(
         r#"
         [project]
@@ -49,7 +52,9 @@ async fn test_flat_links_based_index_returns_path() {
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_file_based_index_returns_path() {
-    let pypi_indexes = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/pypi-indexes");
+    setup_tracing();
+
+    let pypi_indexes = Path::new(env!("CARGO_WORKSPACE_DIR")).join("tests/data/pypi-indexes");
     let pypi_indexes_url = Url::from_directory_path(pypi_indexes.clone()).unwrap();
     let pixi = PixiControl::from_manifest(&format!(
         r#"
@@ -90,7 +95,9 @@ async fn test_file_based_index_returns_path() {
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_index_strategy() {
-    let pypi_indexes = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/pypi-indexes");
+    setup_tracing();
+
+    let pypi_indexes = Path::new(env!("CARGO_WORKSPACE_DIR")).join("tests/data/pypi-indexes");
     let pypi_indexes_url = Url::from_directory_path(pypi_indexes.clone()).unwrap();
 
     let pixi = PixiControl::from_manifest(&format!(
@@ -171,7 +178,9 @@ async fn test_index_strategy() {
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 /// This test checks if we can pin a package from a PyPI index, by explicitly specifying the index.
 async fn test_pinning_index() {
-    let pypi_indexes = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/pypi-indexes");
+    setup_tracing();
+
+    let pypi_indexes = Path::new(env!("CARGO_WORKSPACE_DIR")).join("tests/data/pypi-indexes");
     let pypi_indexes_url = Url::from_directory_path(pypi_indexes.clone()).unwrap();
 
     let pixi = PixiControl::from_manifest(&format!(
@@ -210,6 +219,8 @@ async fn test_pinning_index() {
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 /// This test checks if we can receive torch correctly from the whl/cu124 index.
 async fn pin_torch() {
+    setup_tracing();
+
     // Do some platform magic, as the index does not contain wheels for each platform.
     let platform = Platform::current();
     let platforms = match platform {
@@ -251,6 +262,8 @@ async fn pin_torch() {
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_allow_insecure_host() {
+    setup_tracing();
+
     let pixi = PixiControl::from_manifest(&format!(
         r#"
         [project]
@@ -293,7 +306,9 @@ async fn test_allow_insecure_host() {
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_indexes_are_passed_when_solving_build_pypi_dependencies() {
-    let pypi_indexes = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/pypi-indexes");
+    setup_tracing();
+
+    let pypi_indexes = Path::new(env!("CARGO_WORKSPACE_DIR")).join("tests/data/pypi-indexes");
     let pypi_indexes_url = Url::from_directory_path(pypi_indexes.clone()).unwrap();
 
     let pixi = PixiControl::from_pyproject_manifest(&format!(
@@ -382,6 +397,8 @@ async fn test_indexes_are_passed_when_solving_build_pypi_dependencies() {
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_cross_platform_resolve_with_no_build() {
+    setup_tracing();
+
     // non-current platform
     let resolve_platform = if Platform::current().is_osx() {
         Platform::Linux64
@@ -389,7 +406,7 @@ async fn test_cross_platform_resolve_with_no_build() {
         Platform::OsxArm64
     };
 
-    let pypi_indexes = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/pypi-indexes");
+    let pypi_indexes = Path::new(env!("CARGO_WORKSPACE_DIR")).join("tests/data/pypi-indexes");
     let pixi = PixiControl::from_manifest(&format!(
         r#"
         [project]
@@ -431,6 +448,8 @@ async fn test_cross_platform_resolve_with_no_build() {
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_pinned_help_message() {
+    setup_tracing();
+
     let pixi = PixiControl::from_manifest(
         r#"
         [workspace]
@@ -441,7 +460,7 @@ async fn test_pinned_help_message() {
 
         [dependencies]
         python = "3.12.*"
-        pandas = "*"
+        pandas = "2.3.2"
 
         [pypi-dependencies]
         databricks-sql-connector = ">=4.0.0"
@@ -453,6 +472,6 @@ async fn test_pinned_help_message() {
     // Second, it should contain a help message
     assert_eq!(
         format!("{}", err.help().unwrap()),
-        "The following PyPI packages have been pinned by the conda solve, and this version may be causing a conflict:\npandas==2.3.1"
+        "The following PyPI packages have been pinned by the conda solve, and this version may be causing a conflict:\npandas==2.3.2"
     );
 }

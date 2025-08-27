@@ -702,7 +702,7 @@ packages:
   - python
   - rich 13.9.*
   input:
-    hash: 0ca0e061fed72fef38ea5d178e341c05054d06941ad89c1b8addbedeeffb54e5
+    hash: 162abe2dbee7d970b2f3a971b1aa9fd7d1244a470dd94951fe254d4013d160be
     globs: []
 - conda: https://prefix.dev/conda-forge/linux-64/readline-8.2-h8c095d6_2.conda
   sha256: 2d6d0c026902561ed77cd646b5021aef2d4db22e57a5b0178dfc669231e06d2c

@@ -1,13 +1,15 @@
 use std::str::FromStr;
 
-use pixi::cli;
 use pixi_manifest::FeaturesExt;
 use rattler_conda_types::{NamedChannelOrUrl, Platform, Version};
 
 use crate::common::PixiControl;
+use crate::setup_tracing;
 
 #[tokio::test]
 async fn init_creates_project_manifest() {
+    setup_tracing();
+
     // Run the init command
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
@@ -38,6 +40,8 @@ async fn init_creates_project_manifest() {
 /// actually used.
 #[tokio::test]
 async fn specific_channel() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
 
     // Init with a custom channel
@@ -64,6 +68,8 @@ async fn specific_channel() {
 // Test the initialization from an existing pyproject.toml file without the pixi information
 #[tokio::test]
 async fn init_from_existing_pyproject_toml() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
 
     // Copy the pyproject.toml file to the workspace directory
@@ -74,7 +80,7 @@ async fn init_from_existing_pyproject_toml() {
 
     // Init a new project
     pixi.init()
-        .with_format(cli::init::ManifestFormat::Pyproject)
+        .with_format(pixi_cli::init::ManifestFormat::Pyproject)
         .await
         .unwrap();
 

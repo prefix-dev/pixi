@@ -1,0 +1,14 @@
+[project]
+channels = ["conda-forge"]
+name = "absolute-paths"
+platforms = ["osx-arm64"]
+version = "0.1.0"
+
+[dependencies]
+python = "3.12"
+
+[pypi-dependencies]
+foo = { path = "./projects/foo", editable = true }
+
+[pypi-options.dependency-overrides]
+dummy_test = "==0.1.2"

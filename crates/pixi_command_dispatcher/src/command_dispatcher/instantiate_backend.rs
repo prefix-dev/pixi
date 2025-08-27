@@ -151,6 +151,19 @@ impl CommandDispatcher {
             api_version,
         );
 
+        // Make sure that the project model is compatible with the API version.
+        if !api_version.supports_name_none()
+            && spec
+                .init_params
+                .project_model
+                .as_ref()
+                .is_some_and(|p| p.name.is_none())
+        {
+            return Err(CommandDispatcherError::Failed(
+                InstantiateBackendError::SpecConversionError(SpecConversionError::MissingName),
+            ));
+        }
+
         JsonRpcBackend::setup(
             source_dir,
             spec.init_params.manifest_path,
