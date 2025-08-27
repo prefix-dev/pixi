@@ -24,10 +24,10 @@ jobs:
           bins: cargo-codspeed
 
       - name: Build the benchmark target(s)
-        run: cargo codspeed build
+        run: cd crates/pixi_bench && cargo codspeed build && cd ../../
 
       - name: Run the benchmarks
         uses: CodSpeedHQ/action@v3
         with:
-          run: cargo codspeed run
+          run: cd crates/pixi_bench && cargo codspeed run && cd ../../
           token: ${{ secrets.CODSPEED_TOKEN }}

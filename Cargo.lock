@@ -72,6 +72,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "anes"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4b46cbb362ab8752921c97e041f5e366ee6297bd428a31275b9fcf1e380f7299"
+
+[[package]]
 name = "anstream"
 version = "0.6.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -126,6 +132,15 @@ name = "anyhow"
 version = "1.0.99"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b0674a1ddeecb70197781e945de4b3b8ffb61fa939a5597bcf48503737663100"
+
+[[package]]
+name = "approx"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cab112f0a86d568ea0e627cc1d6be74a1e9cd55214684db5561995f6dad897c6"
+dependencies = [
+ "num-traits",
+]
 
 [[package]]
 name = "arbitrary"
@@ -392,7 +407,7 @@ dependencies = [
  "http-content-range",
  "itertools 0.13.0",
  "memmap2 0.9.8",
- "reqwest",
+ "reqwest 0.12.23",
  "reqwest-middleware",
  "thiserror 1.0.69",
  "tokio",
@@ -866,7 +881,7 @@ dependencies = [
  "pin-project-lite",
  "rustversion",
  "serde",
- "sync_wrapper",
+ "sync_wrapper 1.0.2",
  "tower 0.5.2",
  "tower-layer",
  "tower-service",
@@ -887,7 +902,7 @@ dependencies = [
  "mime",
  "pin-project-lite",
  "rustversion",
- "sync_wrapper",
+ "sync_wrapper 1.0.2",
  "tower-layer",
  "tower-service",
 ]
@@ -990,6 +1005,12 @@ name = "bit-vec"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e764a1d40d510daf35e07be9eb06e75770908c27d411ee6c92109c9840eaaf7"
+
+[[package]]
+name = "bitflags"
+version = "1.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
 name = "bitflags"
@@ -1230,6 +1251,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "cast"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "37b2a672a2cb129a2e41c10b1224bb368f9f37a2b16b612598138befd7b37eb5"
+
+[[package]]
 name = "cbc"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1290,6 +1317,33 @@ dependencies = [
  "serde",
  "wasm-bindgen",
  "windows-link",
+]
+
+[[package]]
+name = "ciborium"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42e69ffd6f0917f5c029256a24d0161db17cea3997d185db0d35926308770f0e"
+dependencies = [
+ "ciborium-io",
+ "ciborium-ll",
+ "serde",
+]
+
+[[package]]
+name = "ciborium-io"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05afea1e0a06c9be33d539b876f1ce3692f4afea2cb41f740e7743225ed1c757"
+
+[[package]]
+name = "ciborium-ll"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57663b653d948a338bfb3eeba9bb2fd5fcfaecb9e199e87e1eda4d9e8b240fd9"
+dependencies = [
+ "ciborium-io",
+ "half",
 ]
 
 [[package]]
@@ -1373,10 +1427,76 @@ dependencies = [
 ]
 
 [[package]]
+name = "codspeed"
+version = "3.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "35584c5fcba8059780748866387fb97c5a203bcfc563fc3d0790af406727a117"
+dependencies = [
+ "anyhow",
+ "bincode",
+ "colored",
+ "glob",
+ "libc",
+ "nix 0.29.0",
+ "serde",
+ "serde_json",
+ "statrs",
+ "uuid",
+]
+
+[[package]]
+name = "codspeed-criterion-compat"
+version = "3.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "78f6c1c6bed5fd84d319e8b0889da051daa361c79b7709c9394dfe1a882bba67"
+dependencies = [
+ "codspeed",
+ "codspeed-criterion-compat-walltime",
+ "colored",
+]
+
+[[package]]
+name = "codspeed-criterion-compat-walltime"
+version = "3.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c989289ce6b1cbde72ed560496cb8fbf5aa14d5ef5666f168e7f87751038352e"
+dependencies = [
+ "anes",
+ "cast",
+ "ciborium",
+ "clap",
+ "codspeed",
+ "criterion-plot",
+ "is-terminal",
+ "itertools 0.10.5",
+ "num-traits",
+ "once_cell",
+ "oorandom",
+ "plotters",
+ "rayon",
+ "regex",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "tinytemplate",
+ "walkdir",
+]
+
+[[package]]
 name = "colorchoice"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b05b61dc5112cbb17e4b6cd61790d9845d13888356391624cbe7e41efeac1e75"
+
+[[package]]
+name = "colored"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "117725a109d387c937a1533ce01b450cbde6b88abceea8473c4d7a85853cda3c"
+dependencies = [
+ "lazy_static",
+ "windows-sys 0.59.0",
+]
 
 [[package]]
 name = "combine"
@@ -1567,6 +1687,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "criterion-plot"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6b50826342786a51a89e2da3a28f1c32b06e387201bc2d19791f622c673706b1"
+dependencies = [
+ "cast",
+ "itertools 0.10.5",
+]
+
+[[package]]
 name = "crossbeam-channel"
 version = "0.5.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1599,6 +1729,12 @@ name = "crossbeam-utils"
 version = "0.8.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0a5c400df2834b80a4c3327b3aad3a4c4cd4de0629063962b03235697506a28"
+
+[[package]]
+name = "crunchy"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 
 [[package]]
 name = "crypto-bigint"
@@ -2504,7 +2640,7 @@ version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0bf760ebf69878d9fd8f110c89703d90ce35095324d1f1edcb595c63945ee757"
 dependencies = [
- "bitflags",
+ "bitflags 2.9.3",
  "ignore",
  "walkdir",
 ]
@@ -2589,7 +2725,7 @@ dependencies = [
  "bon",
  "google-cloud-gax",
  "http 1.3.1",
- "reqwest",
+ "reqwest 0.12.23",
  "rustc_version",
  "rustls 0.23.31",
  "rustls-pemfile 2.2.0",
@@ -2696,6 +2832,16 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+]
+
+[[package]]
+name = "half"
+version = "2.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "459196ed295495a68f7d7fe1d84f6c4b7ff0e21fe3017b2f283c6fac3ad803c9"
+dependencies = [
+ "cfg-if",
+ "crunchy",
 ]
 
 [[package]]
@@ -2884,7 +3030,7 @@ dependencies = [
  "http 1.3.1",
  "http-cache",
  "http-cache-semantics",
- "reqwest",
+ "reqwest 0.12.23",
  "reqwest-middleware",
  "serde",
  "url",
@@ -2898,7 +3044,7 @@ checksum = "92baf25cf0b8c9246baecf3a444546360a97b569168fdf92563ee6a47829920c"
 dependencies = [
  "http 1.3.1",
  "http-serde",
- "reqwest",
+ "reqwest 0.12.23",
  "serde",
  "time",
 ]
@@ -3049,6 +3195,19 @@ dependencies = [
 
 [[package]]
 name = "hyper-tls"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6183ddfa99b85da61a140bea0efc93fdf56ceaa041b37d553518030827f9905"
+dependencies = [
+ "bytes",
+ "hyper 0.14.32",
+ "native-tls",
+ "tokio",
+ "tokio-native-tls",
+]
+
+[[package]]
+name = "hyper-tls"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "70206fc6890eaca9fde8a0bf71caa2ddfc9fe045ac9e5c70df101a7dbde866e0"
@@ -3082,7 +3241,7 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "socket2 0.6.0",
- "system-configuration",
+ "system-configuration 0.6.1",
  "tokio",
  "tower-service",
  "tracing",
@@ -3316,7 +3475,7 @@ version = "0.7.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "046fa2d4d00aea763528b4950358d0ead425372445dc8ff86312b3c69ff7727b"
 dependencies = [
- "bitflags",
+ "bitflags 2.9.3",
  "cfg-if",
  "libc",
 ]
@@ -3335,6 +3494,17 @@ checksum = "dbc5ebe9c3a1a7a5127f920a418f7585e9e758e911d0466ed004f393b0e380b2"
 dependencies = [
  "memchr",
  "serde",
+]
+
+[[package]]
+name = "is-terminal"
+version = "0.4.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e04d7f318608d35d4b61ddd75cbdaee86b023ebe2bd5a66ee0915f0bf93095a9"
+dependencies = [
+ "hermit-abi",
+ "libc",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3357,6 +3527,15 @@ name = "is_terminal_polyfill"
 version = "1.70.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7943c866cc5cd64cbc25b2e01621d07fa8eb2a1a23160ee81ce38704e97b8ecf"
+
+[[package]]
+name = "itertools"
+version = "0.10.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b0fd2260e829bddf4cb6ea802289de2f86d6a7a690192fbe91b3f46e0f2c8473"
+dependencies = [
+ "either",
+]
 
 [[package]]
 name = "itertools"
@@ -3748,7 +3927,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "391290121bad3d37fbddad76d8f5d1c1c314cfc646d143d7e07a3086ddff0ce3"
 dependencies = [
- "bitflags",
+ "bitflags 2.9.3",
  "libc",
  "redox_syscall",
 ]
@@ -4086,7 +4265,7 @@ version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "71e2746dc3a24dd78b3cfcb7be93368c6de9963d30f43a6a73998a9cf4b17b46"
 dependencies = [
- "bitflags",
+ "bitflags 2.9.3",
  "cfg-if",
  "cfg_aliases",
  "libc",
@@ -4099,7 +4278,7 @@ version = "0.30.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "74523f3a35e05aba87a1d978330aef40f67b0304ac79c1c00b294c9830543db6"
 dependencies = [
- "bitflags",
+ "bitflags 2.9.3",
  "cfg-if",
  "cfg_aliases",
  "libc",
@@ -4247,7 +4426,7 @@ version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1c10c2894a6fed806ade6027bcd50662746363a9589d3ec9d9bef30a4e4bc166"
 dependencies = [
- "bitflags",
+ "bitflags 2.9.3",
 ]
 
 [[package]]
@@ -4282,12 +4461,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4895175b425cb1f87721b59f0f286c2092bd4af812243672510e1ac53e2e0ad"
 
 [[package]]
+name = "oorandom"
+version = "11.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6790f58c7ff633d8771f42965289203411a5e5c68388703c06e14f24770b41e"
+
+[[package]]
 name = "openssl"
 version = "0.10.73"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8505734d46c8ab1e19a1dce3aef597ad87dcb4c37e7188231769bd6bd51cebf8"
 dependencies = [
- "bitflags",
+ "bitflags 2.9.3",
  "cfg-if",
  "foreign-types",
  "libc",
@@ -4682,6 +4867,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixi_bench"
+version = "0.1.0"
+dependencies = [
+ "codspeed-criterion-compat",
+ "reqwest 0.11.27",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "pixi_build_discovery"
 version = "0.1.0"
 dependencies = [
@@ -4817,7 +5015,7 @@ dependencies = [
  "rattler_solve",
  "rattler_virtual_packages",
  "regex",
- "reqwest",
+ "reqwest 0.12.23",
  "reqwest-middleware",
  "rstest",
  "same-file",
@@ -4925,7 +5123,7 @@ dependencies = [
  "rattler_conda_types",
  "rattler_networking",
  "rattler_repodata_gateway",
- "reqwest",
+ "reqwest 0.12.23",
  "rstest",
  "serde",
  "serde_ignored",
@@ -5009,7 +5207,7 @@ dependencies = [
  "rattler_shell",
  "rattler_solve",
  "rattler_virtual_packages",
- "reqwest",
+ "reqwest 0.12.23",
  "reqwest-middleware",
  "rlimit",
  "rstest",
@@ -5077,7 +5275,7 @@ dependencies = [
  "dunce",
  "fs-err",
  "pixi_utils",
- "reqwest",
+ "reqwest 0.12.23",
  "reqwest-middleware",
  "serde",
  "thiserror 2.0.16",
@@ -5146,7 +5344,7 @@ dependencies = [
  "rattler_shell",
  "rattler_virtual_packages",
  "regex",
- "reqwest",
+ "reqwest 0.12.23",
  "reqwest-middleware",
  "rstest",
  "serde",
@@ -5404,7 +5602,7 @@ dependencies = [
  "rattler_conda_types",
  "rattler_networking",
  "rattler_shell",
- "reqwest",
+ "reqwest 0.12.23",
  "reqwest-middleware",
  "reqwest-retry",
  "rlimit",
@@ -5487,6 +5685,34 @@ dependencies = [
  "quick-xml 0.38.3",
  "serde",
  "time",
+]
+
+[[package]]
+name = "plotters"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5aeb6f403d7a4911efb1e33402027fc44f29b5bf6def3effcc22d7bb75f2b747"
+dependencies = [
+ "num-traits",
+ "plotters-backend",
+ "plotters-svg",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
+name = "plotters-backend"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df42e13c12958a16b3f7f4386b9ab1f3e7933914ecea48da7139435263a4172a"
+
+[[package]]
+name = "plotters-svg"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51bae2ac328883f7acdfea3d66a7c35751187f870bc81f94563733a154d7a670"
+dependencies = [
+ "plotters-backend",
 ]
 
 [[package]]
@@ -5596,7 +5822,7 @@ version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cc5b72d8145275d844d4b5f6d4e1eef00c8cd889edb6035c21675d1bb1f45c9f"
 dependencies = [
- "bitflags",
+ "bitflags 2.9.3",
  "flate2",
  "hex",
  "procfs-core",
@@ -5609,7 +5835,7 @@ version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "239df02d8349b06fc07398a3a1697b06418223b1c7725085e801e7c0fc6a12ec"
 dependencies = [
- "bitflags",
+ "bitflags 2.9.3",
  "hex",
 ]
 
@@ -5621,7 +5847,7 @@ checksum = "6fcdab19deb5195a31cf7726a210015ff1496ba1464fd42cb4f537b8b01b471f"
 dependencies = [
  "bit-set",
  "bit-vec",
- "bitflags",
+ "bitflags 2.9.3",
  "lazy_static",
  "num-traits",
  "rand 0.9.2",
@@ -5730,7 +5956,7 @@ dependencies = [
  "pixi_consts",
  "rattler_conda_types",
  "rattler_digest",
- "reqwest",
+ "reqwest 0.12.23",
  "reqwest-middleware",
  "reqwest-retry",
  "serde",
@@ -5986,7 +6212,7 @@ dependencies = [
  "rayon",
  "reflink-copy",
  "regex",
- "reqwest",
+ "reqwest 0.12.23",
  "reqwest-middleware",
  "serde_json",
  "simple_spawn_blocking",
@@ -6021,7 +6247,7 @@ dependencies = [
  "rattler_package_streaming",
  "rattler_redaction",
  "rayon",
- "reqwest",
+ "reqwest 0.12.23",
  "reqwest-middleware",
  "serde_json",
  "simple_spawn_blocking",
@@ -6176,7 +6402,7 @@ dependencies = [
  "itertools 0.14.0",
  "keyring",
  "netrc-rs",
- "reqwest",
+ "reqwest 0.12.23",
  "reqwest-middleware",
  "retry-policies",
  "serde",
@@ -6202,7 +6428,7 @@ dependencies = [
  "rattler_digest",
  "rattler_networking",
  "rattler_redaction",
- "reqwest",
+ "reqwest 0.12.23",
  "reqwest-middleware",
  "serde_json",
  "simple_spawn_blocking",
@@ -6234,7 +6460,7 @@ version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3aa5057629aeb20861919e9ae56875985d58028f3c6f433a20b5ded086e1cec5"
 dependencies = [
- "reqwest",
+ "reqwest 0.12.23",
  "reqwest-middleware",
  "url",
 ]
@@ -6277,7 +6503,7 @@ dependencies = [
  "rattler_networking",
  "rattler_package_streaming",
  "rattler_redaction",
- "reqwest",
+ "reqwest 0.12.23",
  "reqwest-middleware",
  "retry-policies",
  "rmp-serde",
@@ -6383,7 +6609,7 @@ version = "0.5.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5407465600fb0548f1442edf71dd20683c6ed326200ace4b1ef0763521bb3b77"
 dependencies = [
- "bitflags",
+ "bitflags 2.9.3",
 ]
 
 [[package]]
@@ -6496,6 +6722,46 @@ dependencies = [
 
 [[package]]
 name = "reqwest"
+version = "0.11.27"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd67538700a17451e7cba03ac727fb961abb7607553461627b97de0b89cf4a62"
+dependencies = [
+ "base64 0.21.7",
+ "bytes",
+ "encoding_rs",
+ "futures-core",
+ "futures-util",
+ "h2 0.3.27",
+ "http 0.2.12",
+ "http-body 0.4.6",
+ "hyper 0.14.32",
+ "hyper-tls 0.5.0",
+ "ipnet",
+ "js-sys",
+ "log",
+ "mime",
+ "native-tls",
+ "once_cell",
+ "percent-encoding",
+ "pin-project-lite",
+ "rustls-pemfile 1.0.4",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "sync_wrapper 0.1.2",
+ "system-configuration 0.5.1",
+ "tokio",
+ "tokio-native-tls",
+ "tower-service",
+ "url",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+ "winreg",
+]
+
+[[package]]
+name = "reqwest"
 version = "0.12.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d429f34c8092b2d42c7c93cec323bb4adeb7c67698f70839adec842ec10c7ceb"
@@ -6512,7 +6778,7 @@ dependencies = [
  "http-body-util",
  "hyper 1.7.0",
  "hyper-rustls 0.27.7",
- "hyper-tls",
+ "hyper-tls 0.6.0",
  "hyper-util",
  "js-sys",
  "log",
@@ -6527,7 +6793,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_urlencoded",
- "sync_wrapper",
+ "sync_wrapper 1.0.2",
  "tokio",
  "tokio-native-tls",
  "tokio-rustls 0.26.2",
@@ -6551,7 +6817,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "http 1.3.1",
- "reqwest",
+ "reqwest 0.12.23",
  "serde",
  "thiserror 1.0.69",
  "tower-service",
@@ -6568,7 +6834,7 @@ dependencies = [
  "getrandom 0.2.16",
  "http 1.3.1",
  "hyper 1.7.0",
- "reqwest",
+ "reqwest 0.12.23",
  "reqwest-middleware",
  "retry-policies",
  "thiserror 1.0.69",
@@ -6757,7 +7023,7 @@ version = "0.38.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fdb5bc1ae2baa591800df16c9ca78619bf65c0488b41b96ccec5d11220d8c154"
 dependencies = [
- "bitflags",
+ "bitflags 2.9.3",
  "errno",
  "libc",
  "linux-raw-sys 0.4.15",
@@ -6770,7 +7036,7 @@ version = "1.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "11181fbabf243db407ef8df94a6ce0b2f9a733bd8be4ad02b4eda9602296cac8"
 dependencies = [
- "bitflags",
+ "bitflags 2.9.3",
  "errno",
  "libc",
  "linux-raw-sys 0.9.4",
@@ -7065,7 +7331,7 @@ version = "2.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "897b2245f0b511c87893af39b033e5ca9cce68824c4d7e7630b5a1d339658d02"
 dependencies = [
- "bitflags",
+ "bitflags 2.9.3",
  "core-foundation 0.9.4",
  "core-foundation-sys",
  "libc",
@@ -7078,7 +7344,7 @@ version = "3.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "80fb1d92c5028aa318b4b8bd7302a5bfcf48be96a37fc6fc790f806b0004ee0c"
 dependencies = [
- "bitflags",
+ "bitflags 2.9.3",
  "core-foundation 0.10.1",
  "core-foundation-sys",
  "libc",
@@ -7567,6 +7833,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 
 [[package]]
+name = "statrs"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2a3fe7c28c6512e766b0874335db33c94ad7b8f9054228ae1c2abd47ce7d335e"
+dependencies = [
+ "approx",
+ "num-traits",
+]
+
+[[package]]
 name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7639,6 +7915,12 @@ dependencies = [
 
 [[package]]
 name = "sync_wrapper"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2047c6ded9c721764247e62cd3b03c09ffc529b2ba5b10ec482ae507a4a70160"
+
+[[package]]
+name = "sync_wrapper"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0bf256ce5efdfa370213c1dabab5935a12e49f2c58d15e9eac2870d3b4f27263"
@@ -7696,7 +7978,7 @@ version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec7dddc5f0fee506baf8b9fdb989e242f17e4b11c61dfbb0635b705217199eea"
 dependencies = [
- "bitflags",
+ "bitflags 2.9.3",
  "byteorder",
  "enum-as-inner",
  "libc",
@@ -7720,13 +8002,34 @@ dependencies = [
 
 [[package]]
 name = "system-configuration"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba3a3adc5c275d719af8cb4272ea1c4a6d668a777f37e115f6d11ddbc1c8e0e7"
+dependencies = [
+ "bitflags 1.3.2",
+ "core-foundation 0.9.4",
+ "system-configuration-sys 0.5.0",
+]
+
+[[package]]
+name = "system-configuration"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c879d448e9d986b661742763247d3693ed13609438cf3d006f51f5368a5ba6b"
 dependencies = [
- "bitflags",
+ "bitflags 2.9.3",
  "core-foundation 0.9.4",
- "system-configuration-sys",
+ "system-configuration-sys 0.6.0",
+]
+
+[[package]]
+name = "system-configuration-sys"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a75fb188eb626b924683e3b95e3a48e63551fcfb51949de2f06a9d91dbee93c9"
+dependencies = [
+ "core-foundation-sys",
+ "libc",
 ]
 
 [[package]]
@@ -7932,6 +8235,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tinytemplate"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be4d6b5f19ff7664e8c98d03e2139cb510db9b0a60b55f8e8709b689d939b6bc"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "tinyvec"
 version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7962,6 +8275,7 @@ dependencies = [
  "io-uring",
  "libc",
  "mio",
+ "parking_lot",
  "pin-project-lite",
  "signal-hook-registry",
  "slab",
@@ -8203,7 +8517,7 @@ dependencies = [
  "futures-core",
  "futures-util",
  "pin-project-lite",
- "sync_wrapper",
+ "sync_wrapper 1.0.2",
  "tokio",
  "tower-layer",
  "tower-service",
@@ -8215,7 +8529,7 @@ version = "0.6.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "adc82fd73de2a9722ac5da747f12383d2bfdb93591ee6c58486e0097890f05f2"
 dependencies = [
- "bitflags",
+ "bitflags 2.9.3",
  "bytes",
  "futures-util",
  "http 1.3.1",
@@ -8476,7 +8790,7 @@ dependencies = [
  "futures",
  "http 1.3.1",
  "percent-encoding",
- "reqwest",
+ "reqwest 0.12.23",
  "reqwest-middleware",
  "rust-netrc",
  "rustc-hash",
@@ -8632,7 +8946,7 @@ dependencies = [
  "itertools 0.14.0",
  "jiff",
  "percent-encoding",
- "reqwest",
+ "reqwest 0.12.23",
  "reqwest-middleware",
  "reqwest-retry",
  "rkyv",
@@ -8673,7 +8987,7 @@ name = "uv-configuration"
 version = "0.0.1"
 source = "git+https://github.com/astral-sh/uv?tag=0.8.5#ce37286814dbb802c422f0926487cfab7aefd2b7"
 dependencies = [
- "bitflags",
+ "bitflags 2.9.3",
  "either",
  "fs-err",
  "rayon",
@@ -8761,7 +9075,7 @@ dependencies = [
  "futures",
  "nanoid",
  "owo-colors",
- "reqwest",
+ "reqwest 0.12.23",
  "reqwest-middleware",
  "rmp-serde",
  "rustc-hash",
@@ -8820,7 +9134,7 @@ version = "0.0.1"
 source = "git+https://github.com/astral-sh/uv?tag=0.8.5#ce37286814dbb802c422f0926487cfab7aefd2b7"
 dependencies = [
  "arcstr",
- "bitflags",
+ "bitflags 2.9.3",
  "fs-err",
  "http 1.3.1",
  "itertools 0.14.0",
@@ -8865,7 +9179,7 @@ dependencies = [
  "futures",
  "md-5",
  "rayon",
- "reqwest",
+ "reqwest 0.12.23",
  "rustc-hash",
  "sha2",
  "thiserror 2.0.16",
@@ -8913,7 +9227,7 @@ dependencies = [
  "cargo-util",
  "dashmap",
  "fs-err",
- "reqwest",
+ "reqwest 0.12.23",
  "reqwest-middleware",
  "thiserror 2.0.16",
  "tokio",
@@ -9204,7 +9518,7 @@ dependencies = [
  "owo-colors",
  "ref-cast",
  "regex",
- "reqwest",
+ "reqwest 0.12.23",
  "reqwest-middleware",
  "reqwest-retry",
  "rmp-serde",
@@ -9299,7 +9613,7 @@ source = "git+https://github.com/astral-sh/uv?tag=0.8.5#ce37286814dbb802c422f092
 dependencies = [
  "fs-err",
  "memchr",
- "reqwest",
+ "reqwest 0.12.23",
  "reqwest-middleware",
  "thiserror 2.0.16",
  "tracing",
@@ -10304,6 +10618,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "winreg"
+version = "0.50.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "524e57b2c537c0f9b1e69f1965311ec12182b4122e45035b1508cd24d2adadb1"
+dependencies = [
+ "cfg-if",
+ "windows-sys 0.48.0",
+]
+
+[[package]]
 name = "winsafe"
 version = "0.0.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10324,7 +10648,7 @@ version = "0.39.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6f42320e61fe2cfd34354ecb597f86f413484a798ba44a8ca1165c58d42da6c1"
 dependencies = [
- "bitflags",
+ "bitflags 2.9.3",
 ]
 
 [[package]]
