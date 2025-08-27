@@ -1,0 +1,20 @@
+[package]
+edition = "2021"
+name = "pixi_bench"
+version = "0.1.0"
+
+[dev-dependencies]
+criterion = { version = "3.0.5", package = "codspeed-criterion-compat" }
+reqwest = { version = "0.11", features = ["json"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tempfile = "3.0"
+tokio = { version = "1.0", features = ["full"] }
+uuid = { version = "1.0", features = ["v4"] }
+
+[[bench]]
+harness = false
+name = "install_packages"
+
+[profile.release]
+debug = true
