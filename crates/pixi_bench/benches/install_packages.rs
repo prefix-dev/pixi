@@ -7,7 +7,7 @@ use tempfile::TempDir;
 fn create_pixi_project(project_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
     use std::fs::File;
     use std::io::Write;
-    
+
     let pixi_toml = r#"[project]
 name = "benchmark-project"
 version = "0.1.0"
@@ -17,7 +17,7 @@ platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
 
 [dependencies]
 "#;
-    
+
     let mut file = File::create(project_dir.join("pixi.toml"))?;
     file.write_all(pixi_toml.as_bytes())?;
     Ok(())
@@ -50,63 +50,45 @@ fn pixi_add_package(package: &str) -> Duration {
         );
     }
 
+    println!(
+        "✅ pixi add {} completed in {:.2}s",
+        package,
+        duration.as_secs_f64()
+    );
     duration
 }
 
-fn bench_pixi_add_small(c: &mut Criterion) {
+fn bench_add_small(c: &mut Criterion) {
     // Check if pixi is installed
     if Command::new("pixi").arg("--version").output().is_err() {
         panic!("pixi is not installed or not in PATH. Install with: curl -fsSL https://pixi.sh/install.sh | bash");
     }
 
-    let mut group = c.benchmark_group("pixi_add_small");
-
-    // Small, fast packages
-    let small_packages = ["click", "pyyaml", "requests"];
-
-    for package in small_packages {
-        group.bench_function(package, |b| {
-            b.iter(|| black_box(pixi_add_package(black_box(package))))
-        });
-    }
-
-    group.finish();
+    c.bench_function("add_small", |b| {
+        b.iter(|| {
+            // Representative small package
+            black_box(pixi_add_package("click"))
+        })
+    });
 }
 
-fn bench_pixi_add_medium(c: &mut Criterion) {
-    let mut group = c.benchmark_group("pixi_add_medium");
-
-    // Medium complexity packages
-    let medium_packages = ["numpy", "pandas", "flask"];
-
-    for package in medium_packages {
-        group.bench_function(package, |b| {
-            b.iter(|| black_box(pixi_add_package(black_box(package))))
-        });
-    }
-
-    group.finish();
+fn bench_add_medium(c: &mut Criterion) {
+    c.bench_function("add_medium", |b| {
+        b.iter(|| {
+            // Representative medium package
+            black_box(pixi_add_package("numpy"))
+        })
+    });
 }
 
-fn bench_pixi_add_large(c: &mut Criterion) {
-    let mut group = c.benchmark_group("pixi_add_large");
-
-    // Large, complex packages
-    let large_packages = ["matplotlib", "scipy", "jupyter"];
-
-    for package in large_packages {
-        group.bench_function(package, |b| {
-            b.iter(|| black_box(pixi_add_package(black_box(package))))
-        });
-    }
-
-    group.finish();
+fn bench_add_large(c: &mut Criterion) {
+    c.bench_function("add_large", |b| {
+        b.iter(|| {
+            // Representative large package
+            black_box(pixi_add_package("matplotlib"))
+        })
+    });
 }
 
-criterion_group!(
-    benches,
-    bench_pixi_add_small,
-    bench_pixi_add_medium,
-    bench_pixi_add_large
-);
+criterion_group!(benches, bench_add_small, bench_add_medium, bench_add_large);
 criterion_main!(benches);
