@@ -59,7 +59,7 @@ pub struct Args {
 
     /// Install and build only this package and its dependencies
     #[arg(long)]
-    pub package: Option<String>,
+    pub only: Option<String>,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -95,7 +95,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let filter = InstallFilter::new()
         .skip_direct(args.skip.clone().unwrap_or_default())
         .skip_with_deps(args.skip_with_deps.clone().unwrap_or_default())
-        .target_package(args.package.clone());
+        .target_package(args.only.clone());
 
     // Update the prefixes by installing all packages
     let (lock_file, _) = get_update_lock_file_and_prefixes(

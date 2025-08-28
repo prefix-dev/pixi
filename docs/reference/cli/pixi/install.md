@@ -23,7 +23,7 @@ pixi install [OPTIONS]
 - <a id="arg---skip-with-deps" href="#arg---skip-with-deps">`--skip-with-deps <SKIP_WITH_DEPS>`</a>
 :  Skip a package and its entire dependency subtree. This performs a hard exclusion: the package and its dependencies are not installed unless reachable from another non-skipped root
 <br>May be provided more than once.
-- <a id="arg---package" href="#arg---package">`--package <PACKAGE>`</a>
+- <a id="arg---only" href="#arg---only">`--only <ONLY>`</a>
 :  Install and build only this package and its dependencies
 
 ## Config Options

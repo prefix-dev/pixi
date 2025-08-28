@@ -568,7 +568,7 @@ impl PixiControl {
                 all: false,
                 skip: None,
                 skip_with_deps: None,
-                package: None,
+                only: None,
             },
         }
     }
