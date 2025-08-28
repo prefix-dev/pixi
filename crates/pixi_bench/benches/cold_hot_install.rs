@@ -210,39 +210,6 @@ fn bench_warm_cache_large(c: &mut Criterion) {
     });
 }
 
-fn bench_add_small(c: &mut Criterion) {
-    let packages = ["numpy"];
-
-    c.bench_function("add_small", |b| {
-        b.iter(|| {
-            let duration_ns = pixi_add_packages_timed(&packages);
-            black_box(duration_ns)
-        })
-    });
-}
-
-fn bench_add_medium(c: &mut Criterion) {
-    let packages = ["numpy", "pandas", "requests"];
-
-    c.bench_function("add_medium", |b| {
-        b.iter(|| {
-            let duration_ns = pixi_add_packages_timed(&packages);
-            black_box(duration_ns)
-        })
-    });
-}
-
-fn bench_add_large(c: &mut Criterion) {
-    let packages = ["numpy", "pandas", "scipy", "matplotlib", "requests"];
-
-    c.bench_function("add_large", |b| {
-        b.iter(|| {
-            let duration_ns = pixi_add_packages_timed(&packages);
-            black_box(duration_ns)
-        })
-    });
-}
-
 criterion_group!(
     benches,
     bench_cold_cache_small,
@@ -251,8 +218,5 @@ criterion_group!(
     bench_warm_cache_small,
     bench_warm_cache_medium,
     bench_warm_cache_large,
-    bench_add_small,
-    bench_add_medium,
-    bench_add_large
 );
 criterion_main!(benches);
