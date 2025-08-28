@@ -13,7 +13,6 @@ use pixi_consts::consts;
 use std::collections::HashSet;
 use uv_cache::Cache;
 use uv_distribution_types::{InstalledDist, Name};
-use uv_pep508::PackageName;
 
 use crate::install_pypi::conversions::ConvertToUvDistError;
 
@@ -37,7 +36,7 @@ pub struct InstallPlanner {
     uv_cache: Cache,
     lock_file_dir: PathBuf,
     // Packages that should never be marked as extraneous
-    ignored_extraneous: HashSet<PackageName>,
+    ignored_extraneous: HashSet<uv_pep508::PackageName>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -78,7 +77,7 @@ impl InstallPlanner {
     /// during the extraneous/duplicate detection phase.
     pub fn with_ignored_extraneous<I>(mut self, names: I) -> Self
     where
-        I: IntoIterator<Item = PackageName>,
+        I: IntoIterator<Item = uv_pep508::PackageName>,
     {
         self.ignored_extraneous = names.into_iter().collect();
         self
