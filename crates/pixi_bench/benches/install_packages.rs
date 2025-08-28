@@ -25,7 +25,7 @@ platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
 }
 
 fn clear_pixi_cache() -> Result<(), Box<dyn std::error::Error>> {
-    println!("🧹 Clearing pixi cache...");
+    println!("Clearing pixi cache...");
 
     // Clear the global pixi cache
     let output = Command::new("pixi")
@@ -51,18 +51,18 @@ fn clear_pixi_cache() -> Result<(), Box<dyn std::error::Error>> {
     for cache_dir in &cache_dirs {
         let path = PathBuf::from(cache_dir);
         if path.exists() {
-            println!("🗑️ Removing cache directory: {:?}", path);
+            println!("Removing cache directory: {:?}", path);
             #[allow(clippy::disallowed_methods)]
             let _ = fs::remove_dir_all(&path);
         }
     }
 
-    println!("✅ Cache cleared");
+    println!("Cache cleared");
     Ok(())
 }
 
 fn warm_up_cache(packages: &[&str]) -> Result<(), Box<dyn std::error::Error>> {
-    println!("🔥 Warming up cache with packages: {:?}", packages);
+    println!("Warming up cache with packages: {:?}", packages);
 
     let temp_dir = TempDir::new()?;
     let project_path = temp_dir.path();
@@ -84,13 +84,13 @@ fn warm_up_cache(packages: &[&str]) -> Result<(), Box<dyn std::error::Error>> {
             String::from_utf8_lossy(&output.stderr)
         );
     } else {
-        println!("✅ Cache warmed up successfully");
+        println!("Cache warmed up successfully");
     }
 
     Ok(())
 }
 
-fn pixi_add_packages_timed(packages: &[&str]) -> Duration {
+fn pixi_add_packages_timed(packages: &[&str]) -> u64 {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let project_path = temp_dir.path();
 
@@ -103,7 +103,7 @@ fn pixi_add_packages_timed(packages: &[&str]) -> Duration {
         cmd.arg(package);
     }
 
-    println!("⏱️ Timing: pixi add {}", packages.join(" "));
+    println!("Timing: pixi add {}", packages.join(" "));
 
     let start = Instant::now();
     let output = cmd.output().expect("Failed to execute pixi add");
@@ -111,18 +111,20 @@ fn pixi_add_packages_timed(packages: &[&str]) -> Duration {
 
     if !output.status.success() {
         eprintln!(
-            "❌ pixi add failed: {}",
+            "pixi add failed: {}",
             String::from_utf8_lossy(&output.stderr)
         );
+        return 0;
     } else {
         println!(
-            "✅ Added {} packages in {:.2}s",
+            "Added {} packages in {:.2}s",
             packages.len(),
             duration.as_secs_f64()
         );
     }
 
-    duration
+    // Return nanoseconds as u64 for Codespeed
+    duration.as_nanos() as u64
 }
 
 // Cold cache benchmarks - clear cache before each run
@@ -130,71 +132,40 @@ fn bench_cold_cache_small(c: &mut Criterion) {
     let packages = ["numpy"];
 
     c.bench_function("cold_cache_small", |b| {
-        b.iter_custom(|iters| {
-            let mut total_duration = Duration::new(0, 0);
+        b.iter(|| {
+            clear_pixi_cache().expect("Failed to clear cache");
+            std::thread::sleep(Duration::from_secs(1));
 
-            for _i in 0..iters {
-                clear_pixi_cache().expect("Failed to clear cache");
-
-                // Small delay to ensure cache is fully cleared
-                std::thread::sleep(Duration::from_secs(1));
-
-                let duration = pixi_add_packages_timed(&packages);
-                total_duration += duration;
-            }
-
-            black_box(total_duration)
+            let duration_ns = pixi_add_packages_timed(&packages);
+            black_box(duration_ns)
         })
     });
 }
 
 fn bench_cold_cache_medium(c: &mut Criterion) {
-    let packages = ["numpy", "pandas", "requests", "click", "pyyaml"];
+    let packages = ["numpy", "pandas", "requests"];
 
     c.bench_function("cold_cache_medium", |b| {
-        b.iter_custom(|iters| {
-            let mut total_duration = Duration::new(0, 0);
+        b.iter(|| {
+            clear_pixi_cache().expect("Failed to clear cache");
+            std::thread::sleep(Duration::from_secs(1));
 
-            for _i in 0..iters {
-                clear_pixi_cache().expect("Failed to clear cache");
-                std::thread::sleep(Duration::from_secs(1));
-
-                let duration = pixi_add_packages_timed(&packages);
-                total_duration += duration;
-            }
-
-            black_box(total_duration)
+            let duration_ns = pixi_add_packages_timed(&packages);
+            black_box(duration_ns)
         })
     });
 }
 
 fn bench_cold_cache_large(c: &mut Criterion) {
-    let packages = [
-        "pytorch",
-        "scipy",
-        "scikit-learn",
-        "matplotlib",
-        "jupyter",
-        "bokeh",
-        "dask",
-        "xarray",
-        "opencv",
-        "pandas",
-    ];
+    let packages = ["numpy", "pandas", "scipy", "matplotlib", "requests"];
 
     c.bench_function("cold_cache_large", |b| {
-        b.iter_custom(|iters| {
-            let mut total_duration = Duration::new(0, 0);
+        b.iter(|| {
+            clear_pixi_cache().expect("Failed to clear cache");
+            std::thread::sleep(Duration::from_secs(2));
 
-            for _i in 0..iters {
-                clear_pixi_cache().expect("Failed to clear cache");
-                std::thread::sleep(Duration::from_secs(2)); // Longer delay for large packages
-
-                let duration = pixi_add_packages_timed(&packages);
-                total_duration += duration;
-            }
-
-            black_box(total_duration)
+            let duration_ns = pixi_add_packages_timed(&packages);
+            black_box(duration_ns)
         })
     });
 }
@@ -204,116 +175,72 @@ fn bench_warm_cache_small(c: &mut Criterion) {
     let packages = ["numpy"];
 
     c.bench_function("warm_cache_small", |b| {
-        b.iter_custom(|iters| {
-            let mut total_duration = Duration::new(0, 0);
+        b.iter(|| {
+            warm_up_cache(&packages).expect("Failed to warm up cache");
 
-            for _i in 0..iters {
-                // Warm up the cache first
-                warm_up_cache(&packages).expect("Failed to warm up cache");
-
-                let duration = pixi_add_packages_timed(&packages);
-                total_duration += duration;
-            }
-
-            black_box(total_duration)
+            let duration_ns = pixi_add_packages_timed(&packages);
+            black_box(duration_ns)
         })
     });
 }
 
 fn bench_warm_cache_medium(c: &mut Criterion) {
-    let packages = ["numpy", "pandas", "requests", "click", "pyyaml"];
+    let packages = ["numpy", "pandas", "requests"];
 
     c.bench_function("warm_cache_medium", |b| {
-        b.iter_custom(|iters| {
-            let mut total_duration = Duration::new(0, 0);
+        b.iter(|| {
+            warm_up_cache(&packages).expect("Failed to warm up cache");
 
-            for _i in 0..iters {
-                warm_up_cache(&packages).expect("Failed to warm up cache");
-
-                let duration = pixi_add_packages_timed(&packages);
-                total_duration += duration;
-            }
-
-            black_box(total_duration)
+            let duration_ns = pixi_add_packages_timed(&packages);
+            black_box(duration_ns)
         })
     });
 }
 
 fn bench_warm_cache_large(c: &mut Criterion) {
-    let packages = [
-        "pytorch",
-        "scipy",
-        "scikit-learn",
-        "matplotlib",
-        "jupyter",
-        "bokeh",
-        "dask",
-        "xarray",
-        "opencv",
-        "pandas",
-    ];
+    let packages = ["numpy", "pandas", "scipy", "matplotlib", "requests"];
 
     c.bench_function("warm_cache_large", |b| {
-        b.iter_custom(|iters| {
-            let mut total_duration = Duration::new(0, 0);
+        b.iter(|| {
+            warm_up_cache(&packages).expect("Failed to warm up cache");
 
-            for _i in 0..iters {
-                warm_up_cache(&packages).expect("Failed to warm up cache");
+            let duration_ns = pixi_add_packages_timed(&packages);
+            black_box(duration_ns)
+        })
+    });
+}
 
-                let duration = pixi_add_packages_timed(&packages);
-                total_duration += duration;
-            }
+fn bench_add_small(c: &mut Criterion) {
+    let packages = ["numpy"];
 
-            black_box(total_duration)
+    c.bench_function("add_small", |b| {
+        b.iter(|| {
+            let duration_ns = pixi_add_packages_timed(&packages);
+            black_box(duration_ns)
         })
     });
 }
 
 fn bench_add_medium(c: &mut Criterion) {
+    let packages = ["numpy", "pandas", "requests"];
+
     c.bench_function("add_medium", |b| {
         b.iter(|| {
-            // Test multiple medium packages and average the time
-            let packages = ["numpy", "pandas", "flask"];
-            let mut total_duration = Duration::new(0, 0);
-
-            for package in packages {
-                let duration = pixi_add_package(black_box(package));
-                total_duration += duration;
-            }
-
-            black_box(total_duration / packages.len() as u32)
+            let duration_ns = pixi_add_packages_timed(&packages);
+            black_box(duration_ns)
         })
     });
 }
 
-fn pixi_add_package(package: &str) -> Duration {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let project_path = temp_dir.path();
+fn bench_add_large(c: &mut Criterion) {
+    let packages = ["numpy", "pandas", "scipy", "matplotlib", "requests"];
 
-    // Create pixi project
-    create_pixi_project(project_path).expect("Failed to create pixi project");
-
-    // Time the pixi add command
-    let start = Instant::now();
-
-    let output = Command::new("pixi")
-        .arg("add")
-        .arg(package)
-        .current_dir(project_path)
-        .output()
-        .expect("Failed to execute pixi add");
-
-    let duration = start.elapsed();
-
-    if !output.status.success() {
-        eprintln!(
-            "Warning: pixi add {} failed: {}",
-            package,
-            String::from_utf8_lossy(&output.stderr)
-        );
-    }
-
-    duration
+    c.bench_function("add_large", |b| {
+        b.iter(|| {
+            let duration_ns = pixi_add_packages_timed(&packages);
+            black_box(duration_ns)
+        })
+    });
 }
 
 criterion_group!(
@@ -324,6 +251,8 @@ criterion_group!(
     bench_warm_cache_small,
     bench_warm_cache_medium,
     bench_warm_cache_large,
-    bench_add_medium
+    bench_add_small,
+    bench_add_medium,
+    bench_add_large
 );
 criterion_main!(benches);
