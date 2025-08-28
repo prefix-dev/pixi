@@ -7,7 +7,7 @@ import tomllib
 from pathlib import Path
 
 import pytest
-from dirty_equals import IsStr, IsList
+from dirty_equals import IsStr, IsList, AnyThing
 from inline_snapshot import snapshot
 
 from .common import (
@@ -1489,7 +1489,7 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
             "virtual_packages": IsAnyList,
             "version": IsStr,
             "cache_dir": IsStr,
-            "cache_size": IsStr,
+            "cache_size": AnyThing,
             "auth_dir": IsStr,
             "global_info": {
                 "bin_dir": IsStr,

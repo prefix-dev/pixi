@@ -125,7 +125,7 @@ packages:
   - python
   license: MIT
   input:
-    hash: cbfd3f78b3a0171befaa5d56f67f0c365b2ac9d7f0518fe7c080bd239fa6f59a
+    hash: 1101422a995a18b9c73ca5617a726f185782e5329c2739d754b921baaf16b7ca
     globs:
     - recipe.yaml
 - conda: https://prefix.dev/conda-forge/linux-64/bzip2-1.0.8-h4bc722e_7.conda

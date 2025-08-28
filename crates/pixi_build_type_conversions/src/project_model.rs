@@ -173,7 +173,7 @@ pub fn to_project_model_v1(
 ) -> Result<pbt::ProjectModelV1, SpecConversionError> {
     let project = pbt::ProjectModelV1 {
         name: manifest.package.name.clone(),
-        version: Some(manifest.package.version.clone()),
+        version: manifest.package.version.clone(),
         description: manifest.package.description.clone(),
         authors: manifest.package.authors.clone(),
         license: manifest.package.license.clone(),
