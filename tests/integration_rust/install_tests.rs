@@ -7,7 +7,6 @@ use std::{
 };
 
 use fs_err::tokio as tokio_fs;
-use insta;
 use pixi_cli::run::{self, Args};
 use pixi_cli::{
     LockFileUsageConfig,
