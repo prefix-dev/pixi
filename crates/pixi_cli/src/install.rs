@@ -62,6 +62,8 @@ pub struct Args {
     pub only: Option<String>,
 }
 
+const SKIP_CUTOFF: usize = 5;
+
 pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.project_config.workspace_locator_start())
@@ -144,32 +146,77 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .unwrap()
     }
 
-    if args.skip.is_some() || args.skip_with_deps.is_some() {
+    if args.skip.is_some() || args.skip_with_deps.is_some() || args.only.is_some() {
         let mut all_skipped_packages = std::collections::HashSet::new();
+        let mut total_retained_count: usize = 0;
         for env in &environments {
-            let skipped_packages = lock_file.get_skipped_package_names(env, &filter)?;
-            all_skipped_packages.extend(skipped_packages);
+            let names = lock_file.get_skipped_package_names(env, &filter)?;
+            total_retained_count += names.retained.len();
+            all_skipped_packages.extend(names.ignored);
+        }
+
+        // When only is set, also print the number of packages that will be installed
+        if args.only.is_some() {
+            write!(
+                &mut message,
+                ", including {} packages",
+                total_retained_count
+            )
+            .unwrap();
+        }
+
+        // Create set of unmatched packages
+        let (matched, unmatched): (Vec<_>, Vec<_>) = args
+            .skip
+            .iter()
+            .flatten()
+            .chain(args.skip_with_deps.iter().flatten())
+            .partition(|name| all_skipped_packages.contains(*name));
+
+        if unmatched.len() > 0 {
+            tracing::warn!(
+                "The skipped arg(s) '{}' did not match any packages in the lock file",
+                unmatched.into_iter().join(", ")
+            );
         }
 
         if !all_skipped_packages.is_empty() {
             let mut skipped_packages_vec: Vec<_> = all_skipped_packages.into_iter().collect();
             skipped_packages_vec.sort();
-            write!(
-                &mut message,
-                " excluding '{}'",
-                skipped_packages_vec.join("', '")
-            )
-            .unwrap();
-        } else {
-            tracing::warn!(
-                "No packages were skipped. '{}' did not match any packages in the lockfile.",
-                args.skip
-                    .into_iter()
-                    .flatten()
-                    .chain(args.skip_with_deps.into_iter().flatten())
-                    .collect_vec()
-                    .join(", ")
-            );
+            let num_skipped_packages = skipped_packages_vec.len();
+
+            if num_skipped_packages > 0 && num_skipped_packages < SKIP_CUTOFF {
+                write!(
+                    &mut message,
+                    " excluding '{}'",
+                    skipped_packages_vec.join("', '")
+                )
+                .unwrap();
+            } else if num_skipped_packages > 0 {
+                let num_matched = matched.len();
+                if num_matched > 0 {
+                    write!(
+                        &mut message,
+                        " excluding '{}' and {} other packages",
+                        matched.into_iter().join("', '"),
+                        skipped_packages_vec.len() - total_retained_count
+                    )
+                    .unwrap()
+                } else {
+                    write!(
+                        &mut message,
+                        " excluding {} other packages",
+                        skipped_packages_vec.len() - total_retained_count
+                    )
+                    .unwrap()
+                }
+            } else {
+                write!(
+                    &mut message,
+                    " no packages were skipped (check if cli args were correct)"
+                )
+                .unwrap();
+            }
         }
     }
 

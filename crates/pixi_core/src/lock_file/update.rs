@@ -681,43 +681,49 @@ impl<'p> LockFileDerivedData<'p> {
             .map(|(prefix, python_status)| (prefix.clone(), python_status.clone()))
     }
 
-    /// Returns a list of matching pypi or conda package names in the lock file
-    /// that are also present in the `skipped` list.
+    /// Returns the retained and ignored package names after applying the
+    /// install filter (skips and/or target).
     pub fn get_skipped_package_names(
         &self,
         environment: &Environment<'p>,
         filter: &InstallFilter,
-    ) -> miette::Result<Vec<String>> {
+    ) -> miette::Result<PackageFilterNames> {
         let platform = environment.best_platform();
         let locked_env = self.locked_env(environment)?;
 
-        // Get all package names
-        let all_package_names: HashSet<String> = locked_env
-            .packages(platform)
-            .into_iter()
-            .flat_map(|p| p.map(|p| p.name().to_string()))
-            .collect();
-
-        // Determine kept packages using the full install filter
+        // Determine kept/ignored packages using the full install filter
         let subset = InstallSubset::new(
             &filter.skip_with_deps,
             &filter.skip_direct,
             filter.target_package.as_deref(),
         );
-        // Which packages are kept
-        let kept = subset.filter(locked_env.packages(platform));
-        let kept_package_names: HashSet<String> = kept
+        let filtered = subset.filter(locked_env.packages(platform));
+
+        // Map to names, dedupe and sort for stable output.
+        let retained = filtered
             .install
             .into_iter()
             .map(|p| p.name().to_string())
+            .unique()
+            .sorted()
+            .collect();
+        let ignored = filtered
+            .ignore
+            .into_iter()
+            .map(|p| p.name().to_string())
+            .unique()
+            .sorted()
             .collect();
 
-        Ok(all_package_names
-            .difference(&kept_package_names)
-            .cloned()
-            .sorted()
-            .collect())
+        Ok(PackageFilterNames { retained, ignored })
     }
+}
+
+/// The result of applying an InstallFilter over the lockfile for a given environment,
+/// expressed as just package names.
+pub struct PackageFilterNames {
+    pub retained: Vec<String>,
+    pub ignored: Vec<String>,
 }
 
 fn locked_packages_to_pixi_records(
