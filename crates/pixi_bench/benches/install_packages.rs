@@ -269,6 +269,53 @@ fn bench_warm_cache_large(c: &mut Criterion) {
     });
 }
 
+fn bench_add_medium(c: &mut Criterion) {
+    c.bench_function("add_medium", |b| {
+        b.iter(|| {
+            // Test multiple medium packages and average the time
+            let packages = ["numpy", "pandas", "flask"];
+            let mut total_duration = Duration::new(0, 0);
+
+            for package in packages {
+                let duration = pixi_add_package(black_box(package));
+                total_duration += duration;
+            }
+
+            black_box(total_duration / packages.len() as u32)
+        })
+    });
+}
+
+fn pixi_add_package(package: &str) -> Duration {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+
+    // Create pixi project
+    create_pixi_project(project_path).expect("Failed to create pixi project");
+
+    // Time the pixi add command
+    let start = Instant::now();
+
+    let output = Command::new("pixi")
+        .arg("add")
+        .arg(package)
+        .current_dir(project_path)
+        .output()
+        .expect("Failed to execute pixi add");
+
+    let duration = start.elapsed();
+
+    if !output.status.success() {
+        eprintln!(
+            "Warning: pixi add {} failed: {}",
+            package,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    duration
+}
+
 criterion_group!(
     benches,
     bench_cold_cache_small,
@@ -276,6 +323,7 @@ criterion_group!(
     bench_cold_cache_large,
     bench_warm_cache_small,
     bench_warm_cache_medium,
-    bench_warm_cache_large
+    bench_warm_cache_large,
+    bench_add_medium
 );
 criterion_main!(benches);
