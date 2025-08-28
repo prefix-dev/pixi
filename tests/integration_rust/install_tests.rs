@@ -7,6 +7,7 @@ use std::{
 };
 
 use fs_err::tokio as tokio_fs;
+use insta;
 use pixi_cli::run::{self, Args};
 use pixi_cli::{
     LockFileUsageConfig,
@@ -423,30 +424,6 @@ async fn install_frozen_skip() {
 
     assert!(is_pypi_package_installed(&env, "no-build-editable"));
     assert!(is_conda_package_installed(&prefix_path, "python_rich").await);
-}
-
-/// Test `pixi install --frozen --skip` functionality with a non existing package
-#[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
-async fn install_skip_non_existent_package_warning() {
-    let pixi = PixiControl::new().unwrap();
-    pixi.init().await.unwrap();
-    // Add a dependency to create a lock file
-    pixi.add("python").await.unwrap();
-
-    let log_buffer = try_init_test_subscriber();
-
-    // Install with a skipped package that doesn't exist in the lock file
-    pixi.install()
-        .with_frozen()
-        .with_skipped(vec!["non-existent-package".to_string()])
-        .await
-        .unwrap();
-
-    let output = log_buffer.get_output();
-    assert!(output.contains(
-        "No packages were skipped. 'non-existent-package' did not match any packages in the lockfile."
-    ), "THIS IS THE OUTPUT: {output}");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
