@@ -14,7 +14,7 @@ uuid = { version = "1.0", features = ["v4"] }
 
 [[bench]]
 harness = false
-name = "install_packages"
+name = "cold_hot_install"
 
 [profile.release]
 debug = true
