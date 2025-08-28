@@ -1,4 +1,4 @@
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -143,7 +143,7 @@ fn bench_cold_cache_small(c: &mut Criterion) {
                 total_duration += duration;
             }
 
-            total_duration
+            black_box(total_duration)
         })
     });
 }
@@ -163,7 +163,7 @@ fn bench_cold_cache_medium(c: &mut Criterion) {
                 total_duration += duration;
             }
 
-            total_duration
+            black_box(total_duration)
         })
     });
 }
@@ -194,7 +194,7 @@ fn bench_cold_cache_large(c: &mut Criterion) {
                 total_duration += duration;
             }
 
-            total_duration
+            black_box(total_duration)
         })
     });
 }
@@ -215,7 +215,7 @@ fn bench_warm_cache_small(c: &mut Criterion) {
                 total_duration += duration;
             }
 
-            total_duration
+            black_box(total_duration)
         })
     });
 }
@@ -234,7 +234,7 @@ fn bench_warm_cache_medium(c: &mut Criterion) {
                 total_duration += duration;
             }
 
-            total_duration
+            black_box(total_duration)
         })
     });
 }
@@ -264,7 +264,7 @@ fn bench_warm_cache_large(c: &mut Criterion) {
                 total_duration += duration;
             }
 
-            total_duration
+            black_box(total_duration)
         })
     });
 }
