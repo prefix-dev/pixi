@@ -37,7 +37,6 @@ use crate::common::{
     builders::{
         HasDependencyConfig, HasLockFileUpdateConfig, HasNoInstallConfig, string_from_iter,
     },
-    logging::try_init_test_subscriber,
     package_database::{Package, PackageDatabase},
 };
 use crate::setup_tracing;
