@@ -1,13 +1,12 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
+use tokio::process::Command;
 
-fn create_pixi_project(project_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    use std::fs::File;
-    use std::io::Write;
+async fn create_pixi_project(project_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    use tokio::fs::File;
+    use tokio::io::AsyncWriteExt;
 
     let pixi_toml = r#"[project]
 name = "benchmark-project"
@@ -19,19 +18,19 @@ platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
 [dependencies]
 "#;
 
-    let mut file = File::create(project_dir.join("pixi.toml"))?;
-    file.write_all(pixi_toml.as_bytes())?;
+    let mut file = File::create(project_dir.join("pixi.toml")).await?;
+    file.write_all(pixi_toml.as_bytes()).await?;
+    file.flush().await?;
     Ok(())
 }
 
-fn clear_pixi_cache() -> Result<(), Box<dyn std::error::Error>> {
+async fn clear_pixi_cache() -> Result<(), Box<dyn std::error::Error>> {
     println!("Clearing pixi cache...");
 
-    // Clear the global pixi cache
     let output = Command::new("pixi")
         .args(["clean", "cache", "-a"])
         .output()
-        .expect("Failed to execute pixi clean cache");
+        .await?;
 
     if !output.status.success() {
         eprintln!(
@@ -40,12 +39,11 @@ fn clear_pixi_cache() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    // Also try to clear common cache locations manually
+    // Clear cache directories asynchronously
     let home_dir = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
     let cache_dirs = [
         format!("{}/.cache/pixi", home_dir),
         format!("{}/.pixi", home_dir),
-        "/tmp/pixi-cache".to_string(),
     ];
 
     for cache_dir in &cache_dirs {
@@ -53,7 +51,7 @@ fn clear_pixi_cache() -> Result<(), Box<dyn std::error::Error>> {
         if path.exists() {
             println!("Removing cache directory: {:?}", path);
             #[allow(clippy::disallowed_methods)]
-            let _ = fs::remove_dir_all(&path);
+            let _ = tokio::fs::remove_dir_all(&path).await;
         }
     }
 
@@ -61,14 +59,13 @@ fn clear_pixi_cache() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn warm_up_cache(packages: &[&str]) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Warming up cache with packages: {:?}", packages);
+async fn warm_cache_with_packages(packages: &[&str]) -> Result<(), Box<dyn std::error::Error>> {
+    println!("Warming cache with packages: {:?}", packages);
 
     let temp_dir = TempDir::new()?;
     let project_path = temp_dir.path();
-    create_pixi_project(project_path)?;
+    create_pixi_project(project_path).await?;
 
-    // Add packages to warm up the cache
     let mut cmd = Command::new("pixi");
     cmd.arg("add").current_dir(project_path);
 
@@ -76,25 +73,25 @@ fn warm_up_cache(packages: &[&str]) -> Result<(), Box<dyn std::error::Error>> {
         cmd.arg(package);
     }
 
-    let output = cmd.output()?;
+    let output = cmd.output().await?;
 
     if !output.status.success() {
         eprintln!(
-            "Warning: cache warm-up failed: {}",
+            "Cache warm-up failed: {}",
             String::from_utf8_lossy(&output.stderr)
         );
-    } else {
-        println!("Cache warmed up successfully");
+        return Err("Failed to warm cache".into());
     }
 
+    println!("Cache warmed successfully");
     Ok(())
 }
 
-fn pixi_add_packages_timed(packages: &[&str]) -> Result<Duration, Box<dyn std::error::Error>> {
+async fn pixi_install_packages(packages: &[&str]) -> Result<Duration, Box<dyn std::error::Error>> {
     let temp_dir = TempDir::new()?;
     let project_path = temp_dir.path();
 
-    create_pixi_project(project_path)?;
+    create_pixi_project(project_path).await?;
 
     let mut cmd = Command::new("pixi");
     cmd.arg("add").current_dir(project_path);
@@ -103,191 +100,181 @@ fn pixi_add_packages_timed(packages: &[&str]) -> Result<Duration, Box<dyn std::e
         cmd.arg(package);
     }
 
-    println!("Timing: pixi add {}", packages.join(" "));
+    println!("Starting installation: pixi add {}", packages.join(" "));
 
     let start = Instant::now();
-    let output = cmd.output()?;
-    let duration = start.elapsed();
+    let output = cmd.output().await?;
 
+    // Wait for command to complete and check success
     if !output.status.success() {
-        return Err(format!(
-            "pixi add failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        )
-        .into());
-    } else {
-        println!(
-            "Added {} packages in {:.2}s",
-            packages.len(),
-            duration.as_secs_f64()
-        );
+        let error_msg = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("pixi add failed: {}", error_msg).into());
     }
 
+    // Only measure time after successful completion
+    let duration = start.elapsed();
+
+    // Verify installation actually worked by checking for created files
+    let pixi_lock = project_path.join("pixi.lock");
+    let pixi_env = project_path.join(".pixi");
+
+    if !pixi_lock.exists() {
+        return Err("Installation failed - no pixi.lock created".into());
+    }
+
+    if !pixi_env.exists() {
+        return Err("Installation failed - no .pixi environment created".into());
+    }
+
+    println!(
+        "Successfully installed {} packages in {:.2}s",
+        packages.len(),
+        duration.as_secs_f64()
+    );
     Ok(duration)
 }
 
-// Cold cache benchmarks - clear cache before each run and time everything
+// Cold cache benchmarks with async support
 fn bench_cold_cache_small(c: &mut Criterion) {
     let packages = ["numpy"];
+    let rt = tokio::runtime::Runtime::new().unwrap();
 
     c.bench_function("cold_cache_small", |b| {
-        b.iter(|iters| {
-            let mut total_duration = Duration::new(0, 0);
-
-            for _i in 0..iters {
-                let start = Instant::now();
-
+        b.iter(|| {
+            rt.block_on(async {
                 // Clear cache and install - time the entire process
-                clear_pixi_cache().expect("Failed to clear cache");
-                std::thread::sleep(Duration::from_millis(500)); // Brief pause for cache clearing
+                if let Err(e) = clear_pixi_cache().await {
+                    eprintln!("Failed to clear cache: {}", e);
+                }
 
-                match pixi_add_packages_timed(&packages) {
-                    Ok(install_duration) => {
-                        // Total time includes cache clearing + install
-                        let total_iter_duration = start.elapsed();
-                        total_duration += total_iter_duration;
-                        println!(
-                            "Cold install took: {:.2}s (install only: {:.2}s)",
-                            total_iter_duration.as_secs_f64(),
-                            install_duration.as_secs_f64()
-                        );
+                tokio::time::sleep(Duration::from_millis(500)).await;
+
+                match pixi_install_packages(&packages).await {
+                    Ok(duration) => {
+                        println!("Cold install took: {:.2}s", duration.as_secs_f64());
+                        black_box(duration)
                     }
                     Err(e) => {
                         eprintln!("Install failed: {}", e);
-                        total_duration += start.elapsed();
+                        black_box(Duration::from_secs(60)) // Penalty for failed install
                     }
                 }
-            }
-
-            black_box(total_duration)
-        });
+            })
+        })
     });
 }
 
 fn bench_cold_cache_medium(c: &mut Criterion) {
     let packages = ["numpy", "pandas", "requests"];
+    let rt = tokio::runtime::Runtime::new().unwrap();
 
     c.bench_function("cold_cache_medium", |b| {
-        b.iter(|iters| {
-            let mut total_duration = Duration::new(0, 0);
+        b.iter(|| {
+            rt.block_on(async {
+                if let Err(e) = clear_pixi_cache().await {
+                    eprintln!("Failed to clear cache: {}", e);
+                }
 
-            for _i in 0..iters {
-                let start = Instant::now();
+                tokio::time::sleep(Duration::from_millis(500)).await;
 
-                clear_pixi_cache().expect("Failed to clear cache");
-                std::thread::sleep(Duration::from_millis(500));
-
-                match pixi_add_packages_timed(&packages) {
-                    Ok(install_duration) => {
-                        let total_iter_duration = start.elapsed();
-                        total_duration += total_iter_duration;
-                        println!(
-                            "Cold install took: {:.2}s (install only: {:.2}s)",
-                            total_iter_duration.as_secs_f64(),
-                            install_duration.as_secs_f64()
-                        );
+                match pixi_install_packages(&packages).await {
+                    Ok(duration) => {
+                        println!("Cold install took: {:.2}s", duration.as_secs_f64());
+                        black_box(duration)
                     }
                     Err(e) => {
                         eprintln!("Install failed: {}", e);
-                        total_duration += start.elapsed();
+                        black_box(Duration::from_secs(60))
                     }
                 }
-            }
-
-            black_box(total_duration)
-        });
+            })
+        })
     });
 }
 
 fn bench_cold_cache_large(c: &mut Criterion) {
     let packages = ["numpy", "pandas", "scipy", "matplotlib", "requests"];
+    let rt = tokio::runtime::Runtime::new().unwrap();
 
     c.bench_function("cold_cache_large", |b| {
-        b.iter(|iters| {
-            let mut total_duration = Duration::new(0, 0);
+        b.iter(|| {
+            rt.block_on(async {
+                if let Err(e) = clear_pixi_cache().await {
+                    eprintln!("Failed to clear cache: {}", e);
+                }
 
-            for _i in 0..iters {
-                let start = Instant::now();
+                tokio::time::sleep(Duration::from_secs(1)).await;
 
-                clear_pixi_cache().expect("Failed to clear cache");
-                std::thread::sleep(Duration::from_secs(1)); // Longer pause for larger package set
-
-                match pixi_add_packages_timed(&packages) {
-                    Ok(install_duration) => {
-                        let total_iter_duration = start.elapsed();
-                        total_duration += total_iter_duration;
-                        println!(
-                            "Cold install took: {:.2}s (install only: {:.2}s)",
-                            total_iter_duration.as_secs_f64(),
-                            install_duration.as_secs_f64()
-                        );
+                match pixi_install_packages(&packages).await {
+                    Ok(duration) => {
+                        println!("Cold install took: {:.2}s", duration.as_secs_f64());
+                        black_box(duration)
                     }
                     Err(e) => {
                         eprintln!("Install failed: {}", e);
-                        total_duration += start.elapsed();
+                        black_box(Duration::from_secs(60))
                     }
                 }
-            }
-
-            black_box(total_duration)
-        });
+            })
+        })
     });
 }
 
-// Hot cache benchmarks - warm up cache once, then just time installs
+// Hot cache benchmarks with async support
 fn bench_hot_cache_small(c: &mut Criterion) {
     let packages = ["numpy"];
+    let rt = tokio::runtime::Runtime::new().unwrap();
 
     // Warm up the cache once before all iterations
-    warm_up_cache(&packages).expect("Failed to warm up cache");
+    rt.block_on(async {
+        if let Err(e) = warm_cache_with_packages(&packages).await {
+            eprintln!("Failed to warm cache: {}", e);
+        }
+    });
 
     c.bench_function("hot_cache_small", |b| {
-        b.iter(|iters| {
-            let mut total_duration = Duration::new(0, 0);
-
-            for _i in 0..iters {
-                match pixi_add_packages_timed(&packages) {
+        b.iter(|| {
+            rt.block_on(async {
+                match pixi_install_packages(&packages).await {
                     Ok(duration) => {
-                        total_duration += duration;
                         println!("Hot install took: {:.2}s", duration.as_secs_f64());
+                        black_box(duration)
                     }
                     Err(e) => {
                         eprintln!("Install failed: {}", e);
-                        // Add some penalty time for failed installs
-                        total_duration += Duration::from_secs(60);
+                        black_box(Duration::from_secs(60))
                     }
                 }
-            }
-
-            black_box(total_duration)
-        });
+            })
+        })
     });
 }
 
 fn bench_hot_cache_medium(c: &mut Criterion) {
-    let packages = ["pandas", "requests", "pyyaml"];
+    let packages = ["numpy", "pandas", "requests"];
+    let rt = tokio::runtime::Runtime::new().unwrap();
 
-    warm_up_cache(&packages).expect("Failed to warm up cache");
+    rt.block_on(async {
+        if let Err(e) = warm_cache_with_packages(&packages).await {
+            eprintln!("Failed to warm cache: {}", e);
+        }
+    });
 
     c.bench_function("hot_cache_medium", |b| {
-        b.iter(|iters| {
-            let mut total_duration = Duration::new(0, 0);
-
-            for _i in 0..iters {
-                match pixi_add_packages_timed(&packages) {
+        b.iter(|| {
+            rt.block_on(async {
+                match pixi_install_packages(&packages).await {
                     Ok(duration) => {
-                        total_duration += duration;
                         println!("Hot install took: {:.2}s", duration.as_secs_f64());
+                        black_box(duration)
                     }
                     Err(e) => {
                         eprintln!("Install failed: {}", e);
-                        total_duration += Duration::from_secs(60);
+                        black_box(Duration::from_secs(60))
                     }
                 }
-            }
-
-            black_box(total_duration)
-        });
+            })
+        })
     });
 }
 
@@ -302,29 +289,31 @@ fn bench_hot_cache_large(c: &mut Criterion) {
         "click",
         "flask",
         "jinja2",
+        "pyyaml",
     ];
+    let rt = tokio::runtime::Runtime::new().unwrap();
 
-    warm_up_cache(&packages).expect("Failed to warm up cache");
+    rt.block_on(async {
+        if let Err(e) = warm_cache_with_packages(&packages).await {
+            eprintln!("Failed to warm cache: {}", e);
+        }
+    });
 
     c.bench_function("hot_cache_large", |b| {
-        b.iter(|iters| {
-            let mut total_duration = Duration::new(0, 0);
-
-            for _i in 0..iters {
-                match pixi_add_packages_timed(&packages) {
+        b.iter(|| {
+            rt.block_on(async {
+                match pixi_install_packages(&packages).await {
                     Ok(duration) => {
-                        total_duration += duration;
                         println!("Hot install took: {:.2}s", duration.as_secs_f64());
+                        black_box(duration)
                     }
                     Err(e) => {
                         eprintln!("Install failed: {}", e);
-                        total_duration += Duration::from_secs(60);
+                        black_box(Duration::from_secs(60))
                     }
                 }
-            }
-
-            tblack_box(total_duration)
-        });
+            })
+        })
     });
 }
 

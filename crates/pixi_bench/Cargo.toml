@@ -16,9 +16,5 @@ uuid = { version = "1.0", features = ["v4"] }
 harness = false
 name = "cold_hot_install"
 
-[[bench]]
-harness = false
-name = "lockfile_performance"
-
 [profile.release]
 debug = true
