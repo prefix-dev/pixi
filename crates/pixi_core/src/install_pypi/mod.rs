@@ -136,6 +136,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
 
     /// Configure package names that should never be treated as extraneous
     /// in the PyPI installation planning.
+    #[allow(dead_code)]
     pub fn with_ignored_extraneous<I>(mut self, names: I) -> Self
     where
         I: IntoIterator<Item = PackageName>,
