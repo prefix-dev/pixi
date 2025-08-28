@@ -292,16 +292,8 @@ fn test_installed_one_none_required() {
 #[test]
 fn test_ignored_packages_not_extraneous() {
     let site_packages = MockedSitePackages::new()
-        .add_registry(
-            "aiofiles",
-            "0.6.0",
-            InstalledDistOptions::default(),
-        )
-        .add_registry(
-            "requests",
-            "2.31.0",
-            InstalledDistOptions::default(),
-        );
+        .add_registry("aiofiles", "0.6.0", InstalledDistOptions::default())
+        .add_registry("requests", "2.31.0", InstalledDistOptions::default());
     let required = RequiredPackages::new();
 
     // Build a planner that ignores `aiofiles` for extraneous detection; `requests`
