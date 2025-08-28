@@ -90,11 +90,11 @@ fn warm_up_cache(packages: &[&str]) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn pixi_add_packages_timed(packages: &[&str]) -> u64 {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+fn pixi_add_packages_timed(packages: &[&str]) -> Result<Duration, Box<dyn std::error::Error>> {
+    let temp_dir = TempDir::new()?;
     let project_path = temp_dir.path();
 
-    create_pixi_project(project_path).expect("Failed to create pixi project");
+    create_pixi_project(project_path)?;
 
     let mut cmd = Command::new("pixi");
     cmd.arg("add").current_dir(project_path);
@@ -106,15 +106,15 @@ fn pixi_add_packages_timed(packages: &[&str]) -> u64 {
     println!("Timing: pixi add {}", packages.join(" "));
 
     let start = Instant::now();
-    let output = cmd.output().expect("Failed to execute pixi add");
+    let output = cmd.output()?;
     let duration = start.elapsed();
 
     if !output.status.success() {
-        eprintln!(
+        return Err(format!(
             "pixi add failed: {}",
             String::from_utf8_lossy(&output.stderr)
-        );
-        return 0;
+        )
+        .into());
     } else {
         println!(
             "Added {} packages in {:.2}s",
@@ -123,22 +123,44 @@ fn pixi_add_packages_timed(packages: &[&str]) -> u64 {
         );
     }
 
-    // Return nanoseconds as u64 for Codespeed
-    duration.as_nanos() as u64
+    Ok(duration)
 }
 
-// Cold cache benchmarks - clear cache before each run
+// Cold cache benchmarks - clear cache before each run and time everything
 fn bench_cold_cache_small(c: &mut Criterion) {
     let packages = ["numpy"];
 
     c.bench_function("cold_cache_small", |b| {
-        b.iter(|| {
-            clear_pixi_cache().expect("Failed to clear cache");
-            std::thread::sleep(Duration::from_secs(1));
+        b.iter(|iters| {
+            let mut total_duration = Duration::new(0, 0);
 
-            let duration_ns = pixi_add_packages_timed(&packages);
-            black_box(duration_ns)
-        })
+            for _i in 0..iters {
+                let start = Instant::now();
+
+                // Clear cache and install - time the entire process
+                clear_pixi_cache().expect("Failed to clear cache");
+                std::thread::sleep(Duration::from_millis(500)); // Brief pause for cache clearing
+
+                match pixi_add_packages_timed(&packages) {
+                    Ok(install_duration) => {
+                        // Total time includes cache clearing + install
+                        let total_iter_duration = start.elapsed();
+                        total_duration += total_iter_duration;
+                        println!(
+                            "Cold install took: {:.2}s (install only: {:.2}s)",
+                            total_iter_duration.as_secs_f64(),
+                            install_duration.as_secs_f64()
+                        );
+                    }
+                    Err(e) => {
+                        eprintln!("Install failed: {}", e);
+                        total_duration += start.elapsed();
+                    }
+                }
+            }
+
+            black_box(total_duration)
+        });
     });
 }
 
@@ -146,13 +168,34 @@ fn bench_cold_cache_medium(c: &mut Criterion) {
     let packages = ["numpy", "pandas", "requests"];
 
     c.bench_function("cold_cache_medium", |b| {
-        b.iter(|| {
-            clear_pixi_cache().expect("Failed to clear cache");
-            std::thread::sleep(Duration::from_secs(1));
+        b.iter(|iters| {
+            let mut total_duration = Duration::new(0, 0);
 
-            let duration_ns = pixi_add_packages_timed(&packages);
-            black_box(duration_ns)
-        })
+            for _i in 0..iters {
+                let start = Instant::now();
+
+                clear_pixi_cache().expect("Failed to clear cache");
+                std::thread::sleep(Duration::from_millis(500));
+
+                match pixi_add_packages_timed(&packages) {
+                    Ok(install_duration) => {
+                        let total_iter_duration = start.elapsed();
+                        total_duration += total_iter_duration;
+                        println!(
+                            "Cold install took: {:.2}s (install only: {:.2}s)",
+                            total_iter_duration.as_secs_f64(),
+                            install_duration.as_secs_f64()
+                        );
+                    }
+                    Err(e) => {
+                        eprintln!("Install failed: {}", e);
+                        total_duration += start.elapsed();
+                    }
+                }
+            }
+
+            black_box(total_duration)
+        });
     });
 }
 
@@ -160,53 +203,128 @@ fn bench_cold_cache_large(c: &mut Criterion) {
     let packages = ["numpy", "pandas", "scipy", "matplotlib", "requests"];
 
     c.bench_function("cold_cache_large", |b| {
-        b.iter(|| {
-            clear_pixi_cache().expect("Failed to clear cache");
-            std::thread::sleep(Duration::from_secs(2));
+        b.iter(|iters| {
+            let mut total_duration = Duration::new(0, 0);
 
-            let duration_ns = pixi_add_packages_timed(&packages);
-            black_box(duration_ns)
-        })
+            for _i in 0..iters {
+                let start = Instant::now();
+
+                clear_pixi_cache().expect("Failed to clear cache");
+                std::thread::sleep(Duration::from_secs(1)); // Longer pause for larger package set
+
+                match pixi_add_packages_timed(&packages) {
+                    Ok(install_duration) => {
+                        let total_iter_duration = start.elapsed();
+                        total_duration += total_iter_duration;
+                        println!(
+                            "Cold install took: {:.2}s (install only: {:.2}s)",
+                            total_iter_duration.as_secs_f64(),
+                            install_duration.as_secs_f64()
+                        );
+                    }
+                    Err(e) => {
+                        eprintln!("Install failed: {}", e);
+                        total_duration += start.elapsed();
+                    }
+                }
+            }
+
+            black_box(total_duration)
+        });
     });
 }
 
-// Warm cache benchmarks - warm up cache before each run
-fn bench_warm_cache_small(c: &mut Criterion) {
+// Hot cache benchmarks - warm up cache once, then just time installs
+fn bench_hot_cache_small(c: &mut Criterion) {
     let packages = ["numpy"];
 
-    c.bench_function("warm_cache_small", |b| {
-        b.iter(|| {
-            warm_up_cache(&packages).expect("Failed to warm up cache");
+    // Warm up the cache once before all iterations
+    warm_up_cache(&packages).expect("Failed to warm up cache");
 
-            let duration_ns = pixi_add_packages_timed(&packages);
-            black_box(duration_ns)
-        })
+    c.bench_function("hot_cache_small", |b| {
+        b.iter(|iters| {
+            let mut total_duration = Duration::new(0, 0);
+
+            for _i in 0..iters {
+                match pixi_add_packages_timed(&packages) {
+                    Ok(duration) => {
+                        total_duration += duration;
+                        println!("Hot install took: {:.2}s", duration.as_secs_f64());
+                    }
+                    Err(e) => {
+                        eprintln!("Install failed: {}", e);
+                        // Add some penalty time for failed installs
+                        total_duration += Duration::from_secs(60);
+                    }
+                }
+            }
+
+            black_box(total_duration)
+        });
     });
 }
 
-fn bench_warm_cache_medium(c: &mut Criterion) {
-    let packages = ["numpy", "pandas", "requests"];
+fn bench_hot_cache_medium(c: &mut Criterion) {
+    let packages = ["pandas", "requests", "pyyaml"];
 
-    c.bench_function("warm_cache_medium", |b| {
-        b.iter(|| {
-            warm_up_cache(&packages).expect("Failed to warm up cache");
+    warm_up_cache(&packages).expect("Failed to warm up cache");
 
-            let duration_ns = pixi_add_packages_timed(&packages);
-            black_box(duration_ns)
-        })
+    c.bench_function("hot_cache_medium", |b| {
+        b.iter(|iters| {
+            let mut total_duration = Duration::new(0, 0);
+
+            for _i in 0..iters {
+                match pixi_add_packages_timed(&packages) {
+                    Ok(duration) => {
+                        total_duration += duration;
+                        println!("Hot install took: {:.2}s", duration.as_secs_f64());
+                    }
+                    Err(e) => {
+                        eprintln!("Install failed: {}", e);
+                        total_duration += Duration::from_secs(60);
+                    }
+                }
+            }
+
+            black_box(total_duration)
+        });
     });
 }
 
-fn bench_warm_cache_large(c: &mut Criterion) {
-    let packages = ["numpy", "pandas", "scipy", "matplotlib", "requests"];
+fn bench_hot_cache_large(c: &mut Criterion) {
+    let packages = [
+        "numpy",
+        "pandas",
+        "scipy",
+        "matplotlib",
+        "scikit-learn",
+        "requests",
+        "click",
+        "flask",
+        "jinja2",
+    ];
 
-    c.bench_function("warm_cache_large", |b| {
-        b.iter(|| {
-            warm_up_cache(&packages).expect("Failed to warm up cache");
+    warm_up_cache(&packages).expect("Failed to warm up cache");
 
-            let duration_ns = pixi_add_packages_timed(&packages);
-            black_box(duration_ns)
-        })
+    c.bench_function("hot_cache_large", |b| {
+        b.iter(|iters| {
+            let mut total_duration = Duration::new(0, 0);
+
+            for _i in 0..iters {
+                match pixi_add_packages_timed(&packages) {
+                    Ok(duration) => {
+                        total_duration += duration;
+                        println!("Hot install took: {:.2}s", duration.as_secs_f64());
+                    }
+                    Err(e) => {
+                        eprintln!("Install failed: {}", e);
+                        total_duration += Duration::from_secs(60);
+                    }
+                }
+            }
+
+            tblack_box(total_duration)
+        });
     });
 }
 
@@ -215,8 +333,8 @@ criterion_group!(
     bench_cold_cache_small,
     bench_cold_cache_medium,
     bench_cold_cache_large,
-    bench_warm_cache_small,
-    bench_warm_cache_medium,
-    bench_warm_cache_large,
+    bench_hot_cache_small,
+    bench_hot_cache_medium,
+    bench_hot_cache_large,
 );
 criterion_main!(benches);
