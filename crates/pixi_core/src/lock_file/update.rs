@@ -683,7 +683,7 @@ impl<'p> LockFileDerivedData<'p> {
 
     /// Returns the retained and ignored package names after applying the
     /// install filter (skips and/or target).
-    pub fn get_skipped_package_names(
+    pub fn get_filtered_package_names(
         &self,
         environment: &Environment<'p>,
         filter: &InstallFilter,

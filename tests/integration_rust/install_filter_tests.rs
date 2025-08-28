@@ -80,7 +80,7 @@ async fn install_filter_skip_direct_soft_exclusion() {
     // Skip only the node `a` but traverse through its deps
     let filter = InstallFilter::new().skip_direct(vec!["a".to_string()]);
     let skipped = derived
-        .get_skipped_package_names(&env, &filter)
+        .get_filtered_package_names(&env, &filter)
         .unwrap()
         .ignored;
 
@@ -103,7 +103,7 @@ async fn install_filter_skip_with_deps_hard_exclusion() {
     // Hard skip `a` including its dependency subtree
     let filter = InstallFilter::new().skip_with_deps(vec!["a".to_string()]);
     let skipped = derived
-        .get_skipped_package_names(&env, &filter)
+        .get_filtered_package_names(&env, &filter)
         .unwrap()
         .ignored;
 
@@ -134,7 +134,7 @@ async fn install_filter_target_package_zoom_in() {
         .unwrap();
     let filter = InstallFilter::new().target_package(Some("a".to_string()));
     let skipped = derived
-        .get_skipped_package_names(&env, &filter)
+        .get_filtered_package_names(&env, &filter)
         .unwrap()
         .ignored;
     assert_eq!(skipped, vec!["e".to_string()]);
@@ -157,7 +157,7 @@ async fn install_filter_target_with_skip_with_deps_stop() {
         .target_package(Some("a".to_string()))
         .skip_with_deps(vec!["c".to_string()]);
     let skipped = derived
-        .get_skipped_package_names(&env, &filter)
+        .get_filtered_package_names(&env, &filter)
         .unwrap()
         .ignored;
     assert_eq!(skipped, vec!["c", "d", "e"]);

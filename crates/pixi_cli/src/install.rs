@@ -150,7 +150,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let mut all_skipped_packages = std::collections::HashSet::new();
         let mut total_retained_count: usize = 0;
         for env in &environments {
-            let names = lock_file.get_skipped_package_names(env, &filter)?;
+            let names = lock_file.get_filtered_package_names(env, &filter)?;
             total_retained_count += names.retained.len();
             all_skipped_packages.extend(names.ignored);
         }
