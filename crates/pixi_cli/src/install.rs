@@ -173,7 +173,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .chain(args.skip_with_deps.iter().flatten())
             .partition(|name| all_skipped_packages.contains(*name));
 
-        if unmatched.len() > 0 {
+        if !unmatched.is_empty() {
             tracing::warn!(
                 "The skipped arg(s) '{}' did not match any packages in the lock file",
                 unmatched.into_iter().join(", ")
