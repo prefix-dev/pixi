@@ -19,9 +19,15 @@ pixi install [OPTIONS]
 
 - [`--all (-a)`](#arg---all) Install all environments
 
-- [`--skip <SKIP>`](#arg---skip) Skip installation of specific packages present in the lockfile. Requires --frozen. This can be useful for instance in a Dockerfile to skip local source dependencies when installing dependencies
+- [`--skip <SKIP>`](#arg---skip) Skip installation of specific packages present in the lockfile. This uses a soft exclusion: the package will be skipped but its dependencies are installed
 
   May be provided more than once.
+
+- [`--skip-with-deps <SKIP_WITH_DEPS>`](#arg---skip-with-deps) Skip a package and its entire dependency subtree. This performs a hard exclusion: the package and its dependencies are not installed unless reachable from another non-skipped root
+
+  May be provided more than once.
+
+- [`--only <ONLY>`](#arg---only) Install and build only this package and its dependencies
 
 ## Config Options
 
