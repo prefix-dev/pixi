@@ -22,6 +22,16 @@ docs/_build/
 dist/
 build/
 
+# Conda/Pixi environment related
+*.conda
+.pixi
+.conda/
+conda-bld/
+.conda-env-vars
+
+# Allow conda files in test data
+!tests/data/channels/channels/**/*.conda
+
 # Python
 __pycache__/
 *.py[cod]
