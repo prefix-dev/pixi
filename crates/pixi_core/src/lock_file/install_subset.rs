@@ -1,4 +1,3 @@
-use itertools::Itertools;
 use rattler_lock::LockedPackageRef;
 use std::collections::{HashMap, HashSet, VecDeque};
 
