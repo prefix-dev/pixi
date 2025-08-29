@@ -44,6 +44,7 @@ class PlatformConfig(ABC):
         """Get a hash of the shortcut content for comparison. Raises FileNotFoundError if shortcut doesn't exist."""
         pass
 
+
 class LinuxConfig(PlatformConfig):
     def shortcut_path(self, data_home: Path, name: str) -> Path:
         return data_home / ".local" / "share" / "applications" / f"{name}_{name}.desktop"
@@ -54,7 +55,9 @@ class LinuxConfig(PlatformConfig):
     def get_shortcut_content_hash(self, data_home: Path, name: str) -> str:
         shortcut_file = self.shortcut_path(data_home, name)
         if not shortcut_file.is_file():
-            raise FileNotFoundError(f"Shortcut file {shortcut_file} does not exist or is not a file")
+            raise FileNotFoundError(
+                f"Shortcut file {shortcut_file} does not exist or is not a file"
+            )
         return hashlib.sha256(shortcut_file.read_bytes()).hexdigest()
 
 
@@ -68,11 +71,13 @@ class MacOSConfig(PlatformConfig):
     def get_shortcut_content_hash(self, data_home: Path, name: str) -> str:
         shortcut_dir = self.shortcut_path(data_home, name)
         if not shortcut_dir.is_dir():
-            raise FileNotFoundError(f"Shortcut directory {shortcut_dir} does not exist or is not a directory")
-        
+            raise FileNotFoundError(
+                f"Shortcut directory {shortcut_dir} does not exist or is not a directory"
+            )
+
         # Hash all files in the .app directory recursively
         hash_md5 = hashlib.sha256()
-        for file_path in sorted(shortcut_dir.rglob('*')):
+        for file_path in sorted(shortcut_dir.rglob("*")):
             if file_path.is_file():
                 hash_md5.update(file_path.read_bytes())
         return hash_md5.hexdigest()
@@ -88,7 +93,9 @@ class WindowsConfig(PlatformConfig):
     def get_shortcut_content_hash(self, data_home: Path, name: str) -> str:
         shortcut_file = self.shortcut_path(data_home, name)
         if not shortcut_file.is_file():
-            raise FileNotFoundError(f"Shortcut file {shortcut_file} does not exist or is not a file")
+            raise FileNotFoundError(
+                f"Shortcut file {shortcut_file} does not exist or is not a file"
+            )
         return hashlib.sha256(shortcut_file.read_bytes()).hexdigest()
 
 
@@ -438,7 +445,7 @@ def test_update_installs_new_shortcuts(
     # Run pixi sync (nothing should be updated here)
     verify_cli_command([pixi, "global", "sync", "-vv"], env=setup_data.env)
     verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=True)
-    
+
     # Verify shortcut content is unchanged
     current_hash = get_shortcut_content_hash(setup_data.data_home, "pixi-editor")
     assert current_hash == initial_hash, "Shortcut content should remain unchanged after sync"
@@ -446,7 +453,7 @@ def test_update_installs_new_shortcuts(
     # Run pixi update
     verify_cli_command([pixi, "global", "update", "-v"], env=setup_data.env)
     verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=True)
-    
+
     # Verify shortcut content has changed after update
     updated_hash = get_shortcut_content_hash(setup_data.data_home, "pixi-editor")
     assert updated_hash != initial_hash, "Shortcut content should be updated after update command"
