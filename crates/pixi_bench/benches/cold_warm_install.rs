@@ -121,98 +121,6 @@ platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
 
         Ok(duration)
     }
-
-    /// Install packages to warm up the cache (without timing)
-    fn warm_up_cache(&self, packages: &[&str]) -> Result<(), Box<dyn std::error::Error>> {
-        println!("🔥 Warming up isolated cache with packages: {:?}", packages);
-
-        self.create_pixi_project()?;
-
-        let mut cmd = Command::new("pixi");
-        cmd.arg("add").current_dir(&self.project_dir);
-
-        for package in packages {
-            cmd.arg(package);
-        }
-
-        // Set environment variables for isolation
-        for (key, value) in self.get_env_vars() {
-            cmd.env(key, value);
-        }
-
-        let output = cmd.output()?;
-
-        if !output.status.success() {
-            eprintln!(
-                "Warning: cache warm-up failed: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-        } else {
-            println!("✅ Isolated cache warmed up successfully");
-        }
-
-        Ok(())
-    }
-
-    /// Install packages again in the same environment (for warm cache benchmarking)
-    fn pixi_add_packages_timed_warm(
-        &self,
-        packages: &[&str],
-    ) -> Result<Duration, Box<dyn std::error::Error>> {
-        // Create a new project directory for the second installation
-        let project_dir_2 = self._temp_dir.path().join("project2");
-        fs::create_dir_all(&project_dir_2)?;
-
-        // Create pixi.toml in the new project directory
-        use std::fs::File;
-        use std::io::Write;
-
-        let pixi_toml = r#"[project]
-name = "benchmark-project-2"
-version = "0.1.0"
-description = "Benchmark project for pixi add (warm cache test)"
-channels = ["conda-forge"]
-platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
-
-[dependencies]
-"#;
-
-        let mut file = File::create(project_dir_2.join("pixi.toml"))?;
-        file.write_all(pixi_toml.as_bytes())?;
-
-        let mut cmd = Command::new("pixi");
-        cmd.arg("add").current_dir(&project_dir_2);
-
-        for package in packages {
-            cmd.arg(package);
-        }
-
-        // Set environment variables for isolation (same cache as warm-up)
-        for (key, value) in self.get_env_vars() {
-            cmd.env(key, value);
-        }
-
-        println!("⏱️ Timing: pixi add {} (warm cache)", packages.join(" "));
-
-        let start = Instant::now();
-        let output = cmd.output()?;
-        let duration = start.elapsed();
-
-        if !output.status.success() {
-            eprintln!(
-                "❌ pixi add failed: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-        } else {
-            println!(
-                "✅ Added {} packages in {:.2}s (warm cache)",
-                packages.len(),
-                duration.as_secs_f64()
-            );
-        }
-
-        Ok(duration)
-    }
 }
 
 // Cold cache benchmarks - each run gets a fresh isolated environment (already cold)
@@ -229,14 +137,10 @@ fn bench_small(c: &mut Criterion) {
         })
     });
 
-    // Warm up cache once before warm cache benchmarks
-    env.warm_up_cache(&packages)
-        .expect("Failed to warm up cache");
-
     c.bench_function("warm_cache_small", |b| {
         b.iter(|| {
             let duration = env
-                .pixi_add_packages_timed_warm(&packages)
+                .pixi_add_packages_timed(&packages)
                 .expect("Failed to time pixi add");
             black_box(duration);
         })
@@ -256,13 +160,10 @@ fn bench_medium(c: &mut Criterion) {
         })
     });
 
-    env.warm_up_cache(&packages)
-        .expect("Failed to warm up cache");
-
     c.bench_function("warm_cache_medium", |b| {
         b.iter(|| {
             let duration = env
-                .pixi_add_packages_timed_warm(&packages)
+                .pixi_add_packages_timed(&packages)
                 .expect("Failed to time pixi add");
             black_box(duration);
         })
@@ -293,18 +194,15 @@ fn bench_large(c: &mut Criterion) {
         })
     });
 
-    env.warm_up_cache(&packages)
-        .expect("Failed to warm up cache");
-
     c.bench_function("warm_cache_large", |b| {
         b.iter(|| {
             let duration = env
-                .pixi_add_packages_timed_warm(&packages)
+                .pixi_add_packages_timed(&packages)
                 .expect("Failed to time pixi add");
             black_box(duration);
         })
     });
 }
 
-criterion_group!(benches, bench_small, bench_medium, bench_large,);
+criterion_group!(benches, bench_small, bench_medium, bench_large);
 criterion_main!(benches);
