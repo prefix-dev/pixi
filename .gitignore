@@ -22,13 +22,6 @@ docs/_build/
 dist/
 build/
 
-# Conda/Pixi environment related
-*.conda
-.pixi
-.conda/
-conda-bld/
-.conda-env-vars
-
 # Python
 __pycache__/
 *.py[cod]
@@ -111,4 +104,3 @@ secrets.json
 # Generated files
 *_pb2.py
 *_pb2_grpc.py
-
