@@ -20,6 +20,10 @@ pixi install [OPTIONS]
 - <a id="arg---skip" href="#arg---skip">`--skip <SKIP>`</a>
 :  Skip installation of specific packages present in the lockfile. Requires --frozen. This can be useful for instance in a Dockerfile to skip local source dependencies when installing dependencies
 <br>May be provided more than once.
+- <a id="arg---to-prefix" href="#arg---to-prefix">`--to-prefix <PREFIX>`</a>
+:  Install to a custom prefix directory instead of the default environment location
+- <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
+:  The platform to install packages for (only used with --to-prefix)
 
 ## Config Options
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
@@ -65,6 +69,8 @@ If you want to install all environments, you can use the `--all` flag.
 Running `pixi install` is not required before running other commands like `pixi run` or `pixi shell`. These commands will automatically install the environment if it is not already installed.
 
 You can use `pixi reinstall` to reinstall all environments, one environment or just some packages of an environment.
+
+Use the `--to-prefix` flag to install packages to a custom directory instead of the default environment location.
 
 
 --8<-- "docs/reference/cli/pixi/install_extender:example"

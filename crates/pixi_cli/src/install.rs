@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
@@ -6,7 +8,10 @@ use pixi_core::{
     UpdateLockFileOptions, WorkspaceLocator,
     environment::get_update_lock_file_and_prefixes,
     lock_file::{ReinstallPackages, UpdateMode},
+    prefix_override::PrefixOverrideGuard,
 };
+use pixi_manifest::FeaturesExt;
+use rattler_conda_types::Platform;
 use std::fmt::Write;
 
 use crate::cli_config::WorkspaceConfig;
@@ -30,6 +35,9 @@ use crate::cli_config::WorkspaceConfig;
 ///
 /// You can use `pixi reinstall` to reinstall all environments, one environment
 /// or just some packages of an environment.
+///
+/// Use the `--to-prefix` flag to install packages to a custom directory instead
+/// of the default environment location.
 #[derive(Parser, Debug)]
 pub struct Args {
     #[clap(flatten)]
@@ -53,20 +61,48 @@ pub struct Args {
     /// This can be useful for instance in a Dockerfile to skip local source dependencies when installing dependencies.
     #[arg(long, requires = "frozen")]
     pub skip: Option<Vec<String>>,
+
+    /// Install to a custom prefix directory instead of the default environment location
+    #[arg(long, value_name = "PREFIX", conflicts_with = "all")]
+    pub to_prefix: Option<PathBuf>,
+
+    /// The platform to install packages for (only used with --to-prefix)
+    #[arg(long, short = 'p', requires = "to_prefix")]
+    pub platform: Option<Platform>,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
+    use miette::{Context, IntoDiagnostic};
+
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.project_config.workspace_locator_start())
         .locate()?
         .with_cli_config(args.config);
 
+    // Setup custom prefix if specified
+    if let Some(prefix_path) = &args.to_prefix {
+        tokio::fs::create_dir_all(prefix_path)
+            .await
+            .into_diagnostic()
+            .with_context(|| {
+                format!(
+                    "Failed to create prefix directory: {}",
+                    prefix_path.display()
+                )
+            })?;
+    }
+
     // Install either:
-    //
     // 1. specific environments
     // 2. all environments
     // 3. default environment (if no environments are specified)
-    let envs = if let Some(envs) = args.environment {
+    let envs = if args.to_prefix.is_some() {
+        vec![
+            args.environment
+                .and_then(|envs| envs.into_iter().next())
+                .unwrap_or_else(|| "default".to_string()),
+        ]
+    } else if let Some(envs) = args.environment {
         envs
     } else if args.all {
         workspace
@@ -83,6 +119,37 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into_iter()
         .map(|env| workspace.environment_from_name_or_env_var(Some(env)))
         .collect::<Result<Vec<_>, _>>()?;
+
+    // Validate platform support if platform is specified
+    if let Some(platform) = args.platform {
+        for env in &environments {
+            if !env.platforms().contains(&platform) {
+                return Err(miette::miette!(
+                    "Platform '{}' is not supported by environment '{}'. Supported platforms: {}",
+                    platform,
+                    env.name(),
+                    env.platforms()
+                        .iter()
+                        .map(|p| p.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ));
+            }
+        }
+    }
+
+    // Use prefix override guard if installing to custom prefix
+    let _guard = args.to_prefix.as_ref().map(|prefix_path| {
+        if let Some(platform) = args.platform {
+            PrefixOverrideGuard::new_with_platform(
+                environments[0].name().to_string(),
+                prefix_path.clone(),
+                platform,
+            )
+        } else {
+            PrefixOverrideGuard::new(environments[0].name().to_string(), prefix_path.clone())
+        }
+    });
 
     // Update the prefixes by installing all packages
     let (lock_file, _) = get_update_lock_file_and_prefixes(
@@ -122,13 +189,21 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .unwrap();
     }
 
-    if let Ok(Some(path)) = workspace.config().detached_environments().path() {
+    // Add location information to the message
+    if let Some(prefix_path) = &args.to_prefix {
+        write!(
+            &mut message,
+            " to '{}'",
+            console::style(prefix_path.display()).bold()
+        )
+        .unwrap();
+    } else if let Ok(Some(path)) = workspace.config().detached_environments().path() {
         write!(
             &mut message,
             " in '{}'",
             console::style(path.display()).bold()
         )
-        .unwrap()
+        .unwrap();
     }
 
     if let Some(skip) = &args.skip {
