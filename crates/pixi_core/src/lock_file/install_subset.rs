@@ -282,9 +282,10 @@ impl PackageReachability {
             .any(|n| matches!(n.source, PackageSource::Pypi) && required.contains(&n.name));
 
         if has_pypi_included {
-            let has_conda_python = self.nodes.iter().any(|n| {
-                matches!(n.source, PackageSource::Conda) && n.name.as_str() == "python"
-            });
+            let has_conda_python = self
+                .nodes
+                .iter()
+                .any(|n| matches!(n.source, PackageSource::Conda) && n.name.as_str() == "python");
             if has_conda_python {
                 required.insert("python".to_string());
             }
