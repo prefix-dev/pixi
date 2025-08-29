@@ -132,8 +132,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .unwrap();
 
         if skip_opts {
-            let names =
-                lock_file.get_filtered_package_names(environments.get(0).unwrap(), &filter)?;
+            let names = lock_file.get_filtered_package_names(
+                environments
+                    .first()
+                    .expect("at least one environment should be available"),
+                &filter,
+            )?;
             let num_skipped = names.ignored.len();
             let num_retained = names.retained.len();
 
