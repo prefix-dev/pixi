@@ -3,12 +3,29 @@ use rattler_lock::LockedPackageRef;
 use std::collections::{HashMap, HashSet, VecDeque};
 
 /// A simplified representation of a package and its dependencies for efficient filtering.
+///
+/// Note: dependency names here are already normalized package names. We only
+/// capture names (not version constraints) because the reachability algorithms
+/// work purely on the structure of the dependency graph.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum PackageSource {
+    Conda,
+    Pypi,
+}
+
+/// A simplified representation of a package and its dependencies for efficient filtering.
+///
+/// Note: dependency names here are already normalized package names. We only
+/// capture names (not version constraints) because the reachability algorithms
+/// work purely on the structure of the dependency graph.
 #[derive(Clone, Debug)]
 struct PackageNode {
     /// Name of the package
     pub name: String,
     /// The list of dependencies
     pub dependencies: Vec<String>,
+    /// Source of the package (Conda or PyPI)
+    pub source: PackageSource,
 }
 
 impl<'a> From<LockedPackageRef<'a>> for PackageNode {
@@ -52,6 +69,10 @@ impl<'a> From<LockedPackageRef<'a>> for PackageNode {
         PackageNode {
             name,
             dependencies: dependency_names,
+            source: match package_ref {
+                LockedPackageRef::Conda(_) => PackageSource::Conda,
+                LockedPackageRef::Pypi(_, _) => PackageSource::Pypi,
+            },
         }
     }
 }
@@ -100,21 +121,27 @@ impl<'a> InstallSubset<'a> {
     }
 
     /// Filter packages based on skip and target settings with proper dependency handling.
+    ///
+    /// Algorithm overview:
+    /// - Convert the input packages to a compact graph representation.
+    /// - If a `target_package` is provided: run a BFS starting at that target,
+    ///   short-circuiting at `skip_with_deps` and not including nodes in `skip_direct`.
+    /// - Else (skip-mode): find original graph roots (indegree 0) and run a BFS
+    ///   from those roots, again not traversing into `skip_with_deps`, and exclude
+    ///   nodes in `skip_direct` from the final result.
+    /// Both traversals run in O(V+E) time on the constructed graph.
     pub fn filter<'lock>(
         &self,
         packages: Option<impl IntoIterator<Item = LockedPackageRef<'lock>> + 'lock>,
     ) -> FilteredPackages<'lock> {
         // Handle None packages
         let Some(packages) = packages else {
-            return FilteredPackages {
-                install: Vec::new(),
-                ignore: Vec::new(),
-            };
+            return FilteredPackages::new(Vec::new(), Vec::new());
         };
 
         let all_packages: Vec<_> = packages.into_iter().collect();
 
-        match self.target_package {
+        let filtered_packages = match self.target_package {
             Some(target) => {
                 // Target mode: Collect target + dependencies with skip short-circuiting
                 let reach = Self::build_reachability(&all_packages);
@@ -137,16 +164,15 @@ impl<'a> InstallSubset<'a> {
                     .filter(|pkg| !required.contains(pkg.name()))
                     .copied()
                     .collect();
-                FilteredPackages {
-                    install: to_process,
-                    ignore: to_ignore,
-                }
+                FilteredPackages::new(to_process, to_ignore)
             }
             None => {
                 // Skip mode: Apply stop/passthrough rules from original roots
                 self.filter_with_skips(&all_packages)
             }
-        }
+        };
+
+        filtered_packages
     }
 
     /// Filter out skip packages and only those dependencies that are no longer
@@ -156,10 +182,7 @@ impl<'a> InstallSubset<'a> {
         all_packages: &[LockedPackageRef<'lock>],
     ) -> FilteredPackages<'lock> {
         if self.skip_with_deps.is_empty() && self.skip_direct.is_empty() {
-            return FilteredPackages {
-                install: all_packages.to_vec(),
-                ignore: Vec::new(),
-            };
+            return FilteredPackages::new(all_packages.to_vec(), Vec::new());
         }
 
         // Compute the set of package names that remain required when the skip
@@ -178,10 +201,7 @@ impl<'a> InstallSubset<'a> {
             .filter(|pkg| !kept.contains(pkg.name()))
             .copied()
             .collect();
-        FilteredPackages {
-            install: to_process,
-            ignore: to_ignore,
-        }
+        FilteredPackages::new(to_process, to_ignore)
     }
 
     /// Build a reachability analyzer for a set of packages.
@@ -198,6 +218,15 @@ pub struct FilteredPackages<'lock> {
     pub ignore: Vec<LockedPackageRef<'lock>>,
 }
 
+impl<'lock> FilteredPackages<'lock> {
+    pub fn new(
+        install: Vec<LockedPackageRef<'lock>>,
+        ignore: Vec<LockedPackageRef<'lock>>,
+    ) -> Self {
+        FilteredPackages { install, ignore }
+    }
+}
+
 /// Collects reachability over the package graph.
 ///
 /// Traversal rules use two skip sets:
@@ -208,10 +237,17 @@ struct PackageReachability {
     nodes: Vec<PackageNode>,
     /// Map package name -> index into `nodes`.
     name_to_index: HashMap<String, usize>,
+    /// Adjacency list of dependency indices for fast traversal.
+    edges: Vec<Vec<usize>>,
 }
 
 impl PackageReachability {
     /// Build a collector from a list of nodes.
+    ///
+    /// This constructs:
+    /// - `name_to_index` for O(1) name→index lookups.
+    /// - `edges` adjacency lists (indices only) for tight traversal loops without
+    ///   repeated string hashing or allocation.
     pub(crate) fn new(nodes: Vec<PackageNode>) -> Self {
         let name_to_index: HashMap<String, usize> = nodes
             .iter()
@@ -219,126 +255,204 @@ impl PackageReachability {
             .map(|(idx, node)| (node.name.clone(), idx))
             .collect();
 
+        // Build compact adjacency list by resolving dependency names to indices
+        let mut edges: Vec<Vec<usize>> = vec![Vec::new(); nodes.len()];
+        for (idx, node) in nodes.iter().enumerate() {
+            let deps = node
+                .dependencies
+                .iter()
+                .filter_map(|name| name_to_index.get(name).copied())
+                .collect();
+            edges[idx] = deps;
+        }
+
         Self {
             nodes,
             name_to_index,
+            edges,
+        }
+    }
+
+    /// If the current required set contains any PyPI package, ensure a Conda
+    /// `python` package is also included when one exists in the graph.
+    fn augment_with_python_if_pypi(&self, required: &mut HashSet<String>) {
+        let has_pypi_included = self
+            .nodes
+            .iter()
+            .any(|n| matches!(n.source, PackageSource::Pypi) && required.contains(&n.name));
+
+        if has_pypi_included {
+            let has_conda_python = self.nodes.iter().any(|n| {
+                matches!(n.source, PackageSource::Conda) && n.name.as_str() == "python"
+            });
+            if has_conda_python {
+                required.insert("python".to_string());
+            }
         }
     }
 
     /// Collect target package and all its dependencies, excluding specified packages.
+    /// Collect all packages reachable from `target` under skip rules.
+    ///
+    /// Semantics:
+    /// - `stop_set` (skip-with-deps): do not include the node and do not traverse
+    ///   into its dependencies.
+    /// - `passthrough_set` (skip-direct): do not include the node, but continue
+    ///   traversal into its dependencies.
+    ///
+    /// Implementation details:
+    /// - Uses index-based BFS over `edges` with boolean bitsets for membership tests
     pub(crate) fn collect_target_dependencies(
         &self,
         target: &str,
         stop_set: &[String],
         passthrough_set: &[String],
     ) -> HashSet<String> {
+        // Resolve sets to boolean index maps for fast membership checks
+        let mut stop_idx = vec![false; self.nodes.len()];
+        for name in stop_set {
+            if let Some(&i) = self.name_to_index.get(name) {
+                stop_idx[i] = true;
+            }
+        }
+        // Do the same for the passthrough set
+        let mut pass_idx = vec![false; self.nodes.len()];
+        for name in passthrough_set {
+            if let Some(&i) = self.name_to_index.get(name) {
+                pass_idx[i] = true;
+            }
+        }
+
         // BFS over target's dependency tree with exclusions
-        let mut included: HashSet<String> = HashSet::new();
-        let mut seen: HashSet<String> = HashSet::new();
+        let mut included = vec![false; self.nodes.len()];
+        let mut seen = vec![false; self.nodes.len()];
         let mut queue = VecDeque::new();
-        let stop_set: HashSet<&str> = stop_set.iter().map(|s| s.as_str()).collect();
-        let passthrough_set: HashSet<&str> = passthrough_set.iter().map(|s| s.as_str()).collect();
-        queue.push_back(target.to_string());
 
-        while let Some(package_name) = queue.pop_front() {
-            // Stop entirely at stop_set
-            if stop_set.contains(package_name.as_str()) {
+        // Start from the target if it exists; otherwise nothing is required.
+        if let Some(&start) = self.name_to_index.get(target) {
+            queue.push_back(start);
+        } else {
+            return HashSet::new();
+        }
+
+        while let Some(idx) = queue.pop_front() {
+            // Do not include or traverse nodes in the stop set.
+            if stop_idx[idx] {
                 continue;
             }
-
-            if !seen.insert(package_name.clone()) {
+            if std::mem::replace(&mut seen[idx], true) {
                 continue;
             }
-
-            // Include this node unless it is passthrough
-            if !passthrough_set.contains(package_name.as_str()) {
-                included.insert(package_name.clone());
+            // Include current node unless it is marked passthrough.
+            if !pass_idx[idx] {
+                included[idx] = true;
             }
-
-            if let Some(&idx) = self.name_to_index.get(&package_name) {
-                for dep_name in self.nodes[idx].dependencies.iter() {
-                    // Always traverse into children unless they are in stop_set,
-                    // even when the current node is passthrough.
-                    if self.name_to_index.contains_key(dep_name) {
-                        queue.push_back(dep_name.clone());
-                    }
+            for &dep_idx in &self.edges[idx] {
+                // Always traverse into children unless they are stopped.
+                if !stop_idx[dep_idx] {
+                    queue.push_back(dep_idx);
                 }
             }
         }
 
-        included
+        // Materialize result names, then augment for python if needed
+        let mut result = HashSet::with_capacity(self.nodes.len());
+        for (i, inc) in included.iter().enumerate() {
+            if *inc {
+                result.insert(self.nodes[i].name.clone());
+            }
+        }
+        self.augment_with_python_if_pypi(&mut result);
+        result
     }
 
     /// Compute the set of packages that should be kept when skipping a set of
     /// packages. This keeps any package that is reachable from at least one
     /// non-skipped package without traversing through a skipped package.
+    /// Compute the set of packages that remain required when skipping packages.
+    ///
+    /// Approach:
+    /// - Determine original roots as nodes with indegree 0. These represent the
+    ///   starting points of the environment before skips.
+    /// - BFS from those roots, never traversing into `stop_set` nodes.
+    /// - Mark nodes as kept unless they are in `passthrough_set` (skip-direct).
+    /// - Complexity: O(V+E) for the traversal and indegree computation.
     pub(crate) fn collect_reachable_from_non_skipped(
         &self,
         stop_set: &[String],
         passthrough_set: &[String],
     ) -> HashSet<String> {
-        // Compute indegree to determine original roots.
-        // indegree == 0 are the initial roots.
-        let mut indegree: HashMap<&str, usize> = self
-            .name_to_index
-            .keys()
-            .map(|k| (k.as_str(), 0usize))
-            .collect();
-        for node in &self.nodes {
-            for dep in &node.dependencies {
-                if let Some(entry) = indegree.get_mut(dep.as_str()) {
-                    *entry += 1;
-                }
+        // Resolve sets to boolean index maps
+        let mut stop_idx = vec![false; self.nodes.len()];
+        for name in stop_set {
+            if let Some(&i) = self.name_to_index.get(name) {
+                stop_idx[i] = true;
             }
         }
-        let roots = indegree
-            .into_iter()
-            .filter_map(|(name, deg)| {
-                if deg == 0 {
-                    Some(name.to_string())
-                } else {
-                    None
-                }
-            })
-            .collect_vec();
+        let mut pass_idx = vec![false; self.nodes.len()];
+        for name in passthrough_set {
+            if let Some(&i) = self.name_to_index.get(name) {
+                pass_idx[i] = true;
+            }
+        }
 
-        let stop_set: HashSet<&str> = stop_set.iter().map(|s| s.as_str()).collect();
-        let passthrough_set: HashSet<&str> = passthrough_set.iter().map(|s| s.as_str()).collect();
+        // Compute indegree to determine original roots (nodes with indegree 0).
+        // We do this on the full graph: skip rules affect traversal/inclusion,
+        // not what counts as a structural root.
+        let mut indegree = vec![0usize; self.nodes.len()];
+        for deps in &self.edges {
+            for &dep in deps {
+                indegree[dep] = indegree[dep].saturating_add(1);
+            }
+        }
+        let roots: Vec<usize> = indegree
+            .iter()
+            .enumerate()
+            .filter_map(|(i, &deg)| if deg == 0 { Some(i) } else { None })
+            .collect();
 
-        let mut kept = HashSet::new();
+        let mut kept = vec![false; self.nodes.len()];
+        let mut seen = vec![false; self.nodes.len()];
         let mut queue = VecDeque::new();
 
         // Initialize the queue with all non-skipped original roots.
-        for name in &roots {
-            if !stop_set.contains(name.as_str()) {
-                queue.push_back(name.clone());
+        for &root in &roots {
+            if !stop_idx[root] {
+                queue.push_back(root);
             }
         }
 
-        while let Some(name) = queue.pop_front() {
-            // Never include skipped packages.
-            if stop_set.contains(name.as_str()) {
+        while let Some(idx) = queue.pop_front() {
+            // Never include or traverse stopped nodes.
+            if stop_idx[idx] {
+                continue;
+            }
+            if std::mem::replace(&mut seen[idx], true) {
                 continue;
             }
 
-            // Insert and continue traversal if newly seen.
-            if !kept.insert(name.clone()) {
-                continue;
+            // Include unless marked passthrough.
+            if !pass_idx[idx] {
+                kept[idx] = true;
             }
 
-            if let Some(&idx) = self.name_to_index.get(&name) {
-                for dep in &self.nodes[idx].dependencies {
-                    // Do not traverse into stop_set; passthrough happens by excluding at the end
-                    if !stop_set.contains(dep.as_str()) {
-                        queue.push_back(dep.clone());
-                    }
+            for &dep in &self.edges[idx] {
+                // Do not traverse into stop_set; passthrough happens by excluding at the end
+                if !stop_idx[dep] {
+                    queue.push_back(dep);
                 }
             }
         }
 
         // Remove passthrough nodes from the kept set, but leave traversal effect
-        kept.retain(|name| !passthrough_set.contains(name.as_str()));
-        kept
+        let mut result = HashSet::with_capacity(self.nodes.len());
+        for (i, &is_kept) in kept.iter().enumerate() {
+            if is_kept && !pass_idx[i] {
+                result.insert(self.nodes[i].name.clone());
+            }
+        }
+        self.augment_with_python_if_pypi(&mut result);
+        result
     }
 }
 
@@ -347,9 +461,19 @@ mod tests {
     use super::*;
 
     fn node(name: &str, deps: &[&str]) -> PackageNode {
+        // Default test helper creates Conda nodes
         PackageNode {
             name: name.to_string(),
             dependencies: deps.iter().map(|s| s.to_string()).collect(),
+            source: PackageSource::Conda,
+        }
+    }
+
+    fn node_pypi(name: &str, deps: &[&str]) -> PackageNode {
+        PackageNode {
+            name: name.to_string(),
+            dependencies: deps.iter().map(|s| s.to_string()).collect(),
+            source: PackageSource::Pypi,
         }
     }
 
@@ -454,5 +578,19 @@ mod tests {
         assert!(kept.contains("A"));
         assert!(!kept.contains("B"));
         assert!(!kept.contains("C"));
+    }
+
+    #[test]
+    fn adds_python_when_pypi_is_included() {
+        // Graph with no edges, but includes a PyPI package and a Conda python.
+        let nodes = vec![node("python", &[]), node_pypi("requests", &[])];
+        let dc = PackageReachability::new(nodes);
+
+        // Simulate result set that includes a PyPI package
+        let mut required: HashSet<String> = ["requests".to_string()].into_iter().collect();
+        dc.augment_with_python_if_pypi(&mut required);
+
+        assert!(required.contains("python"));
+        assert!(required.contains("requests"));
     }
 }
