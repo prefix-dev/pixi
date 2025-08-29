@@ -1013,8 +1013,6 @@ The build system is a table that can contain the following fields:
   - `path`: a string representing a relative or absolute path to the source code.
   - `git`: a string representing URL to the source repository.
   - `rev`: a string representing SHA revision to checkout.
-  - `tag`: a string representing git tag to use.
-  - `branch`: a string representing git branch to use.
   - `subdirectory`: a string representing path to subdirectory to use.
 - `channels`: specifies the channels to get the build backend from.
 - `backend`: specifies the build backend to use. This is a table that can contain the following fields:

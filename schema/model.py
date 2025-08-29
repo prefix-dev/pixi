@@ -725,8 +725,8 @@ class SourceLocation(StrictBaseModel):
 
     git: NonEmptyStr | None = Field(None, description="The git URL to the source repo")
     rev: NonEmptyStr | None = Field(None, description="A git SHA revision to use")
-    tag: NonEmptyStr | None = Field(None, description="A git tag to use")
-    branch: NonEmptyStr | None = Field(None, description="A git branch to use")
+    # tag: NonEmptyStr | None = Field(None, description="A git tag to use")
+    # branch: NonEmptyStr | None = Field(None, description="A git branch to use")
     subdirectory: NonEmptyStr | None = Field(None, description="A subdirectory to use in the repo")
 
 
