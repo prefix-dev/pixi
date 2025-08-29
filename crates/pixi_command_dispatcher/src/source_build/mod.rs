@@ -466,6 +466,7 @@ impl SourceBuildSpec {
                             .map_err(SourceBuildError::CreateBuildEnvironmentDirectory)
                             .map_err(CommandDispatcherError::Failed)?,
                         installed: None,
+                        ignore_packages: None,
                         build_environment: self.build_environment.to_build_from_build(),
                         force_reinstall: Default::default(),
                         channels: self.channels.clone(),
@@ -492,6 +493,7 @@ impl SourceBuildSpec {
                             .map_err(SourceBuildError::CreateBuildEnvironmentDirectory)
                             .map_err(CommandDispatcherError::Failed)?,
                         installed: None,
+                        ignore_packages: None,
                         build_environment: self.build_environment.to_build_from_build(),
                         force_reinstall: Default::default(),
                         channels: self.channels.clone(),

@@ -4,6 +4,7 @@ mod add_tests;
 mod build_tests;
 mod common;
 mod init_tests;
+mod install_filter_tests;
 mod install_tests;
 mod project_tests;
 mod pypi_tests;
