@@ -1,12 +1,13 @@
-from pathlib import Path
 import tomllib
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from pathlib import Path
 from typing import List
 
-import tomli_w
-from ..common import verify_cli_command, ExitCode, CURRENT_PLATFORM
-from abc import ABC, abstractmethod
 import pytest
-from dataclasses import dataclass
+import tomli_w
+
+from ..common import CURRENT_PLATFORM, ExitCode, verify_cli_command
 
 
 @dataclass
@@ -371,4 +372,42 @@ def test_add_shortcut(
     assert parsed_toml["envs"]["pixi-editor"]["shortcuts"] == ["pixi-editor"]
 
     # Verify shortcut exists
+    verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=True)
+
+
+def test_update(
+    pixi: Path,
+    setup_data: SetupData,
+    shortcuts_channel_1: str,
+) -> None:
+    # Setup manifest with given shortcuts
+    manifests = setup_data.pixi_home.joinpath("manifests")
+    manifests.mkdir(parents=True)
+    manifest = manifests.joinpath("pixi-global.toml")
+    toml = f"""
+    [envs.test]
+    channels = ["{shortcuts_channel_1}"]
+    dependencies = {{ pixi-editor = "==0.1.3" }}
+    """
+    manifest.write_text(toml)
+
+    # Verify no shortcuts exist after sync
+    verify_cli_command([pixi, "global", "sync"], env=setup_data.env)
+    verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=False)
+
+    parsed_toml = tomllib.loads(toml)
+    parsed_toml["envs"]["test"]["shortcuts"] = ["pixi-editor"]
+    manifest.write_text(tomli_w.dumps(parsed_toml))
+
+    # Run sync and verify
+    verify_cli_command([pixi, "global", "sync"], env=setup_data.env)
+    verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=True)
+
+    # Change version requirement to '*'
+    manifest_dict = tomllib.loads(toml)
+    manifest_dict["envs"]["test"]["dependencies"]["pixi-editor"] = "*"
+    manifest.write_text(tomli_w.dumps(manifest_dict))
+
+    # Run pixi update
+    verify_cli_command([pixi, "global", "sync"], env=setup_data.env)
     verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=True)
