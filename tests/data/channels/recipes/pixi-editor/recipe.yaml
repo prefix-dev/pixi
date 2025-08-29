@@ -59,7 +59,7 @@ outputs:
           menu_json_path = Path(recipe_dir) / "Menu" / "menu.json"
           menu_data = json.loads(menu_json_path.read_text())
 
-          menu_data["menu_items"][0]["description"] = "Pixi Editor2"
+          menu_data["menu_items"][0]["icon"] = "{{ MENU_DIR }}/another-icon.{{ ICON_EXT }}"
           menu_dir.joinpath("pixi-editor.json").write_text(json.dumps(menu_data))
 
           # Copy icon files
