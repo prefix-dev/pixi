@@ -106,7 +106,7 @@ mod tests {
               "https://prefix.dev/pixi-build-backends",
               "https://prefix.dev/conda-forge",
             ]
-            source = { git = "https://github.com/conda-forge/numpy-feedstock" }
+            source = { git = "https://github.com/conda-forge/numpy-feedstock", rev ="ee87916a49d5e96d4f322f68c3650e8ff6b8866b" }
             "#;
 
         let build = PackageBuild::from_toml_str(toml).unwrap();
