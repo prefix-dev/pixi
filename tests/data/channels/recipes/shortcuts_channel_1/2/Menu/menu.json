@@ -8,7 +8,7 @@
         "target_environment_is_base": "pixi-editor",
         "target_environment_is_not_base": "pixi-editor ({{ ENV_NAME }})"
       },
-      "description": "Pixi Editor 1",
+      "description": "Pixi Editor 2",
       "icon": "{{ MENU_DIR }}/pixi-icon.{{ ICON_EXT }}",
       "activate": false,
       "terminal": false,

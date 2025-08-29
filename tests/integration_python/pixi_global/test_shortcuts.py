@@ -426,7 +426,7 @@ def test_update_installs_new_shortcuts(
             "install",
             "--channel",
             shortcuts_channel_1,
-            "pixi-editor=0.1.3",
+            "pixi-editor=1.0.0",
         ],
         env=setup_data.env,
     )
@@ -443,7 +443,7 @@ def test_update_installs_new_shortcuts(
     initial_hash = get_shortcut_content_hash(setup_data.data_home, "pixi-editor")
 
     # Run pixi sync (nothing should be updated here)
-    verify_cli_command([pixi, "global", "sync", "-vv"], env=setup_data.env)
+    verify_cli_command([pixi, "global", "sync"], env=setup_data.env)
     verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=True)
 
     # Verify shortcut content is unchanged
@@ -451,7 +451,7 @@ def test_update_installs_new_shortcuts(
     assert current_hash == initial_hash, "Shortcut content should remain unchanged after sync"
 
     # Run pixi update
-    verify_cli_command([pixi, "global", "update", "-v"], env=setup_data.env)
+    verify_cli_command([pixi, "global", "update"], env=setup_data.env)
     verify_shortcuts_exist(setup_data.data_home, ["pixi-editor"], expected_exists=True)
 
     # Verify shortcut content has changed after update
