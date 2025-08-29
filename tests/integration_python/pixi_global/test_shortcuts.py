@@ -2,7 +2,6 @@ import tomllib
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List
 
 import pytest
 import tomli_w
@@ -31,7 +30,7 @@ def setup_data(tmp_path: Path) -> SetupData:
 
 class PlatformConfig(ABC):
     @abstractmethod
-    def _shortcut_paths(self, data_home: Path, name: str) -> List[Path]:
+    def shortcut_path(self, data_home: Path, name: str) -> Path:
         pass
 
     @abstractmethod
@@ -41,31 +40,27 @@ class PlatformConfig(ABC):
 
 
 class LinuxConfig(PlatformConfig):
-    def _shortcut_paths(self, data_home: Path, name: str) -> List[Path]:
-        return [data_home / ".local" / "share" / "applications" / f"{name}_{name}.desktop"]
+    def shortcut_path(self, data_home: Path, name: str) -> Path:
+        return data_home / ".local" / "share" / "applications" / f"{name}_{name}.desktop"
 
     def shortcut_exists(self, data_home: Path, name: str) -> bool:
-        return self._shortcut_paths(data_home, name).pop().is_file()
+        return self.shortcut_path(data_home, name).is_file()
 
 
 class MacOSConfig(PlatformConfig):
-    def _shortcut_paths(self, data_home: Path, name: str) -> List[Path]:
-        return [data_home / "Applications" / f"{name}.app"]
+    def shortcut_path(self, data_home: Path, name: str) -> Path:
+        return data_home / "Applications" / f"{name}.app"
 
     def shortcut_exists(self, data_home: Path, name: str) -> bool:
-        return self._shortcut_paths(data_home, name).pop().is_dir()
+        return self.shortcut_path(data_home, name).is_dir()
 
 
 class WindowsConfig(PlatformConfig):
-    def _shortcut_paths(self, data_home: Path, name: str) -> List[Path]:
-        return [data_home / "Desktop" / f"{name}.lnk"]
+    def shortcut_path(self, data_home: Path, name: str) -> Path:
+        return data_home / "Desktop" / f"{name}.lnk"
 
     def shortcut_exists(self, data_home: Path, name: str) -> bool:
-        for path in self._shortcut_paths(data_home, name):
-            print(path)
-            if not path.is_file():
-                return False
-        return True
+        return self.shortcut_path(data_home, name).is_file()
 
 
 def get_platform_config(platform: str) -> PlatformConfig:
