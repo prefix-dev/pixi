@@ -121,6 +121,7 @@ impl<'a> InstallSubset<'a> {
 
     /// Filter packages based on skip and target settings with proper dependency handling.
     ///
+    /// Both traversals run in O(V+E) time on the constructed graph.
     /// Algorithm overview:
     /// - Convert the input packages to a compact graph representation.
     /// - If a `target_package` is provided: run a BFS starting at that target,
@@ -128,7 +129,6 @@ impl<'a> InstallSubset<'a> {
     /// - Else (skip-mode): find original graph roots (indegree 0) and run a BFS
     ///   from those roots, again not traversing into `skip_with_deps`, and exclude
     ///   nodes in `skip_direct` from the final result.
-    /// Both traversals run in O(V+E) time on the constructed graph.
     pub fn filter<'lock>(
         &self,
         packages: Option<impl IntoIterator<Item = LockedPackageRef<'lock>> + 'lock>,
