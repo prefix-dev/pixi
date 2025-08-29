@@ -468,10 +468,11 @@ impl<'p> LockFileDerivedData<'p> {
                     .into_iter()
                     .partition::<Vec<_>, _>(|p| p.as_conda().is_some());
 
-                // TODO: use the same ignore logic for PyPI
-                let (ignored_conda, _ignored_pypi) = ignored
-                    .into_iter()
-                    .partition::<Vec<_>, _>(|p| p.as_conda().is_some());
+                let (ignored_conda, ignored_pypi): (HashSet<_>, HashSet<_>) =
+                    ignored.into_iter().partition_map(|p| match p {
+                        LockedPackageRef::Conda(data) => Either::Left(data.record().name.clone()),
+                        LockedPackageRef::Pypi(data, _) => Either::Right(data.name.clone()),
+                    });
 
                 let pixi_records = locked_packages_to_pixi_records(conda_packages)?;
 
@@ -494,22 +495,9 @@ impl<'p> LockFileDerivedData<'p> {
                     }
                 };
 
-                let ignored_conda_names = Some(
-                    ignored_conda
-                        .iter()
-                        .map(|c| {
-                            c.as_conda()
-                                .expect("these have been filtered before")
-                                .record()
-                                .name
-                                .clone()
-                        })
-                        .collect(),
-                );
-
                 // Get the prefix with the conda packages installed.
                 let (prefix, python_status) = self
-                    .conda_prefix(environment, conda_reinstall_packages, ignored_conda_names)
+                    .conda_prefix(environment, conda_reinstall_packages, Some(ignored_conda))
                     .await?;
 
                 // No `uv` support for WASM right now
@@ -594,7 +582,14 @@ impl<'p> LockFileDerivedData<'p> {
                         environment_variables: env_variables,
                     };
 
+                    // Ignored pypi records
+                    let names = ignored_pypi
+                        .iter()
+                        .map(to_uv_normalize)
+                        .collect::<Result<Vec<_>, _>>()
+                        .into_diagnostic()?;
                     PyPIEnvironmentUpdater::new(config, build_config, context_config)
+                        .with_ignored_extraneous(names)
                         .update(&pixi_records, &pypi_records, &python_status)
                         .await
                 }
