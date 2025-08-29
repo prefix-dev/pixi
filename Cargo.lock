@@ -2408,6 +2408,15 @@ dependencies = [
 
 [[package]]
 name = "fs-err"
+version = "2.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "88a41f105fe1d5b6b34b2055e3dc59bb79b46b48b2040b9e6c7b4b5de097aa41"
+dependencies = [
+ "autocfg",
+]
+
+[[package]]
+name = "fs-err"
 version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "88d7be93788013f265201256d58f04936a8079ad5dc898743aa20525f503b683"
@@ -2432,7 +2441,7 @@ version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8640e34b88f7652208ce9e88b1a37a2ae95227d84abec377ccd3c5cfeb141ed4"
 dependencies = [
- "fs-err",
+ "fs-err 3.1.1",
  "rustix 1.0.8",
  "tokio",
  "windows-sys 0.59.0",
@@ -4649,7 +4658,7 @@ version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "493dd224adc6163e40a1e58cefbeec27dabb69696017677406417b3516c800fa"
 dependencies = [
- "fs-err",
+ "fs-err 3.1.1",
  "fxhash",
  "indexmap 2.11.0",
  "itertools 0.14.0",
@@ -4871,6 +4880,7 @@ name = "pixi_bench"
 version = "0.1.0"
 dependencies = [
  "codspeed-criterion-compat",
+ "fs-err 2.11.0",
  "reqwest 0.11.27",
  "serde",
  "serde_json",
@@ -4906,7 +4916,7 @@ dependencies = [
 name = "pixi_build_frontend"
 version = "0.1.0"
 dependencies = [
- "fs-err",
+ "fs-err 3.1.1",
  "futures",
  "jsonrpsee",
  "miette 7.6.0",
@@ -4970,7 +4980,7 @@ dependencies = [
  "fake",
  "fancy_display",
  "flate2",
- "fs-err",
+ "fs-err 3.1.1",
  "fs_extra",
  "futures",
  "http 1.3.1",
@@ -5061,7 +5071,7 @@ dependencies = [
  "chrono",
  "derive_more",
  "dirs",
- "fs-err",
+ "fs-err 3.1.1",
  "futures",
  "indexmap 2.11.0",
  "insta",
@@ -5114,7 +5124,7 @@ dependencies = [
  "clap",
  "console 0.15.11",
  "dirs",
- "fs-err",
+ "fs-err 3.1.1",
  "insta",
  "itertools 0.14.0",
  "miette 7.6.0",
@@ -5161,7 +5171,7 @@ dependencies = [
  "dunce",
  "fake",
  "fancy_display",
- "fs-err",
+ "fs-err 3.1.1",
  "fs_extra",
  "futures",
  "http 1.3.1",
@@ -5261,7 +5271,7 @@ name = "pixi_docs"
 version = "0.1.0"
 dependencies = [
  "clap",
- "fs-err",
+ "fs-err 3.1.1",
  "itertools 0.14.0",
  "pixi_cli",
  "rattler_conda_types",
@@ -5273,7 +5283,7 @@ version = "0.0.1"
 dependencies = [
  "dashmap",
  "dunce",
- "fs-err",
+ "fs-err 3.1.1",
  "pixi_utils",
  "reqwest 0.12.23",
  "reqwest-middleware",
@@ -5291,7 +5301,7 @@ name = "pixi_glob"
 version = "0.1.0"
 dependencies = [
  "dashmap",
- "fs-err",
+ "fs-err 3.1.1",
  "insta",
  "itertools 0.14.0",
  "memchr",
@@ -5313,7 +5323,7 @@ dependencies = [
  "dunce",
  "fake",
  "fancy_display",
- "fs-err",
+ "fs-err 3.1.1",
  "futures",
  "indexmap 2.11.0",
  "indicatif",
@@ -5369,7 +5379,7 @@ dependencies = [
  "console 0.15.11",
  "dunce",
  "fancy_display",
- "fs-err",
+ "fs-err 3.1.1",
  "glob",
  "indexmap 2.11.0",
  "insta",
@@ -5540,7 +5550,7 @@ dependencies = [
  "crossbeam-channel",
  "deno_task_shell",
  "fancy_display",
- "fs-err",
+ "fs-err 3.1.1",
  "itertools 0.14.0",
  "miette 7.6.0",
  "pixi_consts",
@@ -5590,7 +5600,7 @@ name = "pixi_utils"
 version = "0.1.0"
 dependencies = [
  "async-fd-lock",
- "fs-err",
+ "fs-err 3.1.1",
  "indicatif",
  "insta",
  "is_executable",
@@ -5945,7 +5955,7 @@ version = "0.1.0"
 dependencies = [
  "async-once-cell",
  "dashmap",
- "fs-err",
+ "fs-err 3.1.1",
  "futures",
  "http-cache-reqwest",
  "itertools 0.14.0",
@@ -6191,7 +6201,7 @@ dependencies = [
  "console 0.16.0",
  "digest",
  "dirs",
- "fs-err",
+ "fs-err 3.1.1",
  "futures",
  "humantime",
  "indexmap 2.11.0",
@@ -6235,7 +6245,7 @@ dependencies = [
  "dashmap",
  "digest",
  "dirs",
- "fs-err",
+ "fs-err 3.1.1",
  "fs4",
  "futures",
  "fxhash",
@@ -6268,7 +6278,7 @@ dependencies = [
  "core-foundation 0.10.1",
  "dirs",
  "file_url",
- "fs-err",
+ "fs-err 3.1.1",
  "fxhash",
  "glob",
  "hex",
@@ -6362,7 +6372,7 @@ dependencies = [
  "chrono",
  "configparser",
  "dirs",
- "fs-err",
+ "fs-err 3.1.1",
  "known-folders",
  "once_cell",
  "plist",
@@ -6395,7 +6405,7 @@ dependencies = [
  "aws-sdk-s3",
  "base64 0.22.1",
  "dirs",
- "fs-err",
+ "fs-err 3.1.1",
  "getrandom 0.3.3",
  "google-cloud-auth",
  "http 1.3.1",
@@ -6421,7 +6431,7 @@ checksum = "6ca9f8b8de3797e2e23625d7a4a347d20b386a5a0618ce5ff83160f93e40d08d"
 dependencies = [
  "bzip2 0.6.0",
  "chrono",
- "fs-err",
+ "fs-err 3.1.1",
  "futures-util",
  "num_cpus",
  "rattler_conda_types",
@@ -6484,7 +6494,7 @@ dependencies = [
  "dashmap",
  "dirs",
  "file_url",
- "fs-err",
+ "fs-err 3.1.1",
  "futures",
  "hex",
  "http 1.3.1",
@@ -6533,7 +6543,7 @@ checksum = "342e5a46273b255acb7298a5c92c7ab4cf21536f75bb02c3f0628917a32e3023"
 dependencies = [
  "anyhow",
  "enum_dispatch",
- "fs-err",
+ "fs-err 3.1.1",
  "indexmap 2.11.0",
  "itertools 0.14.0",
  "rattler_conda_types",
@@ -8813,7 +8823,7 @@ source = "git+https://github.com/astral-sh/uv?tag=0.8.5#ce37286814dbb802c422f092
 dependencies = [
  "csv",
  "flate2",
- "fs-err",
+ "fs-err 3.1.1",
  "globset",
  "itertools 0.14.0",
  "rustc-hash",
@@ -8848,7 +8858,7 @@ version = "0.0.1"
 source = "git+https://github.com/astral-sh/uv?tag=0.8.5#ce37286814dbb802c422f0926487cfab7aefd2b7"
 dependencies = [
  "anstream",
- "fs-err",
+ "fs-err 3.1.1",
  "indoc",
  "itertools 0.14.0",
  "owo-colors",
@@ -8882,7 +8892,7 @@ name = "uv-cache"
 version = "0.0.1"
 source = "git+https://github.com/astral-sh/uv?tag=0.8.5#ce37286814dbb802c422f0926487cfab7aefd2b7"
 dependencies = [
- "fs-err",
+ "fs-err 3.1.1",
  "nanoid",
  "rmp-serde",
  "rustc-hash",
@@ -8907,7 +8917,7 @@ name = "uv-cache-info"
 version = "0.0.1"
 source = "git+https://github.com/astral-sh/uv?tag=0.8.5#ce37286814dbb802c422f0926487cfab7aefd2b7"
 dependencies = [
- "fs-err",
+ "fs-err 3.1.1",
  "globwalk",
  "serde",
  "thiserror 2.0.16",
@@ -8939,7 +8949,7 @@ dependencies = [
  "async_http_range_reader",
  "async_zip",
  "bytecheck",
- "fs-err",
+ "fs-err 3.1.1",
  "futures",
  "html-escape",
  "http 1.3.1",
@@ -8989,7 +8999,7 @@ source = "git+https://github.com/astral-sh/uv?tag=0.8.5#ce37286814dbb802c422f092
 dependencies = [
  "bitflags 2.9.3",
  "either",
- "fs-err",
+ "fs-err 3.1.1",
  "rayon",
  "rustc-hash",
  "same-file",
@@ -9027,7 +9037,7 @@ version = "0.0.1"
 source = "git+https://github.com/astral-sh/uv?tag=0.8.5#ce37286814dbb802c422f0926487cfab7aefd2b7"
 dependencies = [
  "etcetera",
- "fs-err",
+ "fs-err 3.1.1",
  "tracing",
  "uv-static",
 ]
@@ -9071,7 +9081,7 @@ source = "git+https://github.com/astral-sh/uv?tag=0.8.5#ce37286814dbb802c422f092
 dependencies = [
  "anyhow",
  "either",
- "fs-err",
+ "fs-err 3.1.1",
  "futures",
  "nanoid",
  "owo-colors",
@@ -9135,7 +9145,7 @@ source = "git+https://github.com/astral-sh/uv?tag=0.8.5#ce37286814dbb802c422f092
 dependencies = [
  "arcstr",
  "bitflags 2.9.3",
- "fs-err",
+ "fs-err 3.1.1",
  "http 1.3.1",
  "itertools 0.14.0",
  "jiff",
@@ -9175,7 +9185,7 @@ dependencies = [
  "async-compression",
  "async_zip",
  "blake2",
- "fs-err",
+ "fs-err 3.1.1",
  "futures",
  "md-5",
  "rayon",
@@ -9202,7 +9212,7 @@ dependencies = [
  "dunce",
  "either",
  "encoding_rs_io",
- "fs-err",
+ "fs-err 3.1.1",
  "fs2",
  "junction",
  "path-slash",
@@ -9226,7 +9236,7 @@ dependencies = [
  "anyhow",
  "cargo-util",
  "dashmap",
- "fs-err",
+ "fs-err 3.1.1",
  "reqwest 0.12.23",
  "reqwest-middleware",
  "thiserror 2.0.16",
@@ -9277,7 +9287,7 @@ dependencies = [
  "configparser",
  "csv",
  "data-encoding",
- "fs-err",
+ "fs-err 3.1.1",
  "mailparse",
  "pathdiff",
  "reflink-copy",
@@ -9310,7 +9320,7 @@ source = "git+https://github.com/astral-sh/uv?tag=0.8.5#ce37286814dbb802c422f092
 dependencies = [
  "anyhow",
  "async-channel",
- "fs-err",
+ "fs-err 3.1.1",
  "futures",
  "owo-colors",
  "rayon",
@@ -9361,7 +9371,7 @@ version = "0.1.0"
 source = "git+https://github.com/astral-sh/uv?tag=0.8.5#ce37286814dbb802c422f0926487cfab7aefd2b7"
 dependencies = [
  "async_zip",
- "fs-err",
+ "fs-err 3.1.1",
  "futures",
  "thiserror 2.0.16",
  "tokio",
@@ -9446,7 +9456,7 @@ name = "uv-platform"
 version = "0.0.1"
 source = "git+https://github.com/astral-sh/uv?tag=0.8.5#ce37286814dbb802c422f0926487cfab7aefd2b7"
 dependencies = [
- "fs-err",
+ "fs-err 3.1.1",
  "goblin",
  "procfs",
  "regex",
@@ -9510,7 +9520,7 @@ dependencies = [
  "anyhow",
  "configparser",
  "dunce",
- "fs-err",
+ "fs-err 3.1.1",
  "futures",
  "indexmap 2.11.0",
  "itertools 0.14.0",
@@ -9578,7 +9588,7 @@ dependencies = [
  "anyhow",
  "configparser",
  "console 0.16.0",
- "fs-err",
+ "fs-err 3.1.1",
  "futures",
  "rustc-hash",
  "serde",
@@ -9611,7 +9621,7 @@ name = "uv-requirements-txt"
 version = "0.0.1"
 source = "git+https://github.com/astral-sh/uv?tag=0.8.5#ce37286814dbb802c422f0926487cfab7aefd2b7"
 dependencies = [
- "fs-err",
+ "fs-err 3.1.1",
  "memchr",
  "reqwest 0.12.23",
  "reqwest-middleware",
@@ -9719,7 +9729,7 @@ name = "uv-state"
 version = "0.0.1"
 source = "git+https://github.com/astral-sh/uv?tag=0.8.5#ce37286814dbb802c422f0926487cfab7aefd2b7"
 dependencies = [
- "fs-err",
+ "fs-err 3.1.1",
  "tempfile",
  "uv-dirs",
 ]
@@ -9738,7 +9748,7 @@ version = "0.1.0"
 source = "git+https://github.com/astral-sh/uv?tag=0.8.5#ce37286814dbb802c422f0926487cfab7aefd2b7"
 dependencies = [
  "either",
- "fs-err",
+ "fs-err 3.1.1",
  "serde",
  "thiserror 2.0.16",
  "tracing",
@@ -9755,7 +9765,7 @@ name = "uv-trampoline-builder"
 version = "0.0.1"
 source = "git+https://github.com/astral-sh/uv?tag=0.8.5#ce37286814dbb802c422f0926487cfab7aefd2b7"
 dependencies = [
- "fs-err",
+ "fs-err 3.1.1",
  "thiserror 2.0.16",
  "uv-fs",
  "zip 2.4.2",
@@ -9796,7 +9806,7 @@ version = "0.0.4"
 source = "git+https://github.com/astral-sh/uv?tag=0.8.5#ce37286814dbb802c422f0926487cfab7aefd2b7"
 dependencies = [
  "console 0.16.0",
- "fs-err",
+ "fs-err 3.1.1",
  "itertools 0.14.0",
  "owo-colors",
  "pathdiff",
@@ -9828,7 +9838,7 @@ name = "uv-workspace"
 version = "0.0.1"
 source = "git+https://github.com/astral-sh/uv?tag=0.8.5#ce37286814dbb802c422f0926487cfab7aefd2b7"
 dependencies = [
- "fs-err",
+ "fs-err 3.1.1",
  "glob",
  "itertools 0.14.0",
  "owo-colors",
