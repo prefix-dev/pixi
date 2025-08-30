@@ -16,6 +16,12 @@ pixi global update [OPTIONS] [ENVIRONMENTS]...
 :  Specifies the environments that are to be updated
 <br>May be provided more than once.
 
+## Options
+- <a id="arg---dry-run" href="#arg---dry-run">`--dry-run (-n)`</a>
+:  Don't actually update any environment
+- <a id="arg---json" href="#arg---json">`--json`</a>
+:  Output the changes in JSON format
+
 ## Config Options
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
 :  Path to the file containing the authentication token
