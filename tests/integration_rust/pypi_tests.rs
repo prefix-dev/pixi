@@ -1,8 +1,7 @@
-use std::{io::Write, path::Path};
+use std::io::Write;
 
 use rattler_conda_types::Platform;
 use typed_path::Utf8TypedPath;
-use url::Url;
 
 use crate::common::pypi_index::{Database as PyPIDatabase, PyPIPackage};
 use crate::common::{LockFileExt, PixiControl};
