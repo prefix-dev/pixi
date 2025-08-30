@@ -532,7 +532,7 @@ async fn test_pinned_help_message() {
 
     // Expect failure
     let result = pixi.unwrap().update_lock_file().await;
-    let err = result.err().expect("expected a resolution error");
+    let err = result.expect_err("expected a resolution error");
     // Should contain pinned help message for pandas==1.0.0
     assert_eq!(
         format!("{}", err.help().unwrap()),

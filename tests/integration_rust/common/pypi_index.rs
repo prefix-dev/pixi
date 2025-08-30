@@ -10,6 +10,7 @@ use std::io::Write as _;
 use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, Utc};
+use fs_err as fs;
 use miette::IntoDiagnostic;
 use tempfile::TempDir;
 use url::Url;
@@ -124,7 +125,7 @@ impl Database {
     pub fn into_simple_index(self) -> miette::Result<SimpleIndex> {
         let dir = TempDir::new().into_diagnostic()?;
         let index_root = dir.path().join("index");
-        std::fs::create_dir_all(&index_root).into_diagnostic()?;
+        fs::create_dir_all(&index_root).into_diagnostic()?;
 
         // Group wheels by normalized project name
         use std::collections::BTreeMap;
@@ -133,7 +134,7 @@ impl Database {
         for pkg in &self.packages {
             let project = normalize_simple_name(&pkg.name);
             let project_dir = index_root.join(&project);
-            std::fs::create_dir_all(&project_dir).into_diagnostic()?;
+            fs::create_dir_all(&project_dir).into_diagnostic()?;
             // write wheel inside project dir
             let wheel_path = write_wheel(&project_dir, pkg)?;
             projects.entry(project).or_default().push(
@@ -154,7 +155,7 @@ impl Database {
                 let _ = writeln!(links, "<a href=\"{}\">{}</a>", fname, fname);
             }
             let html = INDEX_TMPL.replace("%LINKS%", &links);
-            std::fs::write(index_root.join(project).join("index.html"), html).into_diagnostic()?;
+            fs::write(index_root.join(project).join("index.html"), html).into_diagnostic()?;
         }
 
         // Write root index.html linking to projects
@@ -163,7 +164,7 @@ impl Database {
             let _ = writeln!(proj_links, "<a href=\"/{p}\">{p}</a>", p = project);
         }
         let root_html = INDEX_TMPL.replace("%LINKS%", &proj_links);
-        std::fs::write(index_root.join("index.html"), root_html).into_diagnostic()?;
+        fs::write(index_root.join("index.html"), root_html).into_diagnostic()?;
 
         Ok(SimpleIndex {
             dir,
