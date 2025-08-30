@@ -8,7 +8,7 @@ use pixi_build_frontend::{
     tool::{IsolatedTool, SystemTool, Tool},
 };
 use pixi_build_types::{PixiBuildApiVersion, procedures::initialize::InitializeParams};
-use pixi_spec::{SourceLocationSpec, SpecConversionError};
+use pixi_spec::SpecConversionError;
 use rattler_conda_types::ChannelConfig;
 use rattler_shell::{
     activation::{ActivationError, ActivationVariables, Activator},
@@ -18,7 +18,7 @@ use rattler_virtual_packages::DetectVirtualPackageError;
 use thiserror::Error;
 
 use crate::{
-    BuildEnvironment, CommandDispatcher, CommandDispatcherErrorResultExt,
+    BuildEnvironment, CommandDispatcher, CommandDispatcherErrorResultExt, SourceCheckoutError,
     command_dispatcher::error::CommandDispatcherError,
     instantiate_tool_env::{
         InstantiateToolEnvironmentError, InstantiateToolEnvironmentResult,
@@ -50,10 +50,18 @@ impl CommandDispatcher {
     ) -> Result<Backend, CommandDispatcherError<InstantiateBackendError>> {
         let BackendSpec::JsonRpc(backend_spec) = spec.backend_spec;
 
-        let source_dir = if let Some(SourceLocationSpec::Path(path)) = spec.init_params.source {
-            path.resolve(&spec.init_params.source_anchor)
-                .map_err(InstantiateBackendError::from)
-                .map_err(CommandDispatcherError::Failed)?
+        let source_dir = if let Some(source_location_spec) = spec.init_params.source {
+            // Use pin_and_checkout to handle all source types (path, git, url)
+            let checkout =
+                self.pin_and_checkout(source_location_spec)
+                    .await
+                    .map_err(|e| match e {
+                        CommandDispatcherError::Failed(err) => CommandDispatcherError::Failed(
+                            InstantiateBackendError::SourceCheckout(err),
+                        ),
+                        CommandDispatcherError::Cancelled => CommandDispatcherError::Cancelled,
+                    })?;
+            checkout.path
         } else {
             spec.init_params.source_anchor
         };
@@ -206,4 +214,8 @@ pub enum InstantiateBackendError {
 
     #[error(transparent)]
     SpecConversionError(#[from] SpecConversionError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    SourceCheckout(#[from] SourceCheckoutError),
 }
