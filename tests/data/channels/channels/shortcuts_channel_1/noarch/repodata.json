@@ -4,18 +4,31 @@
   },
   "packages": {},
   "packages.conda": {
-    "pixi-editor-0.1.3-h4616a5c_0.conda": {
+    "pixi-editor-1.0.0-h4616a5c_0.conda": {
       "build": "h4616a5c_0",
       "build_number": 0,
       "depends": [],
-      "md5": "710f47b333ecfeeaf1fd8e1b02542283",
+      "md5": "5b8c04e66f6bcbdf6563e3a84c4a92bc",
       "name": "pixi-editor",
       "noarch": "generic",
-      "sha256": "aa4823f8f8c9d999a97f7f85e17f24495b45892a6619c7875a255462bcb5e7d4",
-      "size": 335330,
+      "sha256": "181254b2d6a343088c939f6e2c077a0a1b5dd75b48dedc375078093263d1d419",
+      "size": 335993,
       "subdir": "noarch",
-      "timestamp": 1740648548184,
-      "version": "0.1.3"
+      "timestamp": 1756486136456,
+      "version": "1.0.0"
+    },
+    "pixi-editor-2.0.0-h4616a5c_0.conda": {
+      "build": "h4616a5c_0",
+      "build_number": 0,
+      "depends": [],
+      "md5": "d604f124886b285caf9a635f3e9ed8b5",
+      "name": "pixi-editor",
+      "noarch": "generic",
+      "sha256": "9fb8e7bcc3d7b62b0d75d160a08a980962eeb47450c591b18c0181b7fec95bcb",
+      "size": 337199,
+      "subdir": "noarch",
+      "timestamp": 1756486145266,
+      "version": "2.0.0"
     }
   },
   "repodata_version": 2
