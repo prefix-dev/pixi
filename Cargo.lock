@@ -4821,6 +4821,7 @@ dependencies = [
  "human_bytes",
  "indexmap 2.10.0",
  "indicatif",
+ "insta",
  "is_executable",
  "itertools 0.14.0",
  "libc",

@@ -126,6 +126,9 @@ uv-requirements-txt = { workspace = true }
 uv-types = { workspace = true }
 zip = { workspace = true, features = ["deflate", "time"] }
 
+[dev-dependencies]
+insta = { workspace = true, features = ["filters"] }
+
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true, default-features = false }
 nix = { workspace = true, features = ["poll", "term"] }
