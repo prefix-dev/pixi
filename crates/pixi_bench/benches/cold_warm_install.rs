@@ -171,7 +171,6 @@ fn bench_medium(c: &mut Criterion) {
 }
 
 fn bench_large(c: &mut Criterion) {
-    let env = IsolatedPixiEnv::new().expect("Failed to create isolated environment");
     let packages = [
         "pytorch",
         "scipy",
@@ -187,6 +186,7 @@ fn bench_large(c: &mut Criterion) {
 
     c.bench_function("cold_cache_large", |b| {
         b.iter(|| {
+            let env = IsolatedPixiEnv::new().expect("Failed to create isolated environment");
             let duration = env
                 .pixi_add_packages_timed(&packages)
                 .expect("Failed to time pixi add");
@@ -194,9 +194,13 @@ fn bench_large(c: &mut Criterion) {
         })
     });
 
+    // For warm installation, we have to first install packages then use the loop to reinstall them.
+    let env2 = IsolatedPixiEnv::new().expect("Failed to create isolated environment");
+    env2.pixi_add_packages_timed(&packages)
+        .expect("Failed to time pixi add");
     c.bench_function("warm_cache_large", |b| {
         b.iter(|| {
-            let duration = env
+            let duration = env2
                 .pixi_add_packages_timed(&packages)
                 .expect("Failed to time pixi add");
             black_box(duration);
