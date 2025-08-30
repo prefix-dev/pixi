@@ -82,6 +82,7 @@ platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
     }
 
     /// Run pixi add command with timing in the isolated environment
+    /// Times the entire process until all packages are actually installed
     fn pixi_add_packages_timed(
         &self,
         packages: &[&str],
@@ -102,70 +103,184 @@ platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
 
         println!("⏱️ Timing: pixi add {} (isolated)", packages.join(" "));
 
+        // Start timing from before the command execution
         let start = Instant::now();
+
+        // Execute the pixi add command
         let output = cmd.output()?;
-        let duration = start.elapsed();
 
         if !output.status.success() {
-            eprintln!(
-                "❌ pixi add failed: {}",
+            return Err(format!(
+                "pixi add failed: {}",
                 String::from_utf8_lossy(&output.stderr)
-            );
-        } else {
-            println!(
-                "✅ Added {} packages in {:.2}s (isolated)",
-                packages.len(),
-                duration.as_secs_f64()
-            );
+            )
+            .into());
         }
+
+        // Wait until all packages are actually installed in the environment
+        self.wait_for_packages_installed(packages)?;
+
+        // Total time includes command execution + waiting for installation completion
+        let duration = start.elapsed();
+
+        println!(
+            "✅ Added {} packages in {:.2}s (isolated)",
+            packages.len(),
+            duration.as_secs_f64()
+        );
 
         Ok(duration)
     }
+
+    /// Wait for all packages to be installed in the environment (polling every 100ms)
+    fn wait_for_packages_installed(
+        &self,
+        packages: &[&str],
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use std::thread::sleep;
+        use std::time::Duration as StdDuration;
+
+        const MAX_RETRIES: u32 = 200; // 200 retries * 100ms = 20 seconds max wait time
+        const RETRY_INTERVAL: StdDuration = StdDuration::from_millis(100);
+
+        for retry in 0..MAX_RETRIES {
+            // Run pixi list to check installed packages
+            let mut cmd = Command::new("pixi");
+            cmd.arg("list").current_dir(&self.project_dir);
+
+            // Set environment variables for isolation
+            for (key, value) in self.get_env_vars() {
+                cmd.env(key, value);
+            }
+
+            let output = cmd.output();
+
+            match output {
+                Ok(output) if output.status.success() => {
+                    let list_output = String::from_utf8_lossy(&output.stdout);
+
+                    // Check if all packages are present in the output
+                    let mut missing_packages = Vec::new();
+                    for package in packages {
+                        if !list_output.contains(package) {
+                            missing_packages.push(*package);
+                        }
+                    }
+
+                    if missing_packages.is_empty() {
+                        println!("✅ All {} packages validated as installed via 'pixi list' after {} retries ({}ms)", 
+                            packages.len(), retry + 1, (retry + 1) * 100);
+                        return Ok(());
+                    }
+
+                    if retry == MAX_RETRIES - 1 {
+                        return Err(format!(
+                            "The following packages were not found in 'pixi list' output after {} retries ({}ms): {}\nOutput: {}",
+                            MAX_RETRIES,
+                            MAX_RETRIES * 100,
+                            missing_packages.join(", "),
+                            list_output
+                        ).into());
+                    }
+
+                    // Only print status every 10 retries (every second) to avoid spam
+                    if retry % 10 == 0 {
+                        println!(
+                            "⏳ Waiting for packages to be installed... ({}ms elapsed) - Missing: {}",
+                            (retry + 1) * 100,
+                            missing_packages.join(", ")
+                        );
+                    }
+                }
+                Ok(output) => {
+                    // pixi list failed - environment might not be ready yet
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    if retry == MAX_RETRIES - 1 {
+                        return Err(format!(
+                            "pixi list command failed after {} retries ({}ms): {}",
+                            MAX_RETRIES,
+                            MAX_RETRIES * 100,
+                            stderr
+                        )
+                        .into());
+                    }
+
+                    // Only print error status every 10 retries to avoid spam
+                    if retry % 10 == 0 {
+                        println!(
+                            "⏳ pixi list not ready yet... ({}ms elapsed)",
+                            (retry + 1) * 100
+                        );
+                    }
+                }
+                Err(_) => {
+                    // Command execution failed
+                    if retry == MAX_RETRIES - 1 {
+                        return Err(format!(
+                            "Failed to execute pixi list command after {} retries ({}ms)",
+                            MAX_RETRIES,
+                            MAX_RETRIES * 100
+                        )
+                        .into());
+                    }
+                }
+            }
+
+            sleep(RETRY_INTERVAL);
+        }
+
+        Err("Package installation validation timed out".into())
+    }
 }
 
-// Cold cache benchmarks - each run gets a fresh isolated environment (already cold)
 fn bench_small(c: &mut Criterion) {
     let packages = ["numpy"];
-    let env = IsolatedPixiEnv::new().expect("Failed to create isolated environment");
 
     c.bench_function("cold_cache_small", |b| {
         b.iter(|| {
+            let env = IsolatedPixiEnv::new().expect("Failed to create isolated environment");
             let duration = env
                 .pixi_add_packages_timed(&packages)
                 .expect("Failed to time pixi add");
-            black_box(duration);
+            black_box(duration)
         })
     });
 
+    let env2 = IsolatedPixiEnv::new().expect("Failed to create isolated environment");
+    env2.pixi_add_packages_timed(&packages)
+        .expect("Failed to time pixi add");
     c.bench_function("warm_cache_small", |b| {
         b.iter(|| {
-            let duration = env
+            let duration = env2
                 .pixi_add_packages_timed(&packages)
                 .expect("Failed to time pixi add");
-            black_box(duration);
+            black_box(duration)
         })
     });
 }
 
 fn bench_medium(c: &mut Criterion) {
     let packages = ["numpy", "pandas", "requests", "click", "pyyaml"];
-    let env = IsolatedPixiEnv::new().expect("Failed to create isolated environment");
 
     c.bench_function("cold_cache_medium", |b| {
         b.iter(|| {
+            let env = IsolatedPixiEnv::new().expect("Failed to create isolated environment");
             let duration = env
                 .pixi_add_packages_timed(&packages)
                 .expect("Failed to time pixi add");
-            black_box(duration);
+            black_box(duration)
         })
     });
 
+    let env2 = IsolatedPixiEnv::new().expect("Failed to create isolated environment");
+    env2.pixi_add_packages_timed(&packages)
+        .expect("Failed to time pixi add");
     c.bench_function("warm_cache_medium", |b| {
         b.iter(|| {
-            let duration = env
+            let duration = env2
                 .pixi_add_packages_timed(&packages)
                 .expect("Failed to time pixi add");
-            black_box(duration);
+            black_box(duration)
         })
     });
 }
@@ -190,11 +305,10 @@ fn bench_large(c: &mut Criterion) {
             let duration = env
                 .pixi_add_packages_timed(&packages)
                 .expect("Failed to time pixi add");
-            black_box(duration);
+            black_box(duration)
         })
     });
 
-    // For warm installation, we have to first install packages then use the loop to reinstall them.
     let env2 = IsolatedPixiEnv::new().expect("Failed to create isolated environment");
     env2.pixi_add_packages_timed(&packages)
         .expect("Failed to time pixi add");
@@ -203,7 +317,7 @@ fn bench_large(c: &mut Criterion) {
             let duration = env2
                 .pixi_add_packages_timed(&packages)
                 .expect("Failed to time pixi add");
-            black_box(duration);
+            black_box(duration)
         })
     });
 }
