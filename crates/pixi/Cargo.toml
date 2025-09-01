@@ -83,3 +83,6 @@ zip = { workspace = true }
 [[test]]
 name = "integration_rust"
 path = "../../tests/integration_rust/main.rs"
+
+[package.metadata.wix]
+include = ["../../wix/**/*"]
