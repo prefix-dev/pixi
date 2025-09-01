@@ -30,7 +30,7 @@ use pixi_cli::{
 };
 use pixi_consts::consts;
 use pixi_core::{
-    UpdateLockFileOptions, Workspace,
+    InstallFilter, UpdateLockFileOptions, Workspace,
     lock_file::{ReinstallPackages, UpdateMode},
 };
 use pixi_manifest::{EnvironmentName, FeatureName};
@@ -524,7 +524,7 @@ impl PixiControl {
                             &task.run_environment,
                             UpdateMode::Revalidate,
                             &ReinstallPackages::default(),
-                            &[],
+                            &InstallFilter::default(),
                         )
                         .await?;
                     let env =
@@ -568,6 +568,8 @@ impl PixiControl {
                 config: Default::default(),
                 all: false,
                 skip: None,
+                skip_with_deps: None,
+                only: None,
             },
         }
     }

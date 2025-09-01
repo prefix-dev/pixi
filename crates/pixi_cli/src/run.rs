@@ -258,7 +258,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                             &executable_task.run_environment,
                             UpdateMode::QuickValidate,
                             &ReinstallPackages::default(),
-                            &[],
+                            &pixi_core::environment::InstallFilter::default(),
                         )
                         .await?;
                 }

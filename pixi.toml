@@ -5,10 +5,9 @@ authors = [
   "Tim de Jager <tim@prefix.dev>",
   "Ruben Arts <ruben@prefix.dev>",
 ]
+channels = ["https://prefix.dev/conda-forge"]
 description = "Package management made easy!"
 name = "pixi"
-# Using faster repodata fetching from our experimental fast channel, which implements https://github.com/conda/ceps/pull/75
-channels = ["https://prefix.dev/conda-forge"]
 platforms = ["linux-64", "win-64", "osx-64", "osx-arm64", "linux-aarch64"]
 requires-pixi = ">=0.45"
 

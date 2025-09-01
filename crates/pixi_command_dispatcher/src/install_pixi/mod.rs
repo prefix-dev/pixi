@@ -37,6 +37,10 @@ pub struct InstallPixiEnvironmentSpec {
     #[serde(skip)]
     pub records: Vec<PixiRecord>,
 
+    /// The packages to ignore, meaning dont remove if not present in records
+    /// do not update when also present in PixiRecord
+    pub ignore_packages: Option<HashSet<PackageName>>,
+
     /// The location to create the prefix at.
     #[serde(skip)]
     pub prefix: Prefix,
@@ -98,6 +102,7 @@ impl InstallPixiEnvironmentSpec {
             records,
             prefix,
             installed: None,
+            ignore_packages: None,
             build_environment: BuildEnvironment::default(),
             force_reinstall: HashSet::new(),
             channels: Vec::new(),
@@ -132,6 +137,14 @@ impl InstallPixiEnvironmentSpec {
         binary_records.reserve(source_records.len());
         let mut build_futures = ExecutorFutures::new(command_dispatcher.executor());
         for source_record in source_records {
+            // Do not build if package is explicitly ignored
+            if self
+                .ignore_packages
+                .as_ref()
+                .is_some_and(|ignore| ignore.contains(&source_record.package_record.name))
+            {
+                continue;
+            }
             build_futures.push(async {
                 self.build_from_source(&command_dispatcher, &source_record)
                     .await
@@ -161,6 +174,7 @@ impl InstallPixiEnvironmentSpec {
             .with_download_client(command_dispatcher.download_client().clone())
             .with_package_cache(command_dispatcher.package_cache().clone())
             .with_reinstall_packages(self.force_reinstall)
+            .with_ignored_packages(self.ignore_packages.unwrap_or_default())
             .with_execute_link_scripts(command_dispatcher.allow_execute_link_scripts())
             .with_installed_packages(installed_packages);
 

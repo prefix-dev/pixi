@@ -54,7 +54,6 @@ dunce = { workspace = true }
 fancy_display = { workspace = true }
 flate2 = { workspace = true }
 fs-err = { workspace = true, features = ["tokio"] }
-fs_extra = { workspace = true }
 futures = { workspace = true }
 human_bytes = { workspace = true }
 indexmap = { workspace = true, features = ["serde"] }
@@ -80,7 +79,6 @@ pixi_spec = { workspace = true }
 pixi_task = { workspace = true }
 pixi_utils = { workspace = true, default-features = false }
 pixi_uv_conversions = { workspace = true }
-pypi_mapping = { workspace = true }
 pypi_modifiers = { workspace = true }
 rattler = { workspace = true, features = ["cli-tools", "indicatif"] }
 rattler_conda_types = { workspace = true }
@@ -118,18 +116,18 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true, features = ["env-filter"] }
 typed-path = { workspace = true }
 url = { workspace = true }
-uv-cache = { workspace = true }
 uv-client = { workspace = true }
 uv-configuration = { workspace = true }
 uv-distribution = { workspace = true }
-uv-installer = { workspace = true }
 uv-normalize = { workspace = true }
 uv-pep508 = { workspace = true }
 uv-pypi-types = { workspace = true }
-uv-python = { workspace = true }
 uv-requirements-txt = { workspace = true }
 uv-types = { workspace = true }
 zip = { workspace = true, features = ["deflate", "time"] }
+
+[dev-dependencies]
+insta = { workspace = true, features = ["filters"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true, default-features = false }
@@ -137,17 +135,3 @@ nix = { workspace = true, features = ["poll", "term"] }
 pixi_pty = { path = "../pixi_pty" }
 sha2 = { workspace = true, features = ["asm"] }
 signal-hook = { workspace = true }
-
-[dev-dependencies]
-async-trait = { workspace = true }
-fake = "4.0.0"
-http = { workspace = true }
-insta = { workspace = true, features = ["yaml", "glob", "filters"] }
-pixi_test_utils = { workspace = true }
-rstest = { workspace = true }
-serde_json = { workspace = true }
-tokio = { workspace = true, features = ["rt"] }
-
-[[test]]
-name = "integration_rust"
-path = "../../tests/integration_rust/main.rs"
