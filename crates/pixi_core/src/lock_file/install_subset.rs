@@ -83,7 +83,7 @@ impl<'a> From<LockedPackageRef<'a>> for PackageNode {
 /// - `skip_direct` (passthrough): drop only the node; continue traversal through
 ///   its dependencies so they can still be kept if reachable.
 ///
-/// When `target_package` is set, the target acts as the sole root of traversal.
+/// When `target_packages` are set, the targets act as the roots of traversal.
 /// The result returns both the packages to install/process and to ignore,
 /// preserving the original package order.
 ///
@@ -101,8 +101,8 @@ pub struct InstallSubset<'a> {
     skip_with_deps: &'a [String],
     /// Packages to skip directly but traverse through (passthrough)
     skip_direct: &'a [String],
-    /// What package should be targeted directly (zooming in)
-    target_package: Option<&'a str>,
+    /// Which packages should be targeted directly (zooming in); empty means no targeting
+    target_packages: &'a [String],
 }
 
 impl<'a> InstallSubset<'a> {
@@ -110,12 +110,12 @@ impl<'a> InstallSubset<'a> {
     pub fn new(
         skip_with_deps: &'a [String],
         skip_direct: &'a [String],
-        target_package: Option<&'a str>,
+        target_packages: &'a [String],
     ) -> Self {
         Self {
             skip_with_deps,
             skip_direct,
-            target_package,
+            target_packages,
         }
     }
 
@@ -124,7 +124,7 @@ impl<'a> InstallSubset<'a> {
     /// Both traversals run in O(V+E) time on the constructed graph.
     /// Algorithm overview:
     /// - Convert the input packages to a compact graph representation.
-    /// - If a `target_package` is provided: run a BFS starting at that target,
+    /// - If `target_packages` are provided: run a BFS starting at those targets,
     ///   short-circuiting at `skip_with_deps` and not including nodes in `skip_direct`.
     /// - Else (skip-mode): find original graph roots (indegree 0) and run a BFS
     ///   from those roots, again not traversing into `skip_with_deps`, and exclude
@@ -140,35 +140,32 @@ impl<'a> InstallSubset<'a> {
 
         let all_packages: Vec<_> = packages.into_iter().collect();
 
-        let filtered_packages = match self.target_package {
-            Some(target) => {
-                // Target mode: Collect target + dependencies with skip short-circuiting
-                let reach = Self::build_reachability(&all_packages);
-                let required = reach.collect_target_dependencies(
-                    target,
-                    // This is the stop set, because we just short-circuit getting dependencies
-                    self.skip_with_deps,
-                    // This is the pasthrough set, because we are basically edge-joining
-                    self.skip_direct,
-                );
+        let filtered_packages = if !self.target_packages.is_empty() {
+            // Target mode: Collect targets + dependencies with skip short-circuiting
+            let reach = Self::build_reachability(&all_packages);
+            let required = reach.collect_targets_dependencies(
+                self.target_packages,
+                // This is the stop set, because we just short-circuit getting dependencies
+                self.skip_with_deps,
+                // This is the passthrough set, because we are basically edge-joining
+                self.skip_direct,
+            );
 
-                // Map what we get back
-                let to_process: Vec<_> = all_packages
-                    .iter()
-                    .filter(|pkg| required.contains(pkg.name()))
-                    .copied()
-                    .collect();
-                let to_ignore: Vec<_> = all_packages
-                    .iter()
-                    .filter(|pkg| !required.contains(pkg.name()))
-                    .copied()
-                    .collect();
-                FilteredPackages::new(to_process, to_ignore)
-            }
-            None => {
-                // Skip mode: Apply stop/passthrough rules from original roots
-                self.filter_with_skips(&all_packages)
-            }
+            // Map what we get back
+            let to_process: Vec<_> = all_packages
+                .iter()
+                .filter(|pkg| required.contains(pkg.name()))
+                .copied()
+                .collect();
+            let to_ignore: Vec<_> = all_packages
+                .iter()
+                .filter(|pkg| !required.contains(pkg.name()))
+                .copied()
+                .collect();
+            FilteredPackages::new(to_process, to_ignore)
+        } else {
+            // Skip mode: Apply stop/passthrough rules from original roots
+            self.filter_with_skips(&all_packages)
         };
 
         filtered_packages
@@ -291,8 +288,8 @@ impl PackageReachability {
         }
     }
 
-    /// Collect target package and all its dependencies, excluding specified packages.
-    /// Collect all packages reachable from `target` under skip rules.
+    /// Collect target package(s) and all their dependencies, excluding specified packages.
+    /// Collect all packages reachable from `targets` under skip rules.
     ///
     /// Semantics:
     /// - `stop_set` (skip-with-deps): do not include the node and do not traverse
@@ -302,9 +299,9 @@ impl PackageReachability {
     ///
     /// Implementation details:
     /// - Uses index-based BFS over `edges` with boolean bitsets for membership tests
-    pub(crate) fn collect_target_dependencies(
+    pub(crate) fn collect_targets_dependencies(
         &self,
-        target: &str,
+        targets: &[String],
         stop_set: &[String],
         passthrough_set: &[String],
     ) -> HashSet<String> {
@@ -323,15 +320,18 @@ impl PackageReachability {
             }
         }
 
-        // BFS over target's dependency tree with exclusions
+        // BFS over targets' dependency trees with exclusions
         let mut included = vec![false; self.nodes.len()];
         let mut seen = vec![false; self.nodes.len()];
         let mut queue = VecDeque::new();
 
-        // Start from the target if it exists; otherwise nothing is required.
-        if let Some(&start) = self.name_to_index.get(target) {
-            queue.push_back(start);
-        } else {
+        // Start from all provided targets that exist; if none exist, nothing is required.
+        for target in targets {
+            if let Some(&start) = self.name_to_index.get(target) {
+                queue.push_back(start);
+            }
+        }
+        if queue.is_empty() {
             return HashSet::new();
         }
 
@@ -517,7 +517,7 @@ mod tests {
             node("D", &["C"]),
         ];
         let dc = PackageReachability::new(nodes);
-        let required = dc.collect_target_dependencies("A", &["B".to_string()], &[]);
+        let required = dc.collect_targets_dependencies(&["A".to_string()], &["B".to_string()], &[]);
 
         assert!(required.contains("A"));
         assert!(!required.contains("B"));
@@ -546,10 +546,73 @@ mod tests {
             node("D", &["C"]),
         ];
         let dc = PackageReachability::new(nodes);
-        let required = dc.collect_target_dependencies("A", &[], &["B".to_string()]);
+        let required = dc.collect_targets_dependencies(&["A".to_string()], &[], &["B".to_string()]);
         assert!(required.contains("A"));
         assert!(!required.contains("B"));
         assert!(required.contains("C"));
+    }
+
+    #[test]
+    fn multiple_targets_union_dependencies() {
+        // Graph: A -> X, B -> Y, X -> Z, Y -> Z
+        // Targets: A and B should include A, B, X, Y, Z
+        let nodes = vec![
+            node("A", &["X"]),
+            node("B", &["Y"]),
+            node("X", &["Z"]),
+            node("Y", &["Z"]),
+            node("Z", &[]),
+        ];
+        let dc = PackageReachability::new(nodes);
+        let required =
+            dc.collect_targets_dependencies(&["A".to_string(), "B".to_string()], &[], &[]);
+        for n in ["A", "B", "X", "Y", "Z"] {
+            assert!(required.contains(n), "expected to contain {}", n);
+        }
+    }
+
+    #[test]
+    fn multiple_targets_respect_passthrough_skips() {
+        // A -> B, C -> D; skip_direct = B
+        // Targets A, C => include A, C, D; exclude B
+        let nodes = vec![
+            node("A", &["B"]),
+            node("B", &[]),
+            node("C", &["D"]),
+            node("D", &[]),
+        ];
+        let dc = PackageReachability::new(nodes);
+        let required = dc.collect_targets_dependencies(
+            &vec!["A".to_string(), "C".to_string()],
+            &[],
+            &vec!["B".to_string()],
+        );
+        assert!(required.contains("A"));
+        assert!(required.contains("C"));
+        assert!(required.contains("D"));
+        assert!(!required.contains("B"));
+    }
+
+    #[test]
+    fn multiple_targets_respect_stop_skips() {
+        // A -> B, C -> D; skip_with_deps = B
+        // Targets A, C => include A (but not B), include C and D
+        let nodes = vec![
+            node("A", &["B"]),
+            node("B", &[]),
+            node("C", &["D"]),
+            node("D", &[]),
+        ];
+        let dc = PackageReachability::new(nodes);
+        let required = dc.collect_targets_dependencies(
+            &vec!["A".to_string(), "C".to_string()],
+            &vec!["B".to_string()],
+            &[],
+        );
+        assert!(required.contains("A"));
+        assert!(required.contains("C"));
+        assert!(required.contains("D"));
+        assert!(!required.contains("B"));
     }
 
     #[test]
@@ -566,6 +629,16 @@ mod tests {
         assert!(
             kept.contains("A") && !kept.contains("B") && kept.contains("C") && kept.contains("D")
         );
+    }
+
+    #[test]
+    fn skipped_is_same_as_target() {
+        // A -> B, A -> C, we both target and skip A, in our current implementation the skipped takes precedence over only
+        let nodes = vec![node("A", &["B", "C"]), node("B", &[]), node("C", &[])];
+
+        let dc = PackageReachability::new(nodes);
+        let kept = dc.collect_targets_dependencies(&["A".to_string()], &["A".to_string()], &[]);
+        assert!(kept.is_empty());
     }
 
     #[test]

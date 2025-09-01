@@ -478,8 +478,8 @@ pub struct InstallFilter {
     pub skip_direct: Vec<String>,
     /// Packages to skip together with their dependencies (hard stop)
     pub skip_with_deps: Vec<String>,
-    /// Target a single package (and its deps) to install
-    pub target_package: Option<String>,
+    /// Target one or more packages (and their deps) to install; empty means no targeting
+    pub target_packages: Vec<String>,
 }
 
 impl InstallFilter {
@@ -497,8 +497,8 @@ impl InstallFilter {
         self
     }
 
-    pub fn target_package(mut self, package: Option<String>) -> Self {
-        self.target_package = package;
+    pub fn target_packages(mut self, packages: impl Into<Vec<String>>) -> Self {
+        self.target_packages = packages.into();
         self
     }
 }

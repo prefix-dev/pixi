@@ -24,7 +24,8 @@ pixi install [OPTIONS]
 :  Skip a package and its entire dependency subtree. This performs a hard exclusion: the package and its dependencies are not installed unless reachable from another non-skipped root
 <br>May be provided more than once.
 - <a id="arg---only" href="#arg---only">`--only <ONLY>`</a>
-:  Install and build only this package and its dependencies
+:  Install and build only these package(s) and their dependencies. Can be passed multiple times
+<br>May be provided more than once.
 
 ## Config Options
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
