@@ -132,7 +132,7 @@ async fn install_filter_target_package_zoom_in() {
         .update_lock_file(UpdateLockFileOptions::default())
         .await
         .unwrap();
-    let filter = InstallFilter::new().target_package(Some("a".to_string()));
+    let filter = InstallFilter::new().target_packages(vec!["a".to_string()]);
     let skipped = derived
         .get_filtered_package_names(&env, &filter)
         .unwrap()
@@ -154,7 +154,7 @@ async fn install_filter_target_with_skip_with_deps_stop() {
         .await
         .unwrap();
     let filter = InstallFilter::new()
-        .target_package(Some("a".to_string()))
+        .target_packages(vec!["a".to_string()])
         .skip_with_deps(vec!["c".to_string()]);
     let skipped = derived
         .get_filtered_package_names(&env, &filter)

@@ -469,8 +469,8 @@ impl InstallBuilder {
         self.args.skip_with_deps = Some(names);
         self
     }
-    pub fn with_only_package(mut self, pkg: impl Into<String>) -> Self {
-        self.args.only = Some(pkg.into());
+    pub fn with_only_package(mut self, pkg: Vec<String>) -> Self {
+        self.args.only = Some(pkg);
         self
     }
 }
