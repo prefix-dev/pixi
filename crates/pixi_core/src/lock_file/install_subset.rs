@@ -583,9 +583,9 @@ mod tests {
         ];
         let dc = PackageReachability::new(nodes);
         let required = dc.collect_targets_dependencies(
-            &vec!["A".to_string(), "C".to_string()],
+            &["A".to_string(), "C".to_string()],
             &[],
-            &vec!["B".to_string()],
+            &["B".to_string()],
         );
         assert!(required.contains("A"));
         assert!(required.contains("C"));
@@ -605,8 +605,8 @@ mod tests {
         ];
         let dc = PackageReachability::new(nodes);
         let required = dc.collect_targets_dependencies(
-            &vec!["A".to_string(), "C".to_string()],
-            &vec!["B".to_string()],
+            &["A".to_string(), "C".to_string()],
+            &["B".to_string()],
             &[],
         );
         assert!(required.contains("A"));

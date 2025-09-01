@@ -123,7 +123,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let skip_opts = args.skip.is_some()
         || args.skip_with_deps.is_some()
-        || args.only.as_ref().map_or(false, |v| !v.is_empty());
+        || args.only.as_ref().is_some_and(|v| !v.is_empty());
 
     if installed_envs.len() == 1 {
         write!(
@@ -144,7 +144,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             let num_retained = names.retained.len();
 
             // When only is set, also print the number of packages that will be installed
-            if args.only.as_ref().map_or(false, |v| !v.is_empty()) {
+            if args.only.as_ref().is_some_and(|v| !v.is_empty()) {
                 write!(&mut message, ", including {} packages", num_retained).unwrap();
             }
 
