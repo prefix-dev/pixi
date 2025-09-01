@@ -11028,7 +11028,9 @@ pixi install [OPTIONS]
 
   May be provided more than once.
 
-- [`--only <ONLY>`](#arg---only) Install and build only this package and its dependencies
+- [`--only <ONLY>`](#arg---only) Install and build only these package(s) and their dependencies. Can be passed multiple times
+
+  May be provided more than once.
 
 ## Config Options
 
