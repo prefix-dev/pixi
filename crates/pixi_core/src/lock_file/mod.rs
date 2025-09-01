@@ -1,3 +1,4 @@
+mod install_subset;
 mod outdated;
 mod package_identifier;
 mod records_by_name;
@@ -9,6 +10,7 @@ mod utils;
 pub mod virtual_packages;
 
 pub use crate::environment::CondaPrefixUpdater;
+pub use install_subset::{FilteredPackages, InstallSubset};
 pub use package_identifier::PypiPackageIdentifier;
 use pixi_record::PixiRecord;
 use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};

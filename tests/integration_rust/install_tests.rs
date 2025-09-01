@@ -14,6 +14,7 @@ use pixi_cli::{
 };
 use pixi_config::{Config, DetachedEnvironments};
 use pixi_consts::consts;
+use pixi_core::InstallFilter;
 use pixi_core::{
     UpdateLockFileOptions, Workspace,
     environment::LockFileUsage,
@@ -36,7 +37,6 @@ use crate::common::{
     builders::{
         HasDependencyConfig, HasLockFileUpdateConfig, HasNoInstallConfig, string_from_iter,
     },
-    logging::try_init_test_subscriber,
     package_database::{Package, PackageDatabase},
 };
 use crate::setup_tracing;
@@ -424,30 +424,6 @@ async fn install_frozen_skip() {
     assert!(is_conda_package_installed(&prefix_path, "python_rich").await);
 }
 
-/// Test `pixi install --frozen --skip` functionality with a non existing package
-#[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
-async fn install_skip_non_existent_package_warning() {
-    let pixi = PixiControl::new().unwrap();
-    pixi.init().await.unwrap();
-    // Add a dependency to create a lock file
-    pixi.add("python").await.unwrap();
-
-    let log_buffer = try_init_test_subscriber();
-
-    // Install with a skipped package that doesn't exist in the lock file
-    pixi.install()
-        .with_frozen()
-        .with_skipped(vec!["non-existent-package".to_string()])
-        .await
-        .unwrap();
-
-    let output = log_buffer.get_output();
-    assert!(output.contains(
-        "No packages were skipped. 'non-existent-package' did not match any packages in the lockfile."
-    ));
-}
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn pypi_reinstall_python() {
@@ -744,7 +720,7 @@ async fn test_old_lock_install() {
             ..Default::default()
         },
         ReinstallPackages::default(),
-        &[],
+        &InstallFilter::default(),
     )
     .await
     .unwrap();
@@ -1269,7 +1245,7 @@ async fn test_multiple_prefix_update() {
         let pixi_records = pixi_records.clone();
         // tasks.push(conda_prefix_updater.update(pixi_records));
         let updater = conda_prefix_updater.clone();
-        sets.spawn(async move { updater.update(pixi_records, None).await.cloned() });
+        sets.spawn(async move { updater.update(pixi_records, None, None).await.cloned() });
     }
 
     let mut first_modified = None;

@@ -12,7 +12,7 @@ use pixi_config::{ConfigCli, ConfigCliActivation, ConfigCliPrompt};
 use pixi_core::{
     UpdateLockFileOptions, WorkspaceLocator,
     activation::CurrentEnvVarBehavior,
-    environment::get_update_lock_file_and_prefix,
+    environment::{InstallFilter, get_update_lock_file_and_prefix},
     lock_file::{ReinstallPackages, UpdateMode},
     prompt,
     workspace::get_activated_environment_variables,
@@ -344,7 +344,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         },
         ReinstallPackages::default(),
-        &[],
+        &InstallFilter::default(),
     )
     .await?;
     let lock_file = lock_file_data.into_lock_file();

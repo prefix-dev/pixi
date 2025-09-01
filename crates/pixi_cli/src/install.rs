@@ -4,7 +4,7 @@ use itertools::Itertools;
 use pixi_config::ConfigCli;
 use pixi_core::{
     UpdateLockFileOptions, WorkspaceLocator,
-    environment::get_update_lock_file_and_prefixes,
+    environment::{InstallFilter, get_update_lock_file_and_prefixes},
     lock_file::{ReinstallPackages, UpdateMode},
 };
 use std::fmt::Write;
@@ -49,11 +49,20 @@ pub struct Args {
     #[arg(long, short, conflicts_with = "environment")]
     pub all: bool,
 
-    /// Skip installation of specific packages present in the lockfile. Requires --frozen.
-    /// This can be useful for instance in a Dockerfile to skip local source dependencies when installing dependencies.
-    #[arg(long, requires = "frozen")]
+    /// Skip installation of specific packages present in the lockfile. This uses a soft exclusion: the package will be skipped but its dependencies are installed.
+    #[arg(long)]
     pub skip: Option<Vec<String>>,
+
+    /// Skip a package and its entire dependency subtree. This performs a hard exclusion: the package and its dependencies are not installed unless reachable from another non-skipped root.
+    #[arg(long)]
+    pub skip_with_deps: Option<Vec<String>>,
+
+    /// Install and build only this package and its dependencies
+    #[arg(long)]
+    pub only: Option<String>,
 }
+
+const SKIP_CUTOFF: usize = 5;
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
@@ -84,6 +93,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .map(|env| workspace.environment_from_name_or_env_var(Some(env)))
         .collect::<Result<Vec<_>, _>>()?;
 
+    // Build the install filter from CLI args
+    let filter = InstallFilter::new()
+        .skip_direct(args.skip.clone().unwrap_or_default())
+        .skip_with_deps(args.skip_with_deps.clone().unwrap_or_default())
+        .target_package(args.only.clone());
+
     // Update the prefixes by installing all packages
     let (lock_file, _) = get_update_lock_file_and_prefixes(
         &environments,
@@ -94,7 +109,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         },
         ReinstallPackages::default(),
-        &args.skip.clone().unwrap_or_default(),
+        &filter,
     )
     .await?;
 
@@ -106,6 +121,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Message what's installed
     let mut message = console::style(console::Emoji("✔ ", "")).green().to_string();
 
+    let skip_opts = args.skip.is_some() || args.skip_with_deps.is_some() || args.only.is_some();
+
     if installed_envs.len() == 1 {
         write!(
             &mut message,
@@ -113,6 +130,70 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             installed_envs[0].fancy_display(),
         )
         .unwrap();
+
+        if skip_opts {
+            let names = lock_file.get_filtered_package_names(
+                environments
+                    .first()
+                    .expect("at least one environment should be available"),
+                &filter,
+            )?;
+            let num_skipped = names.ignored.len();
+            let num_retained = names.retained.len();
+
+            // When only is set, also print the number of packages that will be installed
+            if args.only.is_some() {
+                write!(&mut message, ", including {} packages", num_retained).unwrap();
+            }
+
+            // Create set of unmatched packages, that matches the skip filter
+            let (matched, unmatched): (Vec<_>, Vec<_>) = args
+                .skip
+                .iter()
+                .flatten()
+                .chain(args.skip_with_deps.iter().flatten())
+                .partition(|name| names.ignored.contains(*name));
+
+            if !unmatched.is_empty() {
+                tracing::warn!(
+                    "The skipped arg(s) '{}' did not match any packages in the lock file",
+                    unmatched.into_iter().join(", ")
+                );
+            }
+
+            if !num_skipped > 0 {
+                if num_skipped > 0 && num_skipped < SKIP_CUTOFF {
+                    let mut skipped_packages_vec: Vec<_> = names.ignored.into_iter().collect();
+                    skipped_packages_vec.sort();
+
+                    write!(
+                        &mut message,
+                        " excluding '{}'",
+                        skipped_packages_vec.join("', '")
+                    )
+                    .unwrap();
+                } else if num_skipped > 0 {
+                    let num_matched = matched.len();
+                    if num_matched > 0 {
+                        write!(
+                            &mut message,
+                            " excluding '{}' and {} other packages",
+                            matched.into_iter().join("', '"),
+                            num_skipped
+                        )
+                        .unwrap()
+                    } else {
+                        write!(&mut message, " excluding {} other packages", num_skipped).unwrap()
+                    }
+                } else {
+                    write!(
+                        &mut message,
+                        " no packages were skipped (check if cli args were correct)"
+                    )
+                    .unwrap();
+                }
+            }
+        }
     } else {
         write!(
             &mut message,
@@ -129,30 +210,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             console::style(path.display()).bold()
         )
         .unwrap()
-    }
-
-    if let Some(skip) = &args.skip {
-        let mut all_skipped_packages = std::collections::HashSet::new();
-        for env in &environments {
-            let skipped_packages = lock_file.get_skipped_package_names(env, skip)?;
-            all_skipped_packages.extend(skipped_packages);
-        }
-
-        if !all_skipped_packages.is_empty() {
-            let mut skipped_packages_vec: Vec<_> = all_skipped_packages.into_iter().collect();
-            skipped_packages_vec.sort();
-            write!(
-                &mut message,
-                " excluding '{}'",
-                skipped_packages_vec.join("', '")
-            )
-            .unwrap();
-        } else {
-            tracing::warn!(
-                "No packages were skipped. '{}' did not match any packages in the lockfile.",
-                skip.join("', '")
-            );
-        }
     }
 
     eprintln!("{}.", message);
