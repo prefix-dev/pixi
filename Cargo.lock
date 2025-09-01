@@ -4717,6 +4717,7 @@ dependencies = [
  "uv-installer",
  "uv-pep508",
  "uv-python",
+ "zip 2.4.2",
 ]
 
 [[package]]

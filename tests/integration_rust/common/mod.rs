@@ -4,6 +4,7 @@ pub mod builders;
 pub mod client;
 pub mod logging;
 pub mod package_database;
+pub mod pypi_index;
 
 use std::{
     ffi::OsString,

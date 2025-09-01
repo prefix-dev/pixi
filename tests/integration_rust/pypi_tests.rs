@@ -1,9 +1,9 @@
-use std::{io::Write, path::Path};
+use std::io::Write;
 
 use rattler_conda_types::Platform;
 use typed_path::Utf8TypedPath;
-use url::Url;
 
+use crate::common::pypi_index::{Database as PyPIDatabase, PyPIPackage};
 use crate::common::{LockFileExt, PixiControl};
 use crate::setup_tracing;
 use std::fs::File;
@@ -13,11 +13,18 @@ use std::fs::File;
 async fn test_flat_links_based_index_returns_path() {
     setup_tracing();
 
-    let pypi_indexes = Path::new(env!("CARGO_WORKSPACE_DIR")).join("tests/data/pypi-indexes");
+    // Build a local flat (find-links) index with a single wheel: foo==1.0.0
+    let index = PyPIDatabase::new()
+        .with(PyPIPackage::new("foo", "1.0.0"))
+        .into_flat_index()
+        .expect("failed to create local flat index");
+
+    let find_links_path = index.path().display().to_string().replace('\\', "/");
+
     let pixi = PixiControl::from_manifest(&format!(
         r#"
         [project]
-        name = "pypi-extra-index-url"
+        name = "pypi-flat-find-links"
         platforms = ["{platform}"]
         channels = ["https://prefix.dev/conda-forge"]
 
@@ -28,24 +35,23 @@ async fn test_flat_links_based_index_returns_path() {
         foo = "*"
 
         [pypi-options]
-        find-links = [{{ path = "{pypi_indexes}/multiple-indexes-a/flat"}}]"#,
+        find-links = [{{ path = "{find_links_path}"}}]
+        "#,
         platform = Platform::current(),
-        pypi_indexes = pypi_indexes.display().to_string().replace("\\", "/"),
+        find_links_path = find_links_path,
     ));
     let lock_file = pixi.unwrap().update_lock_file().await.unwrap();
 
-    // This assertion is specifically to test that if we have a url-based *local* index
-    // we will get a path back to the index and the corresponding file
+    // Expect the locked URL to be a local path pointing at our generated wheel.
+    // Our wheel builder uses the tag py3-none-any by default.
     assert_eq!(
         lock_file
             .get_pypi_package_url("default", Platform::current(), "foo")
             .unwrap()
             .as_path()
             .unwrap(),
-        Utf8TypedPath::from(&*pypi_indexes.as_os_str().to_string_lossy())
-            .join("multiple-indexes-a")
-            .join("flat")
-            .join("foo-1.0.0-py2.py3-none-any.whl")
+        Utf8TypedPath::from(&*index.path().as_os_str().to_string_lossy())
+            .join("foo-1.0.0-py3-none-any.whl")
     );
 }
 
@@ -54,8 +60,11 @@ async fn test_flat_links_based_index_returns_path() {
 async fn test_file_based_index_returns_path() {
     setup_tracing();
 
-    let pypi_indexes = Path::new(env!("CARGO_WORKSPACE_DIR")).join("tests/data/pypi-indexes");
-    let pypi_indexes_url = Url::from_directory_path(pypi_indexes.clone()).unwrap();
+    let simple = PyPIDatabase::new()
+        .with(PyPIPackage::new("foo", "1.0.0"))
+        .into_simple_index()
+        .expect("failed to create simple index");
+
     let pixi = PixiControl::from_manifest(&format!(
         r#"
         [project]
@@ -71,24 +80,22 @@ async fn test_file_based_index_returns_path() {
 
         [pypi-options]
         extra-index-urls = [
-            "{pypi_indexes}multiple-indexes-a/index"
+            "{index_url}"
         ]"#,
         platform = Platform::current(),
-        pypi_indexes = pypi_indexes_url,
+        index_url = simple.index_url(),
     ));
     let lock_file = pixi.unwrap().update_lock_file().await.unwrap();
 
-    // This assertion is specifically to test that if we have a url-based *local* index
-    // we will get a path back to the index and the corresponding file
     assert_eq!(
         lock_file
             .get_pypi_package_url("default", Platform::current(), "foo")
             .unwrap()
             .as_path()
             .unwrap(),
-        Utf8TypedPath::from(&*pypi_indexes.as_os_str().to_string_lossy())
-            .join("multiple-indexes-a/index/foo")
-            .join("foo-1.0.0-py2.py3-none-any.whl")
+        Utf8TypedPath::from(&*simple.index_path().as_os_str().to_string_lossy())
+            .join("foo")
+            .join("foo-1.0.0-py3-none-any.whl")
     );
 }
 
@@ -97,8 +104,18 @@ async fn test_file_based_index_returns_path() {
 async fn test_index_strategy() {
     setup_tracing();
 
-    let pypi_indexes = Path::new(env!("CARGO_WORKSPACE_DIR")).join("tests/data/pypi-indexes");
-    let pypi_indexes_url = Url::from_directory_path(pypi_indexes.clone()).unwrap();
+    let idx_a = PyPIDatabase::new()
+        .with(PyPIPackage::new("foo", "1.0.0"))
+        .into_simple_index()
+        .unwrap();
+    let idx_b = PyPIDatabase::new()
+        .with(PyPIPackage::new("foo", "2.0.0"))
+        .into_simple_index()
+        .unwrap();
+    let idx_c = PyPIDatabase::new()
+        .with(PyPIPackage::new("foo", "3.0.0"))
+        .into_simple_index()
+        .unwrap();
 
     let pixi = PixiControl::from_manifest(&format!(
         r#"
@@ -115,9 +132,9 @@ async fn test_index_strategy() {
 
         [pypi-options]
         extra-index-urls = [
-            "{pypi_indexes}multiple-indexes-a/index",
-            "{pypi_indexes}multiple-indexes-b/index",
-            "{pypi_indexes}multiple-indexes-c/index",
+            "{idx_a}",
+            "{idx_b}",
+            "{idx_c}",
         ]
 
         [feature.first-index.pypi-options]
@@ -142,7 +159,9 @@ async fn test_index_strategy() {
         unsafe-best-match = ["unsafe-best-match"]
         "#,
         platform = Platform::current(),
-        pypi_indexes = pypi_indexes_url,
+        idx_a = idx_a.index_url(),
+        idx_b = idx_b.index_url(),
+        idx_c = idx_c.index_url(),
     ));
 
     let lock_file = pixi.unwrap().update_lock_file().await.unwrap();
@@ -180,8 +199,10 @@ async fn test_index_strategy() {
 async fn test_pinning_index() {
     setup_tracing();
 
-    let pypi_indexes = Path::new(env!("CARGO_WORKSPACE_DIR")).join("tests/data/pypi-indexes");
-    let pypi_indexes_url = Url::from_directory_path(pypi_indexes.clone()).unwrap();
+    let idx = PyPIDatabase::new()
+        .with(PyPIPackage::new("foo", "1.0.0"))
+        .into_simple_index()
+        .unwrap();
 
     let pixi = PixiControl::from_manifest(&format!(
         r#"
@@ -194,11 +215,11 @@ async fn test_pinning_index() {
         python = "~=3.12.0"
 
         [pypi-dependencies]
-        foo = {{ version = "*", index = "{pypi_indexes}multiple-indexes-a/index" }}
+        foo = {{ version = "*", index = "{idx_url}" }}
 
         "#,
         platform = Platform::current(),
-        pypi_indexes = pypi_indexes_url,
+        idx_url = idx.index_url(),
     ));
 
     let lock_file = pixi.unwrap().update_lock_file().await.unwrap();
@@ -209,9 +230,9 @@ async fn test_pinning_index() {
             .unwrap()
             .as_path()
             .unwrap(),
-        Utf8TypedPath::from(&*pypi_indexes.as_os_str().to_string_lossy())
-            .join("multiple-indexes-a/index/foo")
-            .join("foo-1.0.0-py2.py3-none-any.whl")
+        Utf8TypedPath::from(&*idx.index_path().as_os_str().to_string_lossy())
+            .join("foo")
+            .join("foo-1.0.0-py3-none-any.whl")
     );
 }
 
@@ -308,8 +329,11 @@ async fn test_allow_insecure_host() {
 async fn test_indexes_are_passed_when_solving_build_pypi_dependencies() {
     setup_tracing();
 
-    let pypi_indexes = Path::new(env!("CARGO_WORKSPACE_DIR")).join("tests/data/pypi-indexes");
-    let pypi_indexes_url = Url::from_directory_path(pypi_indexes.clone()).unwrap();
+    // Provide a local simple index containing `foo` used in build-system requires.
+    let simple = PyPIDatabase::new()
+        .with(PyPIPackage::new("foo", "1.0.0"))
+        .into_simple_index()
+        .expect("failed to create simple index");
 
     let pixi = PixiControl::from_pyproject_manifest(&format!(
         r#"
@@ -342,14 +366,14 @@ async fn test_indexes_are_passed_when_solving_build_pypi_dependencies() {
         hatchling = "*"
 
         [tool.pixi.pypi-options]
-        index-url = "{pypi_indexes}multiple-indexes-a/index"
+        index-url = "{index_url}"
         no-build-isolation = ["pypi-build-index"]
 
         [tool.pixi.pypi-dependencies]
         pypi-build-index = {{ path = ".", editable = true }}
         "#,
         platform = Platform::current(),
-        pypi_indexes = pypi_indexes_url,
+        index_url = simple.index_url(),
     ))
     .unwrap();
 
@@ -363,11 +387,7 @@ async fn test_indexes_are_passed_when_solving_build_pypi_dependencies() {
     // verify that the pypi-build-index can be installed when solved the build dependencies
     pixi.install().await.unwrap();
 
-    let mut local_pypi_index = pypi_indexes
-        .join("multiple-indexes-a")
-        .join("index")
-        .display()
-        .to_string();
+    let mut local_pypi_index = simple.index_path().display().to_string();
 
     let mut lock_file_index = lock_file
         .default_environment()
@@ -391,6 +411,13 @@ async fn test_indexes_are_passed_when_solving_build_pypi_dependencies() {
     }
 
     // verify that
+    // Normalize possible trailing slash differences
+    if !local_pypi_index.ends_with('/') {
+        local_pypi_index.push('/');
+    }
+    if !lock_file_index.ends_with('/') {
+        lock_file_index.push('/');
+    }
     assert_eq!(local_pypi_index, lock_file_index,);
 }
 
@@ -406,7 +433,11 @@ async fn test_cross_platform_resolve_with_no_build() {
         Platform::OsxArm64
     };
 
-    let pypi_indexes = Path::new(env!("CARGO_WORKSPACE_DIR")).join("tests/data/pypi-indexes");
+    // Use a local flat index for foo==1.0.0
+    let flat = PyPIDatabase::new()
+        .with(PyPIPackage::new("foo", "1.0.0"))
+        .into_flat_index()
+        .expect("failed to create flat index");
     let pixi = PixiControl::from_manifest(&format!(
         r#"
         [project]
@@ -422,9 +453,9 @@ async fn test_cross_platform_resolve_with_no_build() {
 
         [pypi-options]
         no-build = true
-        find-links = [{{ path = "{pypi_indexes}/multiple-indexes-a/flat"}}]"#,
+        find-links = [{{ path = "{find_links}"}}]"#,
         platform = resolve_platform,
-        pypi_indexes = pypi_indexes.display().to_string().replace("\\", "/"),
+        find_links = flat.path().display().to_string().replace("\\", "/"),
     ));
     let lock_file = pixi.unwrap().update_lock_file().await.unwrap();
 
@@ -434,10 +465,8 @@ async fn test_cross_platform_resolve_with_no_build() {
             .unwrap()
             .as_path()
             .unwrap(),
-        Utf8TypedPath::from(&*pypi_indexes.as_os_str().to_string_lossy())
-            .join("multiple-indexes-a")
-            .join("flat")
-            .join("foo-1.0.0-py2.py3-none-any.whl")
+        Utf8TypedPath::from(&*flat.path().as_os_str().to_string_lossy())
+            .join("foo-1.0.0-py3-none-any.whl")
     );
 }
 
@@ -450,28 +479,63 @@ async fn test_cross_platform_resolve_with_no_build() {
 async fn test_pinned_help_message() {
     setup_tracing();
 
-    let pixi = PixiControl::from_manifest(
+    // Construct a minimal local conda channel with python and pandas==1.0.0
+    use crate::common::package_database::{Package, PackageDatabase};
+    use rattler_conda_types::Platform;
+
+    let mut conda_db = PackageDatabase::default();
+    // Python runtime
+    conda_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(Platform::current())
+            .finish(),
+    );
+    // pandas 1.0.0 (marked as PyPI package via purl)
+    conda_db.add_package(
+        Package::build("pandas", "1.0.0")
+            .with_subdir(Platform::current())
+            .with_dependency("python >=3.12")
+            .with_pypi_purl("pandas")
+            .finish(),
+    );
+    let conda_channel = conda_db.into_channel().await.unwrap();
+
+    // Build a simple PyPI index with package `a` that requires pandas>=2.0.0
+    let pypi_index = PyPIDatabase::new()
+        .with(PyPIPackage::new("a", "1.0.0").with_requires_dist(["pandas>=2.0.0"]))
+        .into_simple_index()
+        .unwrap();
+
+    // Use only our local channel and local simple index
+    let pixi = PixiControl::from_manifest(&format!(
         r#"
         [workspace]
-        channels = ["https://prefix.dev/conda-forge"]
-        name = "deleteme"
-        platforms = ["linux-64"]
+        channels = ["{channel}"]
+        name = "local-pinned-help"
+        platforms = ["{platform}"]
         version = "0.1.0"
 
         [dependencies]
         python = "3.12.*"
-        pandas = "2.3.2"
+        pandas = "==1.0.0"
 
         [pypi-dependencies]
-        databricks-sql-connector = ">=4.0.0"
+        a = "*"
+
+        [pypi-options]
+        extra-index-urls = ["{idx}"]
         "#,
-    );
-    // First, it should fail
+        channel = conda_channel.url(),
+        platform = Platform::current(),
+        idx = pypi_index.index_url(),
+    ));
+
+    // Expect failure
     let result = pixi.unwrap().update_lock_file().await;
-    let err = result.err().unwrap();
-    // Second, it should contain a help message
+    let err = result.expect_err("expected a resolution error");
+    // Should contain pinned help message for pandas==1.0.0
     assert_eq!(
         format!("{}", err.help().unwrap()),
-        "The following PyPI packages have been pinned by the conda solve, and this version may be causing a conflict:\npandas==2.3.2"
+        "The following PyPI packages have been pinned by the conda solve, and this version may be causing a conflict:\npandas==1.0.0"
     );
 }
