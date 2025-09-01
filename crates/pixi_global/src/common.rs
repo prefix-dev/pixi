@@ -382,7 +382,7 @@ pub enum StateChange {
 }
 
 #[must_use]
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct StateChanges {
     changes: HashMap<EnvironmentName, Vec<StateChange>>,
 }

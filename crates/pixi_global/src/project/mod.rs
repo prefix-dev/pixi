@@ -628,6 +628,168 @@ impl Project {
         Ok(EnvironmentUpdate::new(install_changes, dependencies_names))
     }
 
+    /// Performs only the solving step to determine what would change in dry-run mode
+    /// This extracts the solving logic from install_environment without the installation
+    pub async fn solve_for_dry_run(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<crate::common::EnvironmentUpdate> {
+        use crate::common::{EnvironmentUpdate, InstallChange};
+        use miette::{IntoDiagnostic, WrapErr};
+        use pixi_command_dispatcher::{BuildEnvironment, PixiEnvironmentSpec};
+        use pixi_spec_containers::DependencyMap;
+        use rattler_conda_types::{GenericVirtualPackage, Platform};
+        use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
+        use std::collections::HashMap;
+
+        let environment = self
+            .environment(env_name)
+            .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
+
+        let channels = environment
+            .channels()
+            .into_iter()
+            .map(|channel| channel.clone().into_channel(self.global_channel_config()))
+            .collect::<Result<Vec<_>, _>>()
+            .into_diagnostic()?;
+
+        let platform = environment.platform.unwrap_or_else(Platform::current);
+
+        // For update operations, use "*" (any version) to find latest available packages
+        let mut pixi_specs = DependencyMap::default();
+        let mut dependencies_names = Vec::new();
+
+        for (name, _spec) in &environment.dependencies.specs {
+            let any_version_spec = pixi_spec::PixiSpec::default();
+            pixi_specs.insert(name.clone(), any_version_spec);
+            dependencies_names.push(name.clone());
+        }
+
+        let command_dispatcher = self.command_dispatcher().map_err(|e| {
+            miette::miette!(
+                "Cannot access command dispatcher for dry-run solving: {}",
+                e
+            )
+        })?;
+
+        let virtual_packages = if platform
+            .only_platform()
+            .map(|p| p == Platform::current().only_platform().unwrap_or(""))
+            .unwrap_or(false)
+        {
+            VirtualPackage::detect(&VirtualPackageOverrides::default())
+                .into_diagnostic()
+                .wrap_err(format!(
+                    "Failed to determine virtual packages for environment {}",
+                    env_name.fancy_display()
+                ))?
+                .iter()
+                .cloned()
+                .map(GenericVirtualPackage::from)
+                .collect()
+        } else {
+            vec![]
+        };
+
+        let channels = channels
+            .into_iter()
+            .map(|channel| channel.base_url.clone())
+            .collect::<Vec<_>>();
+
+        let build_environment = BuildEnvironment::simple(platform, virtual_packages);
+        let solve_spec = PixiEnvironmentSpec {
+            name: Some(env_name.to_string()),
+            dependencies: pixi_specs,
+            build_environment: build_environment.clone(),
+            channels: channels.clone(),
+            channel_config: self.global_channel_config().clone(),
+            ..Default::default()
+        };
+
+        // SOLVE ONLY
+        let pixi_records = command_dispatcher
+            .solve_pixi_environment(solve_spec)
+            .await?;
+
+        // Compare with current installed packages to detect changes
+        let prefix = self.environment_prefix(env_name).await?;
+        let current_records = prefix.find_installed_packages().unwrap_or_default();
+
+        // Calculate what would change
+        let install_changes = if current_records.is_empty() && !pixi_records.is_empty() {
+            // Environment doesn't exist yet
+            pixi_records
+                .into_iter()
+                .map(|record| {
+                    (
+                        record.package_record().name.clone(),
+                        InstallChange::Installed(record.package_record().version.clone().into()),
+                    )
+                })
+                .collect()
+        } else {
+            // Compare current vs solved packages
+            let current_packages: HashMap<_, _> = current_records
+                .iter()
+                .map(|r| {
+                    (
+                        r.repodata_record.package_record.name.clone(),
+                        &r.repodata_record.package_record.version,
+                    )
+                })
+                .collect();
+
+            let mut changes = HashMap::new();
+
+            // Check for upgrades and new packages
+            for record in &pixi_records {
+                let name = &record.package_record().name;
+                let new_version = &record.package_record().version;
+
+                if let Some(current_version) = current_packages.get(name) {
+                    let current_version_converted: rattler_conda_types::Version =
+                        (*current_version).clone().into();
+                    let new_version_converted: rattler_conda_types::Version =
+                        new_version.clone().into();
+                    if current_version_converted != new_version_converted {
+                        changes.insert(
+                            name.clone(),
+                            InstallChange::Upgraded(
+                                current_version_converted,
+                                new_version_converted,
+                            ),
+                        );
+                    }
+                } else {
+                    changes.insert(
+                        name.clone(),
+                        InstallChange::Installed(new_version.clone().into()),
+                    );
+                }
+            }
+
+            // Check for removed packages
+            for (name, _version) in current_packages {
+                if !pixi_records.iter().any(|r| r.package_record().name == name) {
+                    changes.insert(name.clone(), InstallChange::Removed);
+                }
+            }
+
+            changes
+        };
+
+        // Filter to only include changes to top-level dependencies (packages user explicitly installed)
+        let filtered_changes: HashMap<_, _> = install_changes
+            .into_iter()
+            .filter(|(package_name, _change)| {
+                // Only keep changes for packages that are in the user's dependency list
+                dependencies_names.contains(package_name)
+            })
+            .collect();
+
+        Ok(EnvironmentUpdate::new(filtered_changes, dependencies_names))
+    }
+
     /// Remove an environment from the manifest and the global installation.
     pub async fn remove_environment(
         &mut self,
@@ -1309,7 +1471,7 @@ impl Project {
     }
 
     /// Returns the command dispatcher for this project.
-    fn command_dispatcher(&self) -> Result<&CommandDispatcher, CommandDispatcherError> {
+    pub fn command_dispatcher(&self) -> Result<&CommandDispatcher, CommandDispatcherError> {
         const BUILD_DIR: &str = "bld";
 
         self.command_dispatcher.get_or_try_init(|| {

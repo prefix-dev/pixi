@@ -6,6 +6,12 @@
 pixi global update
 pixi global update pixi-pack
 pixi global update bat rattler-build
+# Show what would be updated without making changes
+pixi global update --dry-run
+pixi global update --dry-run pixi-pack
+# Output changes in JSON format
+pixi global update --json
+pixi global update --json pixi-pack
 ```
 
 --8<-- [end:example]

@@ -639,6 +639,7 @@ impl FromStr for Mapping {
 pub enum ExposedType {
     #[default]
     All,
+    #[allow(dead_code)]
     Nothing,
     Ignore(Vec<PackageName>),
     Mappings(Vec<Mapping>),
