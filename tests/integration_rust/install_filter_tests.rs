@@ -199,6 +199,13 @@ async fn install_subset_e2e_skip_with_deps() {
         .await
         .unwrap();
     let prefix = pixi.default_env_path().unwrap();
+    // When filtering is active, the environment file should contain an invalid hash
+    let env_file = prefix.join("conda-meta").join("pixi");
+    let env_file_contents = fs_err::read_to_string(&env_file).expect("read environment file");
+    assert!(
+        env_file_contents.contains("invalid-hash"),
+        "environment file should contain the invalid hash when filtering is active"
+    );
     assert!(!is_conda_package_installed(&prefix, "dummy-g").await);
     assert!(!is_conda_package_installed(&prefix, "dummy-b").await);
     assert!(is_conda_package_installed(&prefix, "dummy-a").await);

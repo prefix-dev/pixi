@@ -361,6 +361,14 @@ impl<'p> LockFileDerivedData<'p> {
             .update_prefix(environment, reinstall_packages, filter)
             .await?;
 
+        // We write an invalid hash when filtering, as we will need to do a full
+        // revalidation of the environment anyways
+        let hash = if filter.filter_active() {
+            LockedEnvironmentHash::invalid()
+        } else {
+            hash
+        };
+
         // Save an environment file to the environment directory after the update.
         // Avoiding writing the cache away before the update is done.
         write_environment_file(
