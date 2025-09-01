@@ -418,7 +418,7 @@ def test_update_installs_new_shortcuts(
     setup_data: SetupData,
     shortcuts_channel_1: str,
 ) -> None:
-    # Verify no shortcuts exist after sync
+    # Verify shortcuts exist after sync
     verify_cli_command(
         [
             pixi,
