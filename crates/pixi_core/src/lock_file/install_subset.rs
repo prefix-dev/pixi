@@ -1,3 +1,5 @@
+use itertools::Itertools;
+use miette::Diagnostic;
 use rattler_lock::LockedPackageRef;
 use std::collections::{HashMap, HashSet, VecDeque};
 
@@ -105,6 +107,13 @@ pub struct InstallSubset<'a> {
     target_packages: &'a [String],
 }
 
+#[derive(thiserror::Error, Debug, Diagnostic)]
+pub enum InstallSubsetError {
+    #[error("the following `--only` packages do not exist: {}", .0.iter().map(|s| format!("'{}'", s)).join(", "))]
+    #[diagnostic(help("try finding the correct package with `pixi list`"))]
+    TargetPackagesDoNotExist(Vec<String>),
+}
+
 impl<'a> InstallSubset<'a> {
     /// Create a new package filter.
     pub fn new(
@@ -132,13 +141,30 @@ impl<'a> InstallSubset<'a> {
     pub fn filter<'lock>(
         &self,
         packages: Option<impl IntoIterator<Item = LockedPackageRef<'lock>> + 'lock>,
-    ) -> FilteredPackages<'lock> {
+    ) -> Result<FilteredPackages<'lock>, InstallSubsetError> {
         // Handle None packages
         let Some(packages) = packages else {
-            return FilteredPackages::new(Vec::new(), Vec::new());
+            return Ok(FilteredPackages::new(Vec::new(), Vec::new()));
         };
 
         let all_packages: Vec<_> = packages.into_iter().collect();
+
+        // Check if any packages do not match
+        let mut non_matched_targets: HashSet<_> =
+            self.target_packages.iter().map(AsRef::as_ref).collect();
+        for package in &all_packages {
+            if non_matched_targets.contains(package.name()) {
+                non_matched_targets.remove(package.name());
+            }
+        }
+        if !non_matched_targets.is_empty() {
+            return Err(InstallSubsetError::TargetPackagesDoNotExist(
+                non_matched_targets
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect_vec(),
+            ));
+        }
 
         let filtered_packages = if !self.target_packages.is_empty() {
             // Target mode: Collect targets + dependencies with skip short-circuiting
@@ -168,7 +194,7 @@ impl<'a> InstallSubset<'a> {
             self.filter_with_skips(&all_packages)
         };
 
-        filtered_packages
+        Ok(filtered_packages)
     }
 
     /// Filter out skip packages and only those dependencies that are no longer

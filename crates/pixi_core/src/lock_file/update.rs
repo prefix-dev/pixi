@@ -459,7 +459,7 @@ impl<'p> LockFileDerivedData<'p> {
                     &filter.skip_direct,
                     &filter.target_packages,
                 );
-                let result = subset.filter(locked_env.packages(platform));
+                let result = subset.filter(locked_env.packages(platform))?;
                 let packages = result.install;
                 let ignored = result.ignore;
 
@@ -692,7 +692,7 @@ impl<'p> LockFileDerivedData<'p> {
             &filter.skip_direct,
             &filter.target_packages,
         );
-        let filtered = subset.filter(locked_env.packages(platform));
+        let filtered = subset.filter(locked_env.packages(platform))?;
 
         // Map to names, dedupe and sort for stable output.
         let retained = filtered
