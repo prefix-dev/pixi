@@ -11,7 +11,7 @@
 use clap::builder::styling::{AnsiColor, Color, Style};
 use clap::{CommandFactory, Parser};
 use indicatif::ProgressDrawTarget;
-use miette::IntoDiagnostic;
+use miette::{Diagnostic, IntoDiagnostic};
 use pixi_consts::consts;
 use pixi_core::environment::LockFileUsage;
 use pixi_progress::global_multi_progress;
@@ -193,7 +193,7 @@ pub enum Command {
     External(Vec<String>),
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Diagnostic)]
 pub enum LockFileUsageError {
     #[error("the argument '--locked' cannot be used together with '--frozen'")]
     FrozenAndLocked,

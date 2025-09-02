@@ -120,7 +120,7 @@ impl LockFileUpdateConfig {
             ));
         }
 
-        let usage: LockFileUsage = self.lock_file_usage.to_usage().into_diagnostic()?;
+        let usage: LockFileUsage = self.lock_file_usage.to_usage()?;
         Ok(usage)
     }
 }
