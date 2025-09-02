@@ -84,6 +84,144 @@ impl IsolatedPixiEnv {
         env_vars
     }
 
+    /// Ensure local channel exists, create it dynamically if missing (for CI robustness)
+    fn ensure_local_channel_exists(
+        &self,
+        local_channel_dir: &Path,
+        packages: &[&str],
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let noarch_dir = local_channel_dir.join("noarch");
+
+        // If the channel already exists, we're good
+        if noarch_dir.exists() && noarch_dir.join("repodata.json").exists() {
+            return Ok(());
+        }
+
+        println!("🔧 Creating local conda channel for CI environment...");
+
+        // Create the directory structure
+        fs::create_dir_all(&noarch_dir)?;
+
+        // Create repodata.json
+        self.create_repodata_json(&noarch_dir, packages)?;
+
+        // Create minimal conda packages
+        self.create_conda_packages(&noarch_dir, packages)?;
+
+        println!("✅ Local conda channel created successfully");
+        Ok(())
+    }
+
+    /// Create repodata.json for the local channel
+    fn create_repodata_json(
+        &self,
+        noarch_dir: &Path,
+        packages: &[&str],
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use std::fs::File;
+        use std::io::Write;
+
+        let mut repodata = serde_json::json!({
+            "info": {
+                "subdir": "noarch"
+            },
+            "packages": {},
+            "packages.conda": {},
+            "removed": [],
+            "repodata_version": 1
+        });
+
+        // Add each package to the repodata
+        for package in packages {
+            let package_filename = format!("{}-1.0.0-py_0.tar.bz2", package);
+            repodata["packages"][&package_filename] = serde_json::json!({
+                "build": "py_0",
+                "build_number": 0,
+                "depends": [],
+                "license": "MIT",
+                "name": package,
+                "platform": null,
+                "subdir": "noarch",
+                "timestamp": 1640995200000i64,
+                "version": "1.0.0"
+            });
+        }
+
+        let mut file = File::create(noarch_dir.join("repodata.json"))?;
+        file.write_all(serde_json::to_string_pretty(&repodata)?.as_bytes())?;
+        Ok(())
+    }
+
+    /// Create minimal conda packages
+    fn create_conda_packages(
+        &self,
+        noarch_dir: &Path,
+        packages: &[&str],
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use std::fs::File;
+        use std::io::Write;
+        use std::process::Command as StdCommand;
+
+        for package in packages {
+            let package_filename = format!("{}-1.0.0-py_0.tar.bz2", package);
+            let package_path = noarch_dir.join(&package_filename);
+
+            // Create a temporary directory for package contents
+            let temp_dir = tempfile::TempDir::new()?;
+            let info_dir = temp_dir.path().join("info");
+            fs::create_dir_all(&info_dir)?;
+
+            // Create index.json
+            let index_data = serde_json::json!({
+                "name": package,
+                "version": "1.0.0",
+                "build": "py_0",
+                "build_number": 0,
+                "depends": [],
+                "license": "MIT",
+                "platform": null,
+                "subdir": "noarch",
+                "timestamp": 1640995200000i64
+            });
+
+            let mut index_file = File::create(info_dir.join("index.json"))?;
+            index_file.write_all(serde_json::to_string_pretty(&index_data)?.as_bytes())?;
+
+            // Create empty files list
+            File::create(info_dir.join("files"))?.write_all(b"")?;
+
+            // Create paths.json
+            let paths_data = serde_json::json!({
+                "paths": [],
+                "paths_version": 1
+            });
+            let mut paths_file = File::create(info_dir.join("paths.json"))?;
+            paths_file.write_all(serde_json::to_string_pretty(&paths_data)?.as_bytes())?;
+
+            // Create the tar.bz2 package using system tar command
+            let output = StdCommand::new("tar")
+                .args([
+                    "-cjf",
+                    package_path.to_str().unwrap(),
+                    "-C",
+                    temp_dir.path().to_str().unwrap(),
+                    "info",
+                ])
+                .output()?;
+
+            if !output.status.success() {
+                return Err(format!(
+                    "Failed to create tar.bz2 package for {}: {}",
+                    package,
+                    String::from_utf8_lossy(&output.stderr)
+                )
+                .into());
+            }
+        }
+
+        Ok(())
+    }
+
     /// Create pixi project only once
     fn ensure_pixi_project_created(
         &mut self,
@@ -102,6 +240,10 @@ impl IsolatedPixiEnv {
         } else {
             current_dir.join("crates/pixi_bench/my-local-channel")
         };
+
+        // Ensure the local channel exists, create it if it doesn't
+        self.ensure_local_channel_exists(&local_channel_dir, packages)?;
+
         let local_channel_url = format!("file://{}", local_channel_dir.to_string_lossy());
 
         let mut pixi_toml = format!(
@@ -267,9 +409,13 @@ fn bench_small(c: &mut Criterion) {
 
     // Create shared cache for warm testing
     let shared_cache = SharedCache::new().expect("Failed to create shared cache");
+    let mut group = c.benchmark_group("small_package_installs");
+    group.measurement_time(Duration::from_secs(60)); // Allow 1 minute for measurements
+    group.sample_size(10); // Reduce sample size for long operations
+    group.warm_up_time(Duration::from_secs(5)); // Warm up time
 
     // Cold cache benchmark - always creates new isolated environment
-    c.bench_function("cold_cache_small", |b| {
+    group.bench_function("cold_cache_small", |b| {
         b.to_async(TokioExecutor).iter(|| async {
             let mut env = IsolatedPixiEnv::new().expect("Failed to create isolated environment");
             let duration = env
@@ -281,7 +427,7 @@ fn bench_small(c: &mut Criterion) {
     });
 
     // Warm cache benchmark - reuses shared cache and may reuse project
-    c.bench_function("warm_cache_small", |b| {
+    group.bench_function("warm_cache_small", |b| {
         b.to_async(TokioExecutor).iter(|| async {
             let mut env = IsolatedPixiEnv::new_with_shared_cache(&shared_cache.cache_dir)
                 .expect("Failed to create environment with shared cache");
@@ -299,7 +445,12 @@ fn bench_medium(c: &mut Criterion) {
 
     let shared_cache = SharedCache::new().expect("Failed to create shared cache");
 
-    c.bench_function("cold_cache_medium", |b| {
+    let mut group = c.benchmark_group("medium_package_installs");
+    group.measurement_time(Duration::from_secs(90)); // 1.5 minutes
+    group.sample_size(5); // Even fewer samples for medium complexity
+    group.warm_up_time(Duration::from_secs(10));
+
+    group.bench_function("cold_cache_medium", |b| {
         b.to_async(TokioExecutor).iter(|| async {
             let mut env = IsolatedPixiEnv::new().expect("Failed to create isolated environment");
             let duration = env
@@ -310,7 +461,7 @@ fn bench_medium(c: &mut Criterion) {
         })
     });
 
-    c.bench_function("warm_cache_medium", |b| {
+    group.bench_function("warm_cache_medium", |b| {
         b.to_async(TokioExecutor).iter(|| async {
             let mut env = IsolatedPixiEnv::new_with_shared_cache(&shared_cache.cache_dir)
                 .expect("Failed to create environment with shared cache");
@@ -338,8 +489,12 @@ fn bench_large(c: &mut Criterion) {
     ];
 
     let shared_cache = SharedCache::new().expect("Failed to create shared cache");
+    let mut group = c.benchmark_group("large_package_installs");
+    group.measurement_time(Duration::from_secs(180)); // 3 minutes
+    group.sample_size(3); // Very few samples for large operations
+    group.warm_up_time(Duration::from_secs(15));
 
-    c.bench_function("cold_cache_large", |b| {
+    group.bench_function("cold_cache_large", |b| {
         b.to_async(TokioExecutor).iter(|| async {
             let mut env = IsolatedPixiEnv::new().expect("Failed to create isolated environment");
             let duration = env
@@ -350,7 +505,7 @@ fn bench_large(c: &mut Criterion) {
         })
     });
 
-    c.bench_function("warm_cache_large", |b| {
+    group.bench_function("warm_cache_large", |b| {
         b.to_async(TokioExecutor).iter(|| async {
             let mut env = IsolatedPixiEnv::new_with_shared_cache(&shared_cache.cache_dir)
                 .expect("Failed to create environment with shared cache");
