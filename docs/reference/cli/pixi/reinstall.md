@@ -44,12 +44,12 @@ pixi reinstall [OPTIONS] [PACKAGE]...
 :  Use environment activation cache (experimental)
 
 ## Update Options
-- <a id="arg---frozen" href="#arg---frozen">`--frozen <FROZEN>`</a>
+- <a id="arg---frozen" href="#arg---frozen">`--frozen=<FROZEN>`</a>
 :  Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 <br>**env**: `PIXI_FROZEN`
 <br>**default**: `false`
 <br>**options**: `true`, `false`
-- <a id="arg---locked" href="#arg---locked">`--locked <LOCKED>`</a>
+- <a id="arg---locked" href="#arg---locked">`--locked=<LOCKED>`</a>
 :  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 <br>**env**: `PIXI_LOCKED`
 <br>**default**: `false`
