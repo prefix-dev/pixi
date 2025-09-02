@@ -1453,6 +1453,7 @@ dependencies = [
  "codspeed",
  "codspeed-criterion-compat-walltime",
  "colored",
+ "futures",
 ]
 
 [[package]]
@@ -1467,6 +1468,7 @@ dependencies = [
  "clap",
  "codspeed",
  "criterion-plot",
+ "futures",
  "is-terminal",
  "itertools 0.10.5",
  "num-traits",
