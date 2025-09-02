@@ -1,6 +1,7 @@
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
+use miette::IntoDiagnostic;
 use pixi_config::ConfigCli;
 use pixi_core::environment::{InstallFilter, get_update_lock_file_and_prefix};
 use pixi_core::lock_file::{ReinstallPackages, UpdateMode};
@@ -82,11 +83,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             &environment,
             UpdateMode::Revalidate,
             UpdateLockFileOptions {
-                lock_file_usage: args
-                    .lock_file_usage
-                    .clone()
-                    .to_usage()
-                    .map_err(|e| miette::miette!(e.to_string()))?,
+                lock_file_usage: args.lock_file_usage.clone().to_usage().into_diagnostic()?,
                 no_install: false,
                 max_concurrent_solves: workspace.config().max_concurrent_solves(),
             },

@@ -120,10 +120,7 @@ impl LockFileUpdateConfig {
             ));
         }
 
-        let usage: LockFileUsage = self
-            .lock_file_usage
-            .to_usage()
-            .map_err(|e| miette::miette!(e.to_string()))?;
+        let usage: LockFileUsage = self.lock_file_usage.to_usage().into_diagnostic()?;
         Ok(usage)
     }
 }
