@@ -10415,13 +10415,21 @@ pixi add [OPTIONS] <SPEC>...
 
 - [`--no-install`](#arg---no-install) Don't modify the environment, only modify the lock-file
 
-- [`--frozen`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+- [`--frozen=<FROZEN>`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
   **env**: `PIXI_FROZEN`
 
-- [`--locked`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+  **default**: `false`
+
+  **options**: `true`, `false`
+
+- [`--locked=<LOCKED>`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 
   **env**: `PIXI_LOCKED`
+
+  **default**: `false`
+
+  **options**: `true`, `false`
 
 ## Global Options
 
@@ -10739,7 +10747,7 @@ pixi exec [OPTIONS] [COMMAND]...
 
 - [`--force-reinstall`](#arg---force-reinstall) If specified a new environment is always created even if one already exists
 
-- [`--list <LIST>`](#arg---list) Before executing the command, list packages in the environment Specify `--list=some_regex` to filter the shown packages
+- [`--list=<LIST>`](#arg---list) Before executing the command, list packages in the environment Specify `--list=some_regex` to filter the shown packages
 
 - [`--no-modify-ps1`](#arg---no-modify-ps1) Disable modification of the PS1 prompt to indicate the temporary environment
 
@@ -11056,13 +11064,21 @@ pixi install [OPTIONS]
 
 ## Update Options
 
-- [`--frozen`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+- [`--frozen=<FROZEN>`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
   **env**: `PIXI_FROZEN`
 
-- [`--locked`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+  **default**: `false`
+
+  **options**: `true`, `false`
+
+- [`--locked=<LOCKED>`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 
   **env**: `PIXI_LOCKED`
+
+  **default**: `false`
+
+  **options**: `true`, `false`
 
 ## Global Options
 
@@ -11137,13 +11153,21 @@ pixi list [OPTIONS] [REGEX]
 
 ## Update Options
 
-- [`--frozen`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+- [`--frozen=<FROZEN>`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
   **env**: `PIXI_FROZEN`
 
-- [`--locked`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+  **default**: `false`
+
+  **options**: `true`, `false`
+
+- [`--locked=<LOCKED>`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 
   **env**: `PIXI_LOCKED`
+
+  **default**: `false`
+
+  **options**: `true`, `false`
 
 - [`--no-install`](#arg---no-install) Don't modify the environment, only modify the lock-file
 
@@ -11289,13 +11313,21 @@ pixi reinstall [OPTIONS] [PACKAGE]...
 
 ## Update Options
 
-- [`--frozen`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+- [`--frozen=<FROZEN>`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
   **env**: `PIXI_FROZEN`
 
-- [`--locked`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+  **default**: `false`
+
+  **options**: `true`, `false`
+
+- [`--locked=<LOCKED>`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 
   **env**: `PIXI_LOCKED`
+
+  **default**: `false`
+
+  **options**: `true`, `false`
 
 ## Global Options
 
@@ -11383,13 +11415,21 @@ pixi remove [OPTIONS] <SPEC>...
 
 - [`--no-install`](#arg---no-install) Don't modify the environment, only modify the lock-file
 
-- [`--frozen`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+- [`--frozen=<FROZEN>`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
   **env**: `PIXI_FROZEN`
 
-- [`--locked`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+  **default**: `false`
+
+  **options**: `true`, `false`
+
+- [`--locked=<LOCKED>`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 
   **env**: `PIXI_LOCKED`
+
+  **default**: `false`
+
+  **options**: `true`, `false`
 
 ## Global Options
 
@@ -11479,13 +11519,21 @@ pixi run [OPTIONS] [TASK]...
 
 - [`--no-install`](#arg---no-install) Don't modify the environment, only modify the lock-file
 
-- [`--frozen`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+- [`--frozen=<FROZEN>`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
   **env**: `PIXI_FROZEN`
 
-- [`--locked`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+  **default**: `false`
+
+  **options**: `true`, `false`
+
+- [`--locked=<LOCKED>`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 
   **env**: `PIXI_LOCKED`
+
+  **default**: `false`
+
+  **options**: `true`, `false`
 
 - [`--as-is`](#arg---as-is) Shorthand for the combination of --no-install and --frozen
 
@@ -11703,13 +11751,21 @@ pixi shell-hook [OPTIONS]
 
 - [`--no-install`](#arg---no-install) Don't modify the environment, only modify the lock-file
 
-- [`--frozen`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+- [`--frozen=<FROZEN>`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
   **env**: `PIXI_FROZEN`
 
-- [`--locked`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+  **default**: `false`
+
+  **options**: `true`, `false`
+
+- [`--locked=<LOCKED>`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 
   **env**: `PIXI_LOCKED`
+
+  **default**: `false`
+
+  **options**: `true`, `false`
 
 - [`--as-is`](#arg---as-is) Shorthand for the combination of --no-install and --frozen
 
@@ -11797,13 +11853,21 @@ pixi shell [OPTIONS]
 
 - [`--no-install`](#arg---no-install) Don't modify the environment, only modify the lock-file
 
-- [`--frozen`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+- [`--frozen=<FROZEN>`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
   **env**: `PIXI_FROZEN`
 
-- [`--locked`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+  **default**: `false`
+
+  **options**: `true`, `false`
+
+- [`--locked=<LOCKED>`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 
   **env**: `PIXI_LOCKED`
+
+  **default**: `false`
+
+  **options**: `true`, `false`
 
 - [`--as-is`](#arg---as-is) Shorthand for the combination of --no-install and --frozen
 
@@ -11874,13 +11938,21 @@ pixi tree [OPTIONS] [REGEX]
 
 ## Update Options
 
-- [`--frozen`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+- [`--frozen=<FROZEN>`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
   **env**: `PIXI_FROZEN`
 
-- [`--locked`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+  **default**: `false`
+
+  **options**: `true`, `false`
+
+- [`--locked=<LOCKED>`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 
   **env**: `PIXI_LOCKED`
+
+  **default**: `false`
+
+  **options**: `true`, `false`
 
 - [`--no-install`](#arg---no-install) Don't modify the environment, only modify the lock-file
 
@@ -12156,13 +12228,21 @@ pixi upgrade [OPTIONS] [PACKAGES]...
 
 - [`--no-install`](#arg---no-install) Don't modify the environment, only modify the lock-file
 
-- [`--frozen`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+- [`--frozen=<FROZEN>`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
   **env**: `PIXI_FROZEN`
 
-- [`--locked`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+  **default**: `false`
+
+  **options**: `true`, `false`
+
+- [`--locked=<LOCKED>`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 
   **env**: `PIXI_LOCKED`
+
+  **default**: `false`
+
+  **options**: `true`, `false`
 
 ## Global Options
 
@@ -14014,13 +14094,21 @@ pixi workspace channel add [OPTIONS] <CHANNEL>...
 
 - [`--no-install`](#arg---no-install) Don't modify the environment, only modify the lock-file
 
-- [`--frozen`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+- [`--frozen=<FROZEN>`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
   **env**: `PIXI_FROZEN`
 
-- [`--locked`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+  **default**: `false`
+
+  **options**: `true`, `false`
+
+- [`--locked=<LOCKED>`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 
   **env**: `PIXI_LOCKED`
+
+  **default**: `false`
+
+  **options**: `true`, `false`
 
 ## Global Options
 
@@ -14100,13 +14188,21 @@ pixi workspace channel remove [OPTIONS] <CHANNEL>...
 
 - [`--no-install`](#arg---no-install) Don't modify the environment, only modify the lock-file
 
-- [`--frozen`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+- [`--frozen=<FROZEN>`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
   **env**: `PIXI_FROZEN`
 
-- [`--locked`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+  **default**: `false`
+
+  **options**: `true`, `false`
+
+- [`--locked=<LOCKED>`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 
   **env**: `PIXI_LOCKED`
+
+  **default**: `false`
+
+  **options**: `true`, `false`
 
 ## Global Options
 
@@ -14310,13 +14406,21 @@ pixi workspace export conda-explicit-spec [OPTIONS] <OUTPUT_DIR>
 
 ## Update Options
 
-- [`--frozen`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+- [`--frozen=<FROZEN>`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
   **env**: `PIXI_FROZEN`
 
-- [`--locked`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+  **default**: `false`
+
+  **options**: `true`, `false`
+
+- [`--locked=<LOCKED>`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 
   **env**: `PIXI_LOCKED`
+
+  **default**: `false`
+
+  **options**: `true`, `false`
 
 - [`--no-install`](#arg---no-install) Don't modify the environment, only modify the lock-file
 

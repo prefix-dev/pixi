@@ -37,7 +37,7 @@ pixi exec [OPTIONS] [COMMAND]...
 
 - [`--force-reinstall`](#arg---force-reinstall) If specified a new environment is always created even if one already exists
 
-- [`--list <LIST>`](#arg---list) Before executing the command, list packages in the environment Specify `--list=some_regex` to filter the shown packages
+- [`--list=<LIST>`](#arg---list) Before executing the command, list packages in the environment Specify `--list=some_regex` to filter the shown packages
 
 - [`--no-modify-ps1`](#arg---no-modify-ps1) Disable modification of the PS1 prompt to indicate the temporary environment
 
