@@ -13,6 +13,8 @@ jobs:
   benchmarks:
     name: Run benchmarks
     runs-on: ubuntu-latest
+    env:
+      RUST_BACKTRACE: full
     steps:
       - uses: actions/checkout@v4
 
