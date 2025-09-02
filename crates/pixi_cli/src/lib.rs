@@ -11,13 +11,12 @@
 use clap::builder::styling::{AnsiColor, Color, Style};
 use clap::{CommandFactory, Parser};
 use indicatif::ProgressDrawTarget;
-use miette::{Diagnostic, IntoDiagnostic};
+use miette::IntoDiagnostic;
 use pixi_consts::consts;
 use pixi_core::environment::LockFileUsage;
 use pixi_progress::global_multi_progress;
 
 use std::{env, io::IsTerminal};
-use thiserror::Error;
 use tracing::level_filters::LevelFilter;
 
 pub mod add;
@@ -193,12 +192,6 @@ pub enum Command {
     External(Vec<String>),
 }
 
-#[derive(Debug, Error, Diagnostic)]
-pub enum LockFileUsageError {
-    #[error("the argument '--locked' cannot be used together with '--frozen'")]
-    FrozenAndLocked,
-}
-
 /// Configuration for lock file usage, used by LockFileUpdateConfig
 #[derive(Parser, Debug, Default, Clone)]
 pub struct LockFileUsageConfig {
@@ -231,17 +224,14 @@ pub struct LockFileUsageConfig {
 }
 
 impl LockFileUsageConfig {
-    pub fn to_usage(&self) -> Result<LockFileUsage, LockFileUsageError> {
-        if self.frozen && self.locked {
-            return Err(LockFileUsageError::FrozenAndLocked);
-        }
-        Ok(if self.frozen {
-            LockFileUsage::Frozen
-        } else if self.locked {
+    pub fn to_usage(&self) -> LockFileUsage {
+        if self.locked {
             LockFileUsage::Locked
+        } else if self.frozen {
+            LockFileUsage::Frozen
         } else {
             LockFileUsage::Update
-        })
+        }
     }
 }
 
@@ -535,7 +525,7 @@ mod tests {
                 parsed.frozen,
                 "Expected PIXI_FROZEN=true to set frozen=true"
             );
-            let usage = parsed.to_usage().unwrap();
+            let usage = parsed.to_usage();
             assert!(matches!(
                 usage,
                 pixi_core::environment::LockFileUsage::Frozen
@@ -551,7 +541,7 @@ mod tests {
                 !parsed.frozen,
                 "Expected PIXI_FROZEN=false to set frozen=false"
             );
-            let usage = parsed.to_usage().unwrap();
+            let usage = parsed.to_usage();
             assert!(matches!(
                 usage,
                 pixi_core::environment::LockFileUsage::Update
@@ -574,7 +564,7 @@ mod tests {
             let result = LockFileUsageConfig::try_parse_from(["test", "--frozen"]);
             assert!(result.is_ok());
             let parsed = result.unwrap();
-            let usage = parsed.to_usage().unwrap();
+            let usage = parsed.to_usage();
             assert!(matches!(
                 usage,
                 pixi_core::environment::LockFileUsage::Frozen
@@ -583,7 +573,7 @@ mod tests {
     }
 
     #[test]
-    fn test_locked_env_and_conflicts() {
+    fn test_locked_env_and_precedence() {
         // PIXI_FROZEN=true and PIXI_LOCKED=false should work
         temp_env::with_vars(
             vec![
@@ -592,7 +582,7 @@ mod tests {
             ],
             || {
                 let parsed = LockFileUsageConfig::try_parse_from(["test"]).unwrap();
-                let usage = parsed.to_usage().expect("should validate");
+                let usage = parsed.to_usage();
                 assert!(matches!(
                     usage,
                     pixi_core::environment::LockFileUsage::Frozen
@@ -600,13 +590,16 @@ mod tests {
             },
         );
 
-        // PIXI_FROZEN=true and PIXI_LOCKED=true should conflict
+        // PIXI_FROZEN=true and PIXI_LOCKED=true should select Locked (locked wins)
         temp_env::with_vars(
             vec![("PIXI_FROZEN", Some("true")), ("PIXI_LOCKED", Some("true"))],
             || {
                 let parsed = LockFileUsageConfig::try_parse_from(["test"]).unwrap();
-                let err = parsed.to_usage();
-                assert!(err.is_err(), "Expected conflict when both are true");
+                let usage = parsed.to_usage();
+                assert!(matches!(
+                    usage,
+                    pixi_core::environment::LockFileUsage::Locked
+                ));
             },
         );
     }
