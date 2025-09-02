@@ -1,0 +1,164 @@
+{
+  "info": {
+    "subdir": "noarch"
+  },
+  "packages": {
+    "numpy-1.0.0-py_0.tar.bz2": {
+      "build": "py_0",
+      "build_number": 0,
+      "depends": [],
+      "license": "MIT",
+      "name": "numpy",
+      "platform": null,
+      "subdir": "noarch",
+      "timestamp": 1640995200000,
+      "version": "1.0.0"
+    },
+    "pandas-1.0.0-py_0.tar.bz2": {
+      "build": "py_0",
+      "build_number": 0,
+      "depends": [],
+      "license": "MIT",
+      "name": "pandas",
+      "platform": null,
+      "subdir": "noarch",
+      "timestamp": 1640995200000,
+      "version": "1.0.0"
+    },
+    "requests-1.0.0-py_0.tar.bz2": {
+      "build": "py_0",
+      "build_number": 0,
+      "depends": [],
+      "license": "MIT",
+      "name": "requests",
+      "platform": null,
+      "subdir": "noarch",
+      "timestamp": 1640995200000,
+      "version": "1.0.0"
+    },
+    "click-1.0.0-py_0.tar.bz2": {
+      "build": "py_0",
+      "build_number": 0,
+      "depends": [],
+      "license": "MIT",
+      "name": "click",
+      "platform": null,
+      "subdir": "noarch",
+      "timestamp": 1640995200000,
+      "version": "1.0.0"
+    },
+    "pyyaml-1.0.0-py_0.tar.bz2": {
+      "build": "py_0",
+      "build_number": 0,
+      "depends": [],
+      "license": "MIT",
+      "name": "pyyaml",
+      "platform": null,
+      "subdir": "noarch",
+      "timestamp": 1640995200000,
+      "version": "1.0.0"
+    },
+    "pytorch-1.0.0-py_0.tar.bz2": {
+      "build": "py_0",
+      "build_number": 0,
+      "depends": [],
+      "license": "MIT",
+      "name": "pytorch",
+      "platform": null,
+      "subdir": "noarch",
+      "timestamp": 1640995200000,
+      "version": "1.0.0"
+    },
+    "scipy-1.0.0-py_0.tar.bz2": {
+      "build": "py_0",
+      "build_number": 0,
+      "depends": [],
+      "license": "MIT",
+      "name": "scipy",
+      "platform": null,
+      "subdir": "noarch",
+      "timestamp": 1640995200000,
+      "version": "1.0.0"
+    },
+    "scikit-learn-1.0.0-py_0.tar.bz2": {
+      "build": "py_0",
+      "build_number": 0,
+      "depends": [],
+      "license": "MIT",
+      "name": "scikit-learn",
+      "platform": null,
+      "subdir": "noarch",
+      "timestamp": 1640995200000,
+      "version": "1.0.0"
+    },
+    "matplotlib-1.0.0-py_0.tar.bz2": {
+      "build": "py_0",
+      "build_number": 0,
+      "depends": [],
+      "license": "MIT",
+      "name": "matplotlib",
+      "platform": null,
+      "subdir": "noarch",
+      "timestamp": 1640995200000,
+      "version": "1.0.0"
+    },
+    "jupyter-1.0.0-py_0.tar.bz2": {
+      "build": "py_0",
+      "build_number": 0,
+      "depends": [],
+      "license": "MIT",
+      "name": "jupyter",
+      "platform": null,
+      "subdir": "noarch",
+      "timestamp": 1640995200000,
+      "version": "1.0.0"
+    },
+    "bokeh-1.0.0-py_0.tar.bz2": {
+      "build": "py_0",
+      "build_number": 0,
+      "depends": [],
+      "license": "MIT",
+      "name": "bokeh",
+      "platform": null,
+      "subdir": "noarch",
+      "timestamp": 1640995200000,
+      "version": "1.0.0"
+    },
+    "dask-1.0.0-py_0.tar.bz2": {
+      "build": "py_0",
+      "build_number": 0,
+      "depends": [],
+      "license": "MIT",
+      "name": "dask",
+      "platform": null,
+      "subdir": "noarch",
+      "timestamp": 1640995200000,
+      "version": "1.0.0"
+    },
+    "xarray-1.0.0-py_0.tar.bz2": {
+      "build": "py_0",
+      "build_number": 0,
+      "depends": [],
+      "license": "MIT",
+      "name": "xarray",
+      "platform": null,
+      "subdir": "noarch",
+      "timestamp": 1640995200000,
+      "version": "1.0.0"
+    },
+    "opencv-1.0.0-py_0.tar.bz2": {
+      "build": "py_0",
+      "build_number": 0,
+      "depends": [],
+      "license": "MIT",
+      "name": "opencv",
+      "platform": null,
+      "subdir": "noarch",
+      "timestamp": 1640995200000,
+      "version": "1.0.0"
+    }
+  },
+  "packages.conda": {},
+  "removed": [],
+  "repodata_version": 1
+}
