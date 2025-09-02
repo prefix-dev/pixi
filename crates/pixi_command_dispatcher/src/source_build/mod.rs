@@ -5,7 +5,7 @@ use std::{
 };
 
 use miette::Diagnostic;
-use pixi_build_discovery::{DiscoveredBackend, EnabledProtocols};
+use pixi_build_discovery::EnabledProtocols;
 use pixi_build_frontend::Backend;
 use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
 use pixi_record::{PinnedSourceSpec, PixiRecord};
@@ -156,22 +156,24 @@ impl SourceBuildSpec {
             .await
             .map_err_with(SourceBuildError::SourceCheckout)?;
 
-        // Discover information about the build backend from the source code.
-        let discovered_backend = DiscoveredBackend::discover(
-            &source_checkout.path,
-            &self.channel_config,
-            &self.enabled_protocols,
-        )
-        .map_err(SourceBuildError::Discovery)
-        .map_err(CommandDispatcherError::Failed)?;
+        // Discover information about the build backend from the source code (cached by path).
+        let discovered_backend = command_dispatcher
+            .discover_backend(
+                &source_checkout.path,
+                self.channel_config.clone(),
+                self.enabled_protocols.clone(),
+            )
+            .await
+            .map_err_with(SourceBuildError::Discovery)?;
 
         // Instantiate the backend with the discovered information.
         let backend = command_dispatcher
             .instantiate_backend(InstantiateBackendSpec {
                 backend_spec: discovered_backend
                     .backend_spec
+                    .clone()
                     .resolve(SourceAnchor::from(SourceSpec::from(self.source.clone()))),
-                init_params: discovered_backend.init_params,
+                init_params: discovered_backend.init_params.clone(),
                 channel_config: self.channel_config.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
             })
