@@ -111,7 +111,7 @@ toml-span = "0.5.2"
 toml_edit = "0.22.24"
 tracing = "0.1.41"
 # Forcing the version due to this PR https://github.com/tokio-rs/tracing/pull/3368
-tracing-subscriber = "=0.3.19"
+tracing-subscriber = "=0.3.20"
 typed-path = "0.11.0"
 uv-build-frontend = { git = "https://github.com/astral-sh/uv", tag = "0.8.5" }
 uv-distribution-filename = { git = "https://github.com/astral-sh/uv", tag = "0.8.5" }
