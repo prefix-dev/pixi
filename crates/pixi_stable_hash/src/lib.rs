@@ -10,7 +10,6 @@
 use std::{collections::BTreeMap, hash::Hash};
 
 use ordermap::OrderMap;
-use rattler_digest::digest::generic_array::GenericArray;
 
 /// A field discriminant used in hash implementations to ensure different field
 /// configurations produce different hashes while maintaining forward/backward
@@ -62,7 +61,7 @@ pub struct StableHashBuilder<'a, H: std::hash::Hasher> {
     fields: BTreeMap<&'static str, &'a dyn DynHashable<H>>,
 }
 
-impl<H: std::hash::Hasher> Default for StableHashBuilder<'_, H> {
+impl<H: std::hash::Hasher + Default> Default for StableHashBuilder<'_, H> {
     fn default() -> Self {
         Self {
             fields: Default::default(),
@@ -73,7 +72,9 @@ impl<H: std::hash::Hasher> Default for StableHashBuilder<'_, H> {
 impl<'a, H: std::hash::Hasher> StableHashBuilder<'a, H> {
     /// Create a new StableHashBuilder.
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            fields: BTreeMap::new(),
+        }
     }
 
     /// Add a field to the hash if it's not in its default state.
@@ -113,14 +114,6 @@ impl IsDefault for String {
     }
 }
 
-impl IsDefault for url::Url {
-    type Item = Self;
-
-    fn is_non_default(&self) -> Option<&Self::Item> {
-        Some(self) // Never skip required URL fields
-    }
-}
-
 impl IsDefault for std::path::PathBuf {
     type Item = Self;
 
@@ -145,6 +138,16 @@ impl<T: IsDefault> IsDefault for Option<T> {
     }
 }
 
+#[cfg(feature = "url")]
+impl IsDefault for url::Url {
+    type Item = Self;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        Some(self) // Never skip required URL fields
+    }
+}
+
+#[cfg(feature = "rattler_conda_types")]
 impl IsDefault for rattler_conda_types::Version {
     type Item = Self;
 
@@ -153,6 +156,7 @@ impl IsDefault for rattler_conda_types::Version {
     }
 }
 
+#[cfg(feature = "rattler_conda_types")]
 impl IsDefault for rattler_conda_types::StringMatcher {
     type Item = Self;
 
@@ -161,6 +165,7 @@ impl IsDefault for rattler_conda_types::StringMatcher {
     }
 }
 
+#[cfg(feature = "rattler_conda_types")]
 impl IsDefault for rattler_conda_types::BuildNumberSpec {
     type Item = Self;
 
@@ -169,6 +174,7 @@ impl IsDefault for rattler_conda_types::BuildNumberSpec {
     }
 }
 
+#[cfg(feature = "rattler_conda_types")]
 impl IsDefault for rattler_conda_types::VersionSpec {
     type Item = Self;
 
@@ -177,7 +183,10 @@ impl IsDefault for rattler_conda_types::VersionSpec {
     }
 }
 
-impl<U, T: rattler_digest::digest::generic_array::ArrayLength<U>> IsDefault for GenericArray<U, T> {
+#[cfg(feature = "rattler_digest")]
+impl<U, T: rattler_digest::digest::generic_array::ArrayLength<U>> IsDefault
+    for rattler_digest::digest::generic_array::GenericArray<U, T>
+{
     type Item = Self;
 
     fn is_non_default(&self) -> Option<&Self::Item> {

@@ -630,7 +630,7 @@ mod tests {
     use super::*;
 
     fn calculate_hash<T: Hash>(obj: &T) -> u64 {
-        let mut hasher = DefaultHasher::new();
+        let mut hasher = DefaultHasher::default();
         obj.hash(&mut hasher);
         hasher.finish()
     }

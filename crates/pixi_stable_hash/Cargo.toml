@@ -11,6 +11,8 @@ version = "0.1.0"
 
 [dependencies]
 ordermap = { workspace = true }
-rattler_conda_types = { workspace = true }
-rattler_digest = { workspace = true }
-url = { workspace = true }
+
+# Optional integrations
+rattler_conda_types = { workspace = true, optional = true }
+rattler_digest = { workspace = true, optional = true }
+url = { workspace = true, optional = true }
