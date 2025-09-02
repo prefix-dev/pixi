@@ -193,3 +193,101 @@ impl<U, T: rattler_digest::digest::generic_array::ArrayLength<U>> IsDefault
         Some(self) // Never skip digest output fields
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::hash::Hasher;
+    use xxhash_rust::xxh3::Xxh3;
+
+    #[test]
+    fn fields_hashed_in_alphabetical_order() {
+        let a = "a_val".to_string();
+        let b = "b_val".to_string();
+
+        let mut h1 = Xxh3::default();
+        StableHashBuilder::<'_, _>::new()
+            .field("b", &b)
+            .field("a", &a)
+            .finish(&mut h1);
+
+        let mut h2 = Xxh3::default();
+        StableHashBuilder::<'_, _>::new()
+            .field("a", &a)
+            .field("b", &b)
+            .finish(&mut h2);
+
+        assert_eq!(h1.finish(), h2.finish());
+    }
+
+    #[test]
+    fn discriminants_prevent_field_collisions() {
+        // Same value placed in different fields must yield different hashes
+        let v = "same".to_string();
+
+        let mut h1 = Xxh3::default();
+        StableHashBuilder::<'_, _>::new()
+            .field("a", &v)
+            .finish(&mut h1);
+
+        let mut h2 = Xxh3::default();
+        StableHashBuilder::<'_, _>::new()
+            .field("b", &v)
+            .finish(&mut h2);
+
+        assert_ne!(h1.finish(), h2.finish());
+    }
+
+    #[test]
+    fn option_and_empty_values_are_skipped() {
+        // None and Some(empty vec) should be equivalent due to IsDefault impls
+        let none: Option<Vec<String>> = None;
+        let some_empty: Option<Vec<String>> = Some(vec![]);
+        let some_val: Option<Vec<String>> = Some(vec!["x".to_string()]);
+
+        let mut h_none = Xxh3::default();
+        StableHashBuilder::<'_, _>::new()
+            .field("opt", &none)
+            .finish(&mut h_none);
+        let hash_none = h_none.finish();
+
+        let mut h_empty = Xxh3::default();
+        StableHashBuilder::<'_, _>::new()
+            .field("opt", &some_empty)
+            .finish(&mut h_empty);
+        let hash_empty = h_empty.finish();
+
+        let mut h_val = Xxh3::default();
+        StableHashBuilder::<'_, _>::new()
+            .field("opt", &some_val)
+            .finish(&mut h_val);
+        let hash_val = h_val.finish();
+
+        assert_eq!(hash_none, hash_empty);
+        assert_ne!(hash_none, hash_val);
+    }
+
+    #[test]
+    fn ordermap_order_affects_hash() {
+        // OrderMap order is considered meaningful
+        let mut m1: OrderMap<&'static str, &'static str> = OrderMap::new();
+        m1.insert("k1", "v1");
+        m1.insert("k2", "v2");
+
+        let mut m2: OrderMap<&'static str, &'static str> = OrderMap::new();
+        m2.insert("k2", "v2");
+        m2.insert("k1", "v1");
+
+        let mut h1 = Xxh3::default();
+        StableHashBuilder::<'_, _>::new()
+            .field("map", &m1)
+            .finish(&mut h1);
+
+        let mut h2 = Xxh3::default();
+        StableHashBuilder::<'_, _>::new()
+            .field("map", &m2)
+            .finish(&mut h2);
+
+        assert_ne!(h1.finish(), h2.finish());
+    }
+}

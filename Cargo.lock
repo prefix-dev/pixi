@@ -5379,6 +5379,7 @@ dependencies = [
  "rattler_conda_types",
  "rattler_digest",
  "url",
+ "xxhash-rust",
 ]
 
 [[package]]
