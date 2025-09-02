@@ -120,12 +120,11 @@ impl LockFileUpdateConfig {
             ));
         }
 
-        let usage: LockFileUsage = self.lock_file_usage.clone().into();
-        if self.no_lockfile_update {
-            Ok(LockFileUsage::Frozen)
-        } else {
-            Ok(usage)
-        }
+        let usage: LockFileUsage = self
+            .lock_file_usage
+            .to_usage()
+            .map_err(|e| miette::miette!(e.to_string()))?;
+        Ok(usage)
     }
 }
 
