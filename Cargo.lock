@@ -4792,6 +4792,7 @@ name = "pixi_build_types"
 version = "0.1.0"
 dependencies = [
  "ordermap",
+ "pixi_stable_hash",
  "rattler_conda_types",
  "rattler_digest",
  "serde",
@@ -5368,6 +5369,16 @@ dependencies = [
  "pixi_spec",
  "rattler_conda_types",
  "serde",
+]
+
+[[package]]
+name = "pixi_stable_hash"
+version = "0.1.0"
+dependencies = [
+ "ordermap",
+ "rattler_conda_types",
+ "rattler_digest",
+ "url",
 ]
 
 [[package]]

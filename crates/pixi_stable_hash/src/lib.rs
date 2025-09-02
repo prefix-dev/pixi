@@ -1,23 +1,25 @@
 //! Stable hash builder for creating consistent hash implementations.
 //!
-//! This module provides tools for creating hash implementations that:
-//! - Only include non-default field values to maintain forward/backward compatibility
+//! This crate provides tools for creating hash implementations that:
+//! - Only include non-default field values to maintain forward/backward
+//!   compatibility
 //! - Process fields in alphabetical order for consistency
 //! - Prevent hash collisions between different field configurations
 //! - Use direct references without intermediate hashing for efficiency
 
+use std::{collections::BTreeMap, hash::Hash};
+
 use ordermap::OrderMap;
 use rattler_digest::digest::generic_array::GenericArray;
-use std::collections::BTreeMap;
-use std::hash::Hash;
 
 /// A field discriminant used in hash implementations to ensure different field
-/// configurations produce different hashes while maintaining forward/backward compatibility.
+/// configurations produce different hashes while maintaining forward/backward
+/// compatibility.
 ///
 /// This type wraps a static string that identifies which field is being hashed,
 /// preventing hash collisions when the same value appears in different fields.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct FieldDiscriminant(&'static str);
+struct FieldDiscriminant(&'static str);
 
 impl FieldDiscriminant {
     /// Create a new field discriminant with the given field name.
@@ -32,9 +34,10 @@ impl Hash for FieldDiscriminant {
     }
 }
 
-/// Trait to determine if a value should be considered "default" and thus skipped in hash calculations.
-/// This helps maintain forward/backward compatibility by only including discriminants for meaningful values.
-pub(crate) trait IsDefault {
+/// Trait to determine if a value should be considered "default" and thus
+/// skipped in hash calculations. This helps maintain forward/backward
+/// compatibility by only including discriminants for meaningful values.
+pub trait IsDefault {
     type Item;
 
     fn is_non_default(&self) -> Option<&Self::Item>;
@@ -52,18 +55,25 @@ impl<T: Hash, H: std::hash::Hasher> DynHashable<H> for T {
     }
 }
 
-/// Builder pattern for creating stable hash implementations that automatically handle
-/// field discriminants, default value detection, and alphabetical ordering.
-pub(crate) struct StableHashBuilder<'a, H: std::hash::Hasher> {
+/// Builder pattern for creating stable hash implementations that automatically
+/// handle field discriminants, default value detection, and alphabetical
+/// ordering.
+pub struct StableHashBuilder<'a, H: std::hash::Hasher> {
     fields: BTreeMap<&'static str, &'a dyn DynHashable<H>>,
+}
+
+impl<H: std::hash::Hasher> Default for StableHashBuilder<'_, H> {
+    fn default() -> Self {
+        Self {
+            fields: Default::default(),
+        }
+    }
 }
 
 impl<'a, H: std::hash::Hasher> StableHashBuilder<'a, H> {
     /// Create a new StableHashBuilder.
     pub fn new() -> Self {
-        Self {
-            fields: Default::default(),
-        }
+        Self::default()
     }
 
     /// Add a field to the hash if it's not in its default state.
@@ -124,6 +134,14 @@ impl<T> IsDefault for Vec<T> {
 
     fn is_non_default(&self) -> Option<&Self::Item> {
         if !self.is_empty() { Some(self) } else { None }
+    }
+}
+
+impl<T: IsDefault> IsDefault for Option<T> {
+    type Item = T::Item;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        self.as_ref()?.is_non_default()
     }
 }
 

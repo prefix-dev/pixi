@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::{DeserializeFromStr, DisplayFromStr, SerializeDisplay, serde_as};
 use url::Url;
 
-use crate::stable_hash::{IsDefault, StableHashBuilder};
+use pixi_stable_hash::{IsDefault, StableHashBuilder};
 
 /// Enum containing all versions of the project model.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -180,14 +180,6 @@ impl IsDefault for TargetsV1 {
 
     fn is_non_default(&self) -> Option<&Self::Item> {
         if !self.is_empty() { Some(self) } else { None }
-    }
-}
-
-impl<T: IsDefault> IsDefault for Option<T> {
-    type Item = T::Item;
-
-    fn is_non_default(&self) -> Option<&Self::Item> {
-        self.as_ref()?.is_non_default()
     }
 }
 
