@@ -2149,3 +2149,34 @@ def test_tree_invert(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
         env=env,
         stdout_contains=["dummy-c", "dummy-a 0.1.0"],
     )
+
+
+def test_conda_file(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    """Test directly installing a `.conda` file with pixi global"""
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+
+    conda_file = Path.from_uri(dummy_channel_1) / "osx-arm64" / "dummy-c-0.1.0-h60d57d3_0.conda"
+
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--path",
+            conda_file,
+        ],
+        env=env,
+    )
+
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            conda_file,
+        ],
+        env=env,
+        expected_exit_code=ExitCode.FAILURE,
+    )
