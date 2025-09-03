@@ -4665,7 +4665,7 @@ dependencies = [
 
 [[package]]
 name = "pixi"
-version = "0.54.0"
+version = "0.54.1"
 dependencies = [
  "async-trait",
  "chrono",
