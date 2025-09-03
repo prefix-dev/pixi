@@ -195,6 +195,7 @@ pixi_record = { path = "crates/pixi_record" }
 pixi_reporters = { path = "crates/pixi_reporters" }
 pixi_spec = { path = "crates/pixi_spec" }
 pixi_spec_containers = { path = "crates/pixi_spec_containers" }
+pixi_stable_hash = { path = "crates/pixi_stable_hash" }
 pixi_task = { path = "crates/pixi_task" }
 pixi_test_utils = { path = "crates/pixi_test_utils" }
 pixi_toml = { path = "crates/pixi_toml" }
