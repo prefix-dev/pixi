@@ -110,7 +110,8 @@ tokio-util = "0.7.13"
 toml-span = "0.5.2"
 toml_edit = "0.22.24"
 tracing = "0.1.41"
-tracing-subscriber = "0.3.19"
+# Forcing the version due to this PR https://github.com/tokio-rs/tracing/pull/3368
+tracing-subscriber = "=0.3.19"
 typed-path = "0.11.0"
 uv-build-frontend = { git = "https://github.com/astral-sh/uv", tag = "0.8.5" }
 uv-distribution-filename = { git = "https://github.com/astral-sh/uv", tag = "0.8.5" }
@@ -126,6 +127,7 @@ wax = "0.6.0"
 which = "8.0.0"
 
 # Rattler crates
+coalesced_map = "0.1.1"
 file_url = "0.2.6"
 rattler = { version = "0.35.0", default-features = false }
 rattler_cache = { version = "0.3.30", default-features = false }
@@ -194,6 +196,7 @@ pixi_record = { path = "crates/pixi_record" }
 pixi_reporters = { path = "crates/pixi_reporters" }
 pixi_spec = { path = "crates/pixi_spec" }
 pixi_spec_containers = { path = "crates/pixi_spec_containers" }
+pixi_stable_hash = { path = "crates/pixi_stable_hash" }
 pixi_task = { path = "crates/pixi_task" }
 pixi_test_utils = { path = "crates/pixi_test_utils" }
 pixi_toml = { path = "crates/pixi_toml" }

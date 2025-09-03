@@ -12,8 +12,10 @@ version = "0.1.0"
 async-fd-lock = { workspace = true }
 base64 = { workspace = true }
 chrono = { workspace = true }
+coalesced_map = { workspace = true }
 derive_more = { workspace = true, features = ["from", "try_into"] }
 dirs = { workspace = true }
+dunce = { workspace = true }
 fs-err = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
