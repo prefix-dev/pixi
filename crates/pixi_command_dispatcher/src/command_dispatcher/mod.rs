@@ -15,13 +15,14 @@ pub use builder::CommandDispatcherBuilder;
 pub use error::{CommandDispatcherError, CommandDispatcherErrorResultExt};
 pub(crate) use git::GitCheckoutTask;
 pub use instantiate_backend::{InstantiateBackendError, InstantiateBackendSpec};
+use pixi_build_discovery::{DiscoveredBackend, EnabledProtocols};
 use pixi_build_frontend::BackendOverride;
 use pixi_git::resolver::GitResolver;
 use pixi_glob::GlobHashCache;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec, PixiRecord};
 use pixi_spec::{SourceLocationSpec, SourceSpec};
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{GenericVirtualPackage, Platform};
+use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, Platform};
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 use tokio::sync::{mpsc, oneshot};
@@ -35,6 +36,7 @@ use crate::{
     backend_source_build::{BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildSpec},
     build::{BuildCache, source_metadata_cache::SourceMetadataCache},
     cache_dirs::CacheDirs,
+    discover_backend_cache::DiscoveryCache,
     install_pixi::{
         InstallPixiEnvironmentError, InstallPixiEnvironmentResult, InstallPixiEnvironmentSpec,
     },
@@ -122,6 +124,9 @@ pub(crate) struct CommandDispatcherData {
 
     /// A cache for glob hashes.
     pub glob_hash_cache: GlobHashCache,
+
+    /// Cache for discovered build backends keyed by source checkout path.
+    pub discovery_cache: DiscoveryCache,
 
     /// The resolved limits for the command dispatcher.
     pub limits: ResolvedLimits,
@@ -348,6 +353,11 @@ impl CommandDispatcher {
     /// Returns the glob hash cache.
     pub fn glob_hash_cache(&self) -> &GlobHashCache {
         &self.data.glob_hash_cache
+    }
+
+    /// Returns the discovery cache for build backends.
+    pub fn discovery_cache(&self) -> &DiscoveryCache {
+        &self.data.discovery_cache
     }
 
     /// Returns the download client used by the command dispatcher.
@@ -597,6 +607,20 @@ impl CommandDispatcher {
                 unimplemented!("fetching URL sources is not yet implemented")
             }
         }
+    }
+
+    /// Discovers the build backend at a specific path on disk and caches it by
+    /// path.
+    pub async fn discover_backend(
+        &self,
+        source_path: &std::path::Path,
+        channel_config: ChannelConfig,
+        enabled_protocols: EnabledProtocols,
+    ) -> Result<Arc<DiscoveredBackend>, CommandDispatcherError<pixi_build_discovery::DiscoveryError>>
+    {
+        self.discovery_cache()
+            .get_or_discover(source_path, &channel_config, &enabled_protocols)
+            .await
     }
 }
 

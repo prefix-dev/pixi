@@ -204,6 +204,13 @@ impl LockedEnvironmentHash {
     }
 }
 
+impl LockedEnvironmentHash {
+    /// Create an invalid hash for revalidation purposes
+    pub(crate) fn invalid() -> Self {
+        LockedEnvironmentHash("invalid-hash".to_string())
+    }
+}
+
 /// Information about the environment that was used to create the environment.
 #[derive(Serialize, Deserialize)]
 pub(crate) struct EnvironmentFile {
@@ -478,8 +485,8 @@ pub struct InstallFilter {
     pub skip_direct: Vec<String>,
     /// Packages to skip together with their dependencies (hard stop)
     pub skip_with_deps: Vec<String>,
-    /// Target a single package (and its deps) to install
-    pub target_package: Option<String>,
+    /// Target one or more packages (and their deps) to install; empty means no targeting
+    pub target_packages: Vec<String>,
 }
 
 impl InstallFilter {
@@ -497,9 +504,16 @@ impl InstallFilter {
         self
     }
 
-    pub fn target_package(mut self, package: Option<String>) -> Self {
-        self.target_package = package;
+    pub fn target_packages(mut self, packages: impl Into<Vec<String>>) -> Self {
+        self.target_packages = packages.into();
         self
+    }
+
+    /// Is the filter currently active
+    pub fn filter_active(&self) -> bool {
+        !self.skip_direct.is_empty()
+            || !self.skip_with_deps.is_empty()
+            || !self.target_packages.is_empty()
     }
 }
 

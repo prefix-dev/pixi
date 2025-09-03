@@ -57,9 +57,9 @@ pub struct Args {
     #[arg(long)]
     pub skip_with_deps: Option<Vec<String>>,
 
-    /// Install and build only this package and its dependencies
+    /// Install and build only these package(s) and their dependencies. Can be passed multiple times.
     #[arg(long)]
-    pub only: Option<String>,
+    pub only: Option<Vec<String>>,
 }
 
 const SKIP_CUTOFF: usize = 5;
@@ -97,14 +97,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let filter = InstallFilter::new()
         .skip_direct(args.skip.clone().unwrap_or_default())
         .skip_with_deps(args.skip_with_deps.clone().unwrap_or_default())
-        .target_package(args.only.clone());
+        .target_packages(args.only.clone().unwrap_or_default());
 
     // Update the prefixes by installing all packages
     let (lock_file, _) = get_update_lock_file_and_prefixes(
         &environments,
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
-            lock_file_usage: args.lock_file_usage.into(),
+            lock_file_usage: args.lock_file_usage.to_usage(),
             no_install: false,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
         },
@@ -121,7 +121,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Message what's installed
     let mut message = console::style(console::Emoji("✔ ", "")).green().to_string();
 
-    let skip_opts = args.skip.is_some() || args.skip_with_deps.is_some() || args.only.is_some();
+    let skip_opts = args.skip.is_some()
+        || args.skip_with_deps.is_some()
+        || args.only.as_ref().is_some_and(|v| !v.is_empty());
 
     if installed_envs.len() == 1 {
         write!(
@@ -142,7 +144,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             let num_retained = names.retained.len();
 
             // When only is set, also print the number of packages that will be installed
-            if args.only.is_some() {
+            if args.only.as_ref().is_some_and(|v| !v.is_empty()) {
                 write!(&mut message, ", including {} packages", num_retained).unwrap();
             }
 

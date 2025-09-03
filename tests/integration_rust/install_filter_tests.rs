@@ -132,7 +132,7 @@ async fn install_filter_target_package_zoom_in() {
         .update_lock_file(UpdateLockFileOptions::default())
         .await
         .unwrap();
-    let filter = InstallFilter::new().target_package(Some("a".to_string()));
+    let filter = InstallFilter::new().target_packages(vec!["a".to_string()]);
     let skipped = derived
         .get_filtered_package_names(&env, &filter)
         .unwrap()
@@ -154,7 +154,7 @@ async fn install_filter_target_with_skip_with_deps_stop() {
         .await
         .unwrap();
     let filter = InstallFilter::new()
-        .target_package(Some("a".to_string()))
+        .target_packages(vec!["a".to_string()])
         .skip_with_deps(vec!["c".to_string()]);
     let skipped = derived
         .get_filtered_package_names(&env, &filter)
@@ -199,6 +199,13 @@ async fn install_subset_e2e_skip_with_deps() {
         .await
         .unwrap();
     let prefix = pixi.default_env_path().unwrap();
+    // When filtering is active, the environment file should contain an invalid hash
+    let env_file = prefix.join("conda-meta").join("pixi");
+    let env_file_contents = fs_err::read_to_string(&env_file).expect("read environment file");
+    assert!(
+        env_file_contents.contains("invalid-hash"),
+        "environment file should contain the invalid hash when filtering is active"
+    );
     assert!(!is_conda_package_installed(&prefix, "dummy-g").await);
     assert!(!is_conda_package_installed(&prefix, "dummy-b").await);
     assert!(is_conda_package_installed(&prefix, "dummy-a").await);

@@ -4672,7 +4672,7 @@ dependencies = [
 
 [[package]]
 name = "pixi"
-version = "0.53.0"
+version = "0.54.0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -4799,6 +4799,7 @@ name = "pixi_build_types"
 version = "0.1.0"
 dependencies = [
  "ordermap",
+ "pixi_stable_hash",
  "rattler_conda_types",
  "rattler_digest",
  "serde",
@@ -4905,8 +4906,10 @@ dependencies = [
  "async-fd-lock",
  "base64 0.22.1",
  "chrono",
+ "coalesced_map",
  "derive_more",
  "dirs",
+ "dunce",
  "fs-err",
  "futures",
  "indexmap 2.11.0",
@@ -5375,6 +5378,17 @@ dependencies = [
  "pixi_spec",
  "rattler_conda_types",
  "serde",
+]
+
+[[package]]
+name = "pixi_stable_hash"
+version = "0.1.0"
+dependencies = [
+ "ordermap",
+ "rattler_conda_types",
+ "rattler_digest",
+ "url",
+ "xxhash-rust",
 ]
 
 [[package]]

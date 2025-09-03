@@ -361,6 +361,14 @@ impl<'p> LockFileDerivedData<'p> {
             .update_prefix(environment, reinstall_packages, filter)
             .await?;
 
+        // We write an invalid hash when filtering, as we will need to do a full
+        // revalidation of the environment anyways
+        let hash = if filter.filter_active() {
+            LockedEnvironmentHash::invalid()
+        } else {
+            hash
+        };
+
         // Save an environment file to the environment directory after the update.
         // Avoiding writing the cache away before the update is done.
         write_environment_file(
@@ -457,9 +465,9 @@ impl<'p> LockFileDerivedData<'p> {
                 let subset = InstallSubset::new(
                     &filter.skip_with_deps,
                     &filter.skip_direct,
-                    filter.target_package.as_deref(),
+                    &filter.target_packages,
                 );
-                let result = subset.filter(locked_env.packages(platform));
+                let result = subset.filter(locked_env.packages(platform))?;
                 let packages = result.install;
                 let ignored = result.ignore;
 
@@ -690,9 +698,9 @@ impl<'p> LockFileDerivedData<'p> {
         let subset = InstallSubset::new(
             &filter.skip_with_deps,
             &filter.skip_direct,
-            filter.target_package.as_deref(),
+            &filter.target_packages,
         );
-        let filtered = subset.filter(locked_env.packages(platform));
+        let filtered = subset.filter(locked_env.packages(platform))?;
 
         // Map to names, dedupe and sort for stable output.
         let retained = filtered
