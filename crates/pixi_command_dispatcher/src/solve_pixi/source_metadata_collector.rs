@@ -208,7 +208,7 @@ impl SourceMetadataCollector {
 
         // Make sure that a package with the name defined in spec is available from the
         // backend.
-        if !source_metadata.skipped_packages.is_empty() {
+        if source_metadata.records.is_empty() {
             return Err(CommandDispatcherError::Failed(
                 CollectSourceMetadataError::PackageMetadataNotFound {
                     help: Self::create_metadata_not_found_help(
