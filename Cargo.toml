@@ -127,6 +127,7 @@ wax = "0.6.0"
 which = "8.0.0"
 
 # Rattler crates
+coalesced_map = "0.1.1"
 file_url = "0.2.6"
 rattler = { version = "0.35.0", default-features = false }
 rattler_cache = { version = "0.3.30", default-features = false }
