@@ -4,7 +4,7 @@ use futures::FutureExt;
 use pixi_git::{GitError, resolver::RepositoryReference, source::Fetch};
 
 use super::{CommandDispatcherProcessor, PendingGitCheckout, TaskResult};
-use crate::{Reporter, command_dispatcher::GitCheckoutTask};
+use crate::{CommandDispatcherError, Reporter, command_dispatcher::GitCheckoutTask};
 
 impl CommandDispatcherProcessor {
     /// Called when a [`ForegroundMessage::GitCheckout`] task was received.
@@ -48,13 +48,20 @@ impl CommandDispatcherProcessor {
                 let client = self.inner.download_client.clone();
                 let cache_dir = self.inner.cache_dirs.git().clone();
                 self.pending_futures.push(
-                    async move {
-                        let fetch = resolver
-                            .fetch(task.spec.clone(), client, cache_dir, None)
-                            .await;
-                        TaskResult::GitCheckedOut(repository_reference, fetch)
-                    }
-                    .boxed_local(),
+                    task.cancellation_token
+                        .run_until_cancelled_owned(async move {
+                            resolver
+                                .fetch(task.spec.clone(), client, cache_dir, None)
+                                .await
+                                .map_err(CommandDispatcherError::Failed)
+                        })
+                        .map(|fetch| {
+                            TaskResult::GitCheckedOut(
+                                repository_reference,
+                                fetch.unwrap_or(Err(CommandDispatcherError::Cancelled)),
+                            )
+                        })
+                        .boxed_local(),
                 );
             }
         }
@@ -64,7 +71,7 @@ impl CommandDispatcherProcessor {
     pub(crate) fn on_git_checked_out(
         &mut self,
         repository_reference: RepositoryReference,
-        result: Result<Fetch, GitError>,
+        result: Result<Fetch, CommandDispatcherError<GitError>>,
     ) {
         let Some(PendingGitCheckout::Pending(reporter_id, pending)) =
             self.git_checkouts.get_mut(&repository_reference)
@@ -92,7 +99,7 @@ impl CommandDispatcherProcessor {
                 self.git_checkouts
                     .insert(repository_reference, PendingGitCheckout::CheckedOut(fetch));
             }
-            Err(mut err) => {
+            Err(CommandDispatcherError::Failed(mut err)) => {
                 // Only send the error to the first channel, drop the rest, which cancels them.
                 for tx in pending.drain(..) {
                     match tx.send(Err(err)) {
@@ -102,6 +109,10 @@ impl CommandDispatcherProcessor {
                     }
                 }
 
+                self.git_checkouts
+                    .insert(repository_reference, PendingGitCheckout::Errored);
+            }
+            Err(CommandDispatcherError::Cancelled) => {
                 self.git_checkouts
                     .insert(repository_reference, PendingGitCheckout::Errored);
             }
