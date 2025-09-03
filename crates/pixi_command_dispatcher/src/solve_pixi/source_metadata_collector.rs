@@ -6,7 +6,7 @@ use std::{
 use futures::{FutureExt, StreamExt};
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
-use pixi_record::{PinnedSourceSpec, SourceRecord};
+use pixi_record::PinnedSourceSpec;
 use pixi_spec::{SourceAnchor, SourceSpec};
 use rattler_conda_types::{ChannelConfig, ChannelUrl, MatchSpec, ParseStrictness};
 use thiserror::Error;
@@ -208,12 +208,12 @@ impl SourceMetadataCollector {
 
         // Make sure that a package with the name defined in spec is available from the
         // backend.
-        if source_metadata.records.is_empty() {
+        if !source_metadata.skipped_packages.is_empty() {
             return Err(CommandDispatcherError::Failed(
                 CollectSourceMetadataError::PackageMetadataNotFound {
                     help: Self::create_metadata_not_found_help(
                         &name,
-                        source_metadata.records.clone(),
+                        source_metadata.skipped_packages.clone(),
                     ),
                     name,
                     pinned_source: Box::new(source_metadata.source.clone()),
@@ -228,17 +228,14 @@ impl SourceMetadataCollector {
     /// found in the metadata returned by a backend.
     fn create_metadata_not_found_help(
         name: &rattler_conda_types::PackageName,
-        records: Vec<SourceRecord>,
+        skipped_packages: Vec<rattler_conda_types::PackageName>,
     ) -> String {
-        records
+        skipped_packages
             .into_iter()
-            .map(|record| {
+            .map(|skipped_name| {
                 (
-                    strsim::jaro(
-                        record.package_record.name.as_normalized(),
-                        name.as_normalized(),
-                    ),
-                    record,
+                    strsim::jaro(skipped_name.as_normalized(), name.as_normalized()),
+                    skipped_name,
                 )
             })
             .max_by(|(score_a, _), (score_b, _)| {
@@ -249,10 +246,10 @@ impl SourceMetadataCollector {
             .map(|(_, record)| record)
             .map_or_else(
                 || String::from("No packages are provided by the build-backend"),
-                |record| {
+                |skipped_name| {
                     format!(
                         "The build backend does provide other packages, did you mean '{}'?",
-                        record.package_record.name.as_normalized()
+                        skipped_name.as_normalized(),
                     )
                 },
             )
