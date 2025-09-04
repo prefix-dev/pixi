@@ -20,6 +20,7 @@ fs-err = { workspace = true }
 futures = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
+ordermap = { workspace = true }
 pin-project-lite = { workspace = true }
 rand = { workspace = true }
 reqwest-middleware = { workspace = true }
@@ -56,6 +57,7 @@ pixi_glob = { workspace = true }
 pixi_record = { workspace = true }
 pixi_spec = { workspace = true }
 pixi_spec_containers = { workspace = true }
+pixi_stable_hash = { workspace = true, features = ["serde_json"] }
 pixi_utils = { workspace = true }
 
 [dev-dependencies]

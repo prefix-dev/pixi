@@ -98,6 +98,11 @@ impl<'a, H: std::hash::Hasher> StableHashBuilder<'a, H> {
     }
 }
 
+#[cfg(feature = "serde_json")]
+pub mod json;
+
+pub mod map;
+
 impl<K, V> IsDefault for OrderMap<K, V> {
     type Item = Self;
 
@@ -111,6 +116,14 @@ impl IsDefault for String {
 
     fn is_non_default(&self) -> Option<&Self::Item> {
         Some(self) // Never skip required string fields
+    }
+}
+
+impl IsDefault for i32 {
+    type Item = Self;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        Some(self) // Never skip numeric fields
     }
 }
 
@@ -135,6 +148,14 @@ impl<T: IsDefault> IsDefault for Option<T> {
 
     fn is_non_default(&self) -> Option<&Self::Item> {
         self.as_ref()?.is_non_default()
+    }
+}
+
+impl<T: IsDefault> IsDefault for &T {
+    type Item = T::Item;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        T::is_non_default(self)
     }
 }
 
@@ -196,9 +217,11 @@ impl<U, T: rattler_digest::digest::generic_array::ArrayLength<U>> IsDefault
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::hash::Hasher;
+
     use xxhash_rust::xxh3::Xxh3;
+
+    use super::*;
 
     #[test]
     fn fields_hashed_in_alphabetical_order() {
