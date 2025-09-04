@@ -26,6 +26,7 @@ use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, Platform};
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 use tokio::sync::{mpsc, oneshot};
+use tokio_util::sync::CancellationToken;
 use typed_path::Utf8TypedPath;
 
 use crate::{
@@ -401,14 +402,19 @@ impl CommandDispatcher {
             return Err(CommandDispatcherError::Cancelled);
         };
 
+        let cancellation_token = CancellationToken::new();
         let (tx, rx) = oneshot::channel();
         sender
             .send(ForegroundMessage::from(Task {
                 spec,
                 parent: self.context,
                 tx,
+                cancellation_token: cancellation_token.clone(),
             }))
             .map_err(|_| CommandDispatcherError::Cancelled)?;
+
+        // Make sure to trigger the cancellation token when this async task is dropped.
+        let _cancel_guard = cancellation_token.drop_guard();
 
         match rx.await {
             Ok(Ok(result)) => Ok(result),
@@ -691,4 +697,5 @@ pub(crate) struct Task<S: TaskSpec> {
     pub spec: S,
     pub parent: Option<CommandDispatcherContext>,
     pub tx: oneshot::Sender<Result<S::Output, S::Error>>,
+    pub cancellation_token: CancellationToken,
 }

@@ -56,9 +56,14 @@ impl CommandDispatcherProcessor {
         // Add the task to the list of pending futures.
         let dispatcher = self.create_task_command_dispatcher(dispatcher_context);
         self.pending_futures.push(
-            task.spec
-                .install(dispatcher, install_reporter)
-                .map(move |result| TaskResult::InstallPixiEnvironment(pending_env_id, result))
+            task.cancellation_token
+                .run_until_cancelled_owned(task.spec.install(dispatcher, install_reporter))
+                .map(move |result| {
+                    TaskResult::InstallPixiEnvironment(
+                        pending_env_id,
+                        result.unwrap_or(Err(CommandDispatcherError::Cancelled)),
+                    )
+                })
                 .boxed_local(),
         );
     }

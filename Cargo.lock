@@ -4672,7 +4672,7 @@ dependencies = [
 
 [[package]]
 name = "pixi"
-version = "0.54.0"
+version = "0.54.1"
 dependencies = [
  "async-trait",
  "chrono",
@@ -4950,6 +4950,7 @@ dependencies = [
  "text_trees",
  "thiserror 2.0.16",
  "tokio",
+ "tokio-util",
  "tracing",
  "typed-path",
  "url",
