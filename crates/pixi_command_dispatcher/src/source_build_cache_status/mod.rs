@@ -243,7 +243,7 @@ impl SourceBuildCacheStatusSpec {
     /// Checks if the package configuration has changed by computing a hash and
     /// comparing that against the stored hash.
     ///
-    /// TODO: Optimize the crap out of this, currently we have to checkout the
+    /// TODO: We should optimize this because currently we have to checkout the
     /// source, discover the backend, and compute hashes. We can probably
     /// already early out if some of this information is cached more granularly.
     /// E.g. if the pixi.toml file didnt change (compare using timestamp) then
