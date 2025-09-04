@@ -154,7 +154,7 @@ shell-format = "shfmt --write --indent=4 --simplify --binary-next-line"
 toml-format = { cmd = "taplo fmt", env = { RUST_LOG = "warn" } }
 toml-lint = "taplo lint --verbose **/pixi.toml"
 typecheck-python = "mypy"
-typos = "typos --write-changes --force-exclude"
+typos = "typos --force-exclude"
 
 [feature.rust.dependencies]
 rust = ">=1.86.0,<1.87"
