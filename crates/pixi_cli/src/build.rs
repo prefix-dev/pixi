@@ -153,6 +153,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 work_directory: None,
                 clean: args.clean,
                 build_profile: BuildProfile::Release,
+                lock_file_path: Some(workspace.lock_file_path()),
             })
             .await?;
 

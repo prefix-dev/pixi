@@ -60,6 +60,9 @@ pub struct BuildBackendMetadata {
     /// The source checkout that the manifest was extracted from.
     pub source: PinnedSourceSpec,
 
+    /// The source checkout from which we want to build package.
+    pub package_build_source: Option<PinnedSourceSpec>,
+
     /// The cache entry that contains the metadata acquired from the build
     /// backend.
     ///
@@ -99,6 +102,19 @@ impl BuildBackendMetadataSpec {
         .map_err(BuildBackendMetadataError::Discovery)
         .map_err(CommandDispatcherError::Failed)?;
 
+        let package_build_source =
+            if let Some(build_source) = &discovered_backend.init_params.source {
+                Some(
+                    command_dispatcher
+                        .pin_and_checkout(build_source.clone())
+                        .await
+                        .map_err_with(BuildBackendMetadataError::SourceCheckout)?
+                        .pinned,
+                )
+            } else {
+                None
+            };
+
         // Calculate the hash of the project model
         let project_model_hash = discovered_backend
             .init_params
@@ -127,6 +143,7 @@ impl BuildBackendMetadataSpec {
                 metadata,
                 cache_entry,
                 source: source_checkout.pinned,
+                package_build_source,
             });
         }
 
@@ -137,6 +154,7 @@ impl BuildBackendMetadataSpec {
                     .backend_spec
                     .resolve(SourceAnchor::from(SourceSpec::from(self.source.clone()))),
                 init_params: discovered_backend.init_params,
+                source_dir: source_checkout.path.clone(),
                 channel_config: self.channel_config.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
             })
@@ -189,6 +207,7 @@ impl BuildBackendMetadataSpec {
             metadata,
             cache_entry,
             source,
+            package_build_source,
         })
     }
 

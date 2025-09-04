@@ -45,6 +45,8 @@ pub struct SourceMetadata {
     /// package.
     pub source: PinnedSourceSpec,
 
+    pub package_build_source: Option<PinnedSourceSpec>,
+
     /// All the source records for this particular package.
     pub records: Vec<SourceRecord>,
 }
@@ -85,6 +87,7 @@ impl SourceMetadataSpec {
                 Ok(SourceMetadata {
                     source: build_backend_metadata.source.clone(),
                     records,
+                    package_build_source: None,
                 })
             }
             MetadataKind::Outputs { outputs } => {
@@ -105,6 +108,7 @@ impl SourceMetadataSpec {
                 Ok(SourceMetadata {
                     source: build_backend_metadata.source.clone(),
                     records: futures.try_collect().await?,
+                    package_build_source: build_backend_metadata.package_build_source.clone(),
                 })
             }
         }
@@ -279,6 +283,8 @@ impl SourceMetadataSpec {
             strong_constrains: binary_specs_to_match_spec(run_exports.strong_constrains)?,
         };
 
+        let pinned_source_spec = None;
+
         Ok(SourceRecord {
             package_record: PackageRecord {
                 // We cannot now these values from the metadata because no actual package
@@ -334,6 +340,7 @@ impl SourceMetadataSpec {
             },
             source,
             input_hash,
+            pinned_source_spec,
             sources: sources
                 .into_iter()
                 .map(|(name, source)| (name.as_source().to_string(), source))

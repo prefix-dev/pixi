@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use miette::Diagnostic;
 use pixi_build_discovery::{
     BackendInitializationParams, BackendSpec, CommandSpec, EnabledProtocols,
@@ -34,6 +36,9 @@ pub struct InstantiateBackendSpec {
     /// The parameters to initialize the backend with
     pub init_params: BackendInitializationParams,
 
+    /// The source directory to use for the backend
+    pub source_dir: PathBuf,
+
     /// The channel configuration to use for any source packages required by the
     /// backend.
     pub channel_config: ChannelConfig,
@@ -50,21 +55,7 @@ impl CommandDispatcher {
     ) -> Result<Backend, CommandDispatcherError<InstantiateBackendError>> {
         let BackendSpec::JsonRpc(backend_spec) = spec.backend_spec;
 
-        let source_dir = if let Some(source_location_spec) = spec.init_params.source {
-            // Use pin_and_checkout to handle all source types (path, git, url)
-            let checkout =
-                self.pin_and_checkout(source_location_spec)
-                    .await
-                    .map_err(|e| match e {
-                        CommandDispatcherError::Failed(err) => CommandDispatcherError::Failed(
-                            InstantiateBackendError::SourceCheckout(err),
-                        ),
-                        CommandDispatcherError::Cancelled => CommandDispatcherError::Cancelled,
-                    })?;
-            checkout.path
-        } else {
-            spec.init_params.source_anchor
-        };
+        let source_dir = spec.source_dir;
 
         let command_spec = match self.build_backend_overrides() {
             BackendOverride::System(overridden_backends) => overridden_backends

@@ -180,21 +180,6 @@ fn spec_from_spanned_toml_location(
             })
         })?;
 
-    // For build sources, require explicit rev for git sources to
-    // ensure reproducible builds Should be removed once we will be
-    // able to store source revision in lockfile.
-    if let SourceLocationSpec::Git(ref git_spec) = source_location_spec {
-        if git_spec.rev.is_none() {
-            return Err(DeserError::from(Error {
-                kind: toml_span::ErrorKind::Custom(Cow::Borrowed(
-                    "Git sources in build context require an explicit `rev` field for reproducible builds",
-                )),
-                span: spanned_toml.span,
-                line_info: None,
-            }));
-        }
-    }
-
     Ok(source_location_spec)
 }
 
