@@ -1,12 +1,11 @@
-use pixi_core::{InstallFilter, UpdateLockFileOptions};
-use rattler_conda_types::Platform;
+use pixi_core::{InstallFilter, UpdateLockFileOptions, lock_file::PackageFilterNames};
+use pixi_utils::prefix::Prefix as CondaPrefix;
+use rattler_conda_types::{PackageName, Platform};
 
 use crate::common::{
     PixiControl,
     package_database::{Package, PackageDatabase},
 };
-use pixi_utils::prefix::Prefix as CondaPrefix;
-use rattler_conda_types::PackageName;
 
 /// Helper to check if a conda package is installed in a prefix
 async fn is_conda_package_installed(prefix_path: &std::path::Path, package_name: &str) -> bool {
@@ -79,12 +78,16 @@ async fn install_filter_skip_direct_soft_exclusion() {
 
     // Skip only the node `a` but traverse through its deps
     let filter = InstallFilter::new().skip_direct(vec!["a".to_string()]);
-    let skipped = derived
-        .get_filtered_package_names(&env, &filter)
-        .unwrap()
-        .ignored;
+    let skipped = PackageFilterNames::new(
+        &filter,
+        derived.lock_file.environment(env.name().as_str()).unwrap(),
+        env.best_platform(),
+    )
+    .unwrap()
+    .ignored;
 
-    // Only `a` should be skipped; b, c, d remain required via passthrough; e remains
+    // Only `a` should be skipped; b, c, d remain required via passthrough; e
+    // remains
     assert_eq!(skipped, vec!["a".to_string()]);
 }
 
@@ -102,10 +105,13 @@ async fn install_filter_skip_with_deps_hard_exclusion() {
 
     // Hard skip `a` including its dependency subtree
     let filter = InstallFilter::new().skip_with_deps(vec!["a".to_string()]);
-    let skipped = derived
-        .get_filtered_package_names(&env, &filter)
-        .unwrap()
-        .ignored;
+    let skipped = PackageFilterNames::new(
+        &filter,
+        derived.lock_file.environment(env.name().as_str()).unwrap(),
+        env.best_platform(),
+    )
+    .unwrap()
+    .ignored;
 
     // a, b, c, d are excluded; e remains as an independent root
     assert_eq!(
@@ -133,10 +139,13 @@ async fn install_filter_target_package_zoom_in() {
         .await
         .unwrap();
     let filter = InstallFilter::new().target_packages(vec!["a".to_string()]);
-    let skipped = derived
-        .get_filtered_package_names(&env, &filter)
-        .unwrap()
-        .ignored;
+    let skipped = PackageFilterNames::new(
+        &filter,
+        derived.lock_file.environment(env.name().as_str()).unwrap(),
+        env.best_platform(),
+    )
+    .unwrap()
+    .ignored;
     assert_eq!(skipped, vec!["e".to_string()]);
 }
 
@@ -156,10 +165,13 @@ async fn install_filter_target_with_skip_with_deps_stop() {
     let filter = InstallFilter::new()
         .target_packages(vec!["a".to_string()])
         .skip_with_deps(vec!["c".to_string()]);
-    let skipped = derived
-        .get_filtered_package_names(&env, &filter)
-        .unwrap()
-        .ignored;
+    let skipped = PackageFilterNames::new(
+        &filter,
+        derived.lock_file.environment(env.name().as_str()).unwrap(),
+        env.best_platform(),
+    )
+    .unwrap()
+    .ignored;
     assert_eq!(skipped, vec!["c", "d", "e"]);
 }
 
@@ -167,6 +179,7 @@ async fn install_filter_target_with_skip_with_deps_stop() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn install_subset_e2e_skip_with_deps() {
     use std::path::{Path, PathBuf};
+
     use url::Url;
 
     // manifest with dependent packages: dummy-g depends on dummy-b
@@ -192,7 +205,8 @@ async fn install_subset_e2e_skip_with_deps() {
     let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
     pixi.update_lock_file().await.unwrap();
 
-    // Hard-skip dummy-g subtree: expect dummy-g absent, and since dummy-g depends on dummy-b, dummy-b is also absent
+    // Hard-skip dummy-g subtree: expect dummy-g absent, and since dummy-g depends
+    // on dummy-b, dummy-b is also absent
     pixi.install()
         .with_frozen()
         .with_skipped_with_deps(vec!["dummy-g".into()])
