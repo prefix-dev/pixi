@@ -683,24 +683,29 @@ impl<'p> LockFileDerivedData<'p> {
             .await
             .map(|(prefix, python_status)| (prefix.clone(), python_status.clone()))
     }
+}
 
-    /// Returns the retained and ignored package names after applying the
-    /// install filter (skips and/or target).
-    pub fn get_filtered_package_names(
-        &self,
-        environment: &Environment<'p>,
+/// The result of applying an InstallFilter over the lockfile for a given
+/// environment, expressed as just package names.
+#[derive(Default)]
+pub struct PackageFilterNames {
+    pub retained: Vec<String>,
+    pub ignored: Vec<String>,
+}
+
+impl PackageFilterNames {
+    pub fn new(
         filter: &InstallFilter,
-    ) -> miette::Result<PackageFilterNames> {
-        let platform = environment.best_platform();
-        let locked_env = self.locked_env(environment)?;
-
+        environment: rattler_lock::Environment<'_>,
+        platform: Platform,
+    ) -> Option<Self> {
         // Determine kept/ignored packages using the full install filter
         let subset = InstallSubset::new(
             &filter.skip_with_deps,
             &filter.skip_direct,
             &filter.target_packages,
         );
-        let filtered = subset.filter(locked_env.packages(platform))?;
+        let filtered = subset.filter(environment.packages(platform)).ok()?;
 
         // Map to names, dedupe and sort for stable output.
         let retained = filtered
@@ -718,15 +723,8 @@ impl<'p> LockFileDerivedData<'p> {
             .sorted()
             .collect();
 
-        Ok(PackageFilterNames { retained, ignored })
+        Some(Self { retained, ignored })
     }
-}
-
-/// The result of applying an InstallFilter over the lockfile for a given environment,
-/// expressed as just package names.
-pub struct PackageFilterNames {
-    pub retained: Vec<String>,
-    pub ignored: Vec<String>,
 }
 
 fn locked_packages_to_pixi_records(
@@ -1433,7 +1431,8 @@ impl<'p> UpdateContext<'p> {
                 .get_latest_group_repodata_records(&group, environment.best_platform())
                 .ok_or_else(|| make_unsupported_pypi_platform_error(environment, false));
 
-            // Creates an object to initiate an update at a later point. Make sure to only create a single entry if we are solving for multiple platforms.
+            // Creates an object to initiate an update at a later point. Make sure to only
+            // create a single entry if we are solving for multiple platforms.
             let conda_prefix_updater =
                 match pypi_conda_prefix_updaters.entry(environment.name().clone()) {
                     Entry::Vacant(entry) => {
