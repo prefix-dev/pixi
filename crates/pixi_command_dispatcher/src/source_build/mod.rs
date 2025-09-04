@@ -9,12 +9,13 @@ use pixi_build_discovery::EnabledProtocols;
 use pixi_build_frontend::Backend;
 use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
 use pixi_record::{PinnedSourceSpec, PixiRecord};
-use pixi_spec::{SourceAnchor, SourceSpec};
+use pixi_spec::{SourceAnchor, SourceLocationSpec, SourceSpec};
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, ConvertSubdirError, InvalidPackageNameError, PackageRecord,
     Platform, RepoDataRecord, prefix::Prefix,
 };
 use rattler_digest::Sha256Hash;
+use rattler_lock::{LockFile, PackageBuildSource};
 use rattler_repodata_gateway::{RunExportExtractorError, RunExportsReporter};
 use serde::Serialize;
 use thiserror::Error;
@@ -87,6 +88,10 @@ pub struct SourceBuildSpec {
     /// The protocols that are enabled for this source
     #[serde(skip_serializing_if = "crate::is_default")]
     pub enabled_protocols: EnabledProtocols,
+
+    /// Optional path to lock file for reading/writing package_build_source entries
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lock_file_path: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone)]
@@ -109,6 +114,164 @@ pub struct BuiltPackage {
 }
 
 impl SourceBuildSpec {
+    /// Resolves the source to use, checking lock file first if available
+    async fn resolve_source_from_lock_file(
+        &self,
+        command_dispatcher: &CommandDispatcher,
+        build_source_location: Option<SourceLocationSpec>,
+    ) -> Result<(PathBuf, bool, Option<PinnedSourceSpec>), CommandDispatcherError<SourceBuildError>>
+    {
+        // TODO: Currently unimplemented, but it should work as follows.
+        //
+        // 1. Get lockfile entry
+        // 2. Compare lockfile with what we have now.
+        // 3. If they are different then update lock file, giving priority to the entry in the manifest.
+        // 4. If they are the same, then just return it.
+
+        // Check if there's a source specified in the manifest
+        let Some(build_source_location) = build_source_location else {
+            // No source specified in manifest, use the current directory (manifest directory)
+            let source_checkout = command_dispatcher
+                .checkout_pinned_source(self.source.clone())
+                .await
+                .map_err_with(SourceBuildError::SourceCheckout)?;
+
+            return Ok((source_checkout.path, false, None));
+        };
+
+        // Try to get source spec from lock file here.
+        let (resolved_source_location, update_lock_file) =
+            if let Some(lock_file_path) = &self.lock_file_path {
+                if lock_file_path.exists() {
+                    match self.get_source_from_lock_file(lock_file_path)? {
+                        Some(locked_source_location) => {
+                            let needs_update = !self.are_source_locations_equivalent(
+                                &locked_source_location,
+                                &build_source_location,
+                            );
+                            (build_source_location, needs_update)
+                        }
+                        None => {
+                            // No entry in lock file - store new entry if git/url
+                            (
+                                build_source_location.clone(),
+                                should_store_in_lock_file(&build_source_location),
+                            )
+                        }
+                    }
+                } else {
+                    // No lock file - store new entry if git/url
+                    (
+                        build_source_location.clone(),
+                        should_store_in_lock_file(&build_source_location),
+                    )
+                }
+            } else {
+                // No lock file path provided - just use manifest source
+                (build_source_location, false)
+            };
+
+        // Pin and checkout the resolved source
+        let source_checkout = command_dispatcher
+            .pin_and_checkout(resolved_source_location.clone())
+            .await
+            .map_err_with(SourceBuildError::SourceCheckout)?;
+
+        Ok((
+            source_checkout.path,
+            update_lock_file,
+            Some(source_checkout.pinned),
+        ))
+    }
+
+    /// Gets source location from lock file for this package
+    fn get_source_from_lock_file(
+        &self,
+        lock_file_path: &std::path::Path,
+    ) -> Result<Option<SourceLocationSpec>, CommandDispatcherError<SourceBuildError>> {
+        let lock_file = LockFile::from_path(lock_file_path).map_err(|err| {
+            CommandDispatcherError::Failed(SourceBuildError::LockFileError(
+                lock_file_path.to_path_buf(),
+                format!("Failed to parse lock file: {}", err),
+            ))
+        })?;
+
+        // Search for source package by name
+        for (_, env) in lock_file.environments() {
+            if let Some(packages) = env.packages(self.build_environment.host_platform) {
+                for package in packages {
+                    if let Some(package_data) = package.as_conda() {
+                        if package_data.record().name == self.package.name {
+                            if let rattler_lock::CondaPackageData::Source(source_data) =
+                                package_data
+                            {
+                                if let Some(package_build_source) =
+                                    &source_data.package_build_source
+                                {
+                                    // Convert PackageBuildSource to SourceLocationSpec
+                                    return Ok(Some(
+                                        self.package_build_source_to_source_location_spec(
+                                            package_build_source,
+                                        )?,
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    /// Converts PackageBuildSource to SourceLocationSpec
+    fn package_build_source_to_source_location_spec(
+        &self,
+        build_source: &PackageBuildSource,
+    ) -> Result<SourceLocationSpec, CommandDispatcherError<SourceBuildError>> {
+        match build_source {
+            PackageBuildSource::Git {
+                url,
+                spec: _,
+                rev: _,
+            } => {
+                // For comparison purposes, we convert to git spec without pinning the revision
+                // The actual revision pinning will happen during checkout
+                Ok(SourceLocationSpec::Git(pixi_spec::GitSpec {
+                    git: url.clone(),
+                    rev: None, // We'll compare just the URL, ignore specific revisions
+                    subdirectory: None,
+                }))
+            }
+            PackageBuildSource::Url { url, sha256: _ } => {
+                Ok(SourceLocationSpec::Url(pixi_spec::UrlSourceSpec {
+                    url: url.clone(),
+                    sha256: None, // For comparison, we don't need the exact hash
+                    md5: None,
+                }))
+            }
+        }
+    }
+
+    /// Compares if two source locations are equivalent (ignoring revision pins)
+    fn are_source_locations_equivalent(
+        &self,
+        locked: &SourceLocationSpec,
+        current: &SourceLocationSpec,
+    ) -> bool {
+        match (locked, current) {
+            (SourceLocationSpec::Git(locked_git), SourceLocationSpec::Git(current_git)) => {
+                // Compare URLs, ignore specific revisions/branches for now (TODO)
+                locked_git.git == current_git.git
+            }
+            (SourceLocationSpec::Url(locked_url), SourceLocationSpec::Url(current_url)) => {
+                // Compare URLs, ignore hashes for now (TODO)
+                locked_url.url == current_url.url
+            }
+            _ => false,
+        }
+    }
+
     #[instrument(
         skip_all,
         name = "source-build",
@@ -130,6 +293,7 @@ impl SourceBuildSpec {
             } else {
                 // Query the source build cache.
                 let build_cache = command_dispatcher
+                    .clone()
                     .source_build_cache_status(SourceBuildCacheStatusSpec {
                         package: self.package.clone(),
                         build_environment: self.build_environment.clone(),
@@ -153,6 +317,7 @@ impl SourceBuildSpec {
             };
 
         // Check out the source code.
+        // This is a directory where manifest is.
         let source_checkout = command_dispatcher
             .checkout_pinned_source(self.source.clone())
             .await
@@ -172,6 +337,14 @@ impl SourceBuildSpec {
         // Compute the package input hash for caching purposes.
         let package_build_input_hash = PackageBuildInputHash::from(discovered_backend.as_ref());
 
+        // Determine the build source to use: either from lock file or workspace
+        // This is a source from which package will be built.
+        let build_source_location = discovered_backend.init_params.source.clone();
+        // TODO: Update lock file.
+        let (source_dir, _, _) = self
+            .resolve_source_from_lock_file(&command_dispatcher, build_source_location)
+            .await?;
+
         // Instantiate the backend with the discovered information.
         let backend = command_dispatcher
             .instantiate_backend(InstantiateBackendSpec {
@@ -179,7 +352,12 @@ impl SourceBuildSpec {
                     .backend_spec
                     .clone()
                     .resolve(SourceAnchor::from(SourceSpec::from(self.source.clone()))),
+<<<<<<< HEAD
                 init_params: discovered_backend.init_params.clone(),
+=======
+                init_params: discovered_backend.init_params,
+                source_dir,
+>>>>>>> 3efb9b755 (feat: store git source in lock file)
                 channel_config: self.channel_config.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
             })
@@ -214,7 +392,7 @@ impl SourceBuildSpec {
         // Build the package based on the support backend capabilities.
         let mut built_source = if backend.capabilities().provides_conda_build_v1() {
             self.build_v1(
-                command_dispatcher,
+                command_dispatcher.clone(),
                 backend,
                 work_directory,
                 package_build_input_hash,
@@ -223,7 +401,7 @@ impl SourceBuildSpec {
             .await?
         } else {
             self.build_v0(
-                command_dispatcher,
+                command_dispatcher.clone(),
                 backend,
                 work_directory,
                 package_build_input_hash,
@@ -727,6 +905,14 @@ async fn compute_package_sha256(
     .await
 }
 
+/// Determines if this source should be stored in lock file (git and url sources only)
+fn should_store_in_lock_file(source_location: &SourceLocationSpec) -> bool {
+    matches!(
+        source_location,
+        SourceLocationSpec::Git(_) | SourceLocationSpec::Url(_)
+    )
+}
+
 #[derive(Debug, Error, Diagnostic)]
 pub enum SourceBuildError {
     #[error(transparent)]
@@ -815,6 +1001,18 @@ pub enum SourceBuildError {
 
     #[error("the package does not contain a valid subdir")]
     ConvertSubdir(#[source] ConvertSubdirError),
+
+    #[error("failed to read lock file {}: {}", .0.display(), .1)]
+    LockFileError(PathBuf, String),
+
+    #[error("invalid git revision '{}': {}", .0, .1)]
+    InvalidGitRev(String, String),
+
+    #[error("failed to write lock file {}: {}", .0.display(), .1)]
+    LockFileWriteError(PathBuf, std::io::Error),
+
+    #[error("unsupported source type: {}", .0)]
+    UnsupportedSourceType(String),
 }
 
 impl From<DependenciesError> for SourceBuildError {
