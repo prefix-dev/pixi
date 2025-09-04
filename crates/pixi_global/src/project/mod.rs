@@ -1177,6 +1177,10 @@ impl Project {
         let (records_to_install, records_to_uninstall) =
             shortcuts_sync_status(shortcuts, prefix_records, prefix.root())?;
 
+        // Track whether any shortcut changes will be applied (Linux desktop DB refresh)
+        #[cfg(target_os = "linux")]
+        let shortcuts_changed = !records_to_install.is_empty() || !records_to_uninstall.is_empty();
+
         for record in records_to_install {
             tracing::debug!(
                 "Installing menuitems for record: {}",
@@ -1223,7 +1227,11 @@ impl Project {
                 ),
             );
         }
-
+        // On Linux, refresh the desktop database if shortcuts changed so mime-types are recognized
+        #[cfg(target_os = "linux")]
+        if shortcuts_changed {
+            Self::maybe_update_desktop_database().await;
+        }
         Ok(state_changes)
     }
 
@@ -1248,7 +1256,53 @@ impl Project {
                 StateChange::UninstalledShortcut(record.file_name().to_string()),
             );
         }
+        // On Linux, refresh the desktop database if shortcuts were removed
+        #[cfg(target_os = "linux")]
+        if state_changes.has_changed() {
+            Self::maybe_update_desktop_database().await;
+        }
         Ok(state_changes)
+    }
+
+    /// On Linux, call `update-desktop-database` for the user's applications directory
+    /// to ensure that newly installed shortcuts and their mime types are recognized.
+    #[cfg(target_os = "linux")]
+    async fn maybe_update_desktop_database() {
+        use tokio::process::Command;
+
+        // Prefer XDG data dir; defaults to ~/.local/share on Linux
+        if let Some(applications_dir) = dirs::data_dir().map(|d| d.join("applications")) {
+            if applications_dir.is_dir() {
+                match Command::new("update-desktop-database")
+                    .arg(&applications_dir)
+                    .status()
+                    .await
+                {
+                    Ok(status) if status.success() => {
+                        tracing::debug!(
+                            "Updated desktop database at {}",
+                            applications_dir.display()
+                        );
+                    }
+                    Ok(status) => {
+                        tracing::warn!(
+                            "update-desktop-database exited with status {} for {}",
+                            status,
+                            applications_dir.display()
+                        );
+                    }
+                    Err(err) => {
+                        // Command might not exist (desktop-file-utils not installed); don't fail the operation
+                        tracing::warn!("Could not run update-desktop-database: {}", err);
+                    }
+                }
+            } else {
+                tracing::warn!(
+                    "Applications dir does not exist: {} (skipping update-desktop-database)",
+                    applications_dir.display()
+                );
+            }
+        }
     }
 
     #[cfg(unix)] // Completions are only supported on unix like systems
