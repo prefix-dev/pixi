@@ -1454,6 +1454,7 @@ dependencies = [
  "codspeed-criterion-compat-walltime",
  "colored",
  "futures",
+ "tokio",
 ]
 
 [[package]]
@@ -1481,6 +1482,7 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "tinytemplate",
+ "tokio",
  "walkdir",
 ]
 
