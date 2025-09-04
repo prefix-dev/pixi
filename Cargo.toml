@@ -129,13 +129,13 @@ which = "8.0.0"
 # Rattler crates
 coalesced_map = "0.1.1"
 file_url = "0.2.6"
-rattler = { version = "0.36.1", default-features = false }
+rattler = { version = "0.37.0", default-features = false }
 rattler_cache = { version = "0.3.32", default-features = false }
 rattler_conda_types = { version = "0.39.1", default-features = false, features = [
   "rayon",
 ] }
 rattler_digest = { version = "1.1.5", default-features = false }
-rattler_lock = { version = "0.23.16", default-features = false }
+rattler_lock = { version = "0.24.0", default-features = false }
 rattler_menuinst = { version = "0.2.23", default-features = false }
 rattler_networking = { version = "0.25.11", default-features = false, features = [
   "google-cloud-auth",

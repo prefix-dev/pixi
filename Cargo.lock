@@ -3730,7 +3730,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "07033963ba89ebaf1584d767badaa2e8fcec21aedea6b8c0346d487d49c28667"
 dependencies = [
  "cfg-if",
- "windows-targets 0.53.3",
+ "windows-targets 0.48.5",
 ]
 
 [[package]]
@@ -6014,9 +6014,9 @@ dependencies = [
 
 [[package]]
 name = "rattler"
-version = "0.36.1"
+version = "0.37.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ea03597a7d50d2d8afcda6f98a1ab3284b3064618298e914d1b0e06fc63cefb"
+checksum = "9da8b28e5e7c9d401ecb080ef4058821a5ff20d0b7f9e1293f4e308b36c99812"
 dependencies = [
  "anyhow",
  "clap",
@@ -6151,9 +6151,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_lock"
-version = "0.23.16"
+version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b3aba21efab3cace08a9f95d2ed9d0992500681c8dd63245933facb8529dbc3"
+checksum = "6450fbe7185b3f3515a94f81b2311c0f9f7899856b2f471cc66336a1af575fd0"
 dependencies = [
  "chrono",
  "file_url",
