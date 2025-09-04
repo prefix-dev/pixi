@@ -1,11 +1,16 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use fs_err as fs;
+use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
 use tokio::process::Command;
 use tokio::time::{sleep, Duration as TokioDuration};
+
+// Single global runtime for all benchmarks
+static RUNTIME: Lazy<tokio::runtime::Runtime> =
+    Lazy::new(|| tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime"));
 
 /// Create an isolated pixi environment with shared cache for warm testing
 struct IsolatedPixiEnv {
@@ -421,12 +426,9 @@ fn bench_small(c: &mut Criterion) {
     group.sample_size(10); // Reduce sample size for long operations
     group.warm_up_time(Duration::from_secs(5)); // Warm up time
 
-    // Use tokio runtime directly instead of custom executor
-    let runtime = tokio::runtime::Runtime::new().unwrap();
-
     // Cold cache benchmark - always creates new isolated environment
     group.bench_function("cold_cache_small", |b| {
-        b.to_async(&runtime).iter(|| async {
+        b.to_async(&*RUNTIME).iter(|| async {
             let mut env = IsolatedPixiEnv::new().expect("Failed to create isolated environment");
             let duration = env
                 .pixi_install_cold(&packages)
@@ -438,7 +440,7 @@ fn bench_small(c: &mut Criterion) {
 
     // Warm cache benchmark - reuses shared cache and may reuse project
     group.bench_function("warm_cache_small", |b| {
-        b.to_async(&runtime).iter(|| async {
+        b.to_async(&*RUNTIME).iter(|| async {
             let mut env = IsolatedPixiEnv::new_with_shared_cache(&shared_cache.cache_dir)
                 .expect("Failed to create environment with shared cache");
             let duration = env
@@ -460,10 +462,8 @@ fn bench_medium(c: &mut Criterion) {
     group.sample_size(5); // Even fewer samples for medium complexity
     group.warm_up_time(Duration::from_secs(10));
 
-    let runtime = tokio::runtime::Runtime::new().unwrap();
-
     group.bench_function("cold_cache_medium", |b| {
-        b.to_async(&runtime).iter(|| async {
+        b.to_async(&*RUNTIME).iter(|| async {
             let mut env = IsolatedPixiEnv::new().expect("Failed to create isolated environment");
             let duration = env
                 .pixi_install_cold(&packages)
@@ -474,7 +474,7 @@ fn bench_medium(c: &mut Criterion) {
     });
 
     group.bench_function("warm_cache_medium", |b| {
-        b.to_async(&runtime).iter(|| async {
+        b.to_async(&*RUNTIME).iter(|| async {
             let mut env = IsolatedPixiEnv::new_with_shared_cache(&shared_cache.cache_dir)
                 .expect("Failed to create environment with shared cache");
             let duration = env
@@ -506,10 +506,8 @@ fn bench_large(c: &mut Criterion) {
     group.sample_size(3); // Very few samples for large operations
     group.warm_up_time(Duration::from_secs(15));
 
-    let runtime = tokio::runtime::Runtime::new().unwrap();
-
     group.bench_function("cold_cache_large", |b| {
-        b.to_async(&runtime).iter(|| async {
+        b.to_async(&*RUNTIME).iter(|| async {
             let mut env = IsolatedPixiEnv::new().expect("Failed to create isolated environment");
             let duration = env
                 .pixi_install_cold(&packages)
@@ -520,7 +518,7 @@ fn bench_large(c: &mut Criterion) {
     });
 
     group.bench_function("warm_cache_large", |b| {
-        b.to_async(&runtime).iter(|| async {
+        b.to_async(&*RUNTIME).iter(|| async {
             let mut env = IsolatedPixiEnv::new_with_shared_cache(&shared_cache.cache_dir)
                 .expect("Failed to create environment with shared cache");
             let duration = env
