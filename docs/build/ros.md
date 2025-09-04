@@ -94,7 +94,7 @@ pixi run ros2 run my_python_ros_pkg my_python_node
 ```
 Outputs:
 ```bash
-hello world my_python_ros_pkg package
+Hi from my_python_ros_pkg.
 ```
 
 ## Create a CMake ROS package
@@ -144,15 +144,9 @@ With the package(s) added to the workspace, you can now build them.
 ```bash
 cd src/my_python_ros_pkg
 pixi build
-# or
+# then
 cd ../my_cmake_ros_pkg
 pixi build
-```
-
-Outputs:
-```bash
-... Build output
-✔ Successfully built 'ros-jazzy-my-python-ros-pkg-0.0.0-hbf21a9e_0.conda' 
 ```
 
 You can now upload these artifacts to a conda channel and depend on them from other Pixi workspaces.
