@@ -21,7 +21,7 @@ pixi add ros-jazzy-ros2run
 
 This adds the `ros2` cli command to your Pixi environment.
 
-In all examples below, ensure the [build preview](../../reference/pixi_manifest#preview-features) is enabled in your workspace manifest:
+In all examples below, ensure the [build preview](../reference/pixi_manifest.md#preview-features) is enabled in your workspace manifest:
 ```toml title="ros_ws/pixi.toml"
 --8<-- "docs/source_files/pixi_workspaces/pixi_build/ros_ws/pixi.toml:preview"
 ```
