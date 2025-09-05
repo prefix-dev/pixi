@@ -31,7 +31,7 @@ use pixi_core::repodata::Repodata;
 use pixi_manifest::PrioritizedChannel;
 use pixi_progress::global_multi_progress;
 use pixi_reporters::TopLevelProgress;
-use pixi_spec::BinarySpec;
+use pixi_spec::{BinarySpec, PathBinarySpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_utils::{
     executable_from_path,
@@ -41,7 +41,7 @@ use pixi_utils::{
 };
 use rattler_conda_types::{
     ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, PrefixRecord,
-    menuinst::MenuMode,
+    menuinst::MenuMode, package::ArchiveIdentifier,
 };
 use rattler_repodata_gateway::Gateway;
 // Removed unused rattler_solve imports
@@ -1427,7 +1427,11 @@ impl Project {
                 self.infer_package_name_from_source_spec(source_spec).await
             }
             Either::Right(binary_spec) => match binary_spec {
-                BinarySpec::Path(_) => Err(InferPackageNameError::UnsupportedSpecType),
+                BinarySpec::Path(PathBinarySpec { path }) => path
+                    .file_name()
+                    .and_then(ArchiveIdentifier::try_from_filename)
+                    .and_then(|iden| PackageName::from_str(&iden.name).ok())
+                    .ok_or(InferPackageNameError::UnsupportedSpecType),
                 _ => Err(InferPackageNameError::UnsupportedSpecType),
             },
         }
