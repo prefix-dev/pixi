@@ -40,11 +40,7 @@ Most of the logic is done by the ROS2 CLI, so you can follow normal ROS 2 packag
 Use the ROS CLI to generate an `ament_python` package skeleton within the workspace.
 
 ```bash
-pixi run ros2 pkg create \
-  --build-type ament_python \
-  --destination-directory src \
-  --node-name my_python_node \
-  my_python_ros_pkg
+pixi run ros2 pkg create --build-type ament_python --destination-directory src --node-name my_python_node my_python_ros_pkg
 ```
 
 You should now have something like:
