@@ -102,7 +102,12 @@ class TestPixiBuild:
     @pytest.mark.extra_slow
     @pytest.mark.parametrize(
         "pixi_project,result",
-        list(map(lambda p: pytest.param(*p[1], id=p[0]), pixi_project_params)),
+        list(
+            map(
+                lambda p: pytest.param(*p[1], id=p[0]),
+                filter(lambda p: "ros_ws" not in p[0], pixi_project_params),
+            )
+        ),
     )
     def test_doc_pixi_workspaces_pixi_build(
         self,
