@@ -391,8 +391,8 @@ impl CommandDispatcherProcessor {
                 self.on_source_build_cache_status(task)
             }
             ForegroundMessage::ClearReporter(sender) => self.clear_reporter(sender),
-            ForegroundMessage::ClearSourceBuildCacheStatusCache(sender) => {
-                self.clear_source_build_cache_status_cache(sender)
+            ForegroundMessage::ClearFilesystemCaches(sender) => {
+                self.clear_filesystem_caches(sender)
             }
             ForegroundMessage::SourceMetadata(task) => self.on_source_metadata(task),
             ForegroundMessage::BackendSourceBuild(task) => self.on_backend_source_build(task),
@@ -559,11 +559,14 @@ impl CommandDispatcherProcessor {
         let _ = sender.send(());
     }
 
-    /// Clears cached results for source_build_cache_status, preserving in-flight tasks.
-    fn clear_source_build_cache_status_cache(&mut self, sender: oneshot::Sender<()>) {
+    /// Clears cached results based on the filesystem, preserving in-flight tasks.
+    fn clear_filesystem_caches(&mut self, sender: oneshot::Sender<()>) {
+        self.inner.glob_hash_cache.clear();
+
+        // Clear source build cache status, preserving in-flight tasks.
         self.source_build_cache_status
             .retain(|_, v| matches!(v, PendingDeduplicatingTask::Pending(_, _)));
-        // Keep ids map so subsequent identical specs reuse their id; this is harmless.
+
         let _ = sender.send(());
     }
 

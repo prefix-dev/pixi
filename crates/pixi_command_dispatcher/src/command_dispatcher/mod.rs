@@ -237,7 +237,7 @@ pub(crate) enum ForegroundMessage {
     InstantiateToolEnvironment(Task<InstantiateToolEnvironmentSpec>),
     ClearReporter(oneshot::Sender<()>),
     #[from(ignore)]
-    ClearSourceBuildCacheStatusCache(oneshot::Sender<()>),
+    ClearFilesystemCaches(oneshot::Sender<()>),
 }
 
 /// A message that is send to the background task to start solving a particular
@@ -371,13 +371,9 @@ impl CommandDispatcher {
     /// - clears memoized SourceBuildCacheStatus results held by the processor,
     ///   while preserving any in-flight queries
     pub async fn clear_filesystem_caches(&self) {
-        // These caches are process-local and safe to clear from any dispatcher clone.
-        self.data.glob_hash_cache.clear();
-
-        // Ask the processor to drop memoized SourceBuildCacheStatus results.
         if let Some(sender) = self.channel().sender() {
             let (tx, rx) = oneshot::channel();
-            let _ = sender.send(ForegroundMessage::ClearSourceBuildCacheStatusCache(tx));
+            let _ = sender.send(ForegroundMessage::ClearFilesystemCaches(tx));
             let _ = rx.await;
         }
     }
