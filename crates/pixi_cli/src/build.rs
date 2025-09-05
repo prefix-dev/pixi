@@ -175,14 +175,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .expect("built package should have a file name");
         let dest_path = args.output_dir.join(file_name);
 
-        // Copy the .conda artifact into the requested directory
-        fs_err::copy(&package_path, &dest_path).into_diagnostic()?;
+        // Move the .conda artifact into the requested directory.
+        // If a simple rename fails (e.g., across filesystems), fall back to copy+remove.
+        if let Err(_e) = fs_err::rename(&package_path, &dest_path) {
+            fs_err::copy(&package_path, &dest_path).into_diagnostic()?;
+            fs_err::remove_file(&package_path).into_diagnostic()?;
+        }
 
         // Print success relative to the user-requested output directory
         let output_dir = dunce::canonicalize(&args.output_dir)
             .expect("failed to canonicalize output directory which must now exist");
         let dest_canon = dunce::canonicalize(&dest_path)
-            .expect("failed to canonicalize copied output file which must now exist");
+            .expect("failed to canonicalize moved output file which must now exist");
         let output_file = pathdiff::diff_paths(&dest_canon, &output_dir)
             .map(|p| args.output_dir.join(p))
             .unwrap_or_else(|| dunce::simplified(&dest_path).to_path_buf());
