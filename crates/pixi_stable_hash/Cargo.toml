@@ -15,6 +15,7 @@ ordermap = { workspace = true }
 # Optional integrations
 rattler_conda_types = { workspace = true, optional = true }
 rattler_digest = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
 url = { workspace = true, optional = true }
 
 [dev-dependencies]
