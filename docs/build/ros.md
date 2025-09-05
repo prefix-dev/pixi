@@ -14,7 +14,7 @@ You may also want to read the backend documentation for [pixi-build-ros](https:/
 Initialize a new workspace and install the ROS 2 CLI so you can scaffold packages via the `ros2` cli.
 
 ```bash
-pixi init ros_ws -c https://prefix.dev/robostack-jazzy -c https://prefix.dev/conda-forge
+pixi init ros_ws --channel https://prefix.dev/robostack-jazzy --channel https://prefix.dev/conda-forge
 cd ros_ws
 pixi add ros-jazzy-ros2run
 ```
