@@ -11,7 +11,7 @@ my_package
 ```
 The source, Pixi assumes, is everything in the `my_package/` directory.
 
-Otherwise, you can use on of the out of tree options Pixi provides to specify where the source is located.
+Alternatively, you can specify where the source is located.
 
 ## Path
 If your source is located somewhere else, you can specify the location of the source using the `package.build.source.path` field.
