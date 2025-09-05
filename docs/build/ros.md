@@ -100,11 +100,7 @@ Creating a C++ or mixed package using `ament_cmake`.
 ### Scaffold a C++ package:
 
 ```bash
-pixi run ros2 pkg create \
-  --build-type ament_cmake \
-  --destination-directory src \
-  --node-name my_cmake_node \
-  my_cmake_ros_pkg
+pixi run ros2 pkg create --build-type ament_cmake --destination-directory src --node-name my_cmake_node my_cmake_ros_pkg
 ```
 
 ### Add the pixi package info
@@ -150,7 +146,7 @@ You can now upload these artifacts to a conda channel and depend on them from ot
 ## Tips and gotchas
 
 - ROS distro and platform: pick the correct RoboStack channel (e.g. `robostack-humble`, `robostack-jazzy`) and ensure your platform is supported.
-- Keep `package.xml` accurate: name, version, license, maintainers, URLs, and dependencies are read automatically; `pixi.toml` overrides when set.
+- Keep `package.xml` accurate: name, version, license, maintainers, URLs, and dependencies are read automatically; but you can override them in the `pixi.toml`.
 - Backend docs: see the [pixi-build-ros documentation](https://prefix-dev.github.io/pixi-build-backends/backends/pixi-build-ros/) for configuration details like `env`, `distro` and `extra-input-globs`.
 - Colcon vs pixi build: you don’t need `colcon` when using `pixi`; the backend invokes the right build flow. But since you don't have to change your package structure, you can still use `colcon` if you want.
 - Not all ROS packages are available in RoboStack. If you depend on a package not in RoboStack, you can:
