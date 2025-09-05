@@ -14,14 +14,17 @@ use pixi_build_frontend::{
 };
 use pixi_command_dispatcher::{
     BuildEnvironment, CacheDirs, CommandDispatcher, Executor, InstallPixiEnvironmentSpec,
-    InstantiateToolEnvironmentSpec, PixiEnvironmentSpec,
+    InstantiateToolEnvironmentSpec, PackageIdentifier, PixiEnvironmentSpec,
+    SourceBuildCacheStatusSpec,
 };
 use pixi_config::default_channel_config;
+use pixi_record::PinnedPathSpec;
 use pixi_spec::{GitReference, GitSpec, PathSpec, PixiSpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_test_utils::format_diagnostic;
 use rattler_conda_types::{
-    GenericVirtualPackage, PackageName, Platform, VersionSpec, prefix::Prefix,
+    ChannelUrl, GenericVirtualPackage, PackageName, Platform, VersionSpec, VersionWithSource,
+    prefix::Prefix,
 };
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use url::Url;
@@ -532,4 +535,59 @@ pub async fn instantiate_backend_with_from_source() {
         .unwrap();
 
     insta::assert_debug_snapshot!(err);
+}
+
+#[tokio::test]
+async fn source_build_cache_status_clear_works() {
+    let tmp_dir = tempfile::tempdir().unwrap();
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_cache_dirs(CacheDirs::new(tmp_dir.path().to_path_buf()))
+        .finish();
+
+    let host = Platform::current();
+    let build_env = BuildEnvironment {
+        host_platform: host,
+        build_platform: host,
+        build_virtual_packages: vec![],
+        host_virtual_packages: vec![],
+    };
+
+    let pkg = PackageIdentifier {
+        name: PackageName::try_from("dummy-pkg").unwrap(),
+        version: VersionWithSource::from_str("0.0.0").unwrap(),
+        build: "0".to_string(),
+        subdir: host.to_string(),
+    };
+
+    let spec = SourceBuildCacheStatusSpec {
+        package: pkg,
+        source: PinnedPathSpec {
+            path: tmp_dir.path().to_string_lossy().into_owned().into(),
+        }
+        .into(),
+        channels: Vec::<ChannelUrl>::new(),
+        build_environment: build_env,
+    };
+
+    let first = dispatcher
+        .source_build_cache_status(spec.clone())
+        .await
+        .expect("query succeeds");
+    let second = dispatcher
+        .source_build_cache_status(spec.clone())
+        .await
+        .expect("query succeeds");
+
+    // Cached result should return the same Arc
+    assert!(std::sync::Arc::ptr_eq(&first, &second));
+
+    // Clear and expect a fresh Arc on next query
+    dispatcher.clear_filesystem_caches().await;
+
+    let third = dispatcher
+        .source_build_cache_status(spec)
+        .await
+        .expect("query succeeds");
+    assert!(!std::sync::Arc::ptr_eq(&first, &third));
 }
