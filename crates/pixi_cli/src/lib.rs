@@ -200,11 +200,6 @@ pub struct LockFileUsageConfig {
     #[clap(
         long,
         env = "PIXI_FROZEN",
-        action = clap::ArgAction::Set,
-        default_value_t = false,
-        num_args = 0..=1,
-        default_missing_value = "true",
-        require_equals = true,
         help_heading = consts::CLAP_UPDATE_OPTIONS
     )]
     pub frozen: bool,
@@ -213,11 +208,6 @@ pub struct LockFileUsageConfig {
     #[clap(
         long,
         env = "PIXI_LOCKED",
-        action = clap::ArgAction::Set,
-        default_value_t = false,
-        num_args = 0..=1,
-        default_missing_value = "true",
-        require_equals = true,
         help_heading = consts::CLAP_UPDATE_OPTIONS
     )]
     pub locked: bool,
