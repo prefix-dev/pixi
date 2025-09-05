@@ -616,6 +616,7 @@ impl Project {
                 channel_config: self.config.global_channel_config().clone(),
                 enabled_protocols: EnabledProtocols::default(),
                 installed: None,
+                ignore_packages: None,
                 force_reinstall: Default::default(),
                 variants: None,
             })
@@ -1177,6 +1178,10 @@ impl Project {
             shortcuts_sync_status(shortcuts, prefix_records, prefix.root())?;
 
         for record in records_to_install {
+            tracing::debug!(
+                "Installing menuitems for record: {}",
+                record.name().as_normalized()
+            );
             rattler_menuinst::install_menuitems_for_record(
                 prefix.root(),
                 &record,
@@ -1199,6 +1204,10 @@ impl Project {
         }
 
         for record in records_to_uninstall {
+            tracing::debug!(
+                "Uninstalling menuitems for record: {}",
+                record.name().as_normalized()
+            );
             rattler_menuinst::remove_menuitems_for_record(prefix.root(), record.clone())
                 .into_diagnostic()?;
 

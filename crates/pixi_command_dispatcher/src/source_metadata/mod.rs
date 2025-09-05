@@ -47,6 +47,9 @@ pub struct SourceMetadata {
 
     /// All the source records for this particular package.
     pub records: Vec<SourceRecord>,
+
+    /// All package names that where skipped but the backend could provide.
+    pub skipped_packages: Vec<PackageName>,
 }
 
 impl SourceMetadataSpec {
@@ -85,12 +88,16 @@ impl SourceMetadataSpec {
                 Ok(SourceMetadata {
                     source: build_backend_metadata.source.clone(),
                     records,
+                    // As the GetMetadata kind returns all records at once and we don't solve them we can skip this.
+                    skipped_packages: Default::default(),
                 })
             }
             MetadataKind::Outputs { outputs } => {
+                let mut skipped_packages = vec![];
                 let mut futures = ExecutorFutures::new(command_dispatcher.executor());
                 for output in outputs {
                     if output.metadata.name != self.package {
+                        skipped_packages.push(output.metadata.name.clone());
                         continue;
                     }
                     futures.push(self.resolve_output(
@@ -105,6 +112,7 @@ impl SourceMetadataSpec {
                 Ok(SourceMetadata {
                     source: build_backend_metadata.source.clone(),
                     records: futures.try_collect().await?,
+                    skipped_packages,
                 })
             }
         }

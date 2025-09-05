@@ -2039,3 +2039,113 @@ def test_update_remove_old_env(
     )
     assert not dummy_a.is_file()
     assert manifest.read_text() == original_toml
+
+
+def test_tree(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+
+    # Install dummy-a and dummy-b from dummy-channel-1
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "dummy-b==0.1.0",
+            "dummy-a==0.1.0",
+        ],
+        env=env,
+    )
+
+    # Verify tree with dummy-b environment
+    verify_cli_command(
+        [pixi, "global", "tree", "--environment", "dummy-b"],
+        env=env,
+        stdout_contains=["dummy-b", "0.1.0"],
+    )
+
+    # Verify tree with dummy-a environment
+    verify_cli_command(
+        [pixi, "global", "tree", "--environment", "dummy-a"],
+        env=env,
+        stdout_contains=["dummy-a", "0.1.0"],
+    )
+
+
+def test_tree_with_filter(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+
+    # Install dummy-a and dummy-b from dummy-channel-1
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "--environment",
+            "dummy",
+            "dummy-b==0.1.0",
+            "dummy-a==0.1.0",
+        ],
+        env=env,
+    )
+
+    # Verify tree with regex filter for dummy environment
+    verify_cli_command(
+        [pixi, "global", "tree", "--environment", "dummy", "dummy-a"],
+        env=env,
+        stdout_contains=["dummy-a", "0.1.0"],
+        stdout_excludes=["dummy-b"],
+    )
+
+    # Verify tree with regex filter for dummy-b
+    verify_cli_command(
+        [pixi, "global", "tree", "--environment", "dummy", "dummy-b"],
+        env=env,
+        stdout_contains=["dummy-b", "0.1.0"],
+        stdout_excludes=["dummy-a"],
+    )
+
+
+def test_tree_nonexistent_environment(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    # Try to show tree for non-existent environment
+    verify_cli_command(
+        [pixi, "global", "tree", "--environment", "nonexistent"],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="Environment not found",
+    )
+
+
+def test_tree_invert(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+
+    # Install dummy-a which has dummy-c as a dependency
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "dummy-a==0.1.0",
+        ],
+        env=env,
+    )
+
+    # Verify inverted tree showing what depends on dummy-c
+    verify_cli_command(
+        [pixi, "global", "tree", "--environment", "dummy-a", "--invert", "dummy-c"],
+        env=env,
+        stdout_contains=["dummy-c", "dummy-a 0.1.0"],
+    )

@@ -2,10 +2,10 @@ use crate::global::revert_environment_after_error;
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use pixi_config::{Config, ConfigCli};
-use pixi_global::StateChanges;
 use pixi_global::common::check_all_exposed;
 use pixi_global::project::ExposedType;
 use pixi_global::{EnvironmentName, Project};
+use pixi_global::{StateChange, StateChanges};
 
 /// Updates environments in the global environment.
 #[derive(Parser, Debug, Clone)]
@@ -27,18 +27,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         env_name: &EnvironmentName,
         project: &mut Project,
     ) -> miette::Result<StateChanges> {
-        let mut state_changes = StateChanges::default();
         // If the environment isn't up-to-date our executable detection afterwards will not work
-        let require_reinstall = if !project.environment_in_sync_internal(env_name, true).await? {
-            let environment_update = project.install_environment(env_name).await?;
-            state_changes.insert_change(
-                env_name,
-                pixi_global::StateChange::UpdatedEnvironment(environment_update),
-            );
-            false
-        } else {
-            true
-        };
+        if !project.environment_in_sync(env_name).await? {
+            let _ = project.install_environment(env_name).await?;
+        }
 
         // See what executables were installed prior to update
         let env_binaries = project.executables_of_direct_dependencies(env_name).await?;
@@ -57,16 +49,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         };
 
         // Reinstall the environment
-        if require_reinstall {
-            let environment_update = project.install_environment(env_name).await?;
+        let environment_update = project.install_environment(env_name).await?;
 
-            state_changes.insert_change(
-                env_name,
-                pixi_global::StateChange::UpdatedEnvironment(environment_update),
-            );
-        }
+        let mut state_changes = StateChanges::default();
+
+        state_changes.insert_change(
+            env_name,
+            StateChange::UpdatedEnvironment(environment_update),
+        );
+
         // Sync executables exposed names with the manifest
         project.sync_exposed_names(env_name, expose_type).await?;
+
+        state_changes |= project.sync_shortcuts(env_name).await?;
 
         // Expose or prune executables of the new environment
         state_changes |= project

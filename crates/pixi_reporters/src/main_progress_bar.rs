@@ -113,8 +113,13 @@ impl<T: Tracker> State<T> {
         // Clear all items that have finished processing.
         trackers.retain(|_, item| item.finished.is_none());
 
+        // Drop the write lock to the trackers. The progress bar also requires access to
+        // entries so holding on to the write lock might deadlock!
+        let is_empty = trackers.is_empty();
+        drop(trackers);
+
         // Clear or update the progress bar.
-        if trackers.is_empty() {
+        if is_empty {
             // We cannot clear the progress bar and restart it later, so replacing it with a
             // new hidden one is currently the only option.
             self.title = Some(self.pb.prefix());
@@ -124,7 +129,6 @@ impl<T: Tracker> State<T> {
             self.pb.finish_and_clear();
             self.pb = new_pb;
         } else {
-            drop(trackers);
             self.update()
         }
     }

@@ -1,5 +1,5 @@
 use crate::{Workspace, workspace::Environment};
-use crate::{task::EnvironmentHash, workspace::HasWorkspaceRef};
+use crate::{environment::EnvironmentHash, workspace::HasWorkspaceRef};
 use fs_err::tokio as tokio_fs;
 use indexmap::IndexMap;
 use itertools::Itertools;

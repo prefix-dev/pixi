@@ -11,6 +11,7 @@ mod list;
 mod remove;
 mod shortcut;
 mod sync;
+mod tree;
 mod uninstall;
 mod update;
 mod upgrade;
@@ -41,6 +42,8 @@ pub enum Command {
     #[clap(alias = "ua")]
     #[command(hide = true)]
     UpgradeAll(upgrade_all::Args),
+    #[clap(visible_alias = "t")]
+    Tree(tree::Args),
 }
 
 /// Subcommand for global package management actions.
@@ -53,6 +56,7 @@ pub struct Args {
     command: Command,
 }
 
+/// Maps global command enum variants to their function handlers.
 pub async fn execute(cmd: Args) -> miette::Result<()> {
     match cmd.command {
         Command::Add(args) => add::execute(args).await?,
@@ -67,6 +71,7 @@ pub async fn execute(cmd: Args) -> miette::Result<()> {
         Command::Update(args) => update::execute(args).await?,
         Command::Upgrade(args) => upgrade::execute(args).await?,
         Command::UpgradeAll(args) => upgrade_all::execute(args).await?,
+        Command::Tree(args) => tree::execute(args).await?,
     };
     Ok(())
 }

@@ -23,6 +23,7 @@ pre-commit:
       run: pixi {run} actionlint
     - name: cargo-fmt
       glob: "*.rs"
+      stage_fixed: true
       run: pixi {run} cargo-fmt
     - name: ruff
       glob: "*.{py,pyi}"

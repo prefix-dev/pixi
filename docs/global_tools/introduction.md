@@ -57,6 +57,79 @@ You can run `py3` to start the python interpreter.
 py3 -c "print('Hello World')"
 ```
 
+## Install Dependencies From Source
+
+Pixi global also allows you to install [Pixi packages](../build/getting_started.md).
+Let's assume there's a C++ package we'd like to install globally from source.
+First, it needs to have a package manifest:
+
+```toml title="pixi.toml"
+[package] 
+name = "cpp_math"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "pixi-build-cmake", version = "*" }
+```
+
+If the source is on your machine, you can install it like this:
+
+```shell
+pixi global install --path /path/to/cpp_math
+```
+
+If the source resides in a git repository, you can access it like this:
+
+```shell
+pixi global install --git https://github.com/ORG_NAME/cpp_math.git
+```
+
+One has to take care if the source contains multiple outputs, see for example this recipe:
+
+```yaml title="recipe.yaml"
+recipe:
+  name: multi-output
+  version: "0.1.0"
+
+outputs:
+  - package:
+      name: foobar
+    build:
+      script:
+        - if: win
+          then:
+            - mkdir -p %PREFIX%\bin
+            - echo @echo off > %PREFIX%\bin\foobar.bat
+            - echo echo Hello from foobar >> %PREFIX%\bin\foobar.bat
+          else:
+            - mkdir -p $PREFIX/bin
+            - echo "#!/usr/bin/env bash" > $PREFIX/bin/foobar
+            - echo "echo Hello from foobar" >> $PREFIX/bin/foobar
+            - chmod +x $PREFIX/bin/foobar
+
+  - package:
+      name: bizbar
+    build:
+      script:
+        - if: win
+          then:
+            - mkdir -p %PREFIX%\bin
+            - echo @echo off > %PREFIX%\bin\bizbar.bat
+            - echo echo Hello from bizbar >> %PREFIX%\bin\bizbar.bat
+          else:
+            - mkdir -p $PREFIX/bin
+            - echo "#!/usr/bin/env bash" > $PREFIX/bin/bizbar
+            - echo "echo Hello from bizbar" >> $PREFIX/bin/bizbar
+            - chmod +x $PREFIX/bin/bizbar
+```
+
+In this case, we have to specify which output we want to install:
+
+```shell
+pixi global install --path /path/to/package foobar
+```
+
+
 ## Shell Completions
 
 When you work in a terminal, you are using a shell and shells can process completions of command line tools.

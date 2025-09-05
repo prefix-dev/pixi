@@ -2,10 +2,10 @@ use futures::FutureExt;
 use pixi_record::PixiRecord;
 
 use super::{CommandDispatcherProcessor, PendingSolveCondaEnvironment, TaskResult};
-use crate::solve_conda::SolveCondaEnvironmentError;
 use crate::{
     CommandDispatcherError, CommandDispatcherErrorResultExt, Reporter,
     command_dispatcher::{SolveCondaEnvironmentId, SolveCondaEnvironmentTask},
+    solve_conda::SolveCondaEnvironmentError,
 };
 
 impl CommandDispatcherProcessor {
@@ -35,7 +35,7 @@ impl CommandDispatcherProcessor {
 
         // Add the environment to the list of pending environments.
         self.pending_conda_solves
-            .push_back((environment_id, task.spec));
+            .push_back((environment_id, task.spec, task.cancellation_token));
 
         // Queue up as many solves as possible.
         self.start_next_conda_environment_solves();
@@ -49,7 +49,9 @@ impl CommandDispatcherProcessor {
             .max_concurrent_solves
             .unwrap_or(usize::MAX);
         while self.conda_solves.len() - self.pending_conda_solves.len() < limit {
-            let Some((environment_id, spec)) = self.pending_conda_solves.pop_front() else {
+            let Some((environment_id, spec, cancellation_token)) =
+                self.pending_conda_solves.pop_front()
+            else {
                 break;
             };
 
@@ -67,8 +69,14 @@ impl CommandDispatcherProcessor {
 
             // Add the task to the list of pending futures.
             self.pending_futures.push(
-                spec.solve()
-                    .map(move |result| TaskResult::SolveCondaEnvironment(environment_id, result))
+                cancellation_token
+                    .run_until_cancelled_owned(spec.solve())
+                    .map(move |result| {
+                        TaskResult::SolveCondaEnvironment(
+                            environment_id,
+                            result.unwrap_or(Err(CommandDispatcherError::Cancelled)),
+                        )
+                    })
                     .boxed_local(),
             );
         }

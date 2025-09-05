@@ -1,0 +1,9 @@
+package:
+  name: cuda
+  version: 0.1.0
+build:
+  # Don't build on osx forcing the cuda to not be installed on osx
+  skip: osx
+requirements:
+  run:
+    - __cuda >= 12

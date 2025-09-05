@@ -149,7 +149,7 @@ impl<'p> HasFeaturesIter<'p> for GroupedEnvironment<'p> {
 }
 
 /// A name of a [`GroupedEnvironment`].
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum GroupedEnvironmentName {
     Group(String),
     Environment(EnvironmentName),

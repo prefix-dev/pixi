@@ -8,9 +8,6 @@ readme.workspace = true
 repository.workspace = true
 version = "0.1.0"
 
-[features]
-slow_integration_tests = []
-
 [dependencies]
 ahash = { workspace = true }
 console = { workspace = true }

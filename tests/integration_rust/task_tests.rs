@@ -2,11 +2,11 @@ use std::path::PathBuf;
 
 use pixi_cli::cli_config::WorkspaceConfig;
 use pixi_cli::run::Args;
-use pixi_core::task::TaskName;
 use pixi_manifest::{
     FeatureName, Task,
     task::{CmdArgs, TemplateString},
 };
+use pixi_task::TaskName;
 use rattler_conda_types::Platform;
 
 use crate::common::PixiControl;

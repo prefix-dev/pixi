@@ -1,0 +1,10 @@
+package:
+  name: backend-with-compatible-api-version
+  version: 0.1.0
+
+requirements:
+  run:
+    - pixi-build-api-version==0
+
+build:
+  noarch: generic

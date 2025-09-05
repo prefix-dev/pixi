@@ -5,7 +5,7 @@ use rattler_conda_types::Platform;
 
 use pixi_core::{
     UpdateLockFileOptions, Workspace,
-    environment::{LockFileUsage, get_update_lock_file_and_prefix},
+    environment::{InstallFilter, LockFileUsage, get_update_lock_file_and_prefix},
     lock_file::{ReinstallPackages, UpdateMode},
 };
 
@@ -46,7 +46,7 @@ pub async fn execute(workspace: Workspace, args: Args) -> miette::Result<()> {
             max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
         },
         ReinstallPackages::default(),
-        &[],
+        &InstallFilter::default(),
     )
     .await?;
     workspace.save().await.into_diagnostic()?;

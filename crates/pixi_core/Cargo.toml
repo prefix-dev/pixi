@@ -13,16 +13,13 @@ slow_integration_tests = []
 
 [dependencies]
 ahash = { workspace = true }
-anyhow = { workspace = true }
 assert_matches = { workspace = true }
 async-once-cell = { workspace = true }
 barrier_cell = { workspace = true }
 chrono = { workspace = true }
 console = { workspace = true }
-crossbeam-channel = { workspace = true }
 csv = { workspace = true }
 dashmap = { workspace = true }
-deno_task_shell = { workspace = true }
 dialoguer = { workspace = true }
 dunce = { workspace = true }
 fancy_display = { workspace = true }
@@ -68,14 +65,12 @@ rattler_repodata_gateway = { workspace = true }
 rattler_shell = { workspace = true }
 rattler_solve = { workspace = true }
 rattler_virtual_packages = { workspace = true }
-rayon = { workspace = true }
 reqwest = { workspace = true }
 reqwest-middleware = { workspace = true }
 rlimit = { workspace = true }
 rstest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-shlex = { workspace = true }
 tabwriter = { workspace = true }
 tempfile = { workspace = true }
 thiserror = { workspace = true }

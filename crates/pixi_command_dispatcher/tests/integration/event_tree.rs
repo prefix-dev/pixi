@@ -31,6 +31,7 @@ use slotmap::SlotMap;
 use text_trees::{FormatCharacters, StringTreeNode, TreeFormatting};
 
 use crate::event_reporter;
+use crate::event_reporter::EventStore;
 
 /// An [`EventTree`] is a hierarchical representation of the events that
 /// occurred in a [`pixi_command_dispatcher::CommandDispatcher`].
@@ -46,6 +47,12 @@ slotmap::new_key_type! {
 struct Node {
     label: String,
     children: Vec<NodeId>,
+}
+
+impl From<EventStore> for EventTree {
+    fn from(store: EventStore) -> Self {
+        Self::new(store.0.lock().unwrap().iter())
+    }
 }
 
 impl EventTree {

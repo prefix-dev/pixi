@@ -264,6 +264,7 @@ impl InstantiateToolEnvironmentSpec {
                 prefix: prefix.clone(),
                 installed: None,
                 build_environment: self.build_environment,
+                ignore_packages: None,
                 force_reinstall: Default::default(),
                 channels: self.channels,
                 channel_config: self.channel_config,
