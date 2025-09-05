@@ -129,23 +129,23 @@ which = "8.0.0"
 # Rattler crates
 coalesced_map = "0.1.1"
 file_url = "0.2.6"
-rattler = { version = "0.35.0", default-features = false }
-rattler_cache = { version = "0.3.30", default-features = false }
-rattler_conda_types = { version = "0.39.0", default-features = false, features = [
+rattler = { version = "0.37.0", default-features = false }
+rattler_cache = { version = "0.3.32", default-features = false }
+rattler_conda_types = { version = "0.39.1", default-features = false, features = [
   "rayon",
 ] }
 rattler_digest = { version = "1.1.5", default-features = false }
-rattler_lock = { version = "0.23.14", default-features = false }
-rattler_menuinst = { version = "0.2.21", default-features = false }
-rattler_networking = { version = "0.25.9", default-features = false, features = [
+rattler_lock = { version = "0.24.0", default-features = false }
+rattler_menuinst = { version = "0.2.23", default-features = false }
+rattler_networking = { version = "0.25.11", default-features = false, features = [
   "google-cloud-auth",
   "dirs",
 ] }
 rattler_package_streaming = { version = "0.23.0", default-features = false }
-rattler_repodata_gateway = { version = "0.24.0", default-features = false }
-rattler_shell = { version = "0.24.8", default-features = false }
-rattler_solve = { version = "3.0.0", default-features = false }
-rattler_virtual_packages = { version = "2.1.2", default-features = false }
+rattler_repodata_gateway = { version = "0.24.2", default-features = false }
+rattler_shell = { version = "0.24.10", default-features = false }
+rattler_solve = { version = "3.0.2", default-features = false }
+rattler_virtual_packages = { version = "2.1.4", default-features = false }
 simple_spawn_blocking = { version = "1.1.0", default-features = false }
 
 # Bumping this to a higher version breaks the Windows path handling.
