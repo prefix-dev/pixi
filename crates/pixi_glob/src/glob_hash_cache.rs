@@ -129,4 +129,9 @@ impl GlobHashCache {
             }
         }
     }
+
+    /// Clears all memoized glob hashes. In-flight computations are unaffected.
+    pub fn clear(&self) {
+        self.cache.clear();
+    }
 }

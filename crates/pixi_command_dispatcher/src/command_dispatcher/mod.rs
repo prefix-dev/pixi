@@ -236,6 +236,8 @@ pub(crate) enum ForegroundMessage {
     InstallPixiEnvironment(InstallPixiEnvironmentTask),
     InstantiateToolEnvironment(Task<InstantiateToolEnvironmentSpec>),
     ClearReporter(oneshot::Sender<()>),
+    #[from(ignore)]
+    ClearFilesystemCaches(oneshot::Sender<()>),
 }
 
 /// A message that is send to the background task to start solving a particular
@@ -359,6 +361,21 @@ impl CommandDispatcher {
     /// Returns the discovery cache for build backends.
     pub fn discovery_cache(&self) -> &DiscoveryCache {
         &self.data.discovery_cache
+    }
+
+    /// Clears in-memory caches whose correctness depends on the filesystem.
+    ///
+    /// This invalidates memoized results that are derived from files on disk so
+    /// subsequent operations re-check the current state of the filesystem. It:
+    /// - clears glob hash memoization (`GlobHashCache`) used for input file hashing
+    /// - clears memoized SourceBuildCacheStatus results held by the processor,
+    ///   while preserving any in-flight queries
+    pub async fn clear_filesystem_caches(&self) {
+        if let Some(sender) = self.channel().sender() {
+            let (tx, rx) = oneshot::channel();
+            let _ = sender.send(ForegroundMessage::ClearFilesystemCaches(tx));
+            let _ = rx.await;
+        }
     }
 
     /// Returns the download client used by the command dispatcher.

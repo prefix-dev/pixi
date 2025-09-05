@@ -266,6 +266,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 // Clear the current progress reports.
                 lock_file.command_dispatcher.clear_reporter().await;
 
+                // Clear caches based on the filesystem. The tasks might change files on disk.
+                lock_file.command_dispatcher.clear_filesystem_caches().await;
+
                 let command_env = get_task_env(
                     &executable_task.run_environment,
                     args.clean_env || executable_task.task().clean_env(),
