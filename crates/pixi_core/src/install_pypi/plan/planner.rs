@@ -35,6 +35,8 @@ use super::{
 pub struct InstallPlanner {
     uv_cache: Cache,
     lock_file_dir: PathBuf,
+    // Packages that should never be marked as extraneous
+    ignored_extraneous: HashSet<uv_pep508::PackageName>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -56,6 +58,7 @@ impl InstallPlanner {
         Self {
             uv_cache,
             lock_file_dir: lock_file_dir.as_ref().to_path_buf(),
+            ignored_extraneous: HashSet::new(),
         }
     }
 
@@ -65,7 +68,19 @@ impl InstallPlanner {
         Self {
             uv_cache: self.uv_cache.with_refresh(refresh),
             lock_file_dir: self.lock_file_dir.clone(),
+            ignored_extraneous: self.ignored_extraneous,
         }
+    }
+
+    /// Provide a list of packages that should never be marked as extraneous.
+    /// Any installed distribution with a name in this list will be ignored
+    /// during the extraneous/duplicate detection phase.
+    pub fn with_ignored_extraneous<I>(mut self, names: I) -> Self
+    where
+        I: IntoIterator<Item = uv_pep508::PackageName>,
+    {
+        self.ignored_extraneous = names.into_iter().collect();
+        self
     }
 
     /// Figure out what we can link from the cache locally
@@ -189,6 +204,11 @@ impl InstallPlanner {
             let installer = dist
                 .installer()
                 .map_or(String::new(), |f| f.unwrap_or_default());
+
+            // If this package is in the ignore list, never consider it extraneous
+            if self.ignored_extraneous.contains(dist.name()) {
+                continue;
+            }
 
             match pkg {
                 // Apparently we need this package

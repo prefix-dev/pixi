@@ -17,9 +17,10 @@ use pixi_utils::{prefix::Prefix, rlimit::try_increase_rlimit_to_sensible};
 pub use pypi_prefix::{ContinuePyPIPrefixUpdate, on_python_interpreter_change};
 pub use python_status::PythonStatus;
 use rattler_conda_types::Platform;
-use rattler_lock::LockedPackageRef;
+use rattler_lock::{LockFile, LockedPackageRef};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use std::fmt::{Display, Formatter};
 use std::{
     collections::HashMap,
     hash::{Hash, Hasher},
@@ -28,6 +29,7 @@ use std::{
 };
 use xxhash_rust::xxh3::Xxh3;
 
+use crate::workspace;
 use crate::{
     Workspace,
     lock_file::{LockFileDerivedData, ReinstallPackages, UpdateLockFileOptions, UpdateMode},
@@ -104,39 +106,108 @@ async fn prefix_location_changed(
     }
 }
 
+#[derive(Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct EnvironmentHash(String);
+
+impl EnvironmentHash {
+    pub fn from_environment(
+        run_environment: &workspace::Environment<'_>,
+        input_environment_variables: &HashMap<String, Option<String>>,
+        lock_file: &LockFile,
+    ) -> Self {
+        let mut hasher = Xxh3::new();
+
+        // Hash the environment variables
+        let mut sorted_input_environment_variables: Vec<_> =
+            input_environment_variables.iter().collect();
+        sorted_input_environment_variables.sort_by_key(|(key, _)| *key);
+        for (key, value) in sorted_input_environment_variables {
+            key.hash(&mut hasher);
+            value.hash(&mut hasher);
+        }
+
+        // Hash the activation scripts
+        let activation_scripts =
+            run_environment.activation_scripts(Some(run_environment.best_platform()));
+        for script in activation_scripts {
+            script.hash(&mut hasher);
+        }
+
+        // Hash the environment variables
+        let project_activation_env =
+            run_environment.activation_env(Some(run_environment.best_platform()));
+        let mut env_vars: Vec<_> = project_activation_env.iter().collect();
+        env_vars.sort_by_key(|(key, _)| *key);
+
+        for (key, value) in env_vars {
+            key.hash(&mut hasher);
+            value.hash(&mut hasher);
+        }
+
+        // Hash the packages
+        let mut urls = Vec::new();
+        if let Some(env) = lock_file.environment(run_environment.name().as_str()) {
+            if let Some(packages) = env.packages(run_environment.best_platform()) {
+                for package in packages {
+                    urls.push(package.location().to_string())
+                }
+            }
+        }
+        urls.sort();
+        urls.hash(&mut hasher);
+
+        EnvironmentHash(format!("{:x}", hasher.finish()))
+    }
+}
+
+impl Display for EnvironmentHash {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 #[derive(Debug, Hash, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LockedEnvironmentHash(String);
 impl LockedEnvironmentHash {
     pub(crate) fn from_environment(
         environment: rattler_lock::Environment,
         platform: Platform,
-        skipped: &[String],
     ) -> Self {
         let mut hasher = Xxh3::new();
 
-        for package in
-            LockFileDerivedData::filter_skipped_packages(environment.packages(platform), skipped)
-        {
-            // Always has the url or path
-            package.location().to_owned().to_string().hash(&mut hasher);
+        // Intentionally ignore `skipped` here: the quick-validate cache is only
+        // used during runs, and should not vary based on transient install
+        // filters.
+        if let Some(packages) = environment.packages(platform) {
+            for package in packages {
+                // Always has the url or path
+                package.location().to_owned().to_string().hash(&mut hasher);
 
-            match package {
-                // A select set of fields are used to hash the package
-                LockedPackageRef::Conda(pack) => {
-                    if let Some(sha) = pack.record().sha256 {
-                        sha.hash(&mut hasher);
-                    } else if let Some(md5) = pack.record().md5 {
-                        md5.hash(&mut hasher);
+                match package {
+                    // A select set of fields are used to hash the package
+                    LockedPackageRef::Conda(pack) => {
+                        if let Some(sha) = pack.record().sha256 {
+                            sha.hash(&mut hasher);
+                        } else if let Some(md5) = pack.record().md5 {
+                            md5.hash(&mut hasher);
+                        }
                     }
-                }
-                LockedPackageRef::Pypi(pack, env) => {
-                    pack.editable.hash(&mut hasher);
-                    env.extras.hash(&mut hasher);
+                    LockedPackageRef::Pypi(pack, env) => {
+                        pack.editable.hash(&mut hasher);
+                        env.extras.hash(&mut hasher);
+                    }
                 }
             }
         }
 
         LockedEnvironmentHash(format!("{:x}", hasher.finish()))
+    }
+}
+
+impl LockedEnvironmentHash {
+    /// Create an invalid hash for revalidation purposes
+    pub(crate) fn invalid() -> Self {
+        LockedEnvironmentHash("invalid-hash".to_string())
     }
 }
 
@@ -407,6 +478,45 @@ impl LockFileUsage {
     }
 }
 
+/// Options to select a subset of packages to install or skip.
+#[derive(Debug, Default, Clone)]
+pub struct InstallFilter {
+    /// Packages to skip directly but still traverse through their dependencies
+    pub skip_direct: Vec<String>,
+    /// Packages to skip together with their dependencies (hard stop)
+    pub skip_with_deps: Vec<String>,
+    /// Target one or more packages (and their deps) to install; empty means no targeting
+    pub target_packages: Vec<String>,
+}
+
+impl InstallFilter {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn skip_direct(mut self, packages: impl Into<Vec<String>>) -> Self {
+        self.skip_direct = packages.into();
+        self
+    }
+
+    pub fn skip_with_deps(mut self, packages: impl Into<Vec<String>>) -> Self {
+        self.skip_with_deps = packages.into();
+        self
+    }
+
+    pub fn target_packages(mut self, packages: impl Into<Vec<String>>) -> Self {
+        self.target_packages = packages.into();
+        self
+    }
+
+    /// Is the filter currently active
+    pub fn filter_active(&self) -> bool {
+        !self.skip_direct.is_empty()
+            || !self.skip_with_deps.is_empty()
+            || !self.target_packages.is_empty()
+    }
+}
+
 /// Update the prefix if it doesn't exist or if it is not up-to-date.
 ///
 /// To updated multiple prefixes at once, use [`get_update_lock_file_and_prefixes`].
@@ -415,14 +525,14 @@ pub async fn get_update_lock_file_and_prefix<'env>(
     update_mode: UpdateMode,
     update_lock_file_options: UpdateLockFileOptions,
     reinstall_packages: ReinstallPackages,
-    skipped: &[String],
+    filter: &InstallFilter,
 ) -> miette::Result<(LockFileDerivedData<'env>, Prefix)> {
     let (lock_file, prefixes) = get_update_lock_file_and_prefixes(
         &[environment.clone()],
         update_mode,
         update_lock_file_options,
         reinstall_packages,
-        skipped,
+        filter,
     )
     .await?;
     Ok((
@@ -441,7 +551,7 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
     update_mode: UpdateMode,
     update_lock_file_options: UpdateLockFileOptions,
     reinstall_packages: ReinstallPackages,
-    skipped: &[String],
+    filter: &InstallFilter,
 ) -> miette::Result<(LockFileDerivedData<'env>, Vec<Prefix>)> {
     if environments.is_empty() {
         return Err(miette::miette!("No environments provided to install."));
@@ -488,7 +598,7 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
                 std::future::ready(Ok(Prefix::new(env.dir()))).left_future()
             } else {
                 lock_file_ref
-                    .prefix(env, update_mode, reinstall_packages, skipped)
+                    .prefix(env, update_mode, reinstall_packages, filter)
                     .right_future()
             }
         })

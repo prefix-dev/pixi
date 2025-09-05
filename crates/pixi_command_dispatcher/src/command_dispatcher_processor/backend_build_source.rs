@@ -35,8 +35,11 @@ impl CommandDispatcherProcessor {
         }
 
         // Add to the list of pending tasks
-        self.pending_backend_source_builds
-            .push_back((pending_id, task.spec));
+        self.pending_backend_source_builds.push_back((
+            pending_id,
+            task.spec,
+            task.cancellation_token,
+        ));
 
         self.start_next_backend_source_build();
     }
@@ -48,7 +51,7 @@ impl CommandDispatcherProcessor {
             .max_concurrent_builds
             .unwrap_or(usize::MAX);
         while self.backend_source_builds.len() - self.pending_backend_source_builds.len() < limit {
-            let Some((backend_source_build_id, spec)) =
+            let Some((backend_source_build_id, spec, cancellation_token)) =
                 self.pending_backend_source_builds.pop_front()
             else {
                 break;
@@ -71,9 +74,13 @@ impl CommandDispatcherProcessor {
 
             // Add the task to the list of pending futures.
             self.pending_futures.push(
-                spec.build(tx)
+                cancellation_token
+                    .run_until_cancelled_owned(spec.build(tx))
                     .map(move |result| {
-                        TaskResult::BackendSourceBuild(backend_source_build_id, result)
+                        TaskResult::BackendSourceBuild(
+                            backend_source_build_id,
+                            result.unwrap_or(Err(CommandDispatcherError::Cancelled)),
+                        )
                     })
                     .boxed_local(),
             );

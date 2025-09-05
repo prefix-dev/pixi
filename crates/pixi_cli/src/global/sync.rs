@@ -1,7 +1,6 @@
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use pixi_config::{Config, ConfigCli};
-use pixi_core::global;
 
 /// Sync global manifest with installed environments
 #[derive(Parser, Debug)]
@@ -13,7 +12,7 @@ pub struct Args {
 /// Sync global manifest with installed environments
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
-    let project = global::Project::discover_or_create()
+    let project = pixi_global::Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
 
@@ -25,7 +24,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     #[cfg(unix)]
     {
         // Prune broken completions
-        let completions_dir = pixi_core::global::completions::CompletionsDir::from_env().await?;
+        let completions_dir = pixi_global::completions::CompletionsDir::from_env().await?;
         completions_dir.prune_old_completions()?;
     }
 

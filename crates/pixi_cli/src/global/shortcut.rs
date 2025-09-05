@@ -3,8 +3,8 @@ use clap::Parser;
 use fancy_display::FancyDisplay;
 use miette::Context;
 use pixi_config::{Config, ConfigCli};
-use pixi_core::global::Project;
-use pixi_core::global::{EnvironmentName, StateChanges};
+use pixi_global::Project;
+use pixi_global::{EnvironmentName, StateChanges};
 use rattler_conda_types::PackageName;
 use std::collections::HashMap;
 

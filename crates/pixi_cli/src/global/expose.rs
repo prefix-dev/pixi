@@ -2,9 +2,9 @@ use clap::Parser;
 use itertools::Itertools;
 use miette::Context;
 use pixi_config::{Config, ConfigCli};
+use pixi_global::{self, EnvironmentName, ExposedName, Mapping, StateChanges};
 
 use crate::global::revert_environment_after_error;
-use pixi_core::global::{self, EnvironmentName, ExposedName, Mapping, StateChanges};
 
 /// Add exposed binaries from an environment to your global environment
 ///
@@ -71,13 +71,13 @@ pub async fn execute(args: SubCommand) -> miette::Result<()> {
 
 pub async fn add(args: AddArgs) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
-    let project_original = global::Project::discover_or_create()
+    let project_original = pixi_global::Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
 
     async fn apply_changes(
         args: &AddArgs,
-        project: &mut global::Project,
+        project: &mut pixi_global::Project,
     ) -> Result<StateChanges, miette::Error> {
         let env_name = &args.environment;
         let mut state_changes = StateChanges::new_with_env(env_name.clone());
@@ -110,14 +110,14 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
 
 pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
-    let project_original = global::Project::discover_or_create()
+    let project_original = pixi_global::Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
 
     async fn apply_changes(
         exposed_name: &ExposedName,
         env_name: &EnvironmentName,
-        project: &mut global::Project,
+        project: &mut pixi_global::Project,
     ) -> Result<StateChanges, miette::Error> {
         let mut state_changes = StateChanges::new_with_env(env_name.clone());
         project

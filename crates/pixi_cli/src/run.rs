@@ -12,22 +12,21 @@ use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::{Diagnostic, IntoDiagnostic};
 use pixi_config::{ConfigCli, ConfigCliActivation};
-use pixi_manifest::{FeaturesExt, TaskName};
-use rattler_conda_types::Platform;
-use thiserror::Error;
-use tokio_util::sync::CancellationToken;
-use tracing::Level;
-
 use pixi_core::{
     Workspace, WorkspaceLocator,
     environment::sanity_check_workspace,
     lock_file::{ReinstallPackages, UpdateLockFileOptions, UpdateMode},
-    task::{
-        AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
-        SearchEnvironments, TaskAndEnvironment, TaskGraph, get_task_env,
-    },
     workspace::{Environment, errors::UnsupportedPlatformError},
 };
+use pixi_manifest::{FeaturesExt, TaskName};
+use pixi_task::{
+    AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
+    SearchEnvironments, TaskAndEnvironment, TaskGraph, get_task_env,
+};
+use rattler_conda_types::Platform;
+use thiserror::Error;
+use tokio_util::sync::CancellationToken;
+use tracing::Level;
 
 use crate::cli_config::{LockAndInstallConfig, WorkspaceConfig};
 
@@ -259,7 +258,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                             &executable_task.run_environment,
                             UpdateMode::QuickValidate,
                             &ReinstallPackages::default(),
-                            &[],
+                            &pixi_core::environment::InstallFilter::default(),
                         )
                         .await?;
                 }

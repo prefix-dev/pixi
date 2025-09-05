@@ -1,14 +1,22 @@
+//! # Pixi CLI
+//!
+//! This module implements the CLI interface of Pixi.
+//!
+//! ## Structure
+//!
+//! - The [`Command`] enum defines the top-level commands available.
+//! - The [`execute_command`] function matches on [`Command`] and calls the corresponding logic.
 #![deny(clippy::dbg_macro, clippy::unwrap_used)]
 
 use clap::builder::styling::{AnsiColor, Color, Style};
 use clap::{CommandFactory, Parser};
 use indicatif::ProgressDrawTarget;
-use miette::{Diagnostic, IntoDiagnostic};
+use miette::IntoDiagnostic;
 use pixi_consts::consts;
+use pixi_core::environment::LockFileUsage;
 use pixi_progress::global_multi_progress;
 
 use std::{env, io::IsTerminal};
-use thiserror::Error;
 use tracing::level_filters::LevelFilter;
 
 pub mod add;
@@ -32,6 +40,7 @@ pub mod remove;
 pub mod run;
 pub mod search;
 pub mod self_update;
+mod shared;
 pub mod shell;
 pub mod shell_hook;
 pub mod task;
@@ -183,107 +192,37 @@ pub enum Command {
     External(Vec<String>),
 }
 
-#[derive(Debug, Error, Diagnostic)]
-pub enum LockFileUsageError {
-    #[error("the argument '--locked' cannot be used together with '--frozen'")]
-    FrozenAndLocked,
-}
-
-#[derive(Debug, Default, Copy, Clone)]
-/// Lock file usage from the CLI with automatic validation
-pub struct LockFileUsageArgs {
-    inner: LockFileUsageArgsRaw,
-}
-
-#[derive(Parser, Debug, Default, Copy, Clone)]
-#[group(multiple = false)]
-/// Raw lock file usage arguments (use LockFileUsageArgs instead)
-struct LockFileUsageArgsRaw {
-    /// Install the environment as defined in the lockfile, doesn't update
-    /// lockfile if it isn't up-to-date with the manifest file.
-    #[clap(long, env = "PIXI_FROZEN", help_heading = consts::CLAP_UPDATE_OPTIONS, conflicts_with = "locked")]
-    frozen: bool,
-    /// Check if lockfile is up-to-date before installing the environment,
-    /// aborts when lockfile isn't up-to-date with the manifest file.
-    #[clap(long, env = "PIXI_LOCKED", help_heading = consts::CLAP_UPDATE_OPTIONS, conflicts_with = "frozen")]
-    locked: bool,
-}
-
-impl LockFileUsageArgs {
-    pub fn frozen(&self) -> bool {
-        self.inner.frozen
-    }
-
-    pub fn locked(&self) -> bool {
-        self.inner.locked
-    }
-}
-
-// Automatic conversion from raw args (conflicts handled by clap)
-impl From<LockFileUsageArgsRaw> for LockFileUsageArgs {
-    fn from(raw: LockFileUsageArgsRaw) -> Self {
-        LockFileUsageArgs { inner: raw }
-    }
-}
-
-// For clap flattening - this provides automatic validation
-impl clap::FromArgMatches for LockFileUsageArgs {
-    fn from_arg_matches(matches: &clap::ArgMatches) -> Result<Self, clap::Error> {
-        let raw = LockFileUsageArgsRaw::from_arg_matches(matches)?;
-        Ok(raw.into())
-    }
-
-    fn update_from_arg_matches(&mut self, matches: &clap::ArgMatches) -> Result<(), clap::Error> {
-        *self = Self::from_arg_matches(matches)?;
-        Ok(())
-    }
-}
-
-impl clap::Args for LockFileUsageArgs {
-    fn augment_args(cmd: clap::Command) -> clap::Command {
-        LockFileUsageArgsRaw::augment_args(cmd)
-    }
-
-    fn augment_args_for_update(cmd: clap::Command) -> clap::Command {
-        LockFileUsageArgsRaw::augment_args_for_update(cmd)
-    }
-}
-
-impl From<LockFileUsageArgs> for pixi_core::environment::LockFileUsage {
-    fn from(value: LockFileUsageArgs) -> Self {
-        if value.frozen() {
-            Self::Frozen
-        } else if value.locked() {
-            Self::Locked
-        } else {
-            Self::Update
-        }
-    }
-}
-
-impl From<LockFileUsageConfig> for pixi_core::environment::LockFileUsage {
-    fn from(value: LockFileUsageConfig) -> Self {
-        if value.frozen {
-            Self::Frozen
-        } else if value.locked {
-            Self::Locked
-        } else {
-            Self::Update
-        }
-    }
-}
-
 /// Configuration for lock file usage, used by LockFileUpdateConfig
 #[derive(Parser, Debug, Default, Clone)]
 pub struct LockFileUsageConfig {
     /// Install the environment as defined in the lockfile, doesn't update
     /// lockfile if it isn't up-to-date with the manifest file.
-    #[clap(long, env = "PIXI_FROZEN", help_heading = consts::CLAP_UPDATE_OPTIONS, conflicts_with = "locked")]
+    #[clap(
+        long,
+        env = "PIXI_FROZEN",
+        help_heading = consts::CLAP_UPDATE_OPTIONS
+    )]
     pub frozen: bool,
     /// Check if lockfile is up-to-date before installing the environment,
     /// aborts when lockfile isn't up-to-date with the manifest file.
-    #[clap(long, env = "PIXI_LOCKED", help_heading = consts::CLAP_UPDATE_OPTIONS, conflicts_with = "frozen")]
+    #[clap(
+        long,
+        env = "PIXI_LOCKED",
+        help_heading = consts::CLAP_UPDATE_OPTIONS
+    )]
     pub locked: bool,
+}
+
+impl LockFileUsageConfig {
+    pub fn to_usage(&self) -> LockFileUsage {
+        if self.locked {
+            LockFileUsage::Locked
+        } else if self.frozen {
+            LockFileUsage::Frozen
+        } else {
+            LockFileUsage::Update
+        }
+    }
 }
 
 pub async fn execute() -> miette::Result<()> {
@@ -387,7 +326,7 @@ fn setup_logging(args: &Args, use_colors: bool) -> miette::Result<()> {
     Ok(())
 }
 
-/// Execute the actual command
+/// Maps command enum variants to their actual function handlers.
 pub async fn execute_command(
     command: Command,
     global_options: &GlobalOptions,
@@ -576,6 +515,11 @@ mod tests {
                 parsed.frozen,
                 "Expected PIXI_FROZEN=true to set frozen=true"
             );
+            let usage = parsed.to_usage();
+            assert!(matches!(
+                usage,
+                pixi_core::environment::LockFileUsage::Frozen
+            ));
         });
 
         // Test PIXI_FROZEN=false
@@ -587,6 +531,11 @@ mod tests {
                 !parsed.frozen,
                 "Expected PIXI_FROZEN=false to set frozen=false"
             );
+            let usage = parsed.to_usage();
+            assert!(matches!(
+                usage,
+                pixi_core::environment::LockFileUsage::Update
+            ));
         });
 
         // Test unset
@@ -594,10 +543,7 @@ mod tests {
             let result = LockFileUsageConfig::try_parse_from(["test"]);
             assert!(result.is_ok());
             let parsed = result.unwrap();
-            assert!(
-                !parsed.frozen,
-                "Expected unset PIXI_FROZEN to set frozen=false"
-            );
+            assert!(!parsed.frozen, "Expected unset PIXI_FROZEN to be false");
         });
     }
 
@@ -608,10 +554,43 @@ mod tests {
             let result = LockFileUsageConfig::try_parse_from(["test", "--frozen"]);
             assert!(result.is_ok());
             let parsed = result.unwrap();
-            assert!(
-                parsed.frozen,
-                "Expected CLI argument --frozen to override PIXI_FROZEN=false"
-            );
+            let usage = parsed.to_usage();
+            assert!(matches!(
+                usage,
+                pixi_core::environment::LockFileUsage::Frozen
+            ));
         });
+    }
+
+    #[test]
+    fn test_locked_env_and_precedence() {
+        // PIXI_FROZEN=true and PIXI_LOCKED=false should work
+        temp_env::with_vars(
+            vec![
+                ("PIXI_FROZEN", Some("true")),
+                ("PIXI_LOCKED", Some("false")),
+            ],
+            || {
+                let parsed = LockFileUsageConfig::try_parse_from(["test"]).unwrap();
+                let usage = parsed.to_usage();
+                assert!(matches!(
+                    usage,
+                    pixi_core::environment::LockFileUsage::Frozen
+                ));
+            },
+        );
+
+        // PIXI_FROZEN=true and PIXI_LOCKED=true should select Locked (locked wins)
+        temp_env::with_vars(
+            vec![("PIXI_FROZEN", Some("true")), ("PIXI_LOCKED", Some("true"))],
+            || {
+                let parsed = LockFileUsageConfig::try_parse_from(["test"]).unwrap();
+                let usage = parsed.to_usage();
+                assert!(matches!(
+                    usage,
+                    pixi_core::environment::LockFileUsage::Locked
+                ));
+            },
+        );
     }
 }

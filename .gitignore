@@ -13,6 +13,9 @@ Thumbs.db
 .env.local
 .env.*.local
 
+# Agents
+AGENTS.md
+
 # Documentation and build artifacts
 site/
 .build
@@ -28,6 +31,9 @@ build/
 .conda/
 conda-bld/
 .conda-env-vars
+
+# Allow conda files in test data
+!tests/data/channels/channels/**/*.conda
 
 # Python
 __pycache__/
@@ -111,4 +117,3 @@ secrets.json
 # Generated files
 *_pb2.py
 *_pb2_grpc.py
-

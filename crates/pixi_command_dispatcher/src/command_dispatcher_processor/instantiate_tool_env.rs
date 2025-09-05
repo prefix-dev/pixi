@@ -76,9 +76,14 @@ impl CommandDispatcherProcessor {
                     CommandDispatcherContext::InstantiateToolEnv(id),
                 );
                 self.pending_futures.push(
-                    task.spec
-                        .instantiate(command_queue)
-                        .map(move |result| TaskResult::InstantiateToolEnv(id, result))
+                    task.cancellation_token
+                        .run_until_cancelled_owned(task.spec.instantiate(command_queue))
+                        .map(move |result| {
+                            TaskResult::InstantiateToolEnv(
+                                id,
+                                result.unwrap_or(Err(CommandDispatcherError::Cancelled)),
+                            )
+                        })
                         .boxed_local(),
                 )
             }

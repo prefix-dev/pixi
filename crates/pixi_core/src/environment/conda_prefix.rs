@@ -135,6 +135,7 @@ impl CondaPrefixUpdater {
         &self,
         pixi_records: Vec<PixiRecord>,
         reinstall_packages: Option<HashSet<PackageName>>,
+        ignore_packages: Option<HashSet<PackageName>>,
     ) -> miette::Result<&CondaPrefixUpdated> {
         self.inner
             .created
@@ -156,6 +157,7 @@ impl CondaPrefixUpdater {
                     self.inner.variant_config.clone(),
                     self.inner.command_dispatcher.clone(),
                     reinstall_packages,
+                    ignore_packages,
                 )
                 .await?;
 
@@ -186,6 +188,7 @@ pub async fn update_prefix_conda(
     variant_config: VariantConfig,
     command_dispatcher: CommandDispatcher,
     reinstall_packages: Option<HashSet<PackageName>>,
+    ignore_packages: Option<HashSet<PackageName>>,
 ) -> miette::Result<PythonStatus> {
     // Try to increase the rlimit to a sensible value for installation.
     try_increase_rlimit_to_sensible();
@@ -199,6 +202,7 @@ pub async fn update_prefix_conda(
             prefix: rattler_conda_types::prefix::Prefix::create(prefix.root()).into_diagnostic()?,
             installed: None,
             force_reinstall: reinstall_packages.unwrap_or_default(),
+            ignore_packages,
             build_environment,
             channels,
             channel_config,

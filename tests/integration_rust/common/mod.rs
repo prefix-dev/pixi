@@ -4,6 +4,7 @@ pub mod builders;
 pub mod client;
 pub mod logging;
 pub mod package_database;
+pub mod pypi_index;
 
 use std::{
     ffi::OsString,
@@ -29,15 +30,15 @@ use pixi_cli::{
 };
 use pixi_consts::consts;
 use pixi_core::{
-    UpdateLockFileOptions, Workspace,
+    InstallFilter, UpdateLockFileOptions, Workspace,
     lock_file::{ReinstallPackages, UpdateMode},
-    task::{
-        ExecutableTask, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph,
-        TaskGraphError, TaskName, get_task_env,
-    },
 };
 use pixi_manifest::{EnvironmentName, FeatureName};
 use pixi_progress::global_multi_progress;
+use pixi_task::{
+    ExecutableTask, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph, TaskGraphError,
+    TaskName, get_task_env,
+};
 use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform};
 use rattler_lock::{LockFile, LockedPackageRef, UrlOrPath};
 use tempfile::TempDir;
@@ -523,7 +524,7 @@ impl PixiControl {
                             &task.run_environment,
                             UpdateMode::Revalidate,
                             &ReinstallPackages::default(),
-                            &[],
+                            &InstallFilter::default(),
                         )
                         .await?;
                     let env =
@@ -567,6 +568,8 @@ impl PixiControl {
                 config: Default::default(),
                 all: false,
                 skip: None,
+                skip_with_deps: None,
+                only: None,
             },
         }
     }

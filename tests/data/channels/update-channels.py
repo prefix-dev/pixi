@@ -1,8 +1,11 @@
-import subprocess
-from pathlib import Path
-import shutil
-import tomllib
 import argparse
+import shutil
+import subprocess
+import tomllib
+from pathlib import Path
+
+import yaml
+from rattler import Platform
 
 
 def main() -> None:
@@ -10,7 +13,6 @@ def main() -> None:
     parser.add_argument("channel", help="The channel to update")
     args = parser.parse_args()
 
-    platforms = ["win-64", "linux-64", "osx-arm64", "osx-64"]
     mappings = tomllib.loads(Path("mappings.toml").read_text())
     channels_dir = Path("channels", args.channel)
     shutil.rmtree(channels_dir, ignore_errors=True)
@@ -18,6 +20,14 @@ def main() -> None:
     for recipe, channel in mappings.items():
         if channel == args.channel:
             print(recipe, channel)
+            recipe_path = Path("recipes").joinpath(recipe)
+            recipe_content = yaml.safe_load(recipe_path.read_text())
+
+            if recipe_content.get("build", {}).get("noarch"):
+                platforms = [str(Platform.current())]
+            else:
+                platforms = ["win-64", "linux-64", "osx-arm64", "osx-64"]
+
             for platform in platforms:
                 subprocess.run(
                     [
@@ -29,7 +39,7 @@ def main() -> None:
                         "--output-dir",
                         f"channels/{channel}",
                         "--recipe",
-                        f"recipes/{recipe}",
+                        recipe_path,
                     ],
                     check=True,
                 )
