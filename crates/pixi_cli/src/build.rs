@@ -13,6 +13,7 @@ use pixi_progress::global_multi_progress;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
 use pixi_reporters::TopLevelProgress;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
+use tempfile::tempdir;
 
 use crate::cli_config::WorkspaceConfig;
 
@@ -128,7 +129,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Determine all the outputs available from the build backend.
     let packages = backend_metadata.metadata.outputs();
 
-    // Ensure the output directory exists
+    // Ensure the final output directory exists
     fs_err::create_dir_all(&args.output_dir)
         .into_diagnostic()
         .with_context(|| {
@@ -138,12 +139,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             )
         })?;
 
+    // Create a temporary directory to hold build outputs
+    let temp_output_dir = tempdir()
+        .into_diagnostic()
+        .context("failed to create temporary output directory for build artifacts")?;
+
     // Build the individual packages
     for package in packages {
         let built_package = command_dispatcher
             .source_build(SourceBuildSpec {
                 package,
-                output_directory: Some(args.output_dir.clone()),
+                // Build into a temporary directory first
+                output_directory: Some(temp_output_dir.path().to_path_buf()),
                 source: source.clone(),
                 channels: channels.clone(),
                 channel_config: channel_config.clone(),
@@ -159,16 +166,26 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // Clear the top level progress
         command_dispatcher.clear_reporter().await;
 
-        // Canonicalize the output directory and package path.
-        let output_dir = dunce::canonicalize(&args.output_dir)
-            .expect("failed to canonicalize output directory which must now exist");
         let package_path = dunce::canonicalize(&built_package.output_file)
             .expect("failed to canonicalize output file which must now exist");
 
-        // Make the path relative to the output directory
-        let output_file = pathdiff::diff_paths(&package_path, &output_dir)
+        // Destination inside the user-requested output directory
+        let file_name = package_path
+            .file_name()
+            .expect("built package should have a file name");
+        let dest_path = args.output_dir.join(file_name);
+
+        // Copy the .conda artifact into the requested directory
+        fs_err::copy(&package_path, &dest_path).into_diagnostic()?;
+
+        // Print success relative to the user-requested output directory
+        let output_dir = dunce::canonicalize(&args.output_dir)
+            .expect("failed to canonicalize output directory which must now exist");
+        let dest_canon = dunce::canonicalize(&dest_path)
+            .expect("failed to canonicalize copied output file which must now exist");
+        let output_file = pathdiff::diff_paths(&dest_canon, &output_dir)
             .map(|p| args.output_dir.join(p))
-            .unwrap_or_else(|| dunce::simplified(&built_package.output_file).to_path_buf());
+            .unwrap_or_else(|| dunce::simplified(&dest_path).to_path_buf());
         let stripped_output_file = output_file
             .strip_prefix(&args.output_dir)
             .unwrap_or(&output_file);
