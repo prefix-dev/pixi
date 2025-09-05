@@ -3681,7 +3681,7 @@ args = [
   { "arg" = "project", "default" = "my-app" },
   { "arg" = "mode", "default" = "development" },
 ]
-cmd = "echo Building {{ project }} in {{ mode }} mode"
+cmd = "echo Building {{ project }} with {{ mode }} mode"
 # Task with mixed required and optional arguments
 [tasks.deploy]
 args = ["service", { "arg" = "environment", "default" = "staging" }]
