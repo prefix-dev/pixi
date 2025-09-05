@@ -38,6 +38,7 @@ mod build_backend_metadata;
 mod cache_dirs;
 mod command_dispatcher;
 mod command_dispatcher_processor;
+mod discover_backend_cache;
 mod executor;
 mod install_pixi;
 mod instantiate_tool_env;

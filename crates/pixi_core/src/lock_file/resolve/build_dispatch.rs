@@ -17,6 +17,7 @@
 //! and holds struct that is used to instantiate the conda prefix when its
 //! needed.
 use std::cell::Cell;
+use std::collections::HashSet;
 use std::{collections::HashMap, path::Path};
 
 use crate::environment::{CondaPrefixUpdated, CondaPrefixUpdater};
@@ -214,6 +215,8 @@ pub struct LazyBuildDispatch<'a> {
     pub disallow_install_conda_prefix: bool,
 
     workspace_cache: WorkspaceCache,
+
+    pub ignore_packages: Option<HashSet<rattler_conda_types::PackageName>>,
 }
 
 /// These are resources for the [`BuildDispatch`] that need to be lazily
@@ -285,6 +288,7 @@ impl<'a> LazyBuildDispatch<'a> {
         repodata_records: miette::Result<Vec<PixiRecord>>,
         no_build_isolation: NoBuildIsolation,
         lazy_deps: &'a LazyBuildDispatchDependencies,
+        ignore_packages: Option<HashSet<rattler_conda_types::PackageName>>,
         disallow_install_conda_prefix: bool,
     ) -> Self {
         Self {
@@ -299,6 +303,7 @@ impl<'a> LazyBuildDispatch<'a> {
             lazy_deps,
             disallow_install_conda_prefix,
             workspace_cache: WorkspaceCache::default(),
+            ignore_packages,
         }
     }
 
@@ -323,7 +328,11 @@ impl<'a> LazyBuildDispatch<'a> {
 
             let prefix = self
                 .prefix_updater
-                .update(repodata_records.to_vec(), None)
+                .update(
+                    repodata_records.to_vec(),
+                    None,
+                    self.ignore_packages.clone(),
+                )
                 .await
                 .map_err(|err| LazyBuildDispatchError::InitializationError(err.into()))?;
 

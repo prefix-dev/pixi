@@ -3,16 +3,19 @@ use std::path::PathBuf;
 use chrono::Utc;
 use itertools::chain;
 use miette::Diagnostic;
+use pixi_build_discovery::EnabledProtocols;
 use pixi_glob::GlobModificationTime;
 use pixi_record::PinnedSourceSpec;
-use rattler_conda_types::ChannelUrl;
+use rattler_conda_types::{ChannelConfig, ChannelUrl};
 use tokio::sync::Mutex;
 use tracing::instrument;
 
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
     PackageIdentifier, SourceCheckoutError,
-    build::{BuildCacheEntry, BuildCacheError, BuildInput, CachedBuild},
+    build::{
+        BuildCacheEntry, BuildCacheError, BuildInput, CachedBuild, PackageBuildInputHashBuilder,
+    },
 };
 
 /// A list of globs that should be ignored when calculating any input hash.
@@ -44,6 +47,12 @@ pub struct SourceBuildCacheStatusSpec {
 
     /// The build environment used to build the package.
     pub build_environment: BuildEnvironment,
+
+    /// The channel configuration to use when building the package.
+    pub channel_config: ChannelConfig,
+
+    /// The protocols that are enabled when discovering the build backend.
+    pub enabled_protocols: EnabledProtocols,
 }
 
 pub enum CachedBuildStatus {
@@ -125,6 +134,18 @@ impl SourceBuildCacheStatusSpec {
             return Ok(CachedBuildStatus::UpToDate(cached_build));
         }
 
+        // Check if the project configuration has changed.
+        let cached_build = match self
+            .check_package_configuration_changed(command_dispatcher, cached_build, source)
+            .await?
+        {
+            CachedBuildStatus::UpToDate(cached_build) => cached_build,
+            CachedBuildStatus::Stale(cached_build) => {
+                return Ok(CachedBuildStatus::Stale(cached_build));
+            }
+            CachedBuildStatus::Missing => return Ok(CachedBuildStatus::Missing),
+        };
+
         // Determine if the package is out of date by checking the source
         let cached_build = match self
             .check_source_out_of_date(command_dispatcher, cached_build, source)
@@ -173,6 +194,8 @@ impl SourceBuildCacheStatusSpec {
                     source: source.clone(),
                     channels: self.channels.clone(),
                     build_environment: self.build_environment.clone(),
+                    channel_config: self.channel_config.clone(),
+                    enabled_protocols: self.enabled_protocols.clone(),
                 })
                 .await
                 .try_into_failed()?
@@ -214,6 +237,65 @@ impl SourceBuildCacheStatusSpec {
             }
         }
 
+        Ok(CachedBuildStatus::UpToDate(cached_build))
+    }
+
+    /// Checks if the package configuration has changed by computing a hash and
+    /// comparing that against the stored hash.
+    ///
+    /// TODO: We should optimize this because currently we have to checkout the
+    /// source, discover the backend, and compute hashes. We can probably
+    /// already early out if some of this information is cached more granularly.
+    /// E.g. if the pixi.toml file didnt change (compare using timestamp) then
+    /// we can probably skip a bunch of these things.
+    async fn check_package_configuration_changed(
+        &self,
+        command_dispatcher: &CommandDispatcher,
+        cached_build: CachedBuild,
+        source: &PinnedSourceSpec,
+    ) -> Result<CachedBuildStatus, CommandDispatcherError<SourceBuildCacheStatusError>> {
+        let Some(source_info) = &cached_build.source else {
+            return Ok(CachedBuildStatus::UpToDate(cached_build));
+        };
+
+        let Some(current_hash) = source_info.package_build_input_hash else {
+            tracing::debug!(
+                "package is stale because the package build input hash is missing or stale",
+            );
+            return Ok(CachedBuildStatus::Stale(cached_build));
+        };
+
+        // Checkout the source for the package.
+        let source_checkout = command_dispatcher
+            .checkout_pinned_source(source.clone())
+            .await
+            .map_err_with(SourceBuildCacheStatusError::SourceCheckout)?;
+
+        // Determine the backend parameters for the package.
+        let backend = command_dispatcher
+            .discover_backend(
+                &source_checkout.path,
+                self.channel_config.clone(),
+                self.enabled_protocols.clone(),
+            )
+            .await
+            .map_err_with(SourceBuildCacheStatusError::Discovery)?;
+
+        // Compute a hash of the package configuration.
+        let package_build_input_hash = PackageBuildInputHashBuilder {
+            project_model: backend.init_params.project_model.as_ref(),
+            configuration: backend.init_params.configuration.as_ref(),
+            target_configuration: backend.init_params.target_configuration.as_ref(),
+        }
+        .finish();
+
+        // Compare the hashes
+        if current_hash != package_build_input_hash {
+            tracing::debug!("package is stale because the package build input hash has changed");
+            return Ok(CachedBuildStatus::Stale(cached_build));
+        }
+
+        // Compute the input hash of the build.
         Ok(CachedBuildStatus::UpToDate(cached_build))
     }
 
@@ -295,6 +377,10 @@ pub enum SourceBuildCacheStatusError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     SourceCheckout(SourceCheckoutError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Discovery(pixi_build_discovery::DiscoveryError),
 
     #[error("a cycle was detected in the build/host dependencies of the package")]
     Cycle,

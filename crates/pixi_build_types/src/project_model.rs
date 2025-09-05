@@ -21,13 +21,12 @@
 use std::{convert::Infallible, fmt::Display, hash::Hash, path::PathBuf, str::FromStr};
 
 use ordermap::OrderMap;
+use pixi_stable_hash::{IsDefault, StableHashBuilder};
 use rattler_conda_types::{BuildNumberSpec, StringMatcher, Version, VersionSpec};
 use rattler_digest::{Md5, Md5Hash, Sha256, Sha256Hash, serde::SerializableHash};
 use serde::{Deserialize, Serialize};
 use serde_with::{DeserializeFromStr, DisplayFromStr, SerializeDisplay, serde_as};
 use url::Url;
-
-use crate::stable_hash::{IsDefault, StableHashBuilder};
 
 /// Enum containing all versions of the project model.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -108,6 +107,14 @@ pub struct ProjectModelV1 {
     pub targets: Option<TargetsV1>,
 }
 
+impl IsDefault for ProjectModelV1 {
+    type Item = Self;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        Some(self)
+    }
+}
+
 impl From<ProjectModelV1> for VersionedProjectModel {
     fn from(value: ProjectModelV1) -> Self {
         VersionedProjectModel::V1(value)
@@ -180,14 +187,6 @@ impl IsDefault for TargetsV1 {
 
     fn is_non_default(&self) -> Option<&Self::Item> {
         if !self.is_empty() { Some(self) } else { None }
-    }
-}
-
-impl<T: IsDefault> IsDefault for Option<T> {
-    type Item = T::Item;
-
-    fn is_non_default(&self) -> Option<&Self::Item> {
-        self.as_ref()?.is_non_default()
     }
 }
 
@@ -638,7 +637,7 @@ mod tests {
     use super::*;
 
     fn calculate_hash<T: Hash>(obj: &T) -> u64 {
-        let mut hasher = DefaultHasher::new();
+        let mut hasher = DefaultHasher::default();
         obj.hash(&mut hasher);
         hasher.finish()
     }

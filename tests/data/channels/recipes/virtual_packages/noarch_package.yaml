@@ -1,0 +1,8 @@
+package:
+  name: noarch_package
+  version: 0.1.0
+build:
+  noarch: generic
+requirements:
+  run:
+    - ${{ "cuda" if with_cuda == "True" }}

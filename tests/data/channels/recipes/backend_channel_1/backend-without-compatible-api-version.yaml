@@ -1,0 +1,6 @@
+package:
+  name: backend-without-compatible-api-version
+  version: 0.1.0
+
+build:
+  noarch: generic

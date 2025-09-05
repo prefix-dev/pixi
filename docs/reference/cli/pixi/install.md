@@ -18,7 +18,13 @@ pixi install [OPTIONS]
 - <a id="arg---all" href="#arg---all">`--all (-a)`</a>
 :  Install all environments
 - <a id="arg---skip" href="#arg---skip">`--skip <SKIP>`</a>
-:  Skip installation of specific packages present in the lockfile. Requires --frozen. This can be useful for instance in a Dockerfile to skip local source dependencies when installing dependencies
+:  Skip installation of specific packages present in the lockfile. This uses a soft exclusion: the package will be skipped but its dependencies are installed
+<br>May be provided more than once.
+- <a id="arg---skip-with-deps" href="#arg---skip-with-deps">`--skip-with-deps <SKIP_WITH_DEPS>`</a>
+:  Skip a package and its entire dependency subtree. This performs a hard exclusion: the package and its dependencies are not installed unless reachable from another non-skipped root
+<br>May be provided more than once.
+- <a id="arg---only" href="#arg---only">`--only <ONLY>`</a>
+:  Install and build only these package(s) and their dependencies. Can be passed multiple times
 <br>May be provided more than once.
 
 ## Config Options
@@ -42,12 +48,16 @@ pixi install [OPTIONS]
 :  Use environment activation cache (experimental)
 
 ## Update Options
-- <a id="arg---frozen" href="#arg---frozen">`--frozen`</a>
+- <a id="arg---frozen" href="#arg---frozen">`--frozen=<FROZEN>`</a>
 :  Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 <br>**env**: `PIXI_FROZEN`
-- <a id="arg---locked" href="#arg---locked">`--locked`</a>
+<br>**default**: `false`
+<br>**options**: `true`, `false`
+- <a id="arg---locked" href="#arg---locked">`--locked=<LOCKED>`</a>
 :  Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 <br>**env**: `PIXI_LOCKED`
+<br>**default**: `false`
+<br>**options**: `true`, `false`
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path <MANIFEST_PATH>`</a>
