@@ -30,11 +30,17 @@ jobs:
           cache-target: release
           bins: cargo-codspeed
 
+      - name: Install pixi
+        run: cargo install --path crates/pixi
+
       - name: Build the benchmark target(s)
-        run: cd crates/pixi_bench && cargo codspeed build && cd ../../
+        run: cargo codspeed build -p pixi_bench
 
       - name: Run the benchmarks
-        uses: CodSpeedHQ/action@v3
+        uses: CodSpeedHQ/action@v4
         with:
-          run: cd crates/pixi_bench && cargo codspeed run && cd ../../
+          run: |
+            export PATH="~/.cargo/bin:$PATH"
+            cargo codspeed run -p pixi_bench
+          mode: "instrumentation"
           token: ${{ secrets.CODSPEED_TOKEN }}

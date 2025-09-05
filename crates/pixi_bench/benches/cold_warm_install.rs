@@ -298,11 +298,9 @@ platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
         packages: &[&str],
     ) -> Result<Duration, Box<dyn std::error::Error>> {
         let mut cmd = Command::new("pixi");
-        cmd.arg("install").current_dir(&self.project_dir);
-
-        for (key, value) in self.get_env_vars() {
-            cmd.env(key, value);
-        }
+        cmd.arg("install")
+            .current_dir(&self.project_dir)
+            .envs(&self.get_env_vars());
 
         println!("⏱️ Timing: pixi install {} packages", packages.len());
 
