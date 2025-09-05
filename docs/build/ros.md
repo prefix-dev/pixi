@@ -146,7 +146,7 @@ You can now upload these artifacts to a conda channel and depend on them from ot
 ## Tips and gotchas
 
 - ROS distro and platform: pick the correct RoboStack channel (e.g. `robostack-humble`, `robostack-jazzy`) and ensure your platform is supported.
-- Keep `package.xml` accurate: name, version, license, maintainers, URLs, and dependencies are read automatically; but you can override them in the `pixi.toml`.
+- Keep `package.xml` accurate: name, version, license, maintainers, URLs, and dependencies are read automatically; but you can override them in the [pixi manifest](https://pixi.sh/latest/reference/pixi_manifest/#the-package-section).
 - Backend docs: see the [pixi-build-ros documentation](https://prefix-dev.github.io/pixi-build-backends/backends/pixi-build-ros/) for configuration details like `env`, `distro` and `extra-input-globs`.
 - Colcon vs pixi build: you don’t need `colcon` when using `pixi`; the backend invokes the right build flow. But since you don't have to change your package structure, you can still use `colcon` if you want.
 - Not all ROS packages are available in RoboStack. If you depend on a package not in RoboStack, you can:
