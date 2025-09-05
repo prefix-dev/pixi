@@ -9,7 +9,8 @@ my_package
 └── include
     └── my_code.h
 ```
-The source, Pixi assumes, is everything in the `my_package/` directory.
+Build backends are expected to have reasonable defaults from where to take the source code.
+Apart from the `pixi-build-rattler-build` backend where you specify the source in the `recipe.yaml`, the build backend will default to the directory where the package manifest is located
 
 Alternatively, you can specify where the source is located.
 
