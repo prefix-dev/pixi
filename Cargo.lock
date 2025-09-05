@@ -5049,6 +5049,7 @@ dependencies = [
  "rattler_shell",
  "rattler_solve",
  "rattler_virtual_packages",
+ "rayon",
  "reqwest",
  "reqwest-middleware",
  "rlimit",

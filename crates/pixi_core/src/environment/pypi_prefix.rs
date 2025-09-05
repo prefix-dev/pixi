@@ -6,6 +6,7 @@ use rattler::install::PythonInfo;
 use pixi_consts::consts;
 use pixi_utils::prefix::Prefix;
 use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};
+use rayon::prelude::*;
 use uv_distribution_types::{InstalledDist, Name};
 
 use super::PythonStatus;
@@ -14,15 +15,42 @@ use super::PythonStatus;
 /// site packages. from the old interpreter.
 async fn uninstall_outdated_site_packages(site_packages: &Path) -> miette::Result<()> {
     // Check if the old interpreter is outdated
-    let mut installed = vec![];
+    let mut dist_dirs = Vec::new();
     for entry in fs_err::read_dir(site_packages).into_diagnostic()? {
         let entry = entry.into_diagnostic()?;
         if entry.file_type().into_diagnostic()?.is_dir() {
             let path = entry.path();
+            dist_dirs.push(path);
+        }
+    }
 
+    let installed = dist_dirs
+        .into_par_iter()
+        .flat_map(|path| {
+            // Early out if the install was not done by pixi-uv.
+            // For performance reasons we only check if the length of the
+            // installer file is different from a file containing "uv-pixi".
+            let installer_path = path.join("INSTALLER");
+            match fs_err::metadata(&installer_path) {
+                Ok(metadata) => {
+                    if metadata.len() != consts::PIXI_UV_INSTALLER.len() as u64 {
+                        // The file is smaller or larger so its contents cannot be "uv-pixi"
+                        return None;
+                    }
+                }
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                    // No installer file, so cannot be installed by uv pixi
+                    return None;
+                }
+                _ => {
+                    // Unsure, so we continue on the more expensive path
+                }
+            }
+
+            // Load the information of the installed distribution
             let installed_dist = InstalledDist::try_from_path(&path);
             let Ok(installed_dist) = installed_dist else {
-                continue;
+                return None;
             };
 
             if let Some(installed_dist) = installed_dist {
@@ -35,18 +63,20 @@ async fn uninstall_outdated_site_packages(site_packages: &Path) -> miette::Resul
                             installed_dist.name(),
                             e
                         );
-                        continue;
+                        return None;
                     }
                 };
 
                 // Only remove if have actually installed it
                 // by checking the installer
                 if installer.unwrap_or_default() == consts::PIXI_UV_INSTALLER {
-                    installed.push(installed_dist);
+                    return Some(installed_dist);
                 }
             }
-        }
-    }
+
+            None
+        })
+        .collect::<Vec<_>>();
 
     // Uninstall all packages in old site-packages directory
     for dist_info in installed {
