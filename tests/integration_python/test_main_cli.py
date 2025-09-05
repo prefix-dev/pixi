@@ -7,18 +7,18 @@ import tomllib
 from pathlib import Path
 
 import pytest
-from dirty_equals import IsStr, IsList, AnyThing
+from dirty_equals import AnyThing, IsList, IsStr
 from inline_snapshot import snapshot
 
 from .common import (
+    CONDA_FORGE_CHANNEL,
     CURRENT_PLATFORM,
     EMPTY_BOILERPLATE_PROJECT,
     PIXI_VERSION,
     ExitCode,
     cwd,
-    verify_cli_command,
-    CONDA_FORGE_CHANNEL,
     find_commands_supporting_frozen_and_no_install,
+    verify_cli_command,
 )
 
 
@@ -1087,9 +1087,15 @@ def test_pixi_lock(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -
 
 @pytest.mark.extra_slow
 def test_pixi_auth(pixi: Path) -> None:
-    verify_cli_command([pixi, "auth", "login", "--token", "DUMMY_TOKEN", "https://prefix.dev/"])
     verify_cli_command(
-        [pixi, "auth", "login", "--token", "DUMMY_TOKEN", "https://repo.prefix.dev/"]
+        [pixi, "auth", "login", "--token", "DUMMY_TOKEN", "https://prefix.dev/"],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="Unauthorized or invalid token",
+    )
+    verify_cli_command(
+        [pixi, "auth", "login", "--token", "DUMMY_TOKEN", "https://repo.prefix.dev/"],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="Unauthorized or invalid token",
     )
     verify_cli_command(
         [pixi, "auth", "login", "--conda-token", "DUMMY_TOKEN", "https://conda.anaconda.org"]
