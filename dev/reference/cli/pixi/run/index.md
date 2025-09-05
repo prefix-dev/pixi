@@ -55,21 +55,13 @@ pixi run [OPTIONS] [TASK]...
 
 - [`--no-install`](#arg---no-install) Don't modify the environment, only modify the lock-file
 
-- [`--frozen=<FROZEN>`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
+- [`--frozen`](#arg---frozen) Install the environment as defined in the lockfile, doesn't update lockfile if it isn't up-to-date with the manifest file
 
   **env**: `PIXI_FROZEN`
 
-  **default**: `false`
-
-  **options**: `true`, `false`
-
-- [`--locked=<LOCKED>`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
+- [`--locked`](#arg---locked) Check if lockfile is up-to-date before installing the environment, aborts when lockfile isn't up-to-date with the manifest file
 
   **env**: `PIXI_LOCKED`
-
-  **default**: `false`
-
-  **options**: `true`, `false`
 
 - [`--as-is`](#arg---as-is) Shorthand for the combination of --no-install and --frozen
 
