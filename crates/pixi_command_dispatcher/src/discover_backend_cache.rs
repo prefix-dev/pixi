@@ -78,9 +78,4 @@ impl DiscoveryCache {
             }
         }
     }
-
-    // Note: we intentionally do not implement a clear() here because the
-    // underlying coalesced map does not expose a general clear operation.
-    // Callers that need to invalidate discovery results should bump their
-    // cache key inputs or recreate the cache instance at construction time.
 }
