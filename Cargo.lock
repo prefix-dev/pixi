@@ -4916,6 +4916,7 @@ dependencies = [
  "insta",
  "itertools 0.14.0",
  "miette 7.6.0",
+ "ordermap",
  "pin-project-lite",
  "pixi_build_discovery",
  "pixi_build_frontend",
@@ -4928,6 +4929,7 @@ dependencies = [
  "pixi_record",
  "pixi_spec",
  "pixi_spec_containers",
+ "pixi_stable_hash",
  "pixi_test_utils",
  "pixi_utils",
  "rand 0.9.2",
@@ -5388,6 +5390,7 @@ dependencies = [
  "ordermap",
  "rattler_conda_types",
  "rattler_digest",
+ "serde_json",
  "url",
  "xxhash-rust",
 ]
