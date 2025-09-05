@@ -568,6 +568,8 @@ async fn source_build_cache_status_clear_works() {
         .into(),
         channels: Vec::<ChannelUrl>::new(),
         build_environment: build_env,
+        channel_config: default_channel_config(),
+        enabled_protocols: Default::default(),
     };
 
     let first = dispatcher
