@@ -13,7 +13,7 @@ pixi auth login [OPTIONS] <HOST>
 
 ## Arguments
 
-- [`<HOST>`](#arg-%3CHOST%3E) The host to authenticate with (e.g. repo.prefix.dev)
+- [`<HOST>`](#arg-%3CHOST%3E) The host to authenticate with (e.g. prefix.dev)
 
   **required**: `true`
 
