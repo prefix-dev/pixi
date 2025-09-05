@@ -60,7 +60,7 @@ ros_ws/
             └── my_python_node.py
 ```
 
-### Add pixi package info to the new package
+### Add Pixi package info to the new package
 
 Create a `pixi.toml` inside `src/my_python_ros_pkg` so Pixi can build it using the ROS backend. The backend reads most metadata from `package.xml`, so you only need to specify the backend and distro.
 
