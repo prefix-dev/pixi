@@ -35,6 +35,7 @@ As an environment goes beyond just `dependencies` the `feature` fields can be de
 - `target`: All the above features but also separated by targets.
 - `tasks`: Feature specific tasks, tasks in one environment are selected as default tasks for the environment.
 
+In a pixi.toml, default dependencies can be specified as follows. For pyproject.toml, dependencies can be defined under the usual `[project]` tag in `dependencies=[]`
 ```toml title="Default features"
 [dependencies] # short for [feature.default.dependencies]
 python = "*"
@@ -50,39 +51,80 @@ libc = "2.33"
 scripts = ["activate.sh"]
 ```
 
-```toml title="Different dependencies per feature"
-[feature.py39.dependencies]
-python = "~=3.9.0"
-[feature.py310.dependencies]
-python = "~=3.10.0"
-[feature.test.dependencies]
-pytest = "*"
-```
+Dependencies can be separated by features, allowing for more granular control:
+=== "`pixi.toml`"
+    ```toml title="Different dependencies per feature"
+    [feature.py39.dependencies]
+    python = "~=3.9.0"
+    [feature.py310.dependencies]
+    python = "~=3.10.0"
+    [feature.test.dependencies]
+    pytest = "*"
+    ```
+=== "`pyproject.toml`"
+    ```toml title="Different dependencies per feature"
+    [tool.pixi.feature.py39.dependencies]
+    python = "~=3.9.0"
+    [tool.pixi.feature.py310.dependencies]
+    python = "~=3.10.0"
+    [tool.pixi.feature.test.dependencies]
+    pytest = "*"
+    ```
 
-```toml title="Full set of environment modification in one feature"
-[feature.cuda]
-dependencies = {cuda = "x.y.z", cudnn = "12.0"}
-pypi-dependencies = {torch = "1.9.0"}
-platforms = ["linux-64", "osx-arm64"]
-activation = {scripts = ["cuda_activation.sh"]}
-system-requirements = {cuda = "12"}
-# Channels concatenate using a priority instead of overwrite, so the default channels are still used.
-# Using the priority the concatenation is controlled, default is 0, the default channels are used last.
-# Highest priority comes first.
-channels = ["nvidia", {channel = "pytorch", priority = -1}] # Results in:  ["nvidia", "conda-forge", "pytorch"] when the default is `conda-forge`
-tasks = { warmup = "python warmup.py" }
-target.osx-arm64 = {dependencies = {mlx = "x.y.z"}}
-```
 
-```toml title="Define tasks as defaults of an environment"
-[feature.test.tasks]
-test = "pytest"
+Below is an example using a feature for dependencies and system requirements for CUDA:
+=== "`pixi.toml`"
+    ```toml title="Full set of environment modification in one feature"
+    [feature.cuda]
+    dependencies = {cuda = "x.y.z", cudnn = "12.0"}
+    pypi-dependencies = {torch = "1.9.0"}
+    platforms = ["linux-64", "osx-arm64"]
+    activation = {scripts = ["cuda_activation.sh"]}
+    system-requirements = {cuda = "12"}
+    # Channels concatenate using a priority instead of overwrite, so the default channels are still used.
+    # Using the priority the concatenation is controlled, default is 0, the default channels are used last.
+    # Highest priority comes first.
+    channels = ["nvidia", {channel = "pytorch", priority = -1}] # Results in:  ["nvidia", "conda-forge", "pytorch"] when the default is `conda-forge`
+    tasks = { warmup = "python warmup.py" }
+    target.osx-arm64 = {dependencies = {mlx = "x.y.z"}}
+    ```
+=== "`pyproject.toml`"
+    ```toml title="Full set of environment modification in one feature"
+    [tool.pixi.feature.cuda]
+    dependencies = {cuda = "x.y.z", cudnn = "12.0"}
+    pypi-dependencies = {torch = "1.9.0"}
+    platforms = ["linux-64", "osx-arm64"]
+    activation = {scripts = ["cuda_activation.sh"]}
+    system-requirements = {cuda = "12"}
+    # Channels concatenate using a priority instead of overwrite, so the default channels are still used.
+    # Using the priority the concatenation is controlled, default is 0, the default channels are used last.
+    # Highest priority comes first.
+    channels = ["nvidia", {channel = "pytorch", priority = -1}] # Results in:  ["nvidia", "conda-forge", "pytorch"] when the default is `conda-forge`
+    tasks = { warmup = "python warmup.py" }
+    target.osx-arm64 = {dependencies = {mlx = "x.y.z"}}
+    ```
 
-[environments]
-test = ["test"]
+Features can also be used to set default tasks of an environment:
+=== "`pixi.toml`"
+    ```toml title="Define tasks as defaults of an environment"
+    [feature.test.tasks]
+    test = "pytest"
 
-# `pixi run test` == `pixi run --environment test test`
-```
+    [environments]
+    test = ["test"]
+
+    # `pixi run test` == `pixi run --environment test test`
+    ```
+=== "`pyproject.toml`"
+    ```toml title="Define tasks as defaults of an environment"
+    [tool.pixi.feature.test.tasks]
+    test = "pytest"
+
+    [tool.pixi.environments]
+    test = ["test"]
+
+    # `pixi run test` == `pixi run --environment test test`
+    ```
 
 The environment definition should contain the following fields:
 
@@ -91,24 +133,43 @@ The environment definition should contain the following fields:
   This is useful for environments that need to have the same dependencies but might extend them with additional dependencies.
   For instance when testing a production environment with additional test dependencies.
 
-```toml title="Creating environments from features"
-[environments]
-# implicit: default = ["default"]
-default = ["py39"] # implicit: default = ["py39", "default"]
-py310 = ["py310"] # implicit: py310 = ["py310", "default"]
-test = ["test"] # implicit: test = ["test", "default"]
-test39 = ["test", "py39"] # implicit: test39 = ["test", "py39", "default"]
-```
+=== "`pixi.toml`"
+    ```toml title="Creating environments from features"
+    [environments]
+    # implicit: default = ["default"]
+    default = ["py39"] # implicit: default = ["py39", "default"]
+    py310 = ["py310"] # implicit: py310 = ["py310", "default"]
+    test = ["test"] # implicit: test = ["test", "default"]
+    test39 = ["test", "py39"] # implicit: test39 = ["test", "py39", "default"]
+    ```
+    ```toml title="Testing a production environment with additional dependencies"
+    [environments]
+    # Creating a `prod` environment which is the minimal set of dependencies used for production.
+    prod = {features = ["py39"], solve-group = "prod"}
+    # Creating a `test_prod` environment which is the `prod` environment plus the `test` feature.
+    test_prod = {features = ["py39", "test"], solve-group = "prod"}
+    # Using the `solve-group` to solve the `prod` and `test_prod` environments together
+    # Which makes sure the tested environment has the same version of the dependencies as the production environment.
+    ```
 
-```toml title="Testing a production environment with additional dependencies"
-[environments]
-# Creating a `prod` environment which is the minimal set of dependencies used for production.
-prod = {features = ["py39"], solve-group = "prod"}
-# Creating a `test_prod` environment which is the `prod` environment plus the `test` feature.
-test_prod = {features = ["py39", "test"], solve-group = "prod"}
-# Using the `solve-group` to solve the `prod` and `test_prod` environments together
-# Which makes sure the tested environment has the same version of the dependencies as the production environment.
-```
+=== "`pyproject.toml`"
+    ```toml title="Creating environments from features"
+    [tool.pixi.environments]
+    # implicit: default = ["default"]
+    default = ["py39"] # implicit: default = ["py39", "default"]
+    py310 = ["py310"] # implicit: py310 = ["py310", "default"]
+    test = ["test"] # implicit: test = ["test", "default"]
+    test39 = ["test", "py39"] # implicit: test39 = ["test", "py39", "default"]
+    ```
+    ```toml title="Testing a production environment with additional dependencies"
+    [tool.pixi.environments]
+    # Creating a `prod` environment which is the minimal set of dependencies used for production.
+    prod = {features = ["py39"], solve-group = "prod"}
+    # Creating a `test_prod` environment which is the `prod` environment plus the `test` feature.
+    test_prod = {features = ["py39", "test"], solve-group = "prod"}
+    # Using the `solve-group` to solve the `prod` and `test_prod` environments together
+    # Which makes sure the tested environment has the same version of the dependencies as the production environment.
+    ```
 
 ```toml title="Creating environments without including the default feature"
 [dependencies]
