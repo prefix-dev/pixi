@@ -281,7 +281,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         );
         miette::bail!(
             help = help_msg,
-            "You cannot do a nameless initialization in the parent directory of your PIXI_HOME.",
+            "initialization without a name in the parent directory of your PIXI_HOME is not allowed.",
         );
     }
 
