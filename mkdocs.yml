@@ -138,11 +138,13 @@ nav:
       - Tutorials:
           - Building a Python Package: build/python.md
           - Building a C++ Package: build/cpp.md
+          - Building a ROS Package: build/ros.md
           - Multiple Packages in Workspace: build/workspace.md
           - Variants: build/variants.md
           - Advanced Building Using rattler-build: build/advanced_cpp.md
       - Dependency Types: build/dependency_types.md
       - Build Backends: build/backends.md
+      - Package Source: build/package_source.md
   - Distributing:
       - Pixi Pack: deployment/pixi_pack.md
       - Authentication: deployment/authentication.md
