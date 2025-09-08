@@ -124,6 +124,7 @@ cmd = "pytest --inline-snapshot=fix -k '{{ expression }}'"
 [feature.lint.dependencies]
 actionlint = ">=1.7.7,<2"
 basedpyright = ">=1.31.4,<2"
+cargo-deny = ">=0.18.3,<0.19"
 dprint = ">=0.49.1,<0.51"
 go-shfmt = ">=3.11.0,<4"
 lefthook = ">=1.11.14,<2"
@@ -135,6 +136,7 @@ typos = ">=1.29.10,<2"
 [feature.lint.tasks]
 actionlint = { cmd = "actionlint", env = { SHELLCHECK_OPTS = "-e SC2086" } }
 cargo-clippy = "cargo clippy --all-targets --workspace -- -D warnings"
+cargo-deny = "cargo deny --workspace check --deny warnings"
 cargo-fmt = "cargo fmt --all"
 check-openssl = "python tests/scripts/check-openssl.py"
 dprint-check = { cmd = "dprint check --log-level=silent", description = "Check formatting with dprint" }
