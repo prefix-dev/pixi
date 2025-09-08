@@ -1,0 +1,11 @@
+[package]
+name = "cpp_math"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "pixi-build-cmake", version = "==0.3.2" } # (5)!
+
+[package.host-dependencies]
+cmake = "3.20.*"
+nanobind = "2.4.*"
+python = "*"
