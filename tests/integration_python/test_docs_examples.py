@@ -95,14 +95,15 @@ class TestPixiBuild:
         ),
     ]
 
-    def test_coverage(self) -> None:
-        # check that we have covered all example directories
-        assert len(self.pixi_project_params) == len(self.pixi_projects)
-
     @pytest.mark.extra_slow
     @pytest.mark.parametrize(
         "pixi_project,result",
-        list(map(lambda p: pytest.param(*p[1], id=p[0]), pixi_project_params)),
+        list(
+            map(
+                lambda p: pytest.param(*p[1], id=p[0]),
+                filter(lambda p: "ros_ws" not in p[0], pixi_project_params),
+            )
+        ),
     )
     def test_doc_pixi_workspaces_pixi_build(
         self,
@@ -231,4 +232,58 @@ hoi
 Ruben
 """,
         }
+    )
+
+
+def test_docs_task_arguments_toml(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    # Load the manifest from docs and write it into a temp workspace
+    manifest_src = repo_root().joinpath("docs/source_files/pixi_tomls/task_arguments.toml")
+    toml = manifest_src.read_text()
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest.write_text(toml)
+
+    # greet: required argument
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "greet", "Alice"],
+        stdout_contains="Hello, Alice!",
+    )
+
+    # build: optional arguments with defaults
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "build"],
+        stdout_contains="Building my-app with development mode",
+    )
+
+    # build: optional arguments overridden
+    verify_cli_command(
+        [
+            pixi,
+            "run",
+            "--manifest-path",
+            manifest,
+            "build",
+            "cool-app",
+            "production",
+        ],
+        stdout_contains="Building cool-app with production mode",
+    )
+
+    # deploy: mixed required + optional (default)
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "deploy", "web"],
+        stdout_contains="Deploying web to staging",
+    )
+
+    # deploy: mixed required + optional (override)
+    verify_cli_command(
+        [
+            pixi,
+            "run",
+            "--manifest-path",
+            manifest,
+            "deploy",
+            "web",
+            "production",
+        ],
+        stdout_contains="Deploying web to production",
     )

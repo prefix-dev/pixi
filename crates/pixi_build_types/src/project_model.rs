@@ -21,13 +21,12 @@
 use std::{convert::Infallible, fmt::Display, hash::Hash, path::PathBuf, str::FromStr};
 
 use ordermap::OrderMap;
+use pixi_stable_hash::{IsDefault, StableHashBuilder};
 use rattler_conda_types::{BuildNumberSpec, StringMatcher, Version, VersionSpec};
 use rattler_digest::{Md5, Md5Hash, Sha256, Sha256Hash, serde::SerializableHash};
 use serde::{Deserialize, Serialize};
 use serde_with::{DeserializeFromStr, DisplayFromStr, SerializeDisplay, serde_as};
 use url::Url;
-
-use pixi_stable_hash::{IsDefault, StableHashBuilder};
 
 /// Enum containing all versions of the project model.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -106,6 +105,14 @@ pub struct ProjectModelV1 {
     /// The target of the project, this may contain
     /// platform specific configurations.
     pub targets: Option<TargetsV1>,
+}
+
+impl IsDefault for ProjectModelV1 {
+    type Item = Self;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        Some(self)
+    }
 }
 
 impl From<ProjectModelV1> for VersionedProjectModel {
