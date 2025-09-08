@@ -92,7 +92,7 @@ impl BackendSourceBuildReporter for SyncReporter {
         mut backend_output_stream: Box<dyn Stream<Item = String> + Unpin + Send>,
     ) {
         // Enable streaming of the logs from the backend
-        let print_backend_output = tracing::event_enabled!(tracing::Level::INFO);
+        let print_backend_output = tracing::event_enabled!(tracing::Level::WARN);
         // Stream the progress of the output to the screen.
         let progress_bar = self.multi_progress.clone();
 

@@ -1,0 +1,6 @@
+package:
+  name: pixi-build-api-version
+  version: 0
+
+build:
+  noarch: generic

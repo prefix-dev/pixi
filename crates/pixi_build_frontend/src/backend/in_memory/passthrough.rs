@@ -13,7 +13,7 @@ use pixi_build_types::{
         initialize::InitializeParams,
     },
 };
-use rattler_conda_types::{Platform, Version, package::IndexJson};
+use rattler_conda_types::{PackageName, Platform, Version, package::IndexJson};
 use serde::Deserialize;
 
 use crate::{
@@ -64,7 +64,19 @@ impl InMemoryBackend for PassthroughBackend {
         Ok(CondaOutputsResult {
             outputs: vec![CondaOutput {
                 metadata: CondaOutputMetadata {
-                    name: self.project_model.name.parse().unwrap(),
+                    name: self
+                        .project_model
+                        .name
+                        .as_ref()
+                        .map(|name| PackageName::try_from(name.as_str()).unwrap())
+                        .unwrap_or_else(|| {
+                            self.index_json
+                                .as_ref()
+                                .map(|j| j.name.clone())
+                                .unwrap_or_else(|| {
+                                    PackageName::try_from("pixi-package_name").unwrap()
+                                })
+                        }),
                     version: self
                         .project_model
                         .version

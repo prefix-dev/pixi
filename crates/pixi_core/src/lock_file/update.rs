@@ -42,14 +42,14 @@ use tracing::Instrument;
 use uv_normalize::ExtraName;
 
 use super::{
-    CondaPrefixUpdater, PixiRecordsByName, PypiRecordsByName, UvResolutionContext,
+    CondaPrefixUpdater, InstallSubset, PixiRecordsByName, PypiRecordsByName, UvResolutionContext,
     outdated::OutdatedEnvironments, utils::IoConcurrencyLimit,
 };
 use crate::{
     Workspace,
     activation::CurrentEnvVarBehavior,
     environment::{
-        CondaPrefixUpdated, EnvironmentFile, LockFileUsage, LockedEnvironmentHash,
+        CondaPrefixUpdated, EnvironmentFile, InstallFilter, LockFileUsage, LockedEnvironmentHash,
         PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PythonStatus,
         read_environment_file, write_environment_file,
     },
@@ -328,7 +328,6 @@ impl<'p> LockFileDerivedData<'p> {
     fn locked_environment_hash(
         &self,
         environment: &Environment<'p>,
-        skipped: &[String],
     ) -> miette::Result<LockedEnvironmentHash> {
         let locked_environment = self
             .lock_file
@@ -337,7 +336,6 @@ impl<'p> LockFileDerivedData<'p> {
         Ok(LockedEnvironmentHash::from_environment(
             locked_environment,
             environment.best_platform(),
-            skipped,
         ))
     }
 
@@ -347,11 +345,11 @@ impl<'p> LockFileDerivedData<'p> {
         environment: &Environment<'p>,
         update_mode: UpdateMode,
         reinstall_packages: &ReinstallPackages,
-        skipped: &[String],
+        filter: &InstallFilter,
     ) -> miette::Result<Prefix> {
         // Check if the prefix is already up-to-date by validating the hash with the
         // environment file
-        let hash = self.locked_environment_hash(environment, skipped)?;
+        let hash = self.locked_environment_hash(environment)?;
         if update_mode == UpdateMode::QuickValidate {
             if let Some(prefix) = self.cached_prefix(environment, &hash) {
                 return prefix;
@@ -360,8 +358,16 @@ impl<'p> LockFileDerivedData<'p> {
 
         // Get the up-to-date prefix
         let prefix = self
-            .update_prefix(environment, reinstall_packages, skipped)
+            .update_prefix(environment, reinstall_packages, filter)
             .await?;
+
+        // We write an invalid hash when filtering, as we will need to do a full
+        // revalidation of the environment anyways
+        let hash = if filter.filter_active() {
+            LockedEnvironmentHash::invalid()
+        } else {
+            hash
+        };
 
         // Save an environment file to the environment directory after the update.
         // Avoiding writing the cache away before the update is done.
@@ -431,7 +437,7 @@ impl<'p> LockFileDerivedData<'p> {
         &self,
         environment: &Environment<'p>,
         reinstall_packages: &ReinstallPackages,
-        skipped: &[String],
+        filter: &InstallFilter,
     ) -> miette::Result<Prefix> {
         let prefix_once_cell = self
             .updated_pypi_prefixes
@@ -456,13 +462,25 @@ impl<'p> LockFileDerivedData<'p> {
 
                 let platform = environment.best_platform();
                 let locked_env = self.locked_env(environment)?;
-                let packages =
-                    Self::filter_skipped_packages(locked_env.packages(platform), skipped);
+                let subset = InstallSubset::new(
+                    &filter.skip_with_deps,
+                    &filter.skip_direct,
+                    &filter.target_packages,
+                );
+                let result = subset.filter(locked_env.packages(platform))?;
+                let packages = result.install;
+                let ignored = result.ignore;
 
                 // Separate the packages into conda and pypi packages
                 let (conda_packages, pypi_packages) = packages
                     .into_iter()
                     .partition::<Vec<_>, _>(|p| p.as_conda().is_some());
+
+                let (ignored_conda, ignored_pypi): (HashSet<_>, HashSet<_>) =
+                    ignored.into_iter().partition_map(|p| match p {
+                        LockedPackageRef::Conda(data) => Either::Left(data.record().name.clone()),
+                        LockedPackageRef::Pypi(data, _) => Either::Right(data.name.clone()),
+                    });
 
                 let pixi_records = locked_packages_to_pixi_records(conda_packages)?;
 
@@ -487,7 +505,7 @@ impl<'p> LockFileDerivedData<'p> {
 
                 // Get the prefix with the conda packages installed.
                 let (prefix, python_status) = self
-                    .conda_prefix(environment, conda_reinstall_packages, skipped)
+                    .conda_prefix(environment, conda_reinstall_packages, Some(ignored_conda))
                     .await?;
 
                 // No `uv` support for WASM right now
@@ -572,7 +590,14 @@ impl<'p> LockFileDerivedData<'p> {
                         environment_variables: env_variables,
                     };
 
+                    // Ignored pypi records
+                    let names = ignored_pypi
+                        .iter()
+                        .map(to_uv_normalize)
+                        .collect::<Result<Vec<_>, _>>()
+                        .into_diagnostic()?;
                     PyPIEnvironmentUpdater::new(config, build_config, context_config)
+                        .with_ignored_extraneous(names)
                         .update(&pixi_records, &pypi_records, &python_status)
                         .await
                 }
@@ -604,34 +629,11 @@ impl<'p> LockFileDerivedData<'p> {
             .ok_or_else(|| UpdateError::LockFileMissingEnv(environment.name().clone()))
     }
 
-    /// Filters out packages that are in the `skipped` list.
-    /// so it this will return the packages that should *not* be skipped
-    pub fn filter_skipped_packages<'lock>(
-        packages: Option<impl IntoIterator<Item = LockedPackageRef<'lock>> + 'lock>,
-        skipped: &[String],
-    ) -> Vec<LockedPackageRef<'lock>> {
-        // No packages to skip
-        let Some(packages) = packages else {
-            return Vec::new();
-        };
-
-        // Skip list is empty
-        if skipped.is_empty() {
-            return packages.into_iter().collect();
-        }
-
-        // Otherwise, lets filter out
-        packages
-            .into_iter()
-            .filter(|package| !skipped.contains(&package.name().to_string()))
-            .collect()
-    }
-
     async fn conda_prefix(
         &self,
         environment: &Environment<'p>,
         reinstall_packages: Option<HashSet<PackageName>>,
-        skipped: &[String],
+        ignore_packages: Option<HashSet<PackageName>>,
     ) -> miette::Result<(Prefix, PythonStatus)> {
         // If we previously updated this environment, early out.
         let prefix_once_cell = self
@@ -659,8 +661,12 @@ impl<'p> LockFileDerivedData<'p> {
 
                 // Get the locked environment from the lock-file.
                 let locked_env = self.locked_env(environment)?;
-                let packages =
-                    Self::filter_skipped_packages(locked_env.packages(platform), skipped);
+                let packages = locked_env.packages(platform);
+                let packages = if let Some(iter) = packages {
+                    iter.collect_vec()
+                } else {
+                    Vec::new()
+                };
                 let records = locked_packages_to_pixi_records(packages)?;
 
                 // Update the conda prefix
@@ -669,7 +675,7 @@ impl<'p> LockFileDerivedData<'p> {
                     python_status,
                     ..
                 } = conda_prefix_updater
-                    .update(records, reinstall_packages)
+                    .update(records, reinstall_packages, ignore_packages)
                     .await?;
 
                 Ok((prefix.clone(), *python_status.clone()))
@@ -677,36 +683,47 @@ impl<'p> LockFileDerivedData<'p> {
             .await
             .map(|(prefix, python_status)| (prefix.clone(), python_status.clone()))
     }
+}
 
-    /// Returns a list of matching pypi or conda package names in the lock file
-    /// that are also present in the `skipped` list.
-    pub fn get_skipped_package_names(
-        &self,
-        environment: &Environment<'p>,
-        skipped: &[String],
-    ) -> miette::Result<Vec<String>> {
-        let platform = environment.best_platform();
-        let locked_env = self.locked_env(environment)?;
+/// The result of applying an InstallFilter over the lockfile for a given
+/// environment, expressed as just package names.
+#[derive(Default)]
+pub struct PackageFilterNames {
+    pub retained: Vec<String>,
+    pub ignored: Vec<String>,
+}
 
-        // Get all package names
-        let all_package_names: HashSet<String> = locked_env
-            .packages(platform)
+impl PackageFilterNames {
+    pub fn new(
+        filter: &InstallFilter,
+        environment: rattler_lock::Environment<'_>,
+        platform: Platform,
+    ) -> Option<Self> {
+        // Determine kept/ignored packages using the full install filter
+        let subset = InstallSubset::new(
+            &filter.skip_with_deps,
+            &filter.skip_direct,
+            &filter.target_packages,
+        );
+        let filtered = subset.filter(environment.packages(platform)).ok()?;
+
+        // Map to names, dedupe and sort for stable output.
+        let retained = filtered
+            .install
             .into_iter()
-            .flat_map(|p| p.map(|p| p.name().to_string()))
+            .map(|p| p.name().to_string())
+            .unique()
+            .sorted()
+            .collect();
+        let ignored = filtered
+            .ignore
+            .into_iter()
+            .map(|p| p.name().to_string())
+            .unique()
+            .sorted()
             .collect();
 
-        // Get kept package names
-        let kept_package_names: HashSet<String> =
-            Self::filter_skipped_packages(locked_env.packages(platform), skipped)
-                .into_iter()
-                .map(|p| p.name().to_string())
-                .collect();
-
-        Ok(all_package_names
-            .difference(&kept_package_names)
-            .cloned()
-            .sorted()
-            .collect())
+        Some(Self { retained, ignored })
     }
 }
 
@@ -1414,7 +1431,8 @@ impl<'p> UpdateContext<'p> {
                 .get_latest_group_repodata_records(&group, environment.best_platform())
                 .ok_or_else(|| make_unsupported_pypi_platform_error(environment, false));
 
-            // Creates an object to initiate an update at a later point. Make sure to only create a single entry if we are solving for multiple platforms.
+            // Creates an object to initiate an update at a later point. Make sure to only
+            // create a single entry if we are solving for multiple platforms.
             let conda_prefix_updater =
                 match pypi_conda_prefix_updaters.entry(environment.name().clone()) {
                     Entry::Vacant(entry) => {

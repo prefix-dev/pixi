@@ -184,6 +184,9 @@ class Workspace(StrictBaseModel):
         description="The required version spec for pixi itself to resolve and build the project.",
         examples=[">=0.40"],
     )
+    target: dict[TargetName, WorkspaceTarget] | None = Field(
+        None, description="The workspace targets"
+    )
 
 
 ########################
@@ -478,6 +481,14 @@ class Activation(StrictBaseModel):
 # Target section #
 ##################
 TargetName = NonEmptyStr
+
+
+class WorkspaceTarget(StrictBaseModel):
+    """Target-specific configuration for a workspace"""
+
+    build_variants: dict[NonEmptyStr, list[str]] | None = Field(
+        None, description="The build variants for this workspace target"
+    )
 
 
 class Target(StrictBaseModel):

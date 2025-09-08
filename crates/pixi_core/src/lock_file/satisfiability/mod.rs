@@ -1005,6 +1005,24 @@ pub(crate) async fn verify_package_platform_satisfiability(
         return Err(Box::new(PlatformUnsat::TooManyCondaPackages(Vec::new())));
     }
 
+    // retrieve dependency-overrides
+    // map it to (name => requirement) for later matching
+    let dependency_overrides = environment
+        .pypi_options()
+        .dependency_overrides
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(name, req)| -> Result<_, Box<PlatformUnsat>> {
+            let uv_req = as_uv_req(&req, name.as_source(), project_root).map_err(|e| {
+                Box::new(PlatformUnsat::AsPep508Error(
+                    name.as_normalized().clone(),
+                    e,
+                ))
+            })?;
+            Ok((uv_req.name.clone(), uv_req))
+        })
+        .collect::<Result<indexmap::IndexMap<_, _>, _>>()?;
+
     // Transform from PyPiPackage name into UV Requirement type
     let pypi_requirements = environment
         .pypi_dependencies(Some(platform))
@@ -1124,6 +1142,9 @@ pub(crate) async fn verify_package_platform_satisfiability(
                                         ParseChannelError::InvalidPath(p).into()
                                     }
                                     SpecConversionError::InvalidChannel(_name, p) => p.into(),
+                                    SpecConversionError::MissingName => {
+                                        ParseMatchSpecError::MissingPackageName
+                                    }
                                 };
                                 return Err(Box::new(PlatformUnsat::FailedToParseMatchSpec(
                                     name.as_source().to_string(),
@@ -1217,6 +1238,13 @@ pub(crate) async fn verify_package_platform_satisfiability(
                     {
                         Ok(Some(idx)) => {
                             let record = &locked_pypi_environment.records[idx];
+
+                            // use the overridden requirements if specified
+                            let requirement = dependency_overrides
+                                .get(&requirement.name)
+                                .cloned()
+                                .unwrap_or(requirement);
+
                             if requirement.is_editable() {
                                 if let Err(err) =
                                     pypi_satifisfies_editable(&requirement, &record.0, project_root)
@@ -1926,7 +1954,6 @@ mod tests {
 
     #[rstest]
     #[tokio::test]
-    #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
     async fn test_example_satisfiability(
         #[files("../../examples/**/p*.toml")] manifest_path: PathBuf,
     ) {

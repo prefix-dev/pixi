@@ -1,0 +1,22 @@
+[package]
+authors.workspace = true
+description = "Utilities for building stable hash implementations across pixi crates"
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi_stable_hash"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]
+ordermap = { workspace = true }
+
+# Optional integrations
+rattler_conda_types = { workspace = true, optional = true }
+rattler_digest = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+url = { workspace = true, optional = true }
+
+[dev-dependencies]
+xxhash-rust = { workspace = true, features = ["xxh3"] }

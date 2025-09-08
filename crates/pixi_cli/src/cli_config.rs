@@ -120,12 +120,7 @@ impl LockFileUpdateConfig {
             ));
         }
 
-        let usage: LockFileUsage = self.lock_file_usage.clone().into();
-        if self.no_lockfile_update {
-            Ok(LockFileUsage::Frozen)
-        } else {
-            Ok(usage)
-        }
+        Ok(self.lock_file_usage.to_usage())
     }
 }
 
@@ -159,7 +154,7 @@ pub struct LockAndInstallConfig {
     pub lock_file_update_config: LockFileUpdateConfig,
 
     /// Shorthand for the combination of --no-install and --frozen.
-    #[arg(long, help_heading = consts::CLAP_UPDATE_OPTIONS, conflicts_with_all = ["locked"])]
+    #[arg(long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub as_is: bool,
 }
 

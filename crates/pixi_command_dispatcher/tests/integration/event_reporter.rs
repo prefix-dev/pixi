@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 use futures::{Stream, StreamExt};
 use pixi_command_dispatcher::{
@@ -146,7 +149,7 @@ pub enum Event {
 }
 
 pub struct EventReporter {
-    events: Arc<Mutex<Vec<Event>>>,
+    events: EventStore,
     next_conda_solve_id: usize,
     next_pixi_solve_id: usize,
     next_pixi_install_id: usize,
@@ -155,9 +158,67 @@ pub struct EventReporter {
     next_instantiate_tool_env_id: usize,
 }
 
+#[derive(Default, Clone)]
+pub struct EventStore(pub(crate) Arc<Mutex<Vec<Event>>>);
+
+impl EventStore {
+    /// Push a new event to the store.
+    pub fn push(&self, event: Event) {
+        self.0.lock().unwrap().push(event);
+    }
+
+    /// Wait for a certain condition to hold.
+    pub async fn wait_until<F>(
+        &self,
+        mut condition: F,
+        timeout: Duration,
+    ) -> Result<(), tokio::time::error::Elapsed>
+    where
+        F: FnMut(&[Event]) -> bool,
+    {
+        tokio::time::timeout(timeout, async {
+            loop {
+                {
+                    let events = self.0.lock().unwrap();
+                    if condition(&events) {
+                        break;
+                    }
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+    }
+
+    /// Wait until the store contains an event that matches the condition.
+    pub async fn wait_until_matches<F>(
+        &self,
+        mut condition: F,
+        timeout: Duration,
+    ) -> Result<(), tokio::time::error::Elapsed>
+    where
+        F: FnMut(&Event) -> bool,
+    {
+        self.wait_until(move |events| events.iter().any(&mut condition), timeout)
+            .await
+    }
+
+    /// Returns true if the store contains an event that matches the condition.
+    pub fn contains(&self, condition: impl FnMut(&Event) -> bool) -> bool {
+        let events = self.0.lock().unwrap();
+        events.iter().any(condition)
+    }
+
+    /// Takes all events from the store, leaving it empty.
+    pub fn take(&self) -> Vec<Event> {
+        let mut events = self.0.lock().unwrap();
+        std::mem::take(&mut *events)
+    }
+}
+
 impl EventReporter {
-    pub fn new() -> (Self, Arc<Mutex<Vec<Event>>>) {
-        let events = Arc::new(Mutex::new(Vec::new()));
+    pub fn new() -> (Self, EventStore) {
+        let events = EventStore::default();
         (
             Self {
                 events: events.clone(),
@@ -188,20 +249,20 @@ impl CondaSolveReporter for EventReporter {
             context,
         };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
-        self.events.lock().unwrap().push(event);
+        self.events.push(event);
         next_id
     }
 
     fn on_start(&mut self, solve_id: CondaSolveId) {
         let event = Event::CondaSolveStarted { id: solve_id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
-        self.events.lock().unwrap().push(event);
+        self.events.push(event);
     }
 
     fn on_finished(&mut self, solve_id: CondaSolveId) {
         let event = Event::CondaSolveFinished { id: solve_id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
-        self.events.lock().unwrap().push(event);
+        self.events.push(event);
     }
 }
 
@@ -220,20 +281,20 @@ impl PixiSolveReporter for EventReporter {
             context,
         };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
-        self.events.lock().unwrap().push(event);
+        self.events.push(event);
         next_id
     }
 
     fn on_start(&mut self, solve_id: PixiSolveId) {
         let event = Event::PixiSolveStarted { id: solve_id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
-        self.events.lock().unwrap().push(event);
+        self.events.push(event);
     }
 
     fn on_finished(&mut self, solve_id: PixiSolveId) {
         let event = Event::PixiSolveFinished { id: solve_id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
-        self.events.lock().unwrap().push(event);
+        self.events.push(event);
     }
 }
 
@@ -252,20 +313,20 @@ impl PixiInstallReporter for EventReporter {
             context,
         };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
-        self.events.lock().unwrap().push(event);
+        self.events.push(event);
         next_id
     }
 
     fn on_start(&mut self, solve_id: PixiInstallId) {
         let event = Event::PixiInstallStarted { id: solve_id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
-        self.events.lock().unwrap().push(event);
+        self.events.push(event);
     }
 
     fn on_finished(&mut self, solve_id: PixiInstallId) {
         let event = Event::PixiInstallFinished { id: solve_id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
-        self.events.lock().unwrap().push(event);
+        self.events.push(event);
     }
 }
 
@@ -284,20 +345,20 @@ impl GitCheckoutReporter for EventReporter {
             context,
         };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
-        self.events.lock().unwrap().push(event);
+        self.events.push(event);
         next_id
     }
 
     fn on_start(&mut self, checkout_id: GitCheckoutId) {
         let event = Event::GitCheckoutStarted { id: checkout_id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
-        self.events.lock().unwrap().push(event);
+        self.events.push(event);
     }
 
     fn on_finished(&mut self, checkout_id: GitCheckoutId) {
         let event = Event::GitCheckoutFinished { id: checkout_id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
-        self.events.lock().unwrap().push(event);
+        self.events.push(event);
     }
 }
 
@@ -316,20 +377,20 @@ impl BuildBackendMetadataReporter for EventReporter {
             context,
         };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
-        self.events.lock().unwrap().push(event);
+        self.events.push(event);
         next_id
     }
 
     fn on_started(&mut self, id: BuildBackendMetadataId) {
         let event = Event::BuildBackendMetadataStarted { id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
-        self.events.lock().unwrap().push(event);
+        self.events.push(event);
     }
 
     fn on_finished(&mut self, id: BuildBackendMetadataId) {
         let event = Event::BuildBackendMetadataFinished { id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
-        self.events.lock().unwrap().push(event);
+        self.events.push(event);
     }
 }
 
@@ -348,20 +409,20 @@ impl SourceMetadataReporter for EventReporter {
             context,
         };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
-        self.events.lock().unwrap().push(event);
+        self.events.push(event);
         next_id
     }
 
     fn on_started(&mut self, id: SourceMetadataId) {
         let event = Event::SourceMetadataStarted { id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
-        self.events.lock().unwrap().push(event);
+        self.events.push(event);
     }
 
     fn on_finished(&mut self, id: SourceMetadataId) {
         let event = Event::SourceMetadataFinished { id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
-        self.events.lock().unwrap().push(event);
+        self.events.push(event);
     }
 }
 
@@ -380,20 +441,20 @@ impl InstantiateToolEnvironmentReporter for EventReporter {
             context,
         };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
-        self.events.lock().unwrap().push(event);
+        self.events.push(event);
         next_id
     }
 
     fn on_started(&mut self, id: InstantiateToolEnvId) {
         let event = Event::InstantiateToolEnvStarted { id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
-        self.events.lock().unwrap().push(event);
+        self.events.push(event);
     }
 
     fn on_finished(&mut self, id: InstantiateToolEnvId) {
         let event = Event::InstantiateToolEnvFinished { id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
-        self.events.lock().unwrap().push(event);
+        self.events.push(event);
     }
 }
 
@@ -412,20 +473,20 @@ impl SourceBuildReporter for EventReporter {
             context,
         };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
-        self.events.lock().unwrap().push(event);
+        self.events.push(event);
         next_id
     }
 
     fn on_started(&mut self, id: SourceBuildId) {
         let event = Event::SourceBuildStarted { id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
-        self.events.lock().unwrap().push(event);
+        self.events.push(event);
     }
 
     fn on_finished(&mut self, id: SourceBuildId) {
         let event = Event::SourceBuildFinished { id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
-        self.events.lock().unwrap().push(event);
+        self.events.push(event);
     }
 }
 
@@ -444,7 +505,7 @@ impl BackendSourceBuildReporter for EventReporter {
             package: spec.package.clone(),
         };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
-        self.events.lock().unwrap().push(event);
+        self.events.push(event);
         next_id
     }
 
@@ -455,7 +516,7 @@ impl BackendSourceBuildReporter for EventReporter {
     ) {
         let event = Event::BackendSourceBuildStarted { id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
-        self.events.lock().unwrap().push(event);
+        self.events.push(event);
 
         tokio::spawn(async move {
             let mut output_stream = backend_output_stream;
@@ -468,7 +529,7 @@ impl BackendSourceBuildReporter for EventReporter {
     fn on_finished(&mut self, id: BackendSourceBuildId, _failed: bool) {
         let event = Event::BackendSourceBuildFinished { id };
         eprintln!("{}", serde_json::to_string_pretty(&event).unwrap());
-        self.events.lock().unwrap().push(event);
+        self.events.push(event);
     }
 }
 

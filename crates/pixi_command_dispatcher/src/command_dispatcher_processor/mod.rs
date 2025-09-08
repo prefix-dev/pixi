@@ -9,12 +9,6 @@ use std::{
     sync::Arc,
 };
 
-use futures::{StreamExt, future::LocalBoxFuture};
-use itertools::Itertools;
-use pixi_git::{GitError, resolver::RepositoryReference, source::Fetch};
-use pixi_record::PixiRecord;
-use tokio::sync::{mpsc, oneshot};
-
 use crate::{
     BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec,
     CommandDispatcherErrorResultExt, InstallPixiEnvironmentResult, Reporter,
@@ -34,6 +28,12 @@ use crate::{
     reporter,
     solve_conda::SolveCondaEnvironmentError,
 };
+use futures::{StreamExt, future::LocalBoxFuture};
+use itertools::Itertools;
+use pixi_git::{GitError, resolver::RepositoryReference, source::Fetch};
+use pixi_record::PixiRecord;
+use tokio::sync::{mpsc, oneshot};
+use tokio_util::sync::CancellationToken;
 
 mod backend_build_source;
 mod build_backend_metadata;
@@ -69,7 +69,11 @@ pub(crate) struct CommandDispatcherProcessor {
 
     /// A list of conda environments that are pending to be solved. These have
     /// not yet been queued for processing.
-    pending_conda_solves: VecDeque<(SolveCondaEnvironmentId, SolveCondaEnvironmentSpec)>,
+    pending_conda_solves: VecDeque<(
+        SolveCondaEnvironmentId,
+        SolveCondaEnvironmentSpec,
+        CancellationToken,
+    )>,
 
     /// Pixi environments that are currently being solved.
     solve_pixi_environments: slotmap::SlotMap<SolvePixiEnvironmentId, PendingPixiEnvironment>,
@@ -123,7 +127,11 @@ pub(crate) struct CommandDispatcherProcessor {
 
     /// Backend source builds that are currently being processed.
     backend_source_builds: slotmap::SlotMap<BackendSourceBuildId, PendingBackendSourceBuild>,
-    pending_backend_source_builds: VecDeque<(BackendSourceBuildId, BackendSourceBuildSpec)>,
+    pending_backend_source_builds: VecDeque<(
+        BackendSourceBuildId,
+        BackendSourceBuildSpec,
+        CancellationToken,
+    )>,
 
     /// Keeps track of all pending futures. We poll them manually instead of
     /// spawning them so they can be `!Send` and because they are dropped when
@@ -153,7 +161,10 @@ enum TaskResult {
         SourceMetadataId,
         Result<Arc<SourceMetadata>, CommandDispatcherError<SourceMetadataError>>,
     ),
-    GitCheckedOut(RepositoryReference, Result<Fetch, GitError>),
+    GitCheckedOut(
+        RepositoryReference,
+        Result<Fetch, CommandDispatcherError<GitError>>,
+    ),
     InstallPixiEnvironment(
         InstallPixiEnvironmentId,
         Result<InstallPixiEnvironmentResult, CommandDispatcherError<InstallPixiEnvironmentError>>,

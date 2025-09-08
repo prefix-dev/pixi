@@ -1,6 +1,7 @@
 use std::{collections::hash_map::Entry, sync::Arc};
 
 use futures::FutureExt;
+use tokio_util::sync::CancellationToken;
 
 use super::{CommandDispatcherProcessor, PendingDeduplicatingTask, TaskResult};
 use crate::{
@@ -76,7 +77,11 @@ impl CommandDispatcherProcessor {
                     reporter.on_started(reporter_id)
                 }
 
-                self.queue_build_backend_metadata_task(source_metadata_id, task.spec);
+                self.queue_build_backend_metadata_task(
+                    source_metadata_id,
+                    task.spec,
+                    task.cancellation_token,
+                );
             }
         }
     }
@@ -86,16 +91,20 @@ impl CommandDispatcherProcessor {
         &mut self,
         build_backend_metadata_id: BuildBackendMetadataId,
         spec: BuildBackendMetadataSpec,
+        cancellation_token: CancellationToken,
     ) {
         let dispatcher = self.create_task_command_dispatcher(
             CommandDispatcherContext::BuildBackendMetadata(build_backend_metadata_id),
         );
         self.pending_futures.push(
-            spec.request(dispatcher)
+            cancellation_token
+                .run_until_cancelled_owned(spec.request(dispatcher))
                 .map(move |result| {
                     TaskResult::BuildBackendMetadata(
                         build_backend_metadata_id,
-                        result.map(Arc::new),
+                        result.map_or(Err(CommandDispatcherError::Cancelled), |result| {
+                            result.map(Arc::new)
+                        }),
                     )
                 })
                 .boxed_local(),

@@ -1,4 +1,8 @@
-use std::{collections::HashMap, path::Path, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    path::Path,
+    sync::Arc,
+};
 
 use crate::environment::{ContinuePyPIPrefixUpdate, on_python_interpreter_change};
 use chrono::{DateTime, Utc};
@@ -39,6 +43,7 @@ use uv_distribution_types::{
 };
 use uv_install_wheel::LinkMode;
 use uv_installer::{Preparer, SitePackages, UninstallError};
+use uv_pep508::PackageName;
 use uv_python::{Interpreter, PythonEnvironment};
 use uv_resolver::{ExcludeNewer, FlatIndex};
 
@@ -101,6 +106,8 @@ pub struct PyPIEnvironmentUpdater<'a> {
     config: PyPIUpdateConfig<'a>,
     build_config: PyPIBuildConfig<'a>,
     context_config: PyPIContextConfig<'a>,
+    // Names that should never be marked as extraneous in PyPI planning
+    ignored_extraneous: HashSet<PackageName>,
 }
 
 type PyPIRecords = (PypiPackageData, PypiPackageEnvironmentData);
@@ -123,7 +130,19 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             config,
             build_config,
             context_config,
+            ignored_extraneous: Default::default(),
         }
+    }
+
+    /// Configure package names that should never be treated as extraneous
+    /// in the PyPI installation planning.
+    #[allow(dead_code)]
+    pub fn with_ignored_extraneous<I>(mut self, names: I) -> Self
+    where
+        I: IntoIterator<Item = PackageName>,
+    {
+        self.ignored_extraneous = names.into_iter().collect();
+        self
     }
 
     /// Update PyPI packages in the environment, handling all setup, planning, and execution
@@ -342,6 +361,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             self.context_config.uv_context.cache.clone(),
             self.config.lock_file_dir,
         )
+        .with_ignored_extraneous(self.ignored_extraneous.clone())
         .plan(
             &site_packages,
             CachedWheels::new(registry_index, built_wheel_index),

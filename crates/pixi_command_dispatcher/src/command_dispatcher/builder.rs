@@ -10,6 +10,7 @@ use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use reqwest_middleware::ClientWithMiddleware;
 
 use crate::build::source_metadata_cache::SourceMetadataCache;
+use crate::discover_backend_cache::DiscoveryCache;
 use crate::{
     CacheDirs, CommandDispatcher, Executor, Limits, Reporter,
     build::BuildCache,
@@ -174,6 +175,7 @@ impl CommandDispatcherBuilder {
             download_client,
             build_backend_overrides: self.build_backend_overrides,
             glob_hash_cache: GlobHashCache::default(),
+            discovery_cache: DiscoveryCache::default(),
             limits: ResolvedLimits::from(self.limits),
             package_cache,
             tool_platform,

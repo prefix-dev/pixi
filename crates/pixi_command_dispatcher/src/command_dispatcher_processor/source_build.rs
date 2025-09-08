@@ -1,6 +1,7 @@
 use std::collections::hash_map::Entry;
 
 use futures::FutureExt;
+use tokio_util::sync::CancellationToken;
 
 use super::{CommandDispatcherProcessor, PendingDeduplicatingTask, TaskResult};
 use crate::{
@@ -69,13 +70,18 @@ impl CommandDispatcherProcessor {
                     reporter.on_started(reporter_id)
                 }
 
-                self.queue_source_build_task(source_build_id, task.spec);
+                self.queue_source_build_task(source_build_id, task.spec, task.cancellation_token);
             }
         }
     }
 
     /// Queues a source build task to be executed.
-    fn queue_source_build_task(&mut self, source_build_id: SourceBuildId, spec: SourceBuildSpec) {
+    fn queue_source_build_task(
+        &mut self,
+        source_build_id: SourceBuildId,
+        spec: SourceBuildSpec,
+        cancellation_token: CancellationToken,
+    ) {
         let dispatcher = self
             .create_task_command_dispatcher(CommandDispatcherContext::SourceBuild(source_build_id));
 
@@ -87,8 +93,14 @@ impl CommandDispatcherProcessor {
             .and_then(|reporter| reporter.create_run_exports_reporter(reporter_context));
 
         self.pending_futures.push(
-            spec.build(dispatcher, run_exports_reporter)
-                .map(move |result| TaskResult::SourceBuild(source_build_id, result))
+            cancellation_token
+                .run_until_cancelled_owned(spec.build(dispatcher, run_exports_reporter))
+                .map(move |result| {
+                    TaskResult::SourceBuild(
+                        source_build_id,
+                        result.unwrap_or(Err(CommandDispatcherError::Cancelled)),
+                    )
+                })
                 .boxed_local(),
         );
     }

@@ -6,6 +6,7 @@ use harness::empty_wheel;
 use std::path::PathBuf;
 use std::str::FromStr;
 use url::Url;
+use uv_distribution_types::Name;
 
 mod harness;
 
@@ -284,6 +285,40 @@ fn test_installed_one_none_required() {
         )
         .expect("should install");
     assert_eq!(install_plan.extraneous.len(), 1);
+}
+
+/// Ignored packages should never be marked as extraneous; non-ignored are
+/// still removed when unneeded
+#[test]
+fn test_ignored_packages_not_extraneous() {
+    let site_packages = MockedSitePackages::new()
+        .add_registry("aiofiles", "0.6.0", InstalledDistOptions::default())
+        .add_registry("requests", "2.31.0", InstalledDistOptions::default());
+    let required = RequiredPackages::new();
+
+    // Build a planner that ignores `aiofiles` for extraneous detection; `requests`
+    // should be considered extraneous and be uninstalled
+    let plan = harness::install_planner()
+        .with_ignored_extraneous(vec![uv_pep508::PackageName::from_str("aiofiles").unwrap()]);
+
+    let required_dists = required.to_required_dists();
+    let install_plan = plan
+        .plan(
+            &site_packages,
+            NoCache,
+            &required_dists,
+            &uv_configuration::BuildOptions::default(),
+        )
+        .expect("should plan");
+
+    // `aiofiles` should not be marked as extraneous; but `requests` should
+    let names: Vec<String> = install_plan
+        .extraneous
+        .iter()
+        .map(|d| d.name().to_string())
+        .collect();
+    assert_eq!(names.len(), 1, "unexpected extraneous: {:?}", names);
+    assert!(names.contains(&"requests".to_string()));
 }
 
 /// When a package was previously installed from a registry, but we now require it from a local source

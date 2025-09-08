@@ -1,6 +1,7 @@
 [workspace]
 channels = ["conda-forge"]
 name = "task-arguments"
+platforms = ["linux-64", "osx-arm64", "win-64"]
 
 # --8<-- [start:project_tasks]
 # Task with required arguments
@@ -14,7 +15,7 @@ args = [
   { "arg" = "project", "default" = "my-app" },
   { "arg" = "mode", "default" = "development" },
 ]
-cmd = "echo Building {{ project }} in {{ mode }} mode"
+cmd = "echo Building {{ project }} with {{ mode }} mode"
 
 # Task with mixed required and optional arguments
 [tasks.deploy]

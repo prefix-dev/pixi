@@ -6,7 +6,7 @@ use rattler_conda_types::{Channel, ChannelConfig, ChannelUrl};
 use url::Url;
 
 /// Describes how a backend should be instantiated.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type", rename_all = "kebab-case"))]
 pub enum BackendSpec {
@@ -26,7 +26,7 @@ impl BackendSpec {
 }
 
 /// Describes a backend that uses JSON-RPC to communicate with an executable.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub struct JsonRpcBackendSpec {
@@ -66,7 +66,7 @@ impl JsonRpcBackendSpec {
 
 /// Describes a command that should be run by calling an executable in a certain
 /// environment.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type", rename_all = "kebab-case"))]
 pub enum CommandSpec {
@@ -89,7 +89,7 @@ impl CommandSpec {
 
 /// Describes a command that should be run by calling an executable on the
 /// system.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub struct SystemCommandSpec {
@@ -100,7 +100,7 @@ pub struct SystemCommandSpec {
 
 /// Describes a conda environment that should be set up in which the backend is
 /// run.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub struct EnvironmentSpec {

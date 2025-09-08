@@ -1,6 +1,6 @@
 package:
   name: pixi-editor
-  version: "0.1.3"
+  version: "2.0.0"
 
 requirements:
   build:

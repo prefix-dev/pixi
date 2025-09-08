@@ -4,7 +4,6 @@ mod channel_configuration;
 mod conda_package_metadata;
 pub mod procedures;
 mod project_model;
-mod stable_hash;
 
 use std::fmt::Display;
 use std::sync::LazyLock;
@@ -23,13 +22,17 @@ use rattler_conda_types::{
 };
 use serde::{Deserialize, Serialize};
 
+// Version 0: Initial version
+// Version 1: Added conda/outputs and conda/build_v1
+// Version 2: Name in project models can be `None`.
+
 /// The constraint for the pixi build api version package
 /// Adding this constraint when solving a pixi build backend environment ensures
 /// that a backend is selected that uses the same interface version as Pixi does
 pub static PIXI_BUILD_API_VERSION_NAME: LazyLock<PackageName> =
     LazyLock::new(|| PackageName::new_unchecked("pixi-build-api-version"));
 pub const PIXI_BUILD_API_VERSION_LOWER: u64 = 0;
-pub const PIXI_BUILD_API_VERSION_CURRENT: u64 = 1;
+pub const PIXI_BUILD_API_VERSION_CURRENT: u64 = 2;
 pub const PIXI_BUILD_API_VERSION_UPPER: u64 = PIXI_BUILD_API_VERSION_CURRENT + 1;
 pub static PIXI_BUILD_API_VERSION_SPEC: LazyLock<VersionSpec> = LazyLock::new(|| {
     VersionSpec::Group(
@@ -85,8 +88,16 @@ impl PixiBuildApiVersion {
                 provides_conda_build_v1: Some(true),
                 ..Self(0).expected_backend_capabilities()
             },
+            2 => BackendCapabilities {
+                ..Self(1).expected_backend_capabilities()
+            },
             _ => BackendCapabilities::default(),
         }
+    }
+
+    /// Returns true if this version of the protocol supports the name field in the project model to be `None`.
+    pub fn supports_name_none(&self) -> bool {
+        self.0 >= 2
     }
 }
 
