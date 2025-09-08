@@ -274,11 +274,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::load_global();
 
     if is_init_dir_equal_to_pixi_home_parent(&dir) {
+        let help_msg = format!(
+            "Please follow the getting started guide at https://pixi.sh/v{}/init_getting_started/ or run the following command to create a new workspace in a subdirectory:\n\n  {}\n",
+            consts::PIXI_VERSION,
+            console::style("pixi init my_workspace").bold(),
+        );
         miette::bail!(
-            "You cannot create a workspace in the parent of the pixi home directory.\n\
-            Please see https://pixi.sh/pixi/v{}/reference/environment_variables/ \
-            for more information about the pixi home directory.",
-            consts::PIXI_VERSION
+            help = help_msg,
+            "You cannot do a nameless initialization in the parent directory of your PIXI_HOME.",
         );
     }
 
