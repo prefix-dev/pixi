@@ -55,7 +55,9 @@ for further details on how to use the software.
 - [Building a C++ Package](https://prefix-dev.github.io/pixi/dev/build/cpp/index.md)
 - [Dependency Types](https://prefix-dev.github.io/pixi/dev/build/dependency_types/index.md)
 - [Getting Started](https://prefix-dev.github.io/pixi/dev/build/getting_started/index.md)
+- [Package Source](https://prefix-dev.github.io/pixi/dev/build/package_source/index.md)
 - [Building a Python Package](https://prefix-dev.github.io/pixi/dev/build/python/index.md)
+- [Building a ROS Package](https://prefix-dev.github.io/pixi/dev/build/ros/index.md)
 - [Variants](https://prefix-dev.github.io/pixi/dev/build/variants/index.md)
 - [Multiple Packages in Workspace](https://prefix-dev.github.io/pixi/dev/build/workspace/index.md)
 
