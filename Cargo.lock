@@ -4936,6 +4936,7 @@ dependencies = [
  "rattler",
  "rattler_conda_types",
  "rattler_digest",
+ "rattler_lock",
  "rattler_package_streaming",
  "rattler_repodata_gateway",
  "rattler_shell",
