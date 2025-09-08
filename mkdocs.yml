@@ -241,7 +241,8 @@ plugins:
 
         # Redirects for links from code to make sure we don't break them.
         # Using descriptive names that never existed, to avoid conflicts.
-        "init_getting_started.md": "first_project.md" # crates/pixi_cli/src/init.rs
+         # crates/pixi_cli/src/init.rs
+        "init_getting_started.md": "first_project.md"
 
   - search
   - social
