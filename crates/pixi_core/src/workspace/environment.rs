@@ -118,8 +118,10 @@ impl<'p> Environment<'p> {
 
     /// Returns the best platform for the current platform & environment.
     pub fn best_platform(&self) -> Platform {
-        let current = Platform::current();
+        self.best_platform_with_current(Platform::current())
+    }
 
+    fn best_platform_with_current(&self, current: Platform) -> Platform {
         // If the current platform is supported, return it.
         if self.platforms().contains(&current) {
             return current;
@@ -163,6 +165,24 @@ impl<'p> Environment<'p> {
                 }
             });
             return Platform::Win64;
+        }
+
+        // If the current platform is win-64 and the environment supports win-32,
+        // return win-32.
+        if current == Platform::Win64 && self.platforms().contains(&Platform::Win32) {
+            WARN_ONCE.call_once(|| {
+                let warn_folder = self.workspace.pixi_dir().join(consts::ONE_TIME_MESSAGES_DIR);
+                let emulation_warn = warn_folder.join("windows-32-emulation-warn");
+                if !emulation_warn.exists() {
+                    tracing::warn!(
+                        "win-64 is not supported by the pixi.toml, falling back to win-32 (emulation)"
+                    );
+                    fs_err::create_dir_all(warn_folder).and_then(|_| {
+                        fs_err::File::create(emulation_warn)
+                    }).ok();
+                }
+            });
+            return Platform::Win32;
         }
 
         if self.platforms().len() == 1 {
@@ -898,6 +918,26 @@ mod tests {
         assert!(
             env.validate_platform_support(Some(Platform::EmscriptenWasm32))
                 .is_ok()
+        );
+    }
+
+    #[test]
+    fn test_best_platform_win32_on_win64() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let manifest = Workspace::from_str(
+            &temp_dir.path().join("pixi.toml"),
+            r#"
+        [project]
+        name = "foobar"
+        channels = []
+        platforms = ["win-32"]
+        "#,
+        )
+        .unwrap();
+        let env = manifest.default_environment();
+        assert_eq!(
+            env.best_platform_with_current(Platform::Win64),
+            Platform::Win32
         );
     }
 }
