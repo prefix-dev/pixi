@@ -1,6 +1,7 @@
 use clap::CommandFactory;
 use is_executable::IsExecutable;
 use miette::{Context, IntoDiagnostic};
+use pixi_config::pixi_home;
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::path::PathBuf;
@@ -150,11 +151,26 @@ pub fn execute_external_command(args: Vec<String>) -> miette::Result<()> {
     }
 }
 
-/// Get directories to search for external commands (pixi extensions)
+/// Get directories to search for external commands by looking over PATH and pixi global directory
 fn search_directories() -> Option<Vec<PathBuf>> {
-    // Right now, we only search the PATH environment variable.
-    // In the future, we might want to pixi global directories.
-    env::var_os("PATH").map(|paths| env::split_paths(&paths).collect())
+    let mut directories = Vec::new();
+
+    // PATH directories
+    if let Some(path_dirs) = env::var_os("PATH") {
+        directories.extend(env::split_paths(&path_dirs));
+    }
+
+    // pixi global bin directory
+    if let Some(pixi_home_path) = pixi_home() {
+        let global_bin = pixi_home_path.join("bin");
+        directories.push(global_bin);
+    }
+
+    if directories.is_empty() {
+        None
+    } else {
+        Some(directories)
+    }
 }
 
 #[cfg(target_family = "unix")]
