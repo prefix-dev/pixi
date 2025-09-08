@@ -9,12 +9,6 @@ use std::{
     sync::Arc,
 };
 
-use futures::{StreamExt, future::LocalBoxFuture};
-use itertools::Itertools;
-use pixi_git::{GitError, resolver::RepositoryReference, source::Fetch};
-use pixi_record::PixiRecord;
-use tokio::sync::{mpsc, oneshot};
-
 use crate::{
     BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec,
     CommandDispatcherErrorResultExt, InstallPixiEnvironmentResult, Reporter,
@@ -34,6 +28,12 @@ use crate::{
     reporter,
     solve_conda::SolveCondaEnvironmentError,
 };
+use futures::{StreamExt, future::LocalBoxFuture};
+use itertools::Itertools;
+use pixi_git::{GitError, resolver::RepositoryReference, source::Fetch};
+use pixi_record::PixiRecord;
+use tokio::sync::{mpsc, oneshot};
+use tokio_util::sync::CancellationToken;
 
 mod backend_build_source;
 mod build_backend_metadata;
@@ -69,7 +69,11 @@ pub(crate) struct CommandDispatcherProcessor {
 
     /// A list of conda environments that are pending to be solved. These have
     /// not yet been queued for processing.
-    pending_conda_solves: VecDeque<(SolveCondaEnvironmentId, SolveCondaEnvironmentSpec)>,
+    pending_conda_solves: VecDeque<(
+        SolveCondaEnvironmentId,
+        SolveCondaEnvironmentSpec,
+        CancellationToken,
+    )>,
 
     /// Pixi environments that are currently being solved.
     solve_pixi_environments: slotmap::SlotMap<SolvePixiEnvironmentId, PendingPixiEnvironment>,
@@ -123,7 +127,11 @@ pub(crate) struct CommandDispatcherProcessor {
 
     /// Backend source builds that are currently being processed.
     backend_source_builds: slotmap::SlotMap<BackendSourceBuildId, PendingBackendSourceBuild>,
-    pending_backend_source_builds: VecDeque<(BackendSourceBuildId, BackendSourceBuildSpec)>,
+    pending_backend_source_builds: VecDeque<(
+        BackendSourceBuildId,
+        BackendSourceBuildSpec,
+        CancellationToken,
+    )>,
 
     /// Keeps track of all pending futures. We poll them manually instead of
     /// spawning them so they can be `!Send` and because they are dropped when
@@ -153,7 +161,10 @@ enum TaskResult {
         SourceMetadataId,
         Result<Arc<SourceMetadata>, CommandDispatcherError<SourceMetadataError>>,
     ),
-    GitCheckedOut(RepositoryReference, Result<Fetch, GitError>),
+    GitCheckedOut(
+        RepositoryReference,
+        Result<Fetch, CommandDispatcherError<GitError>>,
+    ),
     InstallPixiEnvironment(
         InstallPixiEnvironmentId,
         Result<InstallPixiEnvironmentResult, CommandDispatcherError<InstallPixiEnvironmentError>>,
@@ -435,106 +446,103 @@ impl CommandDispatcherProcessor {
     ) -> Option<reporter::ReporterContext> {
         let mut parent_context = Some(context);
         while let Some(context) = parent_context.take() {
-            parent_context =
-                match context {
-                    CommandDispatcherContext::SolveCondaEnvironment(id) => {
-                        return self.conda_solves.get(id).and_then(|e| {
-                            e.reporter_id.map(reporter::ReporterContext::SolveConda)
-                        });
+            parent_context = match context {
+                CommandDispatcherContext::SolveCondaEnvironment(id) => {
+                    return self.conda_solves[id]
+                        .reporter_id
+                        .map(reporter::ReporterContext::SolveConda);
+                }
+                CommandDispatcherContext::SolvePixiEnvironment(id) => {
+                    return self.solve_pixi_environments[id]
+                        .reporter_id
+                        .map(reporter::ReporterContext::SolvePixi);
+                }
+                CommandDispatcherContext::BuildBackendMetadata(id) => {
+                    if let Some(context) = self
+                        .build_backend_metadata_reporters
+                        .get(&id)
+                        .copied()
+                        .map(reporter::ReporterContext::BuildBackendMetadata)
+                    {
+                        return Some(context);
                     }
-                    CommandDispatcherContext::SolvePixiEnvironment(id) => {
-                        return self
-                            .solve_pixi_environments
-                            .get(id)
-                            .and_then(|e| e.reporter_id.map(reporter::ReporterContext::SolvePixi));
-                    }
-                    CommandDispatcherContext::BuildBackendMetadata(id) => {
-                        if let Some(context) = self
-                            .build_backend_metadata_reporters
-                            .get(&id)
-                            .copied()
-                            .map(reporter::ReporterContext::BuildBackendMetadata)
-                        {
-                            return Some(context);
-                        }
 
-                        self.build_backend_metadata
-                            .get(&id)
-                            .and_then(|pending| match pending {
-                                PendingDeduplicatingTask::Pending(_, context) => Some(*context),
-                                PendingDeduplicatingTask::Result(_, context) => Some(*context),
-                                PendingDeduplicatingTask::Errored => None,
-                            })?
+                    self.build_backend_metadata
+                        .get(&id)
+                        .and_then(|pending| match pending {
+                            PendingDeduplicatingTask::Pending(_, context) => Some(*context),
+                            PendingDeduplicatingTask::Result(_, context) => Some(*context),
+                            PendingDeduplicatingTask::Errored => None,
+                        })?
+                }
+                CommandDispatcherContext::SourceMetadata(id) => {
+                    if let Some(context) = self
+                        .source_metadata_reporters
+                        .get(&id)
+                        .copied()
+                        .map(reporter::ReporterContext::SourceMetadata)
+                    {
+                        return Some(context);
                     }
-                    CommandDispatcherContext::SourceMetadata(id) => {
-                        if let Some(context) = self
-                            .source_metadata_reporters
-                            .get(&id)
-                            .copied()
-                            .map(reporter::ReporterContext::SourceMetadata)
-                        {
-                            return Some(context);
-                        }
 
-                        self.source_metadata
-                            .get(&id)
-                            .and_then(|pending| match pending {
-                                PendingDeduplicatingTask::Pending(_, context) => Some(*context),
-                                PendingDeduplicatingTask::Result(_, context) => Some(*context),
-                                PendingDeduplicatingTask::Errored => None,
-                            })?
+                    self.source_metadata
+                        .get(&id)
+                        .and_then(|pending| match pending {
+                            PendingDeduplicatingTask::Pending(_, context) => Some(*context),
+                            PendingDeduplicatingTask::Result(_, context) => Some(*context),
+                            PendingDeduplicatingTask::Errored => None,
+                        })?
+                }
+                CommandDispatcherContext::InstallPixiEnvironment(id) => {
+                    return self.install_pixi_environment[id]
+                        .reporter_id
+                        .map(reporter::ReporterContext::InstallPixi);
+                }
+                CommandDispatcherContext::InstantiateToolEnv(id) => {
+                    if let Some(context) = self
+                        .instantiated_tool_envs_reporters
+                        .get(&id)
+                        .copied()
+                        .map(reporter::ReporterContext::InstantiateToolEnv)
+                    {
+                        return Some(context);
                     }
-                    CommandDispatcherContext::InstallPixiEnvironment(id) => {
-                        return self.install_pixi_environment.get(id).and_then(|e| {
-                            e.reporter_id.map(reporter::ReporterContext::InstallPixi)
-                        });
-                    }
-                    CommandDispatcherContext::InstantiateToolEnv(id) => {
-                        if let Some(context) = self
-                            .instantiated_tool_envs_reporters
-                            .get(&id)
-                            .copied()
-                            .map(reporter::ReporterContext::InstantiateToolEnv)
-                        {
-                            return Some(context);
-                        }
 
-                        self.instantiated_tool_envs
-                            .get(&id)
-                            .and_then(|pending| match pending {
-                                PendingDeduplicatingTask::Pending(_, context) => Some(*context),
-                                PendingDeduplicatingTask::Result(_, context) => Some(*context),
-                                PendingDeduplicatingTask::Errored => None,
-                            })?
+                    self.instantiated_tool_envs
+                        .get(&id)
+                        .and_then(|pending| match pending {
+                            PendingDeduplicatingTask::Pending(_, context) => Some(*context),
+                            PendingDeduplicatingTask::Result(_, context) => Some(*context),
+                            PendingDeduplicatingTask::Errored => None,
+                        })?
+                }
+                CommandDispatcherContext::SourceBuild(id) => {
+                    if let Some(context) = self
+                        .source_build_reporters
+                        .get(&id)
+                        .copied()
+                        .map(reporter::ReporterContext::SourceBuild)
+                    {
+                        return Some(context);
                     }
-                    CommandDispatcherContext::SourceBuild(id) => {
-                        if let Some(context) = self
-                            .source_build_reporters
-                            .get(&id)
-                            .copied()
-                            .map(reporter::ReporterContext::SourceBuild)
-                        {
-                            return Some(context);
-                        }
 
-                        self.source_build
-                            .get(&id)
-                            .and_then(|pending| match pending {
-                                PendingDeduplicatingTask::Pending(_, context) => Some(*context),
-                                PendingDeduplicatingTask::Result(_, context) => Some(*context),
-                                PendingDeduplicatingTask::Errored => None,
-                            })?
-                    }
-                    CommandDispatcherContext::BackendSourceBuild(id) => {
-                        return self.backend_source_builds.get(id).and_then(|e| {
-                            e.reporter_id
-                                .map(reporter::ReporterContext::BackendSourceBuild)
-                        });
-                    }
-                    CommandDispatcherContext::QuerySourceBuildCache(_id) => {
-                        return None;
-                    }
-                };
+                    self.source_build
+                        .get(&id)
+                        .and_then(|pending| match pending {
+                            PendingDeduplicatingTask::Pending(_, context) => Some(*context),
+                            PendingDeduplicatingTask::Result(_, context) => Some(*context),
+                            PendingDeduplicatingTask::Errored => None,
+                        })?
+                }
+                CommandDispatcherContext::BackendSourceBuild(id) => {
+                    return self.backend_source_builds[id]
+                        .reporter_id
+                        .map(reporter::ReporterContext::BackendSourceBuild);
+                }
+                CommandDispatcherContext::QuerySourceBuildCache(_id) => {
+                    return None;
+                }
+            };
         }
 
         None

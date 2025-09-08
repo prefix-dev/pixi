@@ -61,6 +61,7 @@ impl From<SourceRecord> for CondaPackageData {
                 .into_iter()
                 .map(|(k, v)| (k, v.into()))
                 .collect(),
+            package_build_source: None,
         })
     }
 }

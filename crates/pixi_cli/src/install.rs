@@ -1,3 +1,5 @@
+use std::fmt::Write;
+
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
@@ -5,9 +7,8 @@ use pixi_config::ConfigCli;
 use pixi_core::{
     UpdateLockFileOptions, WorkspaceLocator,
     environment::{InstallFilter, get_update_lock_file_and_prefixes},
-    lock_file::{ReinstallPackages, UpdateMode},
+    lock_file::{LockFileDerivedData, PackageFilterNames, ReinstallPackages, UpdateMode},
 };
-use std::fmt::Write;
 
 use crate::cli_config::WorkspaceConfig;
 
@@ -49,15 +50,20 @@ pub struct Args {
     #[arg(long, short, conflicts_with = "environment")]
     pub all: bool,
 
-    /// Skip installation of specific packages present in the lockfile. This uses a soft exclusion: the package will be skipped but its dependencies are installed.
+    /// Skip installation of specific packages present in the lockfile. This
+    /// uses a soft exclusion: the package will be skipped but its dependencies
+    /// are installed.
     #[arg(long)]
     pub skip: Option<Vec<String>>,
 
-    /// Skip a package and its entire dependency subtree. This performs a hard exclusion: the package and its dependencies are not installed unless reachable from another non-skipped root.
+    /// Skip a package and its entire dependency subtree. This performs a hard
+    /// exclusion: the package and its dependencies are not installed unless
+    /// reachable from another non-skipped root.
     #[arg(long)]
     pub skip_with_deps: Option<Vec<String>>,
 
-    /// Install and build only these package(s) and their dependencies. Can be passed multiple times.
+    /// Install and build only these package(s) and their dependencies. Can be
+    /// passed multiple times.
     #[arg(long)]
     pub only: Option<Vec<String>>,
 }
@@ -100,7 +106,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .target_packages(args.only.clone().unwrap_or_default());
 
     // Update the prefixes by installing all packages
-    let (lock_file, _) = get_update_lock_file_and_prefixes(
+    let (LockFileDerivedData { lock_file, .. }, _) = get_update_lock_file_and_prefixes(
         &environments,
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
@@ -113,11 +119,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     )
     .await?;
 
-    let installed_envs = environments
-        .iter()
-        .map(|env| env.name())
-        .collect::<Vec<_>>();
-
     // Message what's installed
     let mut message = console::style(console::Emoji("✔ ", "")).green().to_string();
 
@@ -125,21 +126,22 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         || args.skip_with_deps.is_some()
         || args.only.as_ref().is_some_and(|v| !v.is_empty());
 
-    if installed_envs.len() == 1 {
+    if let Ok(Some(environment)) = environments.iter().at_most_one() {
         write!(
             &mut message,
             "The {} environment has been installed",
-            installed_envs[0].fancy_display(),
+            environment.name().fancy_display(),
         )
         .unwrap();
 
         if skip_opts {
-            let names = lock_file.get_filtered_package_names(
-                environments
-                    .first()
-                    .expect("at least one environment should be available"),
-                &filter,
-            )?;
+            let platform = environment.best_platform();
+            let locked_env = lock_file
+                .environment(environment.name().as_str())
+                .expect("lock file is missing installed environment");
+
+            let names = PackageFilterNames::new(&filter, locked_env, platform).unwrap_or_default();
+
             let num_skipped = names.ignored.len();
             let num_retained = names.retained.len();
 
@@ -200,7 +202,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         write!(
             &mut message,
             "The following environments have been installed: {}",
-            installed_envs.iter().map(|n| n.fancy_display()).join(", "),
+            environments
+                .iter()
+                .format_with(", ", |e, f| f(&e.name().fancy_display())),
         )
         .unwrap();
     }

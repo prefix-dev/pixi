@@ -9,7 +9,7 @@ from typing import Generator, Optional, Sequence, Set, Tuple
 
 from rattler import Platform
 
-PIXI_VERSION = "0.54.0"
+PIXI_VERSION = "0.54.2"
 
 
 ALL_PLATFORMS = '["linux-64", "osx-64", "osx-arm64", "win-64", "linux-ppc64le", "linux-aarch64"]'

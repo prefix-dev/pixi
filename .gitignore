@@ -13,6 +13,9 @@ Thumbs.db
 .env.local
 .env.*.local
 
+# Agents
+AGENTS.md
+
 # Documentation and build artifacts
 site/
 .build
@@ -114,3 +117,4 @@ secrets.json
 # Generated files
 *_pb2.py
 *_pb2_grpc.py
+files.txt
