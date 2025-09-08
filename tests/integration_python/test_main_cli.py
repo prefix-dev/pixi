@@ -1722,3 +1722,19 @@ dependencies:
             f"to ensure comprehensive coverage.\n"
             f"If you get here you know all commands that *are* supported correctly listen to --frozen and --no-install flags."
         )
+
+
+def test_add_url_no_channel(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    verify_cli_command([pixi, "init", tmp_pixi_workspace])
+    verify_cli_command(
+        [pixi, "add", "https://repo.prefix.dev/bioconda::htslib"],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="pixi workspace channel add https://repo.prefix.dev/bioconda",
+    )
+    verify_cli_command(
+        [pixi, "workspace", "channel", "add", "https://repo.prefix.dev/bioconda"],
+    )
+    verify_cli_command(
+        [pixi, "add", "https://repo.prefix.dev/bioconda::htslib"],
+        stdout_contains="Added https://repo.prefix.dev/bioconda::htslib",
+    )
