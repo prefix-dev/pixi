@@ -461,22 +461,25 @@ impl TemplateString {
     }
 
     pub fn render(&self, args: Option<&ArgValues>) -> Result<String, TemplateStringError> {
-        let context = if let Some(ArgValues::TypedArgs(args)) = args {
+        // Only perform MiniJinja rendering when typed args are provided.
+        // For free-form args or no args, return the source verbatim to avoid
+        // interpreting arbitrary strings as templates.
+        if let Some(ArgValues::TypedArgs(args)) = args {
             let args_map: HashMap<&str, &str> = args
                 .iter()
                 .map(|arg| (arg.name.as_str(), arg.value.as_str()))
                 .collect();
-            minijinja::Value::from_serialize(&args_map)
-        } else {
-            minijinja::Value::default()
-        };
+            let context = minijinja::Value::from_serialize(&args_map);
 
-        JINJA_ENV
-            .render_str(&self.0, context)
-            .map_err(|e| TemplateStringError {
-                src: self.0.clone(),
-                err_span: e.range().unwrap_or_default().into(),
-            })
+            JINJA_ENV
+                .render_str(&self.0, context)
+                .map_err(|e| TemplateStringError {
+                    src: self.0.clone(),
+                    err_span: e.range().unwrap_or_default().into(),
+                })
+        } else {
+            Ok(self.0.clone())
+        }
     }
 
     pub fn source(&self) -> &str {
@@ -882,6 +885,8 @@ mod tests {
 
     use super::quote;
 
+    use super::{ArgValues, TemplateString, TypedArg};
+
     #[test]
     fn test_quote() {
         assert_eq!(quote("foobar"), "foobar");
@@ -911,5 +916,32 @@ mod tests {
         let task = Task::Alias(alias);
         let toml = toml_edit::Item::from(task);
         assert_snapshot!(toml.to_string(), @r###"[{ task = "depTask", args = ["foo", { bar = "baz" }] }]"###);
+    }
+
+    #[test]
+    fn test_template_string_no_render_without_typed_args() {
+        let t = TemplateString::from("echo {{ foo }}");
+        // No args -> should not render, return verbatim string
+        let rendered = t.render(None).expect("should not error without typed args");
+        assert_eq!(rendered, "echo {{ foo }}");
+
+        // Free-form args -> should not render
+        let rendered = t
+            .render(Some(&ArgValues::FreeFormArgs(vec!["bar".into()])))
+            .expect("should not error with free-form args");
+        assert_eq!(rendered, "echo {{ foo }}");
+    }
+
+    #[test]
+    fn test_template_string_renders_with_typed_args() {
+        let t = TemplateString::from("echo {{ foo }}");
+        let args = ArgValues::TypedArgs(vec![TypedArg {
+            name: "foo".into(),
+            value: "bar".into(),
+        }]);
+        let rendered = t
+            .render(Some(&args))
+            .expect("should render with typed args");
+        assert_eq!(rendered, "echo bar");
     }
 }
