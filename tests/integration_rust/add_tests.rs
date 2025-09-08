@@ -96,6 +96,10 @@ async fn add_with_channel() {
         .await
         .unwrap();
 
+    pixi.project_channel_add()
+        .with_channel("https://prefix.dev/conda-forge")
+        .await
+        .unwrap();
     pixi.add("https://prefix.dev/conda-forge::_r-mutex")
         .with_install(false)
         .with_frozen(true)

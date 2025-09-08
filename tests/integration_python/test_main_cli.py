@@ -1727,14 +1727,34 @@ dependencies:
 def test_add_url_no_channel(pixi: Path, tmp_pixi_workspace: Path) -> None:
     verify_cli_command([pixi, "init", tmp_pixi_workspace])
     verify_cli_command(
-        [pixi, "add", "https://repo.prefix.dev/bioconda::htslib"],
+        [
+            pixi,
+            "add",
+            "https://repo.prefix.dev/bioconda::snakemake-minimal",
+            "--manifest-path",
+            tmp_pixi_workspace,
+        ],
         expected_exit_code=ExitCode.FAILURE,
         stderr_contains="pixi workspace channel add https://repo.prefix.dev/bioconda",
     )
     verify_cli_command(
-        [pixi, "workspace", "channel", "add", "https://repo.prefix.dev/bioconda"],
+        [
+            pixi,
+            "workspace",
+            "channel",
+            "add",
+            "https://repo.prefix.dev/bioconda",
+            "--manifest-path",
+            tmp_pixi_workspace,
+        ],
     )
     verify_cli_command(
-        [pixi, "add", "https://repo.prefix.dev/bioconda::htslib"],
-        stdout_contains="Added https://repo.prefix.dev/bioconda::htslib",
+        [
+            pixi,
+            "add",
+            "https://repo.prefix.dev/bioconda::snakemake-minimal",
+            "--manifest-path",
+            tmp_pixi_workspace,
+        ],
+        stderr_contains="Added https://repo.prefix.dev/bioconda::snakemake-minimal",
     )
