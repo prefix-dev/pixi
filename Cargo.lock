@@ -4939,7 +4939,11 @@ version = "0.1.0"
 dependencies = [
  "codspeed-criterion-compat",
  "fs-err 2.11.0",
+ "miette 7.6.0",
  "once_cell",
+ "pixi_cli",
+ "pixi_config",
+ "pixi_core",
  "reqwest 0.11.27",
  "serde",
  "serde_json",

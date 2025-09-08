@@ -5,8 +5,10 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
-use tokio::process::Command;
-use tokio::time::{sleep, Duration as TokioDuration};
+
+// Pixi crate imports for direct API usage
+use pixi_cli::install;
+use pixi_config::ConfigCli;
 
 // Single global runtime for all benchmarks
 static RUNTIME: Lazy<tokio::runtime::Runtime> =
@@ -292,106 +294,53 @@ platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
         self.run_pixi_install(packages).await
     }
 
-    /// Run the actual pixi install command
+    /// Run the actual pixi install command using direct API
     async fn run_pixi_install(
         &self,
         packages: &[&str],
     ) -> Result<Duration, Box<dyn std::error::Error>> {
-        let mut cmd = Command::new("pixi");
-        cmd.arg("install")
-            .current_dir(&self.project_dir)
-            .envs(&self.get_env_vars());
-
         println!("⏱️ Timing: pixi install {} packages", packages.len());
 
+        // Set environment variables for pixi
+        for (key, value) in self.get_env_vars() {
+            std::env::set_var(key, value);
+        }
+
+        // Change to project directory
+        let original_dir = std::env::current_dir()?;
+        std::env::set_current_dir(&self.project_dir)?;
+
         let start = Instant::now();
-        let output = cmd.output().await?;
 
-        if !output.status.success() {
-            // Debug output
-            println!("❌ pixi install command failed!");
-            println!("Exit status: {:?}", output.status);
-            println!("Exit code: {:?}", output.status.code());
-            println!("Working directory: {:?}", self.project_dir);
+        // Create install arguments
+        let install_args = install::Args {
+            project_config: pixi_cli::cli_config::WorkspaceConfig::default(),
+            lock_file_usage: pixi_cli::LockFileUsageConfig::default(),
+            environment: None,
+            config: ConfigCli::default(),
+            all: false,
+            skip: None,
+            skip_with_deps: None,
+            only: None,
+        };
 
-            // Print stderr (the actual error message)
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            println!("STDERR:\n{}", stderr);
+        // Execute pixi install directly
+        let result = install::execute(install_args).await;
 
-            // Print stdout (might have useful info too)
-            let stdout = String::from_utf8_lossy(&output.stdout);
-            println!("STDOUT:\n{}", stdout);
+        // Restore original directory
+        std::env::set_current_dir(original_dir)?;
 
-            return Err(format!(
-                "pixi install failed with exit code {:?}:\nSTDERR: {}\nSTDOUT: {}",
-                output.status.code(),
-                stderr,
-                stdout
-            )
-            .into());
-        }
-
-        // Wait for packages to be verified as installed
-        self.wait_for_packages_installed(packages).await?;
-
-        let duration = start.elapsed();
-        println!("✅ Completed in {:.2}s", duration.as_secs_f64());
-
-        Ok(duration)
-    }
-
-    async fn wait_for_packages_installed(
-        &self,
-        packages: &[&str],
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        const MAX_RETRIES: u32 = 200;
-        const RETRY_INTERVAL: TokioDuration = TokioDuration::from_millis(100);
-
-        for retry in 0..MAX_RETRIES {
-            let mut cmd = Command::new("pixi");
-            cmd.arg("list").current_dir(&self.project_dir);
-
-            for (key, value) in self.get_env_vars() {
-                cmd.env(key, value);
+        match result {
+            Ok(_) => {
+                let duration = start.elapsed();
+                println!("✅ Completed in {:.2}s", duration.as_secs_f64());
+                Ok(duration)
             }
-
-            let output = cmd.output().await;
-
-            match output {
-                Ok(output) if output.status.success() => {
-                    let list_output = String::from_utf8_lossy(&output.stdout);
-
-                    let mut missing_packages = Vec::new();
-                    for package in packages {
-                        if !list_output.contains(package) {
-                            missing_packages.push(*package);
-                        }
-                    }
-
-                    if missing_packages.is_empty() {
-                        println!(
-                            "✅ All {} packages validated after {} retries",
-                            packages.len(),
-                            retry + 1
-                        );
-                        return Ok(());
-                    }
-
-                    if retry % 10 == 0 {
-                        println!("⏳ Missing packages: {}", missing_packages.join(", "));
-                    }
-                }
-                _ => {
-                    if retry % 10 == 0 {
-                        println!("⏳ pixi list not ready yet...");
-                    }
-                }
+            Err(e) => {
+                println!("❌ pixi install failed: {}", e);
+                Err(format!("pixi install failed: {}", e).into())
             }
-
-            sleep(RETRY_INTERVAL).await;
         }
-
-        Err("Package installation validation timed out".into())
     }
 }
 
