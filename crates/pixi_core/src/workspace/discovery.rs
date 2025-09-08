@@ -151,6 +151,7 @@ impl WorkspaceLocator {
     /// Called to locate the workspace or error out if none could be located.
     pub fn locate(self) -> Result<Workspace, WorkspaceLocatorError> {
         // Determine the search root
+        let explicit_start = matches!(&self.start, DiscoveryStart::ExplicitManifest(_));
         let discovery_start = match self.start {
             DiscoveryStart::ExplicitManifest(path) => {
                 pixi_manifest::DiscoveryStart::ExplicitManifest(path)
@@ -191,7 +192,7 @@ impl WorkspaceLocator {
         };
 
         // Take into consideration any environment variables that may be set.
-        if self.consider_environment {
+        if self.consider_environment && !explicit_start {
             if let Some(WithWarnings {
                 value: manifests,
                 warnings: mut env_warnings,
