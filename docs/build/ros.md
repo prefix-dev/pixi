@@ -152,7 +152,7 @@ You can now upload these artifacts to a conda channel and depend on them from ot
 - Not all ROS packages are available in RoboStack. If you depend on a package not in RoboStack, you can:
   - **Recommended:** Contribute to RoboStack to add it; see the [RoboStack Contributing page](https://robostack.github.io/Contributing.html)
   - Package it yourself with Pixi in a separate workspace and upload it to your own conda channel.
-  - Use an [out of tree package definition](./package_source.md) to build the package without changing its source code.
+    - Optionally, this could use an [out of tree package definition](./package_source.md) to build the package without changing its source code.
 
 
 ## Conclusion
