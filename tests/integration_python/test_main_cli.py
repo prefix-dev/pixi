@@ -382,7 +382,8 @@ def test_pixi_init_pixi_home_parent(pixi: Path, tmp_pixi_workspace: Path) -> Non
     verify_cli_command(
         [pixi, "init", pixi_home.parent],
         ExitCode.FAILURE,
-        stderr_contains="pixi init ",  # Test that we print a helpful error message
+        # Test that we print a helpful error message
+        stderr_contains="pixi init",
         env={"PIXI_HOME": str(pixi_home)},
     )
 
