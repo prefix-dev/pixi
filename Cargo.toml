@@ -176,6 +176,7 @@ barrier_cell = { path = "crates/barrier_cell" }
 fancy_display = { path = "crates/fancy_display" }
 pixi = { path = "crates/pixi" }
 pixi_allocator = { path = "crates/pixi_allocator" }
+pixi_api = { path = "crates/pixi_api" }
 pixi_build_discovery = { path = "crates/pixi_build_discovery" }
 pixi_build_frontend = { path = "crates/pixi_build_frontend" }
 pixi_build_type_conversions = { path = "crates/pixi_build_type_conversions" }

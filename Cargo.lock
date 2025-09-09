@@ -4692,6 +4692,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixi_api"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "rattler_conda_types",
+]
+
+[[package]]
 name = "pixi_build_discovery"
 version = "0.1.0"
 dependencies = [
