@@ -3042,7 +3042,7 @@ Then it will execute it by passing any additional arguments to it.</p>
 <p>Pixi searches all directories in your <code>PATH</code> environment variable for executables with the <code>pixi-</code> prefix.</p>
 <h3 id="2-pixi-global-directories">2. <code>pixi global</code> Directories<a class="headerlink" href="#2-pixi-global-directories" title="Permanent link">#</a></h3>
 <p>Pixi also searches in directories managed by <code>pixi global</code>, which allows for organized extension management without cluttering your system PATH.</p>
-<p>When you run <code>pixi --help</code>, all discovered extensions are automatically listed in the "Available Extensions" section, making them easily discoverable alongside built-in commands.</p>
+<p>When you run <code>pixi --list</code>, all discovered extensions are automatically listed alongside all built-in commands, making the commands easily discoverable.</p>
 <h2 id="installing-extensions">Installing Extensions<a class="headerlink" href="#installing-extensions" title="Permanent link">#</a></h2>
 <h3 id="using-pixi-global-recommended">Using <code>pixi global</code> (Recommended)<a class="headerlink" href="#using-pixi-global-recommended" title="Permanent link">#</a></h3>
 <p>The easiest way to install Pixi extensions is using <code>pixi global install</code>:</p>
@@ -3056,7 +3056,7 @@ Then it will execute it by passing any additional arguments to it.</p>
 - <strong>Isolated environments</strong>: Each extension gets its own environment, preventing dependency conflicts
 - <strong>Automatic discovery</strong>: Extensions are automatically found by Pixi without modifying PATH
 - <strong>Easy management</strong>: Use <code>pixi global list</code> and <code>pixi global remove</code> to manage extensions
-- <strong>Consistent experience</strong>: Extensions appear in <code>pixi --help</code> just like built-in commands</p>
+- <strong>Consistent experience</strong>: Extensions appear in <code>pixi --list</code> with all the built-in commands, just like how <code>Cargo</code> handles it</p>
 <h3 id="manual-installation">Manual Installation<a class="headerlink" href="#manual-installation" title="Permanent link">#</a></h3>
 <p>You can also install extensions manually by placing the executable in any directory in your PATH:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Download or build the extension</span>
@@ -3106,7 +3106,7 @@ Then it will execute it by passing any additional arguments to it.</p>
 <p>This works for both built-in commands and any extensions you have installed, making extension discovery seamless.</p>
 <h2 id="getting-help">Getting Help<a class="headerlink" href="#getting-help" title="Permanent link">#</a></h2>
 <ul>
-<li><strong>List available extensions</strong>: Run <code>pixi --help</code> to see all available extensions</li>
+<li><strong>List available extensions</strong>: Run <code>pixi --list</code> to see all available extensions</li>
 <li><strong>Community</strong>: Join our <a href="https://discord.gg/kKV8ZxyzY4">Discord</a> for discussions and support</li>
 </ul>
 <h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">#</a></h2>
