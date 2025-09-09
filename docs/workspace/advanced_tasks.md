@@ -330,6 +330,9 @@ You can set environment variables directly for a task, as well as by other means
 See [the environment variable priority documentation](../reference/environment_variables.md#environment-variable-priority) for full details of ways to set environment variables,
 and how those ways interact with each other.
 
+Notes on environment variables in tasks:
+- Values set via `tasks.<name>.env` are interpreted by `deno_task_shell` when the task runs. Shell-style expansions like `env = { VAR = "$FOO" }` therefore work the same on all operating systems.
+
 !!! warning
 
     In older versions of Pixi, this priority was not well-defined, and there are a number of known
@@ -394,6 +397,7 @@ This setting can also be set from the command line with `pixi run --clean-env TA
 To support the different OS's (Windows, OSX and Linux), Pixi integrates a shell that can run on all of them.
 This is [`deno_task_shell`](https://deno.land/manual@v1.35.0/tools/task_runner#built-in-commands).
 The task shell is a limited implementation of a bourne-shell interface.
+Task command lines and the values of `tasks.<name>.env` are parsed and expanded by this shell.
 
 ### Built-in commands
 
