@@ -1,3 +1,4 @@
+import os
 import platform
 import shutil
 import tomllib
@@ -2156,9 +2157,24 @@ def test_conda_file(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
     manifests = tmp_path.joinpath("manifests")
     manifests.mkdir()
+    os.chdir(tmp_path.joinpath("manifests"))
 
     conda_file = Path.from_uri(dummy_channel_1) / "osx-arm64" / "dummy-c-0.1.0-h60d57d3_0.conda"
+    relative_conda_file = conda_file.relative_to(Path.cwd(), walk_up=True)
 
+    # check relative path
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--path",
+            relative_conda_file,
+        ],
+        env=env,
+    )
+
+    # check absolute path
     verify_cli_command(
         [
             pixi,
@@ -2170,6 +2186,7 @@ def test_conda_file(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
         env=env,
     )
 
+    # check that it fails without `--path`
     verify_cli_command(
         [
             pixi,
