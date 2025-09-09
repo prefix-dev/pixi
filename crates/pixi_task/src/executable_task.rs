@@ -393,13 +393,8 @@ fn get_export_specific_task_env(task: &Task) -> String {
     let mut export = String::new();
     if let Some(env) = task.env() {
         for (key, value) in env {
-            if value.contains(format!("${}", key).as_str()) || std::env::var(key.as_str()).is_err()
-            {
-                tracing::info!("Setting environment variable: {}=\"{}\"", key, value);
-                export.push_str(&format!("export \"{}={}\";\n", key, value));
-            } else {
-                tracing::info!("Environment variable {} already set", key);
-            }
+            tracing::debug!("Setting environment variable: {}=\"{}\"", key, value);
+            export.push_str(&format!("export \"{}={}\";\n", key, value));
         }
     }
     export
