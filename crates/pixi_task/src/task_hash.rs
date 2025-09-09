@@ -78,7 +78,7 @@ impl TaskHash {
         lock_file: &LockFile,
     ) -> Result<Option<Self>, InputHashesError> {
         let input_hashes = InputHashes::from_task(task).await?;
-        let output_hashes = OutputHashes::from_task(task, false).await?;
+        let output_hashes = OutputHashes::from_task(task).await?;
 
         if input_hashes.is_none() && output_hashes.is_none() {
             return Ok(None);
@@ -101,7 +101,15 @@ impl TaskHash {
         &mut self,
         task: &ExecutableTask<'_>,
     ) -> Result<(), InputHashesError> {
-        self.outputs = OutputHashes::from_task(task, true).await?;
+        self.outputs = OutputHashes::from_task(task).await?;
+        Ok(())
+    }
+
+    pub async fn update_input(
+        &mut self,
+        task: &ExecutableTask<'_>,
+    ) -> Result<(), InputHashesError> {
+        self.inputs = InputHashes::from_task(task).await?;
         Ok(())
     }
 
@@ -149,7 +157,7 @@ pub struct InputHashes {
 }
 
 impl InputHashes {
-    /// Compute the input hashes from a task.
+    /// Compute the input hashes from a task. Returns `None` if no files match.
     pub async fn from_task(task: &ExecutableTask<'_>) -> Result<Option<Self>, InputHashesError> {
         let Ok(execute) = task.task().as_execute() else {
             return Ok(None);
@@ -170,19 +178,9 @@ impl InputHashes {
 
         let files = FileHashes::from_files(task.project().root(), &rendered_inputs).await?;
 
-        // check if any files were matched
+        // If no files matched, treat as no inputs for caching purposes
         if files.files.is_empty() {
-            tracing::warn!(
-                "No files matched the input globs for task '{}'",
-                task.name().unwrap_or_default()
-            );
-            tracing::warn!(
-                "Input globs: {:?}",
-                rendered_inputs
-                    .iter()
-                    .map(|g| g.as_str())
-                    .collect::<Vec<_>>()
-            );
+            return Ok(None);
         }
 
         Ok(Some(Self { files }))
@@ -196,11 +194,8 @@ pub struct OutputHashes {
 }
 
 impl OutputHashes {
-    /// Compute the output hashes from a task.
-    pub async fn from_task(
-        task: &ExecutableTask<'_>,
-        warn: bool,
-    ) -> Result<Option<Self>, InputHashesError> {
+    /// Compute the output hashes from a task. Returns `None` if no files match.
+    pub async fn from_task(task: &ExecutableTask<'_>) -> Result<Option<Self>, InputHashesError> {
         let outputs: Vec<String> = match task.task().as_execute() {
             Ok(execute) => {
                 if let Some(outputs) = execute.outputs.clone() {
@@ -224,16 +219,8 @@ impl OutputHashes {
 
         let files = FileHashes::from_files(task.project().root(), outputs.iter()).await?;
 
-        // check if any files were matched
-        if warn && files.files.is_empty() {
-            tracing::warn!(
-                "No files matched the output globs for task` '{}'",
-                task.name().unwrap_or_default()
-            );
-            tracing::warn!(
-                "Output globs: {:?}",
-                outputs.iter().map(|g| g.as_str()).collect::<Vec<_>>()
-            );
+        // If no files matched, treat as no outputs for caching purposes
+        if files.files.is_empty() {
             return Ok(None);
         }
 

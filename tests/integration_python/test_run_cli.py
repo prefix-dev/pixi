@@ -1494,3 +1494,75 @@ def test_signal_forwarding(pixi: Path, tmp_pixi_workspace: Path) -> None:
             )
     else:
         raise AssertionError("Output file was not created")
+
+
+def test_task_outputs_missing_no_initial_cache(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test that nothing is cached when outputs are missing.
+
+    Expected behavior:
+    - First run: no cache is created and a warning is emitted that no outputs matched.
+    - Second run: still no cache hit (since outputs didn't exist), and warning is emitted again.
+    """
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+
+    manifest_content["tasks"] = {
+        "test": {
+            "cmd": "echo 'running; no files are created'",
+            "outputs": ["test.txt"],
+        }
+    }
+
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    # First invocation: expect NO cache hit and a warning about missing outputs
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "test"],
+        stdout_contains="running; no files are created",
+        stderr_contains="No files matched the output globs",
+        stderr_excludes="cache hit",
+    )
+
+    # Second invocation: still should not be a cache hit (outputs still don't exist)
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "test"],
+        stdout_contains="running; no files are created",
+        stderr_excludes="cache hit",
+    )
+
+
+def test_task_inputs_missing_no_initial_cache(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test that nothing is cached when outputs are missing.
+
+    Expected behavior:
+    - First run: warning about missing inputs; no cache is created (no cache hit next run).
+    - Second run: still no cache hit, since inputs still do not exist.
+    """
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+
+    manifest_content["tasks"] = {
+        "test": {
+            "cmd": "echo 'running; no files are created'",
+            "inputs": ["test.txt"],
+        }
+    }
+
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    # First invocation: expect warning about inputs and no cache hit
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "test"],
+        stdout_contains="running; no files are created",
+        stderr_contains="No files matched the input globs",
+        stderr_excludes="cache hit",
+    )
+
+    # Second invocation: still no cache hit
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "test"],
+        stdout_contains="running; no files are created",
+        stderr_excludes="cache hit",
+    )
