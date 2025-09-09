@@ -11,7 +11,8 @@ There are different tags for different base images available:
 - `latest` - based on `ubuntu:jammy`
 - `focal` - based on `ubuntu:focal`
 - `bullseye` - based on `debian:bullseye`
-- `jammy-cuda-12.2.2` - based on `nvidia/cuda:12.2.2-jammy`
+- `noble-cuda-12.9.1` - based on `nvidia/cuda:12.9.1-base-ubuntu24.04`
+- `noble-cuda-13.0.0` - based on `nvidia/cuda:13.0.0-base-ubuntu24.04`
 - ... and more
 
 !!!tip "All tags"

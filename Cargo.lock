@@ -4672,7 +4672,7 @@ dependencies = [
 
 [[package]]
 name = "pixi"
-version = "0.54.1"
+version = "0.54.2"
 dependencies = [
  "async-trait",
  "chrono",
@@ -5059,6 +5059,7 @@ dependencies = [
  "rattler_shell",
  "rattler_solve",
  "rattler_virtual_packages",
+ "rayon",
  "reqwest",
  "reqwest-middleware",
  "rlimit",
