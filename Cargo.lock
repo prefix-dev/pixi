@@ -5149,10 +5149,12 @@ dependencies = [
  "itertools 0.14.0",
  "memchr",
  "rattler_digest",
+ "rayon",
  "rstest",
  "tempfile",
  "thiserror 2.0.16",
  "tokio",
+ "uv-configuration",
  "wax",
 ]
 
