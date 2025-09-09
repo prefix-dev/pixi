@@ -104,9 +104,6 @@ impl Environment<'_> {
             ),
             ("PIXI_PROMPT".to_string(), format!("({}) ", prompt)),
         ]);
-
-        // Add the activation environment variables
-        map.extend(self.activation_env(Some(Platform::current())));
         map
     }
 }
@@ -114,7 +111,6 @@ impl Environment<'_> {
 /// Get the complete activator for the environment.
 /// This method will create an activator for the environment and add the activation scripts from the project.
 /// The activator will be created for the current platform and the default shell.
-/// The activation scripts from the environment will be checked for existence and the extension will be checked for correctness.
 pub fn get_activator<'p>(
     environment: &'p Environment<'p>,
     shell: ShellEnum,
@@ -162,10 +158,15 @@ pub fn get_activator<'p>(
         .activation_scripts
         .extend(additional_activation_scripts);
 
-    // Add the environment variables from the project.
+    // Add the environment variables from the project (pre-activation script vars).
     activator
         .env_vars
         .extend(get_static_environment_variables(environment));
+
+    // Add environment variables that should be applied after activation scripts run.
+    activator
+        .post_activation_env_vars
+        .extend(environment.activation_env(Some(Platform::current())));
 
     Ok(activator)
 }

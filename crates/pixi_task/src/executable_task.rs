@@ -383,6 +383,11 @@ fn get_output_writer_and_handle() -> (ShellPipeWriter, JoinHandle<String>) {
 }
 
 /// Task specific environment variables.
+///
+/// These are rendered as `export KEY=VALUE` statements and prepended to the
+/// task script. At runtime they are interpreted by `deno_task_shell`, not by an
+/// external OS shell, so `$VAR`-style expansion follows deno-task-shell’s
+/// semantics.
 fn get_export_specific_task_env(task: &Task) -> String {
     // Append the environment variables if they don't exist
     let mut export = String::new();
