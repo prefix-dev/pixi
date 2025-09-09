@@ -19,7 +19,7 @@ from pydantic import (
 
 #: latest version currently supported by the `taplo` TOML linter and language server
 SCHEMA_DRAFT = "http://json-schema.org/draft-07/schema#"
-CARGO_TOML = Path(__file__).parent.parent / "Cargo.toml"
+CARGO_TOML = Path(__file__).parent.parent / "crates" / "pixi" / "Cargo.toml"
 CARGO_TOML_DATA = tomllib.loads(CARGO_TOML.read_text(encoding="utf-8"))
 VERSION = CARGO_TOML_DATA["package"]["version"]
 SCHEMA_URI = f"https://pixi.sh/v{VERSION}/schema/manifest/schema.json"
@@ -184,6 +184,9 @@ class Workspace(StrictBaseModel):
         description="The required version spec for pixi itself to resolve and build the project.",
         examples=[">=0.40"],
     )
+    target: dict[TargetName, WorkspaceTarget] | None = Field(
+        None, description="The workspace targets"
+    )
 
 
 ########################
@@ -325,20 +328,27 @@ Dependencies = dict[CondaPackageName, MatchSpec] | None
 # Task section #
 ################
 TaskName = Annotated[str, Field(pattern=r"^[^\s\$]+$", description="A valid task name.")]
+TaskArgName = Annotated[
+    str, Field(pattern=r"^[a-zA-Z_][a-zA-Z\d_]*$", description="A valid task argument name")
+]
+TaskArgInlineTable = Annotated[
+    dict[TaskArgName, str],
+    Field(min_length=1, max_length=1, description="A single item task name/value object"),
+]
 
 
 class TaskArgs(StrictBaseModel):
     """The arguments of a task."""
 
-    arg: NonEmptyStr
+    arg: TaskArgName = Field(description="The name of the argument")
     default: str | None = Field(None, description="The default value of the argument")
 
 
 class DependsOn(StrictBaseModel):
     """The dependencies of a task."""
 
-    task: TaskName
-    args: list[NonEmptyStr, dict[NonEmptyStr, NonEmptyStr]] | None = Field(
+    task: TaskName = Field(description="the name of the task to depend on")
+    args: list[str | TaskArgInlineTable] | None = Field(
         None, description="The (positional or named) arguments to pass to the task"
     )
     environment: EnvironmentName | None = Field(
@@ -386,10 +396,13 @@ class TaskInlineTable(StrictBaseModel):
         None,
         description="Whether to run in a clean environment, removing all environment variables except those defined in `env` and by pixi itself.",
     )
-    args: list[TaskArgs | NonEmptyStr] | None = Field(
+    args: list[TaskArgs | TaskArgName] | None = Field(
         None,
-        description="The arguments to pass to the task",
-        examples=["arg1", "arg2"],
+        description="The arguments to a task",
+        examples=[
+            ["arg1", "arg2"],
+            ["arg", {"arg": "arg2", "default": "2"}],
+        ],
     )
 
 
@@ -468,6 +481,14 @@ class Activation(StrictBaseModel):
 # Target section #
 ##################
 TargetName = NonEmptyStr
+
+
+class WorkspaceTarget(StrictBaseModel):
+    """Target-specific configuration for a workspace"""
+
+    build_variants: dict[NonEmptyStr, list[str]] | None = Field(
+        None, description="The build variants for this workspace target"
+    )
 
 
 class Target(StrictBaseModel):
@@ -688,9 +709,26 @@ class Package(StrictBaseModel):
 class BuildTarget(StrictBaseModel):
     """Target-specific build configuration for different platforms"""
 
-    configuration: dict[str, Any] = Field(
+    config: dict[str, Any] = Field(
         None, description="Target-specific configuration for the build backend"
     )
+
+
+class SourceLocation(StrictBaseModel):
+    """The location of a package's source code."""
+
+    path: NonEmptyStr | None = Field(None, description="The path to the source")
+
+    # TODO: url and git source
+    # url: NonEmptyStr | None = Field(None, description="The URL to the source")
+    # md5: Md5Sum | None = Field(None, description="The md5 hash of the source")
+    # sha256: Sha256Sum | None = Field(None, description="The sha256 hash of the source")
+
+    # git: NonEmptyStr | None = Field(None, description="The git URL to the source repo")
+    # rev: NonEmptyStr | None = Field(None, description="A git SHA revision to use")
+    # tag: NonEmptyStr | None = Field(None, description="A git tag to use")
+    # branch: NonEmptyStr | None = Field(None, description="A git branch to use")
+    # subdirectory: NonEmptyStr | None = Field(None, description="A subdirectory to use in the repo")
 
 
 class Build(StrictBaseModel):
@@ -701,18 +739,27 @@ class Build(StrictBaseModel):
     additional_dependencies: Dependencies = Field(
         None, description="Additional dependencies to install alongside the build backend"
     )
-    configuration: dict[str, Any] = Field(
-        None, description="The configuration of the build backend"
-    )
+    config: dict[str, Any] = Field(None, description="The configuration of the build backend")
     target: dict[TargetName, BuildTarget] | None = Field(
         None,
         description="Target-specific build configuration for different platforms",
-        examples=[{"linux-64": {"configuration": {"key": "value"}}}],
+        examples=[{"linux-64": {"config": {"key": "value"}}}],
+    )
+    source: SourceLocation = Field(
+        None,
+        description="The source from which to build the package",
+        examples=[{"path": "project"}],
     )
 
 
 class BuildBackend(MatchspecTable):
     name: NonEmptyStr = Field(None, description="The name of the build backend package")
+    channels: list[Channel] | None = Field(
+        None, description="The `conda` channels that are used to fetch the build backend from"
+    )
+    additional_dependencies: Dependencies = Field(
+        None, description="Additional dependencies to install alongside the build backend"
+    )
 
 
 class PackageTarget(StrictBaseModel):

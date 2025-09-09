@@ -1,0 +1,85 @@
+[package]
+authors.workspace = true
+description = "A package management and workflow tool"
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi"
+readme.workspace = true
+repository.workspace = true
+version = "0.54.2"
+
+[features]
+default = ["rustls-tls"]
+native-tls = ["pixi_cli/native-tls"]
+# run tests connecting to remote Internet services
+online_tests = ["pixi_cli/online_tests"]
+rustls-tls = ["pixi_cli/rustls-tls"]
+self_update = ["pixi_cli/self_update"]
+slow_integration_tests = ["pixi_cli/slow_integration_tests"]
+tokio-console = ["pixi_cli/tokio-console", "tokio/tracing"]
+
+# This feature enables performance optimizations but at the cost of increased
+# compile times. By default, it is only used when building the release binary.
+performance = ["pixi_allocator"]
+
+[dependencies]
+miette = { workspace = true, features = ["fancy-no-backtrace"] }
+pixi_allocator = { workspace = true, optional = true }
+pixi_cli = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
+
+
+[dev-dependencies]
+async-trait = { workspace = true }
+chrono = { workspace = true }
+dunce = { workspace = true }
+fake = "4.0.0"
+fs-err = { workspace = true }
+fs_extra = { workspace = true }
+futures = { workspace = true }
+http = { workspace = true }
+indexmap = { workspace = true }
+indicatif = { workspace = true }
+insta = { workspace = true, features = ["yaml", "glob", "filters"] }
+itertools = { workspace = true }
+pep508_rs = { workspace = true }
+pixi_config = { workspace = true }
+pixi_consts = { workspace = true }
+pixi_core = { workspace = true }
+pixi_manifest = { workspace = true }
+pixi_progress = { workspace = true }
+pixi_pypi_spec = { workspace = true }
+pixi_record = { workspace = true }
+pixi_spec = { workspace = true }
+pixi_task = { workspace = true }
+pixi_test_utils = { workspace = true }
+pixi_utils = { workspace = true }
+pypi_mapping = { workspace = true }
+rattler_conda_types = { workspace = true }
+rattler_digest = { workspace = true }
+rattler_lock = { workspace = true }
+rattler_virtual_packages = { workspace = true }
+reqwest = { workspace = true }
+reqwest-middleware = { workspace = true }
+rstest = { workspace = true }
+serde_json = { workspace = true }
+temp-env = { workspace = true }
+tempfile = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["rt"] }
+toml_edit = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+typed-path = { workspace = true }
+url = { workspace = true }
+uv-cache = { workspace = true }
+uv-configuration = { workspace = true }
+uv-installer = { workspace = true }
+uv-pep508 = { workspace = true }
+uv-python = { workspace = true }
+zip = { workspace = true }
+
+[[test]]
+name = "integration_rust"
+path = "../../tests/integration_rust/main.rs"

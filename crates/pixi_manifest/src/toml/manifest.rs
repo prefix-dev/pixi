@@ -390,7 +390,7 @@ impl TomlManifest {
 
             warnings.push(Warning::from(
                 GenericError::new(format!(
-                    "The feature '{}' is defined but not used in any environment",
+                    "The feature '{}' is defined but not used in any environment. Dependencies of unused features are not resolved or checked, and use wildcard (*) version specifiers by default, disregarding any set `pinning-strategy`",
                     feature_name
                 ))
                 .with_opt_span(span)
@@ -615,52 +615,6 @@ mod test {
         backend = { name = "foobar", version = "*" }
         "#,
         ));
-    }
-
-    #[test]
-    fn test_missing_version() {
-        assert_snapshot!(expect_parse_failure(
-            r#"
-        [workspace]
-        name = "foo"
-        channels = []
-        platforms = []
-        preview = ["pixi-build"]
-
-        [package]
-        name = { workspace = true }
-
-        [package.build]
-        backend = { name = "foobar", version = "*" }
-        "#,
-        ));
-    }
-
-    #[test]
-    fn test_missing_package_name() {
-        assert_snapshot!(expect_parse_failure(
-            r#"
-        [workspace]
-        channels = []
-        platforms = []
-        preview = ["pixi-build"]
-
-        [package]
-        # Since workspace doesnt define a name we expect an error here.
-
-        [package.build]
-        backend = { name = "foobar", version = "*" }
-        "#,
-        ), @r###"
-         × missing field 'name' in table
-          ╭─[pixi.toml:7:9]
-        6 │
-        7 │         [package]
-          ·         ──────────
-        8 │         # Since workspace doesnt define a name we expect an error here.
-        9 │
-          ╰────
-        "###);
     }
 
     #[test]

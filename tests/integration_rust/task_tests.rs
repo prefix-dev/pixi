@@ -1,19 +1,21 @@
 use std::path::PathBuf;
 
-use pixi::{
-    cli::{cli_config::WorkspaceConfig, run::Args},
-    task::TaskName,
-};
+use pixi_cli::cli_config::WorkspaceConfig;
+use pixi_cli::run::Args;
 use pixi_manifest::{
     FeatureName, Task,
     task::{CmdArgs, TemplateString},
 };
+use pixi_task::TaskName;
 use rattler_conda_types::Platform;
 
 use crate::common::PixiControl;
+use crate::setup_tracing;
 
 #[tokio::test]
 pub async fn add_remove_task() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
 
@@ -48,6 +50,8 @@ pub async fn add_remove_task() {
 
 #[tokio::test]
 pub async fn add_command_types() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
 
@@ -99,6 +103,8 @@ pub async fn add_command_types() {
 
 #[tokio::test]
 async fn test_alias() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init().without_channels().await.unwrap();
 
@@ -140,6 +146,8 @@ async fn test_alias() {
 
 #[tokio::test]
 pub async fn add_remove_target_specific_task() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init_with_platforms(vec!["win-64".to_string()])
         .await
@@ -188,6 +196,8 @@ pub async fn add_remove_target_specific_task() {
 
 #[tokio::test]
 async fn test_cwd() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init().without_channels().await.unwrap();
 
@@ -240,6 +250,8 @@ async fn test_cwd() {
 
 #[tokio::test]
 async fn test_task_with_env() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init().without_channels().await.unwrap();
 
@@ -271,6 +283,8 @@ async fn test_task_with_env() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_clean_env() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init().without_channels().await.unwrap();
 

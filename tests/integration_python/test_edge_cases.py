@@ -1,13 +1,14 @@
-from pathlib import Path
+import platform
 import shutil
 import subprocess
-import pytest
-import platform
 import sys
+from pathlib import Path
+
+import pytest
 import tomli
 import tomli_w
 
-from .common import CURRENT_PLATFORM, verify_cli_command, ExitCode, CONDA_FORGE_CHANNEL
+from .common import CONDA_FORGE_CHANNEL, CURRENT_PLATFORM, ExitCode, verify_cli_command
 
 
 @pytest.mark.extra_slow
@@ -340,6 +341,7 @@ def test_build_git_source_deps(
     )
 
 
+@pytest.mark.slow
 def test_installation_pypi_conda_mismatch(
     pixi: Path, tmp_pixi_workspace: Path, test_data: Path, pixi_tomls: Path
 ) -> None:
@@ -413,6 +415,7 @@ def test_installation_pypi_conda_mismatch(
     assert (site_packages / "foobar" / "b.py").exists(), "b.py does not exist"
 
 
+@pytest.mark.slow
 def test_pypi_url_fragment_in_project_deps(tmp_pixi_workspace: Path, pixi: Path) -> None:
     pyproject_content = f"""
 [project]

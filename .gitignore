@@ -1,14 +1,120 @@
-target
-.idea
-.vscode
-.test-projects
-__pycache__
-.pixi
-.build
-.DS_store
-site/
-.cache
-pytest-temp
-/vendor
-*.conda
+# macOS system files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Local environment files
 *.local.*
+.env
+.env.local
+.env.*.local
+
+# Agents
+AGENTS.md
+
+# Documentation and build artifacts
+site/
+.build
+.cache
+docs/_build/
+*.egg-info/
+dist/
+build/
+
+# Conda/Pixi environment related
+*.conda
+.pixi
+.conda/
+conda-bld/
+.conda-env-vars
+
+# Allow conda files in test data
+!tests/data/channels/channels/**/*.conda
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.tox/
+.coverage
+.coverage.*
+.pytest_cache/
+pytest-temp/
+.test-projects/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+htmlcov/
+.nox/
+.ruff_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# Profiling and performance data
+profile.json.gz
+*.prof
+*.pstats
+perf.data*
+massif.out.*
+cachegrind.out.*
+
+# Rust
+target/
+/vendor/
+*.orig
+**/*.rs.bk
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.vim/
+.emacs.d/
+*.sublime-project
+*.sublime-workspace
+
+# Operating system files
+*.tmp
+*.temp
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# Logs
+*.log
+logs/
+
+# Test artifacts
+coverage/
+coverage.xml
+*.cover
+.hypothesis/
+
+# Temporary files and caches
+*.cache
+.cache/
+.tmp/
+tmp/
+
+# Security and credentials
+*.pem
+*.key
+*.p12
+.secrets
+secrets.json
+
+# Generated files
+*_pb2.py
+*_pb2_grpc.py
+files.txt

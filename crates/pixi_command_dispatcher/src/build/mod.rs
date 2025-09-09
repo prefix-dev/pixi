@@ -13,10 +13,13 @@ use std::hash::{Hash, Hasher};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 pub use build_cache::{
     BuildCache, BuildCacheEntry, BuildCacheError, BuildHostEnvironment, BuildHostPackage,
-    BuildInput, CachedBuild, CachedBuildSourceInfo,
+    BuildInput, CachedBuild, CachedBuildSourceInfo, PackageBuildInputHash,
+    PackageBuildInputHashBuilder,
 };
 pub use build_environment::BuildEnvironment;
-pub use dependencies::{Dependencies, DependenciesError, PixiRunExports};
+pub use dependencies::{
+    Dependencies, DependenciesError, DependencySource, KnownEnvironment, PixiRunExports, WithSource,
+};
 pub(crate) use move_file::{MoveError, move_file};
 use pixi_record::PinnedSourceSpec;
 use url::Url;

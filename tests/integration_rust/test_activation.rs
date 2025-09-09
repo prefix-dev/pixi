@@ -1,5 +1,8 @@
 use crate::common::PixiControl;
-use pixi::{activation::CurrentEnvVarBehavior, workspace::get_activated_environment_variables};
+use crate::setup_tracing;
+use pixi_core::{
+    activation::CurrentEnvVarBehavior, workspace::get_activated_environment_variables,
+};
 
 #[cfg(windows)]
 const HOME: &str = "HOMEPATH";
@@ -8,6 +11,8 @@ const HOME: &str = "HOME";
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_pixi_only_env_activation() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
 
@@ -39,6 +44,8 @@ async fn test_pixi_only_env_activation() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_full_env_activation() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
 

@@ -14,13 +14,16 @@ use url::Url;
 
 use crate::common::{
     LockFileExt, PixiControl,
-    builders::{HasDependencyConfig, HasPrefixUpdateConfig},
+    builders::{HasDependencyConfig, HasNoInstallConfig},
     client::OfflineMiddleware,
     package_database::{Package, PackageDatabase},
 };
+use crate::setup_tracing;
 
 #[tokio::test]
 async fn conda_solve_group_functionality() {
+    setup_tracing();
+
     let mut package_database = PackageDatabase::default();
 
     // Add a package `foo` with 3 different versions
@@ -99,6 +102,8 @@ async fn conda_solve_group_functionality() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_purl_are_added_for_pypi() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
     // Add and update lockfile with this version of python
@@ -120,7 +125,7 @@ async fn test_purl_are_added_for_pypi() {
     // Add boltons from pypi
     pixi.add("boltons")
         .with_install(true)
-        .set_type(pixi::DependencyType::PypiDependency)
+        .set_type(pixi_core::DependencyType::PypiDependency)
         .await
         .unwrap();
 
@@ -167,6 +172,8 @@ async fn test_purl_are_added_for_pypi() {
 #[tokio::test]
 #[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn test_purl_are_missing_for_non_conda_forge() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
 
@@ -202,6 +209,8 @@ async fn test_purl_are_missing_for_non_conda_forge() {
 #[tokio::test]
 #[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn test_purl_are_generated_using_custom_mapping() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
 
@@ -248,6 +257,8 @@ async fn test_purl_are_generated_using_custom_mapping() {
 #[tokio::test]
 #[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn test_compressed_mapping_catch_not_pandoc_not_a_python_package() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
 
@@ -277,9 +288,9 @@ async fn test_compressed_mapping_catch_not_pandoc_not_a_python_package() {
 
 #[tokio::test]
 #[cfg_attr(not(feature = "online_tests"), ignore)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
-
 async fn test_dont_record_not_present_package_as_purl() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
 
@@ -358,7 +369,8 @@ async fn test_dont_record_not_present_package_as_purl() {
 
 fn absolute_custom_mapping_path() -> String {
     dunce::simplified(
-        &Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/mapping_files/custom_mapping.json"),
+        &Path::new(env!("CARGO_WORKSPACE_DIR"))
+            .join("tests/data/mapping_files/custom_mapping.json"),
     )
     .display()
     .to_string()
@@ -367,7 +379,7 @@ fn absolute_custom_mapping_path() -> String {
 
 fn absolute_compressed_mapping_path() -> String {
     dunce::simplified(
-        &Path::new(env!("CARGO_MANIFEST_DIR"))
+        &Path::new(env!("CARGO_WORKSPACE_DIR"))
             .join("tests/data/mapping_files/compressed_mapping.json"),
     )
     .display()
@@ -377,6 +389,8 @@ fn absolute_compressed_mapping_path() -> String {
 
 #[tokio::test]
 async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
+    setup_tracing();
+
     let pixi = PixiControl::from_manifest(&format!(
         r#"
     [project]
@@ -467,6 +481,8 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
 
 #[tokio::test]
 async fn test_custom_mapping_channel_with_suffix() {
+    setup_tracing();
+
     let pixi = PixiControl::from_manifest(&format!(
         r#"
      [project]
@@ -522,6 +538,8 @@ async fn test_custom_mapping_channel_with_suffix() {
 
 #[tokio::test]
 async fn test_repo_data_record_channel_with_suffix() {
+    setup_tracing();
+
     let pixi = PixiControl::from_manifest(&format!(
         r#"
      [project]
@@ -576,6 +594,8 @@ async fn test_repo_data_record_channel_with_suffix() {
 
 #[tokio::test]
 async fn test_path_channel() {
+    setup_tracing();
+
     let pixi = PixiControl::from_manifest(&format!(
         r#"
      [project]
@@ -631,6 +651,8 @@ async fn test_path_channel() {
 
 #[tokio::test]
 async fn test_file_url_as_mapping_location() {
+    setup_tracing();
+
     let tmp_dir = tempfile::tempdir().unwrap();
     let mapping_file = tmp_dir.path().join("custom_mapping.json");
 
@@ -707,6 +729,8 @@ async fn test_file_url_as_mapping_location() {
 
 #[tokio::test]
 async fn test_disabled_mapping() {
+    setup_tracing();
+
     let pixi = PixiControl::from_manifest(
         r#"
     [project]

@@ -14,8 +14,10 @@ backend-spec:
     channels:
       - "https://prefix.dev/pixi-build-backends"
 init-params:
-  source-dir: "[SOURCE_PATH]"
-  manifest-path: pixi.toml
+  workspace-root: "file://<ROOT>/inherit"
+  source: ~
+  source-anchor: "file://<ROOT>/inherit/nested"
+  manifest-path: "file://<ROOT>/inherit/nested/pixi.toml"
   project-model:
     name: simple
     version: 0.1.0

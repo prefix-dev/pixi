@@ -253,6 +253,64 @@ Both PyPi and conda packages are considered.
 !! note Note that for Pypi package indexes the package index must support the `upload-time` field as specified in [`PEP 700`](https://peps.python.org/pep-0700/).
 If the field is not present for a given distribution, the distribution will be treated as unavailable. PyPI provides `upload-time` for all packages.
 
+### `build-variants` (optional)
+
+!!! warning "Preview Feature"
+    Build variants require the `pixi-build` preview feature to be enabled:
+    ```toml
+    [workspace]
+    preview = ["pixi-build"]
+    ```
+
+Build variants allow you to specify different dependency versions for building packages in your workspace, creating a "build matrix" that targets multiple configurations. This is particularly useful for testing packages against different compiler versions, Python versions, or other critical dependencies.
+
+Build variants are defined as key-value pairs where each key represents a dependency name and the value is a list of version specifications to build against.
+
+#### Basic Usage
+
+```toml
+[workspace.build-variants]
+python = ["3.11.*", "3.12.*"]
+c_compiler_version = ["11.4", "14.0"]
+```
+
+#### How Build Variants Work
+
+When build variants are specified, Pixi will:
+
+1. **Create variant combinations**: Generate all possible combinations of the specified variants
+2. **Build separate packages**: Create distinct package builds for each variant combination  
+3. **Resolve dependencies**: Ensure each variant resolves with compatible dependency versions
+4. **Generate unique build strings**: Each variant gets a unique build identifier in the package name
+
+#### Platform-Specific Variants
+
+Build variants can also be specified per-platform:
+
+```toml
+[workspace.build-variants]
+python = ["3.11.*", "3.12.*"]
+
+# Windows-specific variants
+[workspace.target.win-64.build-variants]
+python = ["3.11.*"]  # Only Python 3.11 on Windows
+c_compiler = ["vs2019"]
+
+# Linux-specific variants  
+[workspace.target.linux-64.build-variants]
+c_compiler = ["gcc"]
+c_compiler_version = ["11.4", "13.0"]
+```
+
+#### Common Use Cases
+
+- **Multi-version Python packages**: Build against Python 3.11 and 3.12
+- **Compiler variants**: Test with different compiler versions for C/C++ packages
+- **Dependency compatibility**: Ensure packages work with different versions of key dependencies
+- **Cross-platform builds**: Different build configurations per operating system
+
+For detailed examples and tutorials, see the [build variants documentation](../build/variants.md).
+
 ## The `tasks` table
 
 Tasks are a way to automate certain custom commands in your workspace.
@@ -951,6 +1009,8 @@ And to extend the basics, it can also contain the following fields:
 The build system specifies how the package can be built.
 The build system is a table that can contain the following fields:
 
+- `source`: specifies the location of the source code for the package. Default: manifest directory. Currently supported options:
+  - `path`: a string representing a relative or absolute path to the source code.
 - `channels`: specifies the channels to get the build backend from.
 - `backend`: specifies the build backend to use. This is a table that can contain the following fields:
   - `name`: the name of the build backend to use. This will also be the executable name.
@@ -985,6 +1045,13 @@ Following packages are examples of typical build dependencies:
 - `pkg-config`
 - VSC packages (`git`, `svn`)
 
+??? warning "Using git SSH URLs"
+    When using SSH URLs in git dependencies, make sure to have your SSH key added to your SSH agent.
+    You can do this by running `ssh-add` which will prompt you for your SSH key passphrase.
+    Make sure that the `ssh-add` agent or service is running and you have a generated public/private SSH key.
+    For more details on how to do this, check the [Github SSH documentation](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent).
+
+
 ```toml
 --8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:build-dependencies"
 ```
@@ -1014,5 +1081,3 @@ The `run-dependencies` are the packages that will be installed in the environmen
 ```toml
 --8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:run-dependencies"
 ```
-
-

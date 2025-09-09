@@ -12,7 +12,7 @@ use pixi_manifest::{
     DiscoveryStart, ExplicitManifestError, PackageManifest, PrioritizedChannel, WithProvenance,
     WorkspaceDiscoverer, WorkspaceDiscoveryError, WorkspaceManifest,
 };
-use pixi_spec::SpecConversionError;
+use pixi_spec::{SourceLocationSpec, SpecConversionError};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::ChannelConfig;
 use thiserror::Error;
@@ -26,7 +26,7 @@ const VALID_RECIPE_NAMES: [&str; 2] = ["recipe.yaml", "recipe.yml"];
 const VALID_RECIPE_DIRS: [&str; 2] = ["", "recipe"];
 
 /// Describes a backend discovered for a given source location.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub struct DiscoveredBackend {
@@ -39,14 +39,20 @@ pub struct DiscoveredBackend {
 }
 
 /// The parameters used to initialize a build backend
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub struct BackendInitializationParams {
-    /// The directory that contains the source code.
-    pub source_dir: PathBuf,
+    /// The root directory of the workspace.
+    pub workspace_root: PathBuf,
 
-    /// The path of the discovered manifest _relative_ to `source_dir`.
+    /// The location of the source code.
+    pub source: Option<SourceLocationSpec>,
+
+    /// The anchor for relative paths to the location of the source code.
+    pub source_anchor: PathBuf,
+
+    /// The absolute path of the discovered manifest
     pub manifest_path: PathBuf,
 
     /// Optionally, the manifest of the discovered package.
@@ -102,11 +108,11 @@ pub enum DiscoveryError {
     #[diagnostic(help("This is often caused by an internal error. Please report this issue."))]
     SpecConversionError(pixi_spec::SpecConversionError),
 
-    #[error("the source directory does not contain a supported manifest")]
+    #[error("the source directory '{0}', does not contain a supported manifest")]
     #[diagnostic(help(
         "Ensure that the source directory contains a valid pixi.toml or recipe.yaml file."
     ))]
-    FailedToDiscover,
+    FailedToDiscover(String),
 }
 
 impl DiscoveredBackend {
@@ -132,11 +138,7 @@ impl DiscoveredBackend {
                 let source_dir = source_path
                     .parent()
                     .expect("the recipe must live somewhere");
-                return Self::from_recipe(
-                    source_dir.to_path_buf(),
-                    PathBuf::from(source_file_name),
-                    channel_config,
-                );
+                return Self::from_recipe(source_dir.to_path_buf(), source_path, channel_config);
             }
         }
 
@@ -149,28 +151,34 @@ impl DiscoveredBackend {
 
         // Try to discover as a rattler-build recipe.
         if enabled_protocols.enable_rattler_build {
-            if let Some(pixi) = Self::discover_rattler_build(source_path, channel_config)? {
+            if let Some(pixi) = Self::discover_rattler_build(source_path.clone(), channel_config)? {
                 return Ok(pixi);
             }
         }
 
-        Err(DiscoveryError::FailedToDiscover)
+        Err(DiscoveryError::FailedToDiscover(
+            source_path.to_string_lossy().to_string(),
+        ))
     }
 
     /// Construct a new instance based on a specific `recipe.yaml` file in the
     /// source directory.
     fn from_recipe(
         source_dir: PathBuf,
-        recipe_relative_path: PathBuf,
+        recipe_absolute_path: PathBuf,
         channel_config: &ChannelConfig,
     ) -> Result<Self, DiscoveryError> {
+        debug_assert!(source_dir.is_absolute());
+        debug_assert!(recipe_absolute_path.is_absolute());
         Ok(Self {
             backend_spec: BackendSpec::JsonRpc(JsonRpcBackendSpec::default_rattler_build(
                 channel_config,
             )),
             init_params: BackendInitializationParams {
-                source_dir,
-                manifest_path: recipe_relative_path,
+                workspace_root: source_dir.clone(),
+                source: None,
+                source_anchor: source_dir,
+                manifest_path: recipe_absolute_path,
                 project_model: None,
                 configuration: None,
                 target_configuration: None,
@@ -181,15 +189,22 @@ impl DiscoveredBackend {
     /// Convert a package manifest and corresponding workspace manifest into a
     /// discovered backend, with optional platform-specific configuration.
     pub fn from_package_and_workspace(
-        source_path: PathBuf,
+        // source_path: PathBuf,
         package_manifest: &WithProvenance<PackageManifest>,
-        workspace: &WorkspaceManifest,
+        workspace: &WithProvenance<WorkspaceManifest>,
         channel_config: &ChannelConfig,
     ) -> Result<Self, SpecConversionError> {
         let WithProvenance {
             value: package_manifest,
             provenance,
         } = package_manifest;
+
+        let workspace_root = workspace
+            .provenance
+            .path
+            .parent()
+            .expect("workspace manifest should have a parent directory")
+            .to_path_buf();
 
         // Construct the project model from the manifest
         let project_model = to_project_model_v1(package_manifest, channel_config)?;
@@ -206,7 +221,7 @@ impl DiscoveredBackend {
         let named_channels = match build_system.channels.as_ref() {
             Some(channels) => itertools::Either::Left(channels.iter()),
             None => itertools::Either::Right(PrioritizedChannel::sort_channels_by_priority(
-                workspace.workspace.channels.iter(),
+                workspace.value.workspace.channels.iter(),
             )),
         };
         let channels = named_channels
@@ -217,16 +232,6 @@ impl DiscoveredBackend {
                     .map_err(|err| SpecConversionError::InvalidChannel(channel.to_string(), err))
             })
             .collect::<Result<_, _>>()?;
-
-        // Make sure that the source directory is a directory.
-        let source_dir = if source_path.is_file() {
-            source_path
-                .parent()
-                .expect("a file has a parent")
-                .to_path_buf()
-        } else {
-            source_path
-        };
 
         Ok(Self {
             backend_spec: BackendSpec::JsonRpc(JsonRpcBackendSpec {
@@ -240,17 +245,21 @@ impl DiscoveredBackend {
                 })),
             }),
             init_params: BackendInitializationParams {
-                manifest_path: pathdiff::diff_paths(&provenance.path, &source_dir).expect(
-                    "must be able to construct a path to go from source dir to manifest path",
-                ),
-                source_dir,
+                workspace_root,
+                manifest_path: provenance.path.clone(),
+                source: build_system.source,
+                source_anchor: provenance
+                    .path
+                    .parent()
+                    .expect("points to a file")
+                    .to_path_buf(),
                 project_model: Some(project_model),
-                configuration: build_system.configuration.map(|config| {
+                configuration: build_system.config.map(|config| {
                     config
                         .deserialize_into()
                         .expect("Configuration dictionary needs to be serializable to JSON")
                 }),
-                target_configuration: build_system.target_configuration.map(|c| {
+                target_configuration: build_system.target_config.map(|c| {
                     c.into_iter()
                         .map(|(selector, config)| {
                             (
@@ -293,9 +302,9 @@ impl DiscoveredBackend {
         };
 
         Self::from_package_and_workspace(
-            source_path,
+            // source_path,
             &package_manifest,
-            &manifests.workspace.value,
+            &manifests.workspace,
             channel_config,
         )
         .map_err(DiscoveryError::SpecConversionError)
@@ -311,8 +320,8 @@ impl DiscoveredBackend {
             .iter()
             .cartesian_product(VALID_RECIPE_NAMES.iter())
         {
-            let recipe_path = Path::new(recipe_dir).join(recipe_file);
-            if source_dir.join(&recipe_path).is_file() {
+            let recipe_path = source_dir.join(recipe_dir).join(recipe_file);
+            if recipe_path.is_file() {
                 return Ok(Some(Self::from_recipe(
                     source_dir,
                     recipe_path,

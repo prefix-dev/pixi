@@ -1,24 +1,23 @@
 import json
+import os
 import shutil
-import sys
 import signal
-import time
 import subprocess
-import tomli_w
-import pytest
+import sys
+import tempfile
+import time
 from pathlib import Path
+
+import pytest
+import tomli
+import tomli_w
 
 from .common import (
     EMPTY_BOILERPLATE_PROJECT,
-    verify_cli_command,
     ExitCode,
     default_env_path,
+    verify_cli_command,
 )
-
-import tempfile
-import os
-import tomli
-import platform
 
 
 def test_run_in_shell_environment(pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -186,50 +185,6 @@ def test_using_prefix_validation(
         assert Path(file).exists()
 
 
-def test_prefix_revalidation(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
-    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
-    toml = f"""
-    [project]
-    name = "test"
-    channels = ["{dummy_channel_1}"]
-    platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
-
-    [dependencies]
-    dummy-a = "*"
-    """
-    manifest.write_text(toml)
-
-    # Run the installation
-    verify_cli_command(
-        [pixi, "install", "--manifest-path", manifest],
-    )
-
-    # Validate creation of the pixi file with the hash
-    pixi_file = default_env_path(tmp_pixi_workspace).joinpath("conda-meta").joinpath("pixi")
-    assert pixi_file.exists()
-    assert "environment_lock_file_hash" in pixi_file.read_text()
-
-    # Break environment on purpose
-    dummy_a_meta_files = (
-        default_env_path(tmp_pixi_workspace).joinpath("conda-meta").glob("dummy-a*.json")
-    )
-
-    for file in dummy_a_meta_files:
-        path = Path(file)
-        if path.exists():
-            path.unlink()  # Removes the file
-
-    # Run with revalidation to force reinstallation
-    verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "--revalidate", "echo", "hello"],
-        stdout_contains="hello",
-    )
-
-    # Validate that the dummy-a files are reinstalled
-    for file in dummy_a_meta_files:
-        assert Path(file).exists()
-
-
 def test_run_with_activation(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     toml = f"""
@@ -247,7 +202,7 @@ def test_run_with_activation(pixi: Path, tmp_pixi_workspace: Path) -> None:
         stdout_contains="test123",
     )
 
-    # Validate that without experimental caching it does not use the cache
+    # Validate that without experimental it does not use the cache
     assert not tmp_pixi_workspace.joinpath(".pixi/activation-env-v0").exists()
 
     # Enable the experimental cache config
@@ -1456,103 +1411,43 @@ def test_task_caching_with_multiple_inputs_args(pixi: Path, tmp_pixi_workspace: 
     )
 
 
-# Run with environment variable and sort the priority
-# variable task.env > activation.env > activation.scripts > activation scripts of dependencies > outside environment variable
-def test_run_with_environment_variable_priority(
-    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
-) -> None:
+def test_shell_quoting_run_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test that shell quoting works correctly for CLI commands with quotes.
+
+    This test addresses GitHub issue #1979 where pixi run required multiple
+    layers of quoting to avoid shell substitution.
+    """
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
-    is_windows = platform.system() == "Windows"
-    script_extension = ".bat" if is_windows else ".sh"
-    script_manifest = tmp_pixi_workspace.joinpath(f"env_setup{script_extension}")
-    toml = f"""
-    [workspace]
-    name = "test"
-    channels = ["{dummy_channel_1}"]
-    platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
-    [activation.env]
-    MY_ENV = "test123"
-    [target.unix.activation]
-    scripts = ["env_setup.sh"]
-    [target.win-64.activation]
-    scripts = ["env_setup.bat"]
-    [tasks.task]
-    cmd = "echo $MY_ENV"
-    env = {{ MY_ENV = "test456" }}
-    [tasks.foo]
-    cmd = "echo $MY_ENV"
-    [tasks.foobar]
-    cmd = "echo $FOO_PATH"
-    [tasks.bar]
-    cmd = "echo $BAR_PATH"
-    [tasks.outside]
-    cmd = "echo $OUTSIDE_ENV"
-    [dependencies]
-    pixi-foobar = "*"
-    """
+    manifest.write_text(EMPTY_BOILERPLATE_PROJECT)
 
-    manifest.write_text(toml)
-    # Generate platform-specific script content
-    if is_windows:
-        script_content = """@echo off
-    set "MY_ENV=activation script"
-    set "FOO_PATH=activation_script"
-    """
-    else:
-        script_content = """#!/bin/bash
-    # Activation script for Unix-like systems
-    export MY_ENV="activation script"
-    export FOO_PATH="activation_script"
-    """
-    script_manifest.write_text(script_content)
-
-    # Test 1: task.env > activation.env - should use environment variable defined in specific tasks
+    # Test Python command with single quotes inside double quotes
     verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "task"],
-        stdout_contains="test456",
+        [pixi, "run", "--manifest-path", manifest, "python", "-c", "print('hello world')"],
+        stdout_contains="hello world",
     )
 
-    # Test 2: activation.env > activation.script - should use activation.env
+    # Test Python command with double quotes inside single quotes
     verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "foo"],
-        stdout_contains="test123",
+        [pixi, "run", "--manifest-path", manifest, "python", "-c", 'print("hello world")'],
+        stdout_contains="hello world",
     )
 
-    # Test 3: activation.script > activation scripts from dependencies
+    # Test Python command with escaped quotes
     verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "foobar"],
-        stdout_contains="activation_script",
+        [pixi, "run", "--manifest-path", manifest, "python", "-c", 'print("hello world")'],
+        stdout_contains="hello world",
     )
 
-    # Test 4: activation scripts from dependencies > outside environment variable
+    # Test echo command with quotes
     verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "bar"],
-        stdout_contains="bar",
-        stdout_excludes="outside_env",
-        env={"BAR_PATH": "outside_env"},
+        [pixi, "run", "--manifest-path", manifest, "echo", "hello world"],
+        stdout_contains="hello world",
     )
 
-    # Test 5: if nothing specified, use outside environment variable
+    # Test command with arguments containing spaces
     verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "outside"],
-        stdout_contains="outside_env",
-        env={"OUTSIDE_ENV": "outside_env"},
-    )
-
-    # Test 6: activation.env > outside environment variable - should use activation.env
-    verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "foo"],
-        stdout_contains="test123",
-        stdout_excludes="outside_env",
-        env={"MY_ENV": "outside_env"},
-    )
-
-    # Test 7: task.env > outside environment variable - should use environment variable defined in specific tasks
-    verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "task"],
-        stdout_contains="test456",
-        stdout_excludes="outside_env",
-        env={"MY_ENV": "outside_env"},
+        [pixi, "run", "--manifest-path", manifest, "echo", "hello", "world", "with spaces"],
+        stdout_contains="hello world with spaces",
     )
 
 
@@ -1599,31 +1494,3 @@ def test_signal_forwarding(pixi: Path, tmp_pixi_workspace: Path) -> None:
             )
     else:
         raise AssertionError("Output file was not created")
-    
-def test_run_environment_variable_not_be_overridden(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    """Test environment variables should not be overridden by excluded keys.""" 
-    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
-    toml = """
-    [workspace]
-    name = "my_project"
-    platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
-    channels = []
-    [activation.env]
-    TEST_VAR = "$PIXI_PROJECT_NAME"
-    PROJECT_NAME = "$(pixi workspace name get)"
-    [tasks]
-    start = "echo The project name is $PIXI_PROJECT_NAME"
-    test = "echo The project name is $TEST_VAR"
-    """
-
-    manifest.write_text(toml)
-    verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "start"],
-        stdout_contains="my_project",
-        stdout_excludes="$PIXI_PROJECT_NAME",
-    )
-    verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "test"],
-        stdout_contains="my_project",
-        stdout_excludes="$(pixi workspace name get)"
-    )

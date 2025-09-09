@@ -1,10 +1,11 @@
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use miette::Diagnostic;
-use pixi_build_discovery::{DiscoveredBackend, EnabledProtocols};
+use pixi_build_discovery::EnabledProtocols;
 use pixi_build_frontend::Backend;
 use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
 use pixi_record::{PinnedSourceSpec, PixiRecord};
@@ -14,6 +15,7 @@ use rattler_conda_types::{
     Platform, RepoDataRecord, prefix::Prefix,
 };
 use rattler_digest::Sha256Hash;
+use rattler_repodata_gateway::{RunExportExtractorError, RunExportsReporter};
 use serde::Serialize;
 use thiserror::Error;
 use tracing::instrument;
@@ -29,8 +31,8 @@ use crate::{
     SourceBuildCacheStatusSpec, SourceCheckoutError,
     build::{
         BuildCacheError, BuildHostEnvironment, BuildHostPackage, CachedBuild,
-        CachedBuildSourceInfo, Dependencies, DependenciesError, MoveError, SourceRecordOrCheckout,
-        WorkDirKey, move_file,
+        CachedBuildSourceInfo, Dependencies, DependenciesError, MoveError, PackageBuildInputHash,
+        PixiRunExports, SourceRecordOrCheckout, WorkDirKey, move_file,
     },
     package_identifier::PackageIdentifier,
 };
@@ -118,6 +120,7 @@ impl SourceBuildSpec {
     pub(crate) async fn build(
         mut self,
         command_dispatcher: CommandDispatcher,
+        reporter: Option<Arc<dyn RunExportsReporter>>,
     ) -> Result<SourceBuildResult, CommandDispatcherError<SourceBuildError>> {
         // If the output directory is not set, we want to use the build cache. Read the
         // build cache in that case.
@@ -132,6 +135,8 @@ impl SourceBuildSpec {
                         build_environment: self.build_environment.clone(),
                         source: self.source.clone(),
                         channels: self.channels.clone(),
+                        channel_config: self.channel_config.clone(),
+                        enabled_protocols: self.enabled_protocols.clone(),
                     })
                     .await
                     .map_err_with(SourceBuildError::from)?;
@@ -153,22 +158,28 @@ impl SourceBuildSpec {
             .await
             .map_err_with(SourceBuildError::SourceCheckout)?;
 
-        // Discover information about the build backend from the source code.
-        let discovered_backend = DiscoveredBackend::discover(
-            &source_checkout.path,
-            &self.channel_config,
-            &self.enabled_protocols,
-        )
-        .map_err(SourceBuildError::Discovery)
-        .map_err(CommandDispatcherError::Failed)?;
+        // Discover information about the build backend from the source code (cached by
+        // path).
+        let discovered_backend = command_dispatcher
+            .discover_backend(
+                &source_checkout.path,
+                self.channel_config.clone(),
+                self.enabled_protocols.clone(),
+            )
+            .await
+            .map_err_with(SourceBuildError::Discovery)?;
+
+        // Compute the package input hash for caching purposes.
+        let package_build_input_hash = PackageBuildInputHash::from(discovered_backend.as_ref());
 
         // Instantiate the backend with the discovered information.
         let backend = command_dispatcher
             .instantiate_backend(InstantiateBackendSpec {
                 backend_spec: discovered_backend
                     .backend_spec
+                    .clone()
                     .resolve(SourceAnchor::from(SourceSpec::from(self.source.clone()))),
-                init_params: discovered_backend.init_params,
+                init_params: discovered_backend.init_params.clone(),
                 channel_config: self.channel_config.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
             })
@@ -202,11 +213,22 @@ impl SourceBuildSpec {
 
         // Build the package based on the support backend capabilities.
         let mut built_source = if backend.capabilities().provides_conda_build_v1() {
-            self.build_v1(command_dispatcher, backend, work_directory)
-                .await?
+            self.build_v1(
+                command_dispatcher,
+                backend,
+                work_directory,
+                package_build_input_hash,
+                reporter,
+            )
+            .await?
         } else {
-            self.build_v0(command_dispatcher, backend, work_directory)
-                .await?
+            self.build_v0(
+                command_dispatcher,
+                backend,
+                work_directory,
+                package_build_input_hash,
+            )
+            .await?
         };
 
         // Create the output directory if it does not exist.
@@ -309,12 +331,12 @@ impl SourceBuildSpec {
         command_dispatcher: CommandDispatcher,
         backend: Backend,
         work_directory: PathBuf,
+        package_build_input_hash: PackageBuildInputHash,
     ) -> Result<BuiltPackage, CommandDispatcherError<SourceBuildError>> {
         let result = command_dispatcher
             .backend_source_build(BackendSourceBuildSpec {
                 method: BackendSourceBuildMethod::BuildV0(BackendSourceBuildV0Method {
                     editable: self.editable(),
-                    channel_config: self.channel_config,
                     build_environment: self.build_environment,
                     variants: self.variants,
                     output_directory: self.output_directory,
@@ -324,6 +346,7 @@ impl SourceBuildSpec {
                 source: self.source,
                 work_directory,
                 channels: self.channels,
+                channel_config: self.channel_config,
             })
             .await
             .map_err_with(SourceBuildError::from)?;
@@ -334,6 +357,7 @@ impl SourceBuildSpec {
                 globs: result.input_globs,
                 build: Default::default(),
                 host: Default::default(),
+                package_build_input_hash: Some(package_build_input_hash),
             },
         })
     }
@@ -343,6 +367,8 @@ impl SourceBuildSpec {
         command_dispatcher: CommandDispatcher,
         backend: Backend,
         work_directory: PathBuf,
+        package_build_input_hash: PackageBuildInputHash,
+        reporter: Option<Arc<dyn RunExportsReporter>>,
     ) -> Result<BuiltPackage, CommandDispatcherError<SourceBuildError>> {
         let source_anchor = SourceAnchor::from(SourceSpec::from(self.source.clone()));
         let host_platform = self.build_environment.host_platform;
@@ -394,7 +420,7 @@ impl SourceBuildSpec {
             .map_err(SourceBuildError::from)
             .map_err(CommandDispatcherError::Failed)?
             .unwrap_or_default();
-        let build_records = self
+        let mut build_records = self
             .solve_dependencies(
                 format!("{} (build)", self.package.name.as_source()),
                 &command_dispatcher,
@@ -404,8 +430,18 @@ impl SourceBuildSpec {
             .await
             .map_err_with(Box::new)
             .map_err_with(SourceBuildError::SolveBuildEnvironment)?;
-        let build_run_exports =
-            build_dependencies.extract_run_exports(&build_records, &output.ignore_run_exports);
+
+        let gateway = command_dispatcher.gateway();
+        let build_run_exports = build_dependencies
+            .extract_run_exports(
+                &mut build_records,
+                &output.ignore_run_exports,
+                gateway,
+                reporter.clone(),
+            )
+            .await
+            .map_err(SourceBuildError::from)
+            .map_err(CommandDispatcherError::Failed)?;
 
         // Solve the host environment for the output.
         let host_dependencies = output
@@ -418,7 +454,7 @@ impl SourceBuildSpec {
             .unwrap_or_default()
             // Extend with the run exports from the build environment.
             .extend_with_run_exports_from_build(&build_run_exports);
-        let host_records = self
+        let mut host_records = self
             .solve_dependencies(
                 format!("{} (host)", self.package.name.as_source()),
                 &command_dispatcher,
@@ -428,6 +464,16 @@ impl SourceBuildSpec {
             .await
             .map_err_with(Box::new)
             .map_err_with(SourceBuildError::SolveBuildEnvironment)?;
+        let host_run_exports = host_dependencies
+            .extract_run_exports(
+                &mut host_records,
+                &output.ignore_run_exports,
+                command_dispatcher.gateway(),
+                reporter,
+            )
+            .await
+            .map_err(SourceBuildError::from)
+            .map_err(CommandDispatcherError::Failed)?;
 
         // Install the build environment
         let build_prefix = if build_records.is_empty() {
@@ -442,6 +488,7 @@ impl SourceBuildSpec {
                             .map_err(SourceBuildError::CreateBuildEnvironmentDirectory)
                             .map_err(CommandDispatcherError::Failed)?,
                         installed: None,
+                        ignore_packages: None,
                         build_environment: self.build_environment.to_build_from_build(),
                         force_reinstall: Default::default(),
                         channels: self.channels.clone(),
@@ -468,6 +515,7 @@ impl SourceBuildSpec {
                             .map_err(SourceBuildError::CreateBuildEnvironmentDirectory)
                             .map_err(CommandDispatcherError::Failed)?,
                         installed: None,
+                        ignore_packages: None,
                         build_environment: self.build_environment.to_build_from_build(),
                         force_reinstall: Default::default(),
                         channels: self.channels.clone(),
@@ -486,6 +534,21 @@ impl SourceBuildSpec {
             CommandDispatcherError::Failed(SourceBuildError::CreateWorkDirectory(err))
         })?;
 
+        // Gather the dependencies for the output.
+        let dependencies = Dependencies::new(&output.run_dependencies, None)
+            .map_err(SourceBuildError::from)
+            .map_err(CommandDispatcherError::Failed)?
+            .extend_with_run_exports_from_build_and_host(
+                host_run_exports,
+                build_run_exports,
+                output.metadata.subdir,
+            );
+
+        // Convert the run exports
+        let run_exports = PixiRunExports::try_from_protocol(&output.run_exports)
+            .map_err(SourceBuildError::from)
+            .map_err(CommandDispatcherError::Failed)?;
+
         // Extract the repodata records from the build and host environments.
         let build_records = Self::extract_prefix_repodata(build_records, build_prefix);
         let host_records = Self::extract_prefix_repodata(host_records, host_prefix);
@@ -494,9 +557,12 @@ impl SourceBuildSpec {
             .backend_source_build(BackendSourceBuildSpec {
                 method: BackendSourceBuildMethod::BuildV1(BackendSourceBuildV1Method {
                     editable: self.editable(),
+                    dependencies,
+                    run_exports,
                     build_prefix: BackendSourceBuildPrefix {
                         platform: self.build_environment.build_platform,
                         prefix: directories.build_prefix,
+                        dependencies: build_dependencies,
                         records: build_records
                             .iter()
                             .map(|p| p.repodata_record.clone())
@@ -505,6 +571,7 @@ impl SourceBuildSpec {
                     host_prefix: BackendSourceBuildPrefix {
                         platform: self.build_environment.host_platform,
                         prefix: directories.host_prefix,
+                        dependencies: host_dependencies,
                         records: host_records
                             .iter()
                             .map(|p| p.repodata_record.clone())
@@ -518,6 +585,7 @@ impl SourceBuildSpec {
                 source: self.source,
                 work_directory,
                 channels: self.channels,
+                channel_config: self.channel_config,
             })
             .await
             .map_err_with(SourceBuildError::from)?;
@@ -532,6 +600,7 @@ impl SourceBuildSpec {
                 host: BuildHostEnvironment {
                     packages: host_records,
                 },
+                package_build_input_hash: Some(package_build_input_hash),
             },
         })
     }
@@ -581,8 +650,16 @@ impl SourceBuildSpec {
         command_dispatcher
             .solve_pixi_environment(PixiEnvironmentSpec {
                 name: Some(name),
-                dependencies: dependencies.dependencies,
-                constraints: dependencies.constraints,
+                dependencies: dependencies
+                    .dependencies
+                    .into_specs()
+                    .map(|(name, spec)| (name, spec.value))
+                    .collect(),
+                constraints: dependencies
+                    .constraints
+                    .into_specs()
+                    .map(|(name, spec)| (name, spec.value))
+                    .collect(),
                 installed: vec![], // TODO: To lock build environments, fill this.
                 build_environment,
                 channels: self.channels.clone(),
@@ -658,6 +735,9 @@ pub enum SourceBuildError {
 
     #[error(transparent)]
     BuildCache(#[from] BuildCacheError),
+
+    #[error("failed to amend run exports: {0}")]
+    RunExportsExtraction(#[from] RunExportExtractorError),
 
     #[error(transparent)]
     CreateWorkDirectory(std::io::Error),
@@ -751,6 +831,7 @@ impl From<SourceBuildCacheStatusError> for SourceBuildError {
     fn from(value: SourceBuildCacheStatusError) -> Self {
         match value {
             SourceBuildCacheStatusError::BuildCache(err) => SourceBuildError::BuildCache(err),
+            SourceBuildCacheStatusError::Discovery(err) => SourceBuildError::Discovery(err),
             SourceBuildCacheStatusError::SourceCheckout(err) => {
                 SourceBuildError::SourceCheckout(err)
             }

@@ -3,7 +3,6 @@ mod event_tree;
 
 use std::{
     collections::HashMap,
-    ops::DerefMut,
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -27,7 +26,7 @@ use rattler_conda_types::{
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use url::Url;
 
-use crate::event_tree::EventTree;
+use crate::{event_reporter::Event, event_tree::EventTree};
 
 /// Returns a default set of cache directories for the test.
 fn default_cache_dirs() -> CacheDirs {
@@ -68,6 +67,7 @@ fn default_build_environment() -> BuildEnvironment {
 }
 
 #[tokio::test]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 pub async fn simple_test() {
     let (reporter, events) = EventReporter::new();
     let (tool_platform, tool_virtual_packages) = tool_platform();
@@ -116,6 +116,7 @@ pub async fn simple_test() {
             prefix: Prefix::create(&prefix_dir).unwrap(),
             installed: None,
             build_environment: build_env,
+            ignore_packages: None,
             force_reinstall: Default::default(),
             channels: vec![
                 Url::from_str("https://prefix.dev/conda-forge")
@@ -134,7 +135,7 @@ pub async fn simple_test() {
         prefix_dir.display()
     );
 
-    let event_tree = EventTree::new(events.lock().unwrap().iter());
+    let event_tree = EventTree::from(events);
     insta::assert_snapshot!(event_tree.to_string());
 }
 
@@ -188,6 +189,141 @@ pub async fn instantiate_backend_without_compatible_api_version() {
     insta::assert_snapshot!(format_diagnostic(&err));
 }
 
+/// When two identical tool env instantiations are queued concurrently and the
+/// operation fails, the dispatcher sends the failure to one waiter and cancels
+/// the others. This verifies cancellation without network access.
+#[tokio::test]
+pub async fn instantiate_backend_without_compatible_api_version_cancels_duplicates() {
+    use pixi_command_dispatcher::CommandDispatcherError;
+
+    let backend_name = PackageName::new_unchecked("backend-without-compatible-api-version");
+    let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .unwrap();
+    let channel_dir = root_dir.join("tests/data/channels/channels/backend_channel_1");
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_cache_dirs(default_cache_dirs())
+        .with_executor(Executor::Serial)
+        .finish();
+
+    // Build the spec once and issue two identical concurrent requests.
+    let spec = InstantiateToolEnvironmentSpec::new(
+        backend_name,
+        PixiSpec::Version(VersionSpec::Any),
+        Vec::from([Url::from_directory_path(channel_dir).unwrap().into()]),
+    );
+
+    let (r1, r2) = tokio::join!(
+        dispatcher.instantiate_tool_environment(spec.clone()),
+        dispatcher.instantiate_tool_environment(spec),
+    );
+
+    // Exactly one result should be a failure and the other should be cancelled.
+    let is_cancelled = |r: &Result<
+        _,
+        CommandDispatcherError<pixi_command_dispatcher::InstantiateToolEnvironmentError>,
+    >| matches!(r, Err(CommandDispatcherError::Cancelled));
+    let is_failed = |r: &Result<
+        _,
+        CommandDispatcherError<pixi_command_dispatcher::InstantiateToolEnvironmentError>,
+    >| matches!(r, Err(CommandDispatcherError::Failed(_)));
+
+    let cancelled_count = usize::from(is_cancelled(&r1)) + usize::from(is_cancelled(&r2));
+    let failed_count = usize::from(is_failed(&r1)) + usize::from(is_failed(&r2));
+
+    assert_eq!(
+        cancelled_count, 1,
+        "expected exactly one request to be cancelled"
+    );
+    assert_eq!(failed_count, 1, "expected exactly one request to fail");
+}
+
+/// Dropping the returned future should cancel the background task promptly.
+/// This test verifies that behavior by:
+/// - installing a compatible backend from a local channel (no network)
+/// - starting instantiate_tool_environment with a reporter
+/// - waiting until the background task is started, then immediately dropping
+///   the caller future (via abort)
+/// - ensuring no installation starts and we still see a clean finish event
+#[tokio::test]
+pub async fn dropping_future_cancels_background_task() {
+    // Arrange a dispatcher with an event reporter for synchronization.
+    let (reporter, events) = EventReporter::new();
+    let root_dir = cargo_workspace_dir();
+    let channel_dir = root_dir.join("tests/data/channels/channels/backend_channel_1");
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_cache_dirs(default_cache_dirs())
+        .with_reporter(reporter)
+        .with_executor(Executor::Serial)
+        .finish();
+
+    // Use a backend that has a compatible API version so solve would succeed
+    // and the task would progress to installation if not cancelled.
+    let spec = InstantiateToolEnvironmentSpec::new(
+        PackageName::new_unchecked("backend-with-compatible-api-version"),
+        PixiSpec::Version(VersionSpec::Any),
+        Vec::from([Url::from_directory_path(channel_dir).unwrap().into()]),
+    );
+
+    // Hold the write lock for the target tool prefix so installation cannot
+    // progress even if solve completes; this makes the test deterministic.
+    let prefix_dir = dispatcher
+        .cache_dirs()
+        .build_backends()
+        .join(spec.cache_key());
+    let mut write_guard = pixi_utils::AsyncPrefixGuard::new(&prefix_dir)
+        .await
+        .unwrap()
+        .write()
+        .await
+        .unwrap();
+
+    // Spawn the instantiate future and wait until the background marks it started.
+    let dispatcher = dispatcher.clone();
+    let handle = tokio::spawn(async move { dispatcher.instantiate_tool_environment(spec).await });
+
+    // Busy-wait (briefly) for the "InstantiateToolEnvStarted" event.
+    let started = events
+        .wait_until_matches(
+            |e| matches!(e, Event::InstantiateToolEnvStarted { .. }),
+            std::time::Duration::from_secs(2),
+        )
+        .await
+        .is_ok();
+    assert!(started, "instantiate task did not start in time");
+
+    // Act: immediately drop the caller future by aborting the task.
+    handle.abort();
+
+    // Release our write lock (after cancellation). If cancellation worked,
+    // the background task should not proceed into installation.
+    write_guard.begin().await.unwrap();
+    drop(write_guard);
+
+    // Wait for the background to emit a finished event.
+    let finished = events
+        .wait_until_matches(
+            |e| matches!(e, Event::InstantiateToolEnvFinished { .. }),
+            std::time::Duration::from_secs(2),
+        )
+        .await
+        .is_ok();
+    assert!(
+        finished,
+        "instantiate task did not finish promptly after cancellation"
+    );
+
+    // Assert: No installation should have started.
+    let had_install = events.contains(|e| matches!(e, Event::PixiInstallStarted { .. }));
+    assert!(
+        !had_install,
+        "installation should not have started after cancellation"
+    );
+}
+
 #[tokio::test]
 pub async fn test_cycle() {
     // Setup a reporter that allows us to trace the steps taken by the command
@@ -235,7 +371,7 @@ pub async fn test_cycle() {
         .expect_err("expected a cycle error");
 
     // Output the error and the event tree to a snapshot for debugging.
-    let event_tree = EventTree::new(events.lock().unwrap().iter());
+    let event_tree = EventTree::from(events);
     insta::assert_snapshot!(format!(
         "ERROR:\n{}\n\nTRACE:\n{}",
         format_diagnostic(&error),
@@ -318,7 +454,7 @@ pub async fn test_stale_host_dependency_triggers_rebuild() {
         .unwrap();
 
     // Explicitly drop the dispatcher to ensure all caches are flushed.
-    let first_events = std::mem::take(first_events.lock().unwrap().deref_mut());
+    let first_events = first_events.take();
     drop(dispatcher);
 
     // TOUCH a file that triggers a rebuild of package-b. package-b defines a build
@@ -344,7 +480,7 @@ pub async fn test_stale_host_dependency_triggers_rebuild() {
         .unwrap();
 
     // Get all the events that happened.
-    let second_events = std::mem::take(second_events.lock().unwrap().deref_mut());
+    let second_events = second_events.take();
     let event_tree = EventTree::new(first_events.iter().chain(second_events.iter())).to_string();
     eprintln!("{event_tree}");
 
@@ -368,6 +504,7 @@ pub async fn test_stale_host_dependency_triggers_rebuild() {
 }
 
 #[tokio::test]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 pub async fn instantiate_backend_with_from_source() {
     let root_dir = workspaces_dir().join("source-backends");
 

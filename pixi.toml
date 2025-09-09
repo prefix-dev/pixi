@@ -5,10 +5,9 @@ authors = [
   "Tim de Jager <tim@prefix.dev>",
   "Ruben Arts <ruben@prefix.dev>",
 ]
+channels = ["https://prefix.dev/conda-forge"]
 description = "Package management made easy!"
 name = "pixi"
-# Using faster repodata fetching from our experimental fast channel, which implements https://github.com/conda/ceps/pull/75
-channels = ["https://prefix.dev/conda-forge"]
 platforms = ["linux-64", "win-64", "osx-64", "osx-arm64", "linux-aarch64"]
 requires-pixi = ">=0.45"
 
@@ -21,9 +20,12 @@ build-debug = "cargo build"
 build-release = "cargo build --release"
 bump = "tbump --only-patch $RELEASE_VERSION"
 generate-cli-docs = "cargo run --locked --manifest-path crates/pixi_docs/Cargo.toml"
-install = { cmd = "cargo install --path . --locked", description = "Install pixi itself locally using cargo" }
+install = { cmd = "cargo install --path crates/pixi --locked", description = "Install pixi itself locally using cargo" }
 install-as = { cmd = "python scripts/install.py", depends-on = [
   "build-release",
+] }
+install-debug-as = { cmd = "python scripts/install.py --debug", depends-on = [
+  "build-debug",
 ] }
 pypi-proxy = "python scripts/pypi-proxy.py"
 release = "python scripts/release.py"
@@ -37,8 +39,8 @@ test-all-extra-slow = { depends-on = [
 ] }
 test-all-fast = { depends-on = ["test-fast", "test-integration-fast"] }
 test-all-slow = { depends-on = ["test-slow", "test-integration-slow"] }
-test-fast = "cargo nextest run --workspace --all-targets"
-test-slow = """cargo nextest run --workspace --all-targets --features slow_integration_tests
+test-fast = """RUST_LOG="debug,resolvo=info" cargo nextest run --workspace --all-targets"""
+test-slow = """RUST_LOG="debug,resolvo=info" cargo nextest run --workspace --all-targets --features slow_integration_tests,online_tests
               --status-level skip --failure-output immediate-final --no-fail-fast --final-status-level slow"""
 
 [feature.pytest.dependencies]
@@ -48,10 +50,11 @@ inline-snapshot = ">=0.24.0,<0.25"
 mypy = ">=1.16,<1.17"
 py-rattler = ">=0.14,<0.15"
 pytest = "*"
-pytest-rerunfailures = ">=15,<16"
+pytest-rerunfailures = ">=16,<17"
 pytest-timeout = ">=2.3.1,<3"
 pytest-xdist = ">=3.6.1,<4"
 pyyaml = ">=6.0.2,<7"
+rattler-build = ">=0.46.0,<0.47"
 rich = ">=14,<15"
 tomli-w = ">=1.0,<2"
 types-pyyaml = ">=6.0.12.20241230,<7"
@@ -95,7 +98,7 @@ tbump = ">=6.9.0,<6.10"
 
 [feature.dev.tasks]
 insta-review = "cargo insta review --workspace"
-update-rattler = "cargo upgrade -p rattler -p file_url -p rattler_cache -p rattler_conda_types -p rattler_digest -p rattler_lock -p rattler_networking -p rattler_repodata_gateway -p rattler_shell -p rattler_solve -p rattler_virtual_packages"
+update-rattler = "cargo upgrade --incompatible allow -p rattler -p file_url -p rattler_cache -p rattler_conda_types -p rattler_digest -p rattler_lock -p rattler_networking -p rattler_repodata_gateway -p rattler_shell -p rattler_solve -p rattler_virtual_packages"
 
 # UV dependency management
 switch-to-remote-uv = { cmd = "python scripts/local_patch.py uv remote", description = "Switch back to remote uv dependencies" }
@@ -145,13 +148,13 @@ lint-fast = { cmd = "lefthook run pre-commit --all-files --force", description =
 lint-slow = { cmd = "lefthook run pre-push --all-files --force", description = "Run all slow linters and formatters on all code" }
 pre-commit-install = "lefthook install"
 pre-commit-install-minimal = "lefthook install pre-commit"
-ruff-format = "ruff format --force-exclude"
+ruff-format = "ruff format --exit-non-zero-on-format --force-exclude"
 ruff-lint = "ruff check --fix --exit-non-zero-on-fix --force-exclude"
 shell-format = "shfmt --write --indent=4 --simplify --binary-next-line"
 toml-format = { cmd = "taplo fmt", env = { RUST_LOG = "warn" } }
 toml-lint = "taplo lint --verbose **/pixi.toml"
 typecheck-python = "mypy"
-typos = "typos --write-changes --force-exclude"
+typos = "typos --force-exclude"
 
 [feature.rust.dependencies]
 rust = ">=1.86.0,<1.87"
@@ -165,7 +168,7 @@ pkg-config = "0.29.*"
 rust-src = ">=1.84.0,<2"
 
 [feature.build.target.linux-64.dependencies]
-clang = ">=20.1.2,<20.2"
+clang = ">=21.1,<21.2"
 compilers = ">=1.6.0"
 make = ">=4.3,<5"
 mold = ">=2.33.0,<3.0"

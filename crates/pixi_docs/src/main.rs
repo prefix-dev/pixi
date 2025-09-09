@@ -299,16 +299,21 @@ fn arguments(options: &[&clap::Arg], parents: &[String]) -> String {
             if let Some(short) = opt.get_short() {
                 format!(" (-{})", short)
             } else {
-                "".to_string()
+                String::new()
             },
             if opt.get_action().takes_values() && !opt.is_positional() {
                 if let Some(value_names) = opt.get_value_names() {
-                    format!(" <{}>", value_names.join(" "))
+                    let sep = if opt.is_require_equals_set() {
+                        "="
+                    } else {
+                        " "
+                    };
+                    format!("{}<{}>", sep, value_names.join(" "))
                 } else {
-                    "".to_string()
+                    String::new()
                 }
             } else {
-                "".to_string()
+                String::new()
             }
         )
         .unwrap();
@@ -377,5 +382,5 @@ fn arguments(options: &[&clap::Arg], parents: &[String]) -> String {
 
 /// Loads the CLI command structure from pixi
 fn get_command() -> Command {
-    pixi::cli::Args::command()
+    pixi_cli::Args::command()
 }

@@ -1,0 +1,138 @@
+[package]
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi_cli"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[features]
+default = []
+native-tls = [
+  "reqwest/native-tls",
+  "reqwest/native-tls-alpn",
+  "rattler_repodata_gateway/native-tls",
+  "rattler/native-tls",
+  "pixi_utils/native-tls",
+]
+# run tests connecting to remote Internet services
+online_tests = []
+rustls-tls = [
+  "reqwest/rustls-tls",
+  "reqwest/rustls-tls-native-roots",
+  "rattler_repodata_gateway/rustls-tls",
+  "rattler/rustls-tls",
+  "pixi_utils/rustls-tls",
+]
+self_update = []
+slow_integration_tests = []
+tokio-console = ["console-subscriber", "tokio/tracing"]
+
+
+[dependencies]
+ahash = { workspace = true }
+chrono = { workspace = true }
+clap = { workspace = true, features = [
+  "derive",
+  "usage",
+  "wrap_help",
+  "std",
+  "color",
+  "error-context",
+  "env",
+] }
+clap_complete = { workspace = true }
+clap_complete_nushell = { workspace = true }
+console = { workspace = true, features = ["windows-console-colors"] }
+console-subscriber = { workspace = true, optional = true }
+ctrlc = { workspace = true }
+deno_task_shell = { workspace = true }
+dialoguer = { workspace = true }
+dunce = { workspace = true }
+fancy_display = { workspace = true }
+flate2 = { workspace = true }
+fs-err = { workspace = true, features = ["tokio"] }
+futures = { workspace = true }
+human_bytes = { workspace = true }
+indexmap = { workspace = true, features = ["serde"] }
+indicatif = { workspace = true }
+is_executable = { workspace = true }
+itertools = { workspace = true }
+miette = { workspace = true, features = ["fancy-no-backtrace"] }
+minijinja = { workspace = true, features = ["builtins"] }
+pathdiff = { workspace = true }
+pep508_rs = { workspace = true }
+pixi_command_dispatcher = { workspace = true }
+pixi_config = { workspace = true }
+pixi_consts = { workspace = true }
+pixi_core = { workspace = true }
+pixi_git = { workspace = true }
+pixi_global = { workspace = true }
+pixi_manifest = { workspace = true, features = ["rattler_lock"] }
+pixi_progress = { workspace = true }
+pixi_pypi_spec = { workspace = true }
+pixi_record = { workspace = true }
+pixi_reporters = { workspace = true }
+pixi_spec = { workspace = true }
+pixi_task = { workspace = true }
+pixi_utils = { workspace = true, default-features = false }
+pixi_uv_conversions = { workspace = true }
+pypi_modifiers = { workspace = true }
+rattler = { workspace = true, features = ["cli-tools", "indicatif"] }
+rattler_conda_types = { workspace = true }
+rattler_digest = { workspace = true }
+rattler_lock = { workspace = true }
+rattler_networking = { workspace = true, default-features = false }
+rattler_repodata_gateway = { workspace = true, features = [
+  "sparse",
+  "gateway",
+] }
+rattler_shell = { workspace = true, features = ["sysinfo"] }
+rattler_solve = { workspace = true, features = ["resolvo", "serde"] }
+rattler_upload = { workspace = true, features = ["s3"] }
+rattler_virtual_packages = { workspace = true }
+regex = { workspace = true }
+reqwest = { workspace = true, features = [
+  "http2",
+  "macos-system-configuration",
+] }
+reqwest-middleware = { workspace = true }
+same-file = { workspace = true }
+self-replace = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_with = { workspace = true, features = ["indexmap"] }
+strsim = { workspace = true }
+tabwriter = { workspace = true, features = ["ansi_formatting"] }
+tar = { workspace = true }
+temp-env = { workspace = true }
+tempfile = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal"] }
+tokio-util = { workspace = true }
+toml_edit = { workspace = true, features = ["serde"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+typed-path = { workspace = true }
+url = { workspace = true }
+uv-client = { workspace = true }
+uv-configuration = { workspace = true }
+uv-distribution = { workspace = true }
+uv-normalize = { workspace = true }
+uv-pep508 = { workspace = true }
+uv-pypi-types = { workspace = true }
+uv-requirements-txt = { workspace = true }
+uv-types = { workspace = true }
+zip = { workspace = true, features = ["deflate", "time"] }
+
+[dev-dependencies]
+insta = { workspace = true, features = ["filters"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true, default-features = false }
+nix = { workspace = true, features = ["poll", "term"] }
+pixi_pty = { path = "../pixi_pty" }
+sha2 = { workspace = true, features = ["asm"] }
+signal-hook = { workspace = true }

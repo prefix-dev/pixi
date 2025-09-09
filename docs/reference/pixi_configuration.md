@@ -192,6 +192,22 @@ Configuration for conda channel-mirrors, more info [below](#mirror-configuration
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:mirrors"
 ```
 
+### `proxy-config`
+
+`pixi` respects the proxy environments such as `https_proxy` with the highest priority.
+Also we can set the proxies in `proxy-config` table of the `pixi` config, which affect all the pixi
+network actions, such as resolve, self-update, download, etc.
+Now `proxy-config` table supports the following options:
+
+- `https` and `http`: The proxy url for https:// or http:// url, works like `https_proxy` and `http_proxy` environments.
+- `non-proxy-hosts`: A list of domains which should bypass proxies.
+
+
+```toml title="config.toml"
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:proxy-config"
+```
+
+
 ### `repodata-config`
 
 Configuration for repodata fetching.

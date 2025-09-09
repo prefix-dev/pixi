@@ -1,0 +1,121 @@
+[package]
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi_core"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[features]
+slow_integration_tests = []
+
+[dependencies]
+ahash = { workspace = true }
+assert_matches = { workspace = true }
+async-once-cell = { workspace = true }
+barrier_cell = { workspace = true }
+chrono = { workspace = true }
+console = { workspace = true }
+csv = { workspace = true }
+dashmap = { workspace = true }
+dialoguer = { workspace = true }
+dunce = { workspace = true }
+fancy_display = { workspace = true }
+fs-err = { workspace = true }
+fs_extra = { workspace = true }
+futures = { workspace = true }
+human_bytes = { workspace = true }
+humantime = { workspace = true }
+indexmap = { workspace = true }
+indicatif = { workspace = true }
+itertools = { workspace = true }
+miette = { workspace = true }
+once_cell = { workspace = true }
+pathdiff = { workspace = true }
+pep440_rs = { workspace = true }
+pep508_rs = { workspace = true }
+percent-encoding = { workspace = true }
+pixi_build_discovery = { workspace = true }
+pixi_build_frontend = { workspace = true }
+pixi_build_type_conversions = { workspace = true }
+pixi_command_dispatcher = { workspace = true }
+pixi_config = { workspace = true }
+pixi_consts = { workspace = true }
+pixi_default_versions = { workspace = true }
+pixi_git = { workspace = true }
+pixi_glob = { workspace = true }
+pixi_manifest = { workspace = true, features = ["rattler_lock"] }
+pixi_progress = { workspace = true }
+pixi_pypi_spec = { workspace = true }
+pixi_record = { workspace = true }
+pixi_reporters = { workspace = true }
+pixi_spec = { workspace = true }
+pixi_utils = { workspace = true, default-features = false }
+pixi_uv_conversions = { workspace = true }
+pypi_mapping = { workspace = true }
+pypi_modifiers = { workspace = true }
+rattler = { workspace = true }
+rattler_conda_types = { workspace = true }
+rattler_digest = { workspace = true }
+rattler_lock = { workspace = true }
+rattler_networking = { workspace = true, default-features = false }
+rattler_repodata_gateway = { workspace = true }
+rattler_shell = { workspace = true }
+rattler_solve = { workspace = true }
+rattler_virtual_packages = { workspace = true }
+rayon = { workspace = true }
+reqwest = { workspace = true }
+reqwest-middleware = { workspace = true }
+rlimit = { workspace = true }
+rstest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tabwriter = { workspace = true }
+tempfile = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+toml_edit = { workspace = true }
+tracing = { workspace = true }
+typed-path = { workspace = true }
+url = { workspace = true }
+uv-auth = { workspace = true }
+uv-build-frontend = { workspace = true }
+uv-cache = { workspace = true }
+uv-cache-info = { workspace = true }
+uv-client = { workspace = true }
+uv-configuration = { workspace = true }
+uv-dispatch = { workspace = true }
+uv-distribution = { workspace = true }
+uv-distribution-filename = { workspace = true }
+uv-distribution-types = { workspace = true }
+uv-git = { workspace = true }
+uv-git-types = { workspace = true }
+uv-install-wheel = { workspace = true }
+uv-installer = { workspace = true }
+uv-normalize = { workspace = true }
+uv-pep440 = { workspace = true }
+uv-pep508 = { workspace = true }
+uv-pypi-types = { workspace = true }
+uv-python = { workspace = true }
+uv-redacted = { workspace = true }
+uv-requirements = { workspace = true }
+uv-requirements-txt = { workspace = true }
+uv-resolver = { workspace = true }
+uv-types = { workspace = true }
+uv-workspace = { workspace = true }
+xxhash-rust = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }
+
+[dev-dependencies]
+async-trait = { workspace = true }
+fake = "4.0.0"
+http = { workspace = true }
+insta = { workspace = true, features = ["yaml", "glob", "filters"] }
+pixi_test_utils = { workspace = true }
+rstest = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["rt"] }

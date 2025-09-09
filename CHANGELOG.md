@@ -5,6 +5,298 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.54.2] - 2025-09-08
+#### Added
+
+- Add cancellation support to command dispatcher by @baszalmstra in [#4501](https://github.com/prefix-dev/pixi/pull/4501)
+- Support `win-32` emulation on `win-64` by @baszalmstra in [#4531](https://github.com/prefix-dev/pixi/pull/4531)
+
+#### Changed
+
+- Include version information in `self-update --dry-run` by @nicoddemus in [#4513](https://github.com/prefix-dev/pixi/pull/4513)
+
+#### Documentation
+
+- Fix task arg example by @Hofer-Julian in [#4521](https://github.com/prefix-dev/pixi/pull/4521)
+- Add `pixi-build-ros` tutorial by @ruben-arts in [#4507](https://github.com/prefix-dev/pixi/pull/4507)
+
+#### Fixed
+
+- Clear progress bar after install by @baszalmstra in [#4509](https://github.com/prefix-dev/pixi/pull/4509)
+- Rebuild if dependencies changed by @baszalmstra in [#4511](https://github.com/prefix-dev/pixi/pull/4511)
+- `pixi build` stop generating empty directories by @Hofer-Julian in [#4520](https://github.com/prefix-dev/pixi/pull/4520)
+- Documentation link and error in `pixi init` by @ruben-arts in [#4530](https://github.com/prefix-dev/pixi/pull/4530)
+
+#### Performance
+
+- Early out on installer file not containing the pixi uv installer by @ruben-arts in [#4525](https://github.com/prefix-dev/pixi/pull/4525)
+
+#### New Contributors
+* @nicoddemus made their first contribution in [#4513](https://github.com/prefix-dev/pixi/pull/4513)
+
+### [0.54.1] - 2025-09-03
+#### ✨ Highlights
+
+Small improvements and bug fixes.
+
+#### Changed
+
+- Fix `--frozen` and `--locked` collision by @tdejager in [#4488](https://github.com/prefix-dev/pixi/pull/4488)
+- Cache backend discovery by @baszalmstra in [#4492](https://github.com/prefix-dev/pixi/pull/4492)
+
+
+#### Fixed
+
+- Colors being escaped in cli output by @ruben-arts in [#4490](https://github.com/prefix-dev/pixi/pull/4490)
+- Print build log by default by @ruben-arts in [#4495](https://github.com/prefix-dev/pixi/pull/4495)
+- Panic on moving package source location by @Hofer-Julian in [#4496](https://github.com/prefix-dev/pixi/pull/4496)
+
+
+### [0.54.0] - 2025-09-01
+#### ✨ Highlights
+
+You can now use `pixi global tree` to visualize the dependency tree of a global environment.
+
+And you can install subsets of packages now works, for both conda and pypi packages:
+  ```bash
+  # Define which packages you want to install and which you want to skip.
+  pixi install --only packageA --only packageB --skip packageC
+  
+  # Using this modified environment without updating it again can be done with:
+  pixi run --as-is my_command
+  pixi shell --as-is  
+  ```
+
+#### Breaking Change
+Only for users using `preview = ["pixi-build"]`:
+In [#4410](https://github.com/prefix-dev/pixi/pull/4410) we've made `package.name` optional. e.g.
+```toml
+[package]
+name = "my-package" # This is now optional
+version = "0.1.0" # This is now optional
+```
+Soon, the backends will be able to automatically get those values from `pyproject.toml`, `Cargo.toml`, `package.xml` etc.
+However, this results in the lockfiles not being `--locked` anymore. 
+Running `pixi lock` or `pixi update` should fix this!
+
+#### Added
+
+- Add new `pixi global tree` command by @Carbonhell in [#4427](https://github.com/prefix-dev/pixi/pull/4427)
+- Add the option for multiple `--only` flags. by @tdejager in [#4477](https://github.com/prefix-dev/pixi/pull/4477) & [#4404](https://github.com/prefix-dev/pixi/pull/4404)
+
+#### Changed
+
+- Ability to ignore `pypi` packages during installation by @tdejager in [#4456](https://github.com/prefix-dev/pixi/pull/4456)
+- Move integration tests to pixi crate by @tdejager in [#4472](https://github.com/prefix-dev/pixi/pull/4472)
+
+#### Documentation
+
+- Extend `pixi global` tutorial with source dependencies by @Hofer-Julian in [#4407](https://github.com/prefix-dev/pixi/pull/4407)
+- Fix `pixi-build` getting started doc by @Tobias-Fischer in [#4415](https://github.com/prefix-dev/pixi/pull/4415)
+- Remove unused footnote in `lockfile.md` by @ZhenShuo2021 in [#4439](https://github.com/prefix-dev/pixi/pull/4439)
+
+#### Fixed
+
+- Relative windows --paths by @baszalmstra in [#4395](https://github.com/prefix-dev/pixi/pull/4395)
+- Auth middleware should be added after mirror rewrite by @maccam912 in [#4399](https://github.com/prefix-dev/pixi/pull/4399)
+- Occasionally hangs on exit by @baszalmstra in [#4409](https://github.com/prefix-dev/pixi/pull/4409)
+- Ensure we only create pypi prefix once by @baszalmstra in [#4416](https://github.com/prefix-dev/pixi/pull/4416)
+- Diagnostic source of solve error was not propagated by @baszalmstra in [#4417](https://github.com/prefix-dev/pixi/pull/4417)
+- Warn about no pinning strategy for unused features by @kilian-hu in [#4065](https://github.com/prefix-dev/pixi/pull/4065)
+- Load lock file with dependency override by @HernandoR in [#4419](https://github.com/prefix-dev/pixi/pull/4419)
+- Adapt schema for `[workspace.target.OS.build-variants]` by @Hofer-Julian in [#4445](https://github.com/prefix-dev/pixi/pull/4445)
+- Create virtual PyPI packages by @tdejager in [#4469](https://github.com/prefix-dev/pixi/pull/4469)
+- Pixi global update shortcuts by @Hofer-Julian in [#4463](https://github.com/prefix-dev/pixi/pull/4463)
+- Environment never recovering after subset install by @tdejager in [#4479](https://github.com/prefix-dev/pixi/pull/4479)
+
+#### Refactor
+
+- Move pixi crate into crates/pixi_cli by @haecker-felix in [#4377](https://github.com/prefix-dev/pixi/pull/4377)
+- Drop dedicated cli module from pixi_cli and move everything into /src by @haecker-felix in [#4398](https://github.com/prefix-dev/pixi/pull/4398)
+- Move global into new pixi_global crate by @haecker-felix in [#4388](https://github.com/prefix-dev/pixi/pull/4388)
+- Move task into new pixi_task crate by @haecker-felix in [#4401](https://github.com/prefix-dev/pixi/pull/4401)
+- BREAKING: make name optional by @baszalmstra in [#4410](https://github.com/prefix-dev/pixi/pull/4410)
+
+#### Removed
+
+- Remove outdated comment about fast channel by @lucascolley in [#4471](https://github.com/prefix-dev/pixi/pull/4471)
+
+#### New Contributors
+* @ZhenShuo2021 made their first contribution in [#4439](https://github.com/prefix-dev/pixi/pull/4439)
+* @Tobias-Fischer made their first contribution in [#4415](https://github.com/prefix-dev/pixi/pull/4415)
+* @kilian-hu made their first contribution in [#4065](https://github.com/prefix-dev/pixi/pull/4065)
+* @maccam912 made their first contribution in [#4399](https://github.com/prefix-dev/pixi/pull/4399)
+
+### [0.53.0] - 2025-08-19
+#### ✨ Highlights
+
+- Big cleanup of the CLI flags, mainly `--frozen`, `--locked`, and `--no-install`.
+- Added `--as-is` to `pixi run/shell` to run the command without installing the dependencies or touching the lockfile.
+- Support the Bash shell on Windows using `pixi shell`.
+- Pixi build can now support `package.build.source.path = "some/path"` to use a different source root for the build.
+
+#### ⚠️ Breaking Change
+
+We've removed `--no-lockfile-update` and replaced it with `--no-install --frozen`.
+On `pixi run/shell` you can use `--as-is` to run the command without installing the dependencies or touching the lockfile.
+
+#### Added
+
+- Add `--as-is` as a shorthand for `--no-install --frozen` by @tdejager in [#4357](https://github.com/prefix-dev/pixi/pull/4357)
+- Add profiling profile by @ruben-arts in [#4376](https://github.com/prefix-dev/pixi/pull/4376)
+
+#### Changed
+
+- Infer package name for source package with `pixi global install` by @Hofer-Julian in [#4340](https://github.com/prefix-dev/pixi/pull/4340)
+- Add `pixi --list` to view all the commands (pixi-extensions + built-in commands) by @mrswastik-robot in [#4307](https://github.com/prefix-dev/pixi/pull/4307)
+- Use log level info for build backends by @pavelzw in [#4354](https://github.com/prefix-dev/pixi/pull/4354)
+- Use `pixi build` with non-prefix channels, through fixing `run-exports` fetching by @remimimimimi in [#4179](https://github.com/prefix-dev/pixi/pull/4179)
+- Alternative source root for build by @remimimimimi in [#4240](https://github.com/prefix-dev/pixi/pull/4240)
+- Add `--build-platform` to `pixi build` by @baszalmstra in [#4298](https://github.com/prefix-dev/pixi/pull/4298)
+- Support `Bash` on Windows using 'pixi shell' by @mwiebe in [#3981](https://github.com/prefix-dev/pixi/pull/3981)
+- Move `build.channels` to `build.backend.channels` by @nichmor in [#4361](https://github.com/prefix-dev/pixi/pull/4361)
+- Return error on build dispatch panic by @tdejager in [#4382](https://github.com/prefix-dev/pixi/pull/4382)
+
+#### Documentation
+
+- Add document for proxy-config table by @gzm55 in [#4367](https://github.com/prefix-dev/pixi/pull/4367)
+
+#### Fixed
+
+- Cargo-machete action 0.9.1 by @bnjbvr in [#4368](https://github.com/prefix-dev/pixi/pull/4368)
+- Preserve comments when inserting dependency to manifest by @baszalmstra in [#4370](https://github.com/prefix-dev/pixi/pull/4370)
+- Now cache miss when a pypi no-binary, no-build was found by @tdejager in [#4362](https://github.com/prefix-dev/pixi/pull/4362)
+- Resolve shell quoting issue with pixi run commands by @chrisburr in [#4352](https://github.com/prefix-dev/pixi/pull/4352)
+- Allow dots in global environment names by @baszalmstra in [#4374](https://github.com/prefix-dev/pixi/pull/4374)
+- Improve `infer_package_name_from_spec` by @Hofer-Julian in [#4378](https://github.com/prefix-dev/pixi/pull/4378)
+- Replace `build.configuration` with `build.config` by @ruben-arts in [#4380](https://github.com/prefix-dev/pixi/pull/4380)
+- Pass `run-dependencies` and `run-exports` to packages by @baszalmstra in [#4373](https://github.com/prefix-dev/pixi/pull/4373)
+
+#### Refactor
+
+- Remove manual conflicts check for `--frozen` & `--locked` by @tdejager in [#4359](https://github.com/prefix-dev/pixi/pull/4359)
+
+#### New Contributors
+* @chrisburr made their first contribution in [#4352](https://github.com/prefix-dev/pixi/pull/4352)
+* @bnjbvr made their first contribution in [#4368](https://github.com/prefix-dev/pixi/pull/4368)
+
+### [0.52.0] - 2025-08-14
+#### ✨ Highlights
+
+You can now use `pixi global` to install source dependencies.
+```
+pixi global install --path path/to/my-package my-package
+```
+At the moment, you still have to specify the package name, which we will improve on later!
+
+#### ⚠️ Breaking Change
+
+In `v0.51.0` we changed the environment variable overwriting logic.
+This has be reverted in this release, as there are some issues with it.
+
+#### Features
+
+- Include named source dependencies through `pixi global` by @tdejager in [#4165](https://github.com/prefix-dev/pixi/pull/4165)
+
+#### Documentation
+
+- Fix example package name by @henningkayser in [#4331](https://github.com/prefix-dev/pixi/pull/4331)
+- Add keyring auth support doc and bump setup-pixi action version by @olivier-lacroix in [#4332](https://github.com/prefix-dev/pixi/pull/4332)
+- Pycharm integration via conda environments.txt file by @analog-cbarber in [#4290](https://github.com/prefix-dev/pixi/pull/4290)
+
+#### Fixed
+
+- Fish completion script by @ruben-arts in [#4315](https://github.com/prefix-dev/pixi/pull/4315)
+- Update named arg schema by @bollwyvl in [#4324](https://github.com/prefix-dev/pixi/pull/4324)
+- Revert environment logic changes by @Hofer-Julian in [#4346](https://github.com/prefix-dev/pixi/pull/4346)
+
+#### Refactor
+
+- Move all non cli code into `pixi_core` crate by @haecker-felix in [#4337](https://github.com/prefix-dev/pixi/pull/4337)
+
+#### New Contributors
+* @analog-cbarber made their first contribution in [#4290](https://github.com/prefix-dev/pixi/pull/4290)
+* @haecker-felix made their first contribution in [#4337](https://github.com/prefix-dev/pixi/pull/4337)
+* @henningkayser made their first contribution in [#4331](https://github.com/prefix-dev/pixi/pull/4331)
+
+### [0.51.0] - 2025-08-12
+#### ✨ Highlights
+
+Pixi now supports `--skip` on install which means you can skip the installation of a package. 
+Which can be useful for things like layering Docker images.
+
+Pixi build got a lot of improvements, including the ability to use build backends from source.
+Starting with this release you can get build backends from conda-forge. 
+We will release stable versions of the build backends on conda-forge, and we maintain a rolling distribution on the `pixi-build-backends` channel. 
+The documentation has been updated to reflect this change.
+
+#### ⚠️ Breaking Change
+The environment variable overwriting logic is changed. 
+Previously, the variables in your own environment would overwrite the variables set in the Pixi manifest.
+This is now reversed, meaning that the variables set in the Pixi manifest will overwrite the variables in your own environment.
+More info can be found in the [documentation](https://pixi.sh/dev/reference/environment_variables/).
+
+#### Added
+
+- Add new configuration options for concurrency and experimental features by @zelosleone in [#4223](https://github.com/prefix-dev/pixi/pull/4223)
+- Support for loong64 linux by @wszqkzqk in [#4163](https://github.com/prefix-dev/pixi/pull/4163)
+- Add channels to the build-v1 apis by @baszalmstra in [#4249](https://github.com/prefix-dev/pixi/pull/4249)
+- Support pip packages for `no-build-isolation` by @Hofer-Julian in [#4247](https://github.com/prefix-dev/pixi/pull/4247)
+- Add better logging for build backends by @baszalmstra in [#4276](https://github.com/prefix-dev/pixi/pull/4276)
+- Add `--build`, rename `--tool` to `--build_backends` by @lucascolley in [#4281](https://github.com/prefix-dev/pixi/pull/4281)
+- Add support for PIXI_ENVIRONMENT_NAME and PS1 prompt modification by @zelosleone in [#4101](https://github.com/prefix-dev/pixi/pull/4101)
+- Add the ability to skip install of local source dependencies by @olivier-lacroix in [#3092](https://github.com/prefix-dev/pixi/pull/3092)
+
+#### Changed
+
+- Prevent execution in parent of pixi home directory by @ytausch in [#4168](https://github.com/prefix-dev/pixi/pull/4168)
+- Add `did you mean` suggestions for the cmds (built-in + pixi extensions) by @mrswastik-robot in [#4058](https://github.com/prefix-dev/pixi/pull/4058)
+- Per platform extra options for pixi build configuration by @Hofer-Julian in [#4036](https://github.com/prefix-dev/pixi/pull/4036)
+- Named args in `depends-on` by @lucascolley in [#4148](https://github.com/prefix-dev/pixi/pull/4148)
+- Pass repodata records to build backend by @baszalmstra in [#4252](https://github.com/prefix-dev/pixi/pull/4252)
+- Extract reporters out of pixi into its own crate by @tdejager in [#4266](https://github.com/prefix-dev/pixi/pull/4266)
+- Allow using build backends from source by @baszalmstra in [#4145](https://github.com/prefix-dev/pixi/pull/4145)
+- PyPI `requirements.txt` format by @lucascolley in [#4270](https://github.com/prefix-dev/pixi/pull/4270)
+- Upgrade to uv 0.8.20 and get rid of non-async build dispatch calls by @tdejager in [#4289](https://github.com/prefix-dev/pixi/pull/4289)
+- `SourceSpec` struct composed of `SourceLocationSpec` by @lucascolley in [#4305](https://github.com/prefix-dev/pixi/pull/4305)
+
+
+#### Documentation
+
+- Update documentation on task names by @photex in [#4230](https://github.com/prefix-dev/pixi/pull/4230)
+- Update docs with `pixi-extensions` by @mrswastik-robot in [#4144](https://github.com/prefix-dev/pixi/pull/4144)
+- Mention md-tui support for reading from stdin by @pavelzw in [#4268](https://github.com/prefix-dev/pixi/pull/4268)
+- Add contributor docs for Python test snapshots by @lucascolley in [#4273](https://github.com/prefix-dev/pixi/pull/4273)
+- Update documentation and related manifests by @ruben-arts in [#4279](https://github.com/prefix-dev/pixi/pull/4279)
+- Fix 404 link by @pavelzw in [#4295](https://github.com/prefix-dev/pixi/pull/4295)
+- Mention glow for viewing markdown in the terminal by @pavelzw in [#4288](https://github.com/prefix-dev/pixi/pull/4288)
+- Fix typo by @pavelzw in [#4306](https://github.com/prefix-dev/pixi/pull/4306)[#4309](https://github.com/prefix-dev/pixi/pull/4309)
+- Simplify and fix the `pixi build` getting started by @ruben-arts in [#4304](https://github.com/prefix-dev/pixi/pull/4304)
+ 
+
+#### Fixed
+
+- Improve testing speed by using prefix channel by @ruben-arts in [#4227](https://github.com/prefix-dev/pixi/pull/4227)
+- Pixi-build preview-mode check by @remimimimimi in [#4224](https://github.com/prefix-dev/pixi/pull/4224)
+- Relative path to package for pixi global by @wolfv in [#4200](https://github.com/prefix-dev/pixi/pull/4200)
+- Replace syrupy with inline-snapshot by @lucascolley in [#4246](https://github.com/prefix-dev/pixi/pull/4246)
+- Forward CTRL+C signal to `deno_task_shell` by @wolfv in [#4243](https://github.com/prefix-dev/pixi/pull/4243)
+- Override environment variables based on priority by @magentaqin in [#3940](https://github.com/prefix-dev/pixi/pull/3940)
+- Exclude env key 'PROJECT_ENV' and evaluate referenced variables by @magentaqin in [#4275](https://github.com/prefix-dev/pixi/pull/4275)
+- Quick Demo example shell quoting by @notpeter in [#4285](https://github.com/prefix-dev/pixi/pull/4285)
+- Feature activation environment variable priority by @magentaqin in [#4282](https://github.com/prefix-dev/pixi/pull/4282)
+- Disable JLAP by default by @ruben-arts in [#4301](https://github.com/prefix-dev/pixi/pull/4301)
+
+
+#### New Contributors
+* @magentaqin made their first contribution in [#4282](https://github.com/prefix-dev/pixi/pull/4282)
+* @notpeter made their first contribution in [#4285](https://github.com/prefix-dev/pixi/pull/4285)
+* @lsetiawan made their first contribution in [#4248](https://github.com/prefix-dev/pixi/pull/4248)
+* @Carbonhell made their first contribution in [#4263](https://github.com/prefix-dev/pixi/pull/4263)
+* @matthewfeickert made their first contribution in [#4256](https://github.com/prefix-dev/pixi/pull/4256)
+* @wszqkzqk made their first contribution in [#4163](https://github.com/prefix-dev/pixi/pull/4163)
+* @photex made their first contribution in [#4230](https://github.com/prefix-dev/pixi/pull/4230)
+
 ### [0.50.2] - 2025-07-28
 #### Documentation
 

@@ -123,9 +123,8 @@ impl SolveCondaEnvironmentSpec {
             let source_match_specs = self
                 .source_specs
                 .into_specs()
-                .map(|(name, _)| MatchSpec {
-                    name: Some(name.clone()),
-                    ..MatchSpec::default()
+                .map(|(name, spec)| {
+                    MatchSpec::from_nameless(spec.to_nameless_match_spec(), Some(name))
                 })
                 .collect::<Vec<_>>();
 

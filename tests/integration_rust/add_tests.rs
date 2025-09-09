@@ -1,7 +1,8 @@
 use std::str::FromStr;
 
-use pixi::{DependencyType, Workspace, cli::cli_config::GitRev};
+use pixi_cli::cli_config::GitRev;
 use pixi_consts::consts;
+use pixi_core::{DependencyType, Workspace};
 use pixi_manifest::{FeaturesExt, SpecType};
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName, VersionOrStar};
 use rattler_conda_types::{PackageName, Platform};
@@ -10,14 +11,17 @@ use url::Url;
 
 use crate::common::{
     LockFileExt, PixiControl,
-    builders::{HasDependencyConfig, HasLockFileUpdateConfig, HasPrefixUpdateConfig},
+    builders::{HasDependencyConfig, HasLockFileUpdateConfig, HasNoInstallConfig},
     package_database::{Package, PackageDatabase},
 };
+use crate::setup_tracing;
 
 /// Test add functionality for different types of packages.
 /// Run, dev, build
 #[tokio::test]
 async fn add_functionality() {
+    setup_tracing();
+
     let mut package_database = PackageDatabase::default();
 
     // Add a package `foo` that depends on `bar` both set to version 1.
@@ -80,17 +84,21 @@ async fn add_functionality() {
 /// Test adding a package with a specific channel
 #[tokio::test]
 async fn add_with_channel() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
 
     pixi.init().no_fast_prefix_overwrite(true).await.unwrap();
 
     pixi.add("conda-forge::py_rattler")
-        .without_lockfile_update()
+        .with_install(false)
+        .with_frozen(true)
         .await
         .unwrap();
 
     pixi.add("https://prefix.dev/conda-forge::_r-mutex")
-        .without_lockfile_update()
+        .with_install(false)
+        .with_frozen(true)
         .await
         .unwrap();
 
@@ -119,6 +127,8 @@ async fn add_with_channel() {
 /// build and host
 #[tokio::test]
 async fn add_functionality_union() {
+    setup_tracing();
+
     let mut package_database = PackageDatabase::default();
 
     // Add a package `foo` that depends on `bar` both set to version 1.
@@ -197,6 +207,8 @@ async fn add_functionality_union() {
 /// Test adding a package for a specific OS
 #[tokio::test]
 async fn add_functionality_os() {
+    setup_tracing();
+
     let mut package_database = PackageDatabase::default();
 
     // Add a package `foo` that depends on `bar` both set to version 1.
@@ -239,6 +251,8 @@ async fn add_functionality_os() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn add_pypi_functionality() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
 
     pixi.init().await.unwrap();
@@ -358,6 +372,8 @@ async fn add_pypi_functionality() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn add_pypi_extra_functionality() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
 
     pixi.init().await.unwrap();
@@ -447,6 +463,8 @@ async fn add_pypi_extra_functionality() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn add_sdist_functionality() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
 
     pixi.init().await.unwrap();
@@ -468,6 +486,8 @@ async fn add_sdist_functionality() {
 
 #[tokio::test]
 async fn add_unconstrained_dependency() {
+    setup_tracing();
+
     // Create a channel with a single package
     let mut package_database = PackageDatabase::default();
     package_database.add_package(Package::build("foobar", "1").finish());
@@ -519,6 +539,8 @@ async fn add_unconstrained_dependency() {
 
 #[tokio::test]
 async fn pinning_dependency() {
+    setup_tracing();
+
     // Create a channel with a single package
     let mut package_database = PackageDatabase::default();
     package_database.add_package(Package::build("foobar", "1").finish());
@@ -585,6 +607,8 @@ async fn pinning_dependency() {
 
 #[tokio::test]
 async fn add_dependency_pinning_strategy() {
+    setup_tracing();
+
     // Create a channel with two packages
     let mut package_database = PackageDatabase::default();
     package_database.add_package(Package::build("foo", "1").finish());
@@ -654,8 +678,9 @@ async fn add_dependency_pinning_strategy() {
 /// Test adding a git dependency with a specific branch
 #[tokio::test]
 #[cfg_attr(not(feature = "online_tests"), ignore)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn add_git_deps() {
+    setup_tracing();
+
     let pixi = PixiControl::from_manifest(
         r#"
 [project]
@@ -708,8 +733,9 @@ preview = ['pixi-build']
 #[cfg(not(windows))]
 #[tokio::test]
 #[cfg_attr(not(feature = "online_tests"), ignore)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn add_git_deps_with_creds() {
+    setup_tracing();
+
     let pixi = PixiControl::from_manifest(
         r#"
 [project]
@@ -762,8 +788,9 @@ preview = ['pixi-build']
 /// Test adding a git dependency with a specific commit
 #[tokio::test]
 #[cfg_attr(not(feature = "online_tests"), ignore)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn add_git_with_specific_commit() {
+    setup_tracing();
+
     let pixi = PixiControl::from_manifest(
         r#"
 [project]
@@ -813,9 +840,9 @@ preview = ['pixi-build']"#,
 /// Test adding a git dependency with a specific tag
 #[tokio::test]
 #[cfg_attr(not(feature = "online_tests"), ignore)]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
-
 async fn add_git_with_tag() {
+    setup_tracing();
+
     let pixi = PixiControl::from_manifest(
         r#"
 [project]
@@ -867,6 +894,8 @@ preview = ['pixi-build']"#,
 /// Test adding a git dependency using ssh url
 #[tokio::test]
 async fn add_plain_ssh_url() {
+    setup_tracing();
+
     let pixi = PixiControl::from_manifest(
         r#"
 [project]
@@ -880,7 +909,8 @@ preview = ['pixi-build']"#,
     // Add a package
     pixi.add("boost-check")
         .with_git_url(Url::parse("git+ssh://git@github.com/wolfv/pixi-build-examples.git").unwrap())
-        .with_no_lockfile_update(true)
+        .with_install(false)
+        .with_frozen(true)
         .await
         .unwrap();
 
@@ -900,6 +930,8 @@ preview = ['pixi-build']"#,
 #[tokio::test]
 #[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn add_pypi_git() {
+    setup_tracing();
+
     let pixi = PixiControl::from_manifest(
         format!(
             r#"
@@ -952,6 +984,8 @@ platforms = ["{platform}"]
 
 #[tokio::test]
 async fn add_git_dependency_without_preview_feature_fails() {
+    setup_tracing();
+
     let pixi = PixiControl::from_manifest(
         r#"
 [workspace]
@@ -984,6 +1018,8 @@ platforms = ["linux-64"]
 
 #[tokio::test]
 async fn add_git_dependency_with_preview_feature_succeeds() {
+    setup_tracing();
+
     let pixi = PixiControl::from_manifest(
         r#"
 [workspace]
@@ -999,7 +1035,8 @@ preview = ["pixi-build"]
         .add("boost-check")
         .with_git_url(Url::parse("https://github.com/wolfv/pixi-build-examples.git").unwrap())
         .with_git_subdir("boost-check".to_string())
-        .with_no_lockfile_update(true)
+        .with_install(false)
+        .with_frozen(true)
         .await;
 
     assert!(result.is_ok());
@@ -1019,6 +1056,8 @@ preview = ["pixi-build"]
 
 #[tokio::test]
 async fn add_dependency_dont_create_project() {
+    setup_tracing();
+
     // Create a channel with two packages
     let mut package_database = PackageDatabase::default();
     package_database.add_package(Package::build("foo", "1").finish());

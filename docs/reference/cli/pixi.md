@@ -5,7 +5,7 @@
 
 ## Usage
 ```
-pixi [OPTIONS] <COMMAND>
+pixi [OPTIONS] [COMMAND]
 ```
 
 ## Subcommands
@@ -56,5 +56,7 @@ pixi [OPTIONS] <COMMAND>
 :  Hide all progress bars, always turned on if stderr is not a terminal
 <br>**env**: `PIXI_NO_PROGRESS`
 <br>**default**: `false`
+- <a id="arg---list" href="#arg---list">`--list`</a>
+:  List all installed commands (built-in and extensions)
 
 --8<-- "docs/reference/cli/pixi_extender:example"

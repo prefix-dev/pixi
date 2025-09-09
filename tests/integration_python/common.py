@@ -4,11 +4,12 @@ import subprocess
 from contextlib import contextmanager
 from enum import IntEnum
 from pathlib import Path
-from typing import Generator
+import sys
+from typing import Generator, Optional, Sequence, Set, Tuple
 
 from rattler import Platform
 
-PIXI_VERSION = "0.50.2"
+PIXI_VERSION = "0.54.2"
 
 
 ALL_PLATFORMS = '["linux-64", "osx-64", "osx-arm64", "win-64", "linux-ppc64le", "linux-aarch64"]'
@@ -33,12 +34,12 @@ class ExitCode(IntEnum):
 
 
 class Output:
-    command: list[Path | str]
+    command: Sequence[Path | str]
     stdout: str
     stderr: str
     returncode: int
 
-    def __init__(self, command: list[Path | str], stdout: str, stderr: str, returncode: int):
+    def __init__(self, command: Sequence[Path | str], stdout: str, stderr: str, returncode: int):
         self.command = command
         self.stdout = stdout
         self.stderr = stderr
@@ -49,7 +50,7 @@ class Output:
 
 
 def verify_cli_command(
-    command: list[Path | str],
+    command: Sequence[Path | str],
     expected_exit_code: ExitCode = ExitCode.SUCCESS,
     stdout_contains: str | list[str] | None = None,
     stdout_excludes: str | list[str] | None = None,
@@ -167,3 +168,155 @@ def cwd(path: str | Path) -> Generator[None, None, None]:
         yield
     finally:
         os.chdir(oldpwd)
+
+
+def run_and_get_env(pixi: Path, *args: str, env_var: str) -> Tuple[Optional[str], Output]:
+    if sys.platform.startswith("win"):
+        cmd = [str(pixi), "exec", *args, "--", "cmd", "/c", f"echo %{env_var}%"]
+    else:
+        cmd = [str(pixi), "exec", *args, "--", "printenv", env_var]
+
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+
+        value = result.stdout.strip()
+
+        output = Output(
+            command=cmd,
+            stdout=value,
+            stderr=result.stderr.strip(),
+            returncode=result.returncode,
+        )
+
+        return (value if value and value != f"%{env_var}%" else None, output)
+    except Exception as e:
+        print(f"Error running command: {e}")
+        print(f"Command: {' '.join(cmd)}")
+        raise
+
+
+# Command discovery utilities for testing CLI flag support
+
+
+def discover_pixi_commands() -> set[str]:
+    """Discover all available pixi commands by walking the docs/reference/cli/pixi directory.
+
+    Returns:
+        Set[str]: Set of command names in the format "pixi command subcommand ..."
+
+    Examples:
+        {"pixi add", "pixi workspace channel add", "pixi shell", ...}
+    """
+    docs_path = repo_root() / "docs" / "reference" / "cli" / "pixi"
+    commands: set[str] = set()
+
+    if not docs_path.exists():
+        return commands
+
+    # Walk through all markdown files in the docs directory
+    for md_file in docs_path.rglob("*.md"):
+        # Get relative path from the pixi docs directory
+        relative_path = md_file.relative_to(docs_path)
+
+        # Convert file path to command format
+        # e.g., "workspace/channel/add.md" -> "pixi workspace channel add"
+        command_parts = ["pixi"] + list(relative_path.parts[:-1]) + [relative_path.stem]
+        command = " ".join(command_parts)
+        commands.add(command)
+
+    return commands
+
+
+def check_command_supports_flags(command_parts: list[str], *flag_names: str) -> tuple[bool, ...]:
+    """Check if a command supports specific flags by examining its documentation.
+
+    Args:
+        command_parts: List of command parts (e.g., ["workspace", "channel", "add"])
+        *flag_names: Variable number of flag names to check for (e.g., "--frozen", "--no-install")
+
+    Returns:
+        Tuple[bool, ...]: Tuple of booleans indicating support for each flag in order
+
+    Examples:
+        check_command_supports_flags(["add"], "--frozen", "--no-install")
+        # Returns: (True, True) if both flags are supported
+
+        check_command_supports_flags(["shell"], "--frozen", "--locked", "--no-install")
+        # Returns: (False, True, True) if only --locked and --no-install are supported
+    """
+    # Build the documentation file path
+    docs_path = repo_root() / "docs" / "reference" / "cli" / "pixi"
+    doc_file = docs_path / Path(*command_parts).with_suffix(".md")
+
+    if not doc_file.exists():
+        return tuple(False for _ in flag_names)
+
+    try:
+        doc_content = doc_file.read_text()
+
+        # Check each flag
+        results = []
+        for flag_name in flag_names:
+            results.append(flag_name in doc_content)
+
+        return tuple(results)
+
+    except (OSError, IOError):
+        return tuple(False for _ in flag_names)
+
+
+def find_commands_supporting_flags(*flag_names: str) -> list[str]:
+    """Find all pixi commands that support ALL of the specified flags.
+
+    Args:
+        *flag_names: Variable number of flag names that commands must support
+
+    Returns:
+        List[str]: List of command names that support all specified flags
+
+    Examples:
+        find_commands_supporting_flags("--frozen", "--no-install")
+        # Returns: ["pixi add", "pixi remove", "pixi run", ...]
+
+        find_commands_supporting_flags("--locked", "--no-install")
+        # Returns: ["pixi shell"] (special case that uses --locked instead of --frozen)
+    """
+    all_commands = discover_pixi_commands()
+    supported_commands = []
+
+    for command_str in all_commands:
+        # Skip the "pixi" prefix to get command parts
+        command_parts = (
+            command_str.split()[1:] if command_str.startswith("pixi ") else command_str.split()
+        )
+
+        # Skip empty commands
+        if not command_parts:
+            continue
+
+        # Check if the command supports all specified flags
+        flag_support = check_command_supports_flags(command_parts, *flag_names)
+
+        # Only include if ALL flags are supported
+        if all(flag_support):
+            supported_commands.append(command_str)
+
+    return sorted(supported_commands)
+
+
+def find_commands_supporting_frozen_and_no_install() -> Set[str]:
+    """Convenience function to find commands supporting both --frozen and --no-install flags.
+
+    This also includes commands that use --locked instead of --frozen (like pixi shell).
+
+    Returns:
+        List[str]: List of command names supporting freeze/lock and no-install functionality
+    """
+    # Find commands that support --frozen and --no-install
+    return set(find_commands_supporting_flags("--frozen", "--no-install"))

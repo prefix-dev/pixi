@@ -7,7 +7,11 @@ use std::{
 
 use async_fd_lock::{LockWrite, RwLockWriteGuard};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+use ordermap::OrderMap;
+use pixi_build_discovery::{BackendInitializationParams, DiscoveredBackend};
+use pixi_build_types::{ProjectModelV1, TargetSelectorV1};
 use pixi_record::PinnedSourceSpec;
+use pixi_stable_hash::{StableHashBuilder, json::StableJson, map::StableMap};
 use rattler_conda_types::{ChannelUrl, GenericVirtualPackage, Platform, RepoDataRecord};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -195,6 +199,11 @@ pub struct CachedBuildSourceInfo {
     /// The packages that were installed in the host environment.
     #[serde(default)]
     pub host: BuildHostEnvironment,
+
+    /// A hash of the package build input. If this changes, the build should be
+    /// considered stale.
+    #[serde(default)]
+    pub package_build_input_hash: Option<PackageBuildInputHash>,
 }
 
 #[serde_as]
@@ -264,5 +273,64 @@ impl BuildCacheEntry {
             })?;
 
         Ok(metadata.record)
+    }
+}
+
+/// A builder for creating a stable hash of the package build input.
+///
+/// This is used to compute a singular hash that changes when a rebuild is
+/// warranted.
+pub struct PackageBuildInputHashBuilder<'a> {
+    /// The project model itself. Contains dependencies and more.
+    pub project_model: Option<&'a ProjectModelV1>,
+
+    /// The backend specific configuration
+    pub configuration: Option<&'a serde_json::Value>,
+
+    /// Target specific backend configuration
+    pub target_configuration: Option<&'a OrderMap<TargetSelectorV1, serde_json::Value>>,
+}
+
+impl PackageBuildInputHashBuilder<'_> {
+    pub fn finish(self) -> PackageBuildInputHash {
+        let mut hasher = Xxh3::new();
+        StableHashBuilder::new()
+            .field("project_model", &self.project_model)
+            .field("configuration", &self.configuration.map(StableJson::new))
+            .field(
+                "target_configuration",
+                &self.target_configuration.map(|config| {
+                    StableMap::new(config.iter().map(|(k, v)| (k, StableJson::new(v))))
+                }),
+            )
+            .finish(&mut hasher);
+        PackageBuildInputHash(hasher.finish())
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Eq, PartialEq, Clone, Copy, Hash)]
+#[repr(transparent)]
+pub struct PackageBuildInputHash(u64);
+
+impl<'a> From<&'a DiscoveredBackend> for PackageBuildInputHash {
+    fn from(value: &'a DiscoveredBackend) -> Self {
+        let BackendInitializationParams {
+            project_model,
+            configuration,
+            target_configuration,
+
+            // These fields are not relevant for the package build input hash
+            workspace_root: _,
+            source: _,
+            source_anchor: _,
+            manifest_path: _,
+        } = &value.init_params;
+
+        PackageBuildInputHashBuilder {
+            project_model: project_model.as_ref(),
+            configuration: configuration.as_ref(),
+            target_configuration: target_configuration.as_ref(),
+        }
+        .finish()
     }
 }

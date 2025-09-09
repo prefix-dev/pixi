@@ -8,7 +8,7 @@ use std::{
 };
 
 use futures::{SinkExt, channel::mpsc::UnboundedSender};
-use itertools::Itertools;
+use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_frontend::{Backend, json_rpc::CommunicationError};
 use pixi_build_types::{
@@ -16,17 +16,25 @@ use pixi_build_types::{
     procedures::{
         conda_build_v0::{CondaBuildParams, CondaBuiltPackage, CondaOutputIdentifier},
         conda_build_v1::{
-            CondaBuildV1Output, CondaBuildV1Params, CondaBuildV1Prefix, CondaBuildV1PrefixPackage,
-            CondaBuildV1Result,
+            CondaBuildV1Dependency, CondaBuildV1DependencyRunExportSource,
+            CondaBuildV1DependencySource, CondaBuildV1Output, CondaBuildV1Params,
+            CondaBuildV1Prefix, CondaBuildV1PrefixPackage, CondaBuildV1Result,
+            CondaBuildV1RunExports,
         },
     },
 };
 use pixi_record::PinnedSourceSpec;
-use rattler_conda_types::{ChannelConfig, ChannelUrl, Platform, RepoDataRecord, Version};
+use pixi_spec::{BinarySpec, PixiSpec, SpecConversionError};
+use rattler_conda_types::{
+    ChannelConfig, ChannelUrl, MatchSpec, PackageName, Platform, RepoDataRecord, Version,
+};
 use serde::Serialize;
 use thiserror::Error;
 
-use crate::{BuildEnvironment, CommandDispatcherError, PackageIdentifier};
+use crate::{
+    BuildEnvironment, CommandDispatcherError, PackageIdentifier,
+    build::{Dependencies, DependencySource, PixiRunExports, WithSource},
+};
 
 /// The `BackendSourceBuildSpec` struct is used to define the specifications for
 /// building a source package using a pre-instantiated backend. This task
@@ -52,6 +60,9 @@ pub struct BackendSourceBuildSpec {
     /// The channels to use for solving.
     pub channels: Vec<ChannelUrl>,
 
+    /// The channel configuration to use to convert channel urls.
+    pub channel_config: ChannelConfig,
+
     /// The working directory to use for the build.
     pub work_directory: PathBuf,
 }
@@ -64,9 +75,6 @@ pub enum BackendSourceBuildMethod {
 
 #[derive(Debug, Serialize)]
 pub struct BackendSourceBuildV0Method {
-    /// The channel configuration to use when resolving metadata
-    pub channel_config: ChannelConfig,
-
     /// Information about the platform to install build tools for and the
     /// platform to target.
     pub build_environment: BuildEnvironment,
@@ -89,6 +97,12 @@ pub struct BackendSourceBuildV1Method {
 
     /// The host prefix that was prepared for the backend.
     pub host_prefix: BackendSourceBuildPrefix,
+
+    /// The run dependencies and constraints
+    pub dependencies: Dependencies,
+
+    /// The run exports
+    pub run_exports: PixiRunExports,
 
     /// The variant to build
     /// TODO: This should move to the `SourceRecord` in the future. The variant
@@ -115,6 +129,9 @@ pub struct BackendSourceBuildPrefix {
 
     /// The records that are installed in the prefix.
     pub records: Vec<RepoDataRecord>,
+
+    /// The dependencies that were used to solve the prefix.
+    pub dependencies: Dependencies,
 }
 
 #[derive(Debug, Serialize)]
@@ -142,6 +159,7 @@ impl BackendSourceBuildSpec {
                     params,
                     self.work_directory,
                     self.channels,
+                    self.channel_config,
                     log_sink,
                 )
                 .await
@@ -153,6 +171,7 @@ impl BackendSourceBuildSpec {
                     params,
                     self.work_directory,
                     self.channels,
+                    self.channel_config,
                     log_sink,
                 )
                 .await
@@ -160,6 +179,7 @@ impl BackendSourceBuildSpec {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     async fn build_v0(
         backend: Backend,
         record: PackageIdentifier,
@@ -167,6 +187,7 @@ impl BackendSourceBuildSpec {
         params: BackendSourceBuildV0Method,
         work_directory: PathBuf,
         channels: Vec<ChannelUrl>,
+        channel_config: ChannelConfig,
         mut log_sink: UnboundedSender<String>,
     ) -> Result<BackendBuiltSource, CommandDispatcherError<BackendSourceBuildError>> {
         // Use the backend to build the source package.
@@ -178,7 +199,7 @@ impl BackendSourceBuildSpec {
                     ),
                     channel_base_urls: Some(channels.into_iter().map(Into::into).collect()),
                     channel_configuration: ChannelConfiguration {
-                        base_url: params.channel_config.channel_alias.clone(),
+                        base_url: channel_config.channel_alias.clone(),
                     },
                     outputs: Some(BTreeSet::from_iter([CondaOutputIdentifier {
                         name: Some(record.name.as_normalized().to_string()),
@@ -189,7 +210,7 @@ impl BackendSourceBuildSpec {
                     variant_configuration: params
                         .variants
                         .map(|variants| variants.into_iter().collect()),
-                    work_directory,
+                    work_directory: work_directory.clone(),
                     host_platform: Some(PlatformAndVirtualPackages {
                         platform: params.build_environment.host_platform,
                         virtual_packages: Some(
@@ -267,15 +288,74 @@ impl BackendSourceBuildSpec {
         params: BackendSourceBuildV1Method,
         work_directory: PathBuf,
         channels: Vec<ChannelUrl>,
+        channel_config: ChannelConfig,
         mut log_sink: UnboundedSender<String>,
     ) -> Result<BackendBuiltSource, CommandDispatcherError<BackendSourceBuildError>> {
         let built_package = backend
             .conda_build_v1(
                 CondaBuildV1Params {
                     channels,
+                    run_dependencies: Some(dependencies_to_protocol(
+                        params.dependencies.dependencies.into_specs(),
+                        &channel_config,
+                    )),
+                    run_constraints: Some(constraints_to_protocol(
+                        params.dependencies.constraints.into_specs(),
+                        &channel_config,
+                    )),
+                    run_exports: Some(CondaBuildV1RunExports {
+                        weak: dependencies_to_protocol(
+                            params
+                                .run_exports
+                                .weak
+                                .into_specs()
+                                .map(|(name, spec)| (name, WithSource::new(spec))),
+                            &channel_config,
+                        ),
+                        strong: dependencies_to_protocol(
+                            params
+                                .run_exports
+                                .strong
+                                .into_specs()
+                                .map(|(name, spec)| (name, WithSource::new(spec))),
+                            &channel_config,
+                        ),
+                        noarch: dependencies_to_protocol(
+                            params
+                                .run_exports
+                                .noarch
+                                .into_specs()
+                                .map(|(name, spec)| (name, WithSource::new(spec))),
+                            &channel_config,
+                        ),
+                        weak_constrains: constraints_to_protocol(
+                            params
+                                .run_exports
+                                .weak_constrains
+                                .into_specs()
+                                .map(|(name, spec)| (name, WithSource::new(spec))),
+                            &channel_config,
+                        ),
+                        strong_constrains: constraints_to_protocol(
+                            params
+                                .run_exports
+                                .strong_constrains
+                                .into_specs()
+                                .map(|(name, spec)| (name, WithSource::new(spec))),
+                            &channel_config,
+                        ),
+                    }),
                     build_prefix: Some(CondaBuildV1Prefix {
                         prefix: params.build_prefix.prefix,
                         platform: params.build_prefix.platform,
+                        dependencies: dependencies_to_protocol(
+                            params.build_prefix.dependencies.dependencies.into_specs(),
+                            &channel_config,
+                        ),
+                        constraints: constraints_to_protocol(
+                            params.build_prefix.dependencies.constraints.into_specs(),
+                            &channel_config,
+                        ),
                         packages: params
                             .build_prefix
                             .records
@@ -288,6 +368,14 @@ impl BackendSourceBuildSpec {
                     host_prefix: Some(CondaBuildV1Prefix {
                         prefix: params.host_prefix.prefix,
                         platform: params.host_prefix.platform,
+                        dependencies: dependencies_to_protocol(
+                            params.host_prefix.dependencies.dependencies.into_specs(),
+                            &channel_config,
+                        ),
+                        constraints: constraints_to_protocol(
+                            params.host_prefix.dependencies.constraints.into_specs(),
+                            &channel_config,
+                        ),
                         packages: params
                             .host_prefix
                             .records
@@ -307,7 +395,7 @@ impl BackendSourceBuildSpec {
                             .expect("found a package record with an unparsable subdir"),
                         variant: params.variant,
                     },
-                    work_directory,
+                    work_directory: work_directory.clone(),
                     output_directory: params.output_directory,
                     editable: Some(params.editable),
                 },
@@ -364,6 +452,68 @@ fn v1_built_package_matches_requested(
         || built_package.version != record.version
         || built_package.build != record.build
         || built_package.subdir.as_str() != record.subdir
+}
+
+fn dependencies_to_protocol(
+    dependencies: impl IntoIterator<Item = (PackageName, WithSource<PixiSpec>)>,
+    channel_config: &ChannelConfig,
+) -> Vec<CondaBuildV1Dependency> {
+    dependencies
+        .into_iter()
+        .filter_map(|(name, spec)| {
+            Some(CondaBuildV1Dependency {
+                spec: convert_pixi_spec_to_match_spec(name, spec.value, channel_config).ok()?,
+                source: spec.source.map(convert_source_to_protocol),
+            })
+        })
+        .collect()
+}
+
+fn constraints_to_protocol(
+    dependencies: impl IntoIterator<Item = (PackageName, WithSource<BinarySpec>)>,
+    channel_config: &ChannelConfig,
+) -> Vec<CondaBuildV1Dependency> {
+    dependencies
+        .into_iter()
+        .filter_map(|(name, spec)| {
+            Some(CondaBuildV1Dependency {
+                spec: convert_binary_spec_to_match_spec(name, spec.value, channel_config).ok()?,
+                source: spec.source.map(convert_source_to_protocol),
+            })
+        })
+        .collect()
+}
+
+fn convert_source_to_protocol(dependency_source: DependencySource) -> CondaBuildV1DependencySource {
+    match dependency_source {
+        DependencySource::RunExport { name, env } => {
+            CondaBuildV1DependencySource::RunExport(CondaBuildV1DependencyRunExportSource {
+                from: env.to_string(),
+                package_name: name,
+            })
+        }
+    }
+}
+
+fn convert_pixi_spec_to_match_spec(
+    package_name: PackageName,
+    spec: PixiSpec,
+    channel_config: &ChannelConfig,
+) -> Result<MatchSpec, SpecConversionError> {
+    let nameless_spec = match spec.into_source_or_binary() {
+        Either::Left(source) => source.to_nameless_match_spec(),
+        Either::Right(binary) => binary.try_into_nameless_match_spec(channel_config)?,
+    };
+    Ok(MatchSpec::from_nameless(nameless_spec, Some(package_name)))
+}
+
+fn convert_binary_spec_to_match_spec(
+    package_name: PackageName,
+    spec: BinarySpec,
+    channel_config: &ChannelConfig,
+) -> Result<MatchSpec, SpecConversionError> {
+    let nameless_spec = spec.try_into_nameless_match_spec(channel_config)?;
+    Ok(MatchSpec::from_nameless(nameless_spec, Some(package_name)))
 }
 
 #[derive(Debug, thiserror::Error, Diagnostic)]

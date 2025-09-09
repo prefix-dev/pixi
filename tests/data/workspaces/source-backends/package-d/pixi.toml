@@ -6,5 +6,5 @@ version = "0.1.0"
 backend = { name = "package-e", path = "../package-e" }
 
 
-[package.build.configuration]
+[package.build.config]
 package = "package-d-0.1.0-h4616a5c_0.conda"

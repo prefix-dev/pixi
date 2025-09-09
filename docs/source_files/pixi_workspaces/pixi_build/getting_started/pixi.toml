@@ -1,5 +1,5 @@
 # --8<-- [start:full]
-# Specifies properties for the whole workspace
+### Specifies properties for the whole workspace ###
 # --8<-- [start:preview]
 [workspace]
 preview = ["pixi-build"]
@@ -7,19 +7,27 @@ preview = ["pixi-build"]
 channels = ["https://prefix.dev/conda-forge"]
 platforms = ["win-64", "linux-64", "osx-arm64", "osx-64"]
 
-# There can be multiple packages in a workspace
-# In `package` you specify properties specific to the package
+[tasks]
+start = "rich-example-main"
+
+# --8<-- [start:dependencies]
+[dependencies]
+python_rich = { path = "." }
+# --8<-- [end:dependencies]
+
+### Specify the package properties ###
+# --8<-- [start:package-full]
 # --8<-- [start:package]
 [package]
 name = "python_rich"
 version = "0.1.0"
 # --8<-- [end:package]
 
-# Here the build system of the package is specified
 # We are using `pixi-build-python` in order to build a Python package
 # --8<-- [start:build-system]
-[package.build]
-backend = { name = "pixi-build-python", version = "==0.3.2" }
+[package.build.backend]
+name = "pixi-build-python"
+version = "==0.3.2"
 # --8<-- [end:build-system]
 
 
@@ -29,26 +37,9 @@ backend = { name = "pixi-build-python", version = "==0.3.2" }
 hatchling = "*"
 # --8<-- [end:host-dependencies]
 
-# --8<-- [start:dependencies]
-# We add our package as dependency to the workspace
-[dependencies]
-# We can get source dependencies from a path on our file system
-python_rich_by_folder = { path = "./recipe_by_folder" }
-# as well as from a git repository
-boost-check = { git = "https://github.com/wolfv/pixi-build-examples", branch = "main", subdirectory = "boost-check" }
-
-# If the directory contains a `pixi.toml`, `pixi-build` will be used to build the package
-python_rich = { path = "./python_rich" }
-# if the directory contains a `recipe.yaml`, `rattler-build` will be used.
-python_rich_by_file = { path = "./recipe_by_file/recipe.yaml" }
-# --8<-- [end:dependencies]
-
+# The Python package `python_rich` has a run dependency on `rich`
 # --8<-- [start:run-dependencies]
 [package.run-dependencies]
-rich = ">=13.9.4,<14"
+rich = "13.9.*"
 # --8<-- [end:run-dependencies]
-
-# --8<-- [end:full]
-
-[tasks]
-start = "rich-example-main"
+# --8<-- [end:package-full]

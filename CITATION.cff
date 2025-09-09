@@ -30,8 +30,8 @@ authors:
   - given-names: Julian
     family-names: Hofer
     email: julian.hofer@protonmail.com
-repository-code: 'https://github.com/prefix-dev/pixi/releases/tag/v0.50.2'
-url: 'https://pixi.sh/v0.50.2'
+repository-code: 'https://github.com/prefix-dev/pixi/releases/tag/v0.54.2'
+url: 'https://pixi.sh/v0.54.2'
 abstract: >-
   A cross-platform, language agnostic, package/project
   management tool for development in virtual environments.

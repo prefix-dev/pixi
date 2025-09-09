@@ -1,10 +1,10 @@
 mod cycle;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 pub use cycle::{Cycle, CycleEnvironment};
 use futures::TryStreamExt;
-use itertools::Either;
+use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_types::procedures::conda_outputs::CondaOutput;
 use pixi_record::{InputHash, PinnedSourceSpec, PixiRecord, SourceRecord};
@@ -14,6 +14,7 @@ use rattler_conda_types::{
     ChannelConfig, InvalidPackageNameError, MatchSpec, PackageName, PackageRecord,
     package::RunExportsJson,
 };
+use rattler_repodata_gateway::{RunExportExtractorError, RunExportsReporter};
 use thiserror::Error;
 use tracing::instrument;
 
@@ -46,6 +47,9 @@ pub struct SourceMetadata {
 
     /// All the source records for this particular package.
     pub records: Vec<SourceRecord>,
+
+    /// All package names that where skipped but the backend could provide.
+    pub skipped_packages: Vec<PackageName>,
 }
 
 impl SourceMetadataSpec {
@@ -61,12 +65,15 @@ impl SourceMetadataSpec {
     pub(crate) async fn request(
         self,
         command_dispatcher: CommandDispatcher,
+        reporter: Option<Arc<dyn RunExportsReporter>>,
     ) -> Result<SourceMetadata, CommandDispatcherError<SourceMetadataError>> {
         // Get the metadata from the build backend.
         let build_backend_metadata = command_dispatcher
             .build_backend_metadata(self.backend_metadata.clone())
             .await
-            .map_err_with(SourceMetadataError::BuildBackendMetadata)?;
+            .map_err_with(SourceMetadataError::BuildBackendMetadata);
+
+        let build_backend_metadata = build_backend_metadata?;
 
         match &build_backend_metadata.metadata.metadata {
             MetadataKind::GetMetadata { packages } => {
@@ -81,12 +88,16 @@ impl SourceMetadataSpec {
                 Ok(SourceMetadata {
                     source: build_backend_metadata.source.clone(),
                     records,
+                    // As the GetMetadata kind returns all records at once and we don't solve them we can skip this.
+                    skipped_packages: Default::default(),
                 })
             }
             MetadataKind::Outputs { outputs } => {
+                let mut skipped_packages = vec![];
                 let mut futures = ExecutorFutures::new(command_dispatcher.executor());
                 for output in outputs {
                     if output.metadata.name != self.package {
+                        skipped_packages.push(output.metadata.name.clone());
                         continue;
                     }
                     futures.push(self.resolve_output(
@@ -94,12 +105,14 @@ impl SourceMetadataSpec {
                         output,
                         build_backend_metadata.metadata.input_hash.clone(),
                         build_backend_metadata.source.clone(),
+                        reporter.clone(),
                     ));
                 }
 
                 Ok(SourceMetadata {
                     source: build_backend_metadata.source.clone(),
                     records: futures.try_collect().await?,
+                    skipped_packages,
                 })
             }
         }
@@ -111,6 +124,7 @@ impl SourceMetadataSpec {
         output: &CondaOutput,
         input_hash: Option<InputHash>,
         source: PinnedSourceSpec,
+        reporter: Option<Arc<dyn RunExportsReporter>>,
     ) -> Result<SourceRecord, CommandDispatcherError<SourceMetadataError>> {
         let source_anchor = SourceAnchor::from(SourceSpec::from(source.clone()));
 
@@ -123,7 +137,7 @@ impl SourceMetadataSpec {
             .map_err(SourceMetadataError::from)
             .map_err(CommandDispatcherError::Failed)?
             .unwrap_or_default();
-        let build_records = self
+        let mut build_records = self
             .solve_dependencies(
                 self.package.clone(),
                 CycleEnvironment::Build,
@@ -134,8 +148,18 @@ impl SourceMetadataSpec {
                     .to_build_from_build(),
             )
             .await?;
-        let build_run_exports =
-            build_dependencies.extract_run_exports(&build_records, &output.ignore_run_exports);
+
+        let gateway = command_dispatcher.gateway();
+        let build_run_exports = build_dependencies
+            .extract_run_exports(
+                &mut build_records,
+                &output.ignore_run_exports,
+                gateway,
+                reporter.clone(),
+            )
+            .await
+            .map_err(SourceMetadataError::from)
+            .map_err(CommandDispatcherError::Failed)?;
 
         // Solve the host environment for the output.
         let host_dependencies = output
@@ -148,7 +172,7 @@ impl SourceMetadataSpec {
             .unwrap_or_default()
             // Extend with the run exports from the build environment.
             .extend_with_run_exports_from_build(&build_run_exports);
-        let host_records = self
+        let mut host_records = self
             .solve_dependencies(
                 self.package.clone(),
                 CycleEnvironment::Host,
@@ -157,8 +181,16 @@ impl SourceMetadataSpec {
                 self.backend_metadata.build_environment.clone(),
             )
             .await?;
-        let host_run_exports =
-            host_dependencies.extract_run_exports(&host_records, &output.ignore_run_exports);
+        let host_run_exports = host_dependencies
+            .extract_run_exports(
+                &mut host_records,
+                &output.ignore_run_exports,
+                gateway,
+                reporter,
+            )
+            .await
+            .map_err(SourceMetadataError::from)
+            .map_err(CommandDispatcherError::Failed)?;
 
         // Gather the dependencies for the output.
         let run_dependencies = Dependencies::new(&output.run_dependencies, None)
@@ -180,6 +212,7 @@ impl SourceMetadataSpec {
 
         // Convert the run exports
         let run_exports = PixiRunExports::try_from_protocol(&output.run_exports)
+            .map_err(SourceMetadataError::from)
             .map_err(CommandDispatcherError::Failed)?;
 
         let pixi_spec_to_match_spec = |name: &PackageName,
@@ -330,8 +363,16 @@ impl SourceMetadataSpec {
         match command_dispatcher
             .solve_pixi_environment(PixiEnvironmentSpec {
                 name: Some(format!("{} ({})", pkg_name.as_source(), env_type)),
-                dependencies: dependencies.dependencies,
-                constraints: dependencies.constraints,
+                dependencies: dependencies
+                    .dependencies
+                    .into_specs()
+                    .map(|(name, spec)| (name, spec.value))
+                    .collect(),
+                constraints: dependencies
+                    .constraints
+                    .into_specs()
+                    .map(|(name, spec)| (name, spec.value))
+                    .collect(),
                 installed: vec![], // TODO: To lock build environments, fill this.
                 build_environment,
                 channels: self.backend_metadata.channels.clone(),
@@ -382,14 +423,19 @@ impl PackageRecordDependencies {
     ) -> Result<PackageRecordDependencies, SpecConversionError> {
         let constrains = dependencies
             .constraints
-            .into_match_specs(channel_config)?
-            .into_iter()
-            .map(|spec| spec.to_string())
-            .collect();
+            .into_specs()
+            .map(|(name, spec)| {
+                Ok(MatchSpec::from_nameless(
+                    spec.value.try_into_nameless_match_spec(channel_config)?,
+                    Some(name),
+                ))
+            })
+            .map_ok(|spec| spec.to_string())
+            .collect::<Result<Vec<_>, _>>()?;
         let mut depends = Vec::new();
         let mut sources = HashMap::new();
         for (name, spec) in dependencies.dependencies.into_specs() {
-            match spec.into_source_or_binary() {
+            match spec.value.into_source_or_binary() {
                 Either::Left(source) => {
                     depends.push(
                         MatchSpec {
@@ -420,6 +466,9 @@ pub enum SourceMetadataError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     BuildBackendMetadata(#[from] BuildBackendMetadataError),
+
+    #[error("failed to amend run exports: {0}")]
+    RunExportsExtraction(#[from] RunExportExtractorError),
 
     #[error("while trying to solve the build environment for the package")]
     SolveBuildEnvironment(

@@ -8,7 +8,7 @@ use chrono::{DateTime, Utc};
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{
-    ChannelInfo, PackageName, PackageRecord, Platform, RepoData, VersionWithSource,
+    ChannelInfo, PackageName, PackageRecord, PackageUrl, Platform, RepoData, VersionWithSource,
     package::ArchiveType,
 };
 use std::{collections::HashSet, path::Path};
@@ -146,6 +146,7 @@ pub struct PackageBuilder {
     timestamp: Option<DateTime<Utc>>,
     md5: Option<String>,
     sha256: Option<String>,
+    purls: Option<std::collections::BTreeSet<PackageUrl>>,
 }
 
 impl Package {
@@ -162,6 +163,7 @@ impl Package {
             timestamp: None,
             sha256: None,
             md5: None,
+            purls: None,
         }
     }
 
@@ -205,6 +207,25 @@ impl PackageBuilder {
     /// Set the archive type of this package
     pub fn with_archive_type(mut self, archive_type: ArchiveType) -> Self {
         self.archive_type = archive_type;
+        self
+    }
+
+    /// Attach a PyPI purl for this conda package so Pixi treats it as a Python package.
+    /// The version used will be the conda record version (fallback if purl has none).
+    pub fn with_pypi_purl(mut self, pypi_name: impl AsRef<str>) -> Self {
+        let purl = PackageUrl::builder(String::from("pypi"), pypi_name.as_ref().to_string())
+            .build()
+            .expect("valid pypi package url");
+        match &mut self.purls {
+            Some(v) => {
+                v.insert(purl);
+            }
+            None => {
+                let mut s = std::collections::BTreeSet::new();
+                s.insert(purl);
+                self.purls = Some(s);
+            }
+        }
         self
     }
 
@@ -272,7 +293,7 @@ impl PackageBuilder {
                 timestamp: self.timestamp,
                 track_features: vec![],
                 version: self.version,
-                purls: None,
+                purls: self.purls,
                 run_exports: None,
                 python_site_packages_path: None,
                 experimental_extra_depends: Default::default(),

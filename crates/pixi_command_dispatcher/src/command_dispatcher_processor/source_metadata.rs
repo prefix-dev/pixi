@@ -1,6 +1,7 @@
 use std::{collections::hash_map::Entry, sync::Arc};
 
 use futures::FutureExt;
+use tokio_util::sync::CancellationToken;
 
 use super::{CommandDispatcherProcessor, PendingDeduplicatingTask, TaskResult};
 use crate::{
@@ -81,7 +82,11 @@ impl CommandDispatcherProcessor {
                     reporter.on_started(reporter_id)
                 }
 
-                self.queue_source_metadata_task(source_metadata_id, task.spec);
+                self.queue_source_metadata_task(
+                    source_metadata_id,
+                    task.spec,
+                    task.cancellation_token,
+                );
             }
         }
     }
@@ -91,14 +96,29 @@ impl CommandDispatcherProcessor {
         &mut self,
         source_metadata_id: SourceMetadataId,
         spec: SourceMetadataSpec,
+        cancellation_token: CancellationToken,
     ) {
         let dispatcher = self.create_task_command_dispatcher(
             CommandDispatcherContext::SourceMetadata(source_metadata_id),
         );
+
+        let dispatcher_context = CommandDispatcherContext::SourceMetadata(source_metadata_id);
+        let reporter_context = self.reporter_context(dispatcher_context);
+        let run_exports_reporter = self
+            .reporter
+            .as_mut()
+            .and_then(|reporter| reporter.create_run_exports_reporter(reporter_context));
+
         self.pending_futures.push(
-            spec.request(dispatcher)
+            cancellation_token
+                .run_until_cancelled_owned(spec.request(dispatcher, run_exports_reporter))
                 .map(move |result| {
-                    TaskResult::SourceMetadata(source_metadata_id, result.map(Arc::new))
+                    TaskResult::SourceMetadata(
+                        source_metadata_id,
+                        result.map_or(Err(CommandDispatcherError::Cancelled), |result| {
+                            result.map(Arc::new)
+                        }),
+                    )
                 })
                 .boxed_local(),
         );

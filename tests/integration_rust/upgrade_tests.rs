@@ -1,16 +1,19 @@
 use indexmap::IndexMap;
 use insta::assert_snapshot;
-use pixi::Workspace;
-use pixi::cli::upgrade::{Args, parse_specs};
+use pixi_cli::upgrade::{Args, parse_specs};
+use pixi_core::Workspace;
 use rattler_conda_types::Platform;
 
 use crate::common::PixiControl;
+use crate::setup_tracing;
 
 // This test requires network connection and takes around 40s to
 // complete on my machine.
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 #[tokio::test]
 async fn pypi_dependency_index_preserved_on_upgrade() {
+    setup_tracing();
+
     let pixi = PixiControl::from_manifest(&format!(
         r#"
         [workspace]
@@ -44,8 +47,8 @@ async fn pypi_dependency_index_preserved_on_upgrade() {
             match_specs,
             pypi_deps,
             IndexMap::default(),
-            &args.prefix_update_config,
-            &args.lock_file_update_config,
+            args.no_install_config.no_install,
+            &args.lock_file_update_config.lock_file_usage().unwrap(),
             &args.specs.feature,
             &[],
             true,

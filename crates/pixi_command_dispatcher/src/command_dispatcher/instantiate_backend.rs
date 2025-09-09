@@ -8,6 +8,7 @@ use pixi_build_frontend::{
     tool::{IsolatedTool, SystemTool, Tool},
 };
 use pixi_build_types::{PixiBuildApiVersion, procedures::initialize::InitializeParams};
+use pixi_spec::{SourceLocationSpec, SpecConversionError};
 use rattler_conda_types::ChannelConfig;
 use rattler_shell::{
     activation::{ActivationError, ActivationVariables, Activator},
@@ -49,6 +50,14 @@ impl CommandDispatcher {
     ) -> Result<Backend, CommandDispatcherError<InstantiateBackendError>> {
         let BackendSpec::JsonRpc(backend_spec) = spec.backend_spec;
 
+        let source_dir = if let Some(SourceLocationSpec::Path(path)) = spec.init_params.source {
+            path.resolve(&spec.init_params.source_anchor)
+                .map_err(InstantiateBackendError::from)
+                .map_err(CommandDispatcherError::Failed)?
+        } else {
+            spec.init_params.source_anchor
+        };
+
         let command_spec = match self.build_backend_overrides() {
             BackendOverride::System(overridden_backends) => overridden_backends
                 .named_backend_override(&backend_spec.name)
@@ -60,7 +69,8 @@ impl CommandDispatcher {
                     let memory = in_mem
                         .initialize(InitializeParams {
                             manifest_path: spec.init_params.manifest_path,
-                            source_dir: Some(spec.init_params.source_dir),
+                            source_dir: Some(source_dir),
+                            workspace_root: Some(spec.init_params.workspace_root),
                             cache_directory: Some(self.cache_dirs().root().clone()),
                             project_model: spec.init_params.project_model.map(Into::into),
                             configuration: spec.init_params.configuration,
@@ -133,7 +143,7 @@ impl CommandDispatcher {
         };
 
         // Add debug information about what the backend supports.
-        tracing::debug!(
+        tracing::info!(
             "Instantiated backend {}{}, negotiated API version {}",
             tool.executable(),
             tool.version()
@@ -141,17 +151,23 @@ impl CommandDispatcher {
             api_version,
         );
 
-        // The backend expects both the manifest path and the source directory to be
-        // absolute paths.
-        let manifest_path = spec
-            .init_params
-            .source_dir
-            .join(spec.init_params.manifest_path);
-        let source_dir = spec.init_params.source_dir;
+        // Make sure that the project model is compatible with the API version.
+        if !api_version.supports_name_none()
+            && spec
+                .init_params
+                .project_model
+                .as_ref()
+                .is_some_and(|p| p.name.is_none())
+        {
+            return Err(CommandDispatcherError::Failed(
+                InstantiateBackendError::SpecConversionError(SpecConversionError::MissingName),
+            ));
+        }
 
         JsonRpcBackend::setup(
             source_dir,
-            manifest_path,
+            spec.init_params.manifest_path,
+            spec.init_params.workspace_root,
             spec.init_params.project_model,
             spec.init_params.configuration,
             spec.init_params.target_configuration,
@@ -187,4 +203,7 @@ pub enum InstantiateBackendError {
 
     #[error("failed to run activation for the backend tool")]
     Activation(#[from] ActivationError),
+
+    #[error(transparent)]
+    SpecConversionError(#[from] SpecConversionError),
 }

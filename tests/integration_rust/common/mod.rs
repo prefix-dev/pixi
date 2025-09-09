@@ -4,6 +4,7 @@ pub mod builders;
 pub mod client;
 pub mod logging;
 pub mod package_database;
+pub mod pypi_index;
 
 use std::{
     ffi::OsString,
@@ -15,26 +16,29 @@ use std::{
 use builders::{LockBuilder, SearchBuilder};
 use indicatif::ProgressDrawTarget;
 use miette::{Context, Diagnostic, IntoDiagnostic};
-use pixi::{
-    UpdateLockFileOptions, Workspace,
-    cli::{
-        LockFileUsageConfig, add,
-        cli_config::{ChannelsConfig, LockFileUpdateConfig, PrefixUpdateConfig, WorkspaceConfig},
-        init::{self, GitAttributes},
-        install::Args,
-        lock, remove, run, search,
-        task::{self, AddArgs, AliasArgs},
-        update, workspace,
-    },
-    lock_file::{ReinstallPackages, UpdateMode},
-    task::{
-        ExecutableTask, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph,
-        TaskGraphError, TaskName, get_task_env,
-    },
+use pixi_cli::LockFileUsageConfig;
+use pixi_cli::cli_config::{
+    ChannelsConfig, LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig,
+};
+use pixi_cli::{
+    add,
+    init::{self, GitAttributes},
+    install::Args,
+    lock, remove, run, search,
+    task::{self, AddArgs, AliasArgs},
+    update, workspace,
 };
 use pixi_consts::consts;
+use pixi_core::{
+    InstallFilter, UpdateLockFileOptions, Workspace,
+    lock_file::{ReinstallPackages, UpdateMode},
+};
 use pixi_manifest::{EnvironmentName, FeatureName};
 use pixi_progress::global_multi_progress;
+use pixi_task::{
+    ExecutableTask, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph, TaskGraphError,
+    TaskName, get_task_env,
+};
 use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform};
 use rattler_lock::{LockFile, LockedPackageRef, UrlOrPath};
 use tempfile::TempDir;
@@ -362,11 +366,7 @@ impl PixiControl {
                     manifest_path: Some(self.manifest_path()),
                 },
                 dependency_config: AddBuilder::dependency_config_with_specs(specs),
-                prefix_update_config: PrefixUpdateConfig {
-                    no_install: true,
-
-                    revalidate: false,
-                },
+                no_install_config: NoInstallConfig { no_install: true },
                 lock_file_update_config: LockFileUpdateConfig {
                     no_lockfile_update: false,
                     lock_file_usage: LockFileUsageConfig::default(),
@@ -401,10 +401,7 @@ impl PixiControl {
                     manifest_path: Some(self.manifest_path()),
                 },
                 dependency_config: AddBuilder::dependency_config_with_specs(vec![spec]),
-                prefix_update_config: PrefixUpdateConfig {
-                    no_install: true,
-                    revalidate: false,
-                },
+                no_install_config: NoInstallConfig { no_install: true },
                 lock_file_update_config: LockFileUpdateConfig {
                     no_lockfile_update: false,
                     lock_file_usage: LockFileUsageConfig::default(),
@@ -422,10 +419,7 @@ impl PixiControl {
                     manifest_path: Some(self.manifest_path()),
                 },
                 channel: vec![],
-                prefix_update_config: PrefixUpdateConfig {
-                    no_install: true,
-                    revalidate: false,
-                },
+                no_install_config: NoInstallConfig { no_install: true },
                 lock_file_update_config: LockFileUpdateConfig {
                     no_lockfile_update: false,
                     lock_file_usage: LockFileUsageConfig::default(),
@@ -447,10 +441,7 @@ impl PixiControl {
                     manifest_path: Some(self.manifest_path()),
                 },
                 channel: vec![],
-                prefix_update_config: PrefixUpdateConfig {
-                    no_install: true,
-                    revalidate: false,
-                },
+                no_install_config: NoInstallConfig { no_install: true },
                 lock_file_update_config: LockFileUpdateConfig {
                     no_lockfile_update: false,
                     lock_file_usage: LockFileUsageConfig::default(),
@@ -501,10 +492,11 @@ impl PixiControl {
         // Ensure the lock-file is up-to-date
         let lock_file = project
             .update_lock_file(UpdateLockFileOptions {
-                lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
+                lock_file_usage: args.lock_and_install_config.lock_file_usage().unwrap(),
                 ..UpdateLockFileOptions::default()
             })
-            .await?;
+            .await?
+            .0;
 
         // Create a task graph from the command line arguments.
         let search_env = SearchEnvironments::from_opt_env(
@@ -532,7 +524,7 @@ impl PixiControl {
                             &task.run_environment,
                             UpdateMode::Revalidate,
                             &ReinstallPackages::default(),
-                            &[],
+                            &InstallFilter::default(),
                         )
                         .await?;
                     let env =
@@ -576,6 +568,8 @@ impl PixiControl {
                 config: Default::default(),
                 all: false,
                 skip: None,
+                skip_with_deps: None,
+                only: None,
             },
         }
     }
@@ -613,6 +607,7 @@ impl PixiControl {
         Ok(project
             .update_lock_file(UpdateLockFileOptions::default())
             .await?
+            .0
             .into_lock_file())
     }
 
@@ -624,6 +619,7 @@ impl PixiControl {
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
                 },
+                no_install_config: NoInstallConfig { no_install: false },
                 check: false,
                 json: false,
             },

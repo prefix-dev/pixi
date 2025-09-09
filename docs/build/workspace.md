@@ -15,9 +15,9 @@ Or if you need the changes of an unreleased version of one of your dependencies.
 ## Let's Get Started
 
 In this tutorial we will showcase how to develop two packages in one workspace.
-For that we will use the `python_rich` Python package developed in chapter [Building a Python package](python.md) and let it depend on the `python_binding` C++ package developed in chapter [Building a C++ package](cpp.md).
+For that we will use the `python_rich` Python package developed in chapter [Building a Python package](python.md) and let it depend on the `cpp_math` C++ package developed in chapter [Building a C++ package](cpp.md).
 
-We will start with the original setup of `python_rich` and copy `python_binding` into a folder called `packages`.
+We will start with the original setup of `python_rich` and copy `cpp_math` into a folder called `packages`.
 The source directory structure now looks like this:
 
 ```shell

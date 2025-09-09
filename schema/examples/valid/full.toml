@@ -27,13 +27,17 @@ numpy = { version = ">=1.21.0" }
 name = { workspace = true }
 version = { workspace = true }
 
-[package.build]
+[package.build.backend]
 additional-dependencies = { git = "*" }
-backend = { name = "pixi-build-python", version = "0.1.*" }
 channels = [
   "https://prefix.dev/pixi-build-backends",
   "https://prefix.dev/conda-forge",
 ]
+name = "pixi-build-python"
+version = "*"
+
+[package.build]
+source = { path = "my_project" }
 
 [tool.pixi-build-python]
 noarch = false

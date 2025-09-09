@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://pixi.sh/v0.50.2/schema/manifest/schema.json",
+  "$id": "https://pixi.sh/v0.54.2/schema/manifest/schema.json",
   "title": "`pixi.toml` manifest file",
   "description": "The configuration for a [`pixi`](https://pixi.sh) project.",
   "type": "object",
@@ -10,7 +10,7 @@
       "title": "Schema",
       "description": "The schema identifier for the project's configuration",
       "type": "string",
-      "default": "https://pixi.sh/v0.50.2/schema/manifest/schema.json",
+      "default": "https://pixi.sh/v0.54.2/schema/manifest/schema.json",
       "format": "uri-reference"
     },
     "activation": {
@@ -330,11 +330,20 @@
             ]
           }
         },
-        "configuration": {
-          "title": "Configuration",
+        "config": {
+          "title": "Config",
           "description": "The configuration of the build backend",
           "type": "object",
           "additionalProperties": true
+        },
+        "source": {
+          "$ref": "#/$defs/SourceLocation",
+          "description": "The source from which to build the package",
+          "examples": [
+            {
+              "path": "project"
+            }
+          ]
         },
         "target": {
           "title": "Target",
@@ -349,7 +358,7 @@
           "examples": [
             {
               "linux-64": {
-                "configuration": {
+                "config": {
                   "key": "value"
                 }
               }
@@ -363,6 +372,25 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "additional-dependencies": {
+          "title": "Additional-Dependencies",
+          "description": "Additional dependencies to install alongside the build backend",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/MatchspecTable"
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
         "branch": {
           "title": "Branch",
           "description": "A git branch to use",
@@ -391,6 +419,27 @@
             "pytorch",
             "https://prefix.dev/conda-forge"
           ]
+        },
+        "channels": {
+          "title": "Channels",
+          "description": "The `conda` channels that are used to fetch the build backend from",
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "string",
+                "format": "uri",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/ChannelInlineTable"
+              }
+            ]
+          }
         },
         "file-name": {
           "title": "File-Name",
@@ -478,8 +527,8 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "configuration": {
-          "title": "Configuration",
+        "config": {
+          "title": "Config",
           "description": "Target-specific configuration for the build backend",
           "type": "object",
           "additionalProperties": true
@@ -540,8 +589,25 @@
           "description": "The (positional or named) arguments to pass to the task",
           "type": "array",
           "items": {
-            "type": "string",
-            "minLength": 1
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "description": "A single item task name/value object",
+                "type": "object",
+                "patternProperties": {
+                  "^[a-zA-Z_][a-zA-Z\\d_]*$": {
+                    "type": "string"
+                  }
+                },
+                "maxProperties": 1,
+                "minProperties": 1,
+                "propertyNames": {
+                  "description": "A valid task argument name"
+                }
+              }
+            ]
           }
         },
         "environment": {
@@ -552,7 +618,7 @@
         },
         "task": {
           "title": "Task",
-          "description": "A valid task name.",
+          "description": "the name of the task to depend on",
           "type": "string",
           "pattern": "^[^\\s\\$]+$"
         }
@@ -1630,6 +1696,20 @@
         }
       }
     },
+    "SourceLocation": {
+      "title": "SourceLocation",
+      "description": "The location of a package's source code.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "title": "Path",
+          "description": "The path to the source",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
     "SystemRequirements": {
       "title": "SystemRequirements",
       "description": "Platform-specific requirements",
@@ -1863,8 +1943,9 @@
       "properties": {
         "arg": {
           "title": "Arg",
+          "description": "The name of the argument",
           "type": "string",
-          "minLength": 1
+          "pattern": "^[a-zA-Z_][a-zA-Z\\d_]*$"
         },
         "default": {
           "title": "Default",
@@ -1881,7 +1962,7 @@
       "properties": {
         "args": {
           "title": "Args",
-          "description": "The arguments to pass to the task",
+          "description": "The arguments to a task",
           "type": "array",
           "items": {
             "anyOf": [
@@ -1889,14 +1970,24 @@
                 "$ref": "#/$defs/TaskArgs"
               },
               {
+                "description": "A valid task argument name",
                 "type": "string",
-                "minLength": 1
+                "pattern": "^[a-zA-Z_][a-zA-Z\\d_]*$"
               }
             ]
           },
           "examples": [
-            "arg1",
-            "arg2"
+            [
+              "arg1",
+              "arg2"
+            ],
+            [
+              "arg",
+              {
+                "arg": "arg2",
+                "default": "2"
+              }
+            ]
           ]
         },
         "clean-env": {
@@ -2220,6 +2311,17 @@
             "$ref": "#/$defs/S3Options"
           }
         },
+        "target": {
+          "title": "Target",
+          "description": "The workspace targets",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/WorkspaceTarget"
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
         "version": {
           "title": "Version",
           "description": "The version of the project; we advise use of [SemVer](https://semver.org)",
@@ -2245,6 +2347,28 @@
           "description": "Must be true to inherit from workspace",
           "type": "boolean",
           "const": true
+        }
+      }
+    },
+    "WorkspaceTarget": {
+      "title": "WorkspaceTarget",
+      "description": "Target-specific configuration for a workspace",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "build-variants": {
+          "title": "Build-Variants",
+          "description": "The build variants for this workspace target",
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
         }
       }
     }

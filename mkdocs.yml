@@ -138,11 +138,13 @@ nav:
       - Tutorials:
           - Building a Python Package: build/python.md
           - Building a C++ Package: build/cpp.md
+          - Building a ROS Package: build/ros.md
           - Multiple Packages in Workspace: build/workspace.md
           - Variants: build/variants.md
           - Advanced Building Using rattler-build: build/advanced_cpp.md
       - Dependency Types: build/dependency_types.md
       - Build Backends: build/backends.md
+      - Package Source: build/package_source.md
   - Distributing:
       - Pixi Pack: deployment/pixi_pack.md
       - Authentication: deployment/authentication.md
@@ -239,6 +241,11 @@ plugins:
         "integration/editor/pycharm.md": "integration/editor/jetbrains.md"
         "advanced/installation.md": "installation.md"
 
+        # Redirects for links from code to make sure we don't break them.
+        # Using descriptive names that never existed, to avoid conflicts.
+        # crates/pixi_cli/src/init.rs
+        "init_getting_started.md": "first_project.md"
+
   - search
   - social
   - mike:
@@ -252,7 +259,7 @@ plugins:
     # javascript_dir: js
   # llmstxt must come after the mike plugin:
   - llmstxt:
-      enabled: true
+      enabled: !ENV [CI, false]
       full_output: llms-full.txt
       markdown_description: |-
         Pixi is a fast, modern, and reproducible package management tool

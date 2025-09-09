@@ -1,7 +1,7 @@
 github_url = "https://github.com/prefix-dev/pixi"
 
 [version]
-current = "0.50.2"
+current = "0.54.2"
 
 # Example of a semver regexp.
 # Make sure this matches current_version before
@@ -27,7 +27,7 @@ src = "CITATION.cff"
 
 [[file]]
 search = '^version = "{current_version}"'
-src = "Cargo.toml"
+src = "crates/pixi/Cargo.toml"
 
 [[file]]
 search = "pixi-version: v{current_version}"

@@ -7,19 +7,20 @@ use std::{
 };
 
 use fs_err::tokio as tokio_fs;
-use pixi::{
+use pixi_cli::run::{self, Args};
+use pixi_cli::{
+    LockFileUsageConfig,
+    cli_config::{LockAndInstallConfig, LockFileUpdateConfig, WorkspaceConfig},
+};
+use pixi_config::{Config, DetachedEnvironments};
+use pixi_consts::consts;
+use pixi_core::InstallFilter;
+use pixi_core::{
     UpdateLockFileOptions, Workspace,
-    cli::{
-        LockFileUsageConfig,
-        cli_config::{LockFileUpdateConfig, WorkspaceConfig},
-        run::{self, Args},
-    },
     environment::LockFileUsage,
     lock_file::{CondaPrefixUpdater, ReinstallPackages, UpdateMode},
     workspace::{HasWorkspaceRef, grouped_environment::GroupedEnvironment},
 };
-use pixi_config::{Config, DetachedEnvironments};
-use pixi_consts::consts;
 use pixi_manifest::{FeatureName, FeaturesExt};
 use pixi_record::PixiRecord;
 use rattler_conda_types::{Platform, RepoDataRecord};
@@ -34,17 +35,19 @@ use uv_python::PythonEnvironment;
 use crate::common::{
     LockFileExt, PixiControl,
     builders::{
-        HasDependencyConfig, HasLockFileUpdateConfig, HasPrefixUpdateConfig, string_from_iter,
+        HasDependencyConfig, HasLockFileUpdateConfig, HasNoInstallConfig, string_from_iter,
     },
-    logging::try_init_test_subscriber,
     package_database::{Package, PackageDatabase},
 };
+use crate::setup_tracing;
 
 /// Should add a python version to the environment and lock file that matches
 /// the specified version and run it
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn install_run_python() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
     pixi.add("python==3.11.0").with_install(true).await.unwrap();
@@ -92,6 +95,8 @@ async fn install_run_python() {
 /// solution to keep using version `1` of bar.
 #[tokio::test]
 async fn test_incremental_lock_file() {
+    setup_tracing();
+
     let mut package_database = PackageDatabase::default();
 
     // Add a package `foo` that depends on `bar` both set to version 1.
@@ -172,6 +177,8 @@ async fn test_incremental_lock_file() {
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn install_locked_with_config() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
 
@@ -204,7 +211,8 @@ async fn install_locked_with_config() {
 
     // Add new version of python only to the manifest
     pixi.add("python==3.9.0")
-        .without_lockfile_update()
+        .with_frozen(true)
+        .with_install(false)
         .await
         .unwrap();
 
@@ -271,6 +279,8 @@ async fn install_locked_with_config() {
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn install_frozen() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
     // Add and update lockfile with this version of python
@@ -278,7 +288,8 @@ async fn install_frozen() {
 
     // Add new version of python only to the manifest
     pixi.add("python==3.10.1")
-        .without_lockfile_update()
+        .with_frozen(true)
+        .with_install(false)
         .await
         .unwrap();
 
@@ -295,9 +306,12 @@ async fn install_frozen() {
     // Check if running with frozen doesn't suddenly install the latest update.
     let result = pixi
         .run(run::Args {
-            lock_file_update_config: LockFileUpdateConfig {
-                lock_file_usage: LockFileUsageConfig {
-                    frozen: true,
+            lock_and_install_config: LockAndInstallConfig {
+                lock_file_update_config: LockFileUpdateConfig {
+                    lock_file_usage: LockFileUsageConfig {
+                        frozen: true,
+                        ..Default::default()
+                    },
                     ..Default::default()
                 },
                 ..Default::default()
@@ -333,7 +347,7 @@ fn is_pypi_package_installed(env: &PythonEnvironment, package_name: &str) -> boo
 
 // Helper to check if a conda package is installed.
 async fn is_conda_package_installed(prefix_path: &Path, package_name: &str) -> bool {
-    let conda_prefix = pixi::prefix::Prefix::new(prefix_path.to_path_buf());
+    let conda_prefix = pixi_utils::prefix::Prefix::new(prefix_path.to_path_buf());
     conda_prefix
         .find_designated_package(&rattler_conda_types::PackageName::try_from(package_name).unwrap())
         .await
@@ -344,6 +358,8 @@ async fn is_conda_package_installed(prefix_path: &Path, package_name: &str) -> b
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn install_frozen_skip() {
+    setup_tracing();
+
     // Create a project with a local python dependency 'no-build-editable'
     // and a local conda dependency 'python_rich'
     let current_platform = Platform::current();
@@ -369,15 +385,17 @@ async fn install_frozen_skip() {
 
     let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
 
+    let workspace_root = PathBuf::from(env!("CARGO_WORKSPACE_DIR"));
+
     fs_extra::dir::copy(
-        "docs/source_files/pixi_workspaces/pixi_build/python",
+        workspace_root.join("docs/source_files/pixi_workspaces/pixi_build/python"),
         pixi.workspace_path(),
         &fs_extra::dir::CopyOptions::new(),
     )
     .unwrap();
 
     fs_extra::dir::copy(
-        "tests/data/satisfiability/no-build-editable",
+        workspace_root.join("tests/data/satisfiability/no-build-editable"),
         pixi.workspace_path(),
         &fs_extra::dir::CopyOptions::new(),
     )
@@ -406,33 +424,11 @@ async fn install_frozen_skip() {
     assert!(is_conda_package_installed(&prefix_path, "python_rich").await);
 }
 
-/// Test `pixi install --frozen --skip` functionality with a non existing package
-#[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
-async fn install_skip_non_existent_package_warning() {
-    let pixi = PixiControl::new().unwrap();
-    pixi.init().await.unwrap();
-    // Add a dependency to create a lock file
-    pixi.add("python").await.unwrap();
-
-    let log_buffer = try_init_test_subscriber();
-
-    // Install with a skipped package that doesn't exist in the lock file
-    pixi.install()
-        .with_frozen()
-        .with_skipped(vec!["non-existent-package".to_string()])
-        .await
-        .unwrap();
-
-    let output = log_buffer.get_output();
-    assert!(output.contains(
-        "No packages were skipped. 'non-existent-package' did not match any packages in the lockfile."
-    ));
-}
-
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn pypi_reinstall_python() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
     // Add and update lockfile with this version of python
@@ -441,7 +437,7 @@ async fn pypi_reinstall_python() {
     // Add flask from pypi
     pixi.add("flask")
         .with_install(true)
-        .set_type(pixi::DependencyType::PypiDependency)
+        .set_type(pixi_core::DependencyType::PypiDependency)
         .await
         .unwrap();
     assert!(pixi.lock_file().await.unwrap().contains_match_spec(
@@ -489,6 +485,8 @@ async fn pypi_reinstall_python() {
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 // Check if we add and remove a pypi package that the site-packages is cleared
 async fn pypi_add_remove() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
     // Add and update lockfile with this version of python
@@ -497,7 +495,7 @@ async fn pypi_add_remove() {
     // Add flask from pypi
     pixi.add("flask[dotenv]")
         .with_install(true)
-        .set_type(pixi::DependencyType::PypiDependency)
+        .set_type(pixi_core::DependencyType::PypiDependency)
         .await
         .unwrap();
 
@@ -511,7 +509,7 @@ async fn pypi_add_remove() {
     assert!(installed_311.iter().count() > 0);
 
     pixi.remove("flask[dotenv]")
-        .set_type(pixi::DependencyType::PypiDependency)
+        .set_type(pixi_core::DependencyType::PypiDependency)
         .with_install(true)
         .await
         .unwrap();
@@ -522,6 +520,8 @@ async fn pypi_add_remove() {
 
 #[tokio::test]
 async fn test_channels_changed() {
+    setup_tracing();
+
     // Write a channel with a package `bar` with only one version
     let mut package_database_a = PackageDatabase::default();
     package_database_a.add_package(Package::build("bar", "2").finish());
@@ -577,6 +577,8 @@ async fn test_channels_changed() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn install_conda_meta_history() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
     pixi.install().await.unwrap();
@@ -590,6 +592,8 @@ async fn install_conda_meta_history() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn minimal_lockfile_update_pypi() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
 
@@ -598,7 +602,7 @@ async fn minimal_lockfile_update_pypi() {
 
     // Add pypi dependencies which are not the latest options
     pixi.add_multiple(vec!["uvicorn==0.28.0", "click==7.1.2"])
-        .set_type(pixi::DependencyType::PypiDependency)
+        .set_type(pixi_core::DependencyType::PypiDependency)
         .with_install(true)
         .await
         .unwrap();
@@ -613,7 +617,7 @@ async fn minimal_lockfile_update_pypi() {
 
     // Widening the click version to allow for the latest version
     pixi.add_multiple(vec!["uvicorn==0.29.0", "click"])
-        .set_type(pixi::DependencyType::PypiDependency)
+        .set_type(pixi_core::DependencyType::PypiDependency)
         .with_install(true)
         .await
         .unwrap();
@@ -634,13 +638,15 @@ async fn minimal_lockfile_update_pypi() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_installer_name() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
 
     // Add and update lockfile with this version of python
     pixi.add("python==3.11").with_install(true).await.unwrap();
     pixi.add("click==8.0.0")
-        .set_type(pixi::DependencyType::PypiDependency)
+        .set_type(pixi_core::DependencyType::PypiDependency)
         .with_install(true)
         .await
         .unwrap();
@@ -665,7 +671,7 @@ async fn test_installer_name() {
     fs_err::write(dist_info.join("INSTALLER"), "not-pixi").unwrap();
     pixi.remove("click==8.0.0")
         .with_install(true)
-        .set_type(pixi::DependencyType::PypiDependency)
+        .set_type(pixi_core::DependencyType::PypiDependency)
         .await
         .unwrap();
 
@@ -679,7 +685,7 @@ async fn test_installer_name() {
 
     // re-manage the package by adding it, this should cause a reinstall
     pixi.add("click==8.0.0")
-        .set_type(pixi::DependencyType::PypiDependency)
+        .set_type(pixi_core::DependencyType::PypiDependency)
         .with_install(true)
         .await
         .unwrap();
@@ -694,13 +700,18 @@ async fn test_installer_name() {
 /// Makes sure the lockfile isn't touched and the environment is still
 /// installed.
 async fn test_old_lock_install() {
-    let lock_str =
-        fs_err::read_to_string("tests/data/satisfiability/old_lock_file/pixi.lock").unwrap();
-    let project = Workspace::from_path(Path::new(
-        "tests/data/satisfiability/old_lock_file/pyproject.toml",
-    ))
+    setup_tracing();
+
+    let workspace_root = PathBuf::from(env!("CARGO_WORKSPACE_DIR"));
+    let lock_str = fs_err::read_to_string(
+        workspace_root.join("tests/data/satisfiability/old_lock_file/pixi.lock"),
+    )
     .unwrap();
-    pixi::environment::get_update_lock_file_and_prefix(
+    let project = Workspace::from_path(
+        &workspace_root.join("tests/data/satisfiability/old_lock_file/pyproject.toml"),
+    )
+    .unwrap();
+    pixi_core::environment::get_update_lock_file_and_prefix(
         &project.default_environment(),
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
@@ -709,19 +720,24 @@ async fn test_old_lock_install() {
             ..Default::default()
         },
         ReinstallPackages::default(),
-        &[],
+        &InstallFilter::default(),
     )
     .await
     .unwrap();
     assert_eq!(
         lock_str,
-        fs_err::read_to_string("tests/data/satisfiability/old_lock_file/pixi.lock").unwrap()
+        fs_err::read_to_string(
+            workspace_root.join("tests/data/satisfiability/old_lock_file/pixi.lock")
+        )
+        .unwrap()
     );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_no_build_isolation() {
+    setup_tracing();
+
     let current_platform = Platform::current();
     let setup_py = r#"
 from setuptools import setup, find_packages
@@ -795,6 +811,8 @@ setup(
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_no_build_isolation_with_dependencies() {
+    setup_tracing();
+
     let current_platform = Platform::current();
 
     // Create pyproject.toml for package-tdjager (will be installed with build isolation)
@@ -841,13 +859,13 @@ dependencies = []
         [dependencies]
         python = "3.12.*"
         setuptools = ">=72,<73"
-        
+
         [pypi-dependencies.package-b]
         path = "./package-b"
 
         [pypi-dependencies.package-tdjager]
         path = "./package-tdjager"
-        
+
         "#,
         platform = current_platform,
     );
@@ -907,6 +925,8 @@ setup(
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_setuptools_override_failure() {
+    setup_tracing();
+
     // This was causing issues like: https://github.com/prefix-dev/pixi/issues/1686
     let manifest = format!(
         r#"
@@ -939,6 +959,8 @@ async fn test_setuptools_override_failure() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_many_linux_wheel_tag() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     #[cfg(not(target_os = "linux"))]
     pixi.init_with_platforms(vec![
@@ -953,7 +975,7 @@ async fn test_many_linux_wheel_tag() {
     pixi.add("python==3.12.*").await.unwrap();
     // We know that this package has many linux wheel tags for this version
     pixi.add("gmsh==4.13.1")
-        .set_type(pixi::DependencyType::PypiDependency)
+        .set_type(pixi_core::DependencyType::PypiDependency)
         .with_install(true)
         .await
         .unwrap();
@@ -962,6 +984,8 @@ async fn test_many_linux_wheel_tag() {
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_ensure_gitignore_file_creation() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
     let gitignore_path = pixi.workspace().unwrap().pixi_dir().join(".gitignore");
@@ -1014,6 +1038,8 @@ async fn test_ensure_gitignore_file_creation() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn pypi_prefix_is_not_created_when_whl() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init().await.unwrap();
 
@@ -1022,7 +1048,7 @@ async fn pypi_prefix_is_not_created_when_whl() {
 
     // Add pypi dependency that is a wheel
     pixi.add_multiple(vec!["boltons==24.1.0"])
-        .set_type(pixi::DependencyType::PypiDependency)
+        .set_type(pixi_core::DependencyType::PypiDependency)
         // we don't want to install the package
         // we just want to check that the prefix is not created
         .with_install(false)
@@ -1053,6 +1079,8 @@ async fn pypi_prefix_is_not_created_when_whl() {
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn conda_pypi_override_correct_per_platform() {
+    setup_tracing();
+
     let pixi = PixiControl::new().unwrap();
     pixi.init_with_platforms(vec![
         Platform::OsxArm64.to_string(),
@@ -1108,6 +1136,8 @@ async fn conda_pypi_override_correct_per_platform() {
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 
 async fn test_multiple_prefix_update() {
+    setup_tracing();
+
     let current_platform = Platform::current();
     let virtual_packages = VirtualPackages::detect(&VirtualPackageOverrides::default())
         .unwrap()
@@ -1215,7 +1245,7 @@ async fn test_multiple_prefix_update() {
         let pixi_records = pixi_records.clone();
         // tasks.push(conda_prefix_updater.update(pixi_records));
         let updater = conda_prefix_updater.clone();
-        sets.spawn(async move { updater.update(pixi_records, None).await.cloned() });
+        sets.spawn(async move { updater.update(pixi_records, None, None).await.cloned() });
     }
 
     let mut first_modified = None;
@@ -1248,6 +1278,8 @@ async fn test_multiple_prefix_update() {
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn install_s3() {
+    setup_tracing();
+
     let r2_access_key_id = std::env::var("PIXI_TEST_R2_ACCESS_KEY_ID").ok();
     let r2_secret_access_key = std::env::var("PIXI_TEST_R2_SECRET_ACCESS_KEY").ok();
     if r2_access_key_id.is_none()
@@ -1325,6 +1357,8 @@ async fn install_s3() {
 
 #[tokio::test]
 async fn test_exclude_newer() {
+    setup_tracing();
+
     let mut package_database = PackageDatabase::default();
 
     // Create a channel with two packages with different timestamps
@@ -1396,6 +1430,8 @@ async fn test_exclude_newer() {
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_exclude_newer_pypi() {
+    setup_tracing();
+
     let pixi = PixiControl::from_manifest(&format!(
         r#"
     [workspace]

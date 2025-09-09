@@ -2,19 +2,22 @@ import json
 import os
 import platform
 import shutil
+import sys
 import tomllib
 from pathlib import Path
 
 import pytest
-from dirty_equals import IsStr, IsList
+from dirty_equals import AnyThing, IsList, IsStr
 from inline_snapshot import snapshot
 
 from .common import (
+    CONDA_FORGE_CHANNEL,
     CURRENT_PLATFORM,
     EMPTY_BOILERPLATE_PROJECT,
     PIXI_VERSION,
     ExitCode,
     cwd,
+    find_commands_supporting_frozen_and_no_install,
     verify_cli_command,
 )
 
@@ -379,7 +382,8 @@ def test_pixi_init_pixi_home_parent(pixi: Path, tmp_pixi_workspace: Path) -> Non
     verify_cli_command(
         [pixi, "init", pixi_home.parent],
         ExitCode.FAILURE,
-        stderr_contains="You cannot create a workspace in the parent of the pixi home directory",
+        # Test that we print a helpful error message
+        stderr_contains="pixi init",
         env={"PIXI_HOME": str(pixi_home)},
     )
 
@@ -1084,9 +1088,15 @@ def test_pixi_lock(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -
 
 @pytest.mark.extra_slow
 def test_pixi_auth(pixi: Path) -> None:
-    verify_cli_command([pixi, "auth", "login", "--token", "DUMMY_TOKEN", "https://prefix.dev/"])
     verify_cli_command(
-        [pixi, "auth", "login", "--token", "DUMMY_TOKEN", "https://repo.prefix.dev/"]
+        [pixi, "auth", "login", "--token", "DUMMY_TOKEN", "https://prefix.dev/"],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="Unauthorized or invalid token",
+    )
+    verify_cli_command(
+        [pixi, "auth", "login", "--token", "DUMMY_TOKEN", "https://repo.prefix.dev/"],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="Unauthorized or invalid token",
     )
     verify_cli_command(
         [pixi, "auth", "login", "--conda-token", "DUMMY_TOKEN", "https://conda.anaconda.org"]
@@ -1486,7 +1496,7 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
             "virtual_packages": IsAnyList,
             "version": IsStr,
             "cache_dir": IsStr,
-            "cache_size": IsStr,
+            "cache_size": AnyThing,
             "auth_dir": IsStr,
             "global_info": {
                 "bin_dir": IsStr,
@@ -1543,3 +1553,172 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
             "config_locations": IsAnyList,
         }
     )
+
+
+@pytest.mark.skipif(
+    sys.platform.startswith("win"),
+    reason="Fish shell is not supported on Windows",
+)
+@pytest.mark.slow
+def test_fish_completions(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = f"""
+[workspace]
+name = "test"
+channels = ["{CONDA_FORGE_CHANNEL}"]
+platforms = ["{CURRENT_PLATFORM}"]
+        """
+    manifest.write_text(toml)
+    # install fish
+    verify_cli_command([pixi, "add", "fish", "--manifest-path", tmp_pixi_workspace])
+
+    # Verify that the shell hook generates the correct completions
+    output = verify_cli_command([pixi, "completion", "--shell", "fish"])
+    out = output.stdout
+    # write output to file
+    fish_completion_file = tmp_pixi_workspace / "pixi.fish"
+    fish_completion_file.write_text(out)
+
+    # Check that the file can be parsed by fish
+    verify_cli_command(
+        [
+            pixi,
+            "run",
+            "--manifest-path",
+            tmp_pixi_workspace,
+            "fish",
+            "-c",
+            f"source {fish_completion_file}",
+        ],
+    )
+
+
+@pytest.mark.slow
+def test_frozen_no_install_invariant(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test that --frozen --no-install maintains lockfile invariant and keeps conda-meta empty.
+    This test is made up out of two parts:
+
+    1. This test verifies that when using --frozen --no-install flags together, the pixi.lock
+    file does not change and the conda-meta directory stays empty across all commands that
+    support these flags.
+    2. It discovers all documented commands that support both --frozen and --no-install flags
+    and checks that they are included in the test. If any command is missing, it fails
+    with a message to add it to the test list.
+    """
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+    lock_file_path = tmp_pixi_workspace / "pixi.lock"
+    conda_meta_path = tmp_pixi_workspace / ".pixi" / "envs" / "default" / "conda-meta"
+
+    # Common flags for frozen no-install operations
+    frozen_no_install_flags: list[str | Path] = [
+        "--manifest-path",
+        manifest_path,
+        "--frozen",
+        "--no-install",
+    ]
+
+    # Create a new project with bzip2 (lightweight package)
+    verify_cli_command([pixi, "init", tmp_pixi_workspace], ExitCode.SUCCESS)
+    # Add bzip2 package to keep installation time low
+    verify_cli_command([pixi, "add", "--manifest-path", manifest_path, "bzip2"])
+
+    # Create a simple environment.yml file for import testing
+    simple_env_yml = tmp_pixi_workspace / "simple_env.yml"
+    simple_env_yml.write_text("""name: simple-env
+channels:
+  - conda-forge
+dependencies:
+  - sdl2
+""")
+
+    # Store the original lockfile content
+    original_lock_content = lock_file_path.read_text()
+
+    # Remove conda-meta folder to simulate something that would normally trigger an install
+    if conda_meta_path.exists():
+        shutil.rmtree(conda_meta_path)
+
+    # Helper function to check if the invariants hold after a command execution
+    def check_invariants(command_name: str) -> None:
+        # Check that lockfile hasn't changed
+        current_lock_content = lock_file_path.read_text()
+        assert current_lock_content == original_lock_content, (
+            f"Lockfile changed after {command_name} with --frozen --no-install"
+        )
+
+        # Check that conda-meta directory stays empty/non-existent
+        assert not conda_meta_path.exists() or not any(conda_meta_path.iterdir()), (
+            f"conda-meta directory not empty after {command_name} with --frozen --no-install"
+        )
+
+    # Test commands that properly respect --frozen --no-install
+    # Define commands as (command_parts, additional_args, command_name_for_invariants)
+    commands_to_test: list[tuple[list[str], list[str], str]] = [
+        # Let's start with adding a workspace channel because that would trigger a re-solve in most cases
+        # Don't move this!
+        (
+            ["workspace", "channel", "add"],
+            ["https://prefix.dev/bioconda"],
+            "pixi workspace channel add",
+        ),
+    ]
+    commands_to_test += [
+        (["list"], [], "pixi list"),
+        (["tree"], [], "pixi tree"),
+        (["shell-hook"], [], "pixi shell-hook"),
+        # Special case: pixi shell uses --locked instead of --frozen and expects failure
+        (["shell"], [], "pixi shell"),
+        # Test manifest modifications with --frozen --no-install (these should work)
+        # Note: These modify manifest but not lockfile due to --frozen
+        (["add"], ["python"], "pixi add"),
+        (["remove"], ["python"], "pixi remove"),
+        (["run"], ["echo", "test"], "pixi run"),
+        # Export commands - use temporary directory
+        (
+            ["workspace", "export", "conda-explicit-spec"],
+            [str(tmp_pixi_workspace / "export_test")],
+            "pixi workspace export conda-explicit-spec",
+        ),
+        # Upgrade commands
+        (["upgrade"], [], "pixi upgrade"),
+    ]
+    # This command needs to stay last so we always have something that requires a re-solve
+    # Dont move this!
+    commands_to_test.append(
+        (
+            ["workspace", "channel", "remove"],
+            ["https://prefix.dev/bioconda"],
+            "pixi workspace channel remove",
+        )
+    )
+
+    # Execute all commands and check invariants
+    for command_parts, additional_args, command_name in commands_to_test:
+        if command_name == "pixi shell":
+            # Special case: shell uses --locked instead of --frozen and expects failure
+            verify_cli_command(
+                [pixi, "shell", "--manifest-path", manifest_path, "--locked", "--no-install"],
+                expected_exit_code=ExitCode.FAILURE,
+            )
+        else:
+            verify_cli_command([pixi, *command_parts, *frozen_no_install_flags, *additional_args])
+        check_invariants(command_name)
+
+    # Discover all commands that support --frozen and --no-install flags
+    supported_commands = find_commands_supporting_frozen_and_no_install()
+
+    # Extract commands being tested from the test list
+    tested_commands = {command_name for _, _, command_name in commands_to_test}
+
+    # Find commands that support the flags but aren't being tested
+    missing_commands = set(supported_commands) - tested_commands
+
+    if missing_commands:
+        missing_list = "\n  - ".join(sorted(missing_commands))
+        pytest.fail(
+            f"Found {len(missing_commands)} command(s) that support --frozen --no-install "
+            f"but are not included in the test:\n  - {missing_list}\n\n"
+            f"Please add these commands to the commands_to_test list in test_frozen_no_install_invariant "
+            f"to ensure comprehensive coverage.\n"
+            f"If you get here you know all commands that *are* supported correctly listen to --frozen and --no-install flags."
+        )
