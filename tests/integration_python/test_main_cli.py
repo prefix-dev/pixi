@@ -1725,6 +1725,10 @@ dependencies:
 
 
 def test_add_url_no_channel(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """
+    Check that a helpful error message is raised when attempting to
+    add a `url::pkg` where `url` is not a channel of the workspace.
+    """
     verify_cli_command([pixi, "init", tmp_pixi_workspace])
     verify_cli_command(
         [

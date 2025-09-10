@@ -266,13 +266,13 @@ impl WorkspaceMut {
                     if !found {
                         let help_cmd = format!("pixi workspace channel add {}", channel);
                         let help_msg = format!(
-                            "If you are trying to add a new channel to this workspace, use:\n\n  {}",
+                            "To add the missing channel to this workspace use:\n\n  {}",
                             console::style(help_cmd).bold(),
                         );
 
                         miette::bail!(
                             help = help_msg,
-                            "Channel {} for dependency {} is unavailable in this workspace.",
+                            "The channel `{}` for dependency `{}` is unavailable in this workspace.",
                             channel.as_str(),
                             name.as_source(),
                         );
