@@ -1,3 +1,5 @@
+# pyright: reportIndexIssue=false, reportMissingParameterType=false, reportUnknownLambdaType=false
+
 import hashlib
 import sys
 
@@ -25,7 +27,7 @@ def start():
             )
             dependencies = package.get("depends", [])
             graph.add_node(package_name)
-            for i, dep in enumerate(dependencies):
+            for dep in dependencies:
                 graph.add_edge(package_name, dep.split(" ")[0])
 
     rr.init("fdg", spawn=True)

@@ -3,19 +3,21 @@ import socketserver
 import urllib.request
 from urllib.error import URLError, HTTPError
 import base64
+from typing import override
 
 PORT = 8000
 PYPI_URL = "https://pypi.org/simple"
 
 
 class ProxyHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
+    @override
     def do_GET(self) -> None:
         # Check for basic authentication
         if self.headers.get("Authorization") is None:
             self.send_response(401)
             self.send_header("WWW-Authenticate", 'Basic realm="PyPI Proxy"')
             self.end_headers()
-            self.wfile.write(b"Authentication required")
+            _ = self.wfile.write(b"Authentication required")
             return
 
         # Decode the authentication token
@@ -41,7 +43,7 @@ class ProxyHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                 for header, value in response.getheaders():
                     self.send_header(header, value)
                 self.end_headers()
-                self.wfile.write(response.read())
+                _ = self.wfile.write(response.read())
         except HTTPError as e:
             self.send_error(e.code, e.reason)
         except URLError as e:

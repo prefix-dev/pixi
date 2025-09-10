@@ -18,14 +18,16 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description=f"Build pixi and copy the executable to {DEFAULT_DESTINATION_DIR} or a custom destination specified by --dest"
     )
-    parser.add_argument("name", type=str, help="Name of the executable (e.g. pixid)")
-    parser.add_argument(
+    _ = parser.add_argument("name", type=str, help="Name of the executable (e.g. pixid)")
+    _ = parser.add_argument(
         "--dest",
         type=Path,
         default=DEFAULT_DESTINATION_DIR,
         help=f"Destination directory for the executable, default: {DEFAULT_DESTINATION_DIR}",
     )
-    parser.add_argument("--debug", action="store_true", help="Use the debug dir instead of release")
+    _ = parser.add_argument(
+        "--debug", action="store_true", help="Use the debug dir instead of release"
+    )
 
     print(os.environ["CARGO_TARGET_DIR"])
     args = parser.parse_args()
@@ -39,7 +41,7 @@ def main() -> None:
 
     print(f"Copying ({rel_or_deb}) the executable to {destination_path}")
     destination_path.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy(built_executable_path, destination_path)
+    _ = shutil.copy(built_executable_path, destination_path)
 
 
 if __name__ == "__main__":

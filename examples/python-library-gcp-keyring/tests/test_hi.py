@@ -1,4 +1,4 @@
-from python_library_gcp_keyring import hello
+from ..python_library_gcp_keyring import hello
 
 
 def test_pixi_py():

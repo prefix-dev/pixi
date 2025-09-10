@@ -12,7 +12,7 @@ def get_default_target() -> str:
 
 
 def build_trampoline_binary(target: str, target_dir: Path) -> None:
-    subprocess.run(
+    _ = subprocess.run(
         [
             "cargo",
             "build",
@@ -37,7 +37,7 @@ def compress_binary(target: str, target_dir: Path) -> None:
     binary_path = target_dir.joinpath(target, "release", f"pixi_trampoline{extension}")
     compressed_path = trampolines_dir.joinpath(f"pixi-trampoline-{target}{extension}.zst")
 
-    subprocess.run(["zstd", binary_path, "-o", compressed_path, "--force"], check=True)
+    _ = subprocess.run(["zstd", binary_path, "-o", compressed_path, "--force"], check=True)
 
 
 def main(target: str) -> None:
@@ -48,7 +48,7 @@ def main(target: str) -> None:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Build and compress trampoline binaries.")
-    parser.add_argument(
+    _ = parser.add_argument(
         "--target",
         type=str,
         help="The target triple for the build (e.g., x86_64-unknown-linux-musl).",

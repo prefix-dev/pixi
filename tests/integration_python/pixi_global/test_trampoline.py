@@ -406,6 +406,7 @@ def test_trampoline_extends_path(
     env["PATH"] = original_path
     path_diff = "/test/path"
 
+    prefix_bin = ""
     if extend_path_prefix_entry:
         # Extend PATH with prefix entry
         prefix_bin = str(tmp_path.joinpath("envs", "dummy-trampoline-path", "bin"))

@@ -76,7 +76,7 @@ def print_summary() -> None:
         colored_print(f"- {step}", Colors.YELLOW)
 
 
-atexit.register(print_summary)
+_ = atexit.register(print_summary)
 
 
 def main() -> None:
@@ -115,7 +115,7 @@ def main() -> None:
             status.append("Started release process")
 
         if start_step <= 2:
-            colored_input(
+            _ = colored_input(
                 "Make sure main is up-to-date and CI passes. Press Enter to continue...",
                 Colors.MAGENTA,
             )
@@ -127,24 +127,24 @@ def main() -> None:
 
         if start_step <= 4:
             colored_print("\nCreating a new branch for the release...", Colors.YELLOW)
-            run_command(["git", "checkout", "main"])
-            run_command(["git", "pull", "upstream", "main"])
+            _ = run_command(["git", "checkout", "main"])
+            _ = run_command(["git", "pull", "upstream", "main"])
             branch = f"bump/prepare-v{release_version}"
 
             branch_exists = run_command(["git", "branch", "--list", branch], capture_stdout=True)
             if branch_exists:
-                run_command(["git", "branch", "--delete", branch])
-            run_command(["git", "switch", "--create", branch])
+                _ = run_command(["git", "branch", "--delete", branch])
+            _ = run_command(["git", "switch", "--create", branch])
             status.append(f"Created and switched to branch {branch}")
 
         if start_step <= 5:
             colored_print("\nBumping all versions...", Colors.YELLOW)
-            run_command([pixi, "run", "bump"])
+            _ = run_command([pixi, "run", "bump"])
             status.append("Bumped all versions")
 
         if start_step <= 6:
             colored_print("\nUpdate Cargo pixi lockfile...", Colors.YELLOW)
-            run_command([pixi, "run", "cargo update pixi"])
+            _ = run_command([pixi, "run", "cargo update pixi"])
             status.append("Updated all lockfile")
 
         if start_step <= 7:
@@ -159,8 +159,8 @@ def main() -> None:
                 else:
                     colored_print("Invalid response. Please enter 'yes' or 'no'.", Colors.YELLOW)
             if response == "yes" or response == "y":
-                run_command([pixi, "run", "bump-changelog"])
-            colored_input(
+                _ = run_command([pixi, "run", "bump-changelog"])
+            _ = colored_input(
                 "Don't forget to update the 'Highlights' section in `CHANGELOG.md`. Press Enter to continue...",
                 Colors.MAGENTA,
             )
@@ -168,25 +168,25 @@ def main() -> None:
 
         if start_step <= 8:
             colored_print("\nLinting the changes...", Colors.YELLOW)
-            run_command([pixi, "run", "lint"])
+            _ = run_command([pixi, "run", "lint"])
 
         if start_step <= 9:
             colored_print("\nCommitting the changes...", Colors.YELLOW)
-            run_command(["git", "commit", "-am", f"chore: version to {release_version}"])
+            _ = run_command(["git", "commit", "-am", f"chore: version to {release_version}"])
             status.append("Committed the changes")
 
         if start_step <= 10:
             colored_print("\nPushing the changes...", Colors.YELLOW)
-            run_command(["git", "push", "origin"])
+            _ = run_command(["git", "push", "origin"])
             status.append("Pushed the changes")
 
         if start_step <= 11:
             colored_print("\nRelease prep PR", Colors.YELLOW)
-            colored_input(
+            _ = colored_input(
                 "Create a PR to check off the change with the peers. Press Enter to continue...",
                 Colors.MAGENTA,
             )
-            colored_input("Merge that PR. Press Enter to continue...", Colors.MAGENTA)
+            _ = colored_input("Merge that PR. Press Enter to continue...", Colors.MAGENTA)
             status.append("Created and merged the release prep PR")
 
         colored_print(
