@@ -584,6 +584,14 @@ async fn source_build_cache_status_clear_works() {
     // Cached result should return the same Arc
     assert!(std::sync::Arc::ptr_eq(&first, &second));
 
+    // save address so we can compare them later
+    let first_address = format!("{:p}", first);
+
+    // now drop the cached entries to release the Arc
+    // which will unlock the fd locks that we hold on the cache files
+    drop(first);
+    drop(second);
+
     // Clear and expect a fresh Arc on next query
     dispatcher.clear_filesystem_caches().await;
 
@@ -591,5 +599,10 @@ async fn source_build_cache_status_clear_works() {
         .source_build_cache_status(spec)
         .await
         .expect("query succeeds");
-    assert!(!std::sync::Arc::ptr_eq(&first, &third));
+
+    let third_address = format!("{:p}", third);
+    assert_ne!(
+        first_address, third_address,
+        "expected different Arc addresses"
+    );
 }
