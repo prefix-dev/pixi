@@ -17,7 +17,7 @@ class ProxyHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
             self.send_response(401)
             self.send_header("WWW-Authenticate", 'Basic realm="PyPI Proxy"')
             self.end_headers()
-            _ = self.wfile.write(b"Authentication required")
+            self.wfile.write(b"Authentication required")
             return
 
         # Decode the authentication token
@@ -43,7 +43,7 @@ class ProxyHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
                 for header, value in response.getheaders():
                     self.send_header(header, value)
                 self.end_headers()
-                _ = self.wfile.write(response.read())
+                self.wfile.write(response.read())
         except HTTPError as e:
             self.send_error(e.code, e.reason)
         except URLError as e:

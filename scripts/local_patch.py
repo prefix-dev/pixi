@@ -225,7 +225,7 @@ def switch_to_local(cargo_toml_path: Path, library: str, local_path: str) -> Non
     content = add_patch_section(content, library, deps, local_path)
 
     # Write back to file
-    _ = cargo_toml_path.write_text(content)
+    cargo_toml_path.write_text(content)
     print(f"Successfully updated {cargo_toml_path}")
 
 
@@ -246,7 +246,7 @@ def switch_to_remote(cargo_toml_path: Path, library: str) -> None:
     if has_patch_section(content, library):
         print(f"Removing {library} patch section...")
         content = remove_patch_section(content, library)
-        _ = cargo_toml_path.write_text(content)
+        cargo_toml_path.write_text(content)
         print(f"Successfully removed {library} patch section from {cargo_toml_path}")
     else:
         print(f"No {library} patch section found in Cargo.toml")
@@ -254,7 +254,7 @@ def switch_to_remote(cargo_toml_path: Path, library: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Manage local path dependencies in Cargo.toml")
-    _ = parser.add_argument(
+    parser.add_argument(
         "--cargo-toml",
         type=Path,
         default="Cargo.toml",
@@ -262,7 +262,7 @@ def main() -> None:
     )
 
     # Library selection
-    _ = parser.add_argument(
+    parser.add_argument(
         "library", choices=list(LIBRARY_CONFIGS.keys()), help="Library to manage (uv or rattler)"
     )
 
@@ -271,10 +271,10 @@ def main() -> None:
 
     # Local command
     local_parser = subparsers.add_parser("local", help="Switch to local path dependencies")
-    _ = local_parser.add_argument("path", nargs="?", help="Path to local repository")
+    local_parser.add_argument("path", nargs="?", help="Path to local repository")
 
     # Remote command
-    _ = subparsers.add_parser("remote", help="Switch to remote dependencies")
+    subparsers.add_parser("remote", help="Switch to remote dependencies")
 
     args = parser.parse_args()
 

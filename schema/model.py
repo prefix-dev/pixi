@@ -906,7 +906,7 @@ class SchemaJsonEncoder(json.JSONEncoder):
 
     def normalize_schema(self, obj: dict[str, Any]) -> dict[str, Any]:
         """Recursively normalize and apply an arbitrary sort order to a schema."""
-        _ = self.strip_nulls(obj)
+        self.strip_nulls(obj)
 
         for nest in self.SORT_NESTED:
             if nest in obj:
