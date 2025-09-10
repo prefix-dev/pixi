@@ -96,7 +96,7 @@ impl Environment<'_> {
             }
             EnvironmentName::Default => self.workspace().display_name().to_string(),
         };
-        let mut map = IndexMap::from_iter([
+        let map = IndexMap::from_iter([
             (format!("{ENV_PREFIX}NAME"), self.name().to_string()),
             (
                 format!("{ENV_PREFIX}PLATFORMS"),
