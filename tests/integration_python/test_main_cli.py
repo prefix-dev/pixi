@@ -1489,7 +1489,7 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
 
     # Stub out path, size and other dynamic data from snapshot()
     # samuelcolvin/dirty-equals#116
-    IsAnyList = IsList(length=...)  # type: ignore[call-overload] # pyright: ignore[reportArgumentType]
+    IsAnyList = IsList(length=...)  # pyright: ignore[reportArgumentType]
     assert info_data == snapshot(
         {
             "platform": IsStr,

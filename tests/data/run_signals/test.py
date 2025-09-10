@@ -1,4 +1,3 @@
-# type: ignore
 # pyright: basic
 
 import sys
