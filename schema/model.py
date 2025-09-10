@@ -135,8 +135,8 @@ class Workspace(StrictBaseModel):
         None,
         examples=["strict", "disabled"],
         description="""The type of channel priority that is used in the solve.
-    - 'strict': only take the package from the channel it exist in first.
-    - 'disabled': group all dependencies together as if there is no channel difference.""",
+- 'strict': only take the package from the channel it exist in first.
+- 'disabled': group all dependencies together as if there is no channel difference.""",
     )
     exclude_newer: ExcludeNewer | None = Field(
         None,
@@ -521,8 +521,8 @@ class Feature(StrictBaseModel):
         None,
         examples=["strict", "disabled"],
         description="""The type of channel priority that is used in the solve.
-    - 'strict': only take the package from the channel it exist in first.
-    - 'disabled': group all dependencies together as if there is no channel difference.""",
+- 'strict': only take the package from the channel it exist in first.
+- 'disabled': group all dependencies together as if there is no channel difference.""",
     )
     platforms: list[Platform] | None = Field(
         None,

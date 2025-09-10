@@ -1717,8 +1717,8 @@ dependencies:
         missing_list = "\n  - ".join(sorted(missing_commands))
         pytest.fail(
             f"""Found {len(missing_commands)} command(s) that support --frozen --no-install\
-        but are not included in the test:\n  - {missing_list}\n
-        Please add these commands to the commands_to_test list in test_frozen_no_install_invariant\
-        to ensure comprehensive coverage.
-        If you get here you know all commands that *are* supported correctly listen to --frozen and --no-install flags."""
+but are not included in the test:\n  - {missing_list}\n
+Please add these commands to the commands_to_test list in test_frozen_no_install_invariant\
+to ensure comprehensive coverage.
+If you get here you know all commands that *are* supported correctly listen to --frozen and --no-install flags."""
         )
