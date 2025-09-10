@@ -47,7 +47,6 @@ test-slow = """RUST_LOG="debug,resolvo=info" cargo nextest run --workspace --all
 dirty-equals = ">=0.9.0,<0.10"
 filelock = ">=3.16.0,<4"
 inline-snapshot = ">=0.24.0,<0.25"
-mypy = ">=1.16,<1.17"
 py-rattler = ">=0.14,<0.15"
 pytest = "*"
 pytest-rerunfailures = ">=16,<17"
@@ -124,6 +123,7 @@ cmd = "pytest --inline-snapshot=fix -k '{{ expression }}'"
 
 [feature.lint.dependencies]
 actionlint = ">=1.7.7,<2"
+basedpyright = ">=1.31.4,<2"
 dprint = ">=0.49.1,<0.51"
 go-shfmt = ">=3.11.0,<4"
 lefthook = ">=1.11.14,<2"
@@ -153,7 +153,7 @@ ruff-lint = "ruff check --fix --exit-non-zero-on-fix --force-exclude"
 shell-format = "shfmt --write --indent=4 --simplify --binary-next-line"
 toml-format = { cmd = "taplo fmt", env = { RUST_LOG = "warn" } }
 toml-lint = "taplo lint --verbose **/pixi.toml"
-typecheck-python = "mypy"
+typecheck-python = "basedpyright"
 typos = "typos --force-exclude"
 
 [feature.rust.dependencies]
@@ -263,6 +263,8 @@ lint = { features = [
   "rust",
   "pytest",
   "build",
+  "schema",
+  "pypi-gen",
 ], no-default-feature = true, solve-group = "default" }
 pypi-gen = { features = ["pypi-gen"] }
 recipes = { features = ["recipes"], no-default-feature = true }

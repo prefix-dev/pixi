@@ -1,12 +1,13 @@
-import pytest
 import os
 import pathlib
+import pytest
 import subprocess
-from read_wheels import Package, read_wheel_file
-import time
-from record_results import record_result
-from helpers import add_system_requirements, log_called_process_error, run
 import sys
+import time
+
+from .read_wheels import Package, read_wheel_file
+from .record_results import record_result
+from .helpers import add_system_requirements, log_called_process_error, run
 
 
 @pytest.mark.flaky(reruns=5, reruns_delay=1, condition=sys.platform.startswith("win32"))

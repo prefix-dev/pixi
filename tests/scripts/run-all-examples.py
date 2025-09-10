@@ -2,14 +2,13 @@ import subprocess
 import os
 import argparse
 from pathlib import Path
-from typing import Tuple
 from dataclasses import dataclass
 
 
 @dataclass
 class Results:
     succeeded: list[str]
-    skipped: list[Tuple[str, str]]
+    skipped: list[tuple[str, str]]
     installed: list[str]
     failed: list[str]
 
@@ -28,8 +27,9 @@ def has_test_task(folder: Path, pixi_exec: Path) -> bool:
 
 
 def run_test_in_subfolders(
-    base_path: Path, pixi_exec: Path = Path("pixi"), run_clean: bool = False, rm_lock: bool = False
+    base_path: Path, pixi_exec: Path | None = None, run_clean: bool = False, rm_lock: bool = False
 ) -> Results:
+    pixi_exec = pixi_exec or Path("pixi")
     results = Results([], [], [], [])
     folders = [folder for folder in base_path.iterdir() if folder.is_dir()]
 

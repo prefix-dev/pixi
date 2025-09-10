@@ -3,3 +3,19 @@
 
 [tool.inline-snapshot]
 format-command = "pixi run -e lint ruff format --stdin-filename {filename}"
+
+[tool.basedpyright]
+ignore = ["**/*.ipynb", "**/docs_hooks.py"]
+pythonPlatform = "All"
+pythonVersion = "3.13"
+typeCheckingMode = "all"
+
+reportAny = false
+reportExplicitAny = false
+reportUnnecessaryIsInstance = false
+reportUnusedCallResult = false
+
+executionEnvironments = [
+  { root = "docs", reportMissingImports = false, reportMissingModuleSource = false, reportUnknownVariableType = false, reportUnknownMemberType = false, reportUnusedCallResult = false, reportUnknownArgumentType = false },
+  { root = "examples", reportMissingImports = false, reportMissingModuleSource = false, reportCallIssue = false, reportArgumentType = false, reportAttributeAccessIssue = false, reportUnknownMemberType = false, reportUnknownVariableType = false, reportUnknownParameterType = false, reportUnknownArgumentType = false, reportUnusedCallResult = false, reportMissingParameterType = false, reportUntypedFunctionDecorator = false },
+]
