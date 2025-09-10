@@ -1,9 +1,13 @@
 [advisories]
 ignore = [
-  # See 
+  # tracing-subscriber: Logging user input may result in poisoning logs with ANSI escape sequences
   # - https://github.com/tokio-rs/tracing/pull/3368
   # - https://github.com/tokio-rs/tracing/issues/3369
   "RUSTSEC-2025-0055",
+
+  # paste: No longer maintained
+  # https://github.com/3Hren/msgpack-rust/issues/365
+  "RUSTSEC-2024-0436",
 ]
 
 [licenses]
