@@ -47,7 +47,6 @@ test-slow = """RUST_LOG="debug,resolvo=info" cargo nextest run --workspace --all
 dirty-equals = ">=0.9.0,<0.10"
 filelock = ">=3.16.0,<4"
 inline-snapshot = ">=0.24.0,<0.25"
-mypy = ">=1.16,<1.17"
 py-rattler = ">=0.14,<0.15"
 pytest = "*"
 pytest-rerunfailures = ">=16,<17"
@@ -152,16 +151,14 @@ lint = { depends-on = [
 ], description = "Run all linters and formatters on all code" }
 lint-fast = { cmd = "lefthook run pre-commit --all-files --force", description = "Run all fast linters and formatters on all code (no clippy)" }
 lint-slow = { cmd = "lefthook run pre-push --all-files --force", description = "Run all slow linters and formatters on all code" }
-mypy = "mypy"
 pre-commit-install = "lefthook install"
 pre-commit-install-minimal = "lefthook install pre-commit"
-pyright = "basedpyright"
 ruff-format = "ruff format --exit-non-zero-on-format --force-exclude"
 ruff-lint = "ruff check --fix --exit-non-zero-on-fix --force-exclude"
 shell-format = "shfmt --write --indent=4 --simplify --binary-next-line"
 toml-format = { cmd = "taplo fmt", env = { RUST_LOG = "warn" } }
 toml-lint = "taplo lint --verbose **/pixi.toml"
-typecheck-python = { depends-on = ["mypy", "pyright"] }
+typecheck-python = "basedpyright"
 typos = "typos --force-exclude"
 
 [feature.rust.dependencies]
