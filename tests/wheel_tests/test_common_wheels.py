@@ -46,8 +46,8 @@ def test_wheel(
 
         # Add for another platform, if specified
         for platform in package.spec.target_iter():
-            assert isinstance(package.spec.target, str)
-            run_args.extend(["--platform", package.spec.target])
+            assert isinstance(platform, str)
+            run_args.extend(["--platform", platform])
 
         run(run_args)
         # Record the success of the test
