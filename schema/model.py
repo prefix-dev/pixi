@@ -452,7 +452,7 @@ class Environment(StrictBaseModel):
         None,
         description="The group name for environments that should be solved together",
     )
-    no_default_feature: bool | None = Field(
+    no_default_feature: bool = Field(
         False,
         description="Whether to add the default feature to this environment",
     )
