@@ -4695,8 +4695,25 @@ dependencies = [
 name = "pixi_api"
 version = "0.1.0"
 dependencies = [
- "clap",
+ "console 0.15.11",
+ "console-subscriber",
+ "dunce",
+ "fs-err",
+ "miette 7.6.0",
+ "minijinja",
+ "pixi_config",
+ "pixi_consts",
+ "pixi_core",
+ "pixi_manifest",
+ "pixi_utils",
  "rattler_conda_types",
+ "same-file",
+ "serde",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "url",
+ "uv-normalize",
 ]
 
 [[package]]
@@ -4803,6 +4820,7 @@ dependencies = [
  "nix 0.29.0",
  "pathdiff",
  "pep508_rs",
+ "pixi_api",
  "pixi_command_dispatcher",
  "pixi_config",
  "pixi_consts",

@@ -64,6 +64,7 @@ miette = { workspace = true, features = ["fancy-no-backtrace"] }
 minijinja = { workspace = true, features = ["builtins"] }
 pathdiff = { workspace = true }
 pep508_rs = { workspace = true }
+pixi_api = { workspace = true }
 pixi_command_dispatcher = { workspace = true }
 pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
