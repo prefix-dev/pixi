@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
@@ -8,14 +9,14 @@ use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_build_frontend::Backend;
 use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
-use pixi_record::{PinnedSourceSpec, PixiRecord};
+use pixi_record::{PinnedSourceSpec, PixiRecord, SourceRecord};
 use pixi_spec::{SourceAnchor, SourceLocationSpec, SourceSpec};
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, ConvertSubdirError, InvalidPackageNameError, PackageRecord,
     Platform, RepoDataRecord, prefix::Prefix,
 };
 use rattler_digest::Sha256Hash;
-use rattler_lock::{LockFile, PackageBuildSource};
+use rattler_lock::{CondaPackageData, LockFile, PackageBuildSource, UrlOrPath};
 use rattler_repodata_gateway::{RunExportExtractorError, RunExportsReporter};
 use serde::Serialize;
 use thiserror::Error;
@@ -114,164 +115,6 @@ pub struct BuiltPackage {
 }
 
 impl SourceBuildSpec {
-    /// Resolves the source to use, checking lock file first if available
-    async fn resolve_source_from_lock_file(
-        &self,
-        command_dispatcher: &CommandDispatcher,
-        build_source_location: Option<SourceLocationSpec>,
-    ) -> Result<(PathBuf, bool, Option<PinnedSourceSpec>), CommandDispatcherError<SourceBuildError>>
-    {
-        // TODO: Currently unimplemented, but it should work as follows.
-        //
-        // 1. Get lockfile entry
-        // 2. Compare lockfile with what we have now.
-        // 3. If they are different then update lock file, giving priority to the entry in the manifest.
-        // 4. If they are the same, then just return it.
-
-        // Check if there's a source specified in the manifest
-        let Some(build_source_location) = build_source_location else {
-            // No source specified in manifest, use the current directory (manifest directory)
-            let source_checkout = command_dispatcher
-                .checkout_pinned_source(self.source.clone())
-                .await
-                .map_err_with(SourceBuildError::SourceCheckout)?;
-
-            return Ok((source_checkout.path, false, None));
-        };
-
-        // Try to get source spec from lock file here.
-        let (resolved_source_location, update_lock_file) =
-            if let Some(lock_file_path) = &self.lock_file_path {
-                if lock_file_path.exists() {
-                    match self.get_source_from_lock_file(lock_file_path)? {
-                        Some(locked_source_location) => {
-                            let needs_update = !self.are_source_locations_equivalent(
-                                &locked_source_location,
-                                &build_source_location,
-                            );
-                            (build_source_location, needs_update)
-                        }
-                        None => {
-                            // No entry in lock file - store new entry if git/url
-                            (
-                                build_source_location.clone(),
-                                should_store_in_lock_file(&build_source_location),
-                            )
-                        }
-                    }
-                } else {
-                    // No lock file - store new entry if git/url
-                    (
-                        build_source_location.clone(),
-                        should_store_in_lock_file(&build_source_location),
-                    )
-                }
-            } else {
-                // No lock file path provided - just use manifest source
-                (build_source_location, false)
-            };
-
-        // Pin and checkout the resolved source
-        let source_checkout = command_dispatcher
-            .pin_and_checkout(resolved_source_location.clone())
-            .await
-            .map_err_with(SourceBuildError::SourceCheckout)?;
-
-        Ok((
-            source_checkout.path,
-            update_lock_file,
-            Some(source_checkout.pinned),
-        ))
-    }
-
-    /// Gets source location from lock file for this package
-    fn get_source_from_lock_file(
-        &self,
-        lock_file_path: &std::path::Path,
-    ) -> Result<Option<SourceLocationSpec>, CommandDispatcherError<SourceBuildError>> {
-        let lock_file = LockFile::from_path(lock_file_path).map_err(|err| {
-            CommandDispatcherError::Failed(SourceBuildError::LockFileError(
-                lock_file_path.to_path_buf(),
-                format!("Failed to parse lock file: {}", err),
-            ))
-        })?;
-
-        // Search for source package by name
-        for (_, env) in lock_file.environments() {
-            if let Some(packages) = env.packages(self.build_environment.host_platform) {
-                for package in packages {
-                    if let Some(package_data) = package.as_conda() {
-                        if package_data.record().name == self.package.name {
-                            if let rattler_lock::CondaPackageData::Source(source_data) =
-                                package_data
-                            {
-                                if let Some(package_build_source) =
-                                    &source_data.package_build_source
-                                {
-                                    // Convert PackageBuildSource to SourceLocationSpec
-                                    return Ok(Some(
-                                        self.package_build_source_to_source_location_spec(
-                                            package_build_source,
-                                        )?,
-                                    ));
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        Ok(None)
-    }
-
-    /// Converts PackageBuildSource to SourceLocationSpec
-    fn package_build_source_to_source_location_spec(
-        &self,
-        build_source: &PackageBuildSource,
-    ) -> Result<SourceLocationSpec, CommandDispatcherError<SourceBuildError>> {
-        match build_source {
-            PackageBuildSource::Git {
-                url,
-                spec: _,
-                rev: _,
-            } => {
-                // For comparison purposes, we convert to git spec without pinning the revision
-                // The actual revision pinning will happen during checkout
-                Ok(SourceLocationSpec::Git(pixi_spec::GitSpec {
-                    git: url.clone(),
-                    rev: None, // We'll compare just the URL, ignore specific revisions
-                    subdirectory: None,
-                }))
-            }
-            PackageBuildSource::Url { url, sha256: _ } => {
-                Ok(SourceLocationSpec::Url(pixi_spec::UrlSourceSpec {
-                    url: url.clone(),
-                    sha256: None, // For comparison, we don't need the exact hash
-                    md5: None,
-                }))
-            }
-        }
-    }
-
-    /// Compares if two source locations are equivalent (ignoring revision pins)
-    fn are_source_locations_equivalent(
-        &self,
-        locked: &SourceLocationSpec,
-        current: &SourceLocationSpec,
-    ) -> bool {
-        match (locked, current) {
-            (SourceLocationSpec::Git(locked_git), SourceLocationSpec::Git(current_git)) => {
-                // Compare URLs, ignore specific revisions/branches for now (TODO)
-                locked_git.git == current_git.git
-            }
-            (SourceLocationSpec::Url(locked_url), SourceLocationSpec::Url(current_url)) => {
-                // Compare URLs, ignore hashes for now (TODO)
-                locked_url.url == current_url.url
-            }
-            _ => false,
-        }
-    }
-
     #[instrument(
         skip_all,
         name = "source-build",
@@ -340,9 +183,8 @@ impl SourceBuildSpec {
         // Determine the build source to use: either from lock file or workspace
         // This is a source from which package will be built.
         let build_source_location = discovered_backend.init_params.source.clone();
-        // TODO: Update lock file.
-        let (source_dir, _, _) = self
-            .resolve_source_from_lock_file(&command_dispatcher, build_source_location)
+        let (source_dir, should_write_lock, pinned_source_for_write) = self
+            .resolve_source_from_lock_file(&command_dispatcher, build_source_location.clone())
             .await?;
 
         // Instantiate the backend with the discovered information.
@@ -387,22 +229,24 @@ impl SourceBuildSpec {
 
         // Build the package based on the support backend capabilities.
         let mut built_source = if backend.capabilities().provides_conda_build_v1() {
-            self.build_v1(
-                command_dispatcher.clone(),
-                backend,
-                work_directory,
-                package_build_input_hash,
-                reporter,
-            )
-            .await?
+            self.clone()
+                .build_v1(
+                    command_dispatcher.clone(),
+                    backend,
+                    work_directory,
+                    package_build_input_hash,
+                    reporter,
+                )
+                .await?
         } else {
-            self.build_v0(
-                command_dispatcher.clone(),
-                backend,
-                work_directory,
-                package_build_input_hash,
-            )
-            .await?
+            self.clone()
+                .build_v0(
+                    command_dispatcher.clone(),
+                    backend,
+                    work_directory,
+                    package_build_input_hash,
+                )
+                .await?
         };
 
         // Create the output directory if it does not exist.
@@ -473,6 +317,31 @@ impl SourceBuildSpec {
             channel: None,
         };
 
+        // If requested, update or create a lock file entry with a pinned git PBS for this package.
+        if should_write_lock {
+            if let (Some(lock_file_path), Some(PinnedSourceSpec::Git(pinned_git))) =
+                (&self.lock_file_path, pinned_source_for_write.clone())
+            {
+                if lock_file_path.exists() {
+                    match self.update_lockfile_pbs(lock_file_path, &pinned_git, &record) {
+                        Ok(()) => {}
+                        Err(_) => {
+                            // Try to insert a new record when an existing one was not found.
+                            self.insert_record_into_existing_lockfile(
+                                lock_file_path,
+                                &pinned_git,
+                                &record,
+                            )
+                            .map_err(CommandDispatcherError::Failed)?;
+                        }
+                    }
+                } else {
+                    self.create_minimal_lockfile(lock_file_path, &pinned_git, &record)
+                        .map_err(CommandDispatcherError::Failed)?;
+                }
+            }
+        }
+
         // Update the cache entry if we have one.
         if let Some(build_cache) = build_cache {
             let mut entry = build_cache.entry.lock().await;
@@ -493,6 +362,411 @@ impl SourceBuildSpec {
             output_file: built_source.output_file,
             record,
         })
+    }
+
+    /// Resolves the source to use, checking lock file first if available
+    async fn resolve_source_from_lock_file(
+        &self,
+        command_dispatcher: &CommandDispatcher,
+        build_source_location: Option<SourceLocationSpec>,
+    ) -> Result<(PathBuf, bool, Option<PinnedSourceSpec>), CommandDispatcherError<SourceBuildError>>
+    {
+        // If there is no explicit build source, just use the already pinned source
+        // (current workspace checkout) without touching any lock state.
+        let Some(build_source_location) = build_source_location else {
+            let source_checkout = command_dispatcher
+                .checkout_pinned_source(self.source.clone())
+                .await
+                .map_err_with(SourceBuildError::SourceCheckout)?;
+
+            return Ok((source_checkout.path, false, None));
+        };
+
+        // Path sources are not pinned and should never be written to the lock file.
+        if matches!(build_source_location, SourceLocationSpec::Path(_)) {
+            let source_checkout = command_dispatcher
+                .pin_and_checkout(build_source_location)
+                .await
+                .map_err_with(SourceBuildError::SourceCheckout)?;
+            return Ok((source_checkout.path, false, Some(source_checkout.pinned)));
+        }
+
+        // Only handle git sources for now. URL sources are implemented on a separate branch.
+        let SourceLocationSpec::Git(ref _git_spec) = build_source_location else {
+            let source_checkout = command_dispatcher
+                .pin_and_checkout(build_source_location)
+                .await
+                .map_err_with(SourceBuildError::SourceCheckout)?;
+            return Ok((source_checkout.path, false, Some(source_checkout.pinned)));
+        };
+
+        // Pin the requested git source and compare with lock file when present.
+        let source_checkout = command_dispatcher
+            .pin_and_checkout(build_source_location)
+            .await
+            .map_err_with(SourceBuildError::SourceCheckout)?;
+
+        if let Some(lock_file_path) = &self.lock_file_path {
+            if lock_file_path.exists() {
+                if let Some((_locked_location, maybe_pbs)) =
+                    self.get_source_from_lock_file(lock_file_path)?
+                {
+                    match maybe_pbs {
+                        Some(pbs) => {
+                            // Compare pinned git
+                            let locked_pinned = self
+                                .package_build_source_to_pinned_spec(&pbs)
+                                .map_err(|(rev, err)| {
+                                    CommandDispatcherError::Failed(SourceBuildError::InvalidGitRev(
+                                        rev, err,
+                                    ))
+                                })?;
+                            let equal = match (&locked_pinned, &source_checkout.pinned) {
+                                (PinnedSourceSpec::Git(lg), PinnedSourceSpec::Git(pg)) => {
+                                    lg.git == pg.git && lg.source.commit == pg.source.commit
+                                }
+                                _ => false,
+                            };
+                            if !equal {
+                                return Err(CommandDispatcherError::Failed(
+                                    SourceBuildError::LockFilePolicyViolation(
+                                        "locked source (url/commit) differs from requested checkout; run 'pixi lock' to update source".into(),
+                                    ),
+                                ));
+                            }
+                            return Ok((source_checkout.path, false, Some(source_checkout.pinned)));
+                        }
+                        None => {
+                            // Entry exists but PBS missing: require lock update
+                            return Err(CommandDispatcherError::Failed(
+                                SourceBuildError::LockFilePolicyViolation(
+                                    "lock file entry exists but is missing package_build_source; run 'pixi lock' to update".into(),
+                                ),
+                            ));
+                        }
+                    }
+                } else {
+                    // No entry for this package in lock: allow writing
+                    return Ok((source_checkout.path, true, Some(source_checkout.pinned)));
+                }
+            } else {
+                // No lock file: allow creating
+                return Ok((source_checkout.path, true, Some(source_checkout.pinned)));
+            }
+        }
+
+        // No lock file path provided: never write
+        Ok((source_checkout.path, false, Some(source_checkout.pinned)))
+    }
+
+    /// Gets source location from lock file for this package
+    fn get_source_from_lock_file(
+        &self,
+        lock_file_path: &std::path::Path,
+    ) -> Result<
+        Option<(SourceLocationSpec, Option<PackageBuildSource>)>,
+        CommandDispatcherError<SourceBuildError>,
+    > {
+        let lock_file = LockFile::from_path(lock_file_path).map_err(|err| {
+            CommandDispatcherError::Failed(SourceBuildError::LockFileError(
+                lock_file_path.to_path_buf(),
+                format!("Failed to parse lock file: {}", err),
+            ))
+        })?;
+
+        // Search for exact source package by identifier (name, version, build, subdir)
+        for (_, env) in lock_file.environments() {
+            if let Some(packages) = env.packages(self.build_environment.host_platform) {
+                for package in packages {
+                    if let Some(CondaPackageData::Source(source_data)) = package.as_conda() {
+                        let rec = &source_data.package_record;
+                        if rec.name == self.package.name
+                            && rec.version.to_string() == self.package.version.to_string()
+                            && rec.build == self.package.build
+                            && rec.subdir == self.package.subdir
+                        {
+                            // Convert the locked location into a SourceLocationSpec
+                            let locked_location: SourceLocationSpec = match &source_data.location {
+                                UrlOrPath::Url(url) => {
+                                    SourceLocationSpec::Url(pixi_spec::UrlSourceSpec {
+                                        url: url.clone(),
+                                        sha256: None,
+                                        md5: None,
+                                    })
+                                }
+                                UrlOrPath::Path(path) => {
+                                    SourceLocationSpec::Path(pixi_spec::PathSourceSpec {
+                                        path: path.clone(),
+                                    })
+                                }
+                            };
+                            return Ok(Some((
+                                locked_location,
+                                source_data.package_build_source.clone(),
+                            )));
+                        }
+                    }
+                }
+            }
+        }
+        Ok(None)
+    }
+
+    /// Converts PackageBuildSource (git) to PinnedSourceSpec and returns it.
+    fn package_build_source_to_pinned_spec(
+        &self,
+        build_source: &PackageBuildSource,
+    ) -> Result<PinnedSourceSpec, (String, String)> {
+        match build_source {
+            PackageBuildSource::Git { url, spec, rev } => {
+                // Map shallow spec (branch/tag) back to GitReference. For rev we keep DefaultBranch.
+                let reference = match spec {
+                    Some(rattler_lock::GitShallowSpec::Branch(b)) => {
+                        pixi_spec::GitReference::Branch(b.clone())
+                    }
+                    Some(rattler_lock::GitShallowSpec::Tag(t)) => {
+                        pixi_spec::GitReference::Tag(t.clone())
+                    }
+                    None => pixi_spec::GitReference::DefaultBranch,
+                };
+                let commit = pixi_git::sha::GitSha::from_str(rev)
+                    .map_err(|e| (rev.clone(), e.to_string()))?;
+                let pinned_git = pixi_record::PinnedGitSpec::new(
+                    url.clone(),
+                    pixi_record::PinnedGitCheckout::new(commit, None, reference),
+                );
+                Ok(PinnedSourceSpec::Git(pinned_git))
+            }
+            PackageBuildSource::Url { .. } => {
+                // URL support is implemented in a separate branch.
+                Err((
+                    String::from("url"),
+                    String::from("unsupported in this branch"),
+                ))
+            }
+        }
+    }
+
+    fn update_lockfile_pbs(
+        &self,
+        lock_file_path: &std::path::Path,
+        pinned_git: &pixi_record::PinnedGitSpec,
+        _record: &RepoDataRecord,
+    ) -> Result<(), SourceBuildError> {
+        // Load lock file
+        let lock_file = LockFile::from_path(lock_file_path).map_err(|err| {
+            SourceBuildError::LockFileError(lock_file_path.to_path_buf(), err.to_string())
+        })?;
+
+        // Convert pinned git to PackageBuildSource
+        let pbs = rattler_lock::PackageBuildSource::Git {
+            url: pinned_git.git.clone(),
+            spec: match &pinned_git.source.reference {
+                pixi_spec::GitReference::Branch(b) => {
+                    Some(rattler_lock::GitShallowSpec::Branch(b.clone()))
+                }
+                pixi_spec::GitReference::Tag(t) => {
+                    Some(rattler_lock::GitShallowSpec::Tag(t.clone()))
+                }
+                pixi_spec::GitReference::Rev(_) | pixi_spec::GitReference::DefaultBranch => None,
+            },
+            rev: pinned_git.source.commit.to_string(),
+        };
+
+        // Rebuild using builder while copying environments, updating PBS if we find a matching record
+        let mut builder = rattler_lock::LockFileBuilder::new();
+        let mut updated = false;
+
+        for (env_name, env) in lock_file.environments() {
+            builder.set_channels(env_name, env.channels().to_vec());
+            builder.set_options(env_name, env.solve_options().clone());
+            if let Some(indexes) = env.pypi_indexes().cloned() {
+                builder.set_pypi_indexes(env_name, indexes);
+            }
+
+            for (platform, packages) in env.packages_by_platform() {
+                for pkg in packages {
+                    if let Some(conda_pkg) = pkg.as_conda() {
+                        match conda_pkg {
+                            CondaPackageData::Source(src) => {
+                                let rec = src.package_record.clone();
+                                if rec.name == self.package.name
+                                    && rec.version.to_string() == self.package.version.to_string()
+                                    && rec.build == self.package.build
+                                    && rec.subdir == self.package.subdir
+                                {
+                                    let mut new_src = src.clone();
+                                    if new_src.package_build_source.is_none() {
+                                        new_src.package_build_source = Some(pbs.clone());
+                                        updated = true;
+                                    }
+                                    builder.add_conda_package(
+                                        env_name,
+                                        platform,
+                                        CondaPackageData::Source(new_src),
+                                    );
+                                } else {
+                                    builder.add_package(env_name, platform, pkg.into());
+                                }
+                            }
+                            _ => {
+                                builder.add_package(env_name, platform, pkg.into());
+                            }
+                        }
+                    } else {
+                        // Non-conda packages
+                        builder.add_package(env_name, platform, pkg.into());
+                    }
+                }
+            }
+        }
+
+        if updated {
+            let new_lock = builder.finish();
+            new_lock.to_path(lock_file_path).map_err(|e| {
+                SourceBuildError::LockFileWriteError(lock_file_path.to_path_buf(), e)
+            })?;
+            return Ok(());
+        }
+
+        Err(SourceBuildError::LockFileError(
+            lock_file_path.to_path_buf(),
+            "record not found for PBS update".into(),
+        ))
+    }
+
+    fn insert_record_into_existing_lockfile(
+        &self,
+        lock_file_path: &std::path::Path,
+        pinned_git: &pixi_record::PinnedGitSpec,
+        record: &RepoDataRecord,
+    ) -> Result<(), SourceBuildError> {
+        // Load the existing lockfile
+        let lock_file = LockFile::from_path(lock_file_path).map_err(|err| {
+            SourceBuildError::LockFileError(lock_file_path.to_path_buf(), err.to_string())
+        })?;
+
+        // Rebuild using builder while copying all existing content
+        let mut builder = rattler_lock::LockFileBuilder::new();
+
+        // Copy all environments and packages
+        let mut has_default_env = false;
+        for (env_name, env) in lock_file.environments() {
+            if env_name == "default" {
+                has_default_env = true;
+            }
+            builder.set_channels(env_name, env.channels().to_vec());
+            builder.set_options(env_name, env.solve_options().clone());
+            if let Some(indexes) = env.pypi_indexes().cloned() {
+                builder.set_pypi_indexes(env_name, indexes);
+            }
+            for (platform, packages) in env.packages_by_platform() {
+                for pkg in packages {
+                    builder.add_package(env_name, platform, pkg.into());
+                }
+            }
+        }
+
+        // Build the new source record to add
+        let src_record = SourceRecord {
+            package_record: record.package_record.clone(),
+            source: PinnedSourceSpec::Git(pinned_git.clone()),
+            pinned_source_spec: Some(PinnedSourceSpec::Git(pinned_git.clone())),
+            input_hash: None,
+            sources: Default::default(),
+        };
+        let conda_data: CondaPackageData = src_record.into();
+
+        // Decide environment name
+        let env_name = if has_default_env {
+            "default"
+        } else {
+            match lock_file.environments().next() {
+                Some((name, _)) => name,
+                None => "default",
+            }
+        };
+
+        // If the environment didn't exist, ensure minimal metadata
+        if lock_file.environment(env_name).is_none() {
+            builder.set_channels(env_name, Vec::<rattler_lock::Channel>::new());
+            builder.set_options(env_name, Default::default());
+        }
+
+        // Add our record to the selected environment for the host platform
+        builder.add_conda_package(env_name, self.build_environment.host_platform, conda_data);
+
+        // Write the rebuilt lock file
+        let new_lock = builder.finish();
+        new_lock
+            .to_path(lock_file_path)
+            .map_err(|e| SourceBuildError::LockFileWriteError(lock_file_path.to_path_buf(), e))?;
+        Ok(())
+    }
+
+    fn create_minimal_lockfile(
+        &self,
+        lock_file_path: &std::path::Path,
+        pinned_git: &pixi_record::PinnedGitSpec,
+        record: &RepoDataRecord,
+    ) -> Result<(), SourceBuildError> {
+        let mut builder = rattler_lock::LockFileBuilder::new();
+
+        // Default environment
+        let env_name = "default";
+        // Use the SourceBuildSpec channels as base URLs; keep simple here.
+        let channels: Vec<String> = self.channels.iter().map(ToString::to_string).collect();
+        builder.set_channels(env_name, channels);
+        builder.set_options(env_name, Default::default());
+
+        // Build source record
+        let src_record = SourceRecord {
+            package_record: record.package_record.clone(),
+            source: PinnedSourceSpec::Git(pinned_git.clone()),
+            pinned_source_spec: Some(PinnedSourceSpec::Git(pinned_git.clone())),
+            input_hash: None,
+            sources: Default::default(),
+        };
+        let conda_data: CondaPackageData = src_record.into();
+        builder.add_conda_package(env_name, self.build_environment.host_platform, conda_data);
+
+        // Write lock file
+        let lock = builder.finish();
+        lock.to_path(lock_file_path)
+            .map_err(|e| SourceBuildError::LockFileWriteError(lock_file_path.to_path_buf(), e))?;
+        Ok(())
+    }
+
+    /// Little helper function the build a `BuildHostPackage` from expected and
+    /// installed records.
+    fn extract_prefix_repodata(
+        records: Vec<PixiRecord>,
+        prefix: Option<InstallPixiEnvironmentResult>,
+    ) -> Vec<BuildHostPackage> {
+        let Some(prefix) = prefix else {
+            return vec![];
+        };
+
+        records
+            .into_iter()
+            .map(|record| match record {
+                PixiRecord::Binary(repodata_record) => BuildHostPackage {
+                    repodata_record,
+                    source: None,
+                },
+                PixiRecord::Source(source) => {
+                    let repodata_record = prefix
+                        .resolved_source_records
+                        .get(&source.package_record.name)
+                        .cloned()
+                        .expect("the source record should be present in the result sources");
+                    BuildHostPackage {
+                        repodata_record,
+                        source: Some(source.source),
+                    }
+                }
+            })
+            .collect()
     }
 
     /// Returns whether the package should be built in an editable mode.
@@ -779,38 +1053,6 @@ impl SourceBuildSpec {
         })
     }
 
-    /// Little helper function the build a `BuildHostPackage` from expected and
-    /// installed records.
-    fn extract_prefix_repodata(
-        records: Vec<PixiRecord>,
-        prefix: Option<InstallPixiEnvironmentResult>,
-    ) -> Vec<BuildHostPackage> {
-        let Some(prefix) = prefix else {
-            return vec![];
-        };
-
-        records
-            .into_iter()
-            .map(|record| match record {
-                PixiRecord::Binary(repodata_record) => BuildHostPackage {
-                    repodata_record,
-                    source: None,
-                },
-                PixiRecord::Source(source) => {
-                    let repodata_record = prefix
-                        .resolved_source_records
-                        .get(&source.package_record.name)
-                        .cloned()
-                        .expect("the source record should be present in the result sources");
-                    BuildHostPackage {
-                        repodata_record,
-                        source: Some(source.source),
-                    }
-                }
-            })
-            .collect()
-    }
-
     async fn solve_dependencies(
         &self,
         name: String,
@@ -899,14 +1141,6 @@ async fn compute_package_sha256(
             .map_err(|e| CommandDispatcherError::Failed(SourceBuildError::CalculateSha256(path, e)))
     })
     .await
-}
-
-/// Determines if this source should be stored in lock file (git and url sources only)
-fn should_store_in_lock_file(source_location: &SourceLocationSpec) -> bool {
-    matches!(
-        source_location,
-        SourceLocationSpec::Git(_) | SourceLocationSpec::Url(_)
-    )
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -1009,6 +1243,9 @@ pub enum SourceBuildError {
 
     #[error("unsupported source type: {}", .0)]
     UnsupportedSourceType(String),
+
+    #[error("lock file usage violation: {0}")]
+    LockFilePolicyViolation(String),
 }
 
 impl From<DependenciesError> for SourceBuildError {
@@ -1033,5 +1270,79 @@ impl From<SourceBuildCacheStatusError> for SourceBuildError {
                 unreachable!("a build time cycle should never happen")
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::package_identifier::PackageIdentifier;
+    use pixi_record::PinnedPathSpec;
+    use rattler_conda_types::{ChannelConfig, PackageName, Version, VersionWithSource};
+    use tempfile::tempdir;
+    use typed_path::Utf8TypedPathBuf;
+    use url::Url;
+
+    fn dummy_source_build_spec() -> SourceBuildSpec {
+        SourceBuildSpec {
+            package: PackageIdentifier {
+                name: PackageName::from_str("dummy").unwrap(),
+                version: VersionWithSource::from(Version::from_str("1.0.0").unwrap()),
+                build: "0".to_string(),
+                subdir: rattler_conda_types::Platform::Linux64.to_string(),
+            },
+            source: PinnedSourceSpec::Path(PinnedPathSpec {
+                path: Utf8TypedPathBuf::from("."),
+            }),
+            channel_config: ChannelConfig::default_with_root_dir(".".into()),
+            channels: vec![],
+            build_environment: BuildEnvironment {
+                host_platform: rattler_conda_types::Platform::Linux64,
+                build_platform: rattler_conda_types::Platform::Linux64,
+                build_virtual_packages: vec![],
+                host_virtual_packages: vec![],
+            },
+            build_profile: BuildProfile::Release,
+            variants: None,
+            output_directory: None,
+            work_directory: None,
+            clean: false,
+            enabled_protocols: Default::default(),
+            lock_file_path: None,
+        }
+    }
+
+    #[test]
+    fn test_package_build_source_to_pinned_spec_git() {
+        let spec = dummy_source_build_spec();
+        let url = Url::parse("https://github.com/prefix-dev/pixi.git").unwrap();
+        let pbs = PackageBuildSource::Git {
+            url: url.clone(),
+            spec: Some(rattler_lock::GitShallowSpec::Branch("main".to_string())),
+            rev: "9de9e1b48cc421f05fc6aa6918cade3033a38c32".to_string(),
+        };
+        let pinned = spec.package_build_source_to_pinned_spec(&pbs).unwrap();
+        match pinned {
+            PinnedSourceSpec::Git(g) => {
+                assert_eq!(g.git, url);
+                assert_eq!(
+                    g.source.commit.to_string(),
+                    "9de9e1b48cc421f05fc6aa6918cade3033a38c32"
+                );
+            }
+            _ => panic!("expected pinned git spec"),
+        }
+    }
+
+    #[test]
+    fn test_get_source_from_empty_lockfile_returns_none() {
+        let dir = tempdir().unwrap();
+        let lock_path = dir.path().join("pixi.lock");
+        let lock = LockFile::default();
+        lock.to_path(&lock_path).unwrap();
+
+        let spec = dummy_source_build_spec();
+        let res = spec.get_source_from_lock_file(&lock_path).unwrap();
+        assert!(res.is_none());
     }
 }
