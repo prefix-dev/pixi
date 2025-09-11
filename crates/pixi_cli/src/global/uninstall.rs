@@ -1,7 +1,7 @@
 use crate::global::revert_environment_after_error;
 use clap::Parser;
 use fancy_display::FancyDisplay;
-use miette::{Context, Report};
+use miette::Report;
 use pixi_config::{Config, ConfigCli};
 use pixi_global::StateChanges;
 use pixi_global::{EnvironmentName, Project};
