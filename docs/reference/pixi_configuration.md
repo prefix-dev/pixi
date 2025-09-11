@@ -85,6 +85,7 @@ For backwards compatibility, the following configuration options can still be wr
 in `snake_case`:
 
     - `default_channels`
+    - `default_platforms`
     - `change_ps1`
     - `tls_no_verify`
     - `authentication_override_file`
@@ -109,6 +110,18 @@ workspace is discovered. This defaults to only `conda-forge`.
     For example, `pixi search` uses the effective channels of the workspace's default environment when it discovers a
     workspace. Workspace-independent commands such as `pixi exec` still use `default-channels` when invoked from a
     workspace directory.
+
+### `default-platforms`
+
+The default platforms to select when running `pixi init`.
+This defaults to the current platform if not specified.
+
+```toml title="config.toml"
+default-platforms = ["win-64", "linux-64", "osx-64"]
+```
+
+!!! note
+The `default-platforms` are only used when initializing a new project. You can override this by explicitly providing platforms with the `--platform` flag.
 
 ### `shell`
 

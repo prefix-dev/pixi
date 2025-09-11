@@ -1140,6 +1140,11 @@ pub struct Config {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub default_channels: Vec<NamedChannelOrUrl>,
 
+    #[serde(default)]
+    #[serde(alias = "default_platforms")] // BREAK: remove to stop supporting snake_case alias
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub default_platforms: Vec<String>,
+
     /// Path to the file containing the authentication token.
     #[serde(default)]
     #[serde(alias = "authentication_override_file")] // BREAK: remove to stop supporting snake_case alias
@@ -1297,6 +1302,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             default_channels: Vec::new(),
+            default_platforms: Vec::new(),
             authentication_override_file: None,
             tls_no_verify: None,
             tls_root_certs: None,
@@ -2022,6 +2028,11 @@ impl Config {
             } else {
                 other.default_channels
             },
+            default_platforms: if other.default_platforms.is_empty() {
+                self.default_platforms
+            } else {
+                other.default_platforms
+            },
             tls_no_verify: other.tls_no_verify.or(self.tls_no_verify),
             tls_root_certs: other.tls_root_certs.or(self.tls_root_certs),
             offline: other.offline.or(self.offline),
@@ -2091,6 +2102,11 @@ impl Config {
         } else {
             self.default_channels.clone()
         }
+    }
+
+    /// Retrieve the value for the default_platforms field (defaults to empty).
+    pub fn default_platforms(&self) -> Vec<String> {
+        self.default_platforms.clone()
     }
 
     /// Retrieve the value for the tls_no_verify field (defaults to false).
@@ -4490,5 +4506,18 @@ UNUSED = "unused"
         };
         let err = config.validate().unwrap_err();
         assert!(format!("{err}").contains("cache.conda-packages"));
+    }
+
+    #[test]
+    fn config_parses_and_merges_default_platforms() {
+        let (base, _) = Config::from_toml(r#"default-platforms = ["linux-64"]"#, None).unwrap();
+        let (override_config, _) =
+            Config::from_toml(r#"default-platforms = ["win-64", "osx-64"]"#, None).unwrap();
+
+        assert_eq!(base.default_platforms(), vec!["linux-64"]);
+        assert_eq!(
+            base.merge_config(override_config).default_platforms(),
+            vec!["win-64", "osx-64"]
+        );
     }
 }
