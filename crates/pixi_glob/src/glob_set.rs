@@ -57,11 +57,11 @@ impl<'t> GlobSet<'t> {
 
         // Parse all globs in parallel
         let inclusion_globs = inclusion_globs
-            .into_par_iter()
+            .into_iter()
             .map(Glob::new)
             .collect::<Result<Vec<_>, _>>()?;
         let exclusion_globs = exclusion_globs
-            .into_par_iter()
+            .into_iter()
             .map(Glob::new)
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -101,7 +101,7 @@ impl<'t> GlobSet<'t> {
                     .collect_vec();
 
                 walkable
-                    .into_par_iter()
+                    .into_iter()
                     .map(|w| {
                         w.map_err(|e| GlobSetError::Metadata(effective_walk_root.to_path_buf(), e))
                     })
