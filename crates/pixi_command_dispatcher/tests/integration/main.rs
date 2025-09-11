@@ -592,6 +592,10 @@ async fn source_build_cache_status_clear_works() {
     drop(first);
     drop(second);
 
+    #[cfg(windows)]
+    // testing the theory of "drop releases the lock" is hard on windows
+    tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+
     // Clear and expect a fresh Arc on next query
     dispatcher.clear_filesystem_caches().await;
 
