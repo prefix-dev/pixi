@@ -3,7 +3,7 @@ use std::str::FromStr;
 use pixi_cli::cli_config::GitRev;
 use pixi_consts::consts;
 use pixi_core::{DependencyType, Workspace};
-use pixi_manifest::{FeaturesExt, SpecType};
+use pixi_manifest::{EnvironmentName, FeaturesExt, SpecType};
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName, VersionOrStar};
 use rattler_conda_types::{PackageName, Platform};
 use tempfile::TempDir;
@@ -96,15 +96,6 @@ async fn add_with_channel() {
         .await
         .unwrap();
 
-    pixi.project_channel_add()
-        .with_channel("https://prefix.dev/conda-forge")
-        .await
-        .unwrap();
-    pixi.add("https://prefix.dev/conda-forge::_r-mutex")
-        .with_install(false)
-        .await
-        .unwrap();
-
     let project = Workspace::from_path(pixi.manifest_path().as_path()).unwrap();
     let mut specs = project
         .default_environment()
@@ -118,6 +109,27 @@ async fn add_with_channel() {
         "conda-forge"
     );
 
+    pixi.project_channel_add()
+        .with_channel("https://prefix.dev/conda-forge")
+        .with_feature("prefix-dev")
+        .await
+        .unwrap();
+    pixi.add("https://prefix.dev/conda-forge::_r-mutex")
+        .with_install(false)
+        .with_feature("prefix-dev")
+        .await
+        .unwrap();
+    pixi.project_environment_add(EnvironmentName::from_str("prefix-dev").unwrap())
+        .with_feature("prefix-dev")
+        .await
+        .unwrap();
+
+    let project = Workspace::from_path(pixi.manifest_path().as_path()).unwrap();
+    let mut specs = project
+        .environment_from_name_or_env_var(Some("prefix-dev".into()))
+        .unwrap()
+        .combined_dependencies(Some(Platform::current()))
+        .into_specs();
     let (name, spec) = specs.next().unwrap();
     assert_eq!(name, PackageName::try_from("_r-mutex").unwrap());
     assert_eq!(

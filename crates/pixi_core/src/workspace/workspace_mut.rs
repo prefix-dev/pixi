@@ -255,27 +255,35 @@ impl WorkspaceMut {
             if let PixiSpec::DetailedVersion(spec) = &pixi_spec {
                 if let Some(channel) = &spec.channel {
                     let workspace = self.workspace();
-                    let workspace_channels = &workspace.workspace.value.workspace.channels;
-                    let config = workspace.channel_config();
+                    let workspace_manifest = &workspace.workspace.value;
+                    if let Some(feature) = workspace_manifest.features.get(feature_name) {
+                        if let Some(channels) = feature
+                            .channels
+                            .clone()
+                            .or_else(|| Some(workspace_manifest.workspace.channels.clone()))
+                        {
+                            let config = workspace.channel_config();
 
-                    let found = workspace_channels.iter().any(|c| {
-                        c.channel.clone().into_base_url(&config)
-                            == channel.clone().into_base_url(&config)
-                    });
+                            let found = channels.iter().any(|c| {
+                                c.channel.clone().into_base_url(&config)
+                                    == channel.clone().into_base_url(&config)
+                            });
 
-                    if !found {
-                        let help_cmd = format!("pixi workspace channel add {}", channel);
-                        let help_msg = format!(
-                            "To add the missing channel to this workspace use:\n\n  {}",
-                            console::style(help_cmd).bold(),
-                        );
+                            if !found {
+                                let help_cmd = format!("pixi workspace channel add {}", channel);
+                                let help_msg = format!(
+                                    "To add the missing channel to this workspace use:\n\n  {}",
+                                    console::style(help_cmd).bold(),
+                                );
 
-                        miette::bail!(
-                            help = help_msg,
-                            "The channel `{}` for dependency `{}` is unavailable in this workspace.",
-                            channel.as_str(),
-                            name.as_source(),
-                        );
+                                miette::bail!(
+                                    help = help_msg,
+                                    "The channel `{}` for dependency `{}` is unavailable in this workspace.",
+                                    channel.as_str(),
+                                    name.as_source(),
+                                );
+                            }
+                        }
                     }
                 }
             }

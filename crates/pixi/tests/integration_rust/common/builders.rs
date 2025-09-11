@@ -396,6 +396,11 @@ impl ProjectChannelAddBuilder {
         self
     }
 
+    pub fn with_feature(mut self, feature: impl Into<String>) -> Self {
+        self.args.feature = Some(feature.into());
+        self
+    }
+
     /// Alias to add a local channel.
     pub fn with_local_channel(self, channel: impl AsRef<Path>) -> Self {
         self.with_channel(Url::from_directory_path(channel).unwrap())
