@@ -1,7 +1,8 @@
 use rattler_conda_types::NamedChannelOrUrl;
+use serde::{Deserialize, Serialize};
 use std::{cmp::PartialEq, path::PathBuf};
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct InitOptions {
     /// Where to place the workspace
     pub path: PathBuf,
@@ -22,14 +23,14 @@ pub struct InitOptions {
     pub scm: Option<GitAttributes>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ManifestFormat {
     Pixi,
     Pyproject,
     Mojoproject,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum GitAttributes {
     Github,
     Gitlab,
