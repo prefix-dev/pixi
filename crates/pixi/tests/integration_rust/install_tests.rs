@@ -980,12 +980,10 @@ async fn test_setuptools_override_failure() {
     temp_env::async_with_vars(
         [("PIXI_CACHE_DIR", Some(tmp_dir_path.to_str().unwrap()))],
         async {
-            pixi.install().await.unwrap();
+            pixi.install().await.expect("cannot install project");
         },
     )
     .await;
-
-    pixi.install().await.expect("cannot install project");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
