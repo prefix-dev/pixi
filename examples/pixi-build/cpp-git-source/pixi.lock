@@ -1,0 +1,24 @@
+version: 6
+environments:
+  default:
+    channels:
+    - url: https://prefix.dev/conda-forge/
+    packages:
+      linux-64:
+      - conda: git+https://github.com/prefix-dev/pixi-build-testsuite?subdirectory=tests%2Fdata%2Fpixi_build%2Fcpp-with-path-to-source%2Fproject#19ee9a6a472c06916841c541245f0021bb9c26e9
+packages:
+- conda: git+https://github.com/prefix-dev/pixi-build-testsuite?subdirectory=tests%2Fdata%2Fpixi_build%2Fcpp-with-path-to-source%2Fproject#19ee9a6a472c06916841c541245f0021bb9c26e9
+  name: sdl_example
+  version: 0.1.0
+  build: hbf21a9e_0
+  subdir: linux-64
+  sha256: eb2a59bf411b6876f6c0f6e00f1331b447aaed0a396eacad4311ab3aefd13d09
+  depends:
+  - libstdcxx >=15
+  - libgcc >=15
+  - sdl2 >=2.32.54,<3.0a0
+  channel: null
+  timestamp: 1757582846865
+  package_build_source:
+    git: https://github.com/prefix-dev/pixi-build-testsuite
+    rev: 19ee9a6a472c06916841c541245f0021bb9c26e9
