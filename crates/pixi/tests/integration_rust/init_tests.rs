@@ -75,7 +75,8 @@ async fn init_from_existing_pyproject_toml() {
     // Copy the pyproject.toml file to the workspace directory
     let workspace_path = pixi.workspace_path();
     let pyproject_toml = workspace_path.join("pyproject.toml");
-    let pyproject_toml_contents = include_str!("../data/pixi_tomls/pyproject_no_pixi.toml");
+    let pyproject_toml_contents =
+        include_str!("../../../../tests/data/pixi_tomls/pyproject_no_pixi.toml");
     fs_err::write(&pyproject_toml, pyproject_toml_contents).unwrap();
 
     // Init a new project
