@@ -124,14 +124,11 @@ Warning
 
 We recommend against using this because any environment created for a project is no longer placed in the same folder as the project. This creates a disconnect between the project and its environments and manual cleanup of the environments is required when deleting the project.
 
-```text
 However, in some cases, this option can still be very useful, for instance to:
 
 - force the installation on a specific filesystem/drive.
 - install environments locally but keep the project on a network drive.
 - let a system-administrator have more control over all environments on a system.
-
-```
 
 This field can consist of two types of input.
 
