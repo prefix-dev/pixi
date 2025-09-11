@@ -39,7 +39,7 @@ pub(crate) async fn init<I: Interface>(interface: &I, options: InitOptions) -> m
     let config = Config::load(&dir);
 
     if is_init_dir_equal_to_pixi_home_parent(&dir) {
-        let help_msg = if interface.is_cli() {
+        let help_msg = if interface.is_cli().await {
             format!(
                 "Please follow the getting started guide at https://pixi.sh/v{}/init_getting_started/ or run the following command to create a new workspace in a subdirectory:\n\n  {}\n",
                 consts::PIXI_VERSION,
@@ -104,12 +104,14 @@ pub(crate) async fn init<I: Interface>(interface: &I, options: InitOptions) -> m
         )?;
         let workspace = workspace.save().await.into_diagnostic()?;
 
-        interface.success(&format!(
-            "Created {}",
-            // Canonicalize the path to make it more readable, but if it fails just use the path as
-            // is.
-            workspace.workspace.provenance.path.display()
-        ));
+        interface
+            .success(&format!(
+                "Created {}",
+                // Canonicalize the path to make it more readable, but if it fails just use the path as
+                // is.
+                workspace.workspace.provenance.path.display()
+            ))
+            .await?;
     } else {
         let channels = if let Some(channels) = options.channels {
             channels
@@ -130,7 +132,7 @@ pub(crate) async fn init<I: Interface>(interface: &I, options: InitOptions) -> m
                 "A '{}' file already exists. Do you want to extend it with the '{}' configuration?",
                 console::style(consts::PYPROJECT_MANIFEST).bold(),
                 console::style("[tool.pixi]").bold().green()
-            ))?
+            )).await?
         } else {
             options.format == Some(ManifestFormat::Pyproject)
         };
@@ -142,7 +144,7 @@ pub(crate) async fn init<I: Interface>(interface: &I, options: InitOptions) -> m
 
             // Early exit if 'pyproject.toml' already contains a '[tool.pixi.workspace]' table
             if pyproject.has_pixi_table() {
-                interface.message("Nothing to do here: 'pyproject.toml' already contains a '[tool.pixi.workspace]' section.");
+                interface.message("Nothing to do here: 'pyproject.toml' already contains a '[tool.pixi.workspace]' section.").await?;
                 return Ok(());
             }
 
@@ -179,10 +181,12 @@ pub(crate) async fn init<I: Interface>(interface: &I, options: InitOptions) -> m
             } else {
                 // Inform about the addition of the package itself as an editable dependency of
                 // the workspace
-                interface.success(&format!(
-                    "Added package '{}' as an editable dependency.",
-                    name
-                ));
+                interface
+                    .success(&format!(
+                        "Added package '{}' as an editable dependency.",
+                        name
+                    ))
+                    .await?;
                 // Inform about the addition of environments from optional dependencies
                 // or dependency groups (if any)
                 if !environments.is_empty() {
@@ -191,7 +195,7 @@ pub(crate) async fn init<I: Interface>(interface: &I, options: InitOptions) -> m
                         "Added environment{} '{}' from optional dependencies or dependency groups.",
                         if envs.len() > 1 { "s" } else { "" },
                         envs.join("', '")
-                    ));
+                    )).await?;
                 }
             }
 
@@ -219,7 +223,7 @@ pub(crate) async fn init<I: Interface>(interface: &I, options: InitOptions) -> m
                     },
                 )
                 .expect("should be able to render the template");
-            save_manifest_file(interface, &pyproject_manifest_path, rv)?;
+            save_manifest_file(interface, &pyproject_manifest_path, rv).await?;
 
             let src_dir = dir.join("src").join(pypi_package_name);
             tokio::fs::create_dir_all(&src_dir)
@@ -271,7 +275,7 @@ pub(crate) async fn init<I: Interface>(interface: &I, options: InitOptions) -> m
                 config.s3_options,
                 None,
             );
-            save_manifest_file(interface, &path, rv)?;
+            save_manifest_file(interface, &path, rv).await?;
         };
     }
 
@@ -370,19 +374,21 @@ fn relevant_s3_options(
 }
 
 /// Save the rendered template to a file, and print a message to the user.
-fn save_manifest_file<I: Interface>(
+async fn save_manifest_file<I: Interface>(
     interface: &I,
     path: &Path,
     content: String,
 ) -> miette::Result<()> {
     fs_err::write(path, content).into_diagnostic()?;
-    interface.success(&format!(
-        "Created {}",
-        // Canonicalize the path to make it more readable, but if it fails just use the path as is.
-        dunce::canonicalize(path)
-            .unwrap_or(path.to_path_buf())
-            .display()
-    ));
+    interface
+        .success(&format!(
+            "Created {}",
+            // Canonicalize the path to make it more readable, but if it fails just use the path as is.
+            dunce::canonicalize(path)
+                .unwrap_or(path.to_path_buf())
+                .display()
+        ))
+        .await?;
     Ok(())
 }
 

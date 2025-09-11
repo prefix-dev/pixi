@@ -16,7 +16,7 @@ pub struct InitOptions {
     /// Environment.yml file to bootstrap the workspace.
     pub env_file: Option<PathBuf>,
 
-    /// The manifest format to create. Defaults to [ManifestFormat::Pixi].
+    /// The manifest format to create. Defaults to [ManifestFormat::Pixi] or asks the user when a "pyproject.toml" file already exists.
     pub format: Option<ManifestFormat>,
 
     /// Source Control Management used for this workspace.
