@@ -28,5 +28,9 @@ pixi_core = { path = "../pixi_core" }
 harness = false
 name = "cold_warm_install"
 
+[[bench]]
+harness = false
+name = "lock_install"
+
 [profile.release]
 debug = true
