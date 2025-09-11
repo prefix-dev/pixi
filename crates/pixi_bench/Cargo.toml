@@ -32,5 +32,10 @@ name = "cold_warm_install"
 harness = false
 name = "lock_install"
 
+
+[[bench]]
+harness = false
+name = "task_run"
+
 [profile.release]
 debug = true
