@@ -4,22 +4,22 @@ use std::{cmp::PartialEq, path::PathBuf};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InitOptions {
-    /// Where to place the workspace
+    /// Where to place the workspace.
     pub path: PathBuf,
 
-    /// Channel to use in the workspace
+    /// Channel to use in the workspace. Defaults to conda-forge when empty.
     pub channels: Option<Vec<NamedChannelOrUrl>>,
 
-    /// Platforms that the workspace supports
+    /// Platforms that the workspace supports. Defaults to currently used platform when empty.
     pub platforms: Vec<String>,
 
-    /// Environment.yml file to bootstrap the workspace
+    /// Environment.yml file to bootstrap the workspace.
     pub env_file: Option<PathBuf>,
 
-    /// The manifest format to create
+    /// The manifest format to create. Defaults to [ManifestFormat::Pixi].
     pub format: Option<ManifestFormat>,
 
-    /// Source Control Management used for this workspace
+    /// Source Control Management used for this workspace.
     pub scm: Option<GitAttributes>,
 }
 
