@@ -5,11 +5,11 @@ use pixi_api::interface::Interface;
 pub struct CliInterface {}
 
 impl Interface for CliInterface {
-    fn is_cli(&self) -> bool {
+    async fn is_cli(&self) -> bool {
         true
     }
 
-    fn confirm(&self, msg: &str) -> miette::Result<bool> {
+    async fn confirm(&self, msg: &str) -> miette::Result<bool> {
         dialoguer::Confirm::new()
             .with_prompt(msg)
             .default(false)
@@ -18,25 +18,29 @@ impl Interface for CliInterface {
             .into_diagnostic()
     }
 
-    fn message(&self, msg: &str) {
-        eprintln!("{msg}",);
+    async fn message(&self, msg: &str) -> miette::Result<()> {
+        eprintln!("{msg}");
+        Ok(())
     }
 
-    fn success(&self, msg: &str) {
-        eprintln!("{}{msg}", console::style(console::Emoji("✔ ", "")).green(),);
+    async fn success(&self, msg: &str) -> miette::Result<()> {
+        eprintln!("{}{msg}", console::style(console::Emoji("✔ ", "")).green());
+        Ok(())
     }
 
-    fn warning(&self, msg: &str) {
+    async fn warning(&self, msg: &str) -> miette::Result<()> {
         eprintln!(
             "{}{msg}",
             console::style(console::Emoji("⚠️ ", "")).yellow(),
         );
+        Ok(())
     }
 
-    fn error(&self, msg: &str) {
+    async fn error(&self, msg: &str) -> miette::Result<()> {
         eprintln!(
             "{}{msg}",
             console::style(console::Emoji("❌ ", "")).yellow(),
         );
+        Ok(())
     }
 }
