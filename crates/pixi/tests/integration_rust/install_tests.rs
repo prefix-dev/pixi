@@ -953,6 +953,18 @@ async fn test_setuptools_override_failure() {
         platform = Platform::current()
     );
     let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
+
+    let tmp_dir = tempdir().unwrap();
+    let tmp_dir_path = tmp_dir.path();
+
+    temp_env::async_with_vars(
+        [("PIXI_CACHE_DIR", Some(tmp_dir_path.to_str().unwrap()))],
+        async {
+            pixi.install().await.unwrap();
+        },
+    )
+    .await;
+
     pixi.install().await.expect("cannot install project");
 }
 
