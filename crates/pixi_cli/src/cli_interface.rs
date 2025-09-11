@@ -1,5 +1,5 @@
 use miette::IntoDiagnostic;
-use pixi_api::interface::Interface;
+use pixi_api::{interface::Interface, styled_text::StyledText};
 
 #[derive(Default)]
 pub struct CliInterface {}
@@ -42,5 +42,16 @@ impl Interface for CliInterface {
             console::style(console::Emoji("❌ ", "")).yellow(),
         );
         Ok(())
+    }
+
+    fn styled(&self, text: StyledText) -> String {
+        let mut styled = console::style(text.text());
+        if text.bold {
+            styled = styled.bold();
+        }
+        if text.green {
+            styled = styled.green();
+        }
+        styled.to_string()
     }
 }

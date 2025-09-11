@@ -9,8 +9,6 @@ repository.workspace = true
 version = "0.1.0"
 
 [dependencies]
-console = { workspace = true, features = ["windows-console-colors"] }
-console-subscriber = { workspace = true, optional = true }
 dunce = { workspace = true }
 fs-err = { workspace = true }
 miette = { workspace = true }
