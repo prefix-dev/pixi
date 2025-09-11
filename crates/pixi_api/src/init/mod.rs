@@ -188,8 +188,7 @@ pub(crate) async fn init<I: Interface>(interface: &I, options: InitOptions) -> m
                 if !environments.is_empty() {
                     let envs: Vec<&str> = environments.keys().map(AsRef::as_ref).collect();
                     interface.success(&format!(
-                        "{}Added environment{} '{}' from optional dependencies or dependency groups.",
-                        console::style(console::Emoji("✔ ", "")).green(),
+                        "Added environment{} '{}' from optional dependencies or dependency groups.",
                         if envs.len() > 1 { "s" } else { "" },
                         envs.join("', '")
                     ));
