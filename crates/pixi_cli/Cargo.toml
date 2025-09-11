@@ -61,7 +61,6 @@ indicatif = { workspace = true }
 is_executable = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true, features = ["fancy-no-backtrace"] }
-minijinja = { workspace = true, features = ["builtins"] }
 pathdiff = { workspace = true }
 pep508_rs = { workspace = true }
 pixi_api = { workspace = true }
@@ -99,7 +98,6 @@ reqwest = { workspace = true, features = [
   "macos-system-configuration",
 ] }
 reqwest-middleware = { workspace = true }
-same-file = { workspace = true }
 self-replace = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
