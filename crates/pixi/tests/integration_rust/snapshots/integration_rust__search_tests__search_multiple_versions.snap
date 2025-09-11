@@ -1,5 +1,5 @@
 ---
-source: tests/integration_rust/search_tests.rs
+source: crates/pixi/tests/integration_rust/search_tests.rs
 expression: output
 ---
 foo-0.2.0-h60d57d3_1 (+ 1 build)

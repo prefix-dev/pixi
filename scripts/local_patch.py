@@ -7,11 +7,11 @@ import argparse
 import re
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Set
+from typing import Any
 
 
 # Library configurations
-LIBRARY_CONFIGS: Dict[str, Dict[str, Any]] = {
+LIBRARY_CONFIGS: dict[str, dict[str, Any]] = {
     "uv": {
         "pattern": r"^uv-.*$",
         "default_path": "../uv",
@@ -27,11 +27,11 @@ LIBRARY_CONFIGS: Dict[str, Dict[str, Any]] = {
 }
 
 
-def find_dependencies(cargo_toml_content: str, library: str) -> Set[str]:
+def find_dependencies(cargo_toml_content: str, library: str) -> set[str]:
     """Find all dependencies matching the library pattern in the Cargo.toml content."""
     config = LIBRARY_CONFIGS[library]
     pattern = config["pattern"]
-    deps = set()
+    deps: set[str | Any] = set()
 
     # Look for dependencies in workspace.dependencies and dependencies sections
     for line in cargo_toml_content.split("\n"):
@@ -54,7 +54,7 @@ def has_patch_section(cargo_toml_content: str, library: str) -> bool:
 def remove_patch_section(cargo_toml_content: str, library: str) -> str:
     """Remove the existing library patch section using START/END markers."""
     lines = cargo_toml_content.split("\n")
-    result_lines = []
+    result_lines: list[str] = []
     in_patch_block = False
 
     marker_start = f"# pixi-{library}-patches - START"
@@ -95,7 +95,7 @@ def remove_patch_section(cargo_toml_content: str, library: str) -> str:
 
 
 def add_patch_section(
-    cargo_toml_content: str, library: str, deps: Set[str], local_path: str
+    cargo_toml_content: str, library: str, deps: set[str], local_path: str
 ) -> str:
     """Add a patch section for library dependencies using path dependencies."""
     config = LIBRARY_CONFIGS[library]
@@ -113,7 +113,7 @@ def add_patch_section(
 
 
 def add_git_patches(
-    lines: List[str], library: str, deps: Set[str], local_path: str, patch_url: str
+    lines: list[str], library: str, deps: set[str], local_path: str, patch_url: str
 ) -> str:
     """Add a git patch section for dependencies."""
     # Find insertion point - before [patch.crates-io] if it exists, otherwise at end
@@ -140,7 +140,7 @@ def add_git_patches(
     return "\n".join(lines)
 
 
-def add_crates_io_patches(lines: List[str], library: str, deps: Set[str], local_path: str) -> str:
+def add_crates_io_patches(lines: list[str], library: str, deps: set[str], local_path: str) -> str:
     """Add patches to existing [patch.crates-io] section or create it."""
     # Find existing [patch.crates-io] section
     crates_io_index = None
