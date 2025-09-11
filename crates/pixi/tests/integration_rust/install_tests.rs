@@ -805,7 +805,17 @@ setup(
         .contains(&"my-pkg".parse().unwrap());
 
     assert!(has_pkg, "my-pkg is not in no-build-isolation list");
-    pixi.install().await.expect("cannot install project");
+
+    let tmp_dir = tempdir().unwrap();
+    let tmp_dir_path = tmp_dir.path();
+
+    temp_env::async_with_vars(
+        [("PIXI_CACHE_DIR", Some(tmp_dir_path.to_str().unwrap()))],
+        async {
+            pixi.install().await.expect("cannot install project");
+        },
+    )
+    .await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -917,9 +927,19 @@ setup(
     // 2. PyPI packages with build isolation (package-tdjager) - batch
     // 3. PyPI packages without build isolation (package-b) - one by one
     // The key test: package-b should be able to import package-tdjager during its build
-    pixi.install()
-        .await
-        .expect("cannot install project with no-build-isolation dependencies");
+
+    let tmp_dir = tempdir().unwrap();
+    let tmp_dir_path = tmp_dir.path();
+
+    temp_env::async_with_vars(
+        [("PIXI_CACHE_DIR", Some(tmp_dir_path.to_str().unwrap()))],
+        async {
+            pixi.install()
+                .await
+                .expect("cannot install project with no-build-isolation dependencies");
+        },
+    )
+    .await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
