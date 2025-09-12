@@ -1722,3 +1722,44 @@ Please add these commands to the commands_to_test list in test_frozen_no_install
 to ensure comprehensive coverage.
 If you get here you know all commands that *are* supported correctly listen to --frozen and --no-install flags."""
         )
+
+
+def test_add_url_no_channel(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """
+    Check that a helpful error message is raised when attempting to
+    add a `url::pkg` where `url` is not a channel of the workspace.
+    """
+    verify_cli_command([pixi, "init", tmp_pixi_workspace])
+    verify_cli_command(
+        [
+            pixi,
+            "add",
+            "https://repo.prefix.dev/bioconda::snakemake-minimal",
+            "--manifest-path",
+            tmp_pixi_workspace,
+        ],
+        expected_exit_code=ExitCode.FAILURE,
+        # stderr_contains="pixi workspace channel add https://repo.prefix.dev/bioconda",
+        stderr_contains="unavailable channel 'https://repo.prefix.dev/bioconda/'",
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "channel",
+            "add",
+            "https://repo.prefix.dev/bioconda",
+            "--manifest-path",
+            tmp_pixi_workspace,
+        ],
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "add",
+            "https://repo.prefix.dev/bioconda::snakemake-minimal",
+            "--manifest-path",
+            tmp_pixi_workspace,
+        ],
+        stderr_contains="Added https://repo.prefix.dev/bioconda::snakemake-minimal",
+    )
