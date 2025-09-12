@@ -166,7 +166,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     } else {
         for (env_name, err) in errors {
             tracing::warn!(
-                "Couldn't install environment {}\n{err:?}",
+                "Couldn't install {}\n{err:?}",
                 env_name.fancy_display()
             );
         }
