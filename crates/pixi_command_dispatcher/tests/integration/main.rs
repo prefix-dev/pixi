@@ -620,7 +620,7 @@ async fn source_build_cache_status_clear_works() {
     // Clear and expect a fresh Arc on next query
     dispatcher.clear_filesystem_caches().await;
 
-    let third = dispatcher
+    let _third = dispatcher
         .source_build_cache_status(spec)
         .await
         .expect("query succeeds");
