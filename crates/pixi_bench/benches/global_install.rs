@@ -200,6 +200,94 @@ impl IsolatedPixiGlobalEnv {
         ];
         self.pixi_global_install(&["samtools"], Some(channels), None, false)
     }
+
+    /// Run pixi global uninstall and measure execution time
+    fn pixi_global_uninstall(
+        &self,
+        packages: &[&str],
+    ) -> Result<Duration, Box<dyn std::error::Error>> {
+        println!(
+            "⏱️ Timing: pixi global uninstall {} packages",
+            packages.len()
+        );
+
+        let start = Instant::now();
+
+        // Build command arguments for global uninstall
+        let mut args = vec!["global".to_string(), "uninstall".to_string()];
+
+        // Add packages
+        for package in packages {
+            args.push(package.to_string());
+        }
+
+        // Use system pixi binary to avoid permission issues
+        let pixi_binary = "pixi";
+
+        // Execute pixi global uninstall as subprocess
+        let mut cmd = Command::new(pixi_binary);
+        cmd.args(&args);
+
+        // Set environment variables
+        for (key, value) in self.get_env_vars() {
+            cmd.env(key, value);
+        }
+
+        let result = cmd.output();
+
+        match result {
+            Ok(output) => {
+                let duration = start.elapsed();
+                if output.status.success() {
+                    println!(
+                        "✅ Global uninstall completed in {:.2}s",
+                        duration.as_secs_f64()
+                    );
+                    Ok(duration)
+                } else {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    println!("❌ pixi global uninstall failed: {}", stderr);
+                    Err(format!("pixi global uninstall failed: {}", stderr).into())
+                }
+            }
+            Err(e) => {
+                println!("❌ pixi global uninstall failed to execute: {}", e);
+                Err(format!("pixi global uninstall failed to execute: {}", e).into())
+            }
+        }
+    }
+
+    /// Uninstall a single small package
+    fn uninstall_single_small(&self) -> Result<Duration, Box<dyn std::error::Error>> {
+        // First install the package
+        let _ = self.pixi_global_install(&["ripgrep"], None, None, false)?;
+        // Then uninstall it
+        self.pixi_global_uninstall(&["ripgrep"])
+    }
+
+    /// Uninstall multiple small packages
+    fn uninstall_multiple_small(&self) -> Result<Duration, Box<dyn std::error::Error>> {
+        // First install the packages
+        let _ = self.pixi_global_install(&["ripgrep", "bat", "fd-find"], None, None, false)?;
+        // Then uninstall them
+        self.pixi_global_uninstall(&["ripgrep", "bat", "fd-find"])
+    }
+
+    /// Uninstall a medium-sized package
+    fn uninstall_medium(&self) -> Result<Duration, Box<dyn std::error::Error>> {
+        // First install the package
+        let _ = self.pixi_global_install(&["starship"], None, None, false)?;
+        // Then uninstall it
+        self.pixi_global_uninstall(&["starship"])
+    }
+
+    /// Uninstall a large package
+    fn uninstall_large(&self) -> Result<Duration, Box<dyn std::error::Error>> {
+        // First install the package
+        let _ = self.pixi_global_install(&["jupyter"], None, None, false)?;
+        // Then uninstall it
+        self.pixi_global_uninstall(&["jupyter"])
+    }
 }
 
 /// Shared cache for warm testing
@@ -359,11 +447,86 @@ fn bench_special_scenarios(c: &mut Criterion) {
     });
 }
 
+fn bench_single_package_uninstall(c: &mut Criterion) {
+    let shared_cache = SharedCache::new().expect("Failed to create shared cache");
+    let mut group = c.benchmark_group("single_package_global_uninstall");
+    group.measurement_time(Duration::from_secs(60)); // Allow 1 minute for measurements
+    group.sample_size(10); // Reduce sample size for long operations
+    group.warm_up_time(Duration::from_secs(5)); // Warm up time
+
+    // Uninstall single package benchmark
+    group.bench_function("uninstall_single", |b| {
+        b.iter(|| {
+            let env = IsolatedPixiGlobalEnv::new_with_shared_cache(&shared_cache.cache_dir)
+                .expect("Failed to create environment with shared cache");
+            let duration = env
+                .uninstall_single_small()
+                .expect("Failed to time pixi global uninstall");
+            black_box(duration)
+        })
+    });
+}
+
+fn bench_multiple_packages_uninstall(c: &mut Criterion) {
+    let shared_cache = SharedCache::new().expect("Failed to create shared cache");
+    let mut group = c.benchmark_group("multiple_packages_global_uninstall");
+    group.measurement_time(Duration::from_secs(90)); // 1.5 minutes
+    group.sample_size(8); // Fewer samples for multiple packages
+    group.warm_up_time(Duration::from_secs(10));
+
+    // Uninstall multiple packages benchmark
+    group.bench_function("uninstall_multiple", |b| {
+        b.iter(|| {
+            let env = IsolatedPixiGlobalEnv::new_with_shared_cache(&shared_cache.cache_dir)
+                .expect("Failed to create environment with shared cache");
+            let duration = env
+                .uninstall_multiple_small()
+                .expect("Failed to time pixi global uninstall");
+            black_box(duration)
+        })
+    });
+}
+
+fn bench_package_sizes_uninstall(c: &mut Criterion) {
+    let shared_cache = SharedCache::new().expect("Failed to create shared cache");
+    let mut group = c.benchmark_group("package_sizes_global_uninstall");
+    group.measurement_time(Duration::from_secs(120)); // 2 minutes
+    group.sample_size(5); // Very few samples for large packages
+    group.warm_up_time(Duration::from_secs(15));
+
+    // Medium package uninstall benchmark
+    group.bench_function("uninstall_medium_package", |b| {
+        b.iter(|| {
+            let env = IsolatedPixiGlobalEnv::new_with_shared_cache(&shared_cache.cache_dir)
+                .expect("Failed to create environment with shared cache");
+            let duration = env
+                .uninstall_medium()
+                .expect("Failed to time pixi global uninstall");
+            black_box(duration)
+        })
+    });
+
+    // Large package uninstall benchmark
+    group.bench_function("uninstall_large_package", |b| {
+        b.iter(|| {
+            let env = IsolatedPixiGlobalEnv::new_with_shared_cache(&shared_cache.cache_dir)
+                .expect("Failed to create environment with shared cache");
+            let duration = env
+                .uninstall_large()
+                .expect("Failed to time pixi global uninstall");
+            black_box(duration)
+        })
+    });
+}
+
 criterion_group!(
     benches,
     bench_single_package,
     bench_multiple_packages,
     bench_package_sizes,
-    bench_special_scenarios
+    bench_special_scenarios,
+    bench_single_package_uninstall,
+    bench_multiple_packages_uninstall,
+    bench_package_sizes_uninstall
 );
 criterion_main!(benches);
