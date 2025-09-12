@@ -432,7 +432,7 @@ impl PixiControl {
         }
     }
 
-    /// Remove a channel from the project.
+    /// Add a new channel to the project.
     pub fn project_channel_remove(&self) -> ProjectChannelRemoveBuilder {
         ProjectChannelRemoveBuilder {
             manifest_path: Some(self.manifest_path()),
