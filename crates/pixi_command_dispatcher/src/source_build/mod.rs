@@ -182,7 +182,7 @@ impl SourceBuildSpec {
 
         // Determine the build source to use: either from lock file or workspace
         // This is a source from which package will be built.
-        let build_source_location = discovered_backend.init_params.source.clone();
+        let build_source_location = discovered_backend.init_params.build_source.clone();
         let (source_dir, should_write_lock, pinned_source_for_write) = self
             .resolve_source_from_lock_file(&command_dispatcher, build_source_location.clone())
             .await?;

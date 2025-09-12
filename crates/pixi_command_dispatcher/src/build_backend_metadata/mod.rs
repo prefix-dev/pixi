@@ -104,7 +104,7 @@ impl BuildBackendMetadataSpec {
             .map_err_with(BuildBackendMetadataError::Discovery)?;
 
         let package_build_source =
-            if let Some(build_source) = &discovered_backend.init_params.source {
+            if let Some(build_source) = &discovered_backend.init_params.build_source {
                 Some(
                     command_dispatcher
                         .pin_and_checkout(build_source.clone())
