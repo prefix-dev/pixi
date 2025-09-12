@@ -129,23 +129,23 @@ which = "8.0.0"
 # Rattler crates
 coalesced_map = "0.1.1"
 file_url = "0.2.6"
-rattler = { version = "0.37.0", default-features = false }
-rattler_cache = { version = "0.3.32", default-features = false }
-rattler_conda_types = { version = "0.39.1", default-features = false, features = [
+rattler = { version = "0.37.3", default-features = false }
+rattler_cache = { version = "0.3.34", default-features = false }
+rattler_conda_types = { version = "0.39.2", default-features = false, features = [
   "rayon",
 ] }
 rattler_digest = { version = "1.1.5", default-features = false }
-rattler_lock = { version = "0.24.0", default-features = false }
+rattler_lock = { version = "0.24.1", default-features = false }
 rattler_menuinst = { version = "0.2.23", default-features = false }
-rattler_networking = { version = "0.25.11", default-features = false, features = [
+rattler_networking = { version = "0.25.13", default-features = false, features = [
   "google-cloud-auth",
   "dirs",
 ] }
 rattler_package_streaming = { version = "0.23.0", default-features = false }
-rattler_repodata_gateway = { version = "0.24.2", default-features = false }
-rattler_shell = { version = "0.24.10", default-features = false }
-rattler_solve = { version = "3.0.2", default-features = false }
-rattler_virtual_packages = { version = "2.1.4", default-features = false }
+rattler_repodata_gateway = { version = "0.24.4", default-features = false }
+rattler_shell = { version = "0.25.0", default-features = false }
+rattler_solve = { version = "3.0.3", default-features = false }
+rattler_virtual_packages = { version = "2.1.5", default-features = false }
 simple_spawn_blocking = { version = "1.1.0", default-features = false }
 
 # Bumping this to a higher version breaks the Windows path handling.
@@ -235,21 +235,3 @@ strip = "none"               # or "debuginfo" to separate
 reqwest-middleware = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "ad8b9d332d1773fde8b4cd008486de5973e0a3f8" }
 reqwest-retry = { git = "https://github.com/astral-sh/reqwest-middleware", rev = "ad8b9d332d1773fde8b4cd008486de5973e0a3f8" }
 version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "06ec5a5f59ffaeb6cf5079c6cb184467da06c9db" }
-
-# pixi-rattler-patches - START
-# Patch all rattler crates to a specific git branch
-file_url = { git = "https://github.com/Hofer-Julian/rattler.git", branch = "feat/post-activation-env-vars" }
-rattler = { git = "https://github.com/Hofer-Julian/rattler.git", branch = "feat/post-activation-env-vars" }
-rattler_cache = { git = "https://github.com/Hofer-Julian/rattler.git", branch = "feat/post-activation-env-vars" }
-rattler_conda_types = { git = "https://github.com/Hofer-Julian/rattler.git", branch = "feat/post-activation-env-vars" }
-rattler_digest = { git = "https://github.com/Hofer-Julian/rattler.git", branch = "feat/post-activation-env-vars" }
-rattler_lock = { git = "https://github.com/Hofer-Julian/rattler.git", branch = "feat/post-activation-env-vars" }
-rattler_menuinst = { git = "https://github.com/Hofer-Julian/rattler.git", branch = "feat/post-activation-env-vars" }
-rattler_networking = { git = "https://github.com/Hofer-Julian/rattler.git", branch = "feat/post-activation-env-vars" }
-rattler_package_streaming = { git = "https://github.com/Hofer-Julian/rattler.git", branch = "feat/post-activation-env-vars" }
-rattler_repodata_gateway = { git = "https://github.com/Hofer-Julian/rattler.git", branch = "feat/post-activation-env-vars" }
-rattler_shell = { git = "https://github.com/Hofer-Julian/rattler.git", branch = "feat/post-activation-env-vars" }
-rattler_solve = { git = "https://github.com/Hofer-Julian/rattler.git", branch = "feat/post-activation-env-vars" }
-rattler_virtual_packages = { git = "https://github.com/Hofer-Julian/rattler.git", branch = "feat/post-activation-env-vars" }
-simple_spawn_blocking = { git = "https://github.com/Hofer-Julian/rattler.git", branch = "feat/post-activation-env-vars" }
-# pixi-rattler-patches - END

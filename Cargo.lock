@@ -1367,15 +1367,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "coalesced_map"
-version = "0.1.2"
-source = "git+https://github.com/Hofer-Julian/rattler.git?branch=feat%2Fpost-activation-env-vars#4e1142e3e77a8564f50c18e2488402262fa9efc5"
-dependencies = [
- "dashmap",
- "tokio",
-]
-
-[[package]]
 name = "colorchoice"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2196,7 +2187,8 @@ dependencies = [
 [[package]]
 name = "file_url"
 version = "0.2.6"
-source = "git+https://github.com/Hofer-Julian/rattler.git?branch=feat%2Fpost-activation-env-vars#4e1142e3e77a8564f50c18e2488402262fa9efc5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "765662dc0b26e038099a5a1529f5d48443111eea45377c312be892997651710e"
 dependencies = [
  "itertools 0.14.0",
  "percent-encoding",
@@ -3116,7 +3108,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.61.2",
+ "windows-core 0.59.0",
 ]
 
 [[package]]
@@ -4476,7 +4468,8 @@ checksum = "1e91099d4268b0e11973f036e885d652fb0b21fedcf69738c627f94db6a44f42"
 [[package]]
 name = "path_resolver"
 version = "0.2.0"
-source = "git+https://github.com/Hofer-Julian/rattler.git?branch=feat%2Fpost-activation-env-vars#4e1142e3e77a8564f50c18e2488402262fa9efc5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "493dd224adc6163e40a1e58cefbeec27dabb69696017677406417b3516c800fa"
 dependencies = [
  "fs-err",
  "fxhash",
@@ -4869,7 +4862,7 @@ dependencies = [
  "async-fd-lock",
  "base64 0.22.1",
  "chrono",
- "coalesced_map 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "coalesced_map",
  "derive_more",
  "dirs",
  "dunce",
@@ -5676,7 +5669,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a56d757972c98b346a9b766e3f02746cde6dd1cd1d1d563472929fdd74bec4d"
 dependencies = [
  "anyhow",
- "itertools 0.14.0",
+ "itertools 0.11.0",
  "proc-macro2",
  "quote",
  "syn",
@@ -5979,8 +5972,9 @@ dependencies = [
 
 [[package]]
 name = "rattler"
-version = "0.37.2"
-source = "git+https://github.com/Hofer-Julian/rattler.git?branch=feat%2Fpost-activation-env-vars#4e1142e3e77a8564f50c18e2488402262fa9efc5"
+version = "0.37.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8bde5385d34e38d403d24d141cff078d96f02acfe9880a52cf8a7ee651925ad3"
 dependencies = [
  "anyhow",
  "clap",
@@ -6024,7 +6018,8 @@ dependencies = [
 [[package]]
 name = "rattler_cache"
 version = "0.3.34"
-source = "git+https://github.com/Hofer-Julian/rattler.git?branch=feat%2Fpost-activation-env-vars#4e1142e3e77a8564f50c18e2488402262fa9efc5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1a90d8113aad3c8bff55c59f37dc292ebed419fdd09242036c4d5be30fdccc9b"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -6056,7 +6051,8 @@ dependencies = [
 [[package]]
 name = "rattler_conda_types"
 version = "0.39.2"
-source = "git+https://github.com/Hofer-Julian/rattler.git?branch=feat%2Fpost-activation-env-vars#4e1142e3e77a8564f50c18e2488402262fa9efc5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1f16f93c23cb051636dbe215be32da964969c4d8d416d6b5d4a50574f70ceb3b"
 dependencies = [
  "chrono",
  "core-foundation 0.10.1",
@@ -6096,7 +6092,8 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "1.1.5"
-source = "git+https://github.com/Hofer-Julian/rattler.git?branch=feat%2Fpost-activation-env-vars#4e1142e3e77a8564f50c18e2488402262fa9efc5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f40b746768824bc3306dcb597e549e836eda023dab8d7407d32b9f342c70cc5d"
 dependencies = [
  "blake2",
  "digest",
@@ -6113,7 +6110,8 @@ dependencies = [
 [[package]]
 name = "rattler_lock"
 version = "0.24.1"
-source = "git+https://github.com/Hofer-Julian/rattler.git?branch=feat%2Fpost-activation-env-vars#4e1142e3e77a8564f50c18e2488402262fa9efc5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b480fb1b37b095f8541ae86e3d18aa27aff8d4229bb3f3dcd9b90304e917199"
 dependencies = [
  "chrono",
  "file_url",
@@ -6138,7 +6136,8 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "1.0.11"
-source = "git+https://github.com/Hofer-Julian/rattler.git?branch=feat%2Fpost-activation-env-vars#4e1142e3e77a8564f50c18e2488402262fa9efc5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "988d5d7ace4fb1d7549008236cf08de95e8ea2f1f80754109324a08c31e6dc6a"
 dependencies = [
  "quote",
  "syn",
@@ -6146,8 +6145,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_menuinst"
-version = "0.2.25"
-source = "git+https://github.com/Hofer-Julian/rattler.git?branch=feat%2Fpost-activation-env-vars#4e1142e3e77a8564f50c18e2488402262fa9efc5"
+version = "0.2.26"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5103aaeb791fdf9e1ac62b7573bb0fd165f21fe66bb46224c3a46b8078e70b66"
 dependencies = [
  "chrono",
  "configparser",
@@ -6176,7 +6176,8 @@ dependencies = [
 [[package]]
 name = "rattler_networking"
 version = "0.25.13"
-source = "git+https://github.com/Hofer-Julian/rattler.git?branch=feat%2Fpost-activation-env-vars#4e1142e3e77a8564f50c18e2488402262fa9efc5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd5e48e1ecc33f1b73f9a6fc1a7755a298340fcaf5250034e5ee86388479d3ce"
 dependencies = [
  "anyhow",
  "async-once-cell",
@@ -6206,7 +6207,8 @@ dependencies = [
 [[package]]
 name = "rattler_package_streaming"
 version = "0.23.4"
-source = "git+https://github.com/Hofer-Julian/rattler.git?branch=feat%2Fpost-activation-env-vars#4e1142e3e77a8564f50c18e2488402262fa9efc5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "93a1867b2b10cc5a204e479dee7a02f29794db31a05e2cdff40bfd9652cbd54c"
 dependencies = [
  "bzip2 0.6.0",
  "chrono",
@@ -6235,7 +6237,8 @@ dependencies = [
 [[package]]
 name = "rattler_pty"
 version = "0.2.6"
-source = "git+https://github.com/Hofer-Julian/rattler.git?branch=feat%2Fpost-activation-env-vars#4e1142e3e77a8564f50c18e2488402262fa9efc5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "76a7edbf8f23a099ccb32cc4f024886e35a873c462ca83f86c286556c275bf06"
 dependencies = [
  "libc",
  "nix 0.30.1",
@@ -6245,7 +6248,8 @@ dependencies = [
 [[package]]
 name = "rattler_redaction"
 version = "0.1.12"
-source = "git+https://github.com/Hofer-Julian/rattler.git?branch=feat%2Fpost-activation-env-vars#4e1142e3e77a8564f50c18e2488402262fa9efc5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3aa5057629aeb20861919e9ae56875985d58028f3c6f433a20b5ded086e1cec5"
 dependencies = [
  "reqwest",
  "reqwest-middleware",
@@ -6255,7 +6259,8 @@ dependencies = [
 [[package]]
 name = "rattler_repodata_gateway"
 version = "0.24.4"
-source = "git+https://github.com/Hofer-Julian/rattler.git?branch=feat%2Fpost-activation-env-vars#4e1142e3e77a8564f50c18e2488402262fa9efc5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e05b845113ad91bc24d7023b201ff1f1b6600bc68ad723dc4495e2dd766c3c36"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -6266,7 +6271,7 @@ dependencies = [
  "cache_control",
  "cfg-if",
  "chrono",
- "coalesced_map 0.1.2 (git+https://github.com/Hofer-Julian/rattler.git?branch=feat%2Fpost-activation-env-vars)",
+ "coalesced_map",
  "dashmap",
  "dirs",
  "file_url",
@@ -6313,8 +6318,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_shell"
-version = "0.24.11"
-source = "git+https://github.com/Hofer-Julian/rattler.git?branch=feat%2Fpost-activation-env-vars#4e1142e3e77a8564f50c18e2488402262fa9efc5"
+version = "0.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3719c5f7eae3f4abd56ec6be280eecd50bdfd81670fde2fb3685911882e5e1f"
 dependencies = [
  "anyhow",
  "enum_dispatch",
@@ -6334,7 +6340,8 @@ dependencies = [
 [[package]]
 name = "rattler_solve"
 version = "3.0.3"
-source = "git+https://github.com/Hofer-Julian/rattler.git?branch=feat%2Fpost-activation-env-vars#4e1142e3e77a8564f50c18e2488402262fa9efc5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23c63a7fb3e15b1885b6969fe36ec6d41989c007a69944b38f8da3af2cda37bf"
 dependencies = [
  "chrono",
  "futures",
@@ -6351,7 +6358,8 @@ dependencies = [
 [[package]]
 name = "rattler_virtual_packages"
 version = "2.1.5"
-source = "git+https://github.com/Hofer-Julian/rattler.git?branch=feat%2Fpost-activation-env-vars#4e1142e3e77a8564f50c18e2488402262fa9efc5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "431de037688708d9c65b5442e7b994ce63d63c9daf96bc78bb5ae43f908fe05b"
 dependencies = [
  "archspec",
  "libloading",
@@ -7439,7 +7447,8 @@ checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
 [[package]]
 name = "simple_spawn_blocking"
 version = "1.1.0"
-source = "git+https://github.com/Hofer-Julian/rattler.git?branch=feat%2Fpost-activation-env-vars#4e1142e3e77a8564f50c18e2488402262fa9efc5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "55c0b0b683828aa9d4f5c0e59b0c856a12c30a65b5f1ca4292664734d76fa9c2"
 dependencies = [
  "tokio",
 ]
@@ -7706,7 +7715,7 @@ dependencies = [
  "ntapi",
  "objc2-core-foundation",
  "objc2-io-kit",
- "windows 0.61.3",
+ "windows 0.59.0",
 ]
 
 [[package]]
@@ -9823,7 +9832,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.0",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]
