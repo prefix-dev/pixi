@@ -620,5 +620,6 @@ async fn source_build_cache_status_clear_works() {
         "expected different Arc addresses"
     );
 
-    assert!(false);
+    #[cfg(windows)]
+    unreachable!("Expected same Arc on windows");
 }
