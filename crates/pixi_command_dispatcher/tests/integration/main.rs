@@ -4,7 +4,7 @@ mod event_tree;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
-    ptr,
+    // ptr,
     str::FromStr,
 };
 
