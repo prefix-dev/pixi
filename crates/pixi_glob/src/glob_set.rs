@@ -71,63 +71,76 @@ impl<'t> GlobSet<'t> {
         root_dir: &Path,
     ) -> impl Iterator<Item = Result<WalkEntry<'static>, GlobSetError>> + 't {
         let root_dir = root_dir.to_path_buf();
-        let entries = self
-            .include
-            .iter()
-            .flat_map(move |glob| {
-                let (effective_walk_root, glob) = if glob.has_semantic_literals() {
-                    // if the glob has semantic literals, we need to
-                    // join the root directory with the glob prefix
-                    // and use that as the effective walk root.
-                    // Example:
-                    // if `root_dir` is "/path/to/src" and `glob` is "../**/*.cpp",
-                    //   `effective_walk_root` becomes "/path/to".
-                    let (prefix, glob) = glob.clone().partition();
-                    (root_dir.join(&prefix), glob)
-                } else {
-                    (root_dir.clone(), glob.clone())
-                };
+        let entries =
+            self.include
+                .iter()
+                .flat_map(move |glob| {
+                    let (effective_walk_root, glob) = if glob.has_semantic_literals() {
+                        // if the glob has semantic literals, we need to
+                        // join the root directory with the glob prefix
+                        // and use that as the effective walk root.
+                        // Example:
+                        // if `root_dir` is "/path/to/src" and `glob` is "../**/*.cpp",
+                        //   `effective_walk_root` becomes "/path/to".
+                        let (prefix, glob) = glob.clone().partition();
+                        (root_dir.join(&prefix), glob)
+                    } else {
+                        (root_dir.clone(), glob.clone())
+                    };
 
-                let walkable = glob
-                    .walk(&effective_walk_root)
-                    .not(self.exclude.clone())
-                    .expect("since the globs are already parsed this should not error")
-                    .collect_vec();
+                    let start = std::time::Instant::now();
+                    let walkable = glob
+                        .walk(&effective_walk_root)
+                        .not(self.exclude.clone())
+                        .expect("since the globs are already parsed this should not error")
+                        .collect_vec();
 
-                walkable
-                    .into_iter()
-                    .map(|w| {
-                        w.map_err(|e| GlobSetError::Metadata(effective_walk_root.to_path_buf(), e))
+                    let elapsed = start.elapsed();
+                    // Log per-include timing to help identify slow patterns
+                    // Uses Debug formatting for the glob pattern.
+                    let not_dbg = self
+                        .exclude
+                        .iter()
+                        .map(|e| e.to_string())
+                        .collect_vec()
+                        .join(",");
+                    tracing::error!(
+                        glob = glob.to_string(),
+                        not = not_dbg,
+                        matched = walkable.len(),
+                        elapsed_ms = elapsed.as_millis(),
+                        "glob include walk completed"
+                    );
+
+                    walkable.into_iter().map(move |w| {
+                        w.map_err(|e| GlobSetError::Metadata(effective_walk_root.clone(), e))
                     })
-                    .collect_vec()
-                    .into_iter()
-            })
-            .filter_map(|entry| {
-                match entry {
-                    Ok(entry) if entry.file_type().is_dir() => None,
-                    Ok(entry) => Some(Ok(entry)),
-                    Err(e) => {
-                        match e {
-                            GlobSetError::Metadata(_, we) => {
-                                let path = we.path().map(Path::to_path_buf);
-                                let io_err = std::io::Error::from(we);
-                                match io_err.kind() {
-                                    // Ignore DONE and permission errors
-                                    io::ErrorKind::NotFound | io::ErrorKind::PermissionDenied => {
-                                        None
+                })
+                .filter_map(|entry| {
+                    match entry {
+                        Ok(entry) if entry.file_type().is_dir() => None,
+                        Ok(entry) => Some(Ok(entry)),
+                        Err(e) => {
+                            match e {
+                                GlobSetError::Metadata(_, we) => {
+                                    let path = we.path().map(Path::to_path_buf);
+                                    let io_err = std::io::Error::from(we);
+                                    match io_err.kind() {
+                                        // Ignore DONE and permission errors
+                                        io::ErrorKind::NotFound
+                                        | io::ErrorKind::PermissionDenied => None,
+                                        _ => Some(Err(if let Some(path) = path {
+                                            GlobSetError::Io(path, io_err)
+                                        } else {
+                                            GlobSetError::DirWalk(io_err)
+                                        })),
                                     }
-                                    _ => Some(Err(if let Some(path) = path {
-                                        GlobSetError::Io(path, io_err)
-                                    } else {
-                                        GlobSetError::DirWalk(io_err)
-                                    })),
                                 }
+                                _ => Some(Err(e)),
                             }
-                            _ => Some(Err(e)),
                         }
                     }
-                }
-            });
+                });
         entries
     }
 }

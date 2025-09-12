@@ -18,6 +18,8 @@ rattler_digest = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["sync", "rt"] }
 wax = { workspace = true }
+tracing = { workspace = true }
+ignore = "0.4"
 
 [dev-dependencies]
 insta = { workspace = true }
