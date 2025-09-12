@@ -93,7 +93,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             "The '{}' option is deprecated and will be removed in the future.\nUse '{}' instead.",
             console::style("--pyproject").bold().red(),
             console::style("--format pyproject").bold().green(),
-        )).await?;
+        )).await;
         options.format = Some(pixi_api::init::ManifestFormat::Pyproject);
     }
 

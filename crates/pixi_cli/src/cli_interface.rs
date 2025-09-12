@@ -18,30 +18,26 @@ impl Interface for CliInterface {
             .into_diagnostic()
     }
 
-    async fn message(&self, msg: &str) -> miette::Result<()> {
+    async fn message(&self, msg: &str) {
         eprintln!("{msg}");
-        Ok(())
     }
 
-    async fn success(&self, msg: &str) -> miette::Result<()> {
+    async fn success(&self, msg: &str) {
         eprintln!("{}{msg}", console::style(console::Emoji("✔ ", "")).green());
-        Ok(())
     }
 
-    async fn warning(&self, msg: &str) -> miette::Result<()> {
+    async fn warning(&self, msg: &str) {
         eprintln!(
             "{}{msg}",
             console::style(console::Emoji("⚠️ ", "")).yellow(),
         );
-        Ok(())
     }
 
-    async fn error(&self, msg: &str) -> miette::Result<()> {
+    async fn error(&self, msg: &str) {
         eprintln!(
             "{}{msg}",
             console::style(console::Emoji("❌ ", "")).yellow(),
         );
-        Ok(())
     }
 
     fn styled(&self, text: StyledText) -> String {

@@ -111,7 +111,7 @@ pub(crate) async fn init<I: Interface>(interface: &I, options: InitOptions) -> m
                 // is.
                 workspace.workspace.provenance.path.display()
             ))
-            .await?;
+            .await;
     } else {
         let channels = if let Some(channels) = options.channels {
             channels
@@ -144,7 +144,7 @@ pub(crate) async fn init<I: Interface>(interface: &I, options: InitOptions) -> m
 
             // Early exit if 'pyproject.toml' already contains a '[tool.pixi.workspace]' table
             if pyproject.has_pixi_table() {
-                interface.message("Nothing to do here: 'pyproject.toml' already contains a '[tool.pixi.workspace]' section.").await?;
+                interface.message("Nothing to do here: 'pyproject.toml' already contains a '[tool.pixi.workspace]' section.").await;
                 return Ok(());
             }
 
@@ -186,7 +186,7 @@ pub(crate) async fn init<I: Interface>(interface: &I, options: InitOptions) -> m
                         "Added package '{}' as an editable dependency.",
                         name
                     ))
-                    .await?;
+                    .await;
                 // Inform about the addition of environments from optional dependencies
                 // or dependency groups (if any)
                 if !environments.is_empty() {
@@ -195,7 +195,7 @@ pub(crate) async fn init<I: Interface>(interface: &I, options: InitOptions) -> m
                         "Added environment{} '{}' from optional dependencies or dependency groups.",
                         if envs.len() > 1 { "s" } else { "" },
                         envs.join("', '")
-                    )).await?;
+                    )).await;
                 }
             }
 
@@ -388,7 +388,7 @@ async fn save_manifest_file<I: Interface>(
                 .unwrap_or(path.to_path_buf())
                 .display()
         ))
-        .await?;
+        .await;
     Ok(())
 }
 
