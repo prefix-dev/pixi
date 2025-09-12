@@ -18,7 +18,7 @@ impl Interface for CliInterface {
             .into_diagnostic()
     }
 
-    async fn message(&self, msg: &str) {
+    async fn info(&self, msg: &str) {
         eprintln!("{msg}");
     }
 
