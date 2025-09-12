@@ -7,11 +7,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use itertools::Itertools;
 use rattler_digest::{Sha256, Sha256Hash, digest::Digest};
 use thiserror::Error;
 
-use crate::glob_set::{self, GlobSet};
+use crate::glob_set::{self};
+use crate::{GlobSetIgnore, GlobSetIgnoreError};
 
 /// Contains a hash of the files that match the given glob patterns.
 #[derive(Debug, Clone, Default)]
@@ -33,6 +33,9 @@ pub enum GlobHashError {
 
     #[error("the operation was cancelled")]
     Cancelled,
+
+    #[error(transparent)]
+    GlobSetIgnore(#[from] GlobSetIgnoreError),
 }
 
 impl GlobHash {
@@ -47,14 +50,15 @@ impl GlobHash {
             return Ok(Self::default());
         }
 
-        let glob_set = GlobSet::create(globs)?;
-        let mut entries = glob_set
-            .filter_directory(root_dir)
-            .collect::<Result<Vec<_>, _>>()?
+        let glob_set = GlobSetIgnore::create(globs);
+        // Collect matching entries and convert to concrete DirEntry list, propagating errors.
+        let mut entries: Vec<ignore::DirEntry> = glob_set
+            .collect_matching(root_dir)?
             .into_iter()
-            .map(|entry| entry.path().to_path_buf())
-            .collect_vec();
-        entries.sort();
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // Sort deterministically by path
+        entries.sort_by_key(|e| e.path().to_path_buf());
 
         #[cfg(test)]
         let mut matching_files = Vec::new();
@@ -63,7 +67,7 @@ impl GlobHash {
         for entry in entries {
             // Construct a normalized file path to ensure consistent hashing across
             // platforms. And add it to the hash.
-            let relative_path = entry.strip_prefix(root_dir).unwrap_or(&entry);
+            let relative_path = entry.path().strip_prefix(root_dir).unwrap_or(entry.path());
             let normalized_file_path = relative_path.to_string_lossy().replace("\\", "/");
             rattler_digest::digest::Update::update(&mut hasher, normalized_file_path.as_bytes());
 
@@ -71,9 +75,11 @@ impl GlobHash {
             matching_files.push(normalized_file_path);
 
             // Concatenate the contents of the file to the hash.
-            File::open(&entry)
+            File::open(entry.path())
                 .and_then(|mut file| normalize_line_endings(&mut file, &mut hasher))
-                .map_err(move |e| GlobHashError::NormalizeLineEnds(entry, e))?;
+                .map_err(move |e| {
+                    GlobHashError::NormalizeLineEnds(entry.path().to_path_buf(), e)
+                })?;
         }
 
         if let Some(additional_hash) = additional_hash {

@@ -76,12 +76,12 @@ impl GlobModificationTime {
                     return Err(GlobModificationTimeError::CalculateMTime(
                         matched_path,
                         std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
-                    ))
+                    ));
                 }
             };
-            let modified = md.modified().map_err(|e| {
-                GlobModificationTimeError::CalculateMTime(matched_path.clone(), e)
-            })?;
+            let modified = md
+                .modified()
+                .map_err(|e| GlobModificationTimeError::CalculateMTime(matched_path.clone(), e))?;
 
             if let Some(cur) = latest {
                 if cur >= modified {

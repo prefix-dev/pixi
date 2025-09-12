@@ -12,14 +12,14 @@ version = "0.1.0"
 [dependencies]
 dashmap = { workspace = true }
 fs-err = { workspace = true }
+ignore = "0.4"
 itertools = { workspace = true }
 memchr = { workspace = true }
 rattler_digest = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["sync", "rt"] }
-wax = { workspace = true }
 tracing = { workspace = true }
-ignore = "0.4"
+wax = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true }

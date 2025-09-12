@@ -132,10 +132,7 @@ impl<'t> GlobSetIgnore<'t> {
                                 }
                             }
                         } else if let Ok(mut guard) = collected.lock() {
-                            guard.push(Err(GlobSetIgnoreError::Walk(
-                                root_for_err.clone(),
-                                e,
-                            )));
+                            guard.push(Err(GlobSetIgnoreError::Walk(root_for_err.clone(), e)));
                         }
                     }
                 }
@@ -177,7 +174,7 @@ fn split_pattern_prefix(root_dir: &Path, pattern: &str) -> (PathBuf, String) {
         // Stop on glob meta in this segment
         let has_meta =
             seg.contains('*') || seg.contains('?') || seg.contains('[') || seg.contains('{');
-        if seg == "" || seg == "." || has_meta {
+        if seg.is_empty() || seg == "." || has_meta {
             break;
         }
         // Consume this concrete path segment (may be "..")
