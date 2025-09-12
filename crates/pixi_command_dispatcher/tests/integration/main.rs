@@ -619,4 +619,6 @@ async fn source_build_cache_status_clear_works() {
         first_address, third_address,
         "expected different Arc addresses"
     );
+
+    assert!(false);
 }
