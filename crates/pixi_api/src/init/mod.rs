@@ -144,7 +144,7 @@ pub(crate) async fn init<I: Interface>(interface: &I, options: InitOptions) -> m
 
             // Early exit if 'pyproject.toml' already contains a '[tool.pixi.workspace]' table
             if pyproject.has_pixi_table() {
-                interface.message("Nothing to do here: 'pyproject.toml' already contains a '[tool.pixi.workspace]' section.").await;
+                interface.info("Nothing to do here: 'pyproject.toml' already contains a '[tool.pixi.workspace]' section.").await;
                 return Ok(());
             }
 
