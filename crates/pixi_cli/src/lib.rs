@@ -49,6 +49,7 @@ pub mod update;
 pub mod upgrade;
 pub mod upload;
 pub mod workspace;
+use rattler_upload::upload::opt::UploadOpts;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -145,7 +146,7 @@ impl Args {
         }
     }
 }
-
+#[allow(clippy::large_enum_variant)]
 #[derive(Parser, Debug)]
 pub enum Command {
     // Commands in alphabetical order
@@ -185,7 +186,7 @@ pub enum Command {
     Tree(tree::Args),
     Update(update::Args),
     Upgrade(upgrade::Args),
-    Upload(upload::Args),
+    Upload(UploadOpts),
     #[clap(alias = "project")]
     Workspace(workspace::Args),
     #[command(external_subcommand)]
@@ -347,7 +348,7 @@ pub async fn execute_command(
         Command::Task(cmd) => task::execute(cmd).await,
         Command::Info(cmd) => info::execute(cmd).await,
         Command::Import(cmd) => import::execute(cmd).await,
-        Command::Upload(cmd) => upload::execute(cmd).await,
+        Command::Upload(upload_args) => upload::execute(upload_args).await,
         Command::Search(cmd) => search::execute(cmd).await,
         Command::Workspace(cmd) => workspace::execute(cmd).await,
         Command::Remove(cmd) => remove::execute(cmd).await,
