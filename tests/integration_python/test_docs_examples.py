@@ -14,11 +14,11 @@ pytestmark = pytest.mark.skipif(
 
 
 class TestPixiBuild:
-    pixi_projects = list(
+    pixi_projects: list[Path] = list(
         repo_root().joinpath("docs/source_files/pixi_workspaces/pixi_build").iterdir()
     )
     pixi_projects.sort()
-    pixi_project_params = [
+    pixi_project_params: list[tuple[str, tuple[Path, str]]] = [
         (
             pixi_projects[0].name,
             (

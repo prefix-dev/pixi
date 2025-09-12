@@ -3,6 +3,7 @@ import tomllib
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
+from typing import override
 
 import pytest
 import tomli_w
@@ -46,12 +47,15 @@ class PlatformConfig(ABC):
 
 
 class LinuxConfig(PlatformConfig):
+    @override
     def shortcut_path(self, data_home: Path, name: str) -> Path:
         return data_home / ".local" / "share" / "applications" / f"{name}_{name}.desktop"
 
+    @override
     def shortcut_exists(self, data_home: Path, name: str) -> bool:
         return self.shortcut_path(data_home, name).is_file()
 
+    @override
     def get_shortcut_content_hash(self, data_home: Path, name: str) -> str:
         shortcut_file = self.shortcut_path(data_home, name)
         if not shortcut_file.is_file():
@@ -62,12 +66,15 @@ class LinuxConfig(PlatformConfig):
 
 
 class MacOSConfig(PlatformConfig):
+    @override
     def shortcut_path(self, data_home: Path, name: str) -> Path:
         return data_home / "Applications" / f"{name}.app"
 
+    @override
     def shortcut_exists(self, data_home: Path, name: str) -> bool:
         return self.shortcut_path(data_home, name).is_dir()
 
+    @override
     def get_shortcut_content_hash(self, data_home: Path, name: str) -> str:
         shortcut_dir = self.shortcut_path(data_home, name)
         if not shortcut_dir.is_dir():
@@ -84,12 +91,15 @@ class MacOSConfig(PlatformConfig):
 
 
 class WindowsConfig(PlatformConfig):
+    @override
     def shortcut_path(self, data_home: Path, name: str) -> Path:
         return data_home / "Desktop" / f"{name}.lnk"
 
+    @override
     def shortcut_exists(self, data_home: Path, name: str) -> bool:
         return self.shortcut_path(data_home, name).is_file()
 
+    @override
     def get_shortcut_content_hash(self, data_home: Path, name: str) -> str:
         shortcut_file = self.shortcut_path(data_home, name)
         if not shortcut_file.is_file():

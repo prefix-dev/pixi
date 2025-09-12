@@ -1,8 +1,12 @@
-from typing import Any
-from helpers import setup_stdout_stderr_logging
-from generate_summaries import terminal_summary, markdown_summary
-import pytest
+# pyright: reportUnusedParameter=false
+
 from pathlib import Path
+from typing import Any
+
+import pytest
+
+from .helpers import setup_stdout_stderr_logging
+from .generate_summaries import terminal_summary, markdown_summary
 
 
 def pytest_configure(config: pytest.Config) -> None:

@@ -1,0 +1,42 @@
+[licenses]
+allow = [
+  "0BSD",
+  "Apache-2.0 WITH LLVM-exception",
+  "Apache-2.0",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "BSL-1.0",
+  "bzip2-1.0.6",
+  "CDLA-Permissive-2.0",
+  "ISC",
+  "MIT",
+  "MPL-2.0",
+  "Unicode-3.0",
+  "Zlib",
+]
+confidence-threshold = 0.8
+private = { ignore = true }
+
+[[licenses.clarify]]
+crate = "uv-auth"
+expression = "MIT OR Apache-2.0"
+license-files = [
+  { path = "../../LICENSE-APACHE", hash = 0x0 },
+  { path = "../../LICENSE-MIT", hash = 0x0 },
+]
+
+[[licenses.clarify]]
+crate = "uv-client"
+expression = "MIT OR Apache-2.0"
+license-files = [
+  { path = "../../LICENSE-APACHE", hash = 0x0 },
+  { path = "../../LICENSE-MIT", hash = 0x0 },
+]
+
+[[licenses.clarify]]
+crate = "uv-shell"
+expression = "MIT OR Apache-2.0"
+license-files = [
+  { path = "../../LICENSE-APACHE", hash = 0x0 },
+  { path = "../../LICENSE-MIT", hash = 0x0 },
+]

@@ -1,9 +1,11 @@
 import os
-import subprocess
 import pathlib
-from typing import Any
+import subprocess
 import tomllib
 import tomli_w
+
+from typing import Any
+
 
 StrPath = str | os.PathLike[str]
 LOG_DIR = pathlib.Path(__file__).parent / ".logs"

@@ -10,7 +10,7 @@ def on_files(files: Files, config: MkDocsConfig):
     files.append(
         File(
             path=changelog.name,
-            src_dir=changelog.parent,
+            src_dir=str(changelog.parent),
             dest_dir=f"{config.site_dir}",
             use_directory_urls=config.use_directory_urls,
         )

@@ -79,7 +79,3 @@ uv-installer = { workspace = true }
 uv-pep508 = { workspace = true }
 uv-python = { workspace = true }
 zip = { workspace = true }
-
-[[test]]
-name = "integration_rust"
-path = "../../tests/integration_rust/main.rs"

@@ -684,7 +684,7 @@
         },
         "channel-priority": {
           "$ref": "#/$defs/ChannelPriority",
-          "description": "The type of channel priority that is used in the solve.- 'strict': only take the package from the channel it exist in first.- 'disabled': group all dependencies together as if there is no channel difference.",
+          "description": "The type of channel priority that is used in the solve.\n- 'strict': only take the package from the channel it exist in first.\n- 'disabled': group all dependencies together as if there is no channel difference.",
           "examples": [
             "strict",
             "disabled"
@@ -2152,7 +2152,7 @@
         },
         "channel-priority": {
           "$ref": "#/$defs/ChannelPriority",
-          "description": "The type of channel priority that is used in the solve.- 'strict': only take the package from the channel it exist in first.- 'disabled': group all dependencies together as if there is no channel difference.",
+          "description": "The type of channel priority that is used in the solve.\n- 'strict': only take the package from the channel it exist in first.\n- 'disabled': group all dependencies together as if there is no channel difference.",
           "examples": [
             "strict",
             "disabled"

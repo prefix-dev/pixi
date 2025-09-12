@@ -1,7 +1,11 @@
+# pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportMissingParameterType=false, reportUnknownParameterType=false, reportUnknownArgumentType=false
+
 import glob
 import json
 import tomllib
+
 from pathlib import Path
+from typing import Any
 
 import pytest
 import jsonschema
@@ -16,14 +20,14 @@ INVALID = {ex.stem: ex for ex in (EXAMPLES / "invalid").glob("*.toml")}
 
 
 @pytest.fixture(scope="module", params=VALID)
-def valid_manifest(request) -> str:
+def valid_manifest(request) -> dict[str, Any]:
     manifest = VALID[request.param].read_text()
     manifest_toml = tomllib.loads(manifest)
     return manifest_toml
 
 
 @pytest.fixture(scope="module", params=INVALID)
-def invalid_manifest(request) -> str:
+def invalid_manifest(request) -> dict[str, Any]:
     manifest = INVALID[request.param].read_text()
     manifest_toml = tomllib.loads(manifest)
     return manifest_toml
@@ -51,7 +55,7 @@ def manifest_schema():
 
 @pytest.fixture(scope="session")
 def validator(manifest_schema):
-    validator_cls = jsonschema.validators.validator_for(manifest_schema)
+    validator_cls = jsonschema.validators.validator_for(manifest_schema)  # pyright: ignore[reportAttributeAccessIssue]
     return validator_cls(manifest_schema)
 
 

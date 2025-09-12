@@ -1,7 +1,9 @@
+import tomllib
+
 from dataclasses import dataclass
 from pathlib import Path
-import tomllib
-from typing import Literal, Iterable, Self, Any
+from typing import Literal, Self, Any
+from collections.abc import Iterable
 
 
 @dataclass

@@ -2113,7 +2113,7 @@ def test_tree_with_filter(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> N
     )
 
 
-def test_tree_nonexistent_environment(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+def test_tree_nonexistent_environment(pixi: Path, tmp_path: Path) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
 
     # Try to show tree for non-existent environment

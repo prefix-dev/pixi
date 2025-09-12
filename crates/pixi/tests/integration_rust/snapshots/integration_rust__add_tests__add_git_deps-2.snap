@@ -1,5 +1,5 @@
 ---
-source: tests/integration_rust/add_tests.rs
+source: crates/pixi/tests/integration_rust/add_tests.rs
 expression: pixi.workspace().unwrap().workspace.provenance.read().unwrap().into_inner()
 ---
 [project]

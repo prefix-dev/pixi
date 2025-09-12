@@ -7,7 +7,7 @@ from .common import CONDA_FORGE_CHANNEL, CURRENT_PLATFORM, ExitCode, verify_cli_
 
 
 @pytest.mark.extra_slow
-def test_no_build_option(pixi: Path, tmp_pixi_workspace: Path, tmp_path: Path) -> None:
+def test_no_build_option(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """
     Tests the behavior of pixi install command when the no-build option is specified in pixi.toml.
     This test verifies that the installation fails appropriately when attempting to install
@@ -36,22 +36,22 @@ def test_pypi_overrides(pixi: Path, tmp_pixi_workspace: Path) -> None:
     [workspace]
     channels = ["{CONDA_FORGE_CHANNEL}"]
     platforms = ["{CURRENT_PLATFORM}"]
-    
+
     [dependencies]
     python = "3.13.*"
-    
+
     [pypi-options.dependency-overrides]
     dummy_test = "==0.1.3"
-    
+
     [pypi-dependencies]
     dummy_test = "==0.1.1"
-    
+
     [feature.dev.pypi-options.dependency-overrides]
     dummy_test = "==0.1.2"
-    
+
     [feature.outdated.pypi-options.dependency-overrides]
     dummy_test = "==0.1.0"
-    
+
     [environments]
     dev = ["dev"]
     outdated = ["outdated"]

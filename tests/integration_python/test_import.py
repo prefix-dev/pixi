@@ -2,6 +2,7 @@ import os
 import tomllib
 
 from pathlib import Path
+from collections.abc import Iterable
 
 from dirty_equals import IsPartialDict
 from inline_snapshot import snapshot
@@ -14,7 +15,7 @@ from .common import (
 
 
 class TestImport:
-    simple_env_yaml = {
+    simple_env_yaml: dict[str, Iterable[str]] = {
         "name": "simple-env",
         "channels": ["conda-forge"],
         "dependencies": ["python"],
@@ -46,30 +47,30 @@ class TestImport:
 
 
 class TestCondaEnv:
-    simple_env_yaml = {
+    simple_env_yaml: dict[str, Iterable[str]] = {
         "name": "simple-env",
         "channels": ["conda-forge"],
         "dependencies": ["python"],
     }
 
-    cowpy_env_yaml = {
+    cowpy_env_yaml: dict[str, Iterable[str]] = {
         "name": "cowpy",
         "channels": ["conda-forge"],
         "dependencies": ["cowpy"],
     }
 
-    noname_env_yaml = {
+    noname_env_yaml: dict[str, Iterable[str]] = {
         "channels": ["conda-forge"],
         "dependencies": ["python"],
     }
 
-    xpx_env_yaml = {
+    xpx_env_yaml: dict[str, Iterable[str]] = {
         "name": "array-api-extra",
         "channels": ["conda-forge"],
         "dependencies": ["array-api-extra"],
     }
 
-    complex_env_yaml = {
+    complex_env_yaml: dict[str, Iterable[str]] = {
         "name": "complex-env",
         "channels": ["conda-forge", "bioconda"],
         "dependencies": ["cowpy=1.1.4", "libblas=*=*openblas", "snakemake-minimal"],
@@ -498,10 +499,10 @@ class TestCondaEnv:
 
 
 class TestPypiTxt:
-    simple_txt = "cowpy"
-    xpx_txt = "array-api-extra"
-    numpy_txt = "numpy<2"
-    complex_txt = """
+    simple_txt: str = "cowpy"
+    xpx_txt: str = "array-api-extra"
+    numpy_txt: str = "numpy<2"
+    complex_txt: str = """
 -c numpy_requirements.txt
 cowpy==1.1.4
 -r xpx_requirements.txt

@@ -11,7 +11,7 @@ def on_files(files: Files, config: MkDocsConfig):
         files.append(
             File(
                 path=script.name,
-                src_dir=script.parent,
+                src_dir=str(script.parent),
                 dest_dir=f"{config.site_dir}",
                 use_directory_urls=config.use_directory_urls,
             )

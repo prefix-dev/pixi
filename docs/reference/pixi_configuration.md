@@ -123,11 +123,13 @@ project's root.
 It doesn't affect the environments built for `pixi global`.
 The location of environments created for a `pixi global` installation can be controlled using the `PIXI_HOME`
 environment variable.
+
 !!! warning
-We recommend against using this because any environment created for a project is no longer placed in the same folder as
-the project.
-This creates a disconnect between the project and its environments and manual cleanup of the environments is required
-when deleting the project.
+
+    We recommend against using this because any environment created for a project is no longer placed in the same folder as
+    the project.
+    This creates a disconnect between the project and its environments and manual cleanup of the environments is required
+    when deleting the project.
 
     However, in some cases, this option can still be very useful, for instance to:
 

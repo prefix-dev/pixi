@@ -10,7 +10,7 @@ def on_files(files: Files, config: MkDocsConfig):
     files.append(
         File(
             path=SCHEMA.name,
-            src_dir=SCHEMA.parent,
+            src_dir=str(SCHEMA.parent),
             dest_dir=f"{config.site_dir}/schema/manifest",
             use_directory_urls=config.use_directory_urls,
         )

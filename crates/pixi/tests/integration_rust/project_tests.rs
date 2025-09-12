@@ -98,7 +98,7 @@ async fn parse_project() {
             .collect()
     }
 
-    let pixi_toml = include_str!("../data/pixi_tomls/many_targets.toml");
+    let pixi_toml = include_str!("../../../../tests/data/pixi_tomls/many_targets.toml");
     let project = Workspace::from_str(&PathBuf::from("./many/pixi.toml"), pixi_toml).unwrap();
     assert_debug_snapshot!(dependency_names(&project, Platform::Linux64));
     assert_debug_snapshot!(dependency_names(&project, Platform::OsxArm64));

@@ -1,12 +1,13 @@
-from record_results import RESULTS_FILE
 import tomllib
+
+from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 from rich.panel import Panel
-from pathlib import Path
 
-from read_wheels import read_wheel_file
+from .read_wheels import read_wheel_file
+from .record_results import RESULTS_FILE
 
 
 def terminal_summary() -> None:
@@ -29,7 +30,7 @@ def terminal_summary() -> None:
     table.add_column("Error Details")
 
     # Populate the table with collected results
-    names = []
+    names: list[str] = []
     for result in sorted(results, key=lambda r: r["name"]):
         outcome_color = "green" if result["outcome"] == "passed" else "red"
         error_details = result["longrepr"] if result["outcome"] == "failed" else ""

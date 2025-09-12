@@ -1,5 +1,5 @@
 ---
-source: tests/integration_rust/project_tests.rs
+source: crates/pixi/tests/integration_rust/project_tests.rs
 expression: "dependency_names(&project, Platform::Win64)"
 ---
 [
