@@ -42,6 +42,12 @@ It sets the `PATH` and some more environment variables. But more importantly it 
 An example of this would be the [`libglib_activate.sh`](https://github.com/conda-forge/glib-feedstock/blob/52ba1944dffdb2d882d824d6548325155b58819b/recipe/scripts/activate.sh) script.
 Thus, just adding the `bin` directory to the `PATH` is not enough.
 
+Shell used for activation:
+- On Windows, Pixi executes activation under `cmd.exe`.
+- On Linux and macOS, Pixi executes activation under `bash`.
+
+This affects both `[activation.env]` and `activation.scripts`: they are applied by the platform's shell during activation, before any task runs.
+
 You can modify the activation with the `activation` table in the manifest, you can add more activation scripts or inject environment variables into the activation scripts.
 ```toml
 --8<-- "docs/source_files/pixi_tomls/activation.toml:activation"
