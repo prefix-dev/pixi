@@ -1,9 +1,12 @@
 use std::{
     path::{Path, PathBuf},
+    sync::LazyLock,
     time::SystemTime,
 };
 
+use rayon::prelude::*;
 use thiserror::Error;
+use uv_configuration::RAYON_INITIALIZE;
 
 use crate::glob_set::{self, GlobSet};
 
@@ -50,24 +53,22 @@ impl GlobModificationTime {
         let mut latest = None;
         let mut designated_file = PathBuf::new();
 
+        // Force the initialization of the rayon thread pool to avoid implicit creation conflicts
+        LazyLock::force(&RAYON_INITIALIZE);
+
         // Find the newest modification time and the designated file
-        for entry in entries {
-            let matched_path = entry.path().to_owned();
-            let metadata = entry.metadata().map_err(|e| {
-                GlobModificationTimeError::CalculateMTime(matched_path.clone(), e.into())
-            })?;
-            let modified_entry = metadata
-                .modified()
-                .map_err(|e| GlobModificationTimeError::CalculateMTime(matched_path.clone(), e))?;
-
-            if let Some(ref current_latest) = latest {
-                if *current_latest >= modified_entry {
-                    continue;
-                }
-            }
-
-            latest = Some(modified_entry);
-            designated_file = matched_path.clone();
+        if let Some((modified_at, file)) = entries
+            .into_par_iter()
+            .filter_map(|entry| {
+                let matched_path = entry.path().to_owned();
+                let metadata = entry.metadata().ok()?;
+                let modified_entry = metadata.modified().ok()?;
+                Some((modified_entry, matched_path))
+            })
+            .max_by_key(|(modified_entry, _)| *modified_entry)
+        {
+            latest = Some(modified_at);
+            designated_file = file;
         }
 
         match latest {
