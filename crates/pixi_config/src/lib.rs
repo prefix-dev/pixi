@@ -628,6 +628,11 @@ pub struct Config {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub default_channels: Vec<NamedChannelOrUrl>,
 
+    #[serde(default)]
+    #[serde(alias = "default_platforms")] // BREAK: remove to stop supporting snake_case alias
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub default_platforms: Vec<String>,
+
     /// Path to the file containing the authentication token.
     #[serde(default)]
     #[serde(alias = "authentication_override_file")] // BREAK: remove to stop supporting snake_case alias
@@ -736,6 +741,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             default_channels: Vec::new(),
+            default_platforms: Vec::new(),
             authentication_override_file: None,
             tls_no_verify: None,
             mirrors: HashMap::new(),
@@ -1339,6 +1345,11 @@ impl Config {
             } else {
                 other.default_channels
             },
+            default_platforms: if other.default_platforms.is_empty() {
+                self.default_platforms
+            } else {
+                other.default_platforms
+            },
             tls_no_verify: other.tls_no_verify.or(self.tls_no_verify),
             authentication_override_file: other
                 .authentication_override_file
@@ -1382,6 +1393,11 @@ impl Config {
         } else {
             self.default_channels.clone()
         }
+    }
+
+    /// Retrieve the value for the default_platforms field (defaults to empty).
+    pub fn default_platforms(&self) -> Vec<String> {
+        self.default_platforms.clone()
     }
 
     /// Retrieve the value for the tls_no_verify field (defaults to false).
@@ -2102,6 +2118,7 @@ UNUSED = "unused"
         let mut config = Config::default();
         let other = Config {
             default_channels: vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()],
+            default_platforms: vec!["linux-64".to_string()],
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir")),
             tls_no_verify: Some(true),
             detached_environments: Some(DetachedEnvironments::Path(PathBuf::from("/path/to/envs"))),
@@ -2853,5 +2870,79 @@ UNUSED = "unused"
                 compression_level: CompressionLevel::Lowest
             }
         );
+    }
+
+    #[test]
+    fn test_config_parse_default_platforms() {
+        // Test parsing default_platforms from TOML
+        let toml = r#"default-platforms = ["win-64", "linux-64", "osx-64"]"#;
+        let (config, _) = Config::from_toml(toml, None).unwrap();
+        assert_eq!(
+            config.default_platforms,
+            vec!["win-64", "linux-64", "osx-64"]
+        );
+        assert_eq!(
+            config.default_platforms(),
+            vec!["win-64", "linux-64", "osx-64"]
+        );
+
+        // Test empty default_platforms (should return empty vec)
+        let toml = r#"default-platforms = []"#;
+        let (config, _) = Config::from_toml(toml, None).unwrap();
+        assert_eq!(config.default_platforms, Vec::<String>::new());
+        assert_eq!(config.default_platforms(), Vec::<String>::new());
+
+        // Test missing default_platforms (should default to empty)
+        let toml = r#"tls-no-verify = true"#;
+        let (config, _) = Config::from_toml(toml, None).unwrap();
+        assert_eq!(config.default_platforms, Vec::<String>::new());
+        assert_eq!(config.default_platforms(), Vec::<String>::new());
+    }
+
+    #[test]
+    fn test_config_merge_default_platforms() {
+        // Test that higher priority config overrides lower priority for default_platforms
+        let base_config = Config {
+            default_platforms: vec!["linux-64".to_string()],
+            ..Config::default()
+        };
+
+        let override_config = Config {
+            default_platforms: vec!["win-64".to_string(), "osx-64".to_string()],
+            ..Config::default()
+        };
+
+        let merged = base_config.merge_config(override_config);
+        assert_eq!(merged.default_platforms, vec!["win-64", "osx-64"]);
+
+        // Test that empty override doesn't change base
+        let base_config = Config {
+            default_platforms: vec!["linux-64".to_string()],
+            ..Config::default()
+        };
+
+        let empty_override = Config::default();
+
+        let merged = base_config.merge_config(empty_override);
+        assert_eq!(merged.default_platforms, vec!["linux-64"]);
+    }
+
+    #[test]
+    fn test_config_parse_combined_defaults() {
+        // Test that both default_channels and default_platforms work together
+        let toml = r#"
+default-channels = ["conda-forge", "bioconda"]
+default-platforms = ["win-64", "linux-64"]
+"#;
+        let (config, _) = Config::from_toml(toml, None).unwrap();
+
+        assert_eq!(
+            config.default_channels,
+            vec![
+                NamedChannelOrUrl::from_str("conda-forge").unwrap(),
+                NamedChannelOrUrl::from_str("bioconda").unwrap()
+            ]
+        );
+        assert_eq!(config.default_platforms, vec!["win-64", "linux-64"]);
     }
 }
