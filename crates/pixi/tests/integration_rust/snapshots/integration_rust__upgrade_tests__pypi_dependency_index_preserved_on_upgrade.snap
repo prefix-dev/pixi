@@ -1,5 +1,5 @@
 ---
-source: tests/integration_rust/upgrade_tests.rs
+source: crates/pixi/tests/integration_rust/upgrade_tests.rs
 expression: redacted_content
 ---
         [workspace]
