@@ -2906,6 +2906,10 @@ More information about tasks can be found in the <a href="../advanced_tasks/">ta
 <p>It sets the <code>PATH</code> and some more environment variables. But more importantly it also runs activation scripts that are presented by the installed packages.
 An example of this would be the <a href="https://github.com/conda-forge/glib-feedstock/blob/52ba1944dffdb2d882d824d6548325155b58819b/recipe/scripts/activate.sh"><code>libglib_activate.sh</code></a> script.
 Thus, just adding the <code>bin</code> directory to the <code>PATH</code> is not enough.</p>
+<p>Shell used for activation:
+- On Windows, Pixi executes activation under <code>cmd.exe</code>.
+- On Linux and macOS, Pixi executes activation under <code>bash</code>.</p>
+<p>This affects both <code>[activation.env]</code> and <code>activation.scripts</code>: they are applied by the platform's shell during activation, before any task runs.</p>
 <p>You can modify the activation with the <code>activation</code> table in the manifest, you can add more activation scripts or inject environment variables into the activation scripts.
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">[activation.env]</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># Python users often set:</span>
