@@ -491,6 +491,12 @@ impl TemplateString {
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Hash)]
 pub struct RenderedString(String);
 
+impl RenderedString {
+    pub fn inner(&self) -> &str {
+        &self.0
+    }
+}
+
 impl From<&str> for RenderedString {
     fn from(value: &str) -> Self {
         RenderedString(value.to_string())

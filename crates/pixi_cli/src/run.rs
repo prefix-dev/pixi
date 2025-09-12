@@ -299,9 +299,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             Err(err) => return Err(err.into()),
         }
 
-        // Update the task cache with the new hash
+        // Compute post-run hash, warn on missing globs, and update the cache
+        let post_hash = executable_task
+            .compute_post_run_hash(lock_file.as_lock_file(), task_cache)
+            .await
+            .into_diagnostic()?;
+        if let Some(ref h) = post_hash {
+            executable_task.warn_on_missing_globs(h);
+        }
         executable_task
-            .save_cache(lock_file.as_lock_file(), task_cache)
+            .save_cache(post_hash)
             .await
             .into_diagnostic()?;
     }
