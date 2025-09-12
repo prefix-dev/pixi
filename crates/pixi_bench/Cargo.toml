@@ -42,5 +42,9 @@ name = "task_run"
 harness = false
 name = "global_install"
 
+[[bench]]
+harness = false
+name = "clean"
+
 [profile.release]
 debug = true
