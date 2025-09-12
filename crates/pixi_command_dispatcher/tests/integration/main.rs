@@ -577,13 +577,27 @@ async fn source_build_cache_status_clear_works() {
         .source_build_cache_status(spec.clone())
         .await
         .expect("query succeeds");
+
+    //  let initial_strong_count = std::sync::Arc::strong_count(&first);
+
+    // Create a weak reference to track the original
+    let weak_first = std::sync::Arc::downgrade(&first);
+
     let second = dispatcher
         .source_build_cache_status(spec.clone())
         .await
         .expect("query succeeds");
 
+    // let second_strong_count = std::sync::Arc::strong_count(&second);
+
     // Cached result should return the same Arc
     assert!(std::sync::Arc::ptr_eq(&first, &second));
+
+    // assert_eq!(
+    //     initial_strong_count + 1,
+    //     second_strong_count,
+    //     "expected strong count to increase by one"
+    // );
 
     // assert!(ptr::eq(&first, &second));
 
@@ -611,15 +625,28 @@ async fn source_build_cache_status_clear_works() {
         .await
         .expect("query succeeds");
 
-    let third_address = format!("{:p}", third);
-
-    eprintln!("third address: {third_address}");
-
-    assert_ne!(
-        first_address, third_address,
-        "expected different Arc addresses"
+    // Check if the original Arc is truly gone
+    assert!(
+        weak_first.upgrade().is_none(),
+        "Original Arc should be deallocated after cache clear"
     );
 
-    #[cfg(windows)]
-    unreachable!("Expected same Arc on windows");
+    // let third_strong_count = std::sync::Arc::strong_count(&third);
+
+    // assert_eq!(
+    //     third_strong_count, 1,
+    //     "expected strong count to be one for a fresh Arc"
+    // );
+
+    // let third_address = format!("{:p}", third);
+
+    // eprintln!("third address: {third_address}");
+
+    // assert_ne!(
+    //     first_address, third_address,
+    //     "expected different Arc addresses"
+    // );
+
+    // #[cfg(windows)]
+    // unreachable!("Expected same Arc on windows");
 }
