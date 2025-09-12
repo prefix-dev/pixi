@@ -1,6 +1,7 @@
 use std::io::Write;
 
 use rattler_conda_types::Platform;
+use tempfile::tempdir;
 use typed_path::Utf8TypedPath;
 
 use crate::common::pypi_index::{Database as PyPIDatabase, PyPIPackage};
@@ -385,7 +386,17 @@ async fn test_indexes_are_passed_when_solving_build_pypi_dependencies() {
     let lock_file = pixi.update_lock_file().await.unwrap();
 
     // verify that the pypi-build-index can be installed when solved the build dependencies
-    pixi.install().await.unwrap();
+
+    let tmp_dir = tempdir().unwrap();
+    let tmp_dir_path = tmp_dir.path();
+
+    temp_env::async_with_vars(
+        [("PIXI_CACHE_DIR", Some(tmp_dir_path.to_str().unwrap()))],
+        async {
+            pixi.install().await.unwrap();
+        },
+    )
+    .await;
 
     let mut local_pypi_index = simple.index_path().display().to_string();
 
