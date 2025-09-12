@@ -474,24 +474,22 @@ pub async fn run_future_forwarding_signals<TOutput>(
 
     local_set
         .run_until(async move {
-            spawn_future_with_cancellation(listen_ctrl_c(kill_signal.clone()), token.clone());
+            #[cfg(windows)]
+            spawn_future_with_cancellation(listen_ctrl_c(kill_signal), token.clone());
             #[cfg(unix)]
-            spawn_future_with_cancellation(listen_and_forward_all_signals(kill_signal), token);
+            spawn_future_with_cancellation(listen_and_forward_all_signals(kill_signal), token.clone());
 
             future.await
         })
         .await
 }
-
-async fn listen_ctrl_c(kill_signal: KillSignal) {
+#[cfg(windows)]
+async fn listen_ctrl_c(_kill_signal: KillSignal) {
     while let Ok(()) = tokio::signal::ctrl_c().await {
         // On windows, ctrl+c is sent to the process group, so the signal would
         // have already been sent to the child process. We still want to listen
         // for ctrl+c here to keep the process alive when receiving it, but no
         // need to forward the signal because it's already been sent.
-        if !cfg!(windows) {
-            kill_signal.send(deno_task_shell::SignalKind::SIGINT)
-        }
     }
 }
 
