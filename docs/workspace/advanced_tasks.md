@@ -76,9 +76,18 @@ pixi task add fmt ruff
 pixi task add lint pylint
 ```
 
-```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_tomls/pixi_task_alias.toml:not-all"
-```
+=== "`pixi.toml`"
+    ```toml title="pixi.toml"
+    [tasks]
+    fmt = "ruff"
+    lint = "pylint"
+    ```
+=== "`pyproject.toml`"
+    ```toml title="pyproject.toml"
+    [tool.pixi.tasks]
+    fmt = "ruff"
+    lint = "pylint"
+    ```
 
 !!! tip "Hiding Tasks"
     Tasks can be hidden from user facing commands by [naming them](#task-names) with an `_` prefix.
@@ -95,9 +104,20 @@ pixi task alias style fmt lint
 
 results in the following `pixi.toml`:
 
-```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_tomls/pixi_task_alias.toml:all"
-```
+=== "`pixi.toml`"
+    ```toml title="pixi.toml"
+    [tasks]
+    fmt = "ruff"
+    lint = "pylint"
+    style = [{ task = "fmt" }, { task = "lint" }]
+    ```
+=== "`pyproject.toml`"
+    ```toml title="pyproject.toml"
+    [tool.pixi.tasks]
+    fmt = "ruff"
+    lint = "pylint"
+    style = [{ task = "fmt" }, { task = "lint" }]
+    ```
 
 Now you can run both tools with one command.
 
@@ -109,9 +129,50 @@ pixi run style
 
 You can specify the environment to use for a dependent task:
 
-```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_tomls/tasks_depends_on.toml:tasks"
-```
+=== "`pixi.toml`"
+    ```toml title="pixi.toml"
+    [tasks]
+    test = "python --version"
+
+    [feature.py311.dependencies]
+    python = "3.11.*"
+
+    [feature.py312.dependencies]
+    python = "3.12.*"
+
+    [environments]
+    py311 = ["py311"]
+    py312 = ["py312"]
+
+    # Task that depends on other tasks in different environments
+    [tasks.test-all]
+    depends-on = [
+      { task = "test", environment = "py311" },
+      { task = "test", environment = "py312" },
+    ]
+    ```
+=== "`pyproject.toml`"
+    ```toml title="pyproject.toml"
+    [tool.pixi.tasks]
+    test = "python --version"
+
+    [tool.pixi.feature.py311.dependencies]
+    python = "3.11.*"
+
+    [tool.pixi.feature.py312.dependencies]
+    python = "3.12.*"
+
+    [tool.pixi.environments]
+    py311 = ["py311"]
+    py312 = ["py312"]
+
+    # Task that depends on other tasks in different environments
+    [tool.pixi.tasks.test-all]
+    depends-on = [
+      { task = "test", environment = "py311" },
+      { task = "test", environment = "py312" },
+    ]
+    ```
 
 This allows you to run tasks in different environments as part of a single pipeline.
 When you run the main task, Pixi ensures each dependent task uses its specified environment:
@@ -149,10 +210,16 @@ pixi task add bar "python bar.py" --cwd scripts
 
 This will add the following line to [manifest file](../reference/pixi_manifest.md):
 
-```toml title="pixi.toml"
-[tasks]
-bar = { cmd = "python bar.py", cwd = "scripts" }
-```
+=== "`pixi.toml`"
+    ```toml title="pixi.toml"
+    [tasks]
+    bar = { cmd = "python bar.py", cwd = "scripts" }
+    ```
+=== "`pyproject.toml`"
+    ```toml title="pyproject.toml"
+    [tool.pixi.tasks]
+    bar = { cmd = "python bar.py", cwd = "scripts" }
+    ```
 
 ## Task Arguments
 
@@ -179,9 +246,45 @@ Arguments can be:
 
 Define arguments in your task using the `args` field:
 
-```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_tomls/task_arguments.toml:project_tasks"
-```
+=== "`pixi.toml`"
+    ```toml title="pixi.toml"
+    [tasks.greet]
+    args = ["name"]
+    cmd = "echo Hello, {{ name }}!"
+
+    # Task with optional arguments (default values)
+    [tasks.build]
+    args = [
+      { "arg" = "project", "default" = "my-app" },
+      { "arg" = "mode", "default" = "development" },
+    ]
+    cmd = "echo Building {{ project }} in {{ mode }} mode"
+
+    # Task with mixed required and optional arguments
+    [tasks.deploy]
+    args = ["service", { "arg" = "environment", "default" = "staging" }]
+    cmd = "echo Deploying {{ service }} to {{ environment }}"
+    ```
+=== "`pyproject.toml`"
+    ```toml title="pyproject.toml"
+    [tool.pixi.tasks.greet]
+    args = ["name"]
+    cmd = "echo Hello, {{ name }}!"
+
+    # Task with optional arguments (default values)
+    [tool.pixi.tasks.build]
+    args = [
+      { "arg" = "project", "default" = "my-app" },
+      { "arg" = "mode", "default" = "development" },
+    ]
+    cmd = "echo Building {{ project }} in {{ mode }} mode"
+
+    # Task with mixed required and optional arguments
+    [tool.pixi.tasks.deploy]
+    args = ["service", { "arg" = "environment", "default" = "staging" }]
+    cmd = "echo Deploying {{ service }} to {{ environment }}"
+    ```
+
 
 !!! note "Argument naming restrictions"
     Argument names cannot contain dashes (`-`) due to them being seen as a minus sign in MiniJinja. Use underscores (`_`) or camelCase instead.
@@ -213,9 +316,58 @@ pixi run deploy auth-service production
 
 You can pass arguments to tasks that are dependencies of other tasks:
 
-```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_tomls/task_arguments_dependent.toml:project_tasks"
-```
+=== "`pixi.toml`"
+    ```toml title="pixi.toml"
+    # Base task with arguments
+    [tasks.install]
+    args = [
+      { arg = "path", default = "/default/path" }, # Path to manifest
+      { arg = "flag", default = "--normal" },      # Installation flag
+    ]
+    cmd = "echo Installing with manifest {{ path }} and flag {{ flag }}"
+
+    # Dependent task specifying positional arguments for the base task
+    [tasks.install-release]
+    depends-on = [{ task = "install", args = ["/path/to/manifest", "--debug"] }]
+
+    # Task with multiple dependencies, passing different arguments
+    [tasks.deploy]
+    cmd = "echo Deploying"
+    depends-on = [
+      # Override with named custom path and named verbose flag
+      { task = "install", args = [
+        { path = "/custom/path" },
+        { flag = "--verbose" },
+      ] },
+      # Other dependent tasks can be added here
+    ]
+    ```
+=== "`pyproject.toml`"
+    ```toml title="pyproject.toml"
+    # Base task with arguments
+    [tool.pixi.tasks.install]
+    args = [
+      { arg = "path", default = "/default/path" }, # Path to manifest
+      { arg = "flag", default = "--normal" },      # Installation flag
+    ]
+    cmd = "echo Installing with manifest {{ path }} and flag {{ flag }}"
+
+    # Dependent task specifying positional arguments for the base task
+    [tool.pixi.tasks.install-release]
+    depends-on = [{ task = "install", args = ["/path/to/manifest", "--debug"] }]
+
+    # Task with multiple dependencies, passing different arguments
+    [tool.pixi.tasks.deploy]
+    cmd = "echo Deploying"
+    depends-on = [
+      # Override with named custom path and named verbose flag
+      { task = "install", args = [
+        { path = "/custom/path" },
+        { flag = "--verbose" },
+      ] },
+      # Other dependent tasks can be added here
+    ]
+    ```
 
 When executing a dependent task, the arguments are passed to the dependency:
 
@@ -230,9 +382,32 @@ pixi run deploy
 
 When a dependent task doesn't specify all arguments, the default values are used for the missing ones:
 
-```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_tomls/task_arguments_partial.toml:project_tasks"
-```
+=== "`pixi.toml`"
+    ```toml title="pixi.toml"
+    [tasks.base-task]
+    args = [
+      { "arg" = "arg1", "default" = "default1" }, # First argument with default
+      { "arg" = "arg2", "default" = "default2" }, # Second argument with default
+    ]
+    cmd = "echo Base task with {{ arg1 }} and {{ arg2 }}"
+
+    [tasks.partial-override]
+    # Only override the first argument
+    depends-on = [{ "task" = "base-task", "args" = ["override1"] }]
+    ```
+=== "`pyproject.toml`"
+    ```toml title="pyproject.toml"
+    [tool.pixi.tasks.base-task]
+    args = [
+      { "arg" = "arg1", "default" = "default1" }, # First argument with default
+      { "arg" = "arg2", "default" = "default2" }, # Second argument with default
+    ]
+    cmd = "echo Base task with {{ arg1 }} and {{ arg2 }}"
+
+    [tool.pixi.tasks.partial-override]
+    # Only override the first argument
+    depends-on = [{ "task" = "base-task", "args" = ["override1"] }]
+    ```
 
 ```shell
 pixi run partial-override
@@ -241,9 +416,46 @@ pixi run partial-override
 
 For a dependent task to accept arguments to pass to the dependency, you can use the same syntax as passing arguments to the command:
 
-```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_tomls/task_arguments_partial.toml:project_tasks_with_arg"
-```
+=== "`pixi.toml`"
+    ```toml title="pixi.toml"
+    [tasks.base-task]
+    args = [
+      { "arg" = "arg1", "default" = "default1" }, # First argument with default
+      { "arg" = "arg2", "default" = "default2" }, # Second argument with default
+    ]
+    cmd = "echo Base task with {{ arg1 }} and {{ arg2 }}"
+
+    [tasks.partial-override]
+    # Only override the first argument
+    depends-on = [{ "task" = "base-task", "args" = ["override1"] }]
+
+    [tasks.partial-override-with-arg]
+    # Only override the first argument
+    args = [
+      { arg = "arg2", default = "new-default2" }, # Argument with new default
+    ]
+    depends-on = [{ task = "base-task", args = ["override1", "{{ arg2 }}"] }]
+    ```
+=== "`pyproject.toml`"
+    ```toml title="pyproject.toml"
+    [tool.pixi.tasks.base-task]
+    args = [
+      { "arg" = "arg1", "default" = "default1" }, # First argument with default
+      { "arg" = "arg2", "default" = "default2" }, # Second argument with default
+    ]
+    cmd = "echo Base task with {{ arg1 }} and {{ arg2 }}"
+
+    [tool.pixi.tasks.partial-override]
+    # Only override the first argument
+    depends-on = [{ "task" = "base-task", "args" = ["override1"] }]
+
+    [tool.pixi.tasks.partial-override-with-arg]
+    # Only override the first argument
+    args = [
+      { arg = "arg2", default = "new-default2" }, # Argument with new default
+    ]
+    depends-on = [{ task = "base-task", args = ["override1", "{{ arg2 }}"] }]
+    ```
 
 ```shell
 pixi run partial-override-with-arg
@@ -258,15 +470,59 @@ Task commands support MiniJinja templating syntax for accessing and formatting a
 
 Basic syntax for using an argument in your command:
 
-```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_tomls/task_minijinja_simple.toml:tasks"
-```
+=== "`pixi.toml`"
+    ```toml title="pixi.toml"
+    [tasks]
+    greet = { cmd = "echo Hello, {{ name }}!", args = ["name"] }
+    ```
+=== "`pyproject.toml`"
+    ```toml title="pyproject.toml"
+    [tool.pixi.tasks]
+    greet = { cmd = "echo Hello, {{ name }}!", args = ["name"] }
+    ```
 
 You can also use filters to transform argument values:
 
-```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_workspaces/minijinja/task_args/pixi.toml:tasks"
-```
+=== "`pixi.toml`"
+    ```toml title="pixi.toml"
+    [tasks]
+    # The arg `text`, converted to uppercase, will be printed.
+    task1 = { cmd = "echo {{ text | upper }}", args = ["text"] }
+    # If arg `text` contains 'hoi', it will be converted to lowercase. The result will be printed.
+    task2 = { cmd = "echo {{ text | lower if 'hoi' in text }}", args = [
+      { arg = "text", default = "" },
+    ] }
+    # With `a` and `b` being strings, they will be appended and then printed.
+    task3 = { cmd = "echo {{ a + b }}", args = ["a", { arg = "b", default = "!" }] }
+    # If the string "win" is in arg `platform`, "windows" will be printed, otherwise "unix".
+    task4 = { cmd = """echo {% if "win" in platform  %}windows{% else %}unix{% endif %}""", args = [
+      "platform",
+    ] }
+    # `names` will be split by whitespace and then every name will be printed separately
+    task5 = { cmd = "{% for name in names | split %} echo {{ name }};{% endfor %}", args = [
+      "names",
+    ] }
+    ```
+=== "`pyproject.toml`"
+    ```toml title="pyproject.toml"
+    [tool.pixi.tasks]
+    # The arg `text`, converted to uppercase, will be printed.
+    task1 = { cmd = "echo {{ text | upper }}", args = ["text"] }
+    # If arg `text` contains 'hoi', it will be converted to lowercase. The result will be printed.
+    task2 = { cmd = "echo {{ text | lower if 'hoi' in text }}", args = [
+      { arg = "text", default = "" },
+    ] }
+    # With `a` and `b` being strings, they will be appended and then printed.
+    task3 = { cmd = "echo {{ a + b }}", args = ["a", { arg = "b", default = "!" }] }
+    # If the string "win" is in arg `platform`, "windows" will be printed, otherwise "unix".
+    task4 = { cmd = """echo {% if "win" in platform  %}windows{% else %}unix{% endif %}""", args = [
+      "platform",
+    ] }
+    # `names` will be split by whitespace and then every name will be printed separately
+    task5 = { cmd = "{% for name in names | split %} echo {{ name }};{% endfor %}", args = [
+      "names",
+    ] }
+    ```
 
 For more information about available filters and template syntax, see the [MiniJinja documentation](https://docs.rs/minijinja/latest/minijinja/filters/index.html).
 
@@ -280,9 +536,46 @@ A task name follows these rules:
 
 Hiding tasks can be useful if your project defines many tasks but your users only need to use a subset of them.
 
-```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_tomls/task_visibility.toml:project_tasks"
-```
+=== "`pixi.toml`"
+    ```toml title="pixi.toml"
+    # Hidden task that is only intended to be used by other tasks
+    [tasks._git-clone]
+    args = ["url"]
+    cmd = "echo git clone {{ url }}"
+
+    # Hidden task that clones a dependency
+    [tasks._clone-subproject]
+    depends-on = [
+      { task = "_git-clone", args = [
+        "https://git.hub/org/subproject.git",
+      ] },
+    ]
+
+    # Task to build the project which depends on cloning a dependency
+    [tasks.build]
+    cmd = "echo Building project"
+    depends-on = ["_clone-subproject"]
+    ```
+=== "`pyproject.toml`"
+    ```toml title="pyproject.toml"
+    # Hidden task that is only intended to be used by other tasks
+    [tool.pixi.tasks._git-clone]
+    args = ["url"]
+    cmd = "echo git clone {{ url }}"
+
+    # Hidden task that clones a dependency
+    [tool.pixi.tasks._clone-subproject]
+    depends-on = [
+      { task = "_git-clone", args = [
+        "https://git.hub/org/subproject.git",
+      ] },
+    ]
+
+    # Task to build the project which depends on cloning a dependency
+    [tool.pixi.tasks.build]
+    cmd = "echo Building project"
+    depends-on = ["_clone-subproject"]
+    ```
 
 ## Caching
 
@@ -300,9 +593,62 @@ If all of these conditions are met, Pixi will not run the task again and instead
 
 Inputs and outputs can be specified as globs, which will be expanded to all matching files. You can also use MiniJinja templates in your `inputs` and `outputs` fields to parameterize the paths, making tasks more reusable:
 
-```toml title="pixi.toml"
---8<-- "docs/source_files/pixi_tomls/tasks_minijinja_inputs_outputs.toml:tasks"
-```
+=== "`pixi.toml`"
+    ```toml title="pixi.toml"
+    [tasks]
+    # This task will only run if the `main.py` file has changed.
+    run = { cmd = "python main.py", inputs = ["main.py"] }
+
+    # This task will remember the result of the `curl` command and not run it again if the file `data.csv` already exists.
+    download_data = { cmd = "curl -o data.csv https://example.com/data.csv", outputs = [
+      "data.csv",
+    ] }
+
+    # This task will only run if the `src` directory has changed and will remember the result of the `make` command.
+    build = { cmd = "make", inputs = [
+      "src/*.cpp",
+      "include/*.hpp",
+    ], outputs = [
+      "build/app.exe",
+    ] }
+
+    # Process a specific file based on the provided argument
+    process-file = { cmd = "python process.py inputs/{{ filename }}.txt --output outputs/{{ filename }}.processed", args = [
+      "filename",
+    ], inputs = [
+      "inputs/{{ filename }}.txt",
+    ], outputs = [
+      "outputs/{{ filename }}.processed",
+    ] }
+    ```
+=== "`pyproject.toml`"
+    ```toml title="pyproject.toml"
+    [tool.pixi.tasks]
+    # This task will only run if the `main.py` file has changed.
+    run = { cmd = "python main.py", inputs = ["main.py"] }
+
+    # This task will remember the result of the `curl` command and not run it again if the file `data.csv` already exists.
+    download_data = { cmd = "curl -o data.csv https://example.com/data.csv", outputs = [
+      "data.csv",
+    ] }
+
+    # This task will only run if the `src` directory has changed and will remember the result of the `make` command.
+    build = { cmd = "make", inputs = [
+      "src/*.cpp",
+      "include/*.hpp",
+    ], outputs = [
+      "build/app.exe",
+    ] }
+
+    # Process a specific file based on the provided argument
+    process-file = { cmd = "python process.py inputs/{{ filename }}.txt --output outputs/{{ filename }}.processed", args = [
+      "filename",
+    ], inputs = [
+      "inputs/{{ filename }}.txt",
+    ], outputs = [
+      "outputs/{{ filename }}.processed",
+    ] }
+    ```
 
 When using template variables in inputs/outputs, Pixi expands the templates using the provided arguments or environment variables, and uses the resolved paths for caching decisions. This allows you to create generic tasks that can handle different files without duplicating task configurations:
 
@@ -328,10 +674,17 @@ pixi run -v start
 You can set environment variables for a task.
 These are seen as "default" values for the variables as you can overwrite them from the shell.
 
-```toml title="pixi.toml"
-[tasks]
-echo = { cmd = "echo $ARGUMENT", env = { ARGUMENT = "hello" } }
-```
+=== "`pixi.toml`"
+    ```toml title="pixi.toml"
+    [tasks]
+    echo = { cmd = "echo $ARGUMENT", env = { ARGUMENT = "hello" } }
+    ```
+=== "`pyproject.toml`"
+    ```toml title="pyproject.toml"
+    [tool.pixi.tasks]
+    echo = { cmd = "echo $ARGUMENT", env = { ARGUMENT = "hello" } }
+    ```
+
 If you run `pixi run echo` it will output `hello`.
 When you set the environment variable `ARGUMENT` before running the task, it will use that value instead.
 
@@ -346,10 +699,16 @@ These variables are not shared over tasks, so you need to define these for every
 !!! note "Extend instead of overwrite"
     If you use the same environment variable in the value as in the key of the map you will also overwrite the variable.
     For example overwriting a `PATH`
-    ```toml title="pixi.toml"
-    [tasks]
-    echo = { cmd = "echo $PATH", env = { PATH = "/tmp/path:$PATH" } }
-    ```
+    === "`pixi.toml`"
+        ```toml title="pixi.toml"
+        [tasks]
+        echo = { cmd = "echo $PATH", env = { PATH = "/tmp/path:$PATH" } }
+        ```
+    === "`pyproject.toml`"
+        ```toml title="pyproject.toml"
+        [tool.pixi.tasks]
+        echo = { cmd = "echo $PATH", env = { PATH = "/tmp/path:$PATH" } }
+        ```
     This will output `/tmp/path:/usr/bin:/bin` instead of the original `/usr/bin:/bin`.
 
 ## Clean environment
@@ -359,10 +718,17 @@ The environment will contain all variables set by the conda environment like `"C
 It will however include some default values from the shell, like:
 `"DISPLAY"`, `"LC_ALL"`, `"LC_TIME"`, `"LC_NUMERIC"`, `"LC_MEASUREMENT"`, `"SHELL"`, `"USER"`, `"USERNAME"`, `"LOGNAME"`, `"HOME"`, `"HOSTNAME"`,`"TMPDIR"`, `"XPC_SERVICE_NAME"`, `"XPC_FLAGS"`
 
-```toml
-[tasks]
-clean_command = { cmd = "python run_in_isolated_env.py", clean-env = true}
-```
+=== "`pixi.toml`"
+    ```toml title="pixi.toml"
+    [tasks]
+    clean_command = { cmd = "python run_in_isolated_env.py", clean-env = true}
+    ```
+=== "`pyproject.toml`"
+    ```toml title="pyproject.toml"
+    [tool.pixi.tasks]
+    clean_command = { cmd = "python run_in_isolated_env.py", clean-env = true}
+    ```
+
 This setting can also be set from the command line with `pixi run --clean-env TASK_NAME`.
 
 !!! warning "`clean-env` not supported on Windows"
