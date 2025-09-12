@@ -225,6 +225,7 @@ format = "black ."
         Ok(total_size)
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     fn get_dir_size(&self, dir: &std::path::Path) -> Result<u64, Box<dyn std::error::Error>> {
         let mut total_size = 0;
         for entry in fs::read_dir(dir)? {
