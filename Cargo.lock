@@ -5101,6 +5101,7 @@ version = "0.1.0"
 dependencies = [
  "dashmap",
  "fs-err",
+ "ignore",
  "insta",
  "itertools 0.14.0",
  "memchr",
@@ -5109,6 +5110,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.16",
  "tokio",
+ "tracing",
  "wax",
 ]
 
