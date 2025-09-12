@@ -4,6 +4,7 @@ mod event_tree;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
+    ptr,
     str::FromStr,
 };
 
@@ -584,17 +585,23 @@ async fn source_build_cache_status_clear_works() {
     // Cached result should return the same Arc
     assert!(std::sync::Arc::ptr_eq(&first, &second));
 
+    // assert!(ptr::eq(&first, &second));
+
     // save address so we can compare them later
     let first_address = format!("{:p}", first);
+    let second_address = format!("{:p}", second);
+
+    eprintln!("first address: {first_address}");
+    eprintln!("second address: {second_address}");
 
     // now drop the cached entries to release the Arc
     // which will unlock the fd locks that we hold on the cache files
     drop(first);
     drop(second);
 
-    #[cfg(windows)]
-    // testing the theory of "drop releases the lock" is hard on windows
-    tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+    // #[cfg(windows)]
+    // // testing the theory of "drop releases the lock" is hard on windows
+    // tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
 
     // Clear and expect a fresh Arc on next query
     dispatcher.clear_filesystem_caches().await;
@@ -605,6 +612,9 @@ async fn source_build_cache_status_clear_works() {
         .expect("query succeeds");
 
     let third_address = format!("{:p}", third);
+
+    eprintln!("third address: {third_address}");
+
     assert_ne!(
         first_address, third_address,
         "expected different Arc addresses"
