@@ -251,35 +251,6 @@ impl WorkspaceMut {
             let pixi_spec =
                 PixiSpec::from_nameless_matchspec(nameless_spec.clone(), &channel_config);
 
-            // Check if the spec is trying to access an unavailable channel
-            if let PixiSpec::DetailedVersion(spec) = &pixi_spec {
-                if let Some(channel) = &spec.channel {
-                    let workspace = self.workspace();
-                    let workspace_channels = &workspace.workspace.value.workspace.channels;
-                    let config = workspace.channel_config();
-
-                    let found = workspace_channels.iter().any(|c| {
-                        c.channel.clone().into_base_url(&config)
-                            == channel.clone().into_base_url(&config)
-                    });
-
-                    if !found {
-                        let help_cmd = format!("pixi workspace channel add {}", channel);
-                        let help_msg = format!(
-                            "To add the missing channel to this workspace use:\n\n  {}",
-                            console::style(help_cmd).bold(),
-                        );
-
-                        miette::bail!(
-                            help = help_msg,
-                            "The channel `{}` for dependency `{}` is unavailable in this workspace.",
-                            channel.as_str(),
-                            name.as_source(),
-                        );
-                    }
-                }
-            }
-
             let added = self.manifest().add_dependency(
                 &name,
                 &pixi_spec,
