@@ -30,9 +30,6 @@ jobs:
           cache-target: release
           bins: cargo-codspeed
 
-      - name: Install pixi
-        run: cargo install --path crates/pixi
-
       - name: Build the benchmark target(s)
         run: cargo codspeed build -p pixi_bench
 
