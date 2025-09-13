@@ -381,7 +381,7 @@ impl WorkspaceMut {
                 }) = e.downcast_ref::<SolveCondaEnvironmentError>()
                 {
                     let help_msg = format!(
-                        "help: To add the missing channel to this workspace, use:\n\n  {}",
+                        "help: To add the missing channel to a workspace, use:\n\n  {}",
                         console::style(format!("pixi workspace channel add {}\n", channel)).bold(),
                     );
                     return e.wrap_err(help_msg);
