@@ -5,11 +5,13 @@ use std::{
     sync::Arc,
 };
 
+use crate::lock_file::SolveCondaEnvironmentError;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, NamedSource};
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{Requirement, VersionOrUrl::VersionSpecifier};
+use pixi_command_dispatcher::{CommandDispatcherError, SolvePixiEnvironmentError};
 use pixi_config::PinningStrategy;
 use pixi_manifest::{
     DependencyOverwriteBehavior, FeatureName, FeaturesExt, HasFeaturesIter, LoadManifestsError,
@@ -359,13 +361,34 @@ impl WorkspaceMut {
             command_dispatcher,
             glob_hash_cache,
             io_concurrency_limit,
-        } = UpdateContext::builder(self.workspace())
-            .with_lock_file(unlocked_lock_file)
-            .with_no_install(no_install || dry_run)
-            .finish()
-            .await?
-            .update()
-            .await?;
+        } =
+            UpdateContext::builder(self.workspace())
+                .with_lock_file(unlocked_lock_file)
+                .with_no_install(no_install || dry_run)
+                .finish()
+                .await?
+                .update()
+                .await
+                .map_err(|e| {
+                    // If it fails due to a missing channel, add a help message
+                    // about `pixi workspace channel add`
+                    if let Some(SolveCondaEnvironmentError::SolveFailed {
+                        source:
+                            CommandDispatcherError::Failed(
+                                SolvePixiEnvironmentError::MissingChannelError(_, channel),
+                            ),
+                        ..
+                    }) = e.downcast_ref::<SolveCondaEnvironmentError>()
+                    {
+                        let help_msg = format!(
+                            "help: To add the missing channel to this workspace use:\n\n  {}",
+                            console::style(format!("pixi workspace channel add {}", channel))
+                                .bold(),
+                        );
+                        return e.wrap_err(help_msg);
+                    }
+                    e
+                })?;
 
         let mut implicit_constraints = HashMap::new();
         if !conda_specs_to_add_constraints_for.is_empty() {

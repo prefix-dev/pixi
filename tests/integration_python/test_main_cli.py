@@ -1739,8 +1739,7 @@ def test_add_url_no_channel(pixi: Path, tmp_pixi_workspace: Path) -> None:
             tmp_pixi_workspace,
         ],
         expected_exit_code=ExitCode.FAILURE,
-        # stderr_contains="pixi workspace channel add https://repo.prefix.dev/bioconda",
-        stderr_contains="unavailable channel 'https://repo.prefix.dev/bioconda/'",
+        stderr_contains="pixi workspace channel add https://repo.prefix.dev/bioconda",
     )
     verify_cli_command(
         [
