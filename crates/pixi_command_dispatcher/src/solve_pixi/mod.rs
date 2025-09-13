@@ -243,7 +243,7 @@ impl PixiEnvironmentSpec {
 
                     if !channels.iter().any(|c| c == &base_url) {
                         return Err(CommandDispatcherError::Failed(
-                            SolvePixiEnvironmentError::MissingChannelError(
+                            SolvePixiEnvironmentError::MissingChannel(
                                 pkg.as_normalized().to_string(),
                                 base_url,
                             ),
@@ -279,7 +279,7 @@ pub enum SolvePixiEnvironmentError {
     ParseChannelError(#[from] ParseChannelError),
 
     #[error("Package '{0}' requested unavailable channel '{1}'")]
-    MissingChannelError(String, ChannelUrl),
+    MissingChannel(String, ChannelUrl),
 }
 
 impl Borrow<dyn Diagnostic> for Box<SolvePixiEnvironmentError> {

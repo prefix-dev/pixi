@@ -361,34 +361,33 @@ impl WorkspaceMut {
             command_dispatcher,
             glob_hash_cache,
             io_concurrency_limit,
-        } =
-            UpdateContext::builder(self.workspace())
-                .with_lock_file(unlocked_lock_file)
-                .with_no_install(no_install || dry_run)
-                .finish()
-                .await?
-                .update()
-                .await
-                .map_err(|e| {
-                    // If it fails due to a missing channel, add a help message
-                    // about `pixi workspace channel add`
-                    if let Some(SolveCondaEnvironmentError::SolveFailed {
-                        source:
-                            CommandDispatcherError::Failed(
-                                SolvePixiEnvironmentError::MissingChannelError(_, channel),
-                            ),
-                        ..
-                    }) = e.downcast_ref::<SolveCondaEnvironmentError>()
-                    {
-                        let help_msg = format!(
-                            "help: To add the missing channel to this workspace use:\n\n  {}",
-                            console::style(format!("pixi workspace channel add {}", channel))
-                                .bold(),
-                        );
-                        return e.wrap_err(help_msg);
-                    }
-                    e
-                })?;
+        } = UpdateContext::builder(self.workspace())
+            .with_lock_file(unlocked_lock_file)
+            .with_no_install(no_install || dry_run)
+            .finish()
+            .await?
+            .update()
+            .await
+            .map_err(|e| {
+                // If it fails due to a missing channel, add a help message
+                // about `pixi workspace channel add`
+                if let Some(SolveCondaEnvironmentError::SolveFailed {
+                    source:
+                        CommandDispatcherError::Failed(SolvePixiEnvironmentError::MissingChannel(
+                            _,
+                            channel,
+                        )),
+                    ..
+                }) = e.downcast_ref::<SolveCondaEnvironmentError>()
+                {
+                    let help_msg = format!(
+                        "help: To add the missing channel to this workspace, use:\n\n  {}",
+                        console::style(format!("pixi workspace channel add {}\n", channel)).bold(),
+                    );
+                    return e.wrap_err(help_msg);
+                }
+                e
+            })?;
 
         let mut implicit_constraints = HashMap::new();
         if !conda_specs_to_add_constraints_for.is_empty() {
