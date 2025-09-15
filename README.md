@@ -305,13 +305,13 @@ Global Options:
       --no-progress    Hide all progress bars, always turned on if stderr is not a terminal [env: PIXI_NO_PROGRESS=]
 ```
 
-## Creating a Pixi project
+## Creating a Pixi workspace
 
-Initialize a new project and navigate to the project directory
+Initialize a new workspace and navigate to the workspace directory
 
 ```
-pixi init myproject
-cd myproject
+pixi init myworkspace
+cd myworkspace
 ```
 
 Add the dependencies you want to use
@@ -333,6 +333,8 @@ pixi shell
 cowpy "Thanks for using pixi"
 exit
 ```
+
+Check out https://pixi.sh/dev/first_workspace/ for a more detailed introduction to workspaces.
 
 ## Installing a conda package globally
 
