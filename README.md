@@ -334,7 +334,7 @@ cowpy "Thanks for using pixi"
 exit
 ```
 
-Check out https://pixi.sh/latest/first_workspace/ for a more detailed introduction to workspaces.
+Check out https://pixi.sh/dev/first_workspace/ for a more detailed introduction to workspaces.
 
 ## Installing a conda package globally
 
