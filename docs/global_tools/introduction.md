@@ -64,7 +64,7 @@ Let's assume there's a C++ package we'd like to install globally from source.
 First, it needs to have a package manifest:
 
 ```toml title="pixi.toml"
-[package] 
+[package]
 name = "cpp_math"
 version = "0.1.0"
 
@@ -152,7 +152,9 @@ You can then load the completions in the startup script of your shell:
 
 ```bash title="~/.bashrc"
 # bash, default on most Linux distributions
-source ~/.pixi/completions/bash/*
+for file in ~/.pixi/completions/bash/*; do
+    [ -e "$file" ] && source "$file"
+done
 ```
 
 ```zsh title="~/.zshrc"
