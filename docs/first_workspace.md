@@ -72,13 +72,13 @@ Pixi will make sure it doesn't try to install the same package from both sources
 If you want to add them to your workspace you can do that with the `--pypi` flag:
 
 ```shell
-pixi add --pypi requests
+pixi add --pypi httpx
 ```
-This will add the `requests` package from PyPI to the workspace:
+This will add the `httpx` package from PyPI to the workspace:
 
 ```toml title="pixi.toml"
 [pypi-dependencies]
-httpx = ">=2.31.0,<3"
+httpx = ">=0.28.1,<0.29"
 ```
 
 To learn more about the differences between `conda` and PyPI, see [our Conda & PyPI concept documentation](./concepts/conda_pypi.md).
