@@ -452,7 +452,7 @@ async fn ensure_pixi_directory_and_gitignore(pixi_dir: &Path) -> miette::Result<
 }
 
 /// Specifies how the lock-file should be updated.
-#[derive(Debug, Default, PartialEq, Eq, Copy, Clone)]
+#[derive(Debug, Default, PartialEq, Eq, Copy, Clone, Deserialize, Serialize)]
 pub enum LockFileUsage {
     /// Update the lock-file if it is out of date.
     #[default]

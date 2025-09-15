@@ -20,7 +20,9 @@ pub use satisfiability::{
     EnvironmentUnsat, PlatformUnsat, verify_environment_satisfiability,
     verify_platform_satisfiability,
 };
-pub use update::{LockFileDerivedData, PackageFilterNames, ReinstallPackages, UpdateContext};
+pub use update::{
+    LockFileDerivedData, PackageFilterNames, ReinstallEnvironment, ReinstallPackages, UpdateContext,
+};
 pub use update::{UpdateLockFileOptions, UpdateMode};
 pub use utils::filter_lock_file;
 
