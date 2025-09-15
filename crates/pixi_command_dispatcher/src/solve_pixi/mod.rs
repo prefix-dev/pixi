@@ -10,7 +10,7 @@ use pixi_build_discovery::EnabledProtocols;
 use pixi_record::PixiRecord;
 use pixi_spec::{BinarySpec, PixiSpec, SourceSpec, SpecConversionError};
 use pixi_spec_containers::DependencyMap;
-use rattler_conda_types::{Channel, ChannelConfig, ChannelUrl, Platform};
+use rattler_conda_types::{Channel, ChannelConfig, ChannelUrl, ParseChannelError, Platform};
 use rattler_repodata_gateway::RepoData;
 use rattler_solve::{ChannelPriority, SolveStrategy};
 use reporter::WrappingGatewayReporter;
@@ -122,6 +122,8 @@ impl PixiEnvironmentSpec {
         let (source_specs, binary_specs) =
             Self::split_into_source_and_binary_requirements(self.dependencies);
 
+        Self::check_missing_channels(binary_specs.clone(), &self.channels, &self.channel_config)?;
+
         // Recursively collect the metadata of all the source specs.
         let CollectedSourceMetadata {
             source_repodata,
@@ -223,6 +225,36 @@ impl PixiEnvironmentSpec {
             }
         })
     }
+
+    /// Check that binary specs do not refer to inaccessible channels
+    fn check_missing_channels(
+        binary_specs: DependencyMap<rattler_conda_types::PackageName, BinarySpec>,
+        channels: &[ChannelUrl],
+        channel_config: &ChannelConfig,
+    ) -> Result<(), CommandDispatcherError<SolvePixiEnvironmentError>> {
+        for (pkg, spec) in binary_specs.iter_specs() {
+            if let BinarySpec::DetailedVersion(v) = spec {
+                if let Some(channel) = &v.channel {
+                    let base_url = channel
+                        .clone()
+                        .into_base_url(channel_config)
+                        .map_err(SolvePixiEnvironmentError::ParseChannelError)
+                        .map_err(CommandDispatcherError::Failed)?;
+
+                    if !channels.iter().any(|c| c == &base_url) {
+                        return Err(CommandDispatcherError::Failed(
+                            SolvePixiEnvironmentError::MissingChannel(MissingChannelError {
+                                package: pkg.as_normalized().to_string(),
+                                channel: base_url,
+                                advice: None,
+                            }),
+                        ));
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 /// An error that might be returned when solving a pixi environment.
@@ -243,6 +275,23 @@ pub enum SolvePixiEnvironmentError {
 
     #[error("detected a cyclic dependency:\n\n{0}")]
     Cycle(Cycle),
+
+    #[error(transparent)]
+    ParseChannelError(#[from] ParseChannelError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    MissingChannel(MissingChannelError),
+}
+
+/// An error for a missing channel in the solve request
+#[derive(Debug, Diagnostic, Error)]
+#[error("Package '{package}' requested unavailable channel '{channel}'")]
+pub struct MissingChannelError {
+    pub package: String,
+    pub channel: ChannelUrl,
+    #[help]
+    pub advice: Option<String>,
 }
 
 impl Borrow<dyn Diagnostic> for Box<SolvePixiEnvironmentError> {

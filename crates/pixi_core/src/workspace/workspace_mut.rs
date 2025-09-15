@@ -5,11 +5,15 @@ use std::{
     sync::Arc,
 };
 
+use crate::lock_file::SolveCondaEnvironmentError;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, NamedSource};
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{Requirement, VersionOrUrl::VersionSpecifier};
+use pixi_command_dispatcher::{
+    CommandDispatcherError, MissingChannelError, SolvePixiEnvironmentError::MissingChannel,
+};
 use pixi_config::PinningStrategy;
 use pixi_manifest::{
     DependencyOverwriteBehavior, FeatureName, FeaturesExt, HasFeaturesIter, LoadManifestsError,
@@ -251,35 +255,6 @@ impl WorkspaceMut {
             let pixi_spec =
                 PixiSpec::from_nameless_matchspec(nameless_spec.clone(), &channel_config);
 
-            // Check if the spec is trying to access an unavailable channel
-            if let PixiSpec::DetailedVersion(spec) = &pixi_spec {
-                if let Some(channel) = &spec.channel {
-                    let workspace = self.workspace();
-                    let workspace_channels = &workspace.workspace.value.workspace.channels;
-                    let config = workspace.channel_config();
-
-                    let found = workspace_channels.iter().any(|c| {
-                        c.channel.clone().into_base_url(&config)
-                            == channel.clone().into_base_url(&config)
-                    });
-
-                    if !found {
-                        let help_cmd = format!("pixi workspace channel add {}", channel);
-                        let help_msg = format!(
-                            "To add the missing channel to this workspace use:\n\n  {}",
-                            console::style(help_cmd).bold(),
-                        );
-
-                        miette::bail!(
-                            help = help_msg,
-                            "The channel `{}` for dependency `{}` is unavailable in this workspace.",
-                            channel.as_str(),
-                            name.as_source(),
-                        );
-                    }
-                }
-            }
-
             let added = self.manifest().add_dependency(
                 &name,
                 &pixi_spec,
@@ -394,7 +369,25 @@ impl WorkspaceMut {
             .finish()
             .await?
             .update()
-            .await?;
+            .await
+            .map_err(|mut e| {
+                if let Some(SolveCondaEnvironmentError::SolveFailed {
+                    source:
+                        CommandDispatcherError::Failed(MissingChannel(MissingChannelError {
+                            package: _,
+                            channel,
+                            advice,
+                        })),
+                    ..
+                }) = e.downcast_mut::<SolveCondaEnvironmentError>()
+                {
+                    *advice = Some(format!(
+                        "To add the missing channel to a workspace, use:\n\n  {}",
+                        console::style(format!("pixi workspace channel add {}", channel)).bold(),
+                    ));
+                }
+                e
+            })?;
 
         let mut implicit_constraints = HashMap::new();
         if !conda_specs_to_add_constraints_for.is_empty() {

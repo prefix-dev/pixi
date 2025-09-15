@@ -1730,6 +1730,8 @@ def test_add_url_no_channel(pixi: Path, tmp_pixi_workspace: Path) -> None:
     add a `url::pkg` where `url` is not a channel of the workspace.
     """
     verify_cli_command([pixi, "init", tmp_pixi_workspace])
+
+    # helpful error for missing channel
     verify_cli_command(
         [
             pixi,
@@ -1741,6 +1743,7 @@ def test_add_url_no_channel(pixi: Path, tmp_pixi_workspace: Path) -> None:
         expected_exit_code=ExitCode.FAILURE,
         stderr_contains="pixi workspace channel add https://repo.prefix.dev/bioconda",
     )
+
     verify_cli_command(
         [
             pixi,
@@ -1752,6 +1755,7 @@ def test_add_url_no_channel(pixi: Path, tmp_pixi_workspace: Path) -> None:
             tmp_pixi_workspace,
         ],
     )
+    # successful after adding the channel
     verify_cli_command(
         [
             pixi,
@@ -1761,4 +1765,77 @@ def test_add_url_no_channel(pixi: Path, tmp_pixi_workspace: Path) -> None:
             tmp_pixi_workspace,
         ],
         stderr_contains="Added https://repo.prefix.dev/bioconda::snakemake-minimal",
+    )
+
+    # no message for initially unused feature...
+    verify_cli_command(
+        [
+            pixi,
+            "add",
+            "https://prefix.dev/conda-forge::xz",
+            "--feature=prefix",
+            "--manifest-path",
+            tmp_pixi_workspace,
+        ],
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "environment",
+            "add",
+            "prefix",
+            "--feature=prefix",
+            "--manifest-path",
+            tmp_pixi_workspace,
+        ],
+    )
+    # ...but decent message on install:
+    verify_cli_command(
+        [
+            pixi,
+            "install",
+            "--environment=prefix",
+            "--manifest-path",
+            tmp_pixi_workspace,
+        ],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="unavailable channel 'https://prefix.dev/conda-forge/'",
+    )
+    # and helpful message now feature is used:
+    verify_cli_command(
+        [
+            pixi,
+            "add",
+            "https://prefix.dev/conda-forge::libzlib",
+            "--feature=prefix",
+            "--manifest-path",
+            tmp_pixi_workspace,
+        ],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="pixi workspace channel add https://prefix.dev/conda-forge",
+    )
+
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "channel",
+            "add",
+            "--feature=prefix",
+            "https://prefix.dev/conda-forge",
+            "--manifest-path",
+            tmp_pixi_workspace,
+        ],
+    )
+    # successful after adding the channel
+    verify_cli_command(
+        [
+            pixi,
+            "install",
+            "--environment=prefix",
+            "--manifest-path",
+            tmp_pixi_workspace,
+        ],
+        stderr_contains="The prefix environment has been installed",
     )
