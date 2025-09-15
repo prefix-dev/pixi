@@ -386,12 +386,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../../first_project/" class="md-nav__link">
+      <a href="../../first_workspace/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    First Project
+    First Workspace
     
   </span>
   
@@ -609,9 +609,9 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#managing-both-conda-and-pypi-dependencies-in-pixi" class="md-nav__link">
+  <a href="#managing-both-conda-and-pypi-dependencies" class="md-nav__link">
     <span class="md-ellipsis">
-      Managing both conda and PyPI dependencies in pixi
+      Managing both Conda and PyPI dependencies
     </span>
   </a>
   
@@ -2881,9 +2881,9 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#managing-both-conda-and-pypi-dependencies-in-pixi" class="md-nav__link">
+  <a href="#managing-both-conda-and-pypi-dependencies" class="md-nav__link">
     <span class="md-ellipsis">
-      Managing both conda and PyPI dependencies in pixi
+      Managing both Conda and PyPI dependencies
     </span>
   </a>
   
@@ -3004,7 +3004,7 @@
 
   <h1>Basic Usage</h1>
 
-<p>In this tutorial, we will show you how to create a simple Python project with pixi.
+<p>In this tutorial, we will show you how to create a simple Python project with Pixi.
 We will show some of the features that Pixi provides, that are currently not a part of <code>pdm</code>, <code>poetry</code> etc.</p>
 <h2 id="why-is-this-useful">Why is this useful?<a class="headerlink" href="#why-is-this-useful" title="Permanent link">#</a></h2>
 <p>Pixi builds upon the conda ecosystem, which allows you to create a Python environment with all the dependencies you need.
@@ -3058,7 +3058,7 @@ In this tutorial, we will use the <code>pyproject.toml</code> format because it 
 </span></code></pre></div>
 <p>The <code>channels</code> and <code>platforms</code> are added to the <code>[tool.pixi.workspace]</code> section.
 Channels like <code>conda-forge</code> manage packages similar to PyPI but allow for different packages across languages.
-The keyword <code>platforms</code> determines what platform the project supports.</p>
+The keyword <code>platforms</code> determines which platforms the workspace supports.</p>
 <p>The <code>pixi_py</code> package itself is added as an <code>editable</code> dependency.
 This means that the package is installed in editable mode, so you can make changes to the package and see the changes reflected in the environment, without having to re-install the environment.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Editable installs</span>
@@ -3067,7 +3067,7 @@ This means that the package is installed in editable mode, so you can make chang
 </span></code></pre></div>
 <p>In pixi, unlike other package managers, this is explicitly stated in the <code>pyproject.toml</code> file.
 The main reason being so that you can choose which environment this package should be included in.</p>
-<h3 id="managing-both-conda-and-pypi-dependencies-in-pixi">Managing both conda and PyPI dependencies in pixi<a class="headerlink" href="#managing-both-conda-and-pypi-dependencies-in-pixi" title="Permanent link">#</a></h3>
+<h3 id="managing-both-conda-and-pypi-dependencies">Managing both Conda and PyPI dependencies<a class="headerlink" href="#managing-both-conda-and-pypi-dependencies" title="Permanent link">#</a></h3>
 <p>Our projects usually depend on other packages.</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nb">cd</span><span class="w"> </span>pixi-py<span class="w"> </span><span class="c1"># Move into the project directory</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>pixi<span class="w"> </span>add<span class="w"> </span>black
@@ -3112,7 +3112,7 @@ For example, <code>flask</code> makes the <code>async</code> dependencies option
 If you want to do it manually, you can run:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>pixi<span class="w"> </span>install
 </span></code></pre></div>
-<p>We now have a new directory called <code>.pixi</code> in the project root.
+<p>We now have a new directory called <code>.pixi</code> in the workspace root.
 The environment is a Conda environment with all the Conda and PyPI dependencies installed into it.</p>
 <p>The environment is always a result of the <code>pixi.lock</code> file, which is generated from the <code>pyproject.toml</code> file.
 This file contains the exact versions of the dependencies that were installed in the environment across platforms.</p>
@@ -3327,7 +3327,7 @@ Now results in:
 <p>And it still works!</p>
 <h2 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">#</a></h2>
 <p>In this tutorial, you've seen how easy it is to use a <code>pyproject.toml</code> to manage your Pixi dependencies and environments.
-We have also explored how to use PyPI and conda dependencies seamlessly together in the same project and install optional dependencies to manage Python packages.</p>
+We have also explored how to use PyPI and conda dependencies seamlessly together in the same workspace and install optional dependencies to manage Python packages.</p>
 <p>Hopefully, this provides a flexible and powerful way to manage your Python projects and a fertile base for further exploration with Pixi.</p>
 <p>Thanks for reading! Happy Coding 🚀</p>
 <p>Any questions? Feel free to reach out or share this tutorial on <a href="https://twitter.com/prefix_dev">X</a>, <a href="https://discord.gg/kKV8ZxyzY4">join our Discord</a>, send us an <a href="mailto:hi@prefix.dev">e-mail</a> or follow our <a href="https://github.com/prefix-dev">GitHub</a>.</p>

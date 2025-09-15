@@ -1,13 +1,13 @@
 `conda-deny` in one command:
 
-In your favorite `pixi` project, run:
+In your favorite `pixi` workspace, run:
 
 ```bash
 pixi exec conda-deny check --osi
 
 ```
 
-This will check your project for license compliance against the list of [OSI approved licenses](https://opensource.org/licenses).
+This will check your workspace for license compliance against the list of [OSI approved licenses](https://opensource.org/licenses).
 
 [conda-deny](https://github.com/Quantco/conda-deny) is a CLI tool for checking software environment dependencies for license compliance. Compliance is checked with regard to an allowlist of licenses provided by the user.
 
@@ -47,7 +47,7 @@ ignore-packages = [
 
 ```
 
-After the installation, you can run `conda-deny check` in your project. This checks the dependencies defined by your `pixi.lock` against your allowlist.
+After the installation, you can run `conda-deny check` in your workspace. This checks the dependencies defined by your `pixi.lock` against your allowlist.
 
 ### 🔒 Authorized access to allowlist
 

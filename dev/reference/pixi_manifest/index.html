@@ -386,12 +386,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../../first_project/" class="md-nav__link">
+      <a href="../../first_workspace/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    First Project
+    First Workspace
     
   </span>
   
@@ -3786,7 +3786,7 @@ If the field is not present for a given distribution, the distribution will be t
 <p>When build variants are specified, Pixi will:</p>
 <ol>
 <li><strong>Create variant combinations</strong>: Generate all possible combinations of the specified variants</li>
-<li><strong>Build separate packages</strong>: Create distinct package builds for each variant combination  </li>
+<li><strong>Build separate packages</strong>: Create distinct package builds for each variant combination</li>
 <li><strong>Resolve dependencies</strong>: Ensure each variant resolves with compatible dependency versions</li>
 <li><strong>Generate unique build strings</strong>: Each variant gets a unique build identifier in the package name</li>
 </ol>
@@ -3800,7 +3800,7 @@ If the field is not present for a given distribution, the distribution will be t
 </span><span id="__span-23-6"><a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;3.11.*&quot;</span><span class="p">]</span><span class="w">  </span><span class="c1"># Only Python 3.11 on Windows</span>
 </span><span id="__span-23-7"><a id="__codelineno-23-7" name="__codelineno-23-7" href="#__codelineno-23-7"></a><span class="n">c_compiler</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;vs2019&quot;</span><span class="p">]</span>
 </span><span id="__span-23-8"><a id="__codelineno-23-8" name="__codelineno-23-8" href="#__codelineno-23-8"></a>
-</span><span id="__span-23-9"><a id="__codelineno-23-9" name="__codelineno-23-9" href="#__codelineno-23-9"></a><span class="c1"># Linux-specific variants  </span>
+</span><span id="__span-23-9"><a id="__codelineno-23-9" name="__codelineno-23-9" href="#__codelineno-23-9"></a><span class="c1"># Linux-specific variants</span>
 </span><span id="__span-23-10"><a id="__codelineno-23-10" name="__codelineno-23-10" href="#__codelineno-23-10"></a><span class="k">[workspace.target.linux-64.build-variants]</span>
 </span><span id="__span-23-11"><a id="__codelineno-23-11" name="__codelineno-23-11" href="#__codelineno-23-11"></a><span class="n">c_compiler</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;gcc&quot;</span><span class="p">]</span>
 </span><span id="__span-23-12"><a id="__codelineno-23-12" name="__codelineno-23-12" href="#__codelineno-23-12"></a><span class="n">c_compiler_version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;11.4&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;13.0&quot;</span><span class="p">]</span>
@@ -4339,7 +4339,7 @@ Please keep that in mind when you use it for your workspaces.
 </div>
 <p>The package section can be added
 to a workspace manifest to define the package that is built by Pixi.</p>
-<p>A package section needs to be inside a <code>workspace</code>, 
+<p>A package section needs to be inside a <code>workspace</code>,
 either in the same manifest file as the <code>[workspace]</code> table or in a sub folder <code>pixi.toml</code>/<code>pyproject.toml</code> file.</p>
 <p>These packages will be built into a conda package that can be installed into a conda environment.
 The package section is defined using the following fields:</p>
@@ -4379,7 +4379,7 @@ The package section is defined using the following fields:</p>
 <p class="admonition-title">Workspace inheritance</p>
 <p>Most extra fields can be inherited from the workspace manifest.
 This means that you can define the <code>description</code>, <code>authors</code>, <code>license</code> in the workspace manifest, and they will be inherited by the package manifest.
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-56-1"><a id="__codelineno-56-1" name="__codelineno-56-1" href="#__codelineno-56-1"></a><span class="k">[workspace]</span><span class="w">    </span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-56-1"><a id="__codelineno-56-1" name="__codelineno-56-1" href="#__codelineno-56-1"></a><span class="k">[workspace]</span>
 </span><span id="__span-56-2"><a id="__codelineno-56-2" name="__codelineno-56-2" href="#__codelineno-56-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my-workspace&quot;</span>
 </span><span id="__span-56-3"><a id="__codelineno-56-3" name="__codelineno-56-3" href="#__codelineno-56-3"></a>
 </span><span id="__span-56-4"><a id="__codelineno-56-4" name="__codelineno-56-4" href="#__codelineno-56-4"></a><span class="k">[package]</span>

@@ -386,12 +386,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../../first_project/" class="md-nav__link">
+      <a href="../../first_workspace/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    First Project
+    First Workspace
     
   </span>
   
@@ -2847,7 +2847,7 @@ This document compares key commands and concepts between these tools, highlighti
 With <code>pixi</code>, you'll experience a workspace-based workflow, enhancing your development process, and allowing for easy sharing of your work.</p>
 <h2 id="why-pixi">Why Pixi?<a class="headerlink" href="#why-pixi" title="Permanent link">#</a></h2>
 <p><code>Pixi</code> builds upon the foundation of the conda ecosystem, introducing a workspace-centric approach rather than focusing solely on environments.
-This shift towards projects offers a more organized and efficient way to manage dependencies and run code, tailored to modern development practices.</p>
+This shift towards workspaces offers a more organized and efficient way to manage dependencies and run code, tailored to modern development practices.</p>
 <h2 id="key-differences-at-a-glance">Key Differences at a Glance<a class="headerlink" href="#key-differences-at-a-glance" title="Permanent link">#</a></h2>
 <table>
 <thead>
@@ -2871,7 +2871,7 @@ This shift towards projects offers a more organized and efficient way to manage 
 <tr>
 <td>Activating an Environment</td>
 <td><code>conda activate myenv</code></td>
-<td><code>pixi shell</code> within the project directory</td>
+<td><code>pixi shell</code> within the workspace directory</td>
 </tr>
 <tr>
 <td>Deactivating an Environment</td>
@@ -2909,7 +2909,7 @@ This uses the <code>pixi shell-hook</code> which prints the activation script, w
 </span></code></pre></div></p>
 </details>
 <h2 id="environment-vs-workspace">Environment vs Workspace<a class="headerlink" href="#environment-vs-workspace" title="Permanent link">#</a></h2>
-<p><code>Conda</code> and <code>mamba</code> focus on managing environments, while <code>pixi</code> emphasizes projects.
+<p><code>Conda</code> and <code>mamba</code> focus on managing environments, while <code>pixi</code> emphasizes workspaces.
 In <code>pixi</code>, a workspace is a folder containing a <a href="../../reference/pixi_manifest/">manifest</a>(<code>pixi.toml</code>/<code>pyproject.toml</code>) file that describes the workspace, a <code>pixi.lock</code> lock-file that describes the exact dependencies, and a <code>.pixi</code> folder that contains the environment.</p>
 <p>This workspace-centric approach allows for easy sharing and collaboration, as the workspace folder contains all the necessary information to recreate the environment.
 It manages more than one environment for more than one platform in a single workspace, and allows for easy switching between them. (See <a href="../../workspace/multi_environment/">multiple environments</a>)</p>

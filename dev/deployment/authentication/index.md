@@ -165,7 +165,7 @@ pixi global install keyring --with keyrings.codeartifact
 
 For other registries, you will need to adapt these instructions to add the right keyring backend.
 
-#### Configuring your project to use keyring
+#### Configuring your workspace to use keyring
 
 Use keyring to store your credentials e.g:
 
@@ -221,7 +221,7 @@ extra-index-urls = ["https://aws@<your-domain>-<your-account>.d.codeartifact.<yo
 Either configure your [Global Config](../../reference/pixi_configuration/#pypi-config), or use the flag `--pypi-keyring-provider` which can either be set to `subprocess` (activated) or `disabled`:
 
 ```shell
-# From an existing pixi project
+# From an existing pixi workspace
 pixi install --pypi-keyring-provider subprocess
 
 ```

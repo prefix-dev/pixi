@@ -25,7 +25,7 @@ my_ros2_project
 
 ```
 
-The `pixi.toml` file is the manifest file for your project. It should look like this:
+The `pixi.toml` file is the manifest file for your workspace. It should look like this:
 
 pixi.toml
 
@@ -47,7 +47,7 @@ The `channels` you added to the `init` command are repositories of packages, you
 
 ## Add ROS 2 dependencies
 
-To use a Pixi project you don't need any dependencies on your system, all the dependencies you need should be added through pixi, so other users can use your project without any issues.
+To use a Pixi workspace you don't need any dependencies on your system, all the dependencies you need should be added through pixi, so other users can use your workspace without any issues.
 
 Let's start with the `turtlesim` example
 
@@ -56,7 +56,7 @@ pixi add ros-humble-desktop ros-humble-turtlesim
 
 ```
 
-This will add the `ros-humble-desktop` and `ros-humble-turtlesim` packages to your manifest. Depending on your internet speed this might take a minute, as it will also install ROS in your project folder (`.pixi`).
+This will add the `ros-humble-desktop` and `ros-humble-turtlesim` packages to your manifest. Depending on your internet speed this might take a minute, as it will also install ROS in your workspace folder (`.pixi`).
 
 Now run the `turtlesim` example.
 
@@ -132,7 +132,7 @@ scripts = ["install/setup.bat"]
 
 Multi platform support
 
-You can add multiple activation scripts for different platforms, so you can support multiple platforms with one project. Use the following example to add support for both Linux and Windows, using the [target](../../workspace/multi_platform_configuration/#activation) syntax.
+You can add multiple activation scripts for different platforms, so you can support multiple platforms with one workspace. Use the following example to add support for both Linux and Windows, using the [target](../../workspace/multi_platform_configuration/#activation) syntax.
 
 ```toml
 [workspace]
@@ -176,7 +176,7 @@ Advanced task usage
 Tasks are a powerful feature in pixi.
 
 - You can add [`depends-on`](../../workspace/advanced_tasks/#depends-on) to the tasks to create a task chain.
-- You can add [`cwd`](../../workspace/advanced_tasks/#working-directory) to the tasks to run the task in a different directory from the root of the project.
+- You can add [`cwd`](../../workspace/advanced_tasks/#working-directory) to the tasks to run the task in a different directory from the root of the workspace.
 - You can add [`inputs` and `outputs`](../../workspace/advanced_tasks/#caching) to the tasks to create a task that only runs when the inputs are changed.
 - You can use the [`target`](../../reference/pixi_manifest/#the-target-table) syntax to run specific tasks on specific machines.
 

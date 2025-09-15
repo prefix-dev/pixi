@@ -386,12 +386,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../first_project/" class="md-nav__link">
+      <a href="../../../first_workspace/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    First Project
+    First Workspace
     
   </span>
   
@@ -2808,10 +2808,10 @@
 
 <div class="admonition tip">
 <p class="admonition-title"><code>conda-deny</code> in one command:</p>
-<p>In your favorite <code>pixi</code> project, run:
+<p>In your favorite <code>pixi</code> workspace, run:
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>conda-deny<span class="w"> </span>check<span class="w"> </span>--osi
 </span></code></pre></div></p>
-<p>This will check your project for license compliance against the list of <a href="https://opensource.org/licenses">OSI approved licenses</a>.</p>
+<p>This will check your workspace for license compliance against the list of <a href="https://opensource.org/licenses">OSI approved licenses</a>.</p>
 </div>
 <p><a href="https://github.com/Quantco/conda-deny">conda-deny</a> is a CLI tool for checking software environment dependencies for license compliance.
 Compliance is checked with regard to an allowlist of licenses provided by the user.</p>
@@ -2844,7 +2844,7 @@ The tool expects a configuration in the following format:</p>
 </span><span id="__span-2-17"><a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="n">package</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;make&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;0.1.0&quot;</span><span class="w"> </span><span class="p">},</span>
 </span><span id="__span-2-18"><a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="p">]</span>
 </span></code></pre></div>
-<p>After the installation, you can run <code>conda-deny check</code> in your project.
+<p>After the installation, you can run <code>conda-deny check</code> in your workspace.
 This checks the dependencies defined by your <code>pixi.lock</code> against your allowlist.</p>
 <h3 id="authorized-access-to-allowlist">🔒 Authorized access to allowlist<a class="headerlink" href="#authorized-access-to-allowlist" title="Permanent link">#</a></h3>
 <p>If a Bearer Token is needed to access your allowlist, you can provide it using <code>CONDA_DENY_BEARER_TOKEN</code>.

@@ -2,7 +2,7 @@ Only on Unix-like systems
 
 The following approach only works on Unix-like systems (i.e. Linux and macOS) since Windows does not support shebang lines.
 
-For simple scripts, you can use [`pixi exec`](../../reference/cli/pixi/exec/) to run them directly without needing to take care of installing dependencies or setting up a virtual environment. This can be done by adding a [shebang line](<https://en.wikipedia.org/wiki/Shebang_(Unix)>) at the top of the script, which tells the system how to execute the script. Usually, a shebang line starts with `#!/usr/bin/env` followed by the name of the interpreter to use.
+For simple scripts, you can use [`pixi exec`](../../reference/cli/pixi/exec/) to run them directly without needing to take care of installing dependencies or setting up an environment. This can be done by adding a [shebang line](<https://en.wikipedia.org/wiki/Shebang_(Unix)>) at the top of the script, which tells the system how to execute the script. Usually, a shebang line starts with `#!/usr/bin/env` followed by the name of the interpreter to use.
 
 Instead of adding an interpreter, you can also just add `pixi exec` at the beginning of the script. The only requirement for your script is that you must have `pixi` installed on your system.
 

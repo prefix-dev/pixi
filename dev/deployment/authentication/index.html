@@ -386,12 +386,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../../first_project/" class="md-nav__link">
+      <a href="../../first_workspace/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    First Project
+    First Workspace
     
   </span>
   
@@ -2993,7 +2993,7 @@ When this environment variable is set, it provides the only source of authentica
 </div>
 </div>
 <p>For other registries, you will need to adapt these instructions to add the right keyring backend.</p>
-<h4 id="configuring-your-project-to-use-keyring">Configuring your project to use keyring<a class="headerlink" href="#configuring-your-project-to-use-keyring" title="Permanent link">#</a></h4>
+<h4 id="configuring-your-workspace-to-use-keyring">Configuring your workspace to use keyring<a class="headerlink" href="#configuring-your-workspace-to-use-keyring" title="Permanent link">#</a></h4>
 <div class="tabbed-set tabbed-alternate" data-tabs="2:4"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><input id="__tabbed_2_3" name="__tabbed_2" type="radio" /><input id="__tabbed_2_4" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Basic Auth</label><label for="__tabbed_2_2">Google Artifact Registry</label><label for="__tabbed_2_3">Azure DevOps Artifacts</label><label for="__tabbed_2_4">AWS CodeArtifact</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
@@ -3034,7 +3034,7 @@ When this environment variable is set, it provides the only source of authentica
 </div>
 <h4 id="installing-your-environment">Installing your environment<a class="headerlink" href="#installing-your-environment" title="Permanent link">#</a></h4>
 <p>Either configure your <a href="../../reference/pixi_configuration/#pypi-config">Global Config</a>, or use the flag <code>--pypi-keyring-provider</code> which can either be set to <code>subprocess</code> (activated) or <code>disabled</code>:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># From an existing pixi project</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># From an existing pixi workspace</span>
 </span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>pixi<span class="w"> </span>install<span class="w"> </span>--pypi-keyring-provider<span class="w"> </span>subprocess
 </span></code></pre></div>
 <h3 id="netrc-file"><code>.netrc</code> file<a class="headerlink" href="#netrc-file" title="Permanent link">#</a></h3>

@@ -386,12 +386,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../../first_project/" class="md-nav__link">
+      <a href="../../first_workspace/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    First Project
+    First Workspace
     
   </span>
   
@@ -679,9 +679,9 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#create-a-pixi-project" class="md-nav__link">
+  <a href="#create-a-pixi-workspace" class="md-nav__link">
     <span class="md-ellipsis">
-      Create a Pixi project.
+      Create a Pixi workspace
     </span>
   </a>
   
@@ -2788,9 +2788,9 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#create-a-pixi-project" class="md-nav__link">
+  <a href="#create-a-pixi-workspace" class="md-nav__link">
     <span class="md-ellipsis">
-      Create a Pixi project.
+      Create a Pixi workspace
     </span>
   </a>
   
@@ -2885,7 +2885,7 @@ The benefit would be within a rust workflow that you lock both rust and the C/Sy
 <li>You need to have <code>pixi</code> installed. If you haven't installed it yet, you can follow the instructions in the <a href="../../">installation guide</a>.
   The crux of this tutorial is to show you only need pixi!</li>
 </ul>
-<h2 id="create-a-pixi-project">Create a Pixi project.<a class="headerlink" href="#create-a-pixi-project" title="Permanent link">#</a></h2>
+<h2 id="create-a-pixi-workspace">Create a Pixi workspace<a class="headerlink" href="#create-a-pixi-workspace" title="Permanent link">#</a></h2>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>my_rust_project
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="nb">cd</span><span class="w"> </span>my_rust_project
 </span></code></pre></div>
@@ -2895,7 +2895,7 @@ The benefit would be within a rust workflow that you lock both rust and the C/Sy
 </span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>├──<span class="w"> </span>.gitignore
 </span><span id="__span-1-4"><a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>└──<span class="w"> </span>pixi.toml
 </span></code></pre></div>
-<p>The <code>pixi.toml</code> file is the manifest file for your project. It should look like this:</p>
+<p>The <code>pixi.toml</code> file is the manifest file for your workspace. It should look like this:</p>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[workspace]</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my_rust_project&quot;</span>
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;0.1.0&quot;</span>
@@ -2912,13 +2912,13 @@ The benefit would be within a rust workflow that you lock both rust and the C/Sy
 <li>The <code>platforms</code> is set to your system's platform by default. You can change it to any platform you want to support. e.g. <code>["linux-64", "osx-64", "osx-arm64", "win-64"]</code>.</li>
 </ol>
 <h2 id="add-rust-dependencies">Add Rust dependencies<a class="headerlink" href="#add-rust-dependencies" title="Permanent link">#</a></h2>
-<p>To use a Pixi project you don't need any dependencies on your system, all the dependencies you need should be added through pixi, so other users can use your project without any issues.
+<p>To use a Pixi workspace you don't need any dependencies on your system, all the dependencies you need should be added through pixi, so other users can use your workspace without any issues.
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>add<span class="w"> </span>rust
 </span></code></pre></div></p>
 <p>This will add the <code>rust</code> package to your <code>pixi.toml</code> file under <code>[dependencies]</code>.
 Which includes the <code>rust</code> toolchain, and <code>cargo</code>.</p>
 <h2 id="add-a-cargo-project">Add a <code>cargo</code> project<a class="headerlink" href="#add-a-cargo-project" title="Permanent link">#</a></h2>
-<p>Now that you have rust installed, you can create a <code>cargo</code> project in your <code>pixi</code> project.
+<p>Now that you have rust installed, you can create a <code>cargo</code> project in your <code>pixi</code> workspace.
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>cargo<span class="w"> </span>init
 </span></code></pre></div></p>
 <p><code>pixi run</code> is pixi's way to run commands in the <code>pixi</code> environment, it will make sure that the environment is set up correctly for the command to run.
@@ -2953,7 +2953,7 @@ Which you can simplify with a task again.
 This means that you need to have the Rust compiler installed on your system to use it.
 And possibly other dependencies that are not included in the <code>cargo</code> package manager.
 For example, you might need to install <code>openssl</code> or <code>libssl-dev</code> on your system to build a package.
-This is the case for <code>pixi</code> as well, but <code>pixi</code> will install these dependencies in your project folder, so you don't have to worry about them.</p>
+This is the case for <code>pixi</code> as well, but <code>pixi</code> will install these dependencies in your workspace folder, so you don't have to worry about them.</p>
 <p>Add the following dependencies to your cargo project:
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>cargo<span class="w"> </span>add<span class="w"> </span>git2
 </span></code></pre></div></p>

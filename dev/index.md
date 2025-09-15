@@ -47,7 +47,7 @@ ______________________________________________________________________
 | Supports Multiple Languages | ✅   | ✅    | ❌  | ❌     | ❌  |
 | Lockfiles                   | ✅   | ❌    | ❌  | ✅     | ✅  |
 | Task runner                 | ✅   | ❌    | ❌  | ❌     | ❌  |
-| Project Management          | ✅   | ❌    | ❌  | ✅     | ✅  |
+| Workspace Management        | ✅   | ❌    | ❌  | ✅     | ✅  |
 
 ______________________________________________________________________
 
@@ -169,7 +169,7 @@ More details on how to use Pixi with Python can be found in the [Python tutorial
 
    ```
 
-1. **Create your project:**
+1. **Create your workspace:**
 
    ```text
    pixi run cargo init

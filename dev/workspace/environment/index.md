@@ -1,4 +1,4 @@
-Pixi is a tool to manage virtual environments. This document explains what an environment looks like and how to use it.
+Pixi is a tool to manage environments. This document explains what an environment looks like and how to use it.
 
 ## Activation
 
@@ -217,7 +217,7 @@ For the `[pypi-dependencies]`, `uv` implements `sdist` building to retrieve the 
 
 ## Caching packages
 
-Pixi caches all previously downloaded packages in a cache folder. This cache folder is shared between all Pixi projects and globally installed tools.
+Pixi caches all previously downloaded packages in a cache folder. This cache folder is shared between all Pixi workspaces and globally installed tools.
 
 Normally the location would be the following platform-specific default cache folder:
 

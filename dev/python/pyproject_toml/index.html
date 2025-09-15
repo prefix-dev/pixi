@@ -386,12 +386,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../../first_project/" class="md-nav__link">
+      <a href="../../first_workspace/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    First Project
+    First Workspace
     
   </span>
   
@@ -2961,7 +2961,7 @@ Pixi understands that field and automatically adds the version to the dependenci
 </span></code></pre></div>
 <h2 id="dependency-section">Dependency section<a class="headerlink" href="#dependency-section" title="Permanent link">#</a></h2>
 <p>The <code>pyproject.toml</code> file supports the <code>dependencies</code> field.
-Pixi understands that field and automatically adds the dependencies to the project as <code>[pypi-dependencies]</code>.</p>
+Pixi understands that field and automatically adds the dependencies to the workspace as <code>[pypi-dependencies]</code>.</p>
 <p>This is an example of a <code>pyproject.toml</code> file with the <code>dependencies</code> field:</p>
 <div class="language-toml highlight"><span class="filename">pyproject.toml</span><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[project]</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my_project&quot;</span>
@@ -3013,7 +3013,7 @@ Pixi understands that field and automatically adds the dependencies to the proje
 As Pixi takes the conda dependencies over the pypi dependencies.</p>
 <h2 id="optional-dependencies">Optional dependencies<a class="headerlink" href="#optional-dependencies" title="Permanent link">#</a></h2>
 <p>If your python project includes groups of optional dependencies, Pixi will automatically interpret them as <a href="../../reference/pixi_manifest/#the-feature-table">Pixi features</a> of the same name with the associated <code>pypi-dependencies</code>.</p>
-<p>You can add them to Pixi environments manually, or use <code>pixi init</code> to setup the project, which will create one environment per feature. Self-references to other groups of optional dependencies are also handled.</p>
+<p>You can add them to Pixi environments manually, or use <code>pixi init</code> to setup the workspace, which will create one environment per feature. Self-references to other groups of optional dependencies are also handled.</p>
 <p>For instance, imagine you have a project folder with a <code>pyproject.toml</code> file similar to:</p>
 <div class="language-toml highlight"><span class="filename">pyproject.toml</span><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">[project]</span>
 </span><span id="__span-5-2"><a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my_project&quot;</span>
@@ -3050,7 +3050,7 @@ As Pixi takes the conda dependencies over the pypi dependencies.</p>
 <p>All environments will be solved together, as indicated by the common <code>solve-group</code>, and added to the lock file. You can edit the <code>[tool.pixi.environments]</code> section manually to adapt it to your use case (e.g. if you do not need a particular environment).</p>
 <h2 id="dependency-groups">Dependency groups<a class="headerlink" href="#dependency-groups" title="Permanent link">#</a></h2>
 <p>If your python project includes dependency groups, Pixi will automatically interpret them as <a href="../../reference/pixi_manifest/#the-feature-table">Pixi features</a> of the same name with the associated <code>pypi-dependencies</code>.</p>
-<p>You can add them to Pixi environments manually, or use <code>pixi init</code> to setup the project, which will create one environment per dependency group.</p>
+<p>You can add them to Pixi environments manually, or use <code>pixi init</code> to setup the workspace, which will create one environment per dependency group.</p>
 <p>For instance, imagine you have a project folder with a <code>pyproject.toml</code> file similar to:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">[project]</span>
 </span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my_project&quot;</span>

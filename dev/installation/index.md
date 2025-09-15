@@ -219,9 +219,9 @@ Before un-installation you might want to delete any previous files pixi has inst
    pixi clean cache
 
    ```
-1. Remove the environments from your pixi projects:
+1. Remove the environments from your pixi workspaces:
    ```shell
-   cd path/to/project && pixi clean
+   cd path/to/workspace && pixi clean
 
    ```
 1. Remove the `pixi` and it's global environments

@@ -405,7 +405,7 @@ A task name follows these rules:
 - Must **be unique** within the table.
 - `_` at the start of the name will **hide** the task from the `pixi task list` command.
 
-Hiding tasks can be useful if your project defines many tasks but your users only need to use a subset of them.
+Hiding tasks can be useful if your workspace defines many tasks but your users only need to use a subset of them.
 
 pixi.toml
 

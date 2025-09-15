@@ -386,12 +386,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../first_project/" class="md-nav__link">
+      <a href="../../../first_workspace/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    First Project
+    First Workspace
     
   </span>
   
@@ -1742,9 +1742,9 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#multiple-pixi-projects" class="md-nav__link">
+  <a href="#multiple-pixi-workspaces" class="md-nav__link">
     <span class="md-ellipsis">
-      Multiple Pixi projects
+      Multiple Pixi workspaces
     </span>
   </a>
   
@@ -2797,9 +2797,9 @@
 </li>
         
           <li class="md-nav__item">
-  <a href="#multiple-pixi-projects" class="md-nav__link">
+  <a href="#multiple-pixi-workspaces" class="md-nav__link">
     <span class="md-ellipsis">
-      Multiple Pixi projects
+      Multiple Pixi workspaces
     </span>
   </a>
   
@@ -2907,7 +2907,7 @@ Under the hood it redirects all calls to the corresponding <code>pixi</code> equ
 <div class="admonition warning">
 <p class="admonition-title">Use the conda shim from this Pixi workspace</p>
 <p>Please make sure that this is the <code>conda</code> shim from this Pixi workspace and not another one.
-If you use multiple Pixi projects, you might have to adjust the path accordingly as PyCharm remembers the path to the conda executable.</p>
+If you use multiple Pixi workspaces, you might have to adjust the path accordingly as PyCharm remembers the path to the conda executable.</p>
 </div>
 <p><img alt="Add Python Interpreter" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/add-conda-environment-light.png#only-light" />
 <img alt="Add Python Interpreter" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/add-conda-environment-dark.png#only-dark" /></p>
@@ -2939,8 +2939,8 @@ by specifying <em>Use existing environment</em> in the <em>Add Python Interprete
 <p>You can then specify the corresponding environment in the bottom right corner of the PyCharm window.</p>
 <p><img alt="Specify environment" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/specify-interpreter-light.png#only-light" />
 <img alt="Specify environment" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/specify-interpreter-dark.png#only-dark" /></p>
-<h3 id="multiple-pixi-projects">Multiple Pixi projects<a class="headerlink" href="#multiple-pixi-projects" title="Permanent link">#</a></h3>
-<p>When using multiple Pixi projects, remember to select the correct <em>Conda Executable</em> for each workspace as mentioned above.
+<h3 id="multiple-pixi-workspaces">Multiple Pixi workspaces<a class="headerlink" href="#multiple-pixi-workspaces" title="Permanent link">#</a></h3>
+<p>When using multiple Pixi workspaces, remember to select the correct <em>Conda Executable</em> for each workspace as mentioned above.
 It also might come up that you have multiple environments with the same name.</p>
 <p><img alt="Multiple default environments" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/multiple-default-envs-light.png#only-light" />
 <img alt="Multiple default environments" src="https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/multiple-default-envs-dark.png#only-dark" /></p>
@@ -2986,36 +2986,36 @@ In production, you then just run <code>pixi run -e prod COMMAND</code>, and the 
 <p><a id="alt-approach"></a></p>
 <h3 id="alternate-approach-using-environmentstxt">Alternate approach using environments.txt<a class="headerlink" href="#alternate-approach-using-environmentstxt" title="Permanent link">#</a></h3>
 <p>There is another approach for configuring PyCharm that avoids the need for the pixi-pycharm shim. It requires that you have conda installed locally (PyCharm will detect it automatically if installed in a standard location).</p>
-<p>To configure an interpreter for a new project:</p>
+<p>To configure an interpreter for a new workspace:</p>
 <ol>
 <li>
 <p>Edit conda's environment list located at <code>~/.conda/environments.txt</code>. Simply append the full file paths of any pixi
     environments you wish to include, e.g.:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>...
-</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>/Users/jdoe/my-project/.pixi/envs/default
-</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>/Users/jdoe/my-project/.pixi/envs/dev
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>/Users/jdoe/my-workspace/.pixi/envs/default
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>/Users/jdoe/my-workspace/.pixi/envs/dev
 </span></code></pre></div>
 </li>
 <li>
-<p>In PyCharm, when adding the interpreter for your project, scroll down to the bottom of the Python Interpreter
+<p>In PyCharm, when adding the interpreter for your workspace, scroll down to the bottom of the Python Interpreter
     dropdown menu and choose <em>Show All ...</em> to bring up the Python Interpreters dialog.</p>
 </li>
 <li>
 <p>Select the <code>+</code> button to add a new local existing conda interpreter using the standard conda location and
     choose the desired prefix from the list. (If you edited the environment file while PyCharm was running, you
-    may need to reload the environments.) </p>
+    may need to reload the environments.)</p>
 </li>
 <li>
-<p>This will add the environment but will automatically give it a name matching the last component of the 
+<p>This will add the environment but will automatically give it a name matching the last component of the
     directory path, which will often just be <code>default</code> for pixi environments. This is particularly problematic
-    if you work on many projects. You can change PyCharm's name for the environment by clicking on the pencil icon
-    or using the right-click dropdown menu. </p>
+    if you work on many workspaces. You can change PyCharm's name for the environment by clicking on the pencil icon
+    or using the right-click dropdown menu.</p>
 </li>
 <li>
 <p>Once you have added and renamed the environments, select the desired interpreter to use in PyCharm from the list.</p>
 </li>
 </ol>
-<p>If your project uses more than one environment, you can switch between them by selecting interpreter name in the
+<p>If your workspace uses more than one environment, you can switch between them by selecting interpreter name in the
 status bar at the bottom of the PyCharm window and selecting the interpreter for the desired interpreter from the list.
 Note that this will trigger PyCharm reindexing and might not be very fast.</p>
 <p>As with the pixi-pycharm shim, you should avoid using the PyCharm UI to attempt to add or remove packages from your environments and you should

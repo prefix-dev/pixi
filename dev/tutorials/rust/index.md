@@ -6,7 +6,7 @@ The audience for this tutorial is developers who are familiar with Rust and `car
 
 - You need to have `pixi` installed. If you haven't installed it yet, you can follow the instructions in the [installation guide](../../). The crux of this tutorial is to show you only need pixi!
 
-## Create a Pixi project.
+## Create a Pixi workspace
 
 ```shell
 pixi init my_rust_project
@@ -24,7 +24,7 @@ my_rust_project
 
 ```
 
-The `pixi.toml` file is the manifest file for your project. It should look like this:
+The `pixi.toml` file is the manifest file for your workspace. It should look like this:
 
 pixi.toml
 
@@ -45,7 +45,7 @@ platforms = ["linux-64"] # (1)!
 
 ## Add Rust dependencies
 
-To use a Pixi project you don't need any dependencies on your system, all the dependencies you need should be added through pixi, so other users can use your project without any issues.
+To use a Pixi workspace you don't need any dependencies on your system, all the dependencies you need should be added through pixi, so other users can use your workspace without any issues.
 
 ```shell
 pixi add rust
@@ -56,7 +56,7 @@ This will add the `rust` package to your `pixi.toml` file under `[dependencies]`
 
 ## Add a `cargo` project
 
-Now that you have rust installed, you can create a `cargo` project in your `pixi` project.
+Now that you have rust installed, you can create a `cargo` project in your `pixi` workspace.
 
 ```shell
 pixi run cargo init
@@ -120,7 +120,7 @@ Congratulations, you have a Rust project running on your machine with pixi!
 
 ## Next steps, why is this useful when there is `rustup`?
 
-Cargo is not a binary package manager, but a source-based package manager. This means that you need to have the Rust compiler installed on your system to use it. And possibly other dependencies that are not included in the `cargo` package manager. For example, you might need to install `openssl` or `libssl-dev` on your system to build a package. This is the case for `pixi` as well, but `pixi` will install these dependencies in your project folder, so you don't have to worry about them.
+Cargo is not a binary package manager, but a source-based package manager. This means that you need to have the Rust compiler installed on your system to use it. And possibly other dependencies that are not included in the `cargo` package manager. For example, you might need to install `openssl` or `libssl-dev` on your system to build a package. This is the case for `pixi` as well, but `pixi` will install these dependencies in your workspace folder, so you don't have to worry about them.
 
 Add the following dependencies to your cargo project:
 

@@ -2,7 +2,7 @@
 
 ## About
 
-Commands to manage project environments
+Commands to manage workspace environments
 
 ## Usage
 

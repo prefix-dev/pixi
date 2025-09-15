@@ -2,7 +2,7 @@ Welcome to the guide designed to ease your transition from `conda` or `mamba` to
 
 ## Why Pixi?
 
-`Pixi` builds upon the foundation of the conda ecosystem, introducing a workspace-centric approach rather than focusing solely on environments. This shift towards projects offers a more organized and efficient way to manage dependencies and run code, tailored to modern development practices.
+`Pixi` builds upon the foundation of the conda ecosystem, introducing a workspace-centric approach rather than focusing solely on environments. This shift towards workspaces offers a more organized and efficient way to manage dependencies and run code, tailored to modern development practices.
 
 ## Key Differences at a Glance
 
@@ -10,7 +10,7 @@ Welcome to the guide designed to ease your transition from `conda` or `mamba` to
 | --------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------- |
 | Installation                | Requires an installer                             | Download and add to path (See [installation](../../))                      |
 | Creating an Environment     | `conda create -n myenv -c conda-forge python=3.8` | `pixi init myenv` followed by `pixi add python=3.8`                        |
-| Activating an Environment   | `conda activate myenv`                            | `pixi shell` within the project directory                                  |
+| Activating an Environment   | `conda activate myenv`                            | `pixi shell` within the workspace directory                                |
 | Deactivating an Environment | `conda deactivate`                                | `exit` from the `pixi shell`                                               |
 | Running a Task              | `conda run -n myenv python my_program.py`         | `pixi run python my_program.py` (See [run](../../reference/cli/pixi/run/)) |
 | Installing a Package        | `conda install numpy`                             | `pixi add numpy`                                                           |
@@ -31,7 +31,7 @@ For some advanced use-cases, you can activate the environment in the current she
 
 ## Environment vs Workspace
 
-`Conda` and `mamba` focus on managing environments, while `pixi` emphasizes projects. In `pixi`, a workspace is a folder containing a [manifest](../../reference/pixi_manifest/)(`pixi.toml`/`pyproject.toml`) file that describes the workspace, a `pixi.lock` lock-file that describes the exact dependencies, and a `.pixi` folder that contains the environment.
+`Conda` and `mamba` focus on managing environments, while `pixi` emphasizes workspaces. In `pixi`, a workspace is a folder containing a [manifest](../../reference/pixi_manifest/)(`pixi.toml`/`pyproject.toml`) file that describes the workspace, a `pixi.lock` lock-file that describes the exact dependencies, and a `.pixi` folder that contains the environment.
 
 This workspace-centric approach allows for easy sharing and collaboration, as the workspace folder contains all the necessary information to recreate the environment. It manages more than one environment for more than one platform in a single workspace, and allows for easy switching between them. (See [multiple environments](../../workspace/multi_environment/))
 

@@ -1,6 +1,6 @@
 # The Configuration of Pixi Itself
 
-Apart from the [project specific configuration](../pixi_manifest/) Pixi supports configuration options which are not required for the project to work but are local to the machine. The configuration is loaded in the following order:
+Apart from the [workspace specific configuration](../pixi_manifest/) Pixi supports configuration options which are not required for the workspace to work but are local to the machine. The configuration is loaded in the following order:
 
 | **Priority** | **Location**                                                           | **Comments**                                     |
 | ------------ | ---------------------------------------------------------------------- | ------------------------------------------------ |
@@ -70,7 +70,7 @@ default-channels = ["conda-forge"]
 
 Note
 
-The `default-channels` are only used when initializing a new project. Once initialized the `channels` are used from the project manifest.
+The `default-channels` are only used when initializing a new workspace. Once initialized the `channels` are used from the workspace manifest.
 
 ### `shell`
 
@@ -118,16 +118,16 @@ authentication-override-file = "/path/to/your/override.json"
 
 ### `detached-environments`
 
-The directory where Pixi stores the project environments, what would normally be placed in the `.pixi/envs` folder in a project's root. It doesn't affect the environments built for `pixi global`. The location of environments created for a `pixi global` installation can be controlled using the `PIXI_HOME` environment variable.
+The directory where Pixi stores the workspace environments, what would normally be placed in the `.pixi/envs` folder in a workspace's root. It doesn't affect the environments built for `pixi global`. The location of environments created for a `pixi global` installation can be controlled using the `PIXI_HOME` environment variable.
 
 Warning
 
-We recommend against using this because any environment created for a project is no longer placed in the same folder as the project. This creates a disconnect between the project and its environments and manual cleanup of the environments is required when deleting the project.
+We recommend against using this because any environment created for a workspace is no longer placed in the same folder as the workspace. This creates a disconnect between the workspace and its environments and manual cleanup of the environments is required when deleting the workspace.
 
 However, in some cases, this option can still be very useful, for instance to:
 
 - force the installation on a specific filesystem/drive.
-- install environments locally but keep the project on a network drive.
+- install environments locally but keep the workspace on a network drive.
 - let a system-administrator have more control over all environments on a system.
 
 This field can consist of two types of input.
@@ -324,7 +324,7 @@ Configure whether pixi should execute `post-link` and `pre-unlink` scripts or no
 
 Some packages contain post-link scripts (`bat` or `sh` files) that are executed after a package is installed. We deem these scripts as insecure because they can contain arbitrary code that is executed on the user's machine without the user's consent. By default, the value of `run-post-link-scripts` is set to `false` which prevents the execution of these scripts.
 
-However, you can opt-in on a global (or project) basis by setting the value to `insecure` (e.g. by running `pixi config set --local run-post-link-scripts insecure`).
+However, you can opt-in on a global (or workspace) basis by setting the value to `insecure` (e.g. by running `pixi config set --local run-post-link-scripts insecure`).
 
 In the future we are planning to add a `sandbox` mode to execute these scripts in a controlled environment.
 
@@ -361,14 +361,14 @@ Please write a GitHub issue and add the flag `experimental` to the issue if you 
 Turn this feature on from configuration with the following command:
 
 ```shell
-# For all your projects
+# For all of your workspaces
 pixi config set experimental.use-environment-activation-cache true --global
-# For a specific project
+# For a specific workspace
 pixi config set experimental.use-environment-activation-cache true --local
 
 ```
 
-This will cache the environment activation in the `.pixi/activation-env-v0` folder in the project root. It will create a json file for each environment that is activated, and it will be used to activate the environment in the future.
+This will cache the environment activation in the `.pixi/activation-env-v0` folder in the workspace root. It will create a json file for each environment that is activated, and it will be used to activate the environment in the future.
 
 ```bash
 > tree .pixi/activation-env-v0/

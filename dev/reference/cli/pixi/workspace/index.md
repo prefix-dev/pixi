@@ -19,7 +19,7 @@ pixi workspace [OPTIONS] <COMMAND>
 | [`description`](description/)                 | Commands to manage workspace description                |
 | [`platform`](platform/)                       | Commands to manage workspace platforms                  |
 | [`version`](version/)                         | Commands to manage workspace version                    |
-| [`environment`](environment/)                 | Commands to manage project environments                 |
+| [`environment`](environment/)                 | Commands to manage workspace environments               |
 | [`export`](export/)                           | Commands to export workspaces to other formats          |
 | [`name`](name/)                               | Commands to manage workspace name                       |
 | [`system-requirements`](system-requirements/) | Commands to manage workspace system requirements        |

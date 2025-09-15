@@ -44,27 +44,19 @@ scripts = ["setup.bat"]
 
 ## Platform definition
 
-The `workspace.platforms` defines which platforms your project supports. When multiple platforms are defined, Pixi determines which dependencies to install for each platform individually. All of this is stored in a lock file.
+The `workspace.platforms` defines which platforms your workspace supports. When multiple platforms are defined, Pixi determines which dependencies to install for each platform individually. All of this is stored in a lock file.
 
 Running `pixi install` on a platform that is not configured will warn the user that it is not setup for that platform:
 
 ```shell
 ❯ pixi install
-  × the project is not configured for your current platform
-   ╭─[pixi.toml:6:1]
- 6 │ channels = ["conda-forge"]
- 7 │ platforms = ["osx-64", "osx-arm64", "win-64"]
-   ·             ────────────────┬────────────────
-   ·                             ╰── add 'linux-64' here
- 8 │
-   ╰────
-  help: The project needs to be configured to support your platform (linux-64).
+ WARN Not installing dependency for (default) on current platform: (osx-arm64) as it is not part of this project's supported platforms.
 
 ```
 
 ## Target specifier
 
-With the target specifier, you can overwrite the original configuration specifically for a single platform. If you are targeting a specific platform in your target specifier that was not specified in your `project.platforms` then Pixi will throw an error.
+With the target specifier, you can overwrite the original configuration specifically for a single platform. If you are targeting a specific platform in your target specifier that was not specified in your `workspace.platforms` then Pixi will throw an error.
 
 ### Dependencies
 
@@ -112,7 +104,7 @@ clang = "16.0.6.*"
 
 ### Activation
 
-Pixi's vision is to enable completely cross-platform projects, but you often need to run tools that are not built by your projects. Generated activation scripts are often in this category, default scripts in unix are `bash` and for windows they are `bat`
+Pixi's vision is to enable completely cross-platform workspaces, but you often need to run tools that are not built by your projects. Generated activation scripts are often in this category, default scripts in unix are `bash` and for windows they are `bat`
 
 To deal with this, you can define your activation scripts using the target definition.
 
@@ -126,4 +118,4 @@ scripts = ["setup.bat", "local_setup.bat"]
 
 ```
 
-When this project is run on `win-64` it will only execute the target scripts not the scripts specified in the default `activation.scripts`
+When this workspace is used on `win-64` it will only execute the target scripts not the scripts specified in the default `activation.scripts`

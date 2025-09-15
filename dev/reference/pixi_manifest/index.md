@@ -297,7 +297,7 @@ python = ["3.11.*", "3.12.*"]
 [workspace.target.win-64.build-variants]
 python = ["3.11.*"]  # Only Python 3.11 on Windows
 c_compiler = ["vs2019"]
-# Linux-specific variants  
+# Linux-specific variants
 [workspace.target.linux-64.build-variants]
 c_compiler = ["gcc"]
 c_compiler_version = ["11.4", "13.0"]
@@ -991,7 +991,7 @@ Workspace inheritance
 Most extra fields can be inherited from the workspace manifest. This means that you can define the `description`, `authors`, `license` in the workspace manifest, and they will be inherited by the package manifest.
 
 ```toml
-[workspace]    
+[workspace]
 name = "my-workspace"
 [package]
 name = { workspace = true } # Inherit the name from the workspace

@@ -21,7 +21,6 @@ for further details on how to use the software.
 ## Getting Started documentation
 
 - [Home](https://prefix-dev.github.io/pixi/dev/index.md)
-- [First Project](https://prefix-dev.github.io/pixi/dev/first_project/index.md)
 - [Basic Usage](https://prefix-dev.github.io/pixi/dev/getting_started/index.md)
 - [Installation](https://prefix-dev.github.io/pixi/dev/installation/index.md)
 

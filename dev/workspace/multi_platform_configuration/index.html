@@ -386,12 +386,12 @@
   
   
     <li class="md-nav__item">
-      <a href="../../first_project/" class="md-nav__link">
+      <a href="../../first_workspace/" class="md-nav__link">
         
   
   
   <span class="md-ellipsis">
-    First Project
+    First Workspace
     
   </span>
   
@@ -2868,24 +2868,16 @@ On this page, you will learn what you can configure to align better with the pla
 </div>
 </div>
 <h2 id="platform-definition">Platform definition<a class="headerlink" href="#platform-definition" title="Permanent link">#</a></h2>
-<p>The <code>workspace.platforms</code> defines which platforms your project supports.
+<p>The <code>workspace.platforms</code> defines which platforms your workspace supports.
 When multiple platforms are defined, Pixi determines which dependencies to install for each platform individually.
 All of this is stored in a lock file.</p>
 <p>Running <code>pixi install</code> on a platform that is not configured will warn the user that it is not setup for that platform:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>❯<span class="w"> </span>pixi<span class="w"> </span>install
-</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span>×<span class="w"> </span>the<span class="w"> </span>project<span class="w"> </span>is<span class="w"> </span>not<span class="w"> </span>configured<span class="w"> </span><span class="k">for</span><span class="w"> </span>your<span class="w"> </span>current<span class="w"> </span>platform
-</span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">   </span>╭─<span class="o">[</span>pixi.toml:6:1<span class="o">]</span>
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w"> </span><span class="m">6</span><span class="w"> </span>│<span class="w"> </span><span class="nv">channels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">[</span><span class="s2">&quot;conda-forge&quot;</span><span class="o">]</span>
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w"> </span><span class="m">7</span><span class="w"> </span>│<span class="w"> </span><span class="nv">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">[</span><span class="s2">&quot;osx-64&quot;</span>,<span class="w"> </span><span class="s2">&quot;osx-arm64&quot;</span>,<span class="w"> </span><span class="s2">&quot;win-64&quot;</span><span class="o">]</span>
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">   </span>·<span class="w">             </span>────────────────┬────────────────
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="w">   </span>·<span class="w">                             </span>╰──<span class="w"> </span>add<span class="w"> </span><span class="s1">&#39;linux-64&#39;</span><span class="w"> </span>here
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="w"> </span><span class="m">8</span><span class="w"> </span>│
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="w">   </span>╰────
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">  </span>help:<span class="w"> </span>The<span class="w"> </span>project<span class="w"> </span>needs<span class="w"> </span>to<span class="w"> </span>be<span class="w"> </span>configured<span class="w"> </span>to<span class="w"> </span>support<span class="w"> </span>your<span class="w"> </span>platform<span class="w"> </span><span class="o">(</span>linux-64<span class="o">)</span>.
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w"> </span>WARN<span class="w"> </span>Not<span class="w"> </span>installing<span class="w"> </span>dependency<span class="w"> </span><span class="k">for</span><span class="w"> </span><span class="o">(</span>default<span class="o">)</span><span class="w"> </span>on<span class="w"> </span>current<span class="w"> </span>platform:<span class="w"> </span><span class="o">(</span>osx-arm64<span class="o">)</span><span class="w"> </span>as<span class="w"> </span>it<span class="w"> </span>is<span class="w"> </span>not<span class="w"> </span>part<span class="w"> </span>of<span class="w"> </span>this<span class="w"> </span>project<span class="err">&#39;</span>s<span class="w"> </span>supported<span class="w"> </span>platforms.
 </span></code></pre></div>
 <h2 id="target-specifier">Target specifier<a class="headerlink" href="#target-specifier" title="Permanent link">#</a></h2>
 <p>With the target specifier, you can overwrite the original configuration specifically for a single platform.
-If you are targeting a specific platform in your target specifier that was not specified in your <code>project.platforms</code> then Pixi will throw an error.</p>
+If you are targeting a specific platform in your target specifier that was not specified in your <code>workspace.platforms</code> then Pixi will throw an error.</p>
 <h3 id="dependencies">Dependencies<a class="headerlink" href="#dependencies" title="Permanent link">#</a></h3>
 <p>It might happen that you want to install a certain dependency only on a specific platform, or you might want to use a different version on different platforms.</p>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">[dependencies]</span>
@@ -2914,7 +2906,7 @@ This will not touch any of the other platforms.</p>
 </span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="n">clang</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;16.0.6.*&quot;</span>
 </span></code></pre></div>
 <h3 id="activation">Activation<a class="headerlink" href="#activation" title="Permanent link">#</a></h3>
-<p>Pixi's vision is to enable completely cross-platform projects, but you often need to run tools that are not built by your projects.
+<p>Pixi's vision is to enable completely cross-platform workspaces, but you often need to run tools that are not built by your projects.
 Generated activation scripts are often in this category, default scripts in unix are <code>bash</code> and for windows they are <code>bat</code></p>
 <p>To deal with this, you can define your activation scripts using the target definition.</p>
 <p><div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="k">[activation]</span>
@@ -2923,7 +2915,7 @@ Generated activation scripts are often in this category, default scripts in unix
 </span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="k">[target.win-64.activation]</span>
 </span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="n">scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;setup.bat&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;local_setup.bat&quot;</span><span class="p">]</span>
 </span></code></pre></div>
-When this project is run on <code>win-64</code> it will only execute the target scripts not the scripts specified in the default <code>activation.scripts</code></p>
+When this workspace is used on <code>win-64</code> it will only execute the target scripts not the scripts specified in the default <code>activation.scripts</code></p>
 
 
 

@@ -44,7 +44,7 @@ python = ">=3.9"
 
 ## Dependency section
 
-The `pyproject.toml` file supports the `dependencies` field. Pixi understands that field and automatically adds the dependencies to the project as `[pypi-dependencies]`.
+The `pyproject.toml` file supports the `dependencies` field. Pixi understands that field and automatically adds the dependencies to the workspace as `[pypi-dependencies]`.
 
 This is an example of a `pyproject.toml` file with the `dependencies` field:
 
@@ -112,7 +112,7 @@ This would result in the conda dependencies being installed and the pypi depende
 
 If your python project includes groups of optional dependencies, Pixi will automatically interpret them as [Pixi features](../../reference/pixi_manifest/#the-feature-table) of the same name with the associated `pypi-dependencies`.
 
-You can add them to Pixi environments manually, or use `pixi init` to setup the project, which will create one environment per feature. Self-references to other groups of optional dependencies are also handled.
+You can add them to Pixi environments manually, or use `pixi init` to setup the workspace, which will create one environment per feature. Self-references to other groups of optional dependencies are also handled.
 
 For instance, imagine you have a project folder with a `pyproject.toml` file similar to:
 
@@ -161,7 +161,7 @@ All environments will be solved together, as indicated by the common `solve-grou
 
 If your python project includes dependency groups, Pixi will automatically interpret them as [Pixi features](../../reference/pixi_manifest/#the-feature-table) of the same name with the associated `pypi-dependencies`.
 
-You can add them to Pixi environments manually, or use `pixi init` to setup the project, which will create one environment per dependency group.
+You can add them to Pixi environments manually, or use `pixi init` to setup the workspace, which will create one environment per dependency group.
 
 For instance, imagine you have a project folder with a `pyproject.toml` file similar to:
 

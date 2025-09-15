@@ -2,7 +2,7 @@
 
 Pixi can do alot of things, but it is designed to be simple to use. Let's go through the basic usage of Pixi.
 
-## Managing workspaces or projects
+## Managing workspaces
 
 - [`pixi init`](../reference/cli/pixi/init/) - create a new Pixi manifest in the current directory
 - [`pixi add`](../reference/cli/pixi/add/) - add a dependency to your manifest
@@ -87,7 +87,7 @@ More information: [Tasks](../workspace/advanced_tasks/)
 Pixi supports multiple platforms out of the box. You can specify which platforms your workspace supports and Pixi will ensure that the dependencies are compatible with those platforms.
 
 - [`pixi add --platform`](../reference/cli/pixi/add/#arg---platform) - add a package only to a specific platform
-- [`pixi workspace platform add`](../reference/cli/pixi/workspace/platform/add/) - add a platform to the workspace that you want to support with your project
+- [`pixi workspace platform add`](../reference/cli/pixi/workspace/platform/add/) - add a platform that you want to support to the workspace
 
 More information: [Multi platform support](../workspace/multi_platform_configuration/)
 
@@ -99,7 +99,7 @@ Pixi comes with a set of utilities to help you debug or manage your setup.
 - [`pixi config`](../reference/cli/pixi/config/) - Show or edit the Pixi configuration.
 - [`pixi tree`](../reference/cli/pixi/tree/) - Show a tree of dependencies in the current environment.
 - [`pixi list`](../reference/cli/pixi/list/) - List all dependencies in the current environment.
-- [`pixi clean`](../reference/cli/pixi/clean/) - Remove the project environments from your machine.
+- [`pixi clean`](../reference/cli/pixi/clean/) - Remove the workspace environments from your machine.
 - `pixi help` - Show help for Pixi commands.
 - `pixi help <subcommand>` - Show help for a specific Pixi command.
 - [`pixi auth`](../reference/cli/pixi/auth/) - Manage authentication for conda channels.

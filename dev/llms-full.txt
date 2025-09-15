@@ -69,7 +69,7 @@ ______________________________________________________________________
 | Supports Multiple Languages | ✅   | ✅    | ❌  | ❌     | ❌  |
 | Lockfiles                   | ✅   | ❌    | ❌  | ✅     | ✅  |
 | Task runner                 | ✅   | ❌    | ❌  | ❌     | ❌  |
-| Project Management          | ✅   | ❌    | ❌  | ✅     | ✅  |
+| Workspace Management        | ✅   | ❌    | ❌  | ✅     | ✅  |
 
 ______________________________________________________________________
 
@@ -191,7 +191,7 @@ More details on how to use Pixi with Python can be found in the [Python tutorial
 
    ```
 
-1. **Create your project:**
+1. **Create your workspace:**
 
    ```text
    pixi run cargo init
@@ -333,207 +333,11 @@ ______________________________________________________________________
 - [Rattler](https://github.com/conda/rattler): Everything conda but built in Rust. Backend of Pixi.
 - [rattler-build](https://rattler.build): A blazing fast build system for conda packages.
 
-# Making a Pixi project
-
-Pixi's biggest strength is its ability to create reproducible powerful and flexible projects. Let's go over the common steps to create a Pixi project.
-
-## Creating a Pixi project
-
-To create a new Pixi project, you can use the `pixi init` command:
-
-```shell
-pixi init my_project
-
-```
-
-This command creates a new directory called `my_project` with the following structure:
-
-```shell
-my_project
-├── .gitattributes
-├── .gitignore
-└── pixi.toml
-
-```
-
-The `pixi.toml` file is the manifest of your Pixi project. It contains all the information about your project, such as its channels, platforms, dependencies, tasks, and more.
-
-The one created by `pixi init` is a minimal manifest that looks like this:
-
-pixi.toml
-
-```toml
-[workspace]
-authors = ["Jane Doe <jane.doe@example.com>"]
-channels = ["conda-forge"]
-name = "my_project"
-platforms = ["osx-arm64"]
-version = "0.1.0"
-[tasks]
-[dependencies]
-
-```
-
-Do you want autocompletion of the manifest file?
-
-As `pixi.toml` has a JSON schema, it is possible to use IDE’s like VSCode to edit the field with autocompletion. Install the Even [Better TOML VSCode](https://marketplace.visualstudio.com/items?itemName=tamasfe.even-better-toml) extension to get the best experience. Or use the integrated schema support in PyCharm.
-
-## Managing dependencies
-
-After creating the project, you can start adding dependencies to the project. Pixi uses the `pixi add` command to add dependencies to the project. This command will , by default, add the **conda** dependency to the `pixi.toml`, solve the dependencies, write the lockfile and install the package in the environment. For example, lets add `numpy` and `pytest` to the project.
-
-```shell
-pixi add numpy pytest
-
-```
-
-This results in these lines being added:
-
-pixi.toml
-
-```toml
-[dependencies]
-numpy = ">=2.2.6,<3"
-pytest = ">=8.3.5,<9"
-
-```
-
-You can also specify the version of the dependency you want to add.
-
-```shell
-pixi add numpy==2.2.6 pytest==8.3.5
-
-```
-
-### PyPI dependencies
-
-Pixi normally uses `conda` packages for dependencies, but you can also add dependencies from PyPI. Pixi will make sure it doesn't try to install the same package from both sources, and avoid conflicts between them.
-
-If you want to add them to your project you can do that with the `--pypi` flag:
-
-```shell
-pixi add --pypi requests
-
-```
-
-This will add the `requests` package from PyPI to the project:
-
-pixi.toml
-
-```toml
-[pypi-dependencies]
-requests = ">=2.31.0,<3"
-
-```
-
-## Lockfile
-
-Pixi will always create a lockfile when the dependencies are solved. This file will contain all the exact version of the packages and their dependencies. Resulting in a reproducible environment, that you can share with others or use for testing and deployment.
-
-The lockfile is called `pixi.lock` and it is created in the root of the project. It contains all the information about the dependencies, such as their versions, channels, platforms, and more.
-
-pixi.lock
-
-```yaml
-version: 6
-environments:
-  default:
-    channels:
-    - url: https://prefix.dev/conda-forge/
-    indexes:
-    - https://pypi.org/simple
-    packages:
-      osx-arm64:
-      - conda: https://prefix.dev/conda-forge/osx-arm64/bzip2-1.0.8-h99b78c6_7.conda
-      - pypi: ...
-packages:
-- conda: https://prefix.dev/conda-forge/osx-arm64/bzip2-1.0.8-h99b78c6_7.conda
-  sha256: adfa71f158cbd872a36394c56c3568e6034aa55c623634b37a4836bd036e6b91
-  md5: fc6948412dbbbe9a4c9ddbbcfe0a79ab
-  depends:
-  - __osx >=11.0
-  license: bzip2-1.0.6
-  license_family: BSD
-  size: 122909
-  timestamp: 1720974522888
-- pypi: ...
-
-```
-
-## Managing tasks
-
-Pixi has a built-in cross-platform task runner that allows you to define tasks in the manifest. This is a great way to share tasks with others and to ensure that the same tasks are run in the same environment. The tasks are defined in the `pixi.toml` file under the `[tasks]` section.
-
-You can add one to your project by running the `pixi task add` command.
-
-```shell
-pixi task add hello "echo Hello, World!"
-
-```
-
-This will add the following lines to the `pixi.toml` file:
-
-pixi.toml
-
-```toml
-[tasks]
-hello = "echo Hello, World!"
-
-```
-
-You can then run the task using the `pixi run` command:
-
-```shell
-pixi run hello
-
-```
-
-This will execute the command `echo Hello, World!` in the environment.
-
-Do you want use more powerful features?
-
-Tasks can be much more powerful for example:
-
-```toml
-[tasks.name-of-powerful-task]
-cmd = "echo This task can do much more! Like have {{ arguments }} and {{ "minijinja" | capitalize }} templates."
-# List of tasks that must be run before this one.
-depends-on = ["other-task"]
-# Working directory relative to the root of the project
-cwd = "current/working/directory"
-# Define required arguments for the task
-args = [{ arg = "arguments", default = "default arguments" }]
-# Only run if the input files have changed
-input = ["src"]
-# Only run if the output files are missing
-output = ["output.txt"]
-# Set environment variables for the task
-env = { MY_ENV_VAR = "value" }
-
-```
-
-More information about tasks can be found in the [Tasks](../workspace/advanced_tasks/) section of the documentation.
-
-## Environments
-
-Pixi always creates a virtual environment for your project. These environments are [located](../reference/pixi_configuration/#detached-environments "Find out how to move this location if required") in the `.pixi/envs` directory in the root of your project.
-
-Using these environments is as simple as running the `pixi run` or `pixi shell` command. These commands will automatically activate the environment and run the command in it.
-
-```shell
-pixi run python -VV
-# or:
-pixi shell
-python -VV
-exit
-
-```
-
 # Basic usage of Pixi
 
 Pixi can do alot of things, but it is designed to be simple to use. Let's go through the basic usage of Pixi.
 
-## Managing workspaces or projects
+## Managing workspaces
 
 - [`pixi init`](../reference/cli/pixi/init/) - create a new Pixi manifest in the current directory
 - [`pixi add`](../reference/cli/pixi/add/) - add a dependency to your manifest
@@ -618,7 +422,7 @@ More information: [Tasks](../workspace/advanced_tasks/)
 Pixi supports multiple platforms out of the box. You can specify which platforms your workspace supports and Pixi will ensure that the dependencies are compatible with those platforms.
 
 - [`pixi add --platform`](../reference/cli/pixi/add/#arg---platform) - add a package only to a specific platform
-- [`pixi workspace platform add`](../reference/cli/pixi/workspace/platform/add/) - add a platform to the workspace that you want to support with your project
+- [`pixi workspace platform add`](../reference/cli/pixi/workspace/platform/add/) - add a platform that you want to support to the workspace
 
 More information: [Multi platform support](../workspace/multi_platform_configuration/)
 
@@ -630,7 +434,7 @@ Pixi comes with a set of utilities to help you debug or manage your setup.
 - [`pixi config`](../reference/cli/pixi/config/) - Show or edit the Pixi configuration.
 - [`pixi tree`](../reference/cli/pixi/tree/) - Show a tree of dependencies in the current environment.
 - [`pixi list`](../reference/cli/pixi/list/) - List all dependencies in the current environment.
-- [`pixi clean`](../reference/cli/pixi/clean/) - Remove the project environments from your machine.
+- [`pixi clean`](../reference/cli/pixi/clean/) - Remove the workspace environments from your machine.
 - `pixi help` - Show help for Pixi commands.
 - `pixi help <subcommand>` - Show help for a specific Pixi command.
 - [`pixi auth`](../reference/cli/pixi/auth/) - Manage authentication for conda channels.
@@ -864,9 +668,9 @@ Before un-installation you might want to delete any previous files pixi has inst
    pixi clean cache
 
    ```
-1. Remove the environments from your pixi projects:
+1. Remove the environments from your pixi workspaces:
    ```shell
-   cd path/to/project && pixi clean
+   cd path/to/workspace && pixi clean
 
    ```
 1. Remove the `pixi` and it's global environments
@@ -1176,7 +980,7 @@ python = ">=3.9"
 
 ## Dependency section
 
-The `pyproject.toml` file supports the `dependencies` field. Pixi understands that field and automatically adds the dependencies to the project as `[pypi-dependencies]`.
+The `pyproject.toml` file supports the `dependencies` field. Pixi understands that field and automatically adds the dependencies to the workspace as `[pypi-dependencies]`.
 
 This is an example of a `pyproject.toml` file with the `dependencies` field:
 
@@ -1244,7 +1048,7 @@ This would result in the conda dependencies being installed and the pypi depende
 
 If your python project includes groups of optional dependencies, Pixi will automatically interpret them as [Pixi features](../../reference/pixi_manifest/#the-feature-table) of the same name with the associated `pypi-dependencies`.
 
-You can add them to Pixi environments manually, or use `pixi init` to setup the project, which will create one environment per feature. Self-references to other groups of optional dependencies are also handled.
+You can add them to Pixi environments manually, or use `pixi init` to setup the workspace, which will create one environment per feature. Self-references to other groups of optional dependencies are also handled.
 
 For instance, imagine you have a project folder with a `pyproject.toml` file similar to:
 
@@ -1293,7 +1097,7 @@ All environments will be solved together, as indicated by the common `solve-grou
 
 If your python project includes dependency groups, Pixi will automatically interpret them as [Pixi features](../../reference/pixi_manifest/#the-feature-table) of the same name with the associated `pypi-dependencies`.
 
-You can add them to Pixi environments manually, or use `pixi init` to setup the project, which will create one environment per dependency group.
+You can add them to Pixi environments manually, or use `pixi init` to setup the workspace, which will create one environment per dependency group.
 
 For instance, imagine you have a project folder with a `pyproject.toml` file similar to:
 
@@ -1893,7 +1697,7 @@ Correct Indexes:
 
 This ensures PyTorch installations are compatible with your system’s platform and Python version.
 
-In this tutorial, we will show you how to create a simple Python project with pixi. We will show some of the features that Pixi provides, that are currently not a part of `pdm`, `poetry` etc.
+In this tutorial, we will show you how to create a simple Python project with Pixi. We will show some of the features that Pixi provides, that are currently not a part of `pdm`, `poetry` etc.
 
 ## Why is this useful?
 
@@ -1960,7 +1764,7 @@ platforms = ["osx-arm64"]
 
 ```
 
-The `channels` and `platforms` are added to the `[tool.pixi.workspace]` section. Channels like `conda-forge` manage packages similar to PyPI but allow for different packages across languages. The keyword `platforms` determines what platform the project supports.
+The `channels` and `platforms` are added to the `[tool.pixi.workspace]` section. Channels like `conda-forge` manage packages similar to PyPI but allow for different packages across languages. The keyword `platforms` determines which platforms the workspace supports.
 
 The `pixi_py` package itself is added as an `editable` dependency. This means that the package is installed in editable mode, so you can make changes to the package and see the changes reflected in the environment, without having to re-install the environment.
 
@@ -1973,7 +1777,7 @@ pixi-py = { path = ".", editable = true }
 
 In pixi, unlike other package managers, this is explicitly stated in the `pyproject.toml` file. The main reason being so that you can choose which environment this package should be included in.
 
-### Managing both conda and PyPI dependencies in pixi
+### Managing both Conda and PyPI dependencies
 
 Our projects usually depend on other packages.
 
@@ -2055,7 +1859,7 @@ pixi install
 
 ```
 
-We now have a new directory called `.pixi` in the project root. The environment is a Conda environment with all the Conda and PyPI dependencies installed into it.
+We now have a new directory called `.pixi` in the workspace root. The environment is a Conda environment with all the Conda and PyPI dependencies installed into it.
 
 The environment is always a result of the `pixi.lock` file, which is generated from the `pyproject.toml` file. This file contains the exact versions of the dependencies that were installed in the environment across platforms.
 
@@ -2352,7 +2156,7 @@ And it still works!
 
 ## Conclusion
 
-In this tutorial, you've seen how easy it is to use a `pyproject.toml` to manage your Pixi dependencies and environments. We have also explored how to use PyPI and conda dependencies seamlessly together in the same project and install optional dependencies to manage Python packages.
+In this tutorial, you've seen how easy it is to use a `pyproject.toml` to manage your Pixi dependencies and environments. We have also explored how to use PyPI and conda dependencies seamlessly together in the same workspace and install optional dependencies to manage Python packages.
 
 Hopefully, this provides a flexible and powerful way to manage your Python projects and a fertile base for further exploration with Pixi.
 
@@ -2364,7 +2168,7 @@ Welcome to the guide designed to ease your transition from `conda` or `mamba` to
 
 ## Why Pixi?
 
-`Pixi` builds upon the foundation of the conda ecosystem, introducing a workspace-centric approach rather than focusing solely on environments. This shift towards projects offers a more organized and efficient way to manage dependencies and run code, tailored to modern development practices.
+`Pixi` builds upon the foundation of the conda ecosystem, introducing a workspace-centric approach rather than focusing solely on environments. This shift towards workspaces offers a more organized and efficient way to manage dependencies and run code, tailored to modern development practices.
 
 ## Key Differences at a Glance
 
@@ -2372,7 +2176,7 @@ Welcome to the guide designed to ease your transition from `conda` or `mamba` to
 | --------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------- |
 | Installation                | Requires an installer                             | Download and add to path (See [installation](../../))                      |
 | Creating an Environment     | `conda create -n myenv -c conda-forge python=3.8` | `pixi init myenv` followed by `pixi add python=3.8`                        |
-| Activating an Environment   | `conda activate myenv`                            | `pixi shell` within the project directory                                  |
+| Activating an Environment   | `conda activate myenv`                            | `pixi shell` within the workspace directory                                |
 | Deactivating an Environment | `conda deactivate`                                | `exit` from the `pixi shell`                                               |
 | Running a Task              | `conda run -n myenv python my_program.py`         | `pixi run python my_program.py` (See [run](../../reference/cli/pixi/run/)) |
 | Installing a Package        | `conda install numpy`                             | `pixi add numpy`                                                           |
@@ -2393,7 +2197,7 @@ For some advanced use-cases, you can activate the environment in the current she
 
 ## Environment vs Workspace
 
-`Conda` and `mamba` focus on managing environments, while `pixi` emphasizes projects. In `pixi`, a workspace is a folder containing a [manifest](../../reference/pixi_manifest/)(`pixi.toml`/`pyproject.toml`) file that describes the workspace, a `pixi.lock` lock-file that describes the exact dependencies, and a `.pixi` folder that contains the environment.
+`Conda` and `mamba` focus on managing environments, while `pixi` emphasizes workspaces. In `pixi`, a workspace is a folder containing a [manifest](../../reference/pixi_manifest/)(`pixi.toml`/`pyproject.toml`) file that describes the workspace, a `pixi.lock` lock-file that describes the exact dependencies, and a `.pixi` folder that contains the environment.
 
 This workspace-centric approach allows for easy sharing and collaboration, as the workspace folder contains all the necessary information to recreate the environment. It manages more than one environment for more than one platform in a single workspace, and allows for easy switching between them. (See [multiple environments](../../workspace/multi_environment/))
 
@@ -2460,19 +2264,19 @@ Poetry is most-likely the closest tool to Pixi in terms of workspace management,
 
 ## Quick look at the differences
 
-| Task                       | Poetry                                                  | Pixi                                                                                                                                               |
-| -------------------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Creating an Environment    | `poetry new myenv`                                      | `pixi init myenv`                                                                                                                                  |
-| Running a Task             | `poetry run which python`                               | `pixi run which python` `pixi` uses a built-in cross platform shell for run where poetry uses your shell.                                          |
-| Installing a Package       | `poetry add numpy`                                      | `pixi add numpy` adds the conda variant. `pixi add --pypi numpy` adds the PyPI variant.                                                            |
-| Uninstalling a Package     | `poetry remove numpy`                                   | `pixi remove numpy` removes the conda variant. `pixi remove --pypi numpy` removes the PyPI variant.                                                |
-| Building a package         | `poetry build`                                          | We've yet to implement package building and publishing                                                                                             |
-| Publishing a package       | `poetry publish`                                        | We've yet to implement package building and publishing                                                                                             |
-| Reading the pyproject.toml | `[tool.poetry]`                                         | `[tool.pixi]`                                                                                                                                      |
-| Defining dependencies      | `[tool.poetry.dependencies]`                            | `[tool.pixi.dependencies]` for conda, `[tool.pixi.pypi-dependencies]` or `[project.dependencies]` for PyPI dependencies                            |
-| Dependency definition      | - `numpy = "^1.2.3"`- `numpy = "~1.2.3"`- `numpy = "*"` | - `numpy = ">=1.2.3 <2.0.0"`- `numpy = ">=1.2.3 <1.3.0"`- `numpy = "*"`                                                                            |
-| Lock file                  | `poetry.lock`                                           | `pixi.lock`                                                                                                                                        |
-| Environment directory      | `~/.cache/pypoetry/virtualenvs/myenv`                   | `./.pixi` Defaults to the project folder, move this using the [`detached-environments`](../../reference/pixi_configuration/#detached-environments) |
+| Task                       | Poetry                                                  | Pixi                                                                                                                                                    |
+| -------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Creating an Environment    | `poetry new myenv`                                      | `pixi init myenv`                                                                                                                                       |
+| Running a Task             | `poetry run which python`                               | `pixi run which python` `pixi` uses a built-in cross platform shell for run where poetry uses your shell.                                               |
+| Installing a Package       | `poetry add numpy`                                      | `pixi add numpy` adds the conda variant. `pixi add --pypi numpy` adds the PyPI variant.                                                                 |
+| Uninstalling a Package     | `poetry remove numpy`                                   | `pixi remove numpy` removes the conda variant. `pixi remove --pypi numpy` removes the PyPI variant.                                                     |
+| Building a package         | `poetry build`                                          | We've yet to implement package building and publishing                                                                                                  |
+| Publishing a package       | `poetry publish`                                        | We've yet to implement package building and publishing                                                                                                  |
+| Reading the pyproject.toml | `[tool.poetry]`                                         | `[tool.pixi]`                                                                                                                                           |
+| Defining dependencies      | `[tool.poetry.dependencies]`                            | `[tool.pixi.dependencies]` for conda, `[tool.pixi.pypi-dependencies]` or `[project.dependencies]` for PyPI dependencies                                 |
+| Dependency definition      | - `numpy = "^1.2.3"`- `numpy = "~1.2.3"`- `numpy = "*"` | - `numpy = ">=1.2.3 <2.0.0"`- `numpy = ">=1.2.3 <1.3.0"`- `numpy = "*"`                                                                                 |
+| Lock file                  | `poetry.lock`                                           | `pixi.lock`                                                                                                                                             |
+| Environment directory      | `~/.cache/pypoetry/virtualenvs/myenv`                   | `./.pixi` Defaults to the workspace directory, move this using the [`detached-environments`](../../reference/pixi_configuration/#detached-environments) |
 
 ## Support both `poetry` and `pixi` in my workspace
 
@@ -2623,7 +2427,7 @@ This works as long as there is only one of the environments that has the `test` 
 
 In this example we will use multiple environments to test a package against multiple versions of Python. This is a common use-case when developing a python library. This workflow can be translated to any setup where you want to have multiple environments to test against a different dependency setups.
 
-For this example we assume you have run the commands in the previous example, and have a project with a `test` environment. To allow python being flexible in the new environments we need to set it to a more flexible version e.g. `*`.
+For this example we assume you have run the commands in the previous example, and have a workspace with a `test` environment. To allow python being flexible in the new environments we need to set it to a more flexible version e.g. `*`.
 
 ```shell
 pixi add "python=*"
@@ -2690,7 +2494,7 @@ More info on that in the GitHub actions [documentation](../../integration/ci/git
 
 ## Development, Testing, Production environments
 
-This assumes a clean project, so if you have been following along, you might want to start a new project.
+This assumes a clean workspace, so if you have been following along, you might want to start a new workspace.
 
 ```shell
 pixi init production_project
@@ -2806,7 +2610,7 @@ my_ros2_project
 
 ```
 
-The `pixi.toml` file is the manifest file for your project. It should look like this:
+The `pixi.toml` file is the manifest file for your workspace. It should look like this:
 
 pixi.toml
 
@@ -2828,7 +2632,7 @@ The `channels` you added to the `init` command are repositories of packages, you
 
 ## Add ROS 2 dependencies
 
-To use a Pixi project you don't need any dependencies on your system, all the dependencies you need should be added through pixi, so other users can use your project without any issues.
+To use a Pixi workspace you don't need any dependencies on your system, all the dependencies you need should be added through pixi, so other users can use your workspace without any issues.
 
 Let's start with the `turtlesim` example
 
@@ -2837,7 +2641,7 @@ pixi add ros-humble-desktop ros-humble-turtlesim
 
 ```
 
-This will add the `ros-humble-desktop` and `ros-humble-turtlesim` packages to your manifest. Depending on your internet speed this might take a minute, as it will also install ROS in your project folder (`.pixi`).
+This will add the `ros-humble-desktop` and `ros-humble-turtlesim` packages to your manifest. Depending on your internet speed this might take a minute, as it will also install ROS in your workspace folder (`.pixi`).
 
 Now run the `turtlesim` example.
 
@@ -2913,7 +2717,7 @@ scripts = ["install/setup.bat"]
 
 Multi platform support
 
-You can add multiple activation scripts for different platforms, so you can support multiple platforms with one project. Use the following example to add support for both Linux and Windows, using the [target](../../workspace/multi_platform_configuration/#activation) syntax.
+You can add multiple activation scripts for different platforms, so you can support multiple platforms with one workspace. Use the following example to add support for both Linux and Windows, using the [target](../../workspace/multi_platform_configuration/#activation) syntax.
 
 ```toml
 [workspace]
@@ -2957,7 +2761,7 @@ Advanced task usage
 Tasks are a powerful feature in pixi.
 
 - You can add [`depends-on`](../../workspace/advanced_tasks/#depends-on) to the tasks to create a task chain.
-- You can add [`cwd`](../../workspace/advanced_tasks/#working-directory) to the tasks to run the task in a different directory from the root of the project.
+- You can add [`cwd`](../../workspace/advanced_tasks/#working-directory) to the tasks to run the task in a different directory from the root of the workspace.
 - You can add [`inputs` and `outputs`](../../workspace/advanced_tasks/#caching) to the tasks to create a task that only runs when the inputs are changed.
 - You can use the [`target`](../../reference/pixi_manifest/#the-target-table) syntax to run specific tasks on specific machines.
 
@@ -3033,7 +2837,7 @@ The audience for this tutorial is developers who are familiar with Rust and `car
 
 - You need to have `pixi` installed. If you haven't installed it yet, you can follow the instructions in the [installation guide](../../). The crux of this tutorial is to show you only need pixi!
 
-## Create a Pixi project.
+## Create a Pixi workspace
 
 ```shell
 pixi init my_rust_project
@@ -3051,7 +2855,7 @@ my_rust_project
 
 ```
 
-The `pixi.toml` file is the manifest file for your project. It should look like this:
+The `pixi.toml` file is the manifest file for your workspace. It should look like this:
 
 pixi.toml
 
@@ -3072,7 +2876,7 @@ platforms = ["linux-64"] # (1)!
 
 ## Add Rust dependencies
 
-To use a Pixi project you don't need any dependencies on your system, all the dependencies you need should be added through pixi, so other users can use your project without any issues.
+To use a Pixi workspace you don't need any dependencies on your system, all the dependencies you need should be added through pixi, so other users can use your workspace without any issues.
 
 ```shell
 pixi add rust
@@ -3083,7 +2887,7 @@ This will add the `rust` package to your `pixi.toml` file under `[dependencies]`
 
 ## Add a `cargo` project
 
-Now that you have rust installed, you can create a `cargo` project in your `pixi` project.
+Now that you have rust installed, you can create a `cargo` project in your `pixi` workspace.
 
 ```shell
 pixi run cargo init
@@ -3147,7 +2951,7 @@ Congratulations, you have a Rust project running on your machine with pixi!
 
 ## Next steps, why is this useful when there is `rustup`?
 
-Cargo is not a binary package manager, but a source-based package manager. This means that you need to have the Rust compiler installed on your system to use it. And possibly other dependencies that are not included in the `cargo` package manager. For example, you might need to install `openssl` or `libssl-dev` on your system to build a package. This is the case for `pixi` as well, but `pixi` will install these dependencies in your project folder, so you don't have to worry about them.
+Cargo is not a binary package manager, but a source-based package manager. This means that you need to have the Rust compiler installed on your system to use it. And possibly other dependencies that are not included in the `cargo` package manager. For example, you might need to install `openssl` or `libssl-dev` on your system to build a package. This is the case for `pixi` as well, but `pixi` will install these dependencies in your workspace folder, so you don't have to worry about them.
 
 Add the following dependencies to your cargo project:
 
@@ -3860,7 +3664,7 @@ A task name follows these rules:
 - Must **be unique** within the table.
 - `_` at the start of the name will **hide** the task from the `pixi task list` command.
 
-Hiding tasks can be useful if your project defines many tasks but your users only need to use a subset of them.
+Hiding tasks can be useful if your workspace defines many tasks but your users only need to use a subset of them.
 
 pixi.toml
 
@@ -4064,7 +3868,7 @@ Next to running actual executable like `./myprogram`, `cmake` or `python` the sh
 
 More info in [`deno_task_shell` documentation](https://deno.land/manual@v1.35.0/tools/task_runner#task-runner).
 
-Pixi is a tool to manage virtual environments. This document explains what an environment looks like and how to use it.
+Pixi is a tool to manage environments. This document explains what an environment looks like and how to use it.
 
 ## Activation
 
@@ -4283,7 +4087,7 @@ For the `[pypi-dependencies]`, `uv` implements `sdist` building to retrieve the 
 
 ## Caching packages
 
-Pixi caches all previously downloaded packages in a cache folder. This cache folder is shared between all Pixi projects and globally installed tools.
+Pixi caches all previously downloaded packages in a cache folder. This cache folder is shared between all Pixi workspaces and globally installed tools.
 
 Normally the location would be the following platform-specific default cache folder:
 
@@ -5020,27 +4824,19 @@ scripts = ["setup.bat"]
 
 ## Platform definition
 
-The `workspace.platforms` defines which platforms your project supports. When multiple platforms are defined, Pixi determines which dependencies to install for each platform individually. All of this is stored in a lock file.
+The `workspace.platforms` defines which platforms your workspace supports. When multiple platforms are defined, Pixi determines which dependencies to install for each platform individually. All of this is stored in a lock file.
 
 Running `pixi install` on a platform that is not configured will warn the user that it is not setup for that platform:
 
 ```shell
 ❯ pixi install
-  × the project is not configured for your current platform
-   ╭─[pixi.toml:6:1]
- 6 │ channels = ["conda-forge"]
- 7 │ platforms = ["osx-64", "osx-arm64", "win-64"]
-   ·             ────────────────┬────────────────
-   ·                             ╰── add 'linux-64' here
- 8 │
-   ╰────
-  help: The project needs to be configured to support your platform (linux-64).
+ WARN Not installing dependency for (default) on current platform: (osx-arm64) as it is not part of this project's supported platforms.
 
 ```
 
 ## Target specifier
 
-With the target specifier, you can overwrite the original configuration specifically for a single platform. If you are targeting a specific platform in your target specifier that was not specified in your `project.platforms` then Pixi will throw an error.
+With the target specifier, you can overwrite the original configuration specifically for a single platform. If you are targeting a specific platform in your target specifier that was not specified in your `workspace.platforms` then Pixi will throw an error.
 
 ### Dependencies
 
@@ -5088,7 +4884,7 @@ clang = "16.0.6.*"
 
 ### Activation
 
-Pixi's vision is to enable completely cross-platform projects, but you often need to run tools that are not built by your projects. Generated activation scripts are often in this category, default scripts in unix are `bash` and for windows they are `bat`
+Pixi's vision is to enable completely cross-platform workspaces, but you often need to run tools that are not built by your projects. Generated activation scripts are often in this category, default scripts in unix are `bash` and for windows they are `bat`
 
 To deal with this, you can define your activation scripts using the target definition.
 
@@ -5102,7 +4898,7 @@ scripts = ["setup.bat", "local_setup.bat"]
 
 ```
 
-When this project is run on `win-64` it will only execute the target scripts not the scripts specified in the default `activation.scripts`
+When this workspace is used on `win-64` it will only execute the target scripts not the scripts specified in the default `activation.scripts`
 
 **System requirements** tell Pixi the system specifications needed to install and run your workspace’s environment. They ensure that the dependencies match the operating system and hardware of your machine.
 
@@ -6607,7 +6403,7 @@ pixi global install keyring --with keyrings.codeartifact
 
 For other registries, you will need to adapt these instructions to add the right keyring backend.
 
-#### Configuring your project to use keyring
+#### Configuring your workspace to use keyring
 
 Use keyring to store your credentials e.g:
 
@@ -6663,7 +6459,7 @@ extra-index-urls = ["https://aws@<your-domain>-<your-account>.d.codeartifact.<yo
 Either configure your [Global Config](../../reference/pixi_configuration/#pypi-config), or use the flag `--pypi-keyring-provider` which can either be set to `subprocess` (activated) or `disabled`:
 
 ```shell
-# From an existing pixi project
+# From an existing pixi workspace
 pixi install --pypi-keyring-provider subprocess
 
 ```
@@ -7812,7 +7608,7 @@ This is an executable that tricks PyCharm into thinking it's the proper `conda` 
 
 Use the conda shim from this Pixi workspace
 
-Please make sure that this is the `conda` shim from this Pixi workspace and not another one. If you use multiple Pixi projects, you might have to adjust the path accordingly as PyCharm remembers the path to the conda executable.
+Please make sure that this is the `conda` shim from this Pixi workspace and not another one. If you use multiple Pixi workspaces, you might have to adjust the path accordingly as PyCharm remembers the path to the conda executable.
 
 Having selected the environment, PyCharm will now use the Python interpreter from your Pixi environment.
 
@@ -7832,9 +7628,9 @@ If your workspace uses [multiple environments](../../../workspace/multi_environm
 
 You can then specify the corresponding environment in the bottom right corner of the PyCharm window.
 
-### Multiple Pixi projects
+### Multiple Pixi workspaces
 
-When using multiple Pixi projects, remember to select the correct *Conda Executable* for each workspace as mentioned above. It also might come up that you have multiple environments with the same name.
+When using multiple Pixi workspaces, remember to select the correct *Conda Executable* for each workspace as mentioned above. It also might come up that you have multiple environments with the same name.
 
 It is recommended to rename the environments to something unique.
 
@@ -7878,26 +7674,26 @@ Now you as a user can run `pixi shell`, which will start the default environment
 
 There is another approach for configuring PyCharm that avoids the need for the pixi-pycharm shim. It requires that you have conda installed locally (PyCharm will detect it automatically if installed in a standard location).
 
-To configure an interpreter for a new project:
+To configure an interpreter for a new workspace:
 
 1. Edit conda's environment list located at `~/.conda/environments.txt`. Simply append the full file paths of any pixi environments you wish to include, e.g.:
 
    ```text
    ...
-   /Users/jdoe/my-project/.pixi/envs/default
-   /Users/jdoe/my-project/.pixi/envs/dev
+   /Users/jdoe/my-workspace/.pixi/envs/default
+   /Users/jdoe/my-workspace/.pixi/envs/dev
 
    ```
 
-1. In PyCharm, when adding the interpreter for your project, scroll down to the bottom of the Python Interpreter dropdown menu and choose *Show All ...* to bring up the Python Interpreters dialog.
+1. In PyCharm, when adding the interpreter for your workspace, scroll down to the bottom of the Python Interpreter dropdown menu and choose *Show All ...* to bring up the Python Interpreters dialog.
 
 1. Select the `+` button to add a new local existing conda interpreter using the standard conda location and choose the desired prefix from the list. (If you edited the environment file while PyCharm was running, you may need to reload the environments.)
 
-1. This will add the environment but will automatically give it a name matching the last component of the directory path, which will often just be `default` for pixi environments. This is particularly problematic if you work on many projects. You can change PyCharm's name for the environment by clicking on the pencil icon or using the right-click dropdown menu.
+1. This will add the environment but will automatically give it a name matching the last component of the directory path, which will often just be `default` for pixi environments. This is particularly problematic if you work on many workspaces. You can change PyCharm's name for the environment by clicking on the pencil icon or using the right-click dropdown menu.
 
 1. Once you have added and renamed the environments, select the desired interpreter to use in PyCharm from the list.
 
-If your project uses more than one environment, you can switch between them by selecting interpreter name in the status bar at the bottom of the PyCharm window and selecting the interpreter for the desired interpreter from the list. Note that this will trigger PyCharm reindexing and might not be very fast.
+If your workspace uses more than one environment, you can switch between them by selecting interpreter name in the status bar at the bottom of the PyCharm window and selecting the interpreter for the desired interpreter from the list. Note that this will trigger PyCharm reindexing and might not be very fast.
 
 As with the pixi-pycharm shim, you should avoid using the PyCharm UI to attempt to add or remove packages from your environments and you should make sure to [exclude the `.pixi` directory from PyCharm indexing](#exclude-.pixi).
 
@@ -8369,14 +8165,14 @@ Options:
 
 `conda-deny` in one command:
 
-In your favorite `pixi` project, run:
+In your favorite `pixi` workspace, run:
 
 ```bash
 pixi exec conda-deny check --osi
 
 ```
 
-This will check your project for license compliance against the list of [OSI approved licenses](https://opensource.org/licenses).
+This will check your workspace for license compliance against the list of [OSI approved licenses](https://opensource.org/licenses).
 
 [conda-deny](https://github.com/Quantco/conda-deny) is a CLI tool for checking software environment dependencies for license compliance. Compliance is checked with regard to an allowlist of licenses provided by the user.
 
@@ -8416,7 +8212,7 @@ ignore-packages = [
 
 ```
 
-After the installation, you can run `conda-deny check` in your project. This checks the dependencies defined by your `pixi.lock` against your allowlist.
+After the installation, you can run `conda-deny check` in your workspace. This checks the dependencies defined by your `pixi.lock` against your allowlist.
 
 ### 🔒 Authorized access to allowlist
 
@@ -8911,7 +8707,7 @@ Only on Unix-like systems
 
 The following approach only works on Unix-like systems (i.e. Linux and macOS) since Windows does not support shebang lines.
 
-For simple scripts, you can use [`pixi exec`](../../reference/cli/pixi/exec/) to run them directly without needing to take care of installing dependencies or setting up a virtual environment. This can be done by adding a [shebang line](<https://en.wikipedia.org/wiki/Shebang_(Unix)>) at the top of the script, which tells the system how to execute the script. Usually, a shebang line starts with `#!/usr/bin/env` followed by the name of the interpreter to use.
+For simple scripts, you can use [`pixi exec`](../../reference/cli/pixi/exec/) to run them directly without needing to take care of installing dependencies or setting up an environment. This can be done by adding a [shebang line](<https://en.wikipedia.org/wiki/Shebang_(Unix)>) at the top of the script, which tells the system how to execute the script. Usually, a shebang line starts with `#!/usr/bin/env` followed by the name of the interpreter to use.
 
 Instead of adding an interpreter, you can also just add `pixi exec` at the beginning of the script. The only requirement for your script is that you must have `pixi` installed on your system.
 
@@ -9170,7 +8966,7 @@ Config: task-specific
 
 # The Configuration of Pixi Itself
 
-Apart from the [project specific configuration](../pixi_manifest/) Pixi supports configuration options which are not required for the project to work but are local to the machine. The configuration is loaded in the following order:
+Apart from the [workspace specific configuration](../pixi_manifest/) Pixi supports configuration options which are not required for the workspace to work but are local to the machine. The configuration is loaded in the following order:
 
 | **Priority** | **Location**                                                           | **Comments**                                     |
 | ------------ | ---------------------------------------------------------------------- | ------------------------------------------------ |
@@ -9240,7 +9036,7 @@ default-channels = ["conda-forge"]
 
 Note
 
-The `default-channels` are only used when initializing a new project. Once initialized the `channels` are used from the project manifest.
+The `default-channels` are only used when initializing a new workspace. Once initialized the `channels` are used from the workspace manifest.
 
 ### `shell`
 
@@ -9288,16 +9084,16 @@ authentication-override-file = "/path/to/your/override.json"
 
 ### `detached-environments`
 
-The directory where Pixi stores the project environments, what would normally be placed in the `.pixi/envs` folder in a project's root. It doesn't affect the environments built for `pixi global`. The location of environments created for a `pixi global` installation can be controlled using the `PIXI_HOME` environment variable.
+The directory where Pixi stores the workspace environments, what would normally be placed in the `.pixi/envs` folder in a workspace's root. It doesn't affect the environments built for `pixi global`. The location of environments created for a `pixi global` installation can be controlled using the `PIXI_HOME` environment variable.
 
 Warning
 
-We recommend against using this because any environment created for a project is no longer placed in the same folder as the project. This creates a disconnect between the project and its environments and manual cleanup of the environments is required when deleting the project.
+We recommend against using this because any environment created for a workspace is no longer placed in the same folder as the workspace. This creates a disconnect between the workspace and its environments and manual cleanup of the environments is required when deleting the workspace.
 
 However, in some cases, this option can still be very useful, for instance to:
 
 - force the installation on a specific filesystem/drive.
-- install environments locally but keep the project on a network drive.
+- install environments locally but keep the workspace on a network drive.
 - let a system-administrator have more control over all environments on a system.
 
 This field can consist of two types of input.
@@ -9494,7 +9290,7 @@ Configure whether pixi should execute `post-link` and `pre-unlink` scripts or no
 
 Some packages contain post-link scripts (`bat` or `sh` files) that are executed after a package is installed. We deem these scripts as insecure because they can contain arbitrary code that is executed on the user's machine without the user's consent. By default, the value of `run-post-link-scripts` is set to `false` which prevents the execution of these scripts.
 
-However, you can opt-in on a global (or project) basis by setting the value to `insecure` (e.g. by running `pixi config set --local run-post-link-scripts insecure`).
+However, you can opt-in on a global (or workspace) basis by setting the value to `insecure` (e.g. by running `pixi config set --local run-post-link-scripts insecure`).
 
 In the future we are planning to add a `sandbox` mode to execute these scripts in a controlled environment.
 
@@ -9531,14 +9327,14 @@ Please write a GitHub issue and add the flag `experimental` to the issue if you 
 Turn this feature on from configuration with the following command:
 
 ```shell
-# For all your projects
+# For all of your workspaces
 pixi config set experimental.use-environment-activation-cache true --global
-# For a specific project
+# For a specific workspace
 pixi config set experimental.use-environment-activation-cache true --local
 
 ```
 
-This will cache the environment activation in the `.pixi/activation-env-v0` folder in the project root. It will create a json file for each environment that is activated, and it will be used to activate the environment in the future.
+This will cache the environment activation in the `.pixi/activation-env-v0` folder in the workspace root. It will create a json file for each environment that is activated, and it will be used to activate the environment in the future.
 
 ```bash
 > tree .pixi/activation-env-v0/
@@ -9919,7 +9715,7 @@ python = ["3.11.*", "3.12.*"]
 [workspace.target.win-64.build-variants]
 python = ["3.11.*"]  # Only Python 3.11 on Windows
 c_compiler = ["vs2019"]
-# Linux-specific variants  
+# Linux-specific variants
 [workspace.target.linux-64.build-variants]
 c_compiler = ["gcc"]
 c_compiler_version = ["11.4", "13.0"]
@@ -10613,7 +10409,7 @@ Workspace inheritance
 Most extra fields can be inherited from the workspace manifest. This means that you can define the `description`, `authors`, `license` in the workspace manifest, and they will be inherited by the package manifest.
 
 ```toml
-[workspace]    
+[workspace]
 name = "my-workspace"
 [package]
 name = { workspace = true } # Inherit the name from the workspace
@@ -12686,7 +12482,7 @@ pixi workspace [OPTIONS] <COMMAND>
 | [`description`](description/)                 | Commands to manage workspace description                |
 | [`platform`](platform/)                       | Commands to manage workspace platforms                  |
 | [`version`](version/)                         | Commands to manage workspace version                    |
-| [`environment`](environment/)                 | Commands to manage project environments                 |
+| [`environment`](environment/)                 | Commands to manage workspace environments               |
 | [`export`](export/)                           | Commands to export workspaces to other formats          |
 | [`name`](name/)                               | Commands to manage workspace name                       |
 | [`system-requirements`](system-requirements/) | Commands to manage workspace system requirements        |
@@ -14233,7 +14029,7 @@ pixi workspace description [OPTIONS] <COMMAND>
 
 ## About
 
-Commands to manage project environments
+Commands to manage workspace environments
 
 ## Usage
 
@@ -15168,7 +14964,7 @@ New-Alias -Name not_pixi -Value pixi
 
 **TL;DR**: It's coming we promise!
 
-`pixi build` is going to be the subcommand that can generate a conda package out of a Pixi project. This requires a solid build tool which we're creating with [`rattler-build`](https://github.com/prefix-dev/rattler-build) which will be used as a library in pixi.
+`pixi build` is going to be the subcommand that can generate a conda package out of a Pixi workspace. This requires a solid build tool which we're creating with [`rattler-build`](https://github.com/prefix-dev/rattler-build) which will be used as a library in pixi.
 
 This is a guide for distribution maintainers wanting to package Pixi for a different package manager. Users of Pixi can ignore this page.
 
