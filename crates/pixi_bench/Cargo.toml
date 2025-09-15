@@ -23,6 +23,9 @@ miette = { workspace = true, features = ["fancy-no-backtrace"] }
 pixi_cli = { path = "../pixi_cli" }
 pixi_config = { path = "../pixi_config" }
 pixi_core = { path = "../pixi_core" }
+pixi_global = { path = "../pixi_global" }
+pixi_manifest = { path = "../pixi_manifest" }
+pixi_spec = { path = "../pixi_spec" }
 rattler_conda_types = { workspace = true }
 
 [[bench]]
@@ -38,9 +41,11 @@ name = "lock_install"
 harness = false
 name = "task_run"
 
+
 [[bench]]
 harness = false
 name = "global_install"
+
 
 [profile.release]
 debug = true

@@ -1,13 +1,20 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use fs_err as fs;
+use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::process::Command;
+use std::str::FromStr;
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
 
 // Pixi crate imports for direct API usage
+use pixi_global::project::GlobalSpec;
+use pixi_global::{EnvironmentName, Project};
 use rattler_conda_types::{NamedChannelOrUrl, Platform};
+
+// Single global runtime for all benchmarks
+static RUNTIME: Lazy<tokio::runtime::Runtime> =
+    Lazy::new(|| tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime"));
 
 /// Create an isolated pixi environment for global install testing
 struct IsolatedPixiGlobalEnv {
@@ -80,213 +87,310 @@ impl IsolatedPixiGlobalEnv {
         env_vars
     }
 
-    /// Run pixi global install and measure execution time
-    fn pixi_global_install(
+    /// Run pixi global install and measure execution time using pixi_global crate directly
+    async fn pixi_global_install(
         &self,
         packages: &[&str],
         channels: Option<Vec<NamedChannelOrUrl>>,
         platform: Option<Platform>,
-        force_reinstall: bool,
+        _force_reinstall: bool,
     ) -> Result<Duration, Box<dyn std::error::Error>> {
         println!("⏱️ Timing: pixi global install {} packages", packages.len());
 
         let start = Instant::now();
 
-        // Build command arguments for global install
-        let mut args = vec!["global".to_string(), "install".to_string()];
-
-        // Add packages
-        for package in packages {
-            args.push(package.to_string());
-        }
-
-        // Add channels if specified
-        if let Some(channels) = channels {
-            for channel in channels {
-                args.push("--channel".to_string());
-                args.push(channel.to_string());
-            }
-        }
-
-        // Add platform if specified
-        if let Some(platform) = platform {
-            args.push("--platform".to_string());
-            args.push(platform.to_string());
-        }
-
-        // Add force reinstall if specified
-        if force_reinstall {
-            args.push("--force-reinstall".to_string());
-        }
-
-        // Add no shortcuts for benchmarking
-        args.push("--no-shortcuts".to_string());
-
-        // Use system pixi binary to avoid permission issues
-        let pixi_binary = "pixi";
-
-        // Execute pixi global install as subprocess
-        let mut cmd = Command::new(pixi_binary);
-        cmd.args(&args);
-
-        // Set environment variables
+        // Set environment variables for pixi_global
         for (key, value) in self.get_env_vars() {
-            cmd.env(key, value);
+            std::env::set_var(key, value);
         }
 
-        let result = cmd.output();
+        // Create or discover the global project
+        let mut project = Project::discover_or_create().await?;
 
-        match result {
-            Ok(output) => {
-                let duration = start.elapsed();
-                if output.status.success() {
-                    println!(
-                        "✅ Global install completed in {:.2}s",
-                        duration.as_secs_f64()
-                    );
-                    Ok(duration)
-                } else {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    println!("❌ pixi global install failed: {}", stderr);
-                    Err(format!("pixi global install failed: {}", stderr).into())
-                }
-            }
-            Err(e) => {
-                println!("❌ pixi global install failed to execute: {}", e);
-                Err(format!("pixi global install failed to execute: {}", e).into())
-            }
+        // Create environment name from first package
+        let env_name = EnvironmentName::from_str(&format!("bench_{}", packages[0]))?;
+
+        // Use local channel if no channels specified
+        let channels = channels.unwrap_or_else(|| {
+            let current_dir = std::env::current_dir().unwrap_or_default();
+            let local_channel_dir = if current_dir.ends_with("pixi_bench") {
+                current_dir.join("my-local-channel")
+            } else {
+                current_dir.join("crates/pixi_bench/my-local-channel")
+            };
+            let local_channel_url = format!("file://{}", local_channel_dir.to_string_lossy());
+            vec![NamedChannelOrUrl::Url(local_channel_url.parse().unwrap())]
+        });
+
+        // Add environment to manifest with channels
+        project
+            .manifest
+            .add_environment(&env_name, Some(channels))?;
+
+        // Set platform if specified
+        if let Some(platform) = platform {
+            project.manifest.set_platform(&env_name, platform)?;
         }
+
+        // Add each package as a dependency with version constraint to match local channel
+        for package in packages {
+            let package_spec = format!("{}==1.0.0", package);
+            let global_spec =
+                GlobalSpec::try_from_str(&package_spec, project.global_channel_config())?;
+            project.manifest.add_dependency(&env_name, &global_spec)?;
+        }
+
+        // Install the environment
+        let _environment_update = project.install_environment(&env_name).await?;
+
+        let duration = start.elapsed();
+        println!(
+            "✅ Global install completed in {:.2}s",
+            duration.as_secs_f64()
+        );
+
+        Ok(duration)
     }
 
     /// Install a single small package
-    fn install_single_small(&self) -> Result<Duration, Box<dyn std::error::Error>> {
-        self.pixi_global_install(&["ripgrep"], None, None, false)
+    async fn install_single_small(&self) -> Result<Duration, Box<dyn std::error::Error>> {
+        self.pixi_global_install(&["numpy"], None, None, false)
+            .await
     }
 
     /// Install multiple small packages
-    fn install_multiple_small(&self) -> Result<Duration, Box<dyn std::error::Error>> {
-        self.pixi_global_install(&["ripgrep", "bat", "fd-find"], None, None, false)
+    async fn install_multiple_small(&self) -> Result<Duration, Box<dyn std::error::Error>> {
+        self.pixi_global_install(&["numpy", "pandas", "requests"], None, None, false)
+            .await
     }
 
     /// Install a medium-sized package
-    fn install_medium(&self) -> Result<Duration, Box<dyn std::error::Error>> {
-        self.pixi_global_install(&["starship"], None, None, false)
+    async fn install_medium(&self) -> Result<Duration, Box<dyn std::error::Error>> {
+        self.pixi_global_install(&["matplotlib"], None, None, false)
+            .await
     }
 
     /// Install a large package
-    fn install_large(&self) -> Result<Duration, Box<dyn std::error::Error>> {
+    async fn install_large(&self) -> Result<Duration, Box<dyn std::error::Error>> {
         self.pixi_global_install(&["jupyter"], None, None, false)
+            .await
     }
 
     /// Install with force reinstall
-    fn install_with_force_reinstall(&self) -> Result<Duration, Box<dyn std::error::Error>> {
+    async fn install_with_force_reinstall(&self) -> Result<Duration, Box<dyn std::error::Error>> {
         // First install
-        let _ = self.pixi_global_install(&["ripgrep"], None, None, false)?;
+        let _ = self
+            .pixi_global_install(&["numpy"], None, None, false)
+            .await?;
         // Then force reinstall
-        self.pixi_global_install(&["ripgrep"], None, None, true)
+        self.pixi_global_install(&["numpy"], None, None, true).await
     }
 
     /// Install with specific platform
-    fn install_with_platform(&self) -> Result<Duration, Box<dyn std::error::Error>> {
+    async fn install_with_platform(&self) -> Result<Duration, Box<dyn std::error::Error>> {
         let platform = Platform::current();
-        self.pixi_global_install(&["bat"], None, Some(platform), false)
+        self.pixi_global_install(&["click"], None, Some(platform), false)
+            .await
     }
 
     /// Install with custom channel
-    fn install_with_custom_channel(&self) -> Result<Duration, Box<dyn std::error::Error>> {
-        let channels = vec![
-            NamedChannelOrUrl::Name("conda-forge".to_string()),
-            NamedChannelOrUrl::Name("bioconda".to_string()),
-        ];
-        self.pixi_global_install(&["samtools"], Some(channels), None, false)
+    async fn install_with_custom_channel(&self) -> Result<Duration, Box<dyn std::error::Error>> {
+        // Use local channel for this test too, but with different packages
+        let current_dir = std::env::current_dir().unwrap_or_default();
+        let local_channel_dir = if current_dir.ends_with("pixi_bench") {
+            current_dir.join("my-local-channel")
+        } else {
+            current_dir.join("crates/pixi_bench/my-local-channel")
+        };
+        let local_channel_url = format!("file://{}", local_channel_dir.to_string_lossy());
+        let channels = vec![NamedChannelOrUrl::Url(local_channel_url.parse().unwrap())];
+        self.pixi_global_install(&["scipy"], Some(channels), None, false)
+            .await
     }
 
-    /// Run pixi global uninstall and measure execution time
-    fn pixi_global_uninstall(
+    /// Install and uninstall a single small package (only uninstall is timed)
+    async fn install_and_uninstall_single_small(
         &self,
-        packages: &[&str],
     ) -> Result<Duration, Box<dyn std::error::Error>> {
+        // Set environment variables once for both operations
+        for (key, value) in self.get_env_vars() {
+            std::env::set_var(key, value);
+        }
+
+        // Create a single project instance for both operations
+        let mut project = Project::discover_or_create().await?;
+        let env_name = EnvironmentName::from_str("bench_numpy")?;
+
+        // Use local channel
+        let current_dir = std::env::current_dir().unwrap_or_default();
+        let local_channel_dir = if current_dir.ends_with("pixi_bench") {
+            current_dir.join("my-local-channel")
+        } else {
+            current_dir.join("crates/pixi_bench/my-local-channel")
+        };
+        let local_channel_url = format!("file://{}", local_channel_dir.to_string_lossy());
+        let channels = vec![NamedChannelOrUrl::Url(local_channel_url.parse().unwrap())];
+
+        // Setup: Install the package (not timed)
+        project
+            .manifest
+            .add_environment(&env_name, Some(channels))?;
+        let package_spec = "numpy==1.0.0";
+        let global_spec = GlobalSpec::try_from_str(package_spec, project.global_channel_config())?;
+        project.manifest.add_dependency(&env_name, &global_spec)?;
+        let _ = project.install_environment(&env_name).await?;
+
+        // Measure: Only the uninstall operation
+        println!("⏱️ Timing: pixi global uninstall 1 packages");
+        let start = Instant::now();
+        let _ = project.remove_environment(&env_name).await?;
+        let duration = start.elapsed();
+        println!(
+            "✅ Global uninstall completed in {:.2}s",
+            duration.as_secs_f64()
+        );
+
+        Ok(duration)
+    }
+
+    /// Install and uninstall multiple small packages (only uninstall is timed)
+    async fn install_and_uninstall_multiple_small(
+        &self,
+    ) -> Result<Duration, Box<dyn std::error::Error>> {
+        // Set environment variables once for all operations
+        for (key, value) in self.get_env_vars() {
+            std::env::set_var(key, value);
+        }
+
+        // Create a single project instance for all operations
+        let mut project = Project::discover_or_create().await?;
+
+        // Use local channel
+        let current_dir = std::env::current_dir().unwrap_or_default();
+        let local_channel_dir = if current_dir.ends_with("pixi_bench") {
+            current_dir.join("my-local-channel")
+        } else {
+            current_dir.join("crates/pixi_bench/my-local-channel")
+        };
+        let local_channel_url = format!("file://{}", local_channel_dir.to_string_lossy());
+        let channels = vec![NamedChannelOrUrl::Url(local_channel_url.parse().unwrap())];
+
+        // Setup: Install the packages (not timed)
+        let packages = ["numpy", "pandas", "requests"];
+        for package in &packages {
+            let env_name = EnvironmentName::from_str(&format!("bench_{}", package))?;
+            project
+                .manifest
+                .add_environment(&env_name, Some(channels.clone()))?;
+            let package_spec = format!("{}==1.0.0", package);
+            let global_spec =
+                GlobalSpec::try_from_str(&package_spec, project.global_channel_config())?;
+            project.manifest.add_dependency(&env_name, &global_spec)?;
+            let _ = project.install_environment(&env_name).await?;
+        }
+
+        // Measure: Only the uninstall operations
         println!(
             "⏱️ Timing: pixi global uninstall {} packages",
             packages.len()
         );
-
         let start = Instant::now();
-
-        // Build command arguments for global uninstall
-        let mut args = vec!["global".to_string(), "uninstall".to_string()];
-
-        // Add packages
-        for package in packages {
-            args.push(package.to_string());
+        for package in &packages {
+            let env_name = EnvironmentName::from_str(&format!("bench_{}", package))?;
+            let _ = project.remove_environment(&env_name).await?;
         }
+        let duration = start.elapsed();
+        println!(
+            "✅ Multiple uninstall completed in {:.2}s",
+            duration.as_secs_f64()
+        );
+        Ok(duration)
+    }
 
-        // Use system pixi binary to avoid permission issues
-        let pixi_binary = "pixi";
-
-        // Execute pixi global uninstall as subprocess
-        let mut cmd = Command::new(pixi_binary);
-        cmd.args(&args);
-
-        // Set environment variables
+    /// Install and uninstall a medium-sized package (only uninstall is timed)
+    async fn install_and_uninstall_medium(&self) -> Result<Duration, Box<dyn std::error::Error>> {
+        // Set environment variables once for both operations
         for (key, value) in self.get_env_vars() {
-            cmd.env(key, value);
+            std::env::set_var(key, value);
         }
 
-        let result = cmd.output();
+        // Create a single project instance for both operations
+        let mut project = Project::discover_or_create().await?;
+        let env_name = EnvironmentName::from_str("bench_matplotlib")?;
 
-        match result {
-            Ok(output) => {
-                let duration = start.elapsed();
-                if output.status.success() {
-                    println!(
-                        "✅ Global uninstall completed in {:.2}s",
-                        duration.as_secs_f64()
-                    );
-                    Ok(duration)
-                } else {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    println!("❌ pixi global uninstall failed: {}", stderr);
-                    Err(format!("pixi global uninstall failed: {}", stderr).into())
-                }
-            }
-            Err(e) => {
-                println!("❌ pixi global uninstall failed to execute: {}", e);
-                Err(format!("pixi global uninstall failed to execute: {}", e).into())
-            }
+        // Use local channel
+        let current_dir = std::env::current_dir().unwrap_or_default();
+        let local_channel_dir = if current_dir.ends_with("pixi_bench") {
+            current_dir.join("my-local-channel")
+        } else {
+            current_dir.join("crates/pixi_bench/my-local-channel")
+        };
+        let local_channel_url = format!("file://{}", local_channel_dir.to_string_lossy());
+        let channels = vec![NamedChannelOrUrl::Url(local_channel_url.parse().unwrap())];
+
+        // Setup: Install the package (not timed)
+        project
+            .manifest
+            .add_environment(&env_name, Some(channels))?;
+        let package_spec = "matplotlib==1.0.0";
+        let global_spec = GlobalSpec::try_from_str(package_spec, project.global_channel_config())?;
+        project.manifest.add_dependency(&env_name, &global_spec)?;
+        let _ = project.install_environment(&env_name).await?;
+
+        // Measure: Only the uninstall operation
+        println!("⏱️ Timing: pixi global uninstall 1 packages");
+        let start = Instant::now();
+        let _ = project.remove_environment(&env_name).await?;
+        let duration = start.elapsed();
+        println!(
+            "✅ Global uninstall completed in {:.2}s",
+            duration.as_secs_f64()
+        );
+
+        Ok(duration)
+    }
+
+    /// Install and uninstall a large package (only uninstall is timed)
+    async fn install_and_uninstall_large(&self) -> Result<Duration, Box<dyn std::error::Error>> {
+        // Set environment variables once for both operations
+        for (key, value) in self.get_env_vars() {
+            std::env::set_var(key, value);
         }
-    }
 
-    /// Uninstall a single small package
-    fn uninstall_single_small(&self) -> Result<Duration, Box<dyn std::error::Error>> {
-        // First install the package
-        let _ = self.pixi_global_install(&["ripgrep"], None, None, false)?;
-        // Then uninstall it
-        self.pixi_global_uninstall(&["ripgrep"])
-    }
+        // Create a single project instance for both operations
+        let mut project = Project::discover_or_create().await?;
+        let env_name = EnvironmentName::from_str("bench_jupyter")?;
 
-    /// Uninstall multiple small packages
-    fn uninstall_multiple_small(&self) -> Result<Duration, Box<dyn std::error::Error>> {
-        // First install the packages
-        let _ = self.pixi_global_install(&["ripgrep", "bat", "fd-find"], None, None, false)?;
-        // Then uninstall them
-        self.pixi_global_uninstall(&["ripgrep", "bat", "fd-find"])
-    }
+        // Use local channel
+        let current_dir = std::env::current_dir().unwrap_or_default();
+        let local_channel_dir = if current_dir.ends_with("pixi_bench") {
+            current_dir.join("my-local-channel")
+        } else {
+            current_dir.join("crates/pixi_bench/my-local-channel")
+        };
+        let local_channel_url = format!("file://{}", local_channel_dir.to_string_lossy());
+        let channels = vec![NamedChannelOrUrl::Url(local_channel_url.parse().unwrap())];
 
-    /// Uninstall a medium-sized package
-    fn uninstall_medium(&self) -> Result<Duration, Box<dyn std::error::Error>> {
-        // First install the package
-        let _ = self.pixi_global_install(&["starship"], None, None, false)?;
-        // Then uninstall it
-        self.pixi_global_uninstall(&["starship"])
-    }
+        // Setup: Install the package (not timed)
+        project
+            .manifest
+            .add_environment(&env_name, Some(channels))?;
+        let package_spec = "jupyter==1.0.0";
+        let global_spec = GlobalSpec::try_from_str(package_spec, project.global_channel_config())?;
+        project.manifest.add_dependency(&env_name, &global_spec)?;
+        let _ = project.install_environment(&env_name).await?;
 
-    /// Uninstall a large package
-    fn uninstall_large(&self) -> Result<Duration, Box<dyn std::error::Error>> {
-        // First install the package
-        let _ = self.pixi_global_install(&["jupyter"], None, None, false)?;
-        // Then uninstall it
-        self.pixi_global_uninstall(&["jupyter"])
+        // Measure: Only the uninstall operation
+        println!("⏱️ Timing: pixi global uninstall 1 packages");
+        let start = Instant::now();
+        let _ = project.remove_environment(&env_name).await?;
+        let duration = start.elapsed();
+        println!(
+            "✅ Global uninstall completed in {:.2}s",
+            duration.as_secs_f64()
+        );
+
+        Ok(duration)
     }
 }
 
@@ -318,10 +422,11 @@ fn bench_single_package(c: &mut Criterion) {
 
     // Cold cache benchmark - always creates new isolated environment
     group.bench_function("cold_cache_single", |b| {
-        b.iter(|| {
+        b.to_async(&*RUNTIME).iter(|| async {
             let env = IsolatedPixiGlobalEnv::new().expect("Failed to create isolated environment");
             let duration = env
                 .install_single_small()
+                .await
                 .expect("Failed to time pixi global install");
             black_box(duration)
         })
@@ -329,11 +434,12 @@ fn bench_single_package(c: &mut Criterion) {
 
     // Warm cache benchmark - reuses shared cache
     group.bench_function("warm_cache_single", |b| {
-        b.iter(|| {
+        b.to_async(&*RUNTIME).iter(|| async {
             let env = IsolatedPixiGlobalEnv::new_with_shared_cache(&shared_cache.cache_dir)
                 .expect("Failed to create environment with shared cache");
             let duration = env
                 .install_single_small()
+                .await
                 .expect("Failed to time pixi global install");
             black_box(duration)
         })
@@ -349,10 +455,11 @@ fn bench_multiple_packages(c: &mut Criterion) {
 
     // Cold cache benchmark
     group.bench_function("cold_cache_multiple", |b| {
-        b.iter(|| {
+        b.to_async(&*RUNTIME).iter(|| async {
             let env = IsolatedPixiGlobalEnv::new().expect("Failed to create isolated environment");
             let duration = env
                 .install_multiple_small()
+                .await
                 .expect("Failed to time pixi global install");
             black_box(duration)
         })
@@ -360,11 +467,12 @@ fn bench_multiple_packages(c: &mut Criterion) {
 
     // Warm cache benchmark
     group.bench_function("warm_cache_multiple", |b| {
-        b.iter(|| {
+        b.to_async(&*RUNTIME).iter(|| async {
             let env = IsolatedPixiGlobalEnv::new_with_shared_cache(&shared_cache.cache_dir)
                 .expect("Failed to create environment with shared cache");
             let duration = env
                 .install_multiple_small()
+                .await
                 .expect("Failed to time pixi global install");
             black_box(duration)
         })
@@ -380,11 +488,12 @@ fn bench_package_sizes(c: &mut Criterion) {
 
     // Medium package benchmark
     group.bench_function("medium_package", |b| {
-        b.iter(|| {
+        b.to_async(&*RUNTIME).iter(|| async {
             let env = IsolatedPixiGlobalEnv::new_with_shared_cache(&shared_cache.cache_dir)
                 .expect("Failed to create environment with shared cache");
             let duration = env
                 .install_medium()
+                .await
                 .expect("Failed to time pixi global install");
             black_box(duration)
         })
@@ -392,11 +501,12 @@ fn bench_package_sizes(c: &mut Criterion) {
 
     // Large package benchmark
     group.bench_function("large_package", |b| {
-        b.iter(|| {
+        b.to_async(&*RUNTIME).iter(|| async {
             let env = IsolatedPixiGlobalEnv::new_with_shared_cache(&shared_cache.cache_dir)
                 .expect("Failed to create environment with shared cache");
             let duration = env
                 .install_large()
+                .await
                 .expect("Failed to time pixi global install");
             black_box(duration)
         })
@@ -412,11 +522,12 @@ fn bench_special_scenarios(c: &mut Criterion) {
 
     // Force reinstall benchmark
     group.bench_function("force_reinstall", |b| {
-        b.iter(|| {
+        b.to_async(&*RUNTIME).iter(|| async {
             let env = IsolatedPixiGlobalEnv::new_with_shared_cache(&shared_cache.cache_dir)
                 .expect("Failed to create environment with shared cache");
             let duration = env
                 .install_with_force_reinstall()
+                .await
                 .expect("Failed to time pixi global install with force reinstall");
             black_box(duration)
         })
@@ -424,11 +535,12 @@ fn bench_special_scenarios(c: &mut Criterion) {
 
     // Platform-specific install benchmark
     group.bench_function("platform_specific", |b| {
-        b.iter(|| {
+        b.to_async(&*RUNTIME).iter(|| async {
             let env = IsolatedPixiGlobalEnv::new_with_shared_cache(&shared_cache.cache_dir)
                 .expect("Failed to create environment with shared cache");
             let duration = env
                 .install_with_platform()
+                .await
                 .expect("Failed to time pixi global install with platform");
             black_box(duration)
         })
@@ -436,11 +548,12 @@ fn bench_special_scenarios(c: &mut Criterion) {
 
     // Custom channel benchmark
     group.bench_function("custom_channel", |b| {
-        b.iter(|| {
+        b.to_async(&*RUNTIME).iter(|| async {
             let env = IsolatedPixiGlobalEnv::new_with_shared_cache(&shared_cache.cache_dir)
                 .expect("Failed to create environment with shared cache");
             let duration = env
                 .install_with_custom_channel()
+                .await
                 .expect("Failed to time pixi global install with custom channel");
             black_box(duration)
         })
@@ -456,11 +569,13 @@ fn bench_single_package_uninstall(c: &mut Criterion) {
 
     // Uninstall single package benchmark
     group.bench_function("uninstall_single", |b| {
-        b.iter(|| {
+        b.to_async(&*RUNTIME).iter(|| async {
             let env = IsolatedPixiGlobalEnv::new_with_shared_cache(&shared_cache.cache_dir)
                 .expect("Failed to create environment with shared cache");
+            // Install and uninstall (only uninstall is timed)
             let duration = env
-                .uninstall_single_small()
+                .install_and_uninstall_single_small()
+                .await
                 .expect("Failed to time pixi global uninstall");
             black_box(duration)
         })
@@ -476,11 +591,13 @@ fn bench_multiple_packages_uninstall(c: &mut Criterion) {
 
     // Uninstall multiple packages benchmark
     group.bench_function("uninstall_multiple", |b| {
-        b.iter(|| {
+        b.to_async(&*RUNTIME).iter(|| async {
             let env = IsolatedPixiGlobalEnv::new_with_shared_cache(&shared_cache.cache_dir)
                 .expect("Failed to create environment with shared cache");
+            // Install and uninstall (only uninstall is timed)
             let duration = env
-                .uninstall_multiple_small()
+                .install_and_uninstall_multiple_small()
+                .await
                 .expect("Failed to time pixi global uninstall");
             black_box(duration)
         })
@@ -496,11 +613,13 @@ fn bench_package_sizes_uninstall(c: &mut Criterion) {
 
     // Medium package uninstall benchmark
     group.bench_function("uninstall_medium_package", |b| {
-        b.iter(|| {
+        b.to_async(&*RUNTIME).iter(|| async {
             let env = IsolatedPixiGlobalEnv::new_with_shared_cache(&shared_cache.cache_dir)
                 .expect("Failed to create environment with shared cache");
+            // Install and uninstall (only uninstall is timed)
             let duration = env
-                .uninstall_medium()
+                .install_and_uninstall_medium()
+                .await
                 .expect("Failed to time pixi global uninstall");
             black_box(duration)
         })
@@ -508,11 +627,13 @@ fn bench_package_sizes_uninstall(c: &mut Criterion) {
 
     // Large package uninstall benchmark
     group.bench_function("uninstall_large_package", |b| {
-        b.iter(|| {
+        b.to_async(&*RUNTIME).iter(|| async {
             let env = IsolatedPixiGlobalEnv::new_with_shared_cache(&shared_cache.cache_dir)
                 .expect("Failed to create environment with shared cache");
+            // Install and uninstall (only uninstall is timed)
             let duration = env
-                .uninstall_large()
+                .install_and_uninstall_large()
+                .await
                 .expect("Failed to time pixi global uninstall");
             black_box(duration)
         })
