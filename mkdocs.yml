@@ -108,7 +108,7 @@ nav:
   - Home: index.md
   - Getting Started:
       - Installation: installation.md
-      - First Project: first_project.md
+      - First Workspace: first_workspace.md
       - Basic Usage: getting_started.md
   - Tutorials:
       - Python:
@@ -207,6 +207,7 @@ not_in_nav: |
 plugins:
   - redirects:
       redirect_maps:
+        "first_project.md": "first_workspace.md"
         "configuration.md": "reference/pixi_manifest.md"
         "reference/project_configuration.md": "reference/pixi_manifest.md"
         "basic_usage.md": "getting_started.md"

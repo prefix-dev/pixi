@@ -1,4 +1,4 @@
-Pixi is a tool to manage virtual environments.
+Pixi is a tool to manage environments.
 This document explains what an environment looks like and how to use it.
 
 ## Activation
@@ -153,7 +153,7 @@ This will always be slower than the pure conda solves. So for the best Pixi expe
 ## Caching packages
 
 Pixi caches all previously downloaded packages in a cache folder.
-This cache folder is shared between all Pixi projects and globally installed tools.
+This cache folder is shared between all Pixi workspaces and globally installed tools.
 
 Normally the location would be the following
 platform-specific default cache folder:

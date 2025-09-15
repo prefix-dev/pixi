@@ -113,7 +113,7 @@ In this example we will use multiple environments to test a package against mult
 This is a common use-case when developing a python library.
 This workflow can be translated to any setup where you want to have multiple environments to test against a different dependency setups.
 
-For this example we assume you have run the commands in the previous example, and have a project with a `test` environment.
+For this example we assume you have run the commands in the previous example, and have a workspace with a `test` environment.
 To allow python being flexible in the new environments we need to set it to a more flexible version e.g. `*`.
 
 
@@ -163,7 +163,7 @@ test:
 More info on that in the GitHub actions [documentation](../integration/ci/github_actions.md).
 
 ## Development, Testing, Production environments
-This assumes a clean project, so if you have been following along, you might want to start a new project.
+This assumes a clean workspace, so if you have been following along, you might want to start a new workspace.
 ```shell
 pixi init production_project
 cd production_project
