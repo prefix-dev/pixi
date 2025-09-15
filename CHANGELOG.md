@@ -5,6 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.55.0] - 2025-09-15
+#### ✨ Highlights
+
+This cycle, the Pixi team focused on squashing bugs.
+We especially focused on problems that were annoying and open for some time,
+but never quite important to fix *right now*.
+
+#### ⚠️ Breaking Change
+
+The environment variable overwriting logic is changed.
+If you think you haven't read this for the first time, then you are right!
+We already attempted to fix the order and other weird aspects of our environment variable handling in the past,
+but had to revert it, since it broke too many things.
+This time we touched significantly less logic so we hope that the impact will be minimal.
+
+Previously, the variables in your own environment would overwrite the variables set in the Pixi manifest.
+This is now reversed, meaning that the variables set in the Pixi manifest will overwrite the variables in your own environment.
+Also task environment variables will now be considered even if that environment variable was already defined outside of Pixi.
+More info can be found in the [documentation](https://pixi.sh/v0.55.0/reference/environment_variables/).
+
+
+#### Changed
+
+- Search in `pixi global` directory as well, along with PATH by @mrswastik-robot in [#4365](https://github.com/prefix-dev/pixi/pull/4365)
+- Add cargo-deny by @haecker-felix in [#4539](https://github.com/prefix-dev/pixi/pull/4539)
+
+
+#### Documentation
+
+- Add hyperlinks for `cargo` and `npm` by @lucascolley in [#4582](https://github.com/prefix-dev/pixi/pull/4582)
+- Update cuda tags in `pixi-docker` by @mbrobbel in [#4534](https://github.com/prefix-dev/pixi/pull/4534)
+- Refactor 'pixi-extensions' docs to the latest changes by @mrswastik-robot in [#4541](https://github.com/prefix-dev/pixi/pull/4541)
+- Fix warning syntax for detached-environments by @lucascolley in [#4557](https://github.com/prefix-dev/pixi/pull/4557)
+
+
+#### Fixed
+
+- Check when to render as ninja string by @tdejager in [#4535](https://github.com/prefix-dev/pixi/pull/4535)
+- Honor explicit manifest by @remimimimimi in [#4536](https://github.com/prefix-dev/pixi/pull/4536)
+- Upgrade for all targets by @remimimimimi in [#4553](https://github.com/prefix-dev/pixi/pull/4553)
+- Set pixi cache dir when building cmake extensions by @nichmor in [#4567](https://github.com/prefix-dev/pixi/pull/4567)
+- Environment variable priority by @Hofer-Julian in [#4544](https://github.com/prefix-dev/pixi/pull/4544)
+- Clear filesystem caches in between `pixi run` steps by @baszalmstra in [#4523](https://github.com/prefix-dev/pixi/pull/4523)
+- Collect errors with `pixi global` install and uninstall by @Hofer-Julian in [#4565](https://github.com/prefix-dev/pixi/pull/4565)
+- Check for missing channels in `solve_pixi` by @lucascolley in [#4580](https://github.com/prefix-dev/pixi/pull/4580)
+
+
+#### New Contributors
+* @mbrobbel made their first contribution in [#4534](https://github.com/prefix-dev/pixi/pull/4534)
+
 ### [0.54.2] - 2025-09-08
 #### Added
 
@@ -61,10 +111,10 @@ And you can install subsets of packages now works, for both conda and pypi packa
   ```bash
   # Define which packages you want to install and which you want to skip.
   pixi install --only packageA --only packageB --skip packageC
-  
+
   # Using this modified environment without updating it again can be done with:
   pixi run --as-is my_command
-  pixi shell --as-is  
+  pixi shell --as-is
   ```
 
 #### Breaking Change
@@ -76,7 +126,7 @@ name = "my-package" # This is now optional
 version = "0.1.0" # This is now optional
 ```
 Soon, the backends will be able to automatically get those values from `pyproject.toml`, `Cargo.toml`, `package.xml` etc.
-However, this results in the lockfiles not being `--locked` anymore. 
+However, this results in the lockfiles not being `--locked` anymore.
 Running `pixi lock` or `pixi update` should fix this!
 
 #### Added
@@ -222,16 +272,16 @@ This has be reverted in this release, as there are some issues with it.
 ### [0.51.0] - 2025-08-12
 #### ✨ Highlights
 
-Pixi now supports `--skip` on install which means you can skip the installation of a package. 
+Pixi now supports `--skip` on install which means you can skip the installation of a package.
 Which can be useful for things like layering Docker images.
 
 Pixi build got a lot of improvements, including the ability to use build backends from source.
-Starting with this release you can get build backends from conda-forge. 
-We will release stable versions of the build backends on conda-forge, and we maintain a rolling distribution on the `pixi-build-backends` channel. 
+Starting with this release you can get build backends from conda-forge.
+We will release stable versions of the build backends on conda-forge, and we maintain a rolling distribution on the `pixi-build-backends` channel.
 The documentation has been updated to reflect this change.
 
 #### ⚠️ Breaking Change
-The environment variable overwriting logic is changed. 
+The environment variable overwriting logic is changed.
 Previously, the variables in your own environment would overwrite the variables set in the Pixi manifest.
 This is now reversed, meaning that the variables set in the Pixi manifest will overwrite the variables in your own environment.
 More info can be found in the [documentation](https://pixi.sh/dev/reference/environment_variables/).
@@ -272,7 +322,7 @@ More info can be found in the [documentation](https://pixi.sh/dev/reference/envi
 - Mention glow for viewing markdown in the terminal by @pavelzw in [#4288](https://github.com/prefix-dev/pixi/pull/4288)
 - Fix typo by @pavelzw in [#4306](https://github.com/prefix-dev/pixi/pull/4306)[#4309](https://github.com/prefix-dev/pixi/pull/4309)
 - Simplify and fix the `pixi build` getting started by @ruben-arts in [#4304](https://github.com/prefix-dev/pixi/pull/4304)
- 
+
 
 #### Fixed
 
