@@ -11,7 +11,9 @@ use itertools::Itertools;
 use miette::{IntoDiagnostic, NamedSource};
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{Requirement, VersionOrUrl::VersionSpecifier};
-use pixi_command_dispatcher::{CommandDispatcherError, SolvePixiEnvironmentError};
+use pixi_command_dispatcher::{
+    CommandDispatcherError, MissingChannelError, SolvePixiEnvironmentError::MissingChannel,
+};
 use pixi_config::PinningStrategy;
 use pixi_manifest::{
     DependencyOverwriteBehavior, FeatureName, FeaturesExt, HasFeaturesIter, LoadManifestsError,
@@ -368,23 +370,21 @@ impl WorkspaceMut {
             .await?
             .update()
             .await
-            .map_err(|e| {
-                // If it fails due to a missing channel, add a help message
-                // about `pixi workspace channel add`
+            .map_err(|mut e| {
                 if let Some(SolveCondaEnvironmentError::SolveFailed {
                     source:
-                        CommandDispatcherError::Failed(SolvePixiEnvironmentError::MissingChannel(
-                            _,
+                        CommandDispatcherError::Failed(MissingChannel(MissingChannelError {
+                            package: _,
                             channel,
-                        )),
+                            advice,
+                        })),
                     ..
-                }) = e.downcast_ref::<SolveCondaEnvironmentError>()
+                }) = e.downcast_mut::<SolveCondaEnvironmentError>()
                 {
-                    let help_msg = format!(
-                        "help: To add the missing channel to a workspace, use:\n\n  {}",
-                        console::style(format!("pixi workspace channel add {}\n", channel)).bold(),
-                    );
-                    return e.wrap_err(help_msg);
+                    *advice = Some(format!(
+                        "To add the missing channel to a workspace, use:\n\n  {}",
+                        console::style(format!("pixi workspace channel add {}", channel)).bold(),
+                    ));
                 }
                 e
             })?;

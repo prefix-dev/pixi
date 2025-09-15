@@ -243,10 +243,11 @@ impl PixiEnvironmentSpec {
 
                     if !channels.iter().any(|c| c == &base_url) {
                         return Err(CommandDispatcherError::Failed(
-                            SolvePixiEnvironmentError::MissingChannel(
-                                pkg.as_normalized().to_string(),
-                                base_url,
-                            ),
+                            SolvePixiEnvironmentError::MissingChannel(MissingChannelError {
+                                package: pkg.as_normalized().to_string(),
+                                channel: base_url,
+                                advice: None,
+                            }),
                         ));
                     }
                 }
@@ -278,8 +279,19 @@ pub enum SolvePixiEnvironmentError {
     #[error(transparent)]
     ParseChannelError(#[from] ParseChannelError),
 
-    #[error("Package '{0}' requested unavailable channel '{1}'")]
-    MissingChannel(String, ChannelUrl),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    MissingChannel(MissingChannelError),
+}
+
+/// An error for a missing channel in the solve request
+#[derive(Debug, Diagnostic, Error)]
+#[error("Package '{package}' requested unavailable channel '{channel}'")]
+pub struct MissingChannelError {
+    pub package: String,
+    pub channel: ChannelUrl,
+    #[help]
+    pub advice: Option<String>,
 }
 
 impl Borrow<dyn Diagnostic> for Box<SolvePixiEnvironmentError> {
