@@ -64,10 +64,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         Ok(())
     } else {
         for (env_name, err) in errors {
-            tracing::warn!(
-                "Couldn't remove environment {}\n{err:?}",
-                env_name.fancy_display()
-            );
+            tracing::warn!("Couldn't remove {}\n{err:?}", env_name.fancy_display());
         }
         Err(miette::miette!("Some environments couldn't be removed."))
     }
