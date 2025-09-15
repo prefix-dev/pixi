@@ -85,7 +85,7 @@ To learn more about the differences between `conda` and PyPI, see [our Conda & P
 
 ## Lock file
 Pixi will always create a lock file when the dependencies are solved.
-This file will contain all of the exact versions of the workspace's dependencies (and their dependencies).
+This file will contain all the exact versions of the workspace's dependencies (and their dependencies).
 This results in a reproducible environment, which you can share with others, and use for testing and deployment.
 
 The lockfile is called `pixi.lock` and it is created in the root of the workspace.
@@ -141,7 +141,7 @@ pixi run hello
 ```
 This will execute the command `echo Hello, World!` in the workspace's default environment.
 
-??? tip "Do you want use more powerful features?"
+??? tip "Do you want to use more powerful features?"
     Tasks can be much more powerful, for example:
 
     ```toml
