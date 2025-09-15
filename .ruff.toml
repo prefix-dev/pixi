@@ -1,5 +1,5 @@
 line-length = 100
-target-version = "py312"
+target-version = "py313"
 
 [format]
 indent-style = "space"

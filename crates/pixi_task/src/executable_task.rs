@@ -467,18 +467,18 @@ fn get_output_writer_and_handle() -> (ShellPipeWriter, JoinHandle<String>) {
 }
 
 /// Task specific environment variables.
+///
+/// These are rendered as `export KEY=VALUE` statements and prepended to the
+/// task script. At runtime they are interpreted by `deno_task_shell`, not by an
+/// external OS shell, so `$VAR`-style expansion follows deno-task-shell’s
+/// semantics.
 fn get_export_specific_task_env(task: &Task) -> String {
     // Append the environment variables if they don't exist
     let mut export = String::new();
     if let Some(env) = task.env() {
         for (key, value) in env {
-            if value.contains(format!("${}", key).as_str()) || std::env::var(key.as_str()).is_err()
-            {
-                tracing::info!("Setting environment variable: {}=\"{}\"", key, value);
-                export.push_str(&format!("export \"{}={}\";\n", key, value));
-            } else {
-                tracing::info!("Environment variable {} already set", key);
-            }
+            tracing::debug!("Setting environment variable: {}=\"{}\"", key, value);
+            export.push_str(&format!("export \"{}={}\";\n", key, value));
         }
     }
     export
