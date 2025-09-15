@@ -18,14 +18,14 @@ use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Diagnostic, IntoDiagnostic, MietteDiagnostic, Report, WrapErr};
 use pixi_command_dispatcher::{
-    BuildEnvironment, CommandDispatcher, CommandDispatcherError, PixiEnvironmentSpec,
-    SolvePixiEnvironmentError,
+    BuildEnvironment, CommandDispatcher, CommandDispatcherError, PackageIdentifier,
+    PixiEnvironmentSpec, SolvePixiEnvironmentError,
 };
 use pixi_consts::consts;
 use pixi_glob::GlobHashCache;
 use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
-use pixi_record::{ParseLockFileError, PixiRecord};
+use pixi_record::{ParseLockFileError, PinnedSourceSpec, PixiRecord, SourceRecord};
 use pixi_utils::prefix::Prefix;
 use pixi_uv_conversions::{
     ConversionError, to_extra_name, to_marker_environment, to_normalize, to_uv_extra_name,
@@ -694,6 +694,37 @@ impl<'p> LockFileDerivedData<'p> {
             })
             .await
             .map(|(prefix, python_status)| (prefix.clone(), python_status.clone()))
+    }
+
+    /// Returns `PinnedSourceSpec` that can be used to build pixi build package.
+    pub fn pinned_build_source(&self, package: &PackageIdentifier) -> Option<PinnedSourceSpec> {
+        // Determine the platform from the package identifier subdir.
+        let platform = Platform::from_str(&package.subdir).ok()?;
+
+        // Walk through all environments and return the first pinned source spec for the given
+        // package identifier. Assume that in all environments information is equivalent.
+        for (_, env) in self.lock_file.environments() {
+            if let Some(packages) = env.packages(platform) {
+                for locked in packages {
+                    if let Some(conda_data) = locked.as_conda() {
+                        if let Some(source_data) = conda_data.as_source() {
+                            let ident: PackageIdentifier = (&source_data.package_record).into();
+                            if &ident == package {
+                                // Convert to a pixi SourceRecord to use the existing mapping logic,
+                                // then return its pinned source spec (if any).
+                                if let Ok(src_record) = SourceRecord::try_from(source_data.clone())
+                                {
+                                    return src_record.pinned_source_spec;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // If we can't find the package, return None.
+        None
     }
 }
 

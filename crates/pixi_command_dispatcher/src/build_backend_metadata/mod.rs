@@ -156,7 +156,7 @@ impl BuildBackendMetadataSpec {
                     .clone()
                     .resolve(SourceAnchor::from(SourceSpec::from(self.source.clone()))),
                 init_params: discovered_backend.init_params.clone(),
-                source_dir: source_checkout.path.clone(),
+                build_source_dir: source_checkout.path.clone(),
                 channel_config: self.channel_config.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
             })
