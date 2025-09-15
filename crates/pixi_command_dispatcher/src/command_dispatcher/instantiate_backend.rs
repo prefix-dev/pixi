@@ -37,7 +37,7 @@ pub struct InstantiateBackendSpec {
     pub init_params: BackendInitializationParams,
 
     /// The source directory to use for the backend
-    pub source_dir: PathBuf,
+    pub build_source_dir: PathBuf,
 
     /// The channel configuration to use for any source packages required by the
     /// backend.
@@ -55,7 +55,7 @@ impl CommandDispatcher {
     ) -> Result<Backend, CommandDispatcherError<InstantiateBackendError>> {
         let BackendSpec::JsonRpc(backend_spec) = spec.backend_spec;
 
-        let source_dir = spec.source_dir;
+        let source_dir = spec.build_source_dir;
 
         let command_spec = match self.build_backend_overrides() {
             BackendOverride::System(overridden_backends) => overridden_backends
