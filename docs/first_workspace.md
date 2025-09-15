@@ -78,7 +78,7 @@ This will add the `requests` package from PyPI to the workspace:
 
 ```toml title="pixi.toml"
 [pypi-dependencies]
-requests = ">=2.31.0,<3"
+httpx = ">=2.31.0,<3"
 ```
 
 To learn more about the differences between `conda` and PyPI, see [our Conda & PyPI concept documentation](./concepts/conda_pypi.md).
