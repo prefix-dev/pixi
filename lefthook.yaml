@@ -53,15 +53,15 @@ pre-commit:
           - name: dprint fmt
             run: pixi {run} dprint-fmt {staged_files}
             stage_fixed: true
-    - name: typecheck-python
-      glob: "*.{py,pyi}"
-      run: pixi {run} typecheck-python
     - name: typos
       stage_fixed: true
       run: pixi {run} typos
 
 pre-push:
   jobs:
+    - name: typecheck-python
+      glob: "*.{py,pyi}"
+      run: pixi {run} typecheck-python
     - name: cargo-clippy
       glob: "*.rs"
       run: pixi {run} cargo-clippy
