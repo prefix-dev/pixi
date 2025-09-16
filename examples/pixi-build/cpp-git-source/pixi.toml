@@ -1,5 +1,6 @@
 [package.build.source]
 git = "https://github.com/prefix-dev/pixi-build-testsuite.git"
+# branch = "fix/logging_tests"
 subdirectory = "tests/data/pixi_build/cpp-with-path-to-source/project"
 
 [package.build.backend]

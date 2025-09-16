@@ -134,6 +134,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         build_environment: build_environment.clone(),
         variants: Some(variant_configuration.clone()),
         enabled_protocols: Default::default(),
+        override_pinned_build_source: None,
     };
     let backend_metadata = command_dispatcher
         .build_backend_metadata(backend_metadata_spec.clone())

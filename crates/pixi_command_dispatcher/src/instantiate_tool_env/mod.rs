@@ -209,6 +209,7 @@ impl InstantiateToolEnvironmentSpec {
                 channel_priority: ChannelPriority::default(),
                 variants: self.variants.clone(),
                 strategy: SolveStrategy::default(),
+                override_pinned_source_for_package: None,
             })
             .await
             .map_err_with(Box::new)

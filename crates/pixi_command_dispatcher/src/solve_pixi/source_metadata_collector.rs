@@ -27,6 +27,8 @@ pub struct SourceMetadataCollector {
     build_environment: BuildEnvironment,
     enabled_protocols: EnabledProtocols,
     variants: Option<BTreeMap<String, Vec<String>>>,
+    override_pinned_source_for_package:
+        Option<(rattler_conda_types::PackageName, PinnedSourceSpec)>,
 }
 
 #[derive(Default)]
@@ -73,6 +75,10 @@ impl SourceMetadataCollector {
         build_environment: BuildEnvironment,
         variants: Option<BTreeMap<String, Vec<String>>>,
         enabled_protocols: EnabledProtocols,
+        override_pinned_source_for_package: Option<(
+            rattler_conda_types::PackageName,
+            PinnedSourceSpec,
+        )>,
     ) -> Self {
         Self {
             command_queue,
@@ -81,6 +87,7 @@ impl SourceMetadataCollector {
             enabled_protocols,
             channel_config,
             variants,
+            override_pinned_source_for_package,
         }
     }
 
@@ -156,7 +163,20 @@ impl SourceMetadataCollector {
     > {
         tracing::trace!("Collecting source metadata for {name:#?}");
 
-        // Get the source for the particular package.
+        // Determine if we should override the build_source pin for this package.
+        let override_pin =
+            self.override_pinned_source_for_package
+                .as_ref()
+                .and_then(|(pkg, pin)| {
+                    if pkg == &name {
+                        Some(pin.clone())
+                    } else {
+                        None
+                    }
+                });
+
+        // Always checkout the manifest-defined source location (root), discovery
+        // will pick build_source; we only override the build pin later.
         let source = self
             .command_queue
             .pin_and_checkout(spec.location)
@@ -179,6 +199,7 @@ impl SourceMetadataCollector {
                     build_environment: self.build_environment.clone(),
                     variants: self.variants.clone(),
                     enabled_protocols: self.enabled_protocols.clone(),
+                    override_pinned_build_source: override_pin,
                 },
             })
             .await

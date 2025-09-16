@@ -701,6 +701,7 @@ impl SourceBuildSpec {
                 channel_config: self.channel_config.clone(),
                 variants: self.variants.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
+                override_pinned_source_for_package: None,
             })
             .await
     }

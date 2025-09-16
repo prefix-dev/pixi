@@ -389,6 +389,7 @@ impl SourceMetadataSpec {
                 channel_config: self.backend_metadata.channel_config.clone(),
                 variants: self.backend_metadata.variants.clone(),
                 enabled_protocols: self.backend_metadata.enabled_protocols.clone(),
+                override_pinned_source_for_package: None,
             })
             .await
         {
