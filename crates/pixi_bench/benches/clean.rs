@@ -347,23 +347,23 @@ format = "black ."
             std::env::set_var(key, value);
         }
 
+        // Force non-interactive mode for benchmarks
+        std::env::set_var("NO_COLOR", "1");
+        std::env::set_var("PIXI_NO_PROGRESS", "1");
+        std::env::set_var("CI", "1");
+
         // Change to workspace directory
         let original_dir = std::env::current_dir()?;
         std::env::set_current_dir(&self.workspace_dir)?;
 
         let start = Instant::now();
 
-        // Create clean arguments using std::mem::zeroed and then setting the fields
-        // This is a workaround for the private command field
+        // Create clean arguments
         let mut clean_args: clean::Args = unsafe { std::mem::zeroed() };
-
-        // Now set the public fields
         clean_args.workspace_config = pixi_cli::cli_config::WorkspaceConfig::default();
         clean_args.environment = environment.map(|s| s.to_string());
         clean_args.activation_cache = false;
         clean_args.build = false;
-
-        // The private command field is already None due to zeroed()
 
         // Execute pixi clean directly
         let result = clean::execute(clean_args).await;
