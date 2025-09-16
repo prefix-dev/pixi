@@ -66,7 +66,7 @@ platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
 ```
 
-The available platforms are listed here: [link](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/enum.Platform.html)
+The available platforms are listed here: [link](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/platform/enum.Platform.html)
 
 Special macOS behavior
 

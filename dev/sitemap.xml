@@ -2,634 +2,634 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/first_workspace/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/getting_started/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/installation/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/advanced/channel_logic/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/advanced/explain_info_command/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/advanced/pixi_shell/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/advanced/shebang/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/build/advanced_cpp/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/build/backends/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/build/cpp/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/build/dependency_types/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/build/getting_started/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/build/package_source/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/build/python/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/build/ros/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/build/variants/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/build/workspace/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/concepts/conda_pypi/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/deployment/authentication/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/deployment/container/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/deployment/pixi_pack/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/deployment/s3/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/global_tools/introduction/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/global_tools/manifest/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/global_tools/trampolines/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/integration/ci/github_actions/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/integration/ci/updates_github_actions/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/integration/editor/jetbrains/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/integration/editor/jupyterlab/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/integration/editor/r_studio/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/integration/editor/vscode/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/integration/editor/zed/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/integration/extensions/introduction/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/integration/extensions/pixi_diff/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/integration/extensions/pixi_inject/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/integration/extensions/pixi_install_to_prefix/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/integration/third_party/conda_deny/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/integration/third_party/direnv/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/integration/third_party/starship/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/misc/Community/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/misc/FAQ/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/misc/packaging/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/misc/vision/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/overrides/override/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/partials/conda-style-activation/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/python/pyproject_toml/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/python/pytorch/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/python/tutorial/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/environment_variables/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/pixi_configuration/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/pixi_manifest/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/__README/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/add/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/auth/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/build/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/clean/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/completion/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/config/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/exec/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/global/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/import/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/info/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/init/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/install/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/list/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/lock/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/reinstall/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/remove/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/run/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/search/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/self-update/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/shell-hook/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/shell/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/task/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/tree/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/update/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/upgrade/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/upload/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/auth/login/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/auth/logout/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/clean/cache/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/config/append/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/config/edit/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/config/list/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/config/prepend/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/config/set/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/config/unset/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/global/add/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/global/edit/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/global/expose/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/global/install/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/global/list/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/global/remove/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/global/shortcut/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/global/sync/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/global/tree/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/global/uninstall/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/global/update/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/global/upgrade-all/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/global/upgrade/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/global/expose/add/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/global/expose/remove/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/global/shortcut/add/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/global/shortcut/remove/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/task/add/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/task/alias/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/task/list/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/task/remove/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/channel/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/description/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/environment/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/export/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/name/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/platform/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/requires-pixi/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/system-requirements/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/version/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/channel/add/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/channel/list/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/channel/remove/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/description/get/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/description/set/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/environment/add/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/environment/list/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/environment/remove/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/export/conda-environment/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/export/conda-explicit-spec/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/name/get/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/name/set/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/platform/add/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/platform/list/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/platform/remove/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/requires-pixi/get/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/requires-pixi/set/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/requires-pixi/unset/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/requires-pixi/verify/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/system-requirements/add/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/system-requirements/list/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/version/get/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/version/major/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/version/minor/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/version/patch/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/workspace/version/set/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/switching_from/conda/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/switching_from/poetry/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/tutorials/multi_environment/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/tutorials/ros2/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/tutorials/rust/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/workspace/advanced_tasks/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/workspace/environment/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/workspace/lockfile/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/workspace/multi_environment/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/workspace/multi_platform_configuration/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/workspace/system_requirements/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
     <url>
          <loc>https://prefix-dev.github.io/pixi/dev/CHANGELOG/</loc>
-         <lastmod>2025-09-15</lastmod>
+         <lastmod>2025-09-16</lastmod>
     </url>
 </urlset>
