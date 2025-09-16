@@ -279,7 +279,7 @@ impl<'p> ExecutableTask<'p> {
         // If neither is available, create a minimal hash so we can report warnings
         // and make a consistent caching decision.
         let mut hash = if let Some(hash) = previous_hash {
-            h
+            hash
         } else if let Some(h) = TaskHash::from_task(self, lock_file).await? {
             h
         } else {
