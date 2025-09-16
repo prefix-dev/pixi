@@ -268,7 +268,15 @@ impl ManifestDocument {
 
         self.manifest_mut()
             .get_or_insert_nested_table(&table_name.as_keys())
-            .map(|t| t.remove(dep.as_source()))?;
+            .inspect(|t| {
+                eprintln!("table contains {:?}", t.get_values());
+                eprintln!("removing pypi dependency {}", dep.as_source());
+            })
+            .map(|t| {
+                let removed = t.remove(dep.as_source());
+                eprintln!("removed = {removed:?}");
+                removed
+            })?;
         Ok(())
     }
 
@@ -282,6 +290,9 @@ impl ManifestDocument {
         let array = self
             .manifest_mut()
             .get_mut_toml_array(table_parts, array_name)?;
+        eprintln!("removing from pypi requirements");
+        eprintln!("array before = {array:#?}");
+        eprintln!("array name = {array_name}");
         if let Some(array) = array {
             array.retain(|x| {
                 let req: pep508_rs::Requirement = x
@@ -289,6 +300,7 @@ impl ManifestDocument {
                     .unwrap_or("")
                     .parse()
                     .expect("should be a valid pep508 dependency");
+                eprintln!("req name = {}", req.name);
                 let name = PypiPackageName::from_normalized(req.name);
                 name != *dependency_name
             });

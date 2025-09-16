@@ -31,8 +31,12 @@ pub(crate) trait HasSpecs {
         self.packages()
             .iter()
             .map(|package| {
+                eprintln!("parsing pypi package: {package}");
                 let dep = Requirement::parse(package, project.root()).into_diagnostic()?;
-                let name = PypiPackageName::from_normalized(dep.clone().name);
+                eprintln!("requirement parsed: {dep}");
+                let name = PypiPackageName::from_normalized(dep.clone().name)
+                    .with_source(package.to_string());
+                eprintln!("pypi package name: {:?}", name);
                 Ok((name, dep))
             })
             .collect()
