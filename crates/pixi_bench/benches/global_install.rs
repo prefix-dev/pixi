@@ -450,7 +450,7 @@ fn bench_multiple_packages(c: &mut Criterion) {
     let shared_cache = SharedCache::new().expect("Failed to create shared cache");
     let mut group = c.benchmark_group("multiple_packages_global_install");
     group.measurement_time(Duration::from_secs(90)); // 1.5 minutes
-    group.sample_size(8); // Fewer samples for multiple packages
+    group.sample_size(10); // Minimum required samples
     group.warm_up_time(Duration::from_secs(10));
 
     // Cold cache benchmark
@@ -483,7 +483,7 @@ fn bench_package_sizes(c: &mut Criterion) {
     let shared_cache = SharedCache::new().expect("Failed to create shared cache");
     let mut group = c.benchmark_group("package_sizes_global_install");
     group.measurement_time(Duration::from_secs(120)); // 2 minutes
-    group.sample_size(5); // Very few samples for large packages
+    group.sample_size(10); // Minimum required samples
     group.warm_up_time(Duration::from_secs(15));
 
     // Medium package benchmark
@@ -517,7 +517,7 @@ fn bench_special_scenarios(c: &mut Criterion) {
     let shared_cache = SharedCache::new().expect("Failed to create shared cache");
     let mut group = c.benchmark_group("special_scenarios_global_install");
     group.measurement_time(Duration::from_secs(90)); // 1.5 minutes
-    group.sample_size(6); // Moderate samples for special scenarios
+    group.sample_size(10); // Minimum required samples
     group.warm_up_time(Duration::from_secs(10));
 
     // Force reinstall benchmark
@@ -586,7 +586,7 @@ fn bench_multiple_packages_uninstall(c: &mut Criterion) {
     let shared_cache = SharedCache::new().expect("Failed to create shared cache");
     let mut group = c.benchmark_group("multiple_packages_global_uninstall");
     group.measurement_time(Duration::from_secs(90)); // 1.5 minutes
-    group.sample_size(8); // Fewer samples for multiple packages
+    group.sample_size(10); // Minimum required samples
     group.warm_up_time(Duration::from_secs(10));
 
     // Uninstall multiple packages benchmark
@@ -608,7 +608,7 @@ fn bench_package_sizes_uninstall(c: &mut Criterion) {
     let shared_cache = SharedCache::new().expect("Failed to create shared cache");
     let mut group = c.benchmark_group("package_sizes_global_uninstall");
     group.measurement_time(Duration::from_secs(120)); // 2 minutes
-    group.sample_size(5); // Very few samples for large packages
+    group.sample_size(10); // Minimum required samples
     group.warm_up_time(Duration::from_secs(15));
 
     // Medium package uninstall benchmark
