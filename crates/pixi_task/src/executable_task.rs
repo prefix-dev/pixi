@@ -401,7 +401,7 @@ impl<'p> ExecutableTask<'p> {
 
         // Use the post-run hash provided by the caller
         let new_hash = match post_run_hash {
-            Some(h) => h,
+            Some(hash) => hash,
             None => return Ok(()),
         };
 
