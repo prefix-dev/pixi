@@ -22,6 +22,7 @@ tracing = { workspace = true }
 wax = { workspace = true }
 
 [dev-dependencies]
-insta = { workspace = true }
+insta = { workspace = true, features = ["yaml", "redactions"] }
 rstest = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 tempfile = { workspace = true }

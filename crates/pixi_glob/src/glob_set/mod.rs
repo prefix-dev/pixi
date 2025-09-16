@@ -7,6 +7,11 @@ use itertools::{Either, Itertools};
 use thiserror::Error;
 use wax::{Glob, WalkEntry};
 
+mod glob_set_ignore;
+mod walk_roots;
+
+pub use glob_set_ignore::{GlobSetIgnore, GlobSetIgnoreError};
+
 /// A set of globs to include and exclude from a directory.
 pub struct GlobSet<'t> {
     /// The globs to include in the filter.

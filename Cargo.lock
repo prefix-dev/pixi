@@ -5151,6 +5151,7 @@ dependencies = [
  "memchr",
  "rattler_digest",
  "rstest",
+ "serde",
  "tempfile",
  "thiserror 2.0.16",
  "tokio",

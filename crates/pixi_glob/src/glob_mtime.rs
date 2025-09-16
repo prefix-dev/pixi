@@ -6,7 +6,7 @@ use std::{
 use thiserror::Error;
 
 use crate::glob_set;
-use crate::glob_set_ignore::{GlobSetIgnore, GlobSetIgnoreError};
+use crate::{GlobSetIgnore, GlobSetIgnoreError};
 
 /// Contains the newest modification time for the files that match the given glob patterns.
 #[derive(Debug, Clone)]
@@ -61,14 +61,6 @@ impl GlobModificationTime {
         let mut designated_file = PathBuf::new();
 
         for entry in entries {
-            let entry = match entry {
-                Ok(e) => e,
-                Err(_e) => {
-                    // Serious errors were already filtered/mapped in collect_matching; we can decide
-                    // to surface them by returning early, but to match previous behavior we skip here.
-                    continue;
-                }
-            };
             let matched_path = entry.path().to_path_buf();
             let md = match entry.metadata() {
                 Ok(md) => md,
