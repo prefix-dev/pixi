@@ -400,7 +400,6 @@ impl DependencyConfig {
 
 impl HasSpecs for DependencyConfig {
     fn packages(&self) -> Vec<&str> {
-        eprintln!("specs = {:?}", self.specs);
         self.specs.iter().map(AsRef::as_ref).collect()
     }
 }
