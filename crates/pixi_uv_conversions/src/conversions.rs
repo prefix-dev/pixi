@@ -419,7 +419,7 @@ pub fn to_requirements<'req>(
         })
         .collect();
 
-    Ok(requirements?)
+    requirements
 }
 
 /// Convert back to PEP508 without the VerbatimParsedUrl
