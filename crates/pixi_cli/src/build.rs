@@ -160,7 +160,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Build the individual packages
     for package in packages {
-        let pinned_build_source = dbg!(lock_file.pinned_build_source(&package));
+        let pinned_build_source = lock_file.pinned_build_source(&package);
 
         let built_package = command_dispatcher
             .source_build(SourceBuildSpec {
