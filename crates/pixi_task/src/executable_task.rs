@@ -280,7 +280,7 @@ impl<'p> ExecutableTask<'p> {
         // and make a consistent caching decision.
         let mut hash = if let Some(hash) = previous_hash {
             hash
-        } else if let Some(h) = TaskHash::from_task(self, lock_file).await? {
+        } else if let Some(hash) = TaskHash::from_task(self, lock_file).await? {
             h
         } else {
             TaskHash {
