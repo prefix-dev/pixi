@@ -88,7 +88,7 @@ fn get_completion_script(shell: Shell) -> String {
 }
 
 /// Replace the parts of the bash completion script that need different functionality.
-fn replace_bash_completion(script: &str) -> Cow<str> {
+fn replace_bash_completion(script: &'_ str) -> Cow<'_, str> {
     // Adds tab completion to the pixi run command.
     // NOTE THIS IS FORMATTED BY HAND
     // Replace the '-' with '__' since that's what clap's generator does as well for Bash Shell completion.
@@ -117,7 +117,7 @@ fn replace_bash_completion(script: &str) -> Cow<str> {
 }
 
 /// Replace the parts of the zsh completion script that need different functionality.
-fn replace_zsh_completion(script: &str) -> Cow<str> {
+fn replace_zsh_completion(script: &'_ str) -> Cow<'_, str> {
     // Adds tab completion to the pixi run command.
     // NOTE THIS IS FORMATTED BY HAND
     let pattern = r"(?ms)(\(run\))(?:.*?)(_arguments.*?)(\*::task)";

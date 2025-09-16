@@ -72,6 +72,10 @@ pub struct Args {
     /// Source Control Management used for this workspace
     #[arg(short = 's', long = "scm", ignore_case = true)]
     pub scm: Option<GitAttributes>,
+
+    /// Add configuration for direnv to auto-activate pixi on directory change
+    #[arg(long = "direnv", default_value_t = false)]
+    pub direnv: bool,
 }
 
 /// The pixi.toml template
@@ -229,6 +233,11 @@ const GITIGNORE_TEMPLATE: &str = r#"
 !.pixi/config.toml
 "#;
 
+const DIRENV_TEMPLATE: &str = r#"
+watch_file pixi.lock 
+eval "$(pixi shell-hook)"
+"#;
+
 #[derive(Parser, Debug, Clone, PartialEq, ValueEnum)]
 pub enum GitAttributes {
     Github,
@@ -266,6 +275,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Fail silently if the directory already exists or cannot be created.
     fs_err::create_dir_all(&args.path).ok();
     let dir = args.path.canonicalize().into_diagnostic()?;
+    let direnv_path = dir.join(consts::DIRENV_MANIFEST);
     let pixi_manifest_path = dir.join(consts::WORKSPACE_MANIFEST);
     let pyproject_manifest_path = dir.join(consts::PYPROJECT_MANIFEST);
     let mojoproject_manifest_path = dir.join(consts::MOJOPROJECT_MANIFEST);
@@ -539,6 +549,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             gitignore_path.to_string_lossy(),
             e
         );
+    }
+
+    // create a .envrc file if there is none
+    if args.direnv {
+        if let Err(e) = create_or_append_file(&direnv_path, DIRENV_TEMPLATE.trim_start()) {
+            tracing::warn!(
+                "Warning, couldn't update '{}' because of: {}",
+                direnv_path.display(),
+                e
+            );
+        }
     }
 
     let git_attributes = args.scm.unwrap_or(GitAttributes::Github);

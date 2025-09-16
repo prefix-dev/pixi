@@ -31,6 +31,8 @@ pixi init [OPTIONS] [PATH]
 - <a id="arg---scm" href="#arg---scm">`--scm (-s) <SCM>`</a>
 :  Source Control Management used for this workspace
 <br>**options**: `github`, `gitlab`, `codeberg`
+- <a id="arg---direnv" href="#arg---direnv">`--direnv`</a>
+:  Create a `.envrc` file that auto-activates pixi when entering the project directory
 
 ## Description
 Creates a new workspace

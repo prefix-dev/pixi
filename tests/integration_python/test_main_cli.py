@@ -358,6 +358,37 @@ def test_pixi_init_cwd(pixi: Path, tmp_pixi_workspace: Path) -> None:
         manifest_content = manifest_path.read_text()
         assert "[workspace]" in manifest_content
 
+        # Verify that the manifest file is created
+        direnv_path = tmp_pixi_workspace / ".envrc"
+        assert not direnv_path.exists()
+
+
+def test_pixi_init_cwd_with_direnv(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    # Change directory to workspace
+    with cwd(tmp_pixi_workspace):
+        # Create a new project
+        verify_cli_command([pixi, "init", ".", "--direnv"], ExitCode.SUCCESS)
+
+        # Verify that the manifest file is created
+        manifest_path = tmp_pixi_workspace / "pixi.toml"
+        assert manifest_path.exists()
+
+        # Verify that the manifest file contains expected content
+        manifest_content = manifest_path.read_text()
+        assert "[workspace]" in manifest_content
+
+        # Verify that the manifest file contains expected content
+        manifest_content = manifest_path.read_text()
+        assert "[workspace]" in manifest_content
+
+        # Verify that the manifest file is created
+        direnv_path = tmp_pixi_workspace / ".envrc"
+        assert direnv_path.exists()
+
+        # Verify that the manifest file contains expected content
+        direnv_content = direnv_path.read_text()
+        assert "watch_file pixi.lock" in direnv_content
+
 
 def test_pixi_init_non_existing_dir(pixi: Path, tmp_pixi_workspace: Path) -> None:
     # Specify project dir

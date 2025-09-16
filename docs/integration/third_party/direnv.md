@@ -15,6 +15,8 @@ watch_file pixi.lock # (1)!
 eval "$(pixi shell-hook)" # (2)!
 ```
 
+`pixi init . --direnv` can do that for you.
+
 1. This ensures that every time your `pixi.lock` changes, `direnv` invokes the shell-hook again.
 2. This installs the environment if needed, and activates it. `direnv` ensures that the environment is deactivated when you leave the directory.
 
