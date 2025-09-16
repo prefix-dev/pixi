@@ -5,6 +5,9 @@ use std::{
     string::String,
 };
 
+#[cfg(unix)]
+use std::io::IsTerminal;
+
 use clap::Parser;
 use deno_task_shell::KillSignal;
 use dialoguer::theme::ColorfulTheme;
@@ -456,7 +459,7 @@ fn reset_cursor() {
 ///
 /// Signal listeners and ctrl+c listening will be setup.
 pub async fn run_future_forwarding_signals<TOutput>(
-    kill_signal: KillSignal,
+    #[cfg_attr(windows, allow(unused_variables))] kill_signal: KillSignal,
     future: impl std::future::Future<Output = TOutput>,
 ) -> TOutput {
     fn spawn_future_with_cancellation(
@@ -477,7 +480,9 @@ pub async fn run_future_forwarding_signals<TOutput>(
 
     local_set
         .run_until(async move {
-            spawn_future_with_cancellation(listen_ctrl_c(kill_signal.clone()), token.clone());
+            #[cfg(windows)]
+            spawn_future_with_cancellation(listen_ctrl_c_windows(), token.clone());
+
             #[cfg(unix)]
             spawn_future_with_cancellation(listen_and_forward_all_signals(kill_signal), token);
 
@@ -486,18 +491,27 @@ pub async fn run_future_forwarding_signals<TOutput>(
         .await
 }
 
-async fn listen_ctrl_c(kill_signal: KillSignal) {
-    while let Ok(()) = tokio::signal::ctrl_c().await {
-        // On windows, ctrl+c is sent to the process group, so the signal would
-        // have already been sent to the child process. We still want to listen
-        // for ctrl+c here to keep the process alive when receiving it, but no
-        // need to forward the signal because it's already been sent.
-        if !cfg!(windows) {
-            kill_signal.send(deno_task_shell::SignalKind::SIGINT)
-        }
-    }
+#[cfg(windows)]
+async fn listen_ctrl_c_windows() {
+    // On windows, ctrl+c is sent to the process group, so the signal would
+    // have already been sent to the child process. We still want to listen
+    // for ctrl+c here to keep the process alive when receiving it, but no
+    // need to forward the signal because it's already been sent.
+    while let Ok(()) = tokio::signal::ctrl_c().await {}
 }
 
+/// Listens to all incoming signals and forwards all of them, except
+/// some cases.
+///
+/// Note that we don't handle `SIGINT` correctly, if the subprocess changes
+/// its PGID, then the system won't forward CTRL+C automatically.
+/// However, we should do that to ensure consistent behaviour.
+///
+/// To resolve this we should patch `deno_task_shell` to return PID
+/// from which we could get PGID and do things right.
+///
+/// Resulting approach should mimic
+/// https://github.com/astral-sh/uv/blob/9d17dfa3537312b928f94479f632891f918c4760/crates/uv/src/child.rs#L156C21-L168C77.
 #[cfg(unix)]
 async fn listen_and_forward_all_signals(kill_signal: KillSignal) {
     use futures::FutureExt;
@@ -506,8 +520,12 @@ async fn listen_and_forward_all_signals(kill_signal: KillSignal) {
 
     // listen and forward every signal we support
     let mut futures = Vec::with_capacity(SIGNALS.len());
+    let is_interactive = std::io::stdin().is_terminal();
     for signo in SIGNALS.iter().copied() {
-        if signo == libc::SIGKILL || signo == libc::SIGSTOP {
+        if signo == libc::SIGKILL
+            || signo == libc::SIGSTOP
+            || (signo == libc::SIGINT && is_interactive)
+        {
             continue; // skip, can't listen to these
         }
 
