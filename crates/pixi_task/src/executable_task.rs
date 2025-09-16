@@ -278,7 +278,7 @@ impl<'p> ExecutableTask<'p> {
         // Start from provided hash if available, otherwise from current task state.
         // If neither is available, create a minimal hash so we can report warnings
         // and make a consistent caching decision.
-        let mut hash = if let Some(h) = previous_hash {
+        let mut hash = if let Some(hash) = previous_hash {
             h
         } else if let Some(h) = TaskHash::from_task(self, lock_file).await? {
             h
