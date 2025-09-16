@@ -74,7 +74,6 @@ impl PypiPackageName {
 #[cfg(test)]
 mod tests {
     use std::{
-        collections::HashMap,
         hash::{Hash, Hasher},
         str::FromStr,
     };
