@@ -281,7 +281,7 @@ impl<'p> ExecutableTask<'p> {
         let mut hash = if let Some(hash) = previous_hash {
             hash
         } else if let Some(hash) = TaskHash::from_task(self, lock_file).await? {
-            h
+            hash
         } else {
             TaskHash {
                 command: self.full_command().ok().flatten(),
