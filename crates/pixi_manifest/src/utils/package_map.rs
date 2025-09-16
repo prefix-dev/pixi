@@ -2,7 +2,7 @@ use std::{fmt, marker::PhantomData, ops::Range, str::FromStr};
 
 use indexmap::IndexMap;
 use itertools::Itertools;
-use pixi_spec::PixiSpec;
+use pixi_spec::{BinarySpec, PixiSpec, SourceSpec};
 use rattler_conda_types::PackageName;
 use serde::{
     Deserialize, Deserializer, Serialize,
@@ -33,12 +33,12 @@ impl UniquePackageMap {
             if let Some((package_name, _)) = self.specs.iter().find(|(_, spec)| spec.is_source()) {
                 return Err(TomlError::Generic(
                     GenericError::new(
-                        "source dependencies are not allowed without enabling pixi-build",
+                        "conda source dependencies are not allowed without enabling the 'pixi-build' preview feature",
                     )
                     .with_opt_span(self.value_spans.get(package_name).cloned())
                     .with_span_label("source dependency specified here")
                     .with_help(
-                        "Add `workspace.preview = [\"pixi-build\"]` to enable pixi build support",
+                        "Add `preview = [\"pixi-build\"]` to the `workspace` or `project` table of your manifest",
                     ),
                 ));
             }
@@ -53,6 +53,42 @@ impl IntoIterator for UniquePackageMap {
 
     fn into_iter(self) -> Self::IntoIter {
         self.specs.into_iter()
+    }
+}
+
+impl Extend<(rattler_conda_types::PackageName, PixiSpec)> for UniquePackageMap {
+    fn extend<T: IntoIterator<Item = (rattler_conda_types::PackageName, PixiSpec)>>(
+        &mut self,
+        iter: T,
+    ) {
+        for (name, spec) in iter {
+            self.specs.insert(name, spec);
+            // Note: We don't set spans here as they're primarily used for TOML parsing
+        }
+    }
+}
+
+impl Extend<(rattler_conda_types::PackageName, SourceSpec)> for UniquePackageMap {
+    fn extend<T: IntoIterator<Item = (rattler_conda_types::PackageName, SourceSpec)>>(
+        &mut self,
+        iter: T,
+    ) {
+        for (name, spec) in iter {
+            self.specs.insert(name, spec.into());
+            // Note: We don't set spans here as they're primarily used for TOML parsing
+        }
+    }
+}
+
+impl Extend<(rattler_conda_types::PackageName, BinarySpec)> for UniquePackageMap {
+    fn extend<T: IntoIterator<Item = (rattler_conda_types::PackageName, BinarySpec)>>(
+        &mut self,
+        iter: T,
+    ) {
+        for (name, spec) in iter {
+            self.specs.insert(name, spec.into());
+            // Note: We don't set spans here as they're primarily used for TOML parsing
+        }
     }
 }
 

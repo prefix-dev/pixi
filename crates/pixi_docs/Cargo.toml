@@ -9,10 +9,12 @@ readme = "README.md"
 repository = "https://github.com/prefix-dev/pixi"
 version = "0.1.0"
 
+[package.metadata.dist]
+dist = false
 
 [dependencies]
 clap = { workspace = true }
 fs-err = { workspace = true }
 itertools = { workspace = true }
-pixi = { path = "../..", features = ["self_update"] }
+pixi_cli = { workspace = true, features = ["self_update"] }
 rattler_conda_types = { workspace = true }

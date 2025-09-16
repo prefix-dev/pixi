@@ -14,7 +14,7 @@ use itertools::Itertools;
 use miette::{Diagnostic, SourceSpan};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use toml_edit::{Array, Item, Table, Value};
+use toml_edit::{Array, InlineTable, Item, Table, Value};
 
 use crate::EnvironmentName;
 
@@ -49,14 +49,20 @@ impl From<String> for TaskName {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub struct Dependency {
     pub task_name: TaskName,
-    pub args: Option<Vec<TemplateString>>,
+    pub args: Option<Vec<DependencyArg>>,
     pub environment: Option<EnvironmentName>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
+pub enum DependencyArg {
+    Positional(TemplateString),
+    Named(String, TemplateString),
 }
 
 impl Dependency {
     pub fn new(
         s: &str,
-        args: Option<Vec<TemplateString>>,
+        args: Option<Vec<DependencyArg>>,
         environment: Option<EnvironmentName>,
     ) -> Self {
         Dependency {
@@ -66,7 +72,7 @@ impl Dependency {
         }
     }
 
-    pub fn new_without_env(s: &str, args: Option<Vec<TemplateString>>) -> Self {
+    pub fn new_without_env(s: &str, args: Option<Vec<DependencyArg>>) -> Self {
         Dependency {
             task_name: TaskName(s.to_string()),
             args,
@@ -76,12 +82,19 @@ impl Dependency {
     pub fn render_args(
         &self,
         args: Option<&ArgValues>,
-    ) -> Result<Option<Vec<String>>, TemplateStringError> {
+    ) -> Result<Option<Vec<TypedDependencyArg>>, TemplateStringError> {
         match &self.args {
             Some(task_args) => {
                 let mut result = Vec::new();
                 for arg in task_args {
-                    result.push(arg.render(args)?);
+                    match arg {
+                        DependencyArg::Positional(val) => {
+                            result.push(TypedDependencyArg::Positional(val.render(args)?));
+                        }
+                        DependencyArg::Named(key, val) => {
+                            result.push(TypedDependencyArg::Named(key.clone(), val.render(args)?));
+                        }
+                    }
                 }
                 Ok(Some(result))
             }
@@ -116,8 +129,14 @@ impl FromStr for TaskName {
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct TypedDependency {
     pub task_name: TaskName,
-    pub args: Option<Vec<String>>,
+    pub args: Option<Vec<TypedDependencyArg>>,
     pub environment: Option<EnvironmentName>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, PartialOrd, Ord)]
+pub enum TypedDependencyArg {
+    Positional(String),
+    Named(String, String),
 }
 
 impl TypedDependency {
@@ -442,22 +461,25 @@ impl TemplateString {
     }
 
     pub fn render(&self, args: Option<&ArgValues>) -> Result<String, TemplateStringError> {
-        let context = if let Some(ArgValues::TypedArgs(args)) = args {
+        // Only perform MiniJinja rendering when typed args are provided.
+        // For free-form args or no args, return the source verbatim to avoid
+        // interpreting arbitrary strings as templates.
+        if let Some(ArgValues::TypedArgs(args)) = args {
             let args_map: HashMap<&str, &str> = args
                 .iter()
                 .map(|arg| (arg.name.as_str(), arg.value.as_str()))
                 .collect();
-            minijinja::Value::from_serialize(&args_map)
-        } else {
-            minijinja::Value::default()
-        };
+            let context = minijinja::Value::from_serialize(&args_map);
 
-        JINJA_ENV
-            .render_str(&self.0, context)
-            .map_err(|e| TemplateStringError {
-                src: self.0.clone(),
-                err_span: e.range().unwrap_or_default().into(),
-            })
+            JINJA_ENV
+                .render_str(&self.0, context)
+                .map_err(|e| TemplateStringError {
+                    src: self.0.clone(),
+                    err_span: e.range().unwrap_or_default().into(),
+                })
+        } else {
+            Ok(self.0.clone())
+        }
     }
 
     pub fn source(&self) -> &str {
@@ -722,10 +744,21 @@ impl From<Task> for Item {
                                     table.insert("task", dep.task_name.to_string().into());
                                     table.insert(
                                         "args",
-                                        Value::Array(Array::from_iter(
-                                            args.iter()
-                                                .map(|arg| Value::from(arg.source().to_string())),
-                                        )),
+                                        Value::Array(Array::from_iter(args.iter().map(|arg| {
+                                            match arg {
+                                                DependencyArg::Positional(val) => {
+                                                    Value::from(val.source().to_string())
+                                                }
+                                                DependencyArg::Named(name, val) => {
+                                                    let mut table = InlineTable::new();
+                                                    table.insert(
+                                                        name,
+                                                        Value::from(val.source().to_string()),
+                                                    );
+                                                    Value::InlineTable(table)
+                                                }
+                                            }
+                                        }))),
                                     );
                                     Value::InlineTable(table)
                                 }
@@ -774,9 +807,16 @@ impl From<Task> for Item {
                         if let Some(args) = &dep.args {
                             dep_table.insert(
                                 "args",
-                                Value::Array(Array::from_iter(
-                                    args.iter().map(|arg| Value::from(arg.source().to_string())),
-                                )),
+                                Value::Array(Array::from_iter(args.iter().map(|arg| match arg {
+                                    DependencyArg::Positional(val) => {
+                                        Value::from(val.source().to_string())
+                                    }
+                                    DependencyArg::Named(name, val) => {
+                                        let mut table = InlineTable::new();
+                                        table.insert(name, Value::from(val.source().to_string()));
+                                        Value::InlineTable(table)
+                                    }
+                                }))),
                             );
                         }
 
@@ -802,9 +842,16 @@ impl From<Task> for Item {
                         if let Some(args) = &dep.args {
                             table.insert(
                                 "args",
-                                Value::Array(Array::from_iter(
-                                    args.iter().map(|arg| Value::from(arg.source().to_string())),
-                                )),
+                                Value::Array(Array::from_iter(args.iter().map(|arg| match arg {
+                                    DependencyArg::Positional(val) => {
+                                        Value::from(val.source().to_string())
+                                    }
+                                    DependencyArg::Named(name, val) => {
+                                        let mut table = InlineTable::new();
+                                        table.insert(name, Value::from(val.source().to_string()));
+                                        Value::InlineTable(table)
+                                    }
+                                }))),
                             );
                         }
 
@@ -832,7 +879,13 @@ impl From<Task> for Item {
 
 #[cfg(test)]
 mod tests {
+    use insta::assert_snapshot;
+
+    use crate::task::{Alias, Dependency, DependencyArg, Task};
+
     use super::quote;
+
+    use super::{ArgValues, TemplateString, TypedArg};
 
     #[test]
     fn test_quote() {
@@ -847,5 +900,48 @@ mod tests {
             "PATH=\"$PATH;build/Debug\""
         );
         assert_eq!(quote("name=[64,64]"), "\"name=[64,64]\"");
+    }
+
+    #[test]
+    fn test_table_from_dependency_args() {
+        let positional_arg = DependencyArg::Positional("foo".into());
+        let named_arg = DependencyArg::Named("bar".into(), "baz".into());
+        let args = vec![positional_arg, named_arg];
+        let dep = Dependency::new("depTask", Some(args), None);
+        let alias = Alias {
+            depends_on: vec![dep],
+            description: None,
+            args: None,
+        };
+        let task = Task::Alias(alias);
+        let toml = toml_edit::Item::from(task);
+        assert_snapshot!(toml.to_string(), @r###"[{ task = "depTask", args = ["foo", { bar = "baz" }] }]"###);
+    }
+
+    #[test]
+    fn test_template_string_no_render_without_typed_args() {
+        let t = TemplateString::from("echo {{ foo }}");
+        // No args -> should not render, return verbatim string
+        let rendered = t.render(None).expect("should not error without typed args");
+        assert_eq!(rendered, "echo {{ foo }}");
+
+        // Free-form args -> should not render
+        let rendered = t
+            .render(Some(&ArgValues::FreeFormArgs(vec!["bar".into()])))
+            .expect("should not error with free-form args");
+        assert_eq!(rendered, "echo {{ foo }}");
+    }
+
+    #[test]
+    fn test_template_string_renders_with_typed_args() {
+        let t = TemplateString::from("echo {{ foo }}");
+        let args = ArgValues::TypedArgs(vec![TypedArg {
+            name: "foo".into(),
+            value: "bar".into(),
+        }]);
+        let rendered = t
+            .render(Some(&args))
+            .expect("should render with typed args");
+        assert_eq!(rendered, "echo bar");
     }
 }

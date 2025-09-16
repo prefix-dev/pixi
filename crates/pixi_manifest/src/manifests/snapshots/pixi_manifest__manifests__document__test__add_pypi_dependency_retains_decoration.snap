@@ -1,0 +1,24 @@
+---
+source: crates/pixi_manifest/src/manifests/document.rs
+expression: document.to_string()
+---
+[project]
+name = "test"
+dependencies = [
+    # Main dependency comment
+    "requests>=2.30.0", # inline comment
+]
+
+[project.optional-dependencies]
+dev = [
+    # Dev dependency comment  
+    "pyyaml>=6.1.0", # dev inline comment
+]
+
+[tool.pixi.project]
+channels = []
+platforms = []
+
+[tool.pixi.pypi-dependencies]
+# Table dependency comment
+NumPy = ">=1.21.0" # table inline comment

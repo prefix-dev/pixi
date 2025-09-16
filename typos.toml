@@ -1,8 +1,15 @@
 [files]
-extend-exclude = [".git/", ".pixi/", "**/*.snap", "tests/data/mapping_files/*"]
+extend-exclude = [
+  ".git/",
+  ".pixi/",
+  "**/*.snap",
+  "tests/data/mapping_files/*",
+  "examples/**/**.ipynb",
+]
 ignore-hidden = false
 
 [default.extend-identifiers]
 intoto = "intoto"
+plt-setp = "plt.setp"
 pn = "pn"
 solvePnPRansac = "solvePnPRansac"

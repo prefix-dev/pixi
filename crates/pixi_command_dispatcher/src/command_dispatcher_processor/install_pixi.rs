@@ -1,11 +1,13 @@
 use futures::FutureExt;
 
 use super::{CommandDispatcherProcessor, PendingInstallPixiEnvironment, TaskResult};
-use crate::command_dispatcher::{InstallPixiEnvironmentId, InstallPixiEnvironmentTask};
-use crate::install_pixi::InstallPixiEnvironmentError;
 use crate::{
     CommandDispatcherError, CommandDispatcherErrorResultExt, InstallPixiEnvironmentResult,
-    Reporter, command_dispatcher::CommandDispatcherContext,
+    Reporter,
+    command_dispatcher::{
+        CommandDispatcherContext, InstallPixiEnvironmentId, InstallPixiEnvironmentTask,
+    },
+    install_pixi::InstallPixiEnvironmentError,
 };
 
 impl CommandDispatcherProcessor {
@@ -28,6 +30,11 @@ impl CommandDispatcherProcessor {
                 reporter_id,
             });
 
+        if let Some(parent_context) = task.parent {
+            self.parent_contexts
+                .insert(pending_env_id.into(), parent_context);
+        }
+
         // Notify the reporter that the solve has started.
         if let Some((reporter, id)) = self
             .reporter
@@ -49,9 +56,14 @@ impl CommandDispatcherProcessor {
         // Add the task to the list of pending futures.
         let dispatcher = self.create_task_command_dispatcher(dispatcher_context);
         self.pending_futures.push(
-            task.spec
-                .install(dispatcher, install_reporter)
-                .map(move |result| TaskResult::InstallPixiEnvironment(pending_env_id, result))
+            task.cancellation_token
+                .run_until_cancelled_owned(task.spec.install(dispatcher, install_reporter))
+                .map(move |result| {
+                    TaskResult::InstallPixiEnvironment(
+                        pending_env_id,
+                        result.unwrap_or(Err(CommandDispatcherError::Cancelled)),
+                    )
+                })
                 .boxed_local(),
         );
     }
@@ -69,6 +81,7 @@ impl CommandDispatcherProcessor {
             CommandDispatcherError<InstallPixiEnvironmentError>,
         >,
     ) {
+        self.parent_contexts.remove(&id.into());
         let env = self
             .install_pixi_environment
             .remove(id)

@@ -1,7 +1,9 @@
-use std::{hash::Hash, path::PathBuf};
+use std::path::PathBuf;
 
+use indexmap::IndexMap;
 use indexmap::IndexSet;
 use pep508_rs::PackageName;
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use serde::{Serialize, Serializer, ser::SerializeSeq};
 use thiserror::Error;
 use url::Url;
@@ -133,24 +135,18 @@ pub struct PypiOptions {
     pub index_strategy: Option<IndexStrategy>,
     /// Don't build sdist for all or certain packages
     pub no_build: Option<NoBuild>,
+    /// Dependency overrides
+    pub dependency_overrides: Option<IndexMap<PypiPackageName, PixiPypiSpec>>,
     /// Don't use pre-built wheels all or certain packages
     pub no_binary: Option<NoBinary>,
 }
 
-/// Clones and deduplicates two iterators of values
-fn clone_and_deduplicate<'a, I: Iterator<Item = &'a T>, T: Clone + Eq + Hash + 'a>(
-    values: I,
-    other: I,
-) -> Vec<T> {
-    values
-        .cloned()
-        .chain(other.cloned())
-        .collect::<IndexSet<_>>()
-        .into_iter()
-        .collect::<Vec<_>>()
-}
+use crate::pypi::merge::{
+    MergeUnion, merge_list_dedup, merge_map_override_left, merge_single_option,
+};
 
 impl PypiOptions {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         index: Option<Url>,
         extra_indexes: Option<Vec<Url>>,
@@ -158,6 +154,7 @@ impl PypiOptions {
         no_build_isolation: NoBuildIsolation,
         index_strategy: Option<IndexStrategy>,
         no_build: Option<NoBuild>,
+        dependency_overrides: Option<IndexMap<PypiPackageName, PixiPypiSpec>>,
         no_binary: Option<NoBinary>,
     ) -> Self {
         Self {
@@ -167,6 +164,7 @@ impl PypiOptions {
             no_build_isolation,
             index_strategy,
             no_build,
+            dependency_overrides,
             no_binary,
         }
     }
@@ -199,86 +197,34 @@ impl PypiOptions {
     /// - Flat indexes are merged and deduplicated, in the order they are
     ///   provided
     pub fn union(&self, other: &PypiOptions) -> Result<PypiOptions, PypiOptionsMergeError> {
-        let index = if let Some(other_index) = other.index_url.clone() {
-            // Allow only one index
-            if let Some(own_index) = self.index_url.clone() {
-                return Err(PypiOptionsMergeError::MultiplePrimaryIndexes {
-                    first: own_index.to_string(),
-                    second: other_index.to_string(),
-                });
-            } else {
-                // Use the other index, because we don't have one
-                Some(other_index)
+        // Single-assignment fields with conflict detection
+        let index = merge_single_option(&self.index_url, &other.index_url, |a, b| {
+            PypiOptionsMergeError::MultiplePrimaryIndexes {
+                first: a.to_string(),
+                second: b.to_string(),
             }
-        } else {
-            // Use our index, because the other doesn't have one
-            self.index_url.clone()
-        };
+        })?;
 
-        // Allow only one index strategy
-        let index_strategy = if let Some(other_index_strategy) = other.index_strategy.clone() {
-            if let Some(own_index_strategy) = &self.index_strategy {
-                return Err(PypiOptionsMergeError::MultipleIndexStrategies {
-                    first: own_index_strategy.to_string(),
-                    second: other_index_strategy.to_string(),
-                });
-            } else {
-                Some(other_index_strategy)
-            }
-        } else {
-            self.index_strategy.clone()
-        };
+        let index_strategy =
+            merge_single_option(&self.index_strategy, &other.index_strategy, |a, b| {
+                PypiOptionsMergeError::MultipleIndexStrategies {
+                    first: a.to_string(),
+                    second: b.to_string(),
+                }
+            })?;
 
-        // Chain together and deduplicate the extra indexes
-        let extra_indexes = self
-            .extra_index_urls
-            .as_ref()
-            // Map for value
-            .map(|extra_indexes| {
-                clone_and_deduplicate(
-                    extra_indexes.iter(),
-                    other.extra_index_urls.clone().unwrap_or_default().iter(),
-                )
-            })
-            .or_else(|| other.extra_index_urls.clone());
+        // Ordered lists, deduplicated
+        let extra_indexes = merge_list_dedup(&self.extra_index_urls, &other.extra_index_urls);
+        let flat_indexes = merge_list_dedup(&self.find_links, &other.find_links);
 
-        // Chain together and deduplicate the flat indexes
-        let flat_indexes = self
-            .find_links
-            .as_ref()
-            .map(|flat_indexes| {
-                clone_and_deduplicate(
-                    flat_indexes.iter(),
-                    other.find_links.clone().unwrap_or_default().iter(),
-                )
-            })
-            .or_else(|| other.find_links.clone());
+        // Union-like fields
+        let no_build_isolation = self.no_build_isolation.union(&other.no_build_isolation);
+        let no_build = self.no_build.union(&other.no_build);
+        let no_binary = self.no_binary.union(&other.no_binary);
 
-        // Merge all the no build isolation packages. We take the union.
-        let no_build_isolation = match (&self.no_build_isolation, &other.no_build_isolation) {
-            (NoBuildIsolation::All, _) | (_, NoBuildIsolation::All) => NoBuildIsolation::All,
-            (NoBuildIsolation::Packages(a), NoBuildIsolation::Packages(b)) => {
-                let mut packages = a.clone();
-                packages.extend(b.iter().cloned());
-                NoBuildIsolation::Packages(packages)
-            }
-        };
-
-        // Set the no-build option
-        let no_build = match (self.no_build.as_ref(), other.no_build.as_ref()) {
-            (Some(a), Some(b)) => Some(a.union(b)),
-            (Some(a), None) => Some(a.clone()),
-            (None, Some(b)) => Some(b.clone()),
-            (None, None) => None,
-        };
-
-        // Set the no-binary option
-        let no_binary = match (self.no_binary.as_ref(), other.no_binary.as_ref()) {
-            (Some(a), Some(b)) => Some(a.union(b)),
-            (Some(a), None) => Some(a.clone()),
-            (None, Some(b)) => Some(b.clone()),
-            (None, None) => None,
-        };
+        // Maps with left (self) overriding right (other)
+        let dependency_overrides =
+            merge_map_override_left(&self.dependency_overrides, &other.dependency_overrides);
 
         Ok(PypiOptions {
             index_url: index,
@@ -287,8 +233,29 @@ impl PypiOptions {
             no_build_isolation,
             index_strategy,
             no_build,
+            dependency_overrides,
             no_binary,
         })
+    }
+}
+
+// Implement the generic `MergeUnion` trait for our union-able types so they can be
+// composed uniformly (including for Option<T> via its MergeUnion impl).
+impl MergeUnion for NoBuild {
+    fn union(&self, other: &Self) -> Self {
+        NoBuild::union(self, other)
+    }
+}
+
+impl MergeUnion for NoBinary {
+    fn union(&self, other: &Self) -> Self {
+        NoBinary::union(self, other)
+    }
+}
+
+impl MergeUnion for NoBuildIsolation {
+    fn union(&self, other: &Self) -> Self {
+        NoBuildIsolation::union(self, other)
     }
 }
 
@@ -441,6 +408,16 @@ mod tests {
             ]),
             index_strategy: None,
             no_build: None,
+            dependency_overrides: Some(IndexMap::from_iter([
+                (
+                    "pkg1".parse().unwrap(),
+                    PixiPypiSpec::RawVersion("==1.0.0".parse().unwrap()),
+                ),
+                (
+                    "pkg2".parse().unwrap(),
+                    PixiPypiSpec::RawVersion("==2.0.0".parse().unwrap()),
+                ),
+            ])),
             no_binary: Default::default(),
         };
 
@@ -455,6 +432,17 @@ mod tests {
             no_build_isolation: NoBuildIsolation::from_iter(["foo".parse().unwrap()]),
             index_strategy: None,
             no_build: Some(NoBuild::All),
+            dependency_overrides: Some(IndexMap::from_iter([
+                (
+                    "pkg1".parse().unwrap(),
+                    PixiPypiSpec::RawVersion("==1.2.0".parse().unwrap()),
+                ),
+                (
+                    "pkg3".parse().unwrap(),
+                    PixiPypiSpec::RawVersion("==3.2.0".parse().unwrap()),
+                ),
+            ])),
+
             no_binary: Default::default(),
         };
 
@@ -550,6 +538,7 @@ mod tests {
             no_build_isolation: NoBuildIsolation::default(),
             index_strategy: None,
             no_build: Default::default(),
+            dependency_overrides: None,
             no_binary: Default::default(),
         };
 
@@ -561,6 +550,7 @@ mod tests {
             no_build_isolation: NoBuildIsolation::default(),
             index_strategy: None,
             no_build: Default::default(),
+            dependency_overrides: None,
             no_binary: Default::default(),
         };
 
@@ -580,6 +570,7 @@ mod tests {
             no_build_isolation: NoBuildIsolation::default(),
             index_strategy: Some(IndexStrategy::FirstIndex),
             no_build: Default::default(),
+            dependency_overrides: None,
             no_binary: Default::default(),
         };
 
@@ -591,6 +582,7 @@ mod tests {
             no_build_isolation: NoBuildIsolation::default(),
             index_strategy: Some(IndexStrategy::UnsafeBestMatch),
             no_build: Default::default(),
+            dependency_overrides: None,
             no_binary: Default::default(),
         };
 

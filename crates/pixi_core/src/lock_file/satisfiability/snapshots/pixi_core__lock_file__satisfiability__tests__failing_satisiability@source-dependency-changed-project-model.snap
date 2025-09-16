@@ -1,0 +1,8 @@
+---
+source: crates/pixi_core/src/lock_file/satisfiability/mod.rs
+expression: s
+snapshot_kind: text
+---
+environment 'default' does not satisfy the requirements of the project for platform 'linux-64'
+    Diagnostic severity: error
+    Caused by: the input hash for 'child-package' (6a7fcb5c9f728504123fff40635207fb963b77f26b1a2dffb2993efa7f81559d) does not match the hash in the lock-file (64a8e9eb88c4f6e944a37279a38a47fe7872454fb62bcafad63d200aef4b4a05)

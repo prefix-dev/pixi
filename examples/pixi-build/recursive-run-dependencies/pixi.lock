@@ -154,9 +154,8 @@ packages:
   - boltons
   - python
   input:
-    hash: 7032d14198f3e2b77b18c9bea16474ec23856f7d30c98279401dce94d74adda8
-    globs:
-    - pyproject.toml
+    hash: c33f206dfc06551f0242c7037fe4d8f019bf8fbb3473b626f808d8947b8671f7
+    globs: []
 - conda: https://prefix.dev/conda-forge/linux-64/ld_impl_linux-64-2.43-h712a8e2_4.conda
   sha256: db73f38155d901a610b2320525b9dd3b31e4949215c870685fd92ea61b5ce472
   md5: 01f8d123c96816249efd255a31ad7712
@@ -565,9 +564,8 @@ packages:
   - depend
   - python
   input:
-    hash: c1711484b69aa2e6f0a09093cf079d8f84b936253eeca9350ba7c13b3ef40b93
-    globs:
-    - pyproject.toml
+    hash: d74786cfcf078d97d1c9d5e38440e52418fc4650ee65f4adc27d02afcf50c8d0
+    globs: []
   sources:
     depend:
       path: ../depend

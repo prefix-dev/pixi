@@ -14,7 +14,6 @@ use reqwest::Client;
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, Middleware};
 use reqwest_retry::RetryTransientMiddleware;
 use std::collections::HashMap;
-use tracing::debug;
 
 use pixi_config::Config;
 
@@ -65,7 +64,7 @@ fn auth_middleware(
 
 pub fn mirror_middleware(config: &Config) -> MirrorMiddleware {
     let mut internal_map = HashMap::new();
-    tracing::info!("Using mirrors: {:?}", config.mirror_map());
+    tracing::debug!("Using mirrors: {:?}", config.mirror_map());
 
     fn ensure_trailing_slash(url: &url::Url) -> url::Url {
         if url.path().ends_with('/') {
@@ -163,10 +162,8 @@ pub fn build_reqwest_clients(
     s3_config.extend(s3_config_global);
     s3_config.extend(s3_config_project);
 
-    debug!("Using s3_config: {:?}", s3_config);
     let store = auth_store(&config).into_diagnostic()?;
     let s3_middleware = S3Middleware::new(s3_config, store);
-    debug!("s3_middleware: {:?}", s3_middleware);
     client_builder = client_builder.with(s3_middleware);
 
     client_builder = client_builder.with_arc(Arc::new(
@@ -183,12 +180,62 @@ pub fn build_reqwest_clients(
 }
 
 pub fn uv_middlewares(config: &Config) -> Vec<Arc<dyn Middleware>> {
-    if config.mirror_map().is_empty() {
+    let mut middlewares: Vec<Arc<dyn Middleware>> = if config.mirror_map().is_empty() {
         vec![]
     } else {
         vec![
             Arc::new(mirror_middleware(config)),
             Arc::new(oci_middleware()),
         ]
+    };
+
+    // Add authentication middleware after mirror rewriting so it can authenticate
+    // against the rewritten URLs (important for mirrors that require different credentials)
+    if let Ok(auth_middleware) = auth_middleware(config) {
+        middlewares.push(Arc::new(auth_middleware));
+    }
+    middlewares
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pixi_config::Config;
+    use url::Url;
+
+    #[test]
+    fn test_uv_middlewares_includes_auth_with_mirrors() {
+        // Test that authentication middleware is included when mirrors are configured
+        // This ensures credentials work with rewritten mirror URLs
+        let mut config = Config::default();
+        config.mirrors.insert(
+            Url::parse("https://pypi.org/simple/").unwrap(),
+            vec![Url::parse("https://my-mirror.example.com/simple/").unwrap()],
+        );
+
+        let middlewares = uv_middlewares(&config);
+
+        // Should have: mirror + OCI + auth middleware
+        assert!(
+            middlewares.len() >= 3,
+            "Expected at least 3 middlewares (mirror, OCI, auth) when mirrors configured, got {}",
+            middlewares.len()
+        );
+    }
+
+    #[test]
+    fn test_uv_middlewares_includes_auth_without_mirrors() {
+        // Test that authentication middleware is still included even without mirrors
+        // This ensures existing non-mirror auth scenarios continue to work
+        let config = Config::default();
+        let middlewares = uv_middlewares(&config);
+
+        // Should have: auth middleware only
+        assert_eq!(
+            middlewares.len(),
+            1,
+            "Expected exactly 1 middleware (auth) when no mirrors configured, got {}",
+            middlewares.len()
+        );
     }
 }

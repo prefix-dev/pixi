@@ -1,0 +1,11 @@
+---
+source: crates/pixi_manifest/src/toml/build_backend.rs
+expression: "expect_parse_failure(r#\"\n            backend = { version = \"12.*\" }\n        \"#)"
+---
+  × missing field 'name' in table
+   ╭─[pixi.toml:2:23]
+ 1 │
+ 2 │             backend = { version = "12.*" }
+   ·                       ────────────────────
+ 3 │
+   ╰────

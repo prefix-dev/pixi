@@ -1,4 +1,4 @@
-Pixi is a tool to manage virtual environments.
+Pixi is a tool to manage environments.
 This document explains what an environment looks like and how to use it.
 
 ## Activation
@@ -41,6 +41,12 @@ export PIXI_PROMPT="(pixi) "
 It sets the `PATH` and some more environment variables. But more importantly it also runs activation scripts that are presented by the installed packages.
 An example of this would be the [`libglib_activate.sh`](https://github.com/conda-forge/glib-feedstock/blob/52ba1944dffdb2d882d824d6548325155b58819b/recipe/scripts/activate.sh) script.
 Thus, just adding the `bin` directory to the `PATH` is not enough.
+
+Shell used for activation:
+- On Windows, Pixi executes activation under `cmd.exe`.
+- On Linux and macOS, Pixi executes activation under `bash`.
+
+This affects both `[activation.env]` and `activation.scripts`: they are applied by the platform's shell during activation, before any task runs.
 
 You can modify the activation with the `activation` table in the manifest, you can add more activation scripts or inject environment variables into the activation scripts.
 ```toml
@@ -104,7 +110,7 @@ This file contains the following information:
 The `environment_lock_file_hash` is used to check if the environment is in sync with the `pixi.lock` file.
 If the hash of the `pixi.lock` file is different from the hash in the `pixi` file, Pixi will update the environment.
 
-This is used to speedup activation, in order to trigger a full revalidation pass `--revalidate` to the `pixi run` or `pixi shell` command.
+This is used to speedup activation, in order to trigger a full revalidation and installation use `pixi install` or `pixi reinstall`.
 A broken environment would typically not be found with a hash comparison, but a revalidation would reinstall the environment.
 By default, all lock file modifying commands will always use the revalidation and on `pixi install` it always revalidates.
 
@@ -147,7 +153,7 @@ This will always be slower than the pure conda solves. So for the best Pixi expe
 ## Caching packages
 
 Pixi caches all previously downloaded packages in a cache folder.
-This cache folder is shared between all Pixi projects and globally installed tools.
+This cache folder is shared between all Pixi workspaces and globally installed tools.
 
 Normally the location would be the following
 platform-specific default cache folder:

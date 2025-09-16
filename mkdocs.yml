@@ -108,7 +108,7 @@ nav:
   - Home: index.md
   - Getting Started:
       - Installation: installation.md
-      - First Project: first_project.md
+      - First Workspace: first_workspace.md
       - Basic Usage: getting_started.md
   - Tutorials:
       - Python:
@@ -138,11 +138,13 @@ nav:
       - Tutorials:
           - Building a Python Package: build/python.md
           - Building a C++ Package: build/cpp.md
+          - Building a ROS Package: build/ros.md
           - Multiple Packages in Workspace: build/workspace.md
           - Variants: build/variants.md
           - Advanced Building Using rattler-build: build/advanced_cpp.md
       - Dependency Types: build/dependency_types.md
       - Build Backends: build/backends.md
+      - Package Source: build/package_source.md
   - Distributing:
       - Pixi Pack: deployment/pixi_pack.md
       - Authentication: deployment/authentication.md
@@ -172,6 +174,7 @@ nav:
   - Advanced:
       - Channel Logic: advanced/channel_logic.md
       - Info Command: advanced/explain_info_command.md
+      - Dependency Overrides: overrides/override.md
       - Shebang: advanced/shebang.md
       - Shell: advanced/pixi_shell.md
   - Reference:
@@ -204,6 +207,7 @@ not_in_nav: |
 plugins:
   - redirects:
       redirect_maps:
+        "first_project.md": "first_workspace.md"
         "configuration.md": "reference/pixi_manifest.md"
         "reference/project_configuration.md": "reference/pixi_manifest.md"
         "basic_usage.md": "getting_started.md"
@@ -238,6 +242,11 @@ plugins:
         "integration/editor/pycharm.md": "integration/editor/jetbrains.md"
         "advanced/installation.md": "installation.md"
 
+        # Redirects for links from code to make sure we don't break them.
+        # Using descriptive names that never existed, to avoid conflicts.
+        # crates/pixi_cli/src/init.rs
+        "init_getting_started.md": "first_workspace.md"
+
   - search
   - social
   - mike:
@@ -249,3 +258,51 @@ plugins:
     # version_selector: true
     # css_dir: css
     # javascript_dir: js
+  # llmstxt must come after the mike plugin:
+  - llmstxt:
+      enabled: !ENV [CI, false]
+      full_output: llms-full.txt
+      markdown_description: |-
+        Pixi is a fast, modern, and reproducible package management tool
+        for developers of all backgrounds. Pixi is a cross-platform package manager
+        and project management tool that creates reproducible environments using conda and PyPI packages.
+
+        To use Pixi, start by running `pixi init my_project` to create a new project with a `pixi.toml` manifest file,
+        then add dependencies using `pixi add package1 package2 ...` for conda packages
+        or `pixi add --pypi python_package ...` for PyPI packages. Pixi automatically generates a lockfile (`pixi.lock`)
+        to ensure reproducible environments across different systems.
+        You can define and run tasks using `pixi task add task_name "command arg1 arg2"` and `pixi run task_name`,
+        and work within the project's virtual environment using `pixi run` for single commands
+        or `pixi shell` for an interactive session.
+
+        The tool combines dependency management, task running, and environment isolation in a single workflow,
+        making it easy to share consistent development environments with others. See other documentation sections
+        for further details on how to use the software.
+      sections:
+        Getting Started documentation:
+          - index.md
+          - installation.md
+          - getting_started.md
+          - first_project.md
+        Tutorials documentation:
+          - python/*.md
+          - tutorials/*.md
+          - switching_from/*.md
+          - global_tools/introduction.md
+        Concepts documentation:
+          - workspace/*.md
+          - global_tools/manifest.md
+          - global_tools/trampolines.md
+        Building documentation:
+          - build/*.md
+        Distributing documentation:
+          - deployment/*.md
+        Integration documentation:
+          - integration/**/*.md
+        Advanced documentation:
+          - advanced/*.md
+        Reference documentation:
+          - reference/*.md
+        Miscellaneous documentation:
+          - CHANGELOG.md
+          - misc/*.md

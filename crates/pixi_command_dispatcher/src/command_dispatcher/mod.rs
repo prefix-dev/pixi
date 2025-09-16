@@ -15,30 +15,39 @@ pub use builder::CommandDispatcherBuilder;
 pub use error::{CommandDispatcherError, CommandDispatcherErrorResultExt};
 pub(crate) use git::GitCheckoutTask;
 pub use instantiate_backend::{InstantiateBackendError, InstantiateBackendSpec};
+use pixi_build_discovery::{DiscoveredBackend, EnabledProtocols};
 use pixi_build_frontend::BackendOverride;
 use pixi_git::resolver::GitResolver;
 use pixi_glob::GlobHashCache;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec, PixiRecord};
-use pixi_spec::SourceSpec;
+use pixi_spec::{SourceLocationSpec, SourceSpec};
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{GenericVirtualPackage, Platform, prefix::Prefix};
+use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, Platform};
 use rattler_repodata_gateway::Gateway;
 use reqwest_middleware::ClientWithMiddleware;
 use tokio::sync::{mpsc, oneshot};
+use tokio_util::sync::CancellationToken;
 use typed_path::Utf8TypedPath;
 
 use crate::{
-    Executor, InvalidPathError, PixiEnvironmentSpec, SolveCondaEnvironmentSpec,
-    SolvePixiEnvironmentError, SourceCheckout, SourceCheckoutError, SourceMetadataSpec,
-    build::BuildCache,
+    BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec, Executor,
+    InvalidPathError, PixiEnvironmentSpec, SolveCondaEnvironmentSpec, SolvePixiEnvironmentError,
+    SourceBuildCacheEntry, SourceBuildCacheStatusError, SourceBuildCacheStatusSpec, SourceCheckout,
+    SourceCheckoutError, SourceMetadata, SourceMetadataError, SourceMetadataSpec,
+    backend_source_build::{BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildSpec},
+    build::{BuildCache, source_metadata_cache::SourceMetadataCache},
     cache_dirs::CacheDirs,
+    discover_backend_cache::DiscoveryCache,
     install_pixi::{
         InstallPixiEnvironmentError, InstallPixiEnvironmentResult, InstallPixiEnvironmentSpec,
     },
-    instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec},
+    instantiate_tool_env::{
+        InstantiateToolEnvironmentError, InstantiateToolEnvironmentResult,
+        InstantiateToolEnvironmentSpec,
+    },
     limits::ResolvedLimits,
-    source_build::{BuiltSource, SourceBuildError, SourceBuildSpec},
-    source_metadata::{SourceMetadata, SourceMetadataCache, SourceMetadataError},
+    solve_conda::SolveCondaEnvironmentError,
+    source_build::{SourceBuildError, SourceBuildResult, SourceBuildSpec},
 };
 
 mod builder;
@@ -117,6 +126,9 @@ pub(crate) struct CommandDispatcherData {
     /// A cache for glob hashes.
     pub glob_hash_cache: GlobHashCache,
 
+    /// Cache for discovered build backends keyed by source checkout path.
+    pub discovery_cache: DiscoveryCache,
+
     /// The resolved limits for the command dispatcher.
     pub limits: ResolvedLimits,
 
@@ -160,12 +172,15 @@ impl CommandDispatcherChannel {
 ///
 /// This enum is used to track dependencies and associate tasks with specific
 /// contexts.
-#[derive(Debug, Copy, Clone, derive_more::From)]
+#[derive(Debug, Copy, Clone, derive_more::From, derive_more::TryInto, Hash, Eq, PartialEq)]
 pub(crate) enum CommandDispatcherContext {
     SolveCondaEnvironment(SolveCondaEnvironmentId),
     SolvePixiEnvironment(SolvePixiEnvironmentId),
+    BuildBackendMetadata(BuildBackendMetadataId),
+    BackendSourceBuild(BackendSourceBuildId),
     SourceMetadata(SourceMetadataId),
     SourceBuild(SourceBuildId),
+    QuerySourceBuildCache(SourceBuildCacheStatusId),
     InstallPixiEnvironment(InstallPixiEnvironmentId),
     InstantiateToolEnv(InstantiatedToolEnvId),
 }
@@ -174,8 +189,8 @@ slotmap::new_key_type! {
     /// An id that uniquely identifies a conda environment that is being solved.
     pub(crate) struct SolveCondaEnvironmentId;
 
-    /// An id that uniquely identifies a conda environment that is being solved.
-    pub(crate) struct SourceBuildId;
+    /// An id that uniquely identifies a build backend source build request.
+    pub(crate) struct BackendSourceBuildId;
 
     /// An id that uniquely identifies a conda environment that is being solved.
     pub(crate) struct SolvePixiEnvironmentId;
@@ -187,9 +202,21 @@ slotmap::new_key_type! {
     pub(crate) struct GitCheckoutId;
 }
 
+/// An id that uniquely identifies a build backend metadata request.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub(crate) struct BuildBackendMetadataId(pub usize);
+
 /// An id that uniquely identifies a source metadata request.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub(crate) struct SourceMetadataId(pub usize);
+
+/// An id that uniquely identifies a source build request.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub(crate) struct SourceBuildId(pub usize);
+
+/// An id that uniquely identifies a source build cache request.
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub(crate) struct SourceBuildCacheStatusId(pub usize);
 
 /// An id that uniquely identifies a tool environment.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
@@ -200,12 +227,17 @@ pub(crate) struct InstantiatedToolEnvId(pub usize);
 pub(crate) enum ForegroundMessage {
     SolveCondaEnvironment(SolveCondaEnvironmentTask),
     SolvePixiEnvironment(SolvePixiEnvironmentTask),
+    BuildBackendMetadata(BuildBackendMetadataTask),
+    BackendSourceBuild(BackendSourceBuildTask),
     SourceMetadata(SourceMetadataTask),
     SourceBuild(SourceBuildTask),
+    QuerySourceBuildCache(SourceBuildCacheStatusTask),
     GitCheckout(GitCheckoutTask),
     InstallPixiEnvironment(InstallPixiEnvironmentTask),
     InstantiateToolEnvironment(Task<InstantiateToolEnvironmentSpec>),
     ClearReporter(oneshot::Sender<()>),
+    #[from(ignore)]
+    ClearFilesystemCaches(oneshot::Sender<()>),
 }
 
 /// A message that is send to the background task to start solving a particular
@@ -229,13 +261,19 @@ impl TaskSpec for InstallPixiEnvironmentSpec {
 pub(crate) type SolveCondaEnvironmentTask = Task<SolveCondaEnvironmentSpec>;
 impl TaskSpec for SolveCondaEnvironmentSpec {
     type Output = Vec<PixiRecord>;
-    type Error = rattler_solve::SolveError;
+    type Error = SolveCondaEnvironmentError;
 }
 
 /// A message that is send to the background task to requesting the metadata for
 /// a particular source spec.
-pub(crate) type SourceMetadataTask = Task<SourceMetadataSpec>;
+pub(crate) type BuildBackendMetadataTask = Task<BuildBackendMetadataSpec>;
 
+impl TaskSpec for BuildBackendMetadataSpec {
+    type Output = Arc<BuildBackendMetadata>;
+    type Error = BuildBackendMetadataError;
+}
+
+pub(crate) type SourceMetadataTask = Task<SourceMetadataSpec>;
 impl TaskSpec for SourceMetadataSpec {
     type Output = Arc<SourceMetadata>;
     type Error = SourceMetadataError;
@@ -244,14 +282,28 @@ impl TaskSpec for SourceMetadataSpec {
 pub(crate) type SourceBuildTask = Task<SourceBuildSpec>;
 
 impl TaskSpec for SourceBuildSpec {
-    type Output = BuiltSource;
+    type Output = SourceBuildResult;
     type Error = SourceBuildError;
+}
+
+pub(crate) type BackendSourceBuildTask = Task<BackendSourceBuildSpec>;
+
+impl TaskSpec for BackendSourceBuildSpec {
+    type Output = BackendBuiltSource;
+    type Error = BackendSourceBuildError;
 }
 
 /// Instantiates a tool environment.
 impl TaskSpec for InstantiateToolEnvironmentSpec {
-    type Output = Prefix;
+    type Output = InstantiateToolEnvironmentResult;
     type Error = InstantiateToolEnvironmentError;
+}
+
+pub(crate) type SourceBuildCacheStatusTask = Task<SourceBuildCacheStatusSpec>;
+
+impl TaskSpec for SourceBuildCacheStatusSpec {
+    type Output = Arc<SourceBuildCacheEntry>;
+    type Error = SourceBuildCacheStatusError;
 }
 
 impl Default for CommandDispatcher {
@@ -306,6 +358,26 @@ impl CommandDispatcher {
         &self.data.glob_hash_cache
     }
 
+    /// Returns the discovery cache for build backends.
+    pub fn discovery_cache(&self) -> &DiscoveryCache {
+        &self.data.discovery_cache
+    }
+
+    /// Clears in-memory caches whose correctness depends on the filesystem.
+    ///
+    /// This invalidates memoized results that are derived from files on disk so
+    /// subsequent operations re-check the current state of the filesystem. It:
+    /// - clears glob hash memoization (`GlobHashCache`) used for input file hashing
+    /// - clears memoized SourceBuildCacheStatus results held by the processor,
+    ///   while preserving any in-flight queries
+    pub async fn clear_filesystem_caches(&self) {
+        if let Some(sender) = self.channel().sender() {
+            let (tx, rx) = oneshot::channel();
+            let _ = sender.send(ForegroundMessage::ClearFilesystemCaches(tx));
+            let _ = rx.await;
+        }
+    }
+
     /// Returns the download client used by the command dispatcher.
     pub fn download_client(&self) -> &ClientWithMiddleware {
         &self.data.download_client
@@ -347,14 +419,19 @@ impl CommandDispatcher {
             return Err(CommandDispatcherError::Cancelled);
         };
 
+        let cancellation_token = CancellationToken::new();
         let (tx, rx) = oneshot::channel();
         sender
             .send(ForegroundMessage::from(Task {
                 spec,
                 parent: self.context,
                 tx,
+                cancellation_token: cancellation_token.clone(),
             }))
             .map_err(|_| CommandDispatcherError::Cancelled)?;
+
+        // Make sure to trigger the cancellation token when this async task is dropped.
+        let _cancel_guard = cancellation_token.drop_guard();
 
         match rx.await {
             Ok(Ok(result)) => Ok(result),
@@ -376,6 +453,14 @@ impl CommandDispatcher {
     }
 
     /// Returns the metadata of the source spec.
+    pub async fn build_backend_metadata(
+        &self,
+        spec: BuildBackendMetadataSpec,
+    ) -> Result<Arc<BuildBackendMetadata>, CommandDispatcherError<BuildBackendMetadataError>> {
+        self.execute_task(spec).await
+    }
+
+    /// Returns the metadata of a particular source package.
     pub async fn source_metadata(
         &self,
         spec: SourceMetadataSpec,
@@ -383,11 +468,28 @@ impl CommandDispatcher {
         self.execute_task(spec).await
     }
 
+    /// Query the source build cache for a particular source package.
+    pub async fn source_build_cache_status(
+        &self,
+        spec: SourceBuildCacheStatusSpec,
+    ) -> Result<Arc<SourceBuildCacheEntry>, CommandDispatcherError<SourceBuildCacheStatusError>>
+    {
+        self.execute_task(spec).await
+    }
+
     /// Builds the source package and returns the built conda package.
     pub async fn source_build(
         &self,
         spec: SourceBuildSpec,
-    ) -> Result<BuiltSource, CommandDispatcherError<SourceBuildError>> {
+    ) -> Result<SourceBuildResult, CommandDispatcherError<SourceBuildError>> {
+        self.execute_task(spec).await
+    }
+
+    /// Calls into a pixi build backend to perform a source build.
+    pub(crate) async fn backend_source_build(
+        &self,
+        spec: BackendSourceBuildSpec,
+    ) -> Result<BackendBuiltSource, CommandDispatcherError<BackendSourceBuildError>> {
         self.execute_task(spec).await
     }
 
@@ -437,7 +539,7 @@ impl CommandDispatcher {
     pub async fn solve_conda_environment(
         &self,
         spec: SolveCondaEnvironmentSpec,
-    ) -> Result<Vec<PixiRecord>, CommandDispatcherError<rattler_solve::SolveError>> {
+    ) -> Result<Vec<PixiRecord>, CommandDispatcherError<SolveCondaEnvironmentError>> {
         self.execute_task(spec).await
     }
 
@@ -451,7 +553,10 @@ impl CommandDispatcher {
     pub async fn instantiate_tool_environment(
         &self,
         spec: InstantiateToolEnvironmentSpec,
-    ) -> Result<Prefix, CommandDispatcherError<InstantiateToolEnvironmentError>> {
+    ) -> Result<
+        InstantiateToolEnvironmentResult,
+        CommandDispatcherError<InstantiateToolEnvironmentError>,
+    > {
         self.execute_task(spec).await
     }
 
@@ -473,9 +578,11 @@ impl CommandDispatcher {
         &self,
         source_spec: SourceSpec,
     ) -> Result<SourceCheckout, CommandDispatcherError<SourceCheckoutError>> {
-        match source_spec {
-            SourceSpec::Url(_) => unimplemented!("fetching URL sources is not yet implemented"),
-            SourceSpec::Path(path) => {
+        match source_spec.location {
+            SourceLocationSpec::Url(url) => {
+                unimplemented!("fetching URL sources ({}) is not yet implemented", url.url)
+            }
+            SourceLocationSpec::Path(path) => {
                 let source_path = self
                     .data
                     .resolve_typed_path(path.path.to_path())
@@ -486,7 +593,7 @@ impl CommandDispatcher {
                     pinned: PinnedSourceSpec::Path(PinnedPathSpec { path: path.path }),
                 })
             }
-            SourceSpec::Git(git_spec) => self.pin_and_checkout_git(git_spec).await,
+            SourceLocationSpec::Git(git_spec) => self.pin_and_checkout_git(git_spec).await,
         }
     }
 
@@ -523,6 +630,20 @@ impl CommandDispatcher {
                 unimplemented!("fetching URL sources is not yet implemented")
             }
         }
+    }
+
+    /// Discovers the build backend at a specific path on disk and caches it by
+    /// path.
+    pub async fn discover_backend(
+        &self,
+        source_path: &std::path::Path,
+        channel_config: ChannelConfig,
+        enabled_protocols: EnabledProtocols,
+    ) -> Result<Arc<DiscoveredBackend>, CommandDispatcherError<pixi_build_discovery::DiscoveryError>>
+    {
+        self.discovery_cache()
+            .get_or_discover(source_path, &channel_config, &enabled_protocols)
+            .await
     }
 }
 
@@ -593,4 +714,5 @@ pub(crate) struct Task<S: TaskSpec> {
     pub spec: S,
     pub parent: Option<CommandDispatcherContext>,
     pub tx: oneshot::Sender<Result<S::Output, S::Error>>,
+    pub cancellation_token: CancellationToken,
 }

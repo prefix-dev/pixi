@@ -1,29 +1,31 @@
 mod reporter;
 mod source_metadata_collector;
 
-use std::{collections::BTreeMap, path::PathBuf, time::Instant};
+use std::{borrow::Borrow, collections::BTreeMap, path::PathBuf, time::Instant};
 
-use crate::{
-    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
-    SolveCondaEnvironmentSpec,
-    solve_pixi::source_metadata_collector::{
-        CollectSourceMetadataError, CollectedSourceMetadata, SourceMetadataCollector,
-    },
-};
 use chrono::{DateTime, Utc};
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_record::PixiRecord;
-use pixi_spec::{PixiSpec, SourceSpec};
+use pixi_spec::{BinarySpec, PixiSpec, SourceSpec, SpecConversionError};
 use pixi_spec_containers::DependencyMap;
-use rattler_conda_types::{Channel, ChannelConfig, ChannelUrl, NamelessMatchSpec, Platform};
+use rattler_conda_types::{Channel, ChannelConfig, ChannelUrl, ParseChannelError, Platform};
 use rattler_repodata_gateway::RepoData;
 use rattler_solve::{ChannelPriority, SolveStrategy};
 use reporter::WrappingGatewayReporter;
 use serde::Serialize;
 use thiserror::Error;
 use tracing::instrument;
+
+use crate::{
+    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
+    Cycle, SolveCondaEnvironmentSpec, SourceMetadataError,
+    solve_conda::SolveCondaEnvironmentError,
+    solve_pixi::source_metadata_collector::{
+        CollectSourceMetadataError, CollectedSourceMetadata, SourceMetadataCollector,
+    },
+};
 
 /// Contains all information that describes the input of a pixi environment.
 ///
@@ -47,7 +49,7 @@ pub struct PixiEnvironmentSpec {
 
     /// Additional constraints of the environment
     #[serde(skip_serializing_if = "DependencyMap::is_empty")]
-    pub constraints: DependencyMap<rattler_conda_types::PackageName, NamelessMatchSpec>,
+    pub constraints: DependencyMap<rattler_conda_types::PackageName, BinarySpec>,
 
     /// The records of the packages that are currently already installed. These
     /// are used as hints to reduce the difference between individual solves.
@@ -117,10 +119,10 @@ impl PixiEnvironmentSpec {
         gateway_reporter: Option<Box<dyn rattler_repodata_gateway::Reporter>>,
     ) -> Result<Vec<PixiRecord>, CommandDispatcherError<SolvePixiEnvironmentError>> {
         // Split the requirements into source and binary requirements.
-        let (source_specs, binary_specs) = Self::split_into_source_and_binary_requirements(
-            &self.channel_config,
-            self.dependencies,
-        );
+        let (source_specs, binary_specs) =
+            Self::split_into_source_and_binary_requirements(self.dependencies);
+
+        Self::check_missing_channels(binary_specs.clone(), &self.channels, &self.channel_config)?;
 
         // Recursively collect the metadata of all the source specs.
         let CollectedSourceMetadata {
@@ -143,6 +145,13 @@ impl PixiEnvironmentSpec {
         .await
         .map_err_with(SolvePixiEnvironmentError::from)?;
 
+        // Convert the binary specs into match specs as well.
+        let binary_match_specs = binary_specs
+            .clone()
+            .into_match_specs(&self.channel_config)
+            .map_err(SolvePixiEnvironmentError::SpecConversionError)
+            .map_err(CommandDispatcherError::Failed)?;
+
         // Query the gateway for conda repodata. This fetches the repodata for both the
         // direct dependencies of the environment and the direct dependencies of
         // all (recursively) discovered source dependencies. This ensures that all
@@ -153,8 +162,8 @@ impl PixiEnvironmentSpec {
             .query(
                 self.channels.iter().cloned().map(Channel::from_url),
                 [self.build_environment.host_platform, Platform::NoArch],
-                binary_specs
-                    .iter_match_specs()
+                binary_match_specs
+                    .into_iter()
                     .chain(transitive_dependencies),
             )
             .recursive(true);
@@ -170,7 +179,7 @@ impl PixiEnvironmentSpec {
             .map_err(SolvePixiEnvironmentError::QueryError)
             .map_err(CommandDispatcherError::Failed)?;
         let total_records = binary_repodata.iter().map(RepoData::len).sum::<usize>();
-        tracing::info!(
+        tracing::debug!(
             "fetched {total_records} records in {:?}",
             fetch_repodata_start.elapsed()
         );
@@ -195,7 +204,7 @@ impl PixiEnvironmentSpec {
                 channel_config: self.channel_config,
             })
             .await
-            .map_err_with(SolvePixiEnvironmentError::SolveError)
+            .map_err_with(SolvePixiEnvironmentError::from)
     }
 
     /// Split the set of requirements into source and binary requirements.
@@ -204,23 +213,47 @@ impl PixiEnvironmentSpec {
     /// [`Self::requirements`] without also taking a mutable reference to
     /// `self`.
     fn split_into_source_and_binary_requirements(
-        channel_config: &ChannelConfig,
         specs: DependencyMap<rattler_conda_types::PackageName, PixiSpec>,
     ) -> (
         DependencyMap<rattler_conda_types::PackageName, SourceSpec>,
-        DependencyMap<rattler_conda_types::PackageName, NamelessMatchSpec>,
+        DependencyMap<rattler_conda_types::PackageName, BinarySpec>,
     ) {
         specs.into_specs().partition_map(|(name, constraint)| {
             match constraint.into_source_or_binary() {
                 Either::Left(source) => Either::Left((name, source)),
-                Either::Right(binary) => {
-                    let spec = binary
-                        .try_into_nameless_match_spec(channel_config)
-                        .expect("failed to convert channel from spec");
-                    Either::Right((name, spec))
-                }
+                Either::Right(binary) => Either::Right((name, binary)),
             }
         })
+    }
+
+    /// Check that binary specs do not refer to inaccessible channels
+    fn check_missing_channels(
+        binary_specs: DependencyMap<rattler_conda_types::PackageName, BinarySpec>,
+        channels: &[ChannelUrl],
+        channel_config: &ChannelConfig,
+    ) -> Result<(), CommandDispatcherError<SolvePixiEnvironmentError>> {
+        for (pkg, spec) in binary_specs.iter_specs() {
+            if let BinarySpec::DetailedVersion(v) = spec {
+                if let Some(channel) = &v.channel {
+                    let base_url = channel
+                        .clone()
+                        .into_base_url(channel_config)
+                        .map_err(SolvePixiEnvironmentError::ParseChannelError)
+                        .map_err(CommandDispatcherError::Failed)?;
+
+                    if !channels.iter().any(|c| c == &base_url) {
+                        return Err(CommandDispatcherError::Failed(
+                            SolvePixiEnvironmentError::MissingChannel(MissingChannelError {
+                                package: pkg.as_normalized().to_string(),
+                                channel: base_url,
+                                advice: None,
+                            }),
+                        ));
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -235,5 +268,59 @@ pub enum SolvePixiEnvironmentError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    CollectSourceMetadataError(#[from] CollectSourceMetadataError),
+    CollectSourceMetadataError(CollectSourceMetadataError),
+
+    #[error(transparent)]
+    SpecConversionError(#[from] SpecConversionError),
+
+    #[error("detected a cyclic dependency:\n\n{0}")]
+    Cycle(Cycle),
+
+    #[error(transparent)]
+    ParseChannelError(#[from] ParseChannelError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    MissingChannel(MissingChannelError),
+}
+
+/// An error for a missing channel in the solve request
+#[derive(Debug, Diagnostic, Error)]
+#[error("Package '{package}' requested unavailable channel '{channel}'")]
+pub struct MissingChannelError {
+    pub package: String,
+    pub channel: ChannelUrl,
+    #[help]
+    pub advice: Option<String>,
+}
+
+impl Borrow<dyn Diagnostic> for Box<SolvePixiEnvironmentError> {
+    fn borrow(&self) -> &(dyn Diagnostic + 'static) {
+        self.as_ref()
+    }
+}
+
+impl From<SolveCondaEnvironmentError> for SolvePixiEnvironmentError {
+    fn from(err: SolveCondaEnvironmentError) -> Self {
+        match err {
+            SolveCondaEnvironmentError::SolveError(err) => {
+                SolvePixiEnvironmentError::SolveError(err)
+            }
+            SolveCondaEnvironmentError::SpecConversionError(err) => {
+                SolvePixiEnvironmentError::SpecConversionError(err)
+            }
+        }
+    }
+}
+
+impl From<CollectSourceMetadataError> for SolvePixiEnvironmentError {
+    fn from(err: CollectSourceMetadataError) -> Self {
+        match err {
+            CollectSourceMetadataError::SourceMetadataError {
+                error: SourceMetadataError::Cycle(cycle),
+                ..
+            } => SolvePixiEnvironmentError::Cycle(cycle),
+            _ => SolvePixiEnvironmentError::CollectSourceMetadataError(err),
+        }
+    }
 }

@@ -1,11 +1,12 @@
 use std::str::FromStr;
 
+use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor};
 use pixi_spec_containers::DependencyMap;
-use rattler_conda_types::{Channel, ChannelConfig, ChannelUrl, NamelessMatchSpec};
+use rattler_conda_types::{Channel, ChannelConfig, ChannelUrl};
 use url::Url;
 
 /// Describes how a backend should be instantiated.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type", rename_all = "kebab-case"))]
 pub enum BackendSpec {
@@ -14,8 +15,18 @@ pub enum BackendSpec {
     // TODO: Support in-memory backends without going through JSON-RPC.
 }
 
+impl BackendSpec {
+    /// Resolves the backend specification to a relative path based on the
+    /// provided source anchor.
+    pub fn resolve(self, source_anchor: SourceAnchor) -> Self {
+        match self {
+            BackendSpec::JsonRpc(spec) => BackendSpec::JsonRpc(spec.resolve(source_anchor)),
+        }
+    }
+}
+
 /// Describes a backend that uses JSON-RPC to communicate with an executable.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub struct JsonRpcBackendSpec {
@@ -26,9 +37,36 @@ pub struct JsonRpcBackendSpec {
     pub command: CommandSpec,
 }
 
+impl JsonRpcBackendSpec {
+    /// Resolves the JsonRpcBackendSpec to a relative path based on the
+    /// provided source anchor.
+    pub fn resolve(self, source_anchor: SourceAnchor) -> Self {
+        Self {
+            name: self.name,
+            command: {
+                match self.command {
+                    CommandSpec::EnvironmentSpec(mut env_spec) => {
+                        let maybe_source_spec = env_spec.requirement.1.try_into_source_spec();
+                        let pixi_spec = match maybe_source_spec {
+                            Ok(source_spec) => {
+                                let resolved_spec = source_anchor.resolve(source_spec);
+                                PixiSpec::from(resolved_spec)
+                            }
+                            Err(pixi_spec) => pixi_spec,
+                        };
+                        env_spec.requirement.1 = pixi_spec;
+                        CommandSpec::EnvironmentSpec(env_spec)
+                    }
+                    CommandSpec::System(system_spec) => CommandSpec::System(system_spec),
+                }
+            },
+        }
+    }
+}
+
 /// Describes a command that should be run by calling an executable in a certain
 /// environment.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type", rename_all = "kebab-case"))]
 pub enum CommandSpec {
@@ -36,9 +74,22 @@ pub enum CommandSpec {
     System(SystemCommandSpec),
 }
 
+impl CommandSpec {
+    /// Resolves the CommandSpec to a relative path based on the
+    /// provided source anchor.
+    pub fn resolve(self, source_anchor: SourceAnchor) -> Self {
+        match self {
+            CommandSpec::EnvironmentSpec(env_spec) => {
+                CommandSpec::EnvironmentSpec(Box::new(env_spec.resolve(source_anchor)))
+            }
+            CommandSpec::System(system_spec) => CommandSpec::System(system_spec),
+        }
+    }
+}
+
 /// Describes a command that should be run by calling an executable on the
 /// system.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub struct SystemCommandSpec {
@@ -49,26 +100,26 @@ pub struct SystemCommandSpec {
 
 /// Describes a conda environment that should be set up in which the backend is
 /// run.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub struct EnvironmentSpec {
     /// The main requirement
-    pub requirement: (rattler_conda_types::PackageName, NamelessMatchSpec),
+    pub requirement: (rattler_conda_types::PackageName, PixiSpec),
 
     /// The requirements for the environment.
     #[cfg_attr(
         feature = "serde",
         serde(skip_serializing_if = "DependencyMap::is_empty")
     )]
-    pub additional_requirements: DependencyMap<rattler_conda_types::PackageName, NamelessMatchSpec>,
+    pub additional_requirements: DependencyMap<rattler_conda_types::PackageName, PixiSpec>,
 
     /// Additional constraints to apply to the environment
     #[cfg_attr(
         feature = "serde",
         serde(skip_serializing_if = "DependencyMap::is_empty")
     )]
-    pub constraints: DependencyMap<rattler_conda_types::PackageName, NamelessMatchSpec>,
+    pub constraints: DependencyMap<rattler_conda_types::PackageName, BinarySpec>,
 
     /// The channels to use for solving
     pub channels: Vec<ChannelUrl>,
@@ -77,6 +128,23 @@ pub struct EnvironmentSpec {
     /// this should be derived from the name of the backend.
     #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
     pub command: Option<String>,
+}
+
+impl EnvironmentSpec {
+    /// Resolves the EnvironmentSpec to a relative path based on the
+    /// provided source anchor.
+    pub fn resolve(mut self, source_anchor: SourceAnchor) -> Self {
+        let maybe_source_spec = self.requirement.1.try_into_source_spec();
+        let pixi_spec = match maybe_source_spec {
+            Ok(source_spec) => {
+                let resolved_spec = source_anchor.resolve(source_spec);
+                PixiSpec::from(resolved_spec)
+            }
+            Err(pixi_spec) => pixi_spec,
+        };
+        self.requirement.1 = pixi_spec;
+        self
+    }
 }
 
 impl JsonRpcBackendSpec {
@@ -92,10 +160,7 @@ impl JsonRpcBackendSpec {
         Self {
             name: DEFAULT_BUILD_TOOL.to_string(),
             command: CommandSpec::EnvironmentSpec(Box::new(EnvironmentSpec {
-                requirement: (
-                    DEFAULT_BUILD_TOOL.parse().unwrap(),
-                    NamelessMatchSpec::default(),
-                ),
+                requirement: (DEFAULT_BUILD_TOOL.parse().unwrap(), PixiSpec::any()),
                 additional_requirements: Default::default(),
                 constraints: Default::default(),
                 channels: vec![conda_forge_channel, backends_channel],

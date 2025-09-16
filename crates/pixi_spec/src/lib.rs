@@ -26,7 +26,7 @@ use rattler_conda_types::{
 };
 pub use source_anchor::SourceAnchor;
 use thiserror::Error;
-pub use toml::{TomlSpec, TomlVersionSpecStr};
+pub use toml::{TomlLocationSpec, TomlSpec, TomlVersionSpecStr};
 pub use url::{UrlBinarySpec, UrlSourceSpec, UrlSpec};
 
 /// An error that is returned when a spec cannot be converted into another spec
@@ -48,6 +48,10 @@ pub enum SpecConversionError {
     /// Encountered an invalid channel url or path
     #[error("the channel '{0}' could not be resolved")]
     InvalidChannel(String, #[source] ParseChannelError),
+
+    /// The `name` field is missing in the spec.
+    #[error("the `package.name` must be provided in versions of pixi-build-api-version <2")]
+    MissingName,
 }
 
 /// A package specification for pixi.
@@ -110,6 +114,11 @@ impl From<VersionSpec> for PixiSpec {
 }
 
 impl PixiSpec {
+    /// Creates a new instance that matches any version.
+    pub const fn any() -> Self {
+        Self::Version(VersionSpec::Any)
+    }
+
     /// Convert a [`NamelessMatchSpec`] into a [`PixiSpec`].
     pub fn from_nameless_matchspec(
         spec: NamelessMatchSpec,
@@ -278,12 +287,18 @@ impl PixiSpec {
             }
             PixiSpec::Url(url) => url
                 .into_source_or_binary()
-                .map_left(SourceSpec::Url)
+                .map_left(|url| SourceSpec {
+                    location: SourceLocationSpec::Url(url),
+                })
                 .map_right(BinarySpec::Url),
-            PixiSpec::Git(git) => Either::Left(SourceSpec::Git(git)),
+            PixiSpec::Git(git) => Either::Left(SourceSpec {
+                location: SourceLocationSpec::Git(git),
+            }),
             PixiSpec::Path(path) => path
                 .into_source_or_binary()
-                .map_left(SourceSpec::Path)
+                .map_left(|path| SourceSpec {
+                    location: SourceLocationSpec::Path(path),
+                })
                 .map_right(BinarySpec::Path),
         }
     }
@@ -297,7 +312,9 @@ impl PixiSpec {
                 .try_into_source_url()
                 .map(SourceSpec::from)
                 .map_err(PixiSpec::from),
-            PixiSpec::Git(git) => Ok(SourceSpec::Git(git)),
+            PixiSpec::Git(git) => Ok(SourceSpec {
+                location: SourceLocationSpec::Git(git),
+            }),
             PixiSpec::Path(path) => path
                 .try_into_source_path()
                 .map(SourceSpec::from)
@@ -334,8 +351,15 @@ impl PixiSpec {
 /// This type only represents source packages. Use [`PixiSpec`] to represent
 /// both binary and source packages.
 #[derive(Debug, Clone, Hash, PartialEq, Eq, serde::Serialize)]
+pub struct SourceSpec {
+    /// The location of the source.
+    pub location: SourceLocationSpec,
+}
+
+/// A specification for a source location.
+#[derive(Debug, Clone, Hash, PartialEq, Eq, serde::Serialize)]
 #[serde(untagged)]
-pub enum SourceSpec {
+pub enum SourceLocationSpec {
     /// The spec is represented as an archive that can be downloaded from the
     /// specified URL.
     Url(UrlSourceSpec),
@@ -349,33 +373,40 @@ pub enum SourceSpec {
 
 impl Display for SourceSpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            SourceSpec::Url(url) => write!(f, "{}", url),
-            SourceSpec::Git(git) => write!(f, "{}", git),
-            SourceSpec::Path(path) => write!(f, "{}", path),
+        match &self.location {
+            SourceLocationSpec::Url(url) => write!(f, "{}", url),
+            SourceLocationSpec::Git(git) => write!(f, "{}", git),
+            SourceLocationSpec::Path(path) => write!(f, "{}", path),
         }
     }
 }
 
 impl SourceSpec {
-    /// Returns true if this spec represents a git repository.
-    pub fn is_git(&self) -> bool {
-        matches!(self, Self::Git(_))
+    /// Convert this instance into a nameless match spec.
+    pub fn to_nameless_match_spec(&self) -> NamelessMatchSpec {
+        NamelessMatchSpec::default()
     }
 
     /// Converts this instance into a [`toml_edit::Value`].
     pub fn to_toml_value(&self) -> toml_edit::Value {
-        ::serde::Serialize::serialize(self, toml_edit::ser::ValueSerializer::new())
+        ::serde::Serialize::serialize(&self.location, toml_edit::ser::ValueSerializer::new())
             .expect("conversion to toml cannot fail")
+    }
+}
+
+impl SourceLocationSpec {
+    /// Returns true if this spec represents a git repository.
+    pub fn is_git(&self) -> bool {
+        matches!(self, SourceLocationSpec::Git(_))
     }
 }
 
 impl From<SourceSpec> for PixiSpec {
     fn from(value: SourceSpec) -> Self {
-        match value {
-            SourceSpec::Url(url) => Self::Url(url.into()),
-            SourceSpec::Git(git) => Self::Git(git),
-            SourceSpec::Path(path) => Self::Path(path.into()),
+        match value.location {
+            SourceLocationSpec::Url(url) => Self::Url(url.into()),
+            SourceLocationSpec::Git(git) => Self::Git(git),
+            SourceLocationSpec::Path(path) => Self::Path(path.into()),
         }
     }
 }
@@ -394,7 +425,9 @@ impl From<UrlSpec> for PixiSpec {
 
 impl From<UrlSourceSpec> for SourceSpec {
     fn from(value: UrlSourceSpec) -> Self {
-        SourceSpec::Url(value)
+        Self {
+            location: SourceLocationSpec::Url(value),
+        }
     }
 }
 
@@ -412,7 +445,9 @@ impl From<PathSpec> for PixiSpec {
 
 impl From<PathSourceSpec> for SourceSpec {
     fn from(value: PathSourceSpec) -> Self {
-        Self::Path(value)
+        Self {
+            location: SourceLocationSpec::Path(value),
+        }
     }
 }
 
@@ -427,7 +462,8 @@ impl From<PixiSpec> for toml_edit::Value {
 ///
 /// This type only represents binary packages. Use [`PixiSpec`] to represent
 /// both binary and source packages.
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, ::serde::Serialize)]
+#[serde(untagged)]
 pub enum BinarySpec {
     /// The spec is represented solely by a version string. The package should
     /// be retrieved from a channel.
@@ -496,9 +532,15 @@ impl From<VersionSpec> for BinarySpec {
 impl From<rattler_lock::source::SourceLocation> for SourceSpec {
     fn from(value: rattler_lock::source::SourceLocation) -> Self {
         match value {
-            rattler_lock::source::SourceLocation::Url(url) => Self::Url(url.into()),
-            rattler_lock::source::SourceLocation::Git(git) => Self::Git(git.into()),
-            rattler_lock::source::SourceLocation::Path(path) => Self::Path(path.into()),
+            rattler_lock::source::SourceLocation::Url(url) => Self {
+                location: SourceLocationSpec::Url(url.into()),
+            },
+            rattler_lock::source::SourceLocation::Git(git) => Self {
+                location: SourceLocationSpec::Git(git.into()),
+            },
+            rattler_lock::source::SourceLocation::Path(path) => Self {
+                location: SourceLocationSpec::Path(path.into()),
+            },
         }
     }
 }
@@ -506,10 +548,10 @@ impl From<rattler_lock::source::SourceLocation> for SourceSpec {
 #[cfg(feature = "rattler_lock")]
 impl From<SourceSpec> for rattler_lock::source::SourceLocation {
     fn from(value: SourceSpec) -> Self {
-        match value {
-            SourceSpec::Url(url) => Self::Url(url.into()),
-            SourceSpec::Git(git) => Self::Git(git.into()),
-            SourceSpec::Path(path) => Self::Path(path.into()),
+        match value.location {
+            SourceLocationSpec::Url(url) => Self::Url(url.into()),
+            SourceLocationSpec::Git(git) => Self::Git(git.into()),
+            SourceLocationSpec::Path(path) => Self::Path(path.into()),
         }
     }
 }

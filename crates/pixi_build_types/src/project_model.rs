@@ -1,31 +1,31 @@
-//! This module is a collection of types that represent a pixi package in a protocol
-//! format that can be sent over the wire.
-//! We need to vendor a lot of the types, and simplify them in some cases, so that
-//! we have a stable protocol that can be used to communicate in the build tasks.
+//! This module is a collection of types that represent a pixi package in a
+//! protocol format that can be sent over the wire.
+//! We need to vendor a lot of the types, and simplify them in some cases, so
+//! that we have a stable protocol that can be used to communicate in the build
+//! tasks.
 //!
-//! The rationale is that we want to have a stable protocol to provide forwards and backwards compatibility.
-//! The idea for **backwards compatibility** is that we try not to break this in pixi as much as possible.
-//! So as long as older pixi TOMLs keep loading, we can send them to the backend.
+//! The rationale is that we want to have a stable protocol to provide forwards
+//! and backwards compatibility. The idea for **backwards compatibility** is
+//! that we try not to break this in pixi as much as possible. So as long as
+//! older pixi TOMLs keep loading, we can send them to the backend.
 //!
-//! In regards to forwards compatibility, we want to be able to keep converting to all versions of the `VersionedProjectModel`
-//! as much as possible.
+//! In regards to forwards compatibility, we want to be able to keep converting
+//! to all versions of the `VersionedProjectModel` as much as possible.
 //!
-//! This is why we append a `V{version}` to the type names, to indicate the version
-//! of the protocol.
+//! This is why we append a `V{version}` to the type names, to indicate the
+//! version of the protocol.
 //!
 //! Only the whole ProjectModel is versioned explicitly in an enum.
-//! When making a change to one of the types, be sure to add another enum declaration if it is breaking.
+//! When making a change to one of the types, be sure to add another enum
+//! declaration if it is breaking.
+use std::{convert::Infallible, fmt::Display, hash::Hash, path::PathBuf, str::FromStr};
+
 use ordermap::OrderMap;
+use pixi_stable_hash::{IsDefault, StableHashBuilder};
 use rattler_conda_types::{BuildNumberSpec, StringMatcher, Version, VersionSpec};
 use rattler_digest::{Md5, Md5Hash, Sha256, Sha256Hash, serde::SerializableHash};
 use serde::{Deserialize, Serialize};
-use serde_with::serde_as;
-use serde_with::{DeserializeFromStr, DisplayFromStr, SerializeDisplay};
-use std::convert::Infallible;
-use std::fmt::Display;
-use std::hash::Hash;
-use std::path::PathBuf;
-use std::str::FromStr;
+use serde_with::{DeserializeFromStr, DisplayFromStr, SerializeDisplay, serde_as};
 use url::Url;
 
 /// Enum containing all versions of the project model.
@@ -55,7 +55,8 @@ impl VersionedProjectModel {
         }
     }
 
-    /// Returns a reference to the v1 type, returns None if the version is not v1.
+    /// Returns a reference to the v1 type, returns None if the version is not
+    /// v1.
     pub fn as_v1(&self) -> Option<&ProjectModelV1> {
         match self {
             VersionedProjectModel::V1(v) => Some(v),
@@ -68,11 +69,11 @@ impl VersionedProjectModel {
 /// The source package name of a package. Not normalized per se.
 pub type SourcePackageName = String;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectModelV1 {
     /// The name of the project
-    pub name: String,
+    pub name: Option<String>,
 
     /// The version of the project
     pub version: Option<Version>,
@@ -104,6 +105,14 @@ pub struct ProjectModelV1 {
     /// The target of the project, this may contain
     /// platform specific configurations.
     pub targets: Option<TargetsV1>,
+}
+
+impl IsDefault for ProjectModelV1 {
+    type Item = Self;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        Some(self)
+    }
 }
 
 impl From<ProjectModelV1> for VersionedProjectModel {
@@ -161,6 +170,26 @@ pub struct TargetsV1 {
     pub targets: Option<OrderMap<TargetSelectorV1, TargetV1>>,
 }
 
+impl TargetsV1 {
+    /// Check if this targets struct is effectively empty (contains no
+    /// meaningful data that should affect the hash).
+    pub fn is_empty(&self) -> bool {
+        let has_meaningless_default_target =
+            self.default_target.as_ref().is_none_or(|t| t.is_empty());
+        let has_only_empty_targets = self.targets.as_ref().is_none_or(|t| t.is_empty());
+
+        has_meaningless_default_target && has_only_empty_targets
+    }
+}
+
+impl IsDefault for TargetsV1 {
+    type Item = Self;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        if !self.is_empty() { Some(self) } else { None }
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct TargetV1 {
@@ -174,6 +203,29 @@ pub struct TargetV1 {
     pub run_dependencies: Option<OrderMap<SourcePackageName, PackageSpecV1>>,
 }
 
+impl TargetV1 {
+    /// Check if this target is effectively empty (contains no meaningful data
+    /// that should affect the hash).
+    pub fn is_empty(&self) -> bool {
+        let has_no_build_deps = self
+            .build_dependencies
+            .as_ref()
+            .is_none_or(|d| d.is_empty());
+        let has_no_host_deps = self.host_dependencies.as_ref().is_none_or(|d| d.is_empty());
+        let has_no_run_deps = self.run_dependencies.as_ref().is_none_or(|d| d.is_empty());
+
+        has_no_build_deps && has_no_host_deps && has_no_run_deps
+    }
+}
+
+impl IsDefault for TargetV1 {
+    type Item = Self;
+
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        if !self.is_empty() { Some(self) } else { None }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum PackageSpecV1 {
@@ -181,6 +233,15 @@ pub enum PackageSpecV1 {
     Binary(Box<BinaryPackageSpecV1>),
     /// This is a dependency on a source package
     Source(SourcePackageSpecV1),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct NamedSpecV1<T> {
+    pub name: SourcePackageName,
+
+    #[serde(flatten)]
+    pub spec: T,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
@@ -296,6 +357,10 @@ pub struct BinaryPackageSpecV1 {
     /// The sha256 hash of the package
     #[serde_as(as = "Option<SerializableHash<Sha256>>")]
     pub sha256: Option<Sha256Hash>,
+    /// The URL of the package, if it is available
+    pub url: Option<Url>,
+    /// The license of the package
+    pub license: Option<String>,
 }
 
 impl From<VersionSpec> for BinaryPackageSpecV1 {
@@ -351,8 +416,9 @@ impl std::fmt::Debug for BinaryPackageSpecV1 {
 
 // Custom Hash implementations that skip default values for stability
 impl Hash for ProjectModelV1 {
-    /// Custom hash implementation that skips default/empty values to keep the hash
-    /// as stable as possible when adding new optional fields to the struct.
+    /// Custom hash implementation using StableHashBuilder to ensure different
+    /// field configurations produce different hashes while maintaining
+    /// forward/backward compatibility.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let ProjectModelV1 {
             name,
@@ -368,43 +434,25 @@ impl Hash for ProjectModelV1 {
             targets,
         } = self;
 
-        name.hash(state);
-        if let Some(version) = version {
-            version.hash(state);
-        }
-        if let Some(description) = description {
-            description.hash(state);
-        }
-        if let Some(authors) = authors {
-            authors.hash(state);
-        }
-        if let Some(license) = license {
-            license.hash(state);
-        }
-        if let Some(license_file) = license_file {
-            license_file.hash(state);
-        }
-        if let Some(readme) = readme {
-            readme.hash(state);
-        }
-        if let Some(homepage) = homepage {
-            homepage.hash(state);
-        }
-        if let Some(repository) = repository {
-            repository.hash(state);
-        }
-        if let Some(documentation) = documentation {
-            documentation.hash(state);
-        }
-        if let Some(targets) = targets {
-            targets.hash(state);
-        }
+        StableHashBuilder::<H>::new()
+            .field("authors", authors)
+            .field("description", description)
+            .field("documentation", documentation)
+            .field("homepage", homepage)
+            .field("license", license)
+            .field("license_file", license_file)
+            .field("name", name)
+            .field("readme", readme)
+            .field("repository", repository)
+            .field("targets", targets)
+            .field("version", version)
+            .finish(state);
     }
 }
 
 impl Hash for TargetSelectorV1 {
-    /// Custom hash implementation that uses discriminant values to keep the hash
-    /// as stable as possible when adding new enum variants.
+    /// Custom hash implementation that uses discriminant values to keep the
+    /// hash as stable as possible when adding new enum variants.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
             TargetSelectorV1::Unix => 0u8.hash(state),
@@ -420,56 +468,44 @@ impl Hash for TargetSelectorV1 {
 }
 
 impl Hash for TargetsV1 {
-    /// Custom hash implementation that skips empty collections to keep the hash
-    /// as stable as possible when adding new optional fields to the struct.
+    /// Custom hash implementation using StableHashBuilder to ensure different
+    /// field configurations produce different hashes while maintaining
+    /// forward/backward compatibility.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let TargetsV1 {
             default_target,
             targets,
         } = self;
 
-        if let Some(default_target) = default_target {
-            default_target.hash(state);
-        }
-        if let Some(targets) = targets {
-            if !targets.is_empty() {
-                targets.hash(state);
-            }
-        }
+        StableHashBuilder::<H>::new()
+            .field("default_target", default_target)
+            .field("targets", targets)
+            .finish(state);
     }
 }
 
 impl Hash for TargetV1 {
-    /// Custom hash implementation that skips empty collections to keep the hash
-    /// as stable as possible when adding new optional fields to the struct.
+    /// Custom hash implementation using StableHashBuilder to ensure different
+    /// field configurations produce different hashes while maintaining
+    /// forward/backward compatibility.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let TargetV1 {
-            host_dependencies,
             build_dependencies,
+            host_dependencies,
             run_dependencies,
         } = self;
 
-        if let Some(host_dependencies) = host_dependencies {
-            if !host_dependencies.is_empty() {
-                host_dependencies.hash(state);
-            }
-        }
-        if let Some(build_dependencies) = build_dependencies {
-            if !build_dependencies.is_empty() {
-                build_dependencies.hash(state);
-            }
-        }
-        if let Some(run_dependencies) = run_dependencies {
-            if !run_dependencies.is_empty() {
-                run_dependencies.hash(state);
-            }
-        }
+        StableHashBuilder::<H>::new()
+            .field("build_dependencies", build_dependencies)
+            .field("host_dependencies", host_dependencies)
+            .field("run_dependencies", run_dependencies)
+            .finish(state);
     }
 }
 
 impl Hash for PackageSpecV1 {
-    /// Custom hash implementation that uses discriminant values to keep the hash
-    /// as stable as possible when adding new enum variants.
+    /// Custom hash implementation that uses discriminant values to keep the
+    /// hash as stable as possible when adding new enum variants.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
             PackageSpecV1::Binary(spec) => {
@@ -485,8 +521,8 @@ impl Hash for PackageSpecV1 {
 }
 
 impl Hash for SourcePackageSpecV1 {
-    /// Custom hash implementation that uses discriminant values to keep the hash
-    /// as stable as possible when adding new enum variants.
+    /// Custom hash implementation that uses discriminant values to keep the
+    /// hash as stable as possible when adding new enum variants.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
             SourcePackageSpecV1::Url(spec) => {
@@ -506,38 +542,30 @@ impl Hash for SourcePackageSpecV1 {
 }
 
 impl Hash for UrlSpecV1 {
-    /// Custom hash implementation that skips None values to keep the hash
-    /// as stable as possible when adding new optional fields to the struct.
+    /// Custom hash implementation using StableHashBuilder to ensure different
+    /// field configurations produce different hashes while maintaining
+    /// forward/backward compatibility.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let UrlSpecV1 { url, md5, sha256 } = self;
 
-        url.hash(state);
-        if let Some(md5) = md5 {
-            md5.hash(state);
-        }
-        if let Some(sha256) = sha256 {
-            sha256.hash(state);
-        }
+        StableHashBuilder::<H>::new()
+            .field("md5", md5)
+            .field("sha256", sha256)
+            .field("url", url)
+            .finish(state);
     }
 }
 
 impl Hash for GitSpecV1 {
-    /// Custom hash implementation that skips None values to keep the hash
-    /// as stable as possible when adding new optional fields to the struct.
+    /// Custom hash implementation using StableHashBuilder to ensure different
+    /// field configurations produce different hashes while maintaining
+    /// forward/backward compatibility.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        let GitSpecV1 {
-            git,
-            rev,
-            subdirectory,
-        } = self;
-
-        git.hash(state);
-        if let Some(rev) = rev {
-            rev.hash(state);
-        }
-        if let Some(subdirectory) = subdirectory {
-            subdirectory.hash(state);
-        }
+        StableHashBuilder::<H>::new()
+            .field("git", &self.git)
+            .field("rev", &self.rev)
+            .field("subdirectory", &self.subdirectory)
+            .finish(state);
     }
 }
 
@@ -551,8 +579,8 @@ impl Hash for PathSpecV1 {
 }
 
 impl Hash for GitReferenceV1 {
-    /// Custom hash implementation that uses discriminant values to keep the hash
-    /// as stable as possible when adding new enum variants.
+    /// Custom hash implementation that uses discriminant values to keep the
+    /// hash as stable as possible when adding new enum variants.
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         match self {
             GitReferenceV1::Branch(b) => {
@@ -574,55 +602,42 @@ impl Hash for GitReferenceV1 {
     }
 }
 
-impl Hash for BinaryPackageSpecV1 {
-    /// Custom hash implementation that skips None values to keep the hash
-    /// as stable as possible when adding new optional fields to the struct.
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        let BinaryPackageSpecV1 {
-            version,
-            build,
-            build_number,
-            file_name,
-            channel,
-            subdir,
-            md5,
-            sha256,
-        } = self;
+impl IsDefault for GitReferenceV1 {
+    type Item = Self;
 
-        if let Some(version) = version {
-            version.hash(state);
-        }
-        if let Some(build) = build {
-            build.hash(state);
-        }
-        if let Some(build_number) = build_number {
-            build_number.hash(state);
-        }
-        if let Some(file_name) = file_name {
-            file_name.hash(state);
-        }
-        if let Some(channel) = channel {
-            channel.hash(state);
-        }
-        if let Some(subdir) = subdir {
-            subdir.hash(state);
-        }
-        if let Some(md5) = md5 {
-            md5.hash(state);
-        }
-        if let Some(sha256) = sha256 {
-            sha256.hash(state);
-        }
+    fn is_non_default(&self) -> Option<&Self::Item> {
+        Some(self) // Never skip GitReferenceV1 fields
+    }
+}
+
+impl Hash for BinaryPackageSpecV1 {
+    /// Custom hash implementation using StableHashBuilder to ensure different
+    /// field configurations produce different hashes while maintaining
+    /// forward/backward compatibility.
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        StableHashBuilder::<H>::new()
+            .field("build", &self.build)
+            .field("build_number", &self.build_number)
+            .field("channel", &self.channel)
+            .field("file_name", &self.file_name)
+            .field("license", &self.license)
+            .field("md5", &self.md5)
+            .field("sha256", &self.sha256)
+            .field("subdir", &self.subdir)
+            .field("url", &self.url)
+            .field("version", &self.version)
+            .finish(state);
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::hash::{DefaultHasher, Hash, Hasher};
 
+    use super::*;
+
     fn calculate_hash<T: Hash>(obj: &T) -> u64 {
-        let mut hasher = DefaultHasher::new();
+        let mut hasher = DefaultHasher::default();
         obj.hash(&mut hasher);
         hasher.finish()
     }
@@ -631,7 +646,7 @@ mod tests {
     fn test_hash_stability_with_default_values() {
         // Create a minimal ProjectModelV1 instance
         let mut project_model = ProjectModelV1 {
-            name: "test-project".to_string(),
+            name: Some("test-project".to_string()),
             version: None,
             description: None,
             authors: None,
@@ -646,14 +661,16 @@ mod tests {
 
         let hash1 = calculate_hash(&project_model);
 
-        // Add empty targets field (should NOT change hash due to our custom implementation)
+        // Add empty targets field - with corrected implementation, this should NOT
+        // change hash because we only include discriminants for
+        // non-default/non-empty values
         project_model.targets = Some(TargetsV1 {
             default_target: None,
             targets: Some(OrderMap::new()),
         });
         let hash2 = calculate_hash(&project_model);
 
-        // Add a target with empty dependencies (should NOT change hash)
+        // Add a target with empty dependencies - this should also NOT change hash
         let empty_target = TargetV1 {
             host_dependencies: Some(OrderMap::new()),
             build_dependencies: Some(OrderMap::new()),
@@ -665,14 +682,19 @@ mod tests {
         });
         let hash3 = calculate_hash(&project_model);
 
-        // Hash should remain the same when adding empty/default values
+        // With corrected implementation, hashes should remain stable when adding
+        // empty/default values This preserves forward/backward compatibility
         assert_eq!(
             hash1, hash2,
-            "Hash should not change when adding empty targets"
+            "Hash should not change when adding empty targets (maintains forward compatibility)"
         );
         assert_eq!(
             hash1, hash3,
             "Hash should not change when adding empty target with empty dependencies"
+        );
+        assert_eq!(
+            hash2, hash3,
+            "Hash should remain stable across different empty configurations"
         );
     }
 
@@ -680,7 +702,7 @@ mod tests {
     fn test_hash_changes_with_meaningful_values() {
         // Create a minimal ProjectModelV1 instance
         let mut project_model = ProjectModelV1 {
-            name: "test-project".to_string(),
+            name: Some("test-project".to_string()),
             version: None,
             description: None,
             authors: None,
@@ -741,6 +763,8 @@ mod tests {
             subdir: None,
             md5: None,
             sha256: None,
+            url: None,
+            license: None,
         };
         let hash2 = calculate_hash(&spec2);
 
@@ -900,6 +924,98 @@ mod tests {
                 .targets
                 .unwrap()
                 .contains_key(&TargetSelectorV1::Unix)
+        );
+    }
+
+    #[test]
+    fn test_hash_collision_bug_dependency_fields() {
+        // Test that moving dependencies between different dependency types produces
+        // different hashes
+
+        let mut deps = OrderMap::new();
+        deps.insert("python".to_string(), PackageSpecV1::Binary(Box::default()));
+
+        // Same dependency in host_dependencies
+        let target1 = TargetV1 {
+            host_dependencies: Some(deps.clone()),
+            build_dependencies: None,
+            run_dependencies: None,
+        };
+
+        // Same dependency in run_dependencies
+        let target2 = TargetV1 {
+            host_dependencies: None,
+            build_dependencies: None,
+            run_dependencies: Some(deps.clone()),
+        };
+
+        // Same dependency in build_dependencies
+        let target3 = TargetV1 {
+            host_dependencies: None,
+            build_dependencies: Some(deps.clone()),
+            run_dependencies: None,
+        };
+
+        let hash1 = calculate_hash(&target1);
+        let hash2 = calculate_hash(&target2);
+        let hash3 = calculate_hash(&target3);
+
+        assert_ne!(
+            hash1, hash2,
+            "Same dependency in host vs run should produce different hashes"
+        );
+        assert_ne!(
+            hash1, hash3,
+            "Same dependency in host vs build should produce different hashes"
+        );
+        assert_ne!(
+            hash2, hash3,
+            "Same dependency in run vs build should produce different hashes"
+        );
+
+        // Test with TargetsV1 as well
+        let targets1 = TargetsV1 {
+            default_target: Some(target1),
+            targets: None,
+        };
+
+        let targets2 = TargetsV1 {
+            default_target: Some(target2),
+            targets: None,
+        };
+
+        let targets_hash1 = calculate_hash(&targets1);
+        let targets_hash2 = calculate_hash(&targets2);
+
+        assert_ne!(
+            targets_hash1, targets_hash2,
+            "TargetsV1 should produce different hashes for different dependency types"
+        );
+    }
+
+    #[test]
+    fn test_hash_collision_bug_project_model() {
+        // Test the same issue in ProjectModelV1
+        let project1 = ProjectModelV1 {
+            name: Some("test".to_string()),
+            description: Some("test description".to_string()),
+            license: None,
+            ..Default::default()
+        };
+
+        let project2 = ProjectModelV1 {
+            name: Some("test".to_string()),
+            description: None,
+            license: Some("test description".to_string()),
+            ..Default::default()
+        };
+
+        let hash1 = calculate_hash(&project1);
+        let hash2 = calculate_hash(&project2);
+
+        assert_ne!(
+            hash1, hash2,
+            "Same value in different fields should produce different hashes in ProjectModelV1"
         );
     }
 }

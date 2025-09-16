@@ -5,7 +5,7 @@ pub use pixi_toml::TomlFromStr;
 use pixi_toml::{DeserializeAs, Same, TomlIndexMap, TomlWith};
 use rattler_conda_types::Version;
 use thiserror::Error;
-use toml_span::{DeserError, Error, ErrorKind, Span, Spanned, Value, de_helpers::TableHelper};
+use toml_span::{DeserError, Span, Spanned, Value, de_helpers::TableHelper};
 use url::Url;
 
 use crate::{
@@ -270,43 +270,6 @@ pub enum PackageError {
 }
 
 impl TomlPackage {
-    /// Helper function to resolve a required field with 3-tier hierarchy:
-    /// 1. Direct value (from package)
-    /// 2. Workspace inheritance (from workspace)
-    /// 3. Package defaults (from [project] section if the manifest is a
-    ///    `pyproject.toml`)
-    /// 4. Error if missing at all levels
-    fn resolve_required_field_with_defaults<T>(
-        field: Option<WorkspaceInheritableField<T>>,
-        workspace_value: Option<T>,
-        default_value: Option<T>,
-        field_name: &'static str,
-        package_span: Span,
-    ) -> Result<T, TomlError> {
-        match field {
-            Some(WorkspaceInheritableField::Value(v)) => Ok(v),
-            Some(WorkspaceInheritableField::Workspace(span)) => workspace_value.ok_or_else(|| {
-                GenericError::new(format!("the workspace does not define a '{}'", field_name))
-                    .with_span(span.into())
-                    .into()
-            }),
-            Some(WorkspaceInheritableField::NotWorkspace(span)) => {
-                Err(workspace_cannot_be_false().with_span(span.into()).into())
-            }
-            None => {
-                // Fall back to package defaults
-                default_value.ok_or(
-                    Error {
-                        kind: ErrorKind::MissingField(field_name),
-                        span: package_span,
-                        line_info: None,
-                    }
-                    .into(),
-                )
-            }
-        }
-    }
-
     /// Helper function to resolve an optional field with 3-tier hierarchy:
     /// 1. Direct value (from package)
     /// 2. Workspace inheritance (from workspace) - ERROR if explicitly
@@ -351,23 +314,24 @@ impl TomlPackage {
         preview: &Preview,
         root_directory: Option<&Path>,
     ) -> Result<WithWarnings<PackageManifest>, TomlError> {
-        let warnings = Vec::new();
+        let mut warnings = Vec::new();
+
+        let build_result = self.build.into_build_system()?;
+        warnings.extend(build_result.warnings);
 
         // Resolve fields with 3-tier hierarchy: direct → workspace → package defaults →
         // error
-        let name = Self::resolve_required_field_with_defaults(
+        let name = Self::resolve_optional_field_with_defaults(
             self.name,
             workspace.name,
             package_defaults.name,
             "name",
-            self.span,
         )?;
-        let version = Self::resolve_required_field_with_defaults(
+        let version = Self::resolve_optional_field_with_defaults(
             self.version,
             workspace.version,
             package_defaults.version,
             "version",
-            self.span,
         )?;
 
         let default_package_target = TomlPackageTarget {
@@ -496,7 +460,7 @@ impl TomlPackage {
                     "documentation",
                 )?,
             },
-            build: self.build.into_build_system()?,
+            build: build_result.value,
             targets: Targets::from_default_and_user_defined(default_package_target, targets),
         })
         .with_warnings(warnings))
@@ -639,8 +603,8 @@ mod test {
                 None,
             )
             .unwrap();
-        assert_eq!(manifest.value.package.name, "workspace-name");
-        assert_eq!(manifest.value.package.version.to_string(), "1.0.0");
+        assert_eq!(manifest.value.package.name.unwrap(), "workspace-name");
+        assert_eq!(manifest.value.package.version.unwrap().to_string(), "1.0.0");
         assert_eq!(
             manifest.value.package.description,
             Some("Package description".to_string())
@@ -662,29 +626,6 @@ mod test {
             package.name,
             Some(WorkspaceInheritableField::NotWorkspace(_))
         );
-    }
-
-    #[test]
-    fn test_missing_name_no_inheritance() {
-        let input = r#"
-        version = "1.0.0"
-
-        [build]
-        backend = { name = "bla", version = "1.0" }
-        "#;
-
-        let package = TomlPackage::from_toml_str(input).unwrap();
-        let workspace = WorkspacePackageProperties::default();
-
-        let parse_error = package
-            .into_manifest(
-                workspace,
-                PackageDefaults::default(),
-                &Preview::default(),
-                None,
-            )
-            .unwrap_err();
-        assert_snapshot!(format_parse_error(input, parse_error));
     }
 
     #[test]
@@ -716,8 +657,8 @@ mod test {
                 None,
             )
             .unwrap();
-        assert_eq!(manifest.value.package.name, "workspace-name");
-        assert_eq!(manifest.value.package.version.to_string(), "2.0.0");
+        assert_eq!(manifest.value.package.name.unwrap(), "workspace-name");
+        assert_eq!(manifest.value.package.version.unwrap().to_string(), "2.0.0");
         assert_eq!(
             manifest.value.package.description,
             Some("Workspace description".to_string())
@@ -807,8 +748,8 @@ mod test {
             .into_manifest(workspace, package_defaults, &Preview::default(), None)
             .unwrap();
         // Should use package defaults for name and version
-        assert_eq!(manifest.value.package.name, "default-name");
-        assert_eq!(manifest.value.package.version.to_string(), "2.0.0");
+        assert_eq!(manifest.value.package.name.unwrap(), "default-name");
+        assert_eq!(manifest.value.package.version.unwrap().to_string(), "2.0.0");
         // Should use direct value for description
         assert_eq!(
             manifest.value.package.description,
@@ -848,32 +789,13 @@ mod test {
             .into_manifest(workspace, package_defaults, &Preview::default(), None)
             .unwrap();
         // Should use workspace values for name and version (overrides defaults)
-        assert_eq!(manifest.value.package.name, "workspace-name");
-        assert_eq!(manifest.value.package.version.to_string(), "3.0.0");
+        assert_eq!(manifest.value.package.name.unwrap(), "workspace-name");
+        assert_eq!(manifest.value.package.version.unwrap().to_string(), "3.0.0");
         // Should use package defaults for description (not specified anywhere else)
         assert_eq!(
             manifest.value.package.description,
             Some("Default description".to_string())
         );
-    }
-
-    #[test]
-    fn test_missing_required_field_no_defaults_no_workspace() {
-        let input = r#"
-        version = "1.0.0"
-
-        [build]
-        backend = { name = "bla", version = "1.0" }
-        "#;
-
-        let package = TomlPackage::from_toml_str(input).unwrap();
-        let workspace = WorkspacePackageProperties::default(); // Empty workspace
-        let package_defaults = PackageDefaults::default(); // Empty defaults
-
-        let parse_error = package
-            .into_manifest(workspace, package_defaults, &Preview::default(), None)
-            .unwrap_err();
-        assert_snapshot!(format_parse_error(input, parse_error));
     }
 
     #[test]
@@ -903,5 +825,62 @@ mod test {
             .into_manifest(workspace, package_defaults, &Preview::default(), None)
             .unwrap_err();
         assert_snapshot!(format_parse_error(input, parse_error));
+    }
+
+    #[test]
+    fn test_target_specific_build_config() {
+        let input = r#"
+        name = "package-name"
+        version = "1.0.0"
+        
+        [build.config]
+        test = "test_normal"
+        
+        [build.target.unix.config]
+        test = "test_unix"
+        
+        [build]
+        backend = { name = "bla", version = "1.0" }
+        "#;
+        let package = TomlPackage::from_toml_str(input).unwrap();
+        let workspace = WorkspacePackageProperties::default();
+
+        let parsed = package
+            .into_manifest(
+                workspace,
+                PackageDefaults::default(),
+                &Preview::default(),
+                None,
+            )
+            .unwrap();
+
+        // Now check if we can also parse the deprecated `configuration` key
+        let input = r#"
+        name = "package-name"
+        version = "1.0.0"
+        
+        [build.configuration]
+        test = "test_normal"
+        
+        [build.target.unix.configuration]
+        test = "test_unix"
+        
+        [build]
+        backend = { name = "bla", version = "1.0" }
+        "#;
+        let package = TomlPackage::from_toml_str(input).unwrap();
+        let workspace = WorkspacePackageProperties::default();
+
+        let parsed_deprecated = package
+            .into_manifest(
+                workspace,
+                PackageDefaults::default(),
+                &Preview::default(),
+                None,
+            )
+            .unwrap();
+
+        assert!(!parsed_deprecated.warnings.is_empty());
+        assert_eq!(parsed.value.build, parsed_deprecated.value.build);
     }
 }

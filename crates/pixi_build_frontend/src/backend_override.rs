@@ -1,17 +1,21 @@
-use std::{path::PathBuf, str::FromStr};
+use std::{collections::HashMap, fmt::Debug, path::PathBuf, str::FromStr};
 
 use pixi_build_discovery::{CommandSpec, SystemCommandSpec};
+
+use crate::in_memory::{BoxedInMemoryBackend, InMemoryBackendInstantiator};
 
 /// A backend override that can be used to override the backend tools.
 #[derive(Debug)]
 pub enum BackendOverride {
     /// Overwrite the backend with an executable path.
     System(OverriddenBackends),
-    // Add more overrides here once require
-    // e.g like an isolated spec
+
+    /// Use an in-memory backend instantiator to create the backend.
+    InMemory(InMemoryOverriddenBackends),
 }
 
-/// Default implementation for the backend override were no tools are overridden.
+/// Default implementation for the backend override were no tools are
+/// overridden.
 impl Default for BackendOverride {
     fn default() -> Self {
         Self::System(OverriddenBackends::Specified(Vec::new()))
@@ -19,17 +23,30 @@ impl Default for BackendOverride {
 }
 
 impl BackendOverride {
+    /// Constructs a backend override that uses the specified
+    /// [`InMemoryBackendInstantiator`] to create an in-memory backend.
+    ///
+    /// Using this method allows you to create a backend that runs completely in
+    /// memory.
+    pub fn from_memory<T: InMemoryBackendInstantiator + Send + Sync + 'static>(
+        instantiator: T,
+    ) -> Self {
+        Self::InMemory(InMemoryOverriddenBackends::All(BoxedInMemoryBackend::from(
+            instantiator,
+        )))
+    }
+}
+
+impl OverriddenBackends {
     /// Returns a new backend spec for a backend with the given name.
     pub fn named_backend_override(&self, name: &str) -> Option<CommandSpec> {
         let tool = match self {
-            Self::System(overridden) => match overridden {
-                OverriddenBackends::Specified(overridden) => {
-                    overridden.iter().find(|tool| tool.name == name)?
-                }
-                OverriddenBackends::All => &OverriddenTool {
-                    name: name.to_string(),
-                    path: None,
-                },
+            OverriddenBackends::Specified(overridden) => {
+                overridden.iter().find(|tool| tool.name == name)?
+            }
+            OverriddenBackends::All => &OverriddenTool {
+                name: name.to_string(),
+                path: None,
             },
         };
 
@@ -63,6 +80,25 @@ pub enum OverriddenBackends {
     All,
     /// Specific backend overrides.
     Specified(Vec<OverriddenTool>),
+}
+
+/// List of overridden backends using in memory backends.
+#[derive(Debug)]
+pub enum InMemoryOverriddenBackends {
+    /// Overrides all backends and use the same in-memory backend for all
+    All(BoxedInMemoryBackend),
+    /// Specific backend overrides using in-memory backends.
+    Specified(HashMap<String, BoxedInMemoryBackend>),
+}
+
+impl InMemoryOverriddenBackends {
+    /// Returns the in-memory backend override for the given name.
+    pub fn backend_override(&self, name: &str) -> Option<&BoxedInMemoryBackend> {
+        match self {
+            InMemoryOverriddenBackends::Specified(overridden) => overridden.get(name),
+            InMemoryOverriddenBackends::All(backend) => Some(backend),
+        }
+    }
 }
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]

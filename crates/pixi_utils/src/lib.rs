@@ -1,8 +1,11 @@
 pub mod cache;
 pub mod conda_environment_file;
 pub mod indicatif;
+pub mod prefix;
 mod prefix_guard;
 pub mod reqwest;
+pub mod rlimit;
+pub mod variants;
 
 mod executable_utils;
 pub use executable_utils::{

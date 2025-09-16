@@ -32,22 +32,35 @@
 //! created and awaited concurrently. This enables parallel execution while
 //! maintaining a simple API surface.
 
+mod backend_source_build;
 pub mod build;
+mod build_backend_metadata;
 mod cache_dirs;
 mod command_dispatcher;
 mod command_dispatcher_processor;
+mod discover_backend_cache;
 mod executor;
 mod install_pixi;
 mod instantiate_tool_env;
 mod limits;
+mod package_identifier;
 pub mod reporter;
 mod solve_conda;
 mod solve_pixi;
 mod source_build;
+mod source_build_cache_status;
 mod source_checkout;
 mod source_metadata;
 
+pub use backend_source_build::{
+    BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildMethod,
+    BackendSourceBuildPrefix, BackendSourceBuildSpec, BackendSourceBuildV0Method,
+    BackendSourceBuildV1Method,
+};
 pub use build::BuildEnvironment;
+pub use build_backend_metadata::{
+    BuildBackendMetadata, BuildBackendMetadataError, BuildBackendMetadataSpec,
+};
 pub use cache_dirs::CacheDirs;
 pub use command_dispatcher::{
     CommandDispatcher, CommandDispatcherBuilder, CommandDispatcherError,
@@ -59,20 +72,40 @@ pub use install_pixi::{
 };
 pub use instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec};
 pub use limits::Limits;
+pub use package_identifier::PackageIdentifier;
 pub use reporter::{
     CondaSolveReporter, GitCheckoutReporter, PixiInstallReporter, PixiSolveReporter, Reporter,
     ReporterContext,
 };
+use serde::Serialize;
 pub use solve_conda::SolveCondaEnvironmentSpec;
-pub use solve_pixi::{PixiEnvironmentSpec, SolvePixiEnvironmentError};
-pub use source_build::{BuiltSource, SourceBuildError, SourceBuildSpec};
+pub use solve_pixi::{MissingChannelError, PixiEnvironmentSpec, SolvePixiEnvironmentError};
+pub use source_build::{SourceBuildError, SourceBuildResult, SourceBuildSpec};
+pub use source_build_cache_status::{
+    CachedBuildStatus, SourceBuildCacheEntry, SourceBuildCacheStatusError,
+    SourceBuildCacheStatusSpec,
+};
 pub use source_checkout::{InvalidPathError, SourceCheckout, SourceCheckoutError};
-pub use source_metadata::{SourceMetadata, SourceMetadataError, SourceMetadataSpec};
+pub use source_metadata::{Cycle, SourceMetadata, SourceMetadataError, SourceMetadataSpec};
 
 /// A helper function to check if a value is the default value for its type.
 fn is_default<T: Default + PartialEq>(value: &T) -> bool {
     T::default() == *value
 }
 
-#[cfg(test)]
-mod test {}
+/// A build profile indicates the type of build that should happen. Dependencies
+/// should not change regarding of the build profile, but the way the build is
+/// executed can change. For example, a release build might use optimizations
+/// while a development build might not.
+///
+/// ### Note
+///
+/// This feature is still in very early stages and is not yet fully implemented.
+#[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize)]
+pub enum BuildProfile {
+    /// Build a version of the package that is suitable for development.
+    Development,
+
+    /// Build a version of the package that is suitable for release.
+    Release,
+}

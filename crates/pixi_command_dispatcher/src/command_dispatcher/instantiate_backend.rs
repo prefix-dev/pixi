@@ -3,11 +3,12 @@ use pixi_build_discovery::{
     BackendInitializationParams, BackendSpec, CommandSpec, EnabledProtocols,
 };
 use pixi_build_frontend::{
-    Backend, json_rpc,
-    json_rpc::JsonRpcBackend,
+    Backend, BackendOverride, json_rpc,
+    json_rpc::{CommunicationError, JsonRpcBackend},
     tool::{IsolatedTool, SystemTool, Tool},
 };
-use pixi_spec::PixiSpec;
+use pixi_build_types::{PixiBuildApiVersion, procedures::initialize::InitializeParams};
+use pixi_spec::{SourceLocationSpec, SpecConversionError};
 use rattler_conda_types::ChannelConfig;
 use rattler_shell::{
     activation::{ActivationError, ActivationVariables, Activator},
@@ -19,7 +20,10 @@ use thiserror::Error;
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherErrorResultExt,
     command_dispatcher::error::CommandDispatcherError,
-    instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec},
+    instantiate_tool_env::{
+        InstantiateToolEnvironmentError, InstantiateToolEnvironmentResult,
+        InstantiateToolEnvironmentSpec,
+    },
 };
 
 #[derive(Debug)]
@@ -46,39 +50,59 @@ impl CommandDispatcher {
     ) -> Result<Backend, CommandDispatcherError<InstantiateBackendError>> {
         let BackendSpec::JsonRpc(backend_spec) = spec.backend_spec;
 
-        let command_spec = self
-            .build_backend_overrides()
-            .named_backend_override(&backend_spec.name)
-            .unwrap_or(backend_spec.command);
+        let source_dir = if let Some(SourceLocationSpec::Path(path)) = spec.init_params.source {
+            path.resolve(&spec.init_params.source_anchor)
+                .map_err(InstantiateBackendError::from)
+                .map_err(CommandDispatcherError::Failed)?
+        } else {
+            spec.init_params.source_anchor
+        };
 
-        let tool = match command_spec {
-            CommandSpec::System(system_spec) => Tool::System(SystemTool::new(
-                system_spec.command.unwrap_or(backend_spec.name),
-            )),
+        let command_spec = match self.build_backend_overrides() {
+            BackendOverride::System(overridden_backends) => overridden_backends
+                .named_backend_override(&backend_spec.name)
+                .unwrap_or(backend_spec.command),
+            BackendOverride::InMemory(memory) => {
+                let backend = memory.backend_override(&backend_spec.name);
+
+                if let Some(in_mem) = backend {
+                    let memory = in_mem
+                        .initialize(InitializeParams {
+                            manifest_path: spec.init_params.manifest_path,
+                            source_dir: Some(source_dir),
+                            workspace_root: Some(spec.init_params.workspace_root),
+                            cache_directory: Some(self.cache_dirs().root().clone()),
+                            project_model: spec.init_params.project_model.map(Into::into),
+                            configuration: spec.init_params.configuration,
+                            target_configuration: spec.init_params.target_configuration,
+                        })
+                        .map_err(InstantiateBackendError::InMemoryError)
+                        .map_err(CommandDispatcherError::Failed)?;
+                    return Ok(Backend::new(memory.into(), in_mem.api_version()));
+                } else {
+                    backend_spec.command
+                }
+            }
+        };
+
+        let (tool, api_version) = match command_spec {
+            CommandSpec::System(system_spec) => (
+                Tool::System(SystemTool::new(
+                    system_spec.command.unwrap_or(backend_spec.name),
+                )),
+                // Assume the latest version of the backend
+                PixiBuildApiVersion::current(),
+            ),
             CommandSpec::EnvironmentSpec(env_spec) => {
                 let (tool_platform, tool_platform_virtual_packages) = self.tool_platform();
-                let prefix = self
+                let InstantiateToolEnvironmentResult {
+                    prefix,
+                    version,
+                    api,
+                } = self
                     .instantiate_tool_environment(InstantiateToolEnvironmentSpec {
-                        requirement: (
-                            env_spec.requirement.0,
-                            PixiSpec::from_nameless_matchspec(
-                                env_spec.requirement.1,
-                                &spec.channel_config,
-                            ),
-                        ),
-                        additional_requirements: env_spec
-                            .additional_requirements
-                            .into_specs()
-                            .map(|(name, nameless)| {
-                                (
-                                    name,
-                                    PixiSpec::from_nameless_matchspec(
-                                        nameless,
-                                        &spec.channel_config,
-                                    ),
-                                )
-                            })
-                            .collect(),
+                        requirement: env_spec.requirement,
+                        additional_requirements: env_spec.additional_requirements,
                         constraints: env_spec.constraints,
                         build_environment: BuildEnvironment {
                             host_platform: tool_platform,
@@ -106,34 +130,54 @@ impl CommandDispatcher {
                     .map_err(InstantiateBackendError::from)
                     .map_err(CommandDispatcherError::Failed)?;
 
-                Tool::from(IsolatedTool::new(
-                    env_spec.command.unwrap_or(backend_spec.name),
-                    prefix.path().to_path_buf(),
-                    activation_scripts,
-                ))
+                (
+                    Tool::from(IsolatedTool::new(
+                        env_spec.command.unwrap_or(backend_spec.name),
+                        Some(version),
+                        prefix.path().to_path_buf(),
+                        activation_scripts,
+                    )),
+                    api,
+                )
             }
         };
 
-        // The backend expects both the manifest path and the source directory to be
-        // absolute paths.
-        let manifest_path = spec
-            .init_params
-            .source_dir
-            .join(spec.init_params.manifest_path);
-        let source_dir = spec.init_params.source_dir;
+        // Add debug information about what the backend supports.
+        tracing::info!(
+            "Instantiated backend {}{}, negotiated API version {}",
+            tool.executable(),
+            tool.version()
+                .map_or_else(String::new, |v| format!("@{}", v)),
+            api_version,
+        );
+
+        // Make sure that the project model is compatible with the API version.
+        if !api_version.supports_name_none()
+            && spec
+                .init_params
+                .project_model
+                .as_ref()
+                .is_some_and(|p| p.name.is_none())
+        {
+            return Err(CommandDispatcherError::Failed(
+                InstantiateBackendError::SpecConversionError(SpecConversionError::MissingName),
+            ));
+        }
 
         JsonRpcBackend::setup(
             source_dir,
-            manifest_path,
+            spec.init_params.manifest_path,
+            spec.init_params.workspace_root,
             spec.init_params.project_model,
             spec.init_params.configuration,
+            spec.init_params.target_configuration,
             Some(self.cache_dirs().root().clone()),
             tool,
         )
         .await
         .map_err(InstantiateBackendError::from)
         .map_err(CommandDispatcherError::Failed)
-        .map(Backend::JsonRpc)
+        .map(|backend| Backend::new(backend.into(), api_version))
     }
 }
 
@@ -143,6 +187,11 @@ pub enum InstantiateBackendError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     JsonRpc(#[from] json_rpc::InitializeError),
+
+    /// The command dispatcher could not be initialized.
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    InMemoryError(CommunicationError),
 
     /// Could not detect the virtual packages for the system
     #[error(transparent)]
@@ -154,4 +203,7 @@ pub enum InstantiateBackendError {
 
     #[error("failed to run activation for the backend tool")]
     Activation(#[from] ActivationError),
+
+    #[error(transparent)]
+    SpecConversionError(#[from] SpecConversionError),
 }

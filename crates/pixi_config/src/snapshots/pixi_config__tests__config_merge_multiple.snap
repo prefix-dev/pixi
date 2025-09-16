@@ -1,6 +1,5 @@
 ---
 source: crates/pixi_config/src/lib.rs
-assertion_line: 2213
 expression: debug
 ---
 Config {
@@ -148,6 +147,7 @@ Config {
             },
         ),
     },
+    tool_platform: None,
     change_ps1: None,
     force_activate: None,
 }

@@ -13,7 +13,7 @@ version = "0.1.0"
 dunce = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
-pathdiff = { workspace = true }
+ordermap = { workspace = true }
 serde = { workspace = true, optional = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

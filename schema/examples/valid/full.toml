@@ -19,19 +19,25 @@ version = "0.1.0"
 
 [project.pypi-options]
 no-build = false
+[project.pypi-options.dependency-overrides]
+numpy = { version = ">=1.21.0" }
 
 [package]
 # Inherit the name and version the workspace
 name = { workspace = true }
 version = { workspace = true }
 
-[package.build]
+[package.build.backend]
 additional-dependencies = { git = "*" }
-backend = { name = "pixi-build-python", version = "0.1.*" }
 channels = [
   "https://prefix.dev/pixi-build-backends",
   "https://prefix.dev/conda-forge",
 ]
+name = "pixi-build-python"
+version = "*"
+
+[package.build]
+source = { path = "my_project" }
 
 [tool.pixi-build-python]
 noarch = false
@@ -125,6 +131,7 @@ test = "*"
 test = "*"
 
 [feature.yes-build.pypi-options]
+dependency-overrides = { numpy = ">=2.0.0" }
 no-build = true
 
 [feature.prod]

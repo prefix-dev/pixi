@@ -11,6 +11,11 @@ version = "0.1.0"
 
 [dependencies]
 ordermap = { workspace = true, features = ["serde"] }
+pixi_stable_hash = { workspace = true, features = [
+  "rattler_conda_types",
+  "rattler_digest",
+  "url",
+] }
 rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true, features = ["serde"] }
 serde = { workspace = true, features = ["derive"] }

@@ -5,7 +5,7 @@
 
 ## Usage
 ```
-pixi [OPTIONS] <COMMAND>
+pixi [OPTIONS] [COMMAND]
 ```
 
 ## Subcommands
@@ -21,6 +21,7 @@ pixi [OPTIONS] <COMMAND>
 | [`global`](pixi/global.md) | Subcommand for global package management actions |
 | [`info`](pixi/info.md) | Information about the system, workspace and environments for the current machine |
 | [`init`](pixi/init.md) | Creates a new workspace |
+| [`import`](pixi/import.md) | Imports a file into an environment in an existing workspace. |
 | [`install`](pixi/install.md) | Install an environment, both updating the lockfile and installing the environment |
 | [`list`](pixi/list.md) | List workspace's packages |
 | [`lock`](pixi/lock.md) | Solve environment and update the lock file without installing the environments |
@@ -55,5 +56,7 @@ pixi [OPTIONS] <COMMAND>
 :  Hide all progress bars, always turned on if stderr is not a terminal
 <br>**env**: `PIXI_NO_PROGRESS`
 <br>**default**: `false`
+- <a id="arg---list" href="#arg---list">`--list`</a>
+:  List all installed commands (built-in and extensions)
 
 --8<-- "docs/reference/cli/pixi_extender:example"

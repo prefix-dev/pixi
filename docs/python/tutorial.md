@@ -1,4 +1,4 @@
-In this tutorial, we will show you how to create a simple Python project with pixi.
+In this tutorial, we will show you how to create a simple Python project with Pixi.
 We will show some of the features that Pixi provides, that are currently not a part of `pdm`, `poetry` etc.
 
 ## Why is this useful?
@@ -74,7 +74,7 @@ platforms = ["osx-arm64"]
 
 The `channels` and `platforms` are added to the `[tool.pixi.workspace]` section.
 Channels like `conda-forge` manage packages similar to PyPI but allow for different packages across languages.
-The keyword `platforms` determines what platform the project supports.
+The keyword `platforms` determines which platforms the workspace supports.
 
 The `pixi_py` package itself is added as an `editable` dependency.
 This means that the package is installed in editable mode, so you can make changes to the package and see the changes reflected in the environment, without having to re-install the environment.
@@ -88,7 +88,7 @@ pixi-py = { path = ".", editable = true }
 In pixi, unlike other package managers, this is explicitly stated in the `pyproject.toml` file.
 The main reason being so that you can choose which environment this package should be included in.
 
-### Managing both conda and PyPI dependencies in pixi
+### Managing both Conda and PyPI dependencies
 
 Our projects usually depend on other packages.
 
@@ -160,7 +160,7 @@ If you want to do it manually, you can run:
 pixi install
 ```
 
-We now have a new directory called `.pixi` in the project root.
+We now have a new directory called `.pixi` in the workspace root.
 The environment is a Conda environment with all the Conda and PyPI dependencies installed into it.
 
 The environment is always a result of the `pixi.lock` file, which is generated from the `pyproject.toml` file.
@@ -243,8 +243,8 @@ After we have added the `dependency-groups` to the `pyproject.toml`, Pixi sees t
 
 
 ```shell
-pixi project environment add default --solve-group default --force
-pixi project environment add test --feature test --solve-group default
+pixi workspace environment add default --solve-group default --force
+pixi workspace environment add test --feature test --solve-group default
 ```
 
 Which results in:
@@ -450,7 +450,7 @@ And it still works!
 ## Conclusion
 
 In this tutorial, you've seen how easy it is to use a `pyproject.toml` to manage your Pixi dependencies and environments.
-We have also explored how to use PyPI and conda dependencies seamlessly together in the same project and install optional dependencies to manage Python packages.
+We have also explored how to use PyPI and conda dependencies seamlessly together in the same workspace and install optional dependencies to manage Python packages.
 
 Hopefully, this provides a flexible and powerful way to manage your Python projects and a fertile base for further exploration with Pixi.
 

@@ -5,6 +5,7 @@ use super::{CommandDispatcherProcessor, PendingSolveCondaEnvironment, TaskResult
 use crate::{
     CommandDispatcherError, CommandDispatcherErrorResultExt, Reporter,
     command_dispatcher::{SolveCondaEnvironmentId, SolveCondaEnvironmentTask},
+    solve_conda::SolveCondaEnvironmentError,
 };
 
 impl CommandDispatcherProcessor {
@@ -27,9 +28,14 @@ impl CommandDispatcherProcessor {
             reporter_id,
         });
 
+        if let Some(parent) = task.parent {
+            // Store the parent context for the task.
+            self.parent_contexts.insert(environment_id.into(), parent);
+        }
+
         // Add the environment to the list of pending environments.
         self.pending_conda_solves
-            .push_back((environment_id, task.spec));
+            .push_back((environment_id, task.spec, task.cancellation_token));
 
         // Queue up as many solves as possible.
         self.start_next_conda_environment_solves();
@@ -43,7 +49,9 @@ impl CommandDispatcherProcessor {
             .max_concurrent_solves
             .unwrap_or(usize::MAX);
         while self.conda_solves.len() - self.pending_conda_solves.len() < limit {
-            let Some((environment_id, spec)) = self.pending_conda_solves.pop_front() else {
+            let Some((environment_id, spec, cancellation_token)) =
+                self.pending_conda_solves.pop_front()
+            else {
                 break;
             };
 
@@ -61,8 +69,14 @@ impl CommandDispatcherProcessor {
 
             // Add the task to the list of pending futures.
             self.pending_futures.push(
-                spec.solve()
-                    .map(move |result| TaskResult::SolveCondaEnvironment(environment_id, result))
+                cancellation_token
+                    .run_until_cancelled_owned(spec.solve())
+                    .map(move |result| {
+                        TaskResult::SolveCondaEnvironment(
+                            environment_id,
+                            result.unwrap_or(Err(CommandDispatcherError::Cancelled)),
+                        )
+                    })
                     .boxed_local(),
             );
         }
@@ -76,8 +90,9 @@ impl CommandDispatcherProcessor {
     pub(crate) fn on_solve_conda_environment_result(
         &mut self,
         id: SolveCondaEnvironmentId,
-        result: Result<Vec<PixiRecord>, CommandDispatcherError<rattler_solve::SolveError>>,
+        result: Result<Vec<PixiRecord>, CommandDispatcherError<SolveCondaEnvironmentError>>,
     ) {
+        self.parent_contexts.remove(&id.into());
         let env = self
             .conda_solves
             .remove(id)

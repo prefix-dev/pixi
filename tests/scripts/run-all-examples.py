@@ -2,16 +2,22 @@ import subprocess
 import os
 import argparse
 from pathlib import Path
-from typing import Tuple
 from dataclasses import dataclass
 
 
 @dataclass
 class Results:
     succeeded: list[str]
-    skipped: list[Tuple[str, str]]
+    skipped: list[tuple[str, str]]
     installed: list[str]
     failed: list[str]
+
+    def __iadd__(self, other: "Results") -> "Results":
+        self.succeeded += other.succeeded
+        self.skipped += other.skipped
+        self.installed += other.installed
+        self.failed += other.failed
+        return self
 
 
 def has_test_task(folder: Path, pixi_exec: Path) -> bool:
@@ -21,8 +27,9 @@ def has_test_task(folder: Path, pixi_exec: Path) -> bool:
 
 
 def run_test_in_subfolders(
-    base_path: Path, pixi_exec: Path = Path("pixi"), run_clean: bool = False, rm_lock: bool = False
+    base_path: Path, pixi_exec: Path | None = None, run_clean: bool = False, rm_lock: bool = False
 ) -> Results:
+    pixi_exec = pixi_exec or Path("pixi")
     results = Results([], [], [], [])
     folders = [folder for folder in base_path.iterdir() if folder.is_dir()]
 
@@ -135,6 +142,10 @@ if __name__ == "__main__":
         pixi_exec = Path(args.pixi_exec) if args.pixi_exec else Path("pixi")
         results = run_test_in_subfolders(
             pixi_root / "examples", pixi_exec, args.clean, args.rm_lock
+        )
+
+        results += run_test_in_subfolders(
+            pixi_root / "examples" / "pixi-build", pixi_exec, args.clean, args.rm_lock
         )
 
         print_summary(results, pixi_exec)

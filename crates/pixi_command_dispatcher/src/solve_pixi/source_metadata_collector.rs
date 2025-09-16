@@ -3,19 +3,19 @@ use std::{
     sync::Arc,
 };
 
-use futures::StreamExt;
+use futures::{FutureExt, StreamExt};
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
-use pixi_record::{PinnedSourceSpec, SourceRecord};
+use pixi_record::PinnedSourceSpec;
 use pixi_spec::{SourceAnchor, SourceSpec};
 use rattler_conda_types::{ChannelConfig, ChannelUrl, MatchSpec, ParseStrictness};
 use thiserror::Error;
 
 use crate::{
-    BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
+    BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, CommandDispatcherError,
     SourceCheckoutError, SourceMetadataSpec,
     executor::ExecutorFutures,
-    source_metadata::{SourceMetadata, SourceMetadataError},
+    source_metadata::{CycleEnvironment, SourceMetadata, SourceMetadataError},
 };
 
 /// An object that is responsible for recursively collecting metadata of source
@@ -42,16 +42,16 @@ pub struct CollectedSourceMetadata {
 /// An error that can occur while collecting source metadata.
 #[derive(Debug, Error, Diagnostic)]
 pub enum CollectSourceMetadataError {
-    #[error("failed to extract metadata for package '{name}'")]
+    #[error("failed to extract metadata for package '{}'", .name.as_source())]
     SourceMetadataError {
-        name: String,
+        name: rattler_conda_types::PackageName,
         #[source]
         #[diagnostic_source]
         error: SourceMetadataError,
     },
-    #[error("the package '{name}' is not provided by the project located at '{}'", &.pinned_source)]
+    #[error("the package '{}' is not provided by the project located at '{}'", .name.as_source(), &.pinned_source)]
     PackageMetadataNotFound {
-        name: String,
+        name: rattler_conda_types::PackageName,
         pinned_source: Box<PinnedSourceSpec>,
         #[help]
         help: String,
@@ -89,15 +89,21 @@ impl SourceMetadataCollector {
         specs: Vec<(rattler_conda_types::PackageName, SourceSpec)>,
     ) -> Result<CollectedSourceMetadata, CommandDispatcherError<CollectSourceMetadataError>> {
         let mut source_futures = ExecutorFutures::new(self.command_queue.executor());
-        let mut specs = specs;
+        let mut specs = specs
+            .into_iter()
+            .map(|(name, spec)| (name, spec, Vec::new()))
+            .collect::<Vec<_>>();
         let mut result = CollectedSourceMetadata::default();
         let mut already_encountered_specs = HashSet::new();
 
         loop {
             // Create futures for all encountered specs.
-            for (name, spec) in specs.drain(..) {
+            for (name, spec, chain) in specs.drain(..) {
                 if already_encountered_specs.insert(spec.clone()) {
-                    source_futures.push(self.collect_source_metadata(name, spec));
+                    source_futures.push(
+                        self.collect_source_metadata(name, spec, chain)
+                            .boxed_local(),
+                    );
                 }
             }
 
@@ -108,10 +114,11 @@ impl SourceMetadataCollector {
             };
 
             // Handle any potential error
-            let source_metadata = source_metadata?;
+            let (source_metadata, mut chain) = source_metadata?;
 
             // Process transitive dependencies
             for record in &source_metadata.records {
+                chain.push(record.package_record.name.clone());
                 let anchor = SourceAnchor::from(SourceSpec::from(record.source.clone()));
                 for depend in &record.package_record.depends {
                     if let Ok(spec) = MatchSpec::from_str(depend, ParseStrictness::Lenient) {
@@ -122,7 +129,7 @@ impl SourceMetadataCollector {
                                 .map(|source_spec| (name.clone(), source_spec.clone()))
                         }) {
                             // We encountered a transitive source dependency.
-                            specs.push((name, anchor.resolve(source_spec)));
+                            specs.push((name, anchor.resolve(source_spec), chain.clone()));
                         } else {
                             // We encountered a transitive dependency that is not a source
                             result.transitive_dependencies.push(spec);
@@ -131,6 +138,7 @@ impl SourceMetadataCollector {
                         // TODO: Should we handle this error?
                     }
                 }
+                chain.pop();
             }
 
             result.source_repodata.push(source_metadata);
@@ -141,7 +149,13 @@ impl SourceMetadataCollector {
         &self,
         name: rattler_conda_types::PackageName,
         spec: SourceSpec,
-    ) -> Result<Arc<SourceMetadata>, CommandDispatcherError<CollectSourceMetadataError>> {
+        chain: Vec<rattler_conda_types::PackageName>,
+    ) -> Result<
+        (Arc<SourceMetadata>, Vec<rattler_conda_types::PackageName>),
+        CommandDispatcherError<CollectSourceMetadataError>,
+    > {
+        tracing::trace!("Collecting source metadata for {name:#?}");
+
         // Get the source for the particular package.
         let source = self
             .command_queue
@@ -154,59 +168,74 @@ impl SourceMetadataCollector {
             .map_err(CommandDispatcherError::Failed)?;
 
         // Extract information for the particular source spec.
-        let source_metadata = self
+        let source_metadata = match self
             .command_queue
             .source_metadata(SourceMetadataSpec {
-                source,
-                channel_config: self.channel_config.clone(),
-                channels: self.channels.clone(),
-                build_environment: self.build_environment.clone(),
-                variants: self.variants.clone(),
-                enabled_protocols: self.enabled_protocols.clone(),
+                package: name.clone(),
+                backend_metadata: BuildBackendMetadataSpec {
+                    source: source.pinned,
+                    channel_config: self.channel_config.clone(),
+                    channels: self.channels.clone(),
+                    build_environment: self.build_environment.clone(),
+                    variants: self.variants.clone(),
+                    enabled_protocols: self.enabled_protocols.clone(),
+                },
             })
             .await
-            .map_err_with(|err| CollectSourceMetadataError::SourceMetadataError {
-                name: name.as_source().to_string(),
-                error: err,
-            })?;
+        {
+            Err(CommandDispatcherError::Cancelled) => {
+                return Err(CommandDispatcherError::Cancelled);
+            }
+            Err(CommandDispatcherError::Failed(SourceMetadataError::Cycle(mut cycle))) => {
+                // Push the packages that led up to this cycle onto the cycle stack.
+                cycle
+                    .stack
+                    .extend(chain.into_iter().map(|pkg| (pkg, CycleEnvironment::Run)));
+                return Err(CommandDispatcherError::Failed(
+                    CollectSourceMetadataError::SourceMetadataError {
+                        name,
+                        error: SourceMetadataError::Cycle(cycle),
+                    },
+                ));
+            }
+            Err(CommandDispatcherError::Failed(error)) => {
+                return Err(CommandDispatcherError::Failed(
+                    CollectSourceMetadataError::SourceMetadataError { name, error },
+                ));
+            }
+            Ok(metadata) => metadata,
+        };
 
         // Make sure that a package with the name defined in spec is available from the
         // backend.
-        if !source_metadata
-            .records
-            .iter()
-            .any(|record| record.package_record.name == name)
-        {
+        if source_metadata.records.is_empty() {
             return Err(CommandDispatcherError::Failed(
                 CollectSourceMetadataError::PackageMetadataNotFound {
-                    name: name.as_source().to_string(),
-                    pinned_source: Box::new(source_metadata.source.pinned.clone()),
                     help: Self::create_metadata_not_found_help(
-                        name,
-                        source_metadata.records.clone(),
+                        &name,
+                        source_metadata.skipped_packages.clone(),
                     ),
+                    name,
+                    pinned_source: Box::new(source_metadata.source.clone()),
                 },
             ));
         }
 
-        Ok(source_metadata)
+        Ok((source_metadata, chain))
     }
 
     /// Create a help message for the user when the requested package is not
     /// found in the metadata returned by a backend.
     fn create_metadata_not_found_help(
-        name: rattler_conda_types::PackageName,
-        records: Vec<SourceRecord>,
+        name: &rattler_conda_types::PackageName,
+        skipped_packages: Vec<rattler_conda_types::PackageName>,
     ) -> String {
-        records
+        skipped_packages
             .into_iter()
-            .map(|record| {
+            .map(|skipped_name| {
                 (
-                    strsim::jaro(
-                        record.package_record.name.as_normalized(),
-                        name.as_normalized(),
-                    ),
-                    record,
+                    strsim::jaro(skipped_name.as_normalized(), name.as_normalized()),
+                    skipped_name,
                 )
             })
             .max_by(|(score_a, _), (score_b, _)| {
@@ -217,10 +246,10 @@ impl SourceMetadataCollector {
             .map(|(_, record)| record)
             .map_or_else(
                 || String::from("No packages are provided by the build-backend"),
-                |record| {
+                |skipped_name| {
                     format!(
                         "The build backend does provide other packages, did you mean '{}'?",
-                        record.package_record.name.as_normalized()
+                        skipped_name.as_normalized(),
                     )
                 },
             )
