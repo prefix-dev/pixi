@@ -671,7 +671,7 @@ pub async fn resolve_pypi(
             .map_err(|e| create_solve_error(e, &conda_python_packages))
     });
 
-    // We try to distinguis between build dispatch panics and any other panics that occur
+    // We try to distinguish between build dispatch panics and any other panics that occur
     let resolution = match resolution_future.catch_unwind().await {
         Ok(result) => result?,
         Err(panic_payload) => {
