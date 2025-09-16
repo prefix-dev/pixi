@@ -1,10 +1,9 @@
 use std::path::{Path, PathBuf};
 
-use itertools::Itertools;
-use std::sync::{Arc, Mutex};
 use thiserror::Error;
 
-use crate::glob_set::walk_roots::{SimpleGlobItem, WalkRoots};
+use crate::glob_set::walk;
+use crate::glob_set::walk_roots::WalkRoots;
 
 /// A glob set implemented using the `ignore` crate (globset + fast walker).
 pub struct GlobSetIgnore {
@@ -54,127 +53,11 @@ impl GlobSetIgnore {
                 continue;
             }
 
-            let mut results: Vec<_> = Self::walk(&effective_walk_root, &globs)?
-                .into_iter()
-                .try_collect()?;
-
+            let mut results = walk::walk_globs(&effective_walk_root, &globs)?;
             all_results.append(&mut results);
         }
 
         Ok(all_results)
-    }
-
-    /// Perform a walk per unique route
-    pub fn walk(
-        effective_walk_root: &Path,
-        globs: &[SimpleGlobItem<'_>],
-    ) -> Result<Vec<Result<ignore::DirEntry, GlobSetIgnoreError>>, GlobSetIgnoreError> {
-        let mut ob = ignore::overrides::OverrideBuilder::new(effective_walk_root);
-        for glob in globs {
-            let pattern = glob.to_pattern();
-            ob.add(&pattern)
-                .map_err(GlobSetIgnoreError::BuildOverrides)?;
-        }
-
-        let overrides = ob.build().map_err(GlobSetIgnoreError::BuildOverrides)?;
-
-        // Single parallel walk.
-        let walker = ignore::WalkBuilder::new(effective_walk_root)
-            // Enable repository local ignores
-            .git_ignore(true)
-            .git_exclude(true)
-            .hidden(true)
-            // Dont read global ignores and ag and rg ignores
-            .git_global(false)
-            .ignore(false)
-            .overrides(overrides)
-            .build_parallel();
-        // Implement a custom per-thread visitor to batch results locally,
-        // and merge once per thread on Drop.
-        struct CollectBuilder {
-            sink: Arc<Mutex<Vec<Result<ignore::DirEntry, GlobSetIgnoreError>>>>,
-            err_root: PathBuf,
-        }
-
-        struct CollectVisitor {
-            local: Vec<Result<ignore::DirEntry, GlobSetIgnoreError>>,
-            sink: Arc<Mutex<Vec<Result<ignore::DirEntry, GlobSetIgnoreError>>>>,
-            err_root: PathBuf,
-        }
-
-        impl Drop for CollectVisitor {
-            fn drop(&mut self) {
-                if let Ok(mut guard) = self.sink.lock() {
-                    guard.extend(self.local.drain(..));
-                }
-            }
-        }
-
-        impl<'s> ignore::ParallelVisitorBuilder<'s> for CollectBuilder {
-            fn build(&mut self) -> Box<dyn ignore::ParallelVisitor + 's> {
-                Box::new(CollectVisitor {
-                    local: Vec::new(),
-                    sink: Arc::clone(&self.sink),
-                    err_root: self.err_root.clone(),
-                })
-            }
-        }
-
-        impl ignore::ParallelVisitor for CollectVisitor {
-            fn visit(
-                &mut self,
-                dent: Result<ignore::DirEntry, ignore::Error>,
-            ) -> ignore::WalkState {
-                match dent {
-                    Ok(dent) => {
-                        if dent.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
-                            return ignore::WalkState::Continue;
-                        }
-                        self.local.push(Ok(dent));
-                    }
-                    Err(e) => {
-                        if let Some(ioe) = e.io_error() {
-                            match ioe.kind() {
-                                std::io::ErrorKind::NotFound
-                                | std::io::ErrorKind::PermissionDenied => {}
-                                _ => self
-                                    .local
-                                    .push(Err(GlobSetIgnoreError::Walk(self.err_root.clone(), e))),
-                            }
-                        } else {
-                            self.local
-                                .push(Err(GlobSetIgnoreError::Walk(self.err_root.clone(), e)));
-                        }
-                    }
-                }
-                ignore::WalkState::Continue
-            }
-        }
-
-        let collected: Arc<Mutex<Vec<Result<ignore::DirEntry, GlobSetIgnoreError>>>> =
-            Arc::new(Mutex::new(Vec::new()));
-        let start = std::time::Instant::now();
-
-        let mut builder = CollectBuilder {
-            sink: Arc::clone(&collected),
-            err_root: effective_walk_root.to_path_buf(),
-        };
-        walker.visit(&mut builder);
-
-        let mut results = collected.lock().unwrap_or_else(|p| p.into_inner());
-        let matched = results.len();
-        let elapsed = start.elapsed();
-        let include_patterns = globs.iter().filter(|g| !g.negated).count();
-        let exclude_patterns = globs.len().saturating_sub(include_patterns);
-        tracing::debug!(
-            includes = include_patterns,
-            excludes = exclude_patterns,
-            matched,
-            elapsed_ms = elapsed.as_millis(),
-            "glob pass completed"
-        );
-
-        Ok(std::mem::take(&mut *results))
     }
 }
 
@@ -182,13 +65,20 @@ impl GlobSetIgnore {
 mod tests {
     use super::GlobSetIgnore;
     use fs_err::{self as fs, File};
-    use std::path::PathBuf;
+    use insta::assert_yaml_snapshot;
     use tempfile::tempdir;
 
-    fn sorted_paths(entries: Vec<ignore::DirEntry>, root: &std::path::Path) -> Vec<PathBuf> {
+    fn sorted_paths(entries: Vec<ignore::DirEntry>, root: &std::path::Path) -> Vec<String> {
         let mut paths: Vec<_> = entries
             .into_iter()
-            .map(|entry| entry.path().strip_prefix(root).unwrap().to_path_buf())
+            .map(|entry| {
+                entry
+                    .path()
+                    .strip_prefix(root)
+                    .unwrap()
+                    .display()
+                    .to_string()
+            })
             .collect();
         paths.sort();
         paths
@@ -209,13 +99,10 @@ mod tests {
         let entries = glob_set.collect_matching(root_path).unwrap();
 
         let paths = sorted_paths(entries, root_path);
-        assert_eq!(
-            paths,
-            vec![
-                PathBuf::from("include1.txt"),
-                PathBuf::from("subdir/include_subdir.txt"),
-            ]
-        );
+        assert_yaml_snapshot!(paths, @r###"---
+- include1.txt
+- subdir/include_subdir.txt
+"###);
     }
 
     #[test]
@@ -232,10 +119,9 @@ mod tests {
         let entries = glob_set.collect_matching(&nested_root).unwrap();
 
         let paths = sorted_paths(entries, &nested_root);
-        assert_eq!(
-            paths,
-            vec![PathBuf::from("../subdir/some_inner_source.cpp")]
-        );
+        assert_yaml_snapshot!(paths, @r###"---
+- "../subdir/some_inner_source.cpp"
+"###);
     }
 
     #[test]
@@ -249,6 +135,8 @@ mod tests {
         let entries = glob_set.collect_matching(root_path).unwrap();
 
         let paths = sorted_paths(entries, root_path);
-        assert_eq!(paths, vec![PathBuf::from("pixi.toml")]);
+        assert_yaml_snapshot!(paths, @r###"---
+- pixi.toml
+"###);
     }
 }

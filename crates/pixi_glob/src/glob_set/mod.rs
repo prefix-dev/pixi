@@ -8,6 +8,7 @@ use thiserror::Error;
 use wax::{Glob, WalkEntry};
 
 mod glob_set_ignore;
+mod walk;
 mod walk_roots;
 
 pub use glob_set_ignore::{GlobSetIgnore, GlobSetIgnoreError};

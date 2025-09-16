@@ -5149,6 +5149,7 @@ dependencies = [
  "insta",
  "itertools 0.14.0",
  "memchr",
+ "parking_lot",
  "rattler_digest",
  "rstest",
  "serde",
