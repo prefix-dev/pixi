@@ -83,6 +83,14 @@ pub struct PixiEnvironmentSpec {
     /// The protocols that are enabled for source packages
     #[serde(skip_serializing_if = "crate::is_default")]
     pub enabled_protocols: EnabledProtocols,
+
+    /// Optional override for a specific package: use this pinned source for
+    /// checkout and as the package_build_source instead of pinning anew.
+    #[serde(skip)]
+    pub override_pinned_source_for_package: Option<(
+        rattler_conda_types::PackageName,
+        pixi_record::PinnedSourceSpec,
+    )>,
 }
 
 impl Default for PixiEnvironmentSpec {
@@ -100,6 +108,7 @@ impl Default for PixiEnvironmentSpec {
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from(".")),
             variants: None,
             enabled_protocols: EnabledProtocols::default(),
+            override_pinned_source_for_package: None,
         }
     }
 }
@@ -135,6 +144,7 @@ impl PixiEnvironmentSpec {
             self.build_environment.clone(),
             self.variants.clone(),
             self.enabled_protocols.clone(),
+            self.override_pinned_source_for_package.clone(),
         )
         .collect(
             source_specs
