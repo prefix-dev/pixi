@@ -7,9 +7,11 @@ use crate::glob_set::walk_roots::SimpleGlobItem;
 
 use super::GlobSetIgnoreError;
 
+type SharedResults = Arc<Mutex<Option<Vec<Result<ignore::DirEntry, GlobSetIgnoreError>>>>>;
+
 struct CollectBuilder {
     // Shared aggregation storage wrapped in an Option so we can `take` at the end.
-    sink: Arc<Mutex<Option<Vec<Result<ignore::DirEntry, GlobSetIgnoreError>>>>>,
+    sink: SharedResults,
     err_root: PathBuf,
 }
 
@@ -17,7 +19,7 @@ struct CollectVisitor {
     // Local per-thread buffer to append results without holding the lock.
     local: Vec<Result<ignore::DirEntry, GlobSetIgnoreError>>,
     // Reference to the shared sink.
-    sink: Arc<Mutex<Option<Vec<Result<ignore::DirEntry, GlobSetIgnoreError>>>>>,
+    sink: SharedResults,
     err_root: PathBuf,
 }
 
@@ -25,8 +27,7 @@ impl Drop for CollectVisitor {
     // This merges the outputs on the drop
     fn drop(&mut self) {
         let mut sink = self.sink.lock();
-        sink.get_or_insert_with(Vec::new)
-            .extend(self.local.drain(..));
+        sink.get_or_insert_with(Vec::new).append(&mut self.local);
     }
 }
 
@@ -42,6 +43,8 @@ impl<'s> ignore::ParallelVisitorBuilder<'s> for CollectBuilder {
 }
 
 impl ignore::ParallelVisitor for CollectVisitor {
+    /// This function loops over all matches, ignores directories, and ignores PermissionDenied and
+    /// NotFound errors
     fn visit(&mut self, dent: Result<ignore::DirEntry, ignore::Error>) -> ignore::WalkState {
         match dent {
             Ok(dent) => {
@@ -90,8 +93,7 @@ pub fn walk_globs(
         .overrides(overrides)
         .build_parallel();
 
-    let collected: Arc<Mutex<Option<Vec<Result<ignore::DirEntry, GlobSetIgnoreError>>>>> =
-        Arc::new(Mutex::new(Some(Vec::new())));
+    let collected: SharedResults = Arc::new(Mutex::new(Some(Vec::new())));
     let start = std::time::Instant::now();
 
     let mut builder = CollectBuilder {

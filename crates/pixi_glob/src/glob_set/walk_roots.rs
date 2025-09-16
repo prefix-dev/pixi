@@ -63,12 +63,19 @@ impl WalkRoots {
                     glob: glob.to_string(),
                 });
             }
-            let normalized_prefix = normalize_relative(Path::new(prefix));
+            let mut normalized_prefix = normalize_relative(Path::new(prefix));
+
+            let glob = if negated && !normalized_prefix.as_os_str().is_empty() && glob == "**" {
+                normalized_prefix = PathBuf::new();
+                format!("{}{}", prefix, glob)
+            } else {
+                glob.to_string()
+            };
 
             roots
                 .entry(normalized_prefix)
                 .or_insert_with(Vec::new)
-                .push(SimpleGlob::new(glob.to_string(), negated));
+                .push(SimpleGlob::new(glob, negated));
         }
 
         Ok(Self { roots })
@@ -311,7 +318,13 @@ mod tests {
 
     #[test]
     fn determine_groups_globs_by_normalized_prefix() {
-        let globs = ["./src/**/*.rs", "!./src/**/*.tmp", "../include/*.c"];
+        let globs = [
+            "./src/**/*.rs",
+            "!./src/**/*.tmp",
+            "../include/*.c",
+            "!.pixi/**",
+            "**/*.cpp",
+        ];
 
         let walk_roots = WalkRoots::build(globs).expect("determine should succeed");
 
@@ -319,6 +332,12 @@ mod tests {
             snapshot_walk_roots(&walk_roots),
             { ".**" => insta::sorted_redaction() },
             @r###"
+        - globs:
+            - pattern: ".pixi/**"
+              negated: true
+            - pattern: "**/*.cpp"
+              negated: false
+          path: ""
         - globs:
             - pattern: "*.c"
               negated: false
@@ -374,6 +393,24 @@ mod tests {
             - pattern: "**/generated.rs"
               negated: true
           path: src
+        "###
+        );
+    }
+
+    #[test]
+    fn determine_negated_directory_glob_sticks_to_root() {
+        let globs = ["!.pixi/**"];
+
+        let walk_roots = WalkRoots::build(globs).expect("determine should succeed");
+
+        assert_yaml_snapshot!(
+            snapshot_walk_roots(&walk_roots),
+            { ".**" => insta::sorted_redaction() },
+            @r###"
+        - globs:
+            - pattern: ".pixi/**"
+              negated: true
+          path: ""
         "###
         );
     }

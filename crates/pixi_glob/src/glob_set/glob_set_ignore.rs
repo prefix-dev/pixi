@@ -99,10 +99,10 @@ mod tests {
         let entries = glob_set.collect_matching(root_path).unwrap();
 
         let paths = sorted_paths(entries, root_path);
-        assert_yaml_snapshot!(paths, @r###"---
-- include1.txt
-- subdir/include_subdir.txt
-"###);
+        assert_yaml_snapshot!(paths, @r###"
+        - include1.txt
+        - subdir/include_subdir.txt
+        "###);
     }
 
     #[test]
@@ -119,9 +119,7 @@ mod tests {
         let entries = glob_set.collect_matching(&nested_root).unwrap();
 
         let paths = sorted_paths(entries, &nested_root);
-        assert_yaml_snapshot!(paths, @r###"---
-- "../subdir/some_inner_source.cpp"
-"###);
+        assert_yaml_snapshot!(paths, @r###"- "../subdir/some_inner_source.cpp""###);
     }
 
     #[test]
@@ -135,8 +133,6 @@ mod tests {
         let entries = glob_set.collect_matching(root_path).unwrap();
 
         let paths = sorted_paths(entries, root_path);
-        assert_yaml_snapshot!(paths, @r###"---
-- pixi.toml
-"###);
+        assert_yaml_snapshot!(paths, @"- pixi.toml");
     }
 }
