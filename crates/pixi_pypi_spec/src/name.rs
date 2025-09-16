@@ -102,14 +102,4 @@ mod tests {
             "Normalized PyPI name and Non-Normalized name do not hash to the same value"
         );
     }
-
-    #[test]
-    fn removing_pypi_dependency() {
-        // Assert equality of two package names with different source strings
-        let name = PypiPackageName::from_str("pixi-demo").unwrap();
-        let name2 = PypiPackageName::from_str("pixi_demo").unwrap();
-
-        let index_map: HashMap<_, _> = HashMap::from_iter([(name.clone(), name)]);
-        assert!(index_map.contains_key(&name2));
-    }
 }
