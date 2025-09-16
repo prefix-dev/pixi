@@ -1,10 +1,18 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use fs_err as fs;
+use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::process::Command;
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
+
+// Pixi crate imports for direct API usage
+use pixi_cli::{clean, install};
+use pixi_config::ConfigCli;
+
+// Single global runtime for all benchmarks
+static RUNTIME: Lazy<tokio::runtime::Runtime> =
+    Lazy::new(|| tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime"));
 
 /// Create an isolated pixi workspace environment for clean testing
 struct IsolatedPixiWorkspace {
@@ -43,15 +51,164 @@ impl IsolatedPixiWorkspace {
         env_vars
     }
 
-    /// Create a basic pixi.toml file with specified dependencies
+    /// Ensure local channel exists, create it dynamically if missing (for CI robustness)
+    fn ensure_local_channel_exists(
+        &self,
+        local_channel_dir: &std::path::Path,
+        packages: &[&str],
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let noarch_dir = local_channel_dir.join("noarch");
+
+        // If the channel already exists, we're good
+        if noarch_dir.exists() && noarch_dir.join("repodata.json").exists() {
+            return Ok(());
+        }
+
+        println!("🔧 Creating local conda channel for CI environment...");
+
+        // Create the directory structure
+        fs::create_dir_all(&noarch_dir)?;
+
+        // Create repodata.json
+        self.create_repodata_json(&noarch_dir, packages)?;
+
+        // Create minimal conda packages
+        self.create_conda_packages(&noarch_dir, packages)?;
+
+        println!("✅ Local conda channel created successfully");
+        Ok(())
+    }
+
+    /// Create repodata.json for the local channel
+    fn create_repodata_json(
+        &self,
+        noarch_dir: &std::path::Path,
+        packages: &[&str],
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use std::fs::File;
+        use std::io::Write;
+
+        let mut repodata = serde_json::json!({
+            "info": {
+                "subdir": "noarch"
+            },
+            "packages": {},
+            "packages.conda": {},
+            "removed": [],
+            "repodata_version": 1
+        });
+
+        // Add each package to the repodata
+        for package in packages {
+            let package_filename = format!("{}-1.0.0-py_0.tar.bz2", package);
+            repodata["packages"][&package_filename] = serde_json::json!({
+                "build": "py_0",
+                "build_number": 0,
+                "depends": [],
+                "license": "MIT",
+                "name": package,
+                "platform": null,
+                "subdir": "noarch",
+                "timestamp": 1640995200000i64,
+                "version": "1.0.0"
+            });
+        }
+
+        let mut file = File::create(noarch_dir.join("repodata.json"))?;
+        file.write_all(serde_json::to_string_pretty(&repodata)?.as_bytes())?;
+        Ok(())
+    }
+
+    /// Create minimal conda packages
+    fn create_conda_packages(
+        &self,
+        noarch_dir: &std::path::Path,
+        packages: &[&str],
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use std::fs::File;
+        use std::io::Write;
+        use std::process::Command as StdCommand;
+
+        for package in packages {
+            let package_filename = format!("{}-1.0.0-py_0.tar.bz2", package);
+            let package_path = noarch_dir.join(&package_filename);
+
+            // Create a temporary directory for package contents
+            let temp_dir = tempfile::TempDir::new()?;
+            let info_dir = temp_dir.path().join("info");
+            fs::create_dir_all(&info_dir)?;
+
+            // Create index.json
+            let index_data = serde_json::json!({
+                "name": package,
+                "version": "1.0.0",
+                "build": "py_0",
+                "build_number": 0,
+                "depends": [],
+                "license": "MIT",
+                "platform": null,
+                "subdir": "noarch",
+                "timestamp": 1640995200000i64
+            });
+
+            let mut index_file = File::create(info_dir.join("index.json"))?;
+            index_file.write_all(serde_json::to_string_pretty(&index_data)?.as_bytes())?;
+
+            // Create empty files list
+            File::create(info_dir.join("files"))?.write_all(b"")?;
+
+            // Create paths.json
+            let paths_data = serde_json::json!({
+                "paths": [],
+                "paths_version": 1
+            });
+            let mut paths_file = File::create(info_dir.join("paths.json"))?;
+            paths_file.write_all(serde_json::to_string_pretty(&paths_data)?.as_bytes())?;
+
+            // Create the tar.bz2 package using system tar command
+            let output = StdCommand::new("tar")
+                .args([
+                    "-cjf",
+                    package_path.to_str().unwrap(),
+                    "-C",
+                    temp_dir.path().to_str().unwrap(),
+                    "info",
+                ])
+                .output()?;
+
+            if !output.status.success() {
+                return Err(format!(
+                    "Failed to create tar.bz2 package for {}: {}",
+                    package,
+                    String::from_utf8_lossy(&output.stderr)
+                )
+                .into());
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Create a basic pixi.toml file with specified dependencies using local channel
     fn create_pixi_toml(&self, dependencies: &[&str]) -> Result<(), Box<dyn std::error::Error>> {
+        let current_dir = std::env::current_dir()?;
+        let local_channel_dir = if current_dir.ends_with("pixi_bench") {
+            current_dir.join("my-local-channel")
+        } else {
+            current_dir.join("crates/pixi_bench/my-local-channel")
+        };
+
+        // Ensure the local channel exists, create it if it doesn't
+        self.ensure_local_channel_exists(&local_channel_dir, dependencies)?;
+
+        let local_channel_url = format!("file://{}", local_channel_dir.to_string_lossy());
+
         let pixi_toml_content = format!(
             r#"[project]
 name = "test-project"
 version = "0.1.0"
 description = "Test project for pixi clean benchmarks"
-channels = ["conda-forge"]
-platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
+channels = ["{}", "conda-forge"]
 
 [dependencies]
 {}
@@ -59,6 +216,7 @@ platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
 [tasks]
 test = "echo 'test task'"
 "#,
+            local_channel_url,
             dependencies
                 .iter()
                 .map(|dep| format!("{} = \"*\"", dep))
@@ -71,23 +229,47 @@ test = "echo 'test task'"
         Ok(())
     }
 
-    /// Create a pixi.toml with multiple environments
+    /// Create a pixi.toml with multiple environments using local channel
     fn create_multi_env_pixi_toml(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let pixi_toml_content = r#"[project]
+        let current_dir = std::env::current_dir()?;
+        let local_channel_dir = if current_dir.ends_with("pixi_bench") {
+            current_dir.join("my-local-channel")
+        } else {
+            current_dir.join("crates/pixi_bench/my-local-channel")
+        };
+
+        // All packages used in multi-environment setup
+        let all_packages = [
+            "python",
+            "pytest",
+            "pytest-cov",
+            "black",
+            "flake8",
+            "mypy",
+            "requests",
+            "flask",
+        ];
+
+        // Ensure the local channel exists, create it if it doesn't
+        self.ensure_local_channel_exists(&local_channel_dir, &all_packages)?;
+
+        let local_channel_url = format!("file://{}", local_channel_dir.to_string_lossy());
+
+        let pixi_toml_content = format!(
+            r#"[project]
 name = "multi-env-project"
 version = "0.1.0"
 description = "Multi-environment test project for pixi clean benchmarks"
-channels = ["conda-forge"]
-platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
+channels = ["{}", "conda-forge"]
 
 [dependencies]
-python = ">=3.8"
+python = "*"
 
 [environments]
-default = { solve-group = "default" }
-test = { features = ["test"], solve-group = "test" }
-dev = { features = ["dev"], solve-group = "dev" }
-prod = { features = ["prod"], solve-group = "prod" }
+default = {{ solve-group = "default" }}
+test = {{ features = ["test"], solve-group = "test" }}
+dev = {{ features = ["dev"], solve-group = "dev" }}
+prod = {{ features = ["prod"], solve-group = "prod" }}
 
 [feature.test.dependencies]
 pytest = "*"
@@ -106,56 +288,52 @@ flask = "*"
 test = "pytest"
 lint = "flake8 ."
 format = "black ."
-"#;
+"#,
+            local_channel_url
+        );
 
         let pixi_toml_path = self.workspace_dir.join("pixi.toml");
         fs::write(pixi_toml_path, pixi_toml_content)?;
         Ok(())
     }
 
-    /// Install dependencies to create environments
-    fn install_dependencies(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let mut cmd = Command::new("pixi");
-        cmd.arg("install").current_dir(&self.workspace_dir);
-
-        // Set environment variables
+    /// Install dependencies to create environments using pixi API directly
+    async fn install_dependencies(&self) -> Result<(), Box<dyn std::error::Error>> {
+        // Set environment variables for pixi
         for (key, value) in self.get_env_vars() {
-            cmd.env(key, value);
+            std::env::set_var(key, value);
         }
 
-        let output = cmd.output()?;
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("pixi install failed: {}", stderr).into());
-        }
+        // Change to workspace directory
+        let original_dir = std::env::current_dir()?;
+        std::env::set_current_dir(&self.workspace_dir)?;
 
-        Ok(())
+        // Create install arguments
+        let install_args = install::Args {
+            project_config: pixi_cli::cli_config::WorkspaceConfig::default(),
+            lock_file_usage: pixi_cli::LockFileUsageConfig::default(),
+            environment: None,
+            config: ConfigCli::default(),
+            all: false,
+            skip: None,
+            skip_with_deps: None,
+            only: None,
+        };
+
+        // Execute pixi install directly
+        let result = install::execute(install_args).await;
+
+        // Restore original directory
+        std::env::set_current_dir(original_dir)?;
+
+        match result {
+            Ok(_) => Ok(()),
+            Err(e) => Err(format!("pixi install failed: {}", e).into()),
+        }
     }
 
-    /// Install specific environment
-    fn install_environment(&self, env_name: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let mut cmd = Command::new("pixi");
-        cmd.arg("install")
-            .arg("--environment")
-            .arg(env_name)
-            .current_dir(&self.workspace_dir);
-
-        // Set environment variables
-        for (key, value) in self.get_env_vars() {
-            cmd.env(key, value);
-        }
-
-        let output = cmd.output()?;
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("pixi install {} failed: {}", env_name, stderr).into());
-        }
-
-        Ok(())
-    }
-
-    /// Run pixi clean and measure execution time
-    fn pixi_clean(
+    /// Run pixi clean and measure execution time using pixi API directly
+    async fn pixi_clean(
         &self,
         environment: Option<&str>,
     ) -> Result<Duration, Box<dyn std::error::Error>> {
@@ -164,38 +342,45 @@ format = "black ."
         });
         println!("⏱️ Timing: pixi clean {}", env_desc);
 
+        // Set environment variables for pixi
+        for (key, value) in self.get_env_vars() {
+            std::env::set_var(key, value);
+        }
+
+        // Change to workspace directory
+        let original_dir = std::env::current_dir()?;
+        std::env::set_current_dir(&self.workspace_dir)?;
+
         let start = Instant::now();
 
-        let mut cmd = Command::new("pixi");
-        cmd.arg("clean").current_dir(&self.workspace_dir);
+        // Create clean arguments using std::mem::zeroed and then setting the fields
+        // This is a workaround for the private command field
+        let mut clean_args: clean::Args = unsafe { std::mem::zeroed() };
 
-        // Add environment-specific flag if specified
-        if let Some(env_name) = environment {
-            cmd.arg("--environment").arg(env_name);
-        }
+        // Now set the public fields
+        clean_args.workspace_config = pixi_cli::cli_config::WorkspaceConfig::default();
+        clean_args.environment = environment.map(|s| s.to_string());
+        clean_args.activation_cache = false;
+        clean_args.build = false;
 
-        // Set environment variables
-        for (key, value) in self.get_env_vars() {
-            cmd.env(key, value);
-        }
+        // The private command field is already None due to zeroed()
 
-        let result = cmd.output();
+        // Execute pixi clean directly
+        let result = clean::execute(clean_args).await;
+
+        // Restore original directory
+        std::env::set_current_dir(original_dir)?;
+
+        let duration = start.elapsed();
 
         match result {
-            Ok(output) => {
-                let duration = start.elapsed();
-                if output.status.success() {
-                    println!("✅ Clean completed in {:.2}s", duration.as_secs_f64());
-                    Ok(duration)
-                } else {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    println!("❌ pixi clean failed: {}", stderr);
-                    Err(format!("pixi clean failed: {}", stderr).into())
-                }
+            Ok(_) => {
+                println!("✅ Clean completed in {:.2}s", duration.as_secs_f64());
+                Ok(duration)
             }
             Err(e) => {
-                println!("❌ pixi clean failed to execute: {}", e);
-                Err(format!("pixi clean failed to execute: {}", e).into())
+                println!("❌ pixi clean failed: {}", e);
+                Err(format!("pixi clean failed: {}", e).into())
             }
         }
     }
@@ -241,21 +426,21 @@ format = "black ."
     }
 
     /// Clean small environment (few small packages)
-    fn clean_small_environment(&self) -> Result<Duration, Box<dyn std::error::Error>> {
+    async fn clean_small_environment(&self) -> Result<Duration, Box<dyn std::error::Error>> {
         self.create_pixi_toml(&["python"])?;
-        self.install_dependencies()?;
-        self.pixi_clean(None)
+        self.install_dependencies().await?;
+        self.pixi_clean(None).await
     }
 
     /// Clean medium environment (several packages)
-    fn clean_medium_environment(&self) -> Result<Duration, Box<dyn std::error::Error>> {
+    async fn clean_medium_environment(&self) -> Result<Duration, Box<dyn std::error::Error>> {
         self.create_pixi_toml(&["python", "numpy", "pandas", "requests"])?;
-        self.install_dependencies()?;
-        self.pixi_clean(None)
+        self.install_dependencies().await?;
+        self.pixi_clean(None).await
     }
 
     /// Clean large environment (many packages)
-    fn clean_large_environment(&self) -> Result<Duration, Box<dyn std::error::Error>> {
+    async fn clean_large_environment(&self) -> Result<Duration, Box<dyn std::error::Error>> {
         self.create_pixi_toml(&[
             "python",
             "numpy",
@@ -268,41 +453,35 @@ format = "black ."
             "flask",
             "django",
         ])?;
-        self.install_dependencies()?;
-        self.pixi_clean(None)
+        self.install_dependencies().await?;
+        self.pixi_clean(None).await
     }
 
     /// Clean specific environment from multi-environment setup
-    fn clean_specific_environment(&self) -> Result<Duration, Box<dyn std::error::Error>> {
+    async fn clean_specific_environment(&self) -> Result<Duration, Box<dyn std::error::Error>> {
         self.create_multi_env_pixi_toml()?;
-        // Install all environments first
-        self.install_dependencies()?;
-        self.install_environment("test")?;
-        self.install_environment("dev")?;
-        self.install_environment("prod")?;
+        // Install all environments first (pixi install installs all environments by default)
+        self.install_dependencies().await?;
 
         // Clean only the test environment
-        self.pixi_clean(Some("test"))
+        self.pixi_clean(Some("test")).await
     }
 
     /// Clean all environments from multi-environment setup
-    fn clean_multi_environments(&self) -> Result<Duration, Box<dyn std::error::Error>> {
+    async fn clean_multi_environments(&self) -> Result<Duration, Box<dyn std::error::Error>> {
         self.create_multi_env_pixi_toml()?;
-        // Install all environments first
-        self.install_dependencies()?;
-        self.install_environment("test")?;
-        self.install_environment("dev")?;
-        self.install_environment("prod")?;
+        // Install all environments first (pixi install installs all environments by default)
+        self.install_dependencies().await?;
 
         // Clean all environments
-        self.pixi_clean(None)
+        self.pixi_clean(None).await
     }
 
     /// Clean empty workspace (no environments to clean)
-    fn clean_empty_workspace(&self) -> Result<Duration, Box<dyn std::error::Error>> {
+    async fn clean_empty_workspace(&self) -> Result<Duration, Box<dyn std::error::Error>> {
         self.create_pixi_toml(&["python"])?;
         // Don't install dependencies, so no environments exist
-        self.pixi_clean(None)
+        self.pixi_clean(None).await
     }
 }
 
@@ -337,8 +516,8 @@ fn bench_environment_sizes(c: &mut Criterion) {
         b.iter(|| {
             let workspace = IsolatedPixiWorkspace::new_with_shared_cache(&shared_cache.cache_dir)
                 .expect("Failed to create workspace with shared cache");
-            let duration = workspace
-                .clean_small_environment()
+            let duration = RUNTIME
+                .block_on(workspace.clean_small_environment())
                 .expect("Failed to time pixi clean");
             black_box(duration)
         })
@@ -349,8 +528,8 @@ fn bench_environment_sizes(c: &mut Criterion) {
         b.iter(|| {
             let workspace = IsolatedPixiWorkspace::new_with_shared_cache(&shared_cache.cache_dir)
                 .expect("Failed to create workspace with shared cache");
-            let duration = workspace
-                .clean_medium_environment()
+            let duration = RUNTIME
+                .block_on(workspace.clean_medium_environment())
                 .expect("Failed to time pixi clean");
             black_box(duration)
         })
@@ -361,8 +540,8 @@ fn bench_environment_sizes(c: &mut Criterion) {
         b.iter(|| {
             let workspace = IsolatedPixiWorkspace::new_with_shared_cache(&shared_cache.cache_dir)
                 .expect("Failed to create workspace with shared cache");
-            let duration = workspace
-                .clean_large_environment()
+            let duration = RUNTIME
+                .block_on(workspace.clean_large_environment())
                 .expect("Failed to time pixi clean");
             black_box(duration)
         })
@@ -373,7 +552,7 @@ fn bench_multi_environment_scenarios(c: &mut Criterion) {
     let shared_cache = SharedCache::new().expect("Failed to create shared cache");
     let mut group = c.benchmark_group("multi_environment_clean");
     group.measurement_time(Duration::from_secs(120)); // 2 minutes
-    group.sample_size(6); // Fewer samples for complex scenarios
+    group.sample_size(10); // Minimum required sample size
     group.warm_up_time(Duration::from_secs(15));
 
     // Clean specific environment
@@ -381,8 +560,8 @@ fn bench_multi_environment_scenarios(c: &mut Criterion) {
         b.iter(|| {
             let workspace = IsolatedPixiWorkspace::new_with_shared_cache(&shared_cache.cache_dir)
                 .expect("Failed to create workspace with shared cache");
-            let duration = workspace
-                .clean_specific_environment()
+            let duration = RUNTIME
+                .block_on(workspace.clean_specific_environment())
                 .expect("Failed to time pixi clean specific environment");
             black_box(duration)
         })
@@ -393,8 +572,8 @@ fn bench_multi_environment_scenarios(c: &mut Criterion) {
         b.iter(|| {
             let workspace = IsolatedPixiWorkspace::new_with_shared_cache(&shared_cache.cache_dir)
                 .expect("Failed to create workspace with shared cache");
-            let duration = workspace
-                .clean_multi_environments()
+            let duration = RUNTIME
+                .block_on(workspace.clean_multi_environments())
                 .expect("Failed to time pixi clean all environments");
             black_box(duration)
         })
@@ -413,8 +592,8 @@ fn bench_edge_cases(c: &mut Criterion) {
         b.iter(|| {
             let workspace = IsolatedPixiWorkspace::new_with_shared_cache(&shared_cache.cache_dir)
                 .expect("Failed to create workspace with shared cache");
-            let duration = workspace
-                .clean_empty_workspace()
+            let duration = RUNTIME
+                .block_on(workspace.clean_empty_workspace())
                 .expect("Failed to time pixi clean empty workspace");
             black_box(duration)
         })
@@ -434,30 +613,36 @@ fn bench_repeated_clean_operations(c: &mut Criterion) {
             let workspace = IsolatedPixiWorkspace::new_with_shared_cache(&shared_cache.cache_dir)
                 .expect("Failed to create workspace with shared cache");
 
-            // Setup environment
-            workspace
-                .create_pixi_toml(&["python", "numpy"])
-                .expect("Failed to create pixi.toml");
-            workspace
-                .install_dependencies()
-                .expect("Failed to install dependencies");
+            RUNTIME.block_on(async {
+                // Setup environment
+                workspace
+                    .create_pixi_toml(&["python", "numpy"])
+                    .expect("Failed to create pixi.toml");
+                workspace
+                    .install_dependencies()
+                    .await
+                    .expect("Failed to install dependencies");
 
-            // First clean
-            let duration1 = workspace
-                .pixi_clean(None)
-                .expect("Failed to clean first time");
+                // First clean
+                let duration1 = workspace
+                    .pixi_clean(None)
+                    .await
+                    .expect("Failed to clean first time");
 
-            // Reinstall
-            workspace
-                .install_dependencies()
-                .expect("Failed to reinstall dependencies");
+                // Reinstall
+                workspace
+                    .install_dependencies()
+                    .await
+                    .expect("Failed to reinstall dependencies");
 
-            // Second clean
-            let duration2 = workspace
-                .pixi_clean(None)
-                .expect("Failed to clean second time");
+                // Second clean
+                let duration2 = workspace
+                    .pixi_clean(None)
+                    .await
+                    .expect("Failed to clean second time");
 
-            black_box((duration1, duration2))
+                black_box((duration1, duration2))
+            })
         })
     });
 }
@@ -466,7 +651,7 @@ fn bench_clean_performance_by_size(c: &mut Criterion) {
     let shared_cache = SharedCache::new().expect("Failed to create shared cache");
     let mut group = c.benchmark_group("clean_performance_by_size");
     group.measurement_time(Duration::from_secs(120)); // 2 minutes
-    group.sample_size(5); // Fewer samples for detailed analysis
+    group.sample_size(10); // Minimum required sample size
     group.warm_up_time(Duration::from_secs(15));
 
     // Measure clean performance vs environment size
@@ -475,38 +660,42 @@ fn bench_clean_performance_by_size(c: &mut Criterion) {
             let workspace = IsolatedPixiWorkspace::new_with_shared_cache(&shared_cache.cache_dir)
                 .expect("Failed to create workspace with shared cache");
 
-            // Create large environment
-            workspace
-                .create_pixi_toml(&[
-                    "python",
-                    "numpy",
-                    "pandas",
-                    "scipy",
-                    "matplotlib",
-                    "jupyter",
-                    "scikit-learn",
-                    "requests",
-                    "flask",
-                ])
-                .expect("Failed to create pixi.toml");
-            workspace
-                .install_dependencies()
-                .expect("Failed to install dependencies");
+            RUNTIME.block_on(async {
+                // Create large environment
+                workspace
+                    .create_pixi_toml(&[
+                        "python",
+                        "numpy",
+                        "pandas",
+                        "scipy",
+                        "matplotlib",
+                        "jupyter",
+                        "scikit-learn",
+                        "requests",
+                        "flask",
+                    ])
+                    .expect("Failed to create pixi.toml");
+                workspace
+                    .install_dependencies()
+                    .await
+                    .expect("Failed to install dependencies");
 
-            // Measure size before clean
-            let size_before = workspace
-                .get_envs_size()
-                .expect("Failed to get environment size");
+                // Measure size before clean
+                let size_before = workspace
+                    .get_envs_size()
+                    .expect("Failed to get environment size");
 
-            // Clean and measure time
-            let clean_duration = workspace
-                .pixi_clean(None)
-                .expect("Failed to clean environment");
+                // Clean and measure time
+                let clean_duration = workspace
+                    .pixi_clean(None)
+                    .await
+                    .expect("Failed to clean environment");
 
-            // Verify environments are gone
-            let environments_exist_after = workspace.environments_exist();
+                // Verify environments are gone
+                let environments_exist_after = workspace.environments_exist();
 
-            black_box((clean_duration, size_before, environments_exist_after))
+                black_box((clean_duration, size_before, environments_exist_after))
+            })
         })
     });
 }
