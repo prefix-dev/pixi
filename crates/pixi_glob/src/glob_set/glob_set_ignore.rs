@@ -58,18 +58,18 @@ impl GlobSetIgnore {
                 .into_iter()
                 .try_collect()?;
 
-            all_results.extend(results.drain(..));
+            all_results.append(&mut results);
         }
 
         Ok(all_results)
     }
 
     /// Perform a walk per unique route
-    pub fn walk<'a>(
+    pub fn walk(
         effective_walk_root: &Path,
-        globs: &[SimpleGlobItem<'a>],
+        globs: &[SimpleGlobItem<'_>],
     ) -> Result<Vec<Result<ignore::DirEntry, GlobSetIgnoreError>>, GlobSetIgnoreError> {
-        let mut ob = ignore::overrides::OverrideBuilder::new(&effective_walk_root);
+        let mut ob = ignore::overrides::OverrideBuilder::new(effective_walk_root);
         for glob in globs {
             let pattern = glob.to_pattern();
             ob.add(&pattern)
@@ -79,12 +79,14 @@ impl GlobSetIgnore {
         let overrides = ob.build().map_err(GlobSetIgnoreError::BuildOverrides)?;
 
         // Single parallel walk.
-        let walker = ignore::WalkBuilder::new(&effective_walk_root)
-            .ignore(false)
-            .git_ignore(false)
+        let walker = ignore::WalkBuilder::new(effective_walk_root)
+            // Enable repository local ignores
+            .git_ignore(true)
+            .git_exclude(true)
+            .hidden(true)
+            // Dont read global ignores and ag and rg ignores
             .git_global(false)
-            .git_exclude(false)
-            .hidden(false)
+            .ignore(false)
             .overrides(overrides)
             .build_parallel();
         // Implement a custom per-thread visitor to batch results locally,

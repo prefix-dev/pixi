@@ -112,8 +112,8 @@ pub struct SimpleGlobItem<'a> {
     pub negated: bool,
 }
 
-impl<'a> SimpleGlobItem<'a> {
-    pub fn to_pattern(&self) -> String {
+impl SimpleGlobItem<'_> {
+    pub fn to_pattern(self) -> String {
         if self.negated {
             format!("!{}", self.pattern)
         } else {
@@ -147,7 +147,7 @@ impl<'a> Iterator for WalkRootsIter<'a> {
 
 // Iterator implementations
 
-impl<'a> ExactSizeIterator for WalkRootsIter<'a> {
+impl ExactSizeIterator for WalkRootsIter<'_> {
     fn len(&self) -> usize {
         self.inner.len()
     }
@@ -196,7 +196,7 @@ impl<'a> Iterator for SimpleGlobsIter<'a> {
     }
 }
 
-impl<'a> ExactSizeIterator for SimpleGlobsIter<'a> {
+impl ExactSizeIterator for SimpleGlobsIter<'_> {
     fn len(&self) -> usize {
         self.inner.len()
     }
@@ -206,6 +206,7 @@ impl<'a> ExactSizeIterator for SimpleGlobsIter<'a> {
 /// - `path_prefix` ends at the last separator before the first glob metachar (`* ? [ {`)
 ///   and includes that separator (e.g. "src/").
 /// - `glob_part` is the rest starting from the component that contains the first meta.
+///
 /// If no glob is present, returns ("", input).
 pub fn split_path_and_glob(input: &str) -> (&str, &str) {
     fn is_meta(c: char) -> bool {
