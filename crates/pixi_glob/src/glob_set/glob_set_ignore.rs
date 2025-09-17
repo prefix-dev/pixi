@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use thiserror::Error;
 
 use crate::glob_set::walk;
-use crate::glob_set::walk_roots::WalkRoots;
+use crate::glob_set::walk_roots::{WalkRoots, WalkRootsError};
 
 /// A glob set implemented using the `ignore` crate (globset + fast walker).
 pub struct GlobSetIgnore {
@@ -19,6 +19,9 @@ pub enum GlobSetIgnoreError {
 
     #[error("walk error at {0}")]
     Walk(PathBuf, #[source] ignore::Error),
+
+    #[error(transparent)]
+    WalkRoots(#[from] WalkRootsError),
 }
 
 impl GlobSetIgnore {
@@ -39,25 +42,8 @@ impl GlobSetIgnore {
             return Ok(vec![]);
         }
 
-        let mut all_results = Vec::new();
-
-        for walk_root in &self.walk_roots {
-            let effective_walk_root = if walk_root.path().as_os_str().is_empty() {
-                root_dir.to_path_buf()
-            } else {
-                root_dir.join(walk_root.path())
-            };
-
-            let globs: Vec<_> = walk_root.into_iter().collect();
-            if globs.is_empty() {
-                continue;
-            }
-
-            let mut results = walk::walk_globs(&effective_walk_root, &globs)?;
-            all_results.append(&mut results);
-        }
-
-        Ok(all_results)
+        let rebased = self.walk_roots.rebase(root_dir)?;
+        walk::walk_globs(&rebased.root, &rebased.globs)
     }
 }
 
@@ -68,17 +54,22 @@ mod tests {
     use insta::assert_yaml_snapshot;
     use tempfile::tempdir;
 
+    fn relative_path(path: &std::path::Path, root: &std::path::Path) -> std::path::PathBuf {
+        if let Ok(rel) = path.strip_prefix(root) {
+            return rel.to_path_buf();
+        }
+        if let Some(parent) = root.parent() {
+            if let Ok(rel) = path.strip_prefix(parent) {
+                return std::path::Path::new("..").join(rel);
+            }
+        }
+        path.to_path_buf()
+    }
+
     fn sorted_paths(entries: Vec<ignore::DirEntry>, root: &std::path::Path) -> Vec<String> {
         let mut paths: Vec<_> = entries
             .into_iter()
-            .map(|entry| {
-                entry
-                    .path()
-                    .strip_prefix(root)
-                    .unwrap()
-                    .display()
-                    .to_string()
-            })
+            .map(|entry| relative_path(entry.path(), root).display().to_string())
             .collect();
         paths.sort();
         paths

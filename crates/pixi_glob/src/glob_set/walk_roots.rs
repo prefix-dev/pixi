@@ -1,20 +1,19 @@
-//! Module to determine where to start globbing, by splitting the `..`, and `.` components from a glob
-//! This will then determine what we need to join with the current glob path to start globbing from that location.
-//! We need to split the effective walk roots, so that we can do a single globbing pass from there, which
-//! is probably the best heuristic to be efficient
+//! Plan the effective glob walk root for a set of patterns that may contain relative components.
+//!
+//! The builder determines how many `..` segments we need to traverse so every pattern can be
+//! evaluated from a single ancestor directory.  When `rebase` is invoked we pop that ancestor off
+//! the provided search root, splice the remaining literal components back into each pattern and
+//! return the rewritten globs.  Negated patterns that start with `**/` are treated as global
+//! exclusions and are emitted unchanged so users can keep wildcard directory bans in scope even if
+//! the effective root moves.
 
-use std::{
-    collections::HashMap,
-    path::{Path, PathBuf},
-};
+use std::path::{Component, Path, PathBuf};
 
-/// A non-processed glob so its easier to split into negated
-/// an non-negated later on
-struct SimpleGlob {
-    /// Glob to use
-    pub glob: String,
-    /// Determine if its negated, a !glob
-    pub negated: bool,
+/// Simple handler to work with our globs
+#[derive(Clone, Debug)]
+pub struct SimpleGlob {
+    glob: String,
+    negated: bool,
 }
 
 impl SimpleGlob {
@@ -29,183 +28,163 @@ impl SimpleGlob {
     pub fn is_negated(&self) -> bool {
         self.negated
     }
+
+    pub fn to_pattern(&self) -> String {
+        if self.negated {
+            format!("!{}", self.glob)
+        } else {
+            self.glob.clone()
+        }
+    }
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum WalkRootsError {
     #[error("after processing glob '{glob}', split into '{prefix}' and empty glob")]
     EmptyGlob { prefix: String, glob: String },
+
+    #[error("glob prefix '{prefix}' must be relative")]
+    AbsolutePrefix { prefix: String },
+
+    #[error("cannot ascend {required} level(s) from '{root}'")]
+    CannotAscend { required: usize, root: PathBuf },
+}
+
+struct GlobSpec {
+    negated: bool,
+    parent_dirs: usize,
+    tail_components: Vec<String>,
+    pattern: String,
+    skip_rebase: bool,
 }
 
 /// Contains the globs and the joinable path
 pub struct WalkRoots {
-    roots: HashMap<PathBuf, Vec<SimpleGlob>>,
+    specs: Vec<GlobSpec>,
+    max_parent_dirs: usize,
+}
+
+/// Globs rebased to a common root
+pub struct RebasedGlobs {
+    pub root: PathBuf,
+    pub globs: Vec<SimpleGlob>,
 }
 
 impl WalkRoots {
-    /// Build the `WalkRoots` by iterating through the globs and extracting and normaliziong
-    /// any non-glob component so the input glob is split between the prefix and the actual glob
-    /// the prefix containing all the semantic literals, meaning these need to be interpreted as
-    /// modification to the search path
     pub fn build<'t>(globs: impl IntoIterator<Item = &'t str>) -> Result<Self, WalkRootsError> {
-        let mut roots = HashMap::new();
+        let mut specs = Vec::new();
+        let mut max_parent_dirs = 0usize;
 
         for glob in globs {
             let negated = glob.starts_with('!');
-
-            // Remove ! from globs for processing
             let glob = if negated { &glob[1..] } else { glob };
 
-            let (prefix, glob) = split_path_and_glob(glob);
-            if glob.is_empty() {
+            let (prefix, pattern) = split_path_and_glob(glob);
+            if pattern.is_empty() {
                 return Err(WalkRootsError::EmptyGlob {
                     prefix: prefix.to_string(),
                     glob: glob.to_string(),
                 });
             }
-            let mut normalized_prefix = normalize_relative(Path::new(prefix));
 
-            let glob = if negated && !normalized_prefix.as_os_str().is_empty() && glob == "**" {
-                normalized_prefix = PathBuf::new();
-                format!("{}{}", prefix, glob)
-            } else {
-                glob.to_string()
-            };
+            let normalized_prefix = normalize_relative(Path::new(prefix));
+            let mut parent_dirs = 0usize;
+            let mut tail_components = Vec::new();
 
-            roots
-                .entry(normalized_prefix)
-                .or_insert_with(Vec::new)
-                .push(SimpleGlob::new(glob, negated));
+            for comp in normalized_prefix.components() {
+                match comp {
+                    Component::ParentDir => parent_dirs += 1,
+                    Component::CurDir => {}
+                    Component::Normal(s) => {
+                        tail_components.push(s.to_string_lossy().into_owned());
+                    }
+                    Component::RootDir | Component::Prefix(_) => {
+                        return Err(WalkRootsError::AbsolutePrefix {
+                            prefix: prefix.to_string(),
+                        });
+                    }
+                }
+            }
+
+            let skip_rebase =
+                negated && normalized_prefix.as_os_str().is_empty() && pattern.starts_with("**/");
+
+            max_parent_dirs = max_parent_dirs.max(parent_dirs);
+            specs.push(GlobSpec {
+                negated,
+                parent_dirs,
+                tail_components,
+                pattern: pattern.to_string(),
+                skip_rebase,
+            });
         }
 
-        Ok(Self { roots })
-    }
-
-    pub fn iter(&self) -> WalkRootsIter<'_> {
-        WalkRootsIter {
-            inner: self.roots.iter(),
-        }
-    }
-
-    pub fn get(&self, root: &Path) -> Option<WalkRootItem<'_>> {
-        self.roots
-            .get_key_value(root)
-            .map(|(path, globs)| WalkRootItem {
-                path: path.as_path(),
-                globs: globs.as_slice(),
-            })
-    }
-
-    pub fn len(&self) -> usize {
-        self.roots.len()
+        Ok(Self {
+            specs,
+            max_parent_dirs,
+        })
     }
 
     pub fn is_empty(&self) -> bool {
-        self.roots.is_empty()
+        self.specs.is_empty()
     }
-}
 
-// Iteration interfaces
-
-#[derive(Clone, Copy)]
-pub struct WalkRootItem<'a> {
-    path: &'a Path,
-    globs: &'a [SimpleGlob],
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SimpleGlobItem<'a> {
-    pub pattern: &'a str,
-    pub negated: bool,
-}
-
-impl SimpleGlobItem<'_> {
-    pub fn to_pattern(self) -> String {
-        if self.negated {
-            format!("!{}", self.pattern)
-        } else {
-            self.pattern.to_string()
+    pub fn rebase(&self, root: &Path) -> Result<RebasedGlobs, WalkRootsError> {
+        if self.specs.is_empty() {
+            return Ok(RebasedGlobs {
+                root: root.to_path_buf(),
+                globs: Vec::new(),
+            });
         }
-    }
-}
 
-// Iterator interfaces
+        let available = root
+            .components()
+            .filter(|c| matches!(c, Component::Normal(_) | Component::Prefix(_)))
+            .count();
+        if available < self.max_parent_dirs {
+            return Err(WalkRootsError::CannotAscend {
+                required: self.max_parent_dirs,
+                root: root.to_path_buf(),
+            });
+        }
 
-/// Iterator over WalkRoots
-pub struct WalkRootsIter<'a> {
-    inner: std::collections::hash_map::Iter<'a, PathBuf, Vec<SimpleGlob>>,
-}
+        let mut effective_root = root.to_path_buf();
+        let mut popped = Vec::with_capacity(self.max_parent_dirs);
+        for _ in 0..self.max_parent_dirs {
+            let name = effective_root
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .expect("checked available components beforehand");
+            effective_root.pop();
+            popped.push(name);
+        }
+        popped.reverse();
 
-/// Iterator over collections of SimpleGlob
-pub struct SimpleGlobsIter<'a> {
-    inner: std::slice::Iter<'a, SimpleGlob>,
-}
+        let mut rebased = Vec::with_capacity(self.specs.len());
+        for spec in &self.specs {
+            if spec.skip_rebase {
+                rebased.push(SimpleGlob::new(spec.pattern.clone(), spec.negated));
+                continue;
+            }
 
-impl<'a> Iterator for WalkRootsIter<'a> {
-    type Item = WalkRootItem<'a>;
+            let keep_from_suffix = self.max_parent_dirs.saturating_sub(spec.parent_dirs);
+            let mut components = Vec::new();
+            components.extend(popped.iter().take(keep_from_suffix).cloned());
+            components.extend(spec.tail_components.iter().cloned());
 
-    fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next().map(|(path, globs)| WalkRootItem {
-            path: path.as_path(),
-            globs: globs.as_slice(),
+            let pattern = if components.is_empty() {
+                spec.pattern.clone()
+            } else {
+                format!("{}/{}", components.join("/"), spec.pattern)
+            };
+
+            rebased.push(SimpleGlob::new(pattern, spec.negated));
+        }
+
+        Ok(RebasedGlobs {
+            root: effective_root,
+            globs: rebased,
         })
-    }
-}
-
-// Iterator implementations
-
-impl ExactSizeIterator for WalkRootsIter<'_> {
-    fn len(&self) -> usize {
-        self.inner.len()
-    }
-}
-
-impl<'a> IntoIterator for &'a WalkRoots {
-    type Item = WalkRootItem<'a>;
-    type IntoIter = WalkRootsIter<'a>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.iter()
-    }
-}
-
-impl<'a> WalkRootItem<'a> {
-    pub fn path(&self) -> &'a Path {
-        self.path
-    }
-
-    pub fn globs(&self) -> SimpleGlobsIter<'a> {
-        SimpleGlobsIter {
-            inner: self.globs.iter(),
-        }
-    }
-}
-
-impl<'a> IntoIterator for WalkRootItem<'a> {
-    type Item = SimpleGlobItem<'a>;
-    type IntoIter = SimpleGlobsIter<'a>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        SimpleGlobsIter {
-            inner: self.globs.iter(),
-        }
-    }
-}
-
-impl<'a> Iterator for SimpleGlobsIter<'a> {
-    type Item = SimpleGlobItem<'a>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.inner.next().map(|glob| SimpleGlobItem {
-            pattern: glob.pattern(),
-            negated: glob.is_negated(),
-        })
-    }
-}
-
-impl ExactSizeIterator for SimpleGlobsIter<'_> {
-    fn len(&self) -> usize {
-        self.inner.len()
     }
 }
 
@@ -213,8 +192,13 @@ impl ExactSizeIterator for SimpleGlobsIter<'_> {
 /// - `path_prefix` ends at the last separator before the first glob metachar (`* ? [ {`)
 ///   and includes that separator (e.g. "src/").
 /// - `glob_part` is the rest starting from the component that contains the first meta.
+///   If no glob is present, returns ("", input).
 ///
-/// If no glob is present, returns ("", input).
+/// Examples:
+///   "../.././../*.{rs,cc}" -> ("../.././../", "*.{rs,cc}")
+///   "src/*/test?.rs"      -> ("src/", "*/test?.rs")
+///   "*.rs"                -> ("", "*.rs")
+///   "plain/path"          -> ("", "plain/path")
 pub fn split_path_and_glob(input: &str) -> (&str, &str) {
     fn is_meta(c: char) -> bool {
         matches!(c, '*' | '?' | '[' | '{')
@@ -225,18 +209,14 @@ pub fn split_path_and_glob(input: &str) -> (&str, &str) {
     }
     for (i, ch) in input.char_indices() {
         if is_meta(ch) {
-            // Find the last separator *before* the first meta.
             if let Some(sep_idx) = input[..i].rfind(|c: char| is_sep(c)) {
-                // Include the separator in the path prefix.
                 return (&input[..=sep_idx], &input[sep_idx + 1..]);
             } else {
-                // Glob starts in the first path component.
                 return ("", input);
             }
         }
     }
 
-    // No glob characters found.
     ("", input)
 }
 
@@ -245,7 +225,7 @@ pub fn normalize_relative(path: &Path) -> PathBuf {
     let mut out = PathBuf::new();
     for comp in path.components() {
         match comp {
-            std::path::Component::CurDir => {}
+            Component::CurDir => {}
             _ => out.push(comp.as_os_str()),
         }
     }
@@ -256,15 +236,13 @@ pub fn normalize_relative(path: &Path) -> PathBuf {
 mod tests {
     use std::path::Path;
 
-    use crate::glob_set::walk_roots::normalize_relative;
-
-    use super::{WalkRoots, split_path_and_glob};
+    use super::{WalkRoots, normalize_relative, split_path_and_glob};
     use insta::assert_yaml_snapshot;
     use serde::Serialize;
 
     #[derive(Serialize)]
-    struct SnapshotRoot {
-        path: String,
+    struct SnapshotWalk {
+        root: String,
         globs: Vec<SnapshotGlob>,
     }
 
@@ -274,22 +252,21 @@ mod tests {
         negated: bool,
     }
 
-    fn snapshot_walk_roots(walk_roots: &WalkRoots) -> Vec<SnapshotRoot> {
-        let mut roots: Vec<_> = walk_roots
+    fn snapshot_walk_roots(plan: &WalkRoots, root: &Path) -> SnapshotWalk {
+        let rebased = plan.rebase(root).expect("rebase should succeed");
+        let root_str = rebased.root.display().to_string().replace('\\', "/");
+        let globs = rebased
+            .globs
             .iter()
-            .map(|root| SnapshotRoot {
-                path: root.path().display().to_string(),
-                globs: root
-                    .globs()
-                    .map(|g| SnapshotGlob {
-                        pattern: g.pattern.to_string(),
-                        negated: g.negated,
-                    })
-                    .collect(),
+            .map(|g| SnapshotGlob {
+                pattern: g.pattern().to_string(),
+                negated: g.is_negated(),
             })
             .collect();
-        roots.sort_by(|a, b| a.path.cmp(&b.path));
-        roots
+        SnapshotWalk {
+            root: root_str,
+            globs,
+        }
     }
 
     #[test]
@@ -323,32 +300,30 @@ mod tests {
             "!./src/**/*.tmp",
             "../include/*.c",
             "!.pixi/**",
+            "!**/.pixi/**",
             "**/*.cpp",
         ];
 
         let walk_roots = WalkRoots::build(globs).expect("determine should succeed");
 
         assert_yaml_snapshot!(
-            snapshot_walk_roots(&walk_roots),
-            { ".**" => insta::sorted_redaction() },
-            @r###"
-        - globs:
-            - pattern: ".pixi/**"
-              negated: true
-            - pattern: "**/*.cpp"
-              negated: false
-          path: ""
-        - globs:
-            - pattern: "*.c"
-              negated: false
-          path: "../include"
-        - globs:
-            - pattern: "**/*.rs"
-              negated: false
-            - pattern: "**/*.tmp"
-              negated: true
-          path: src
-        "###
+            snapshot_walk_roots(&walk_roots, Path::new("workspace/baz")),
+            @r###"---
+root: workspace
+globs:
+  - pattern: baz/src/**/*.rs
+    negated: false
+  - pattern: baz/src/**/*.tmp
+    negated: true
+  - pattern: include/*.c
+    negated: false
+  - pattern: baz/.pixi/**
+    negated: true
+  - pattern: "**/.pixi/**"
+    negated: true
+  - pattern: baz/**/*.cpp
+    negated: false
+"###
         );
     }
 
@@ -358,19 +333,16 @@ mod tests {
 
         let walk_roots = WalkRoots::build(globs).expect("determine should succeed");
 
-        assert_eq!(walk_roots.len(), 1);
-        assert!(!walk_roots.is_empty());
         assert_yaml_snapshot!(
-            snapshot_walk_roots(&walk_roots),
-            { ".**" => insta::sorted_redaction() },
-            @r###"
-        - globs:
-            - pattern: "*.rs"
-              negated: false
-            - pattern: "*.tmp"
-              negated: true
-          path: ""
-        "###
+            snapshot_walk_roots(&walk_roots, Path::new("workspace/baz")),
+            @r###"---
+root: workspace/baz
+globs:
+  - pattern: "*.rs"
+    negated: false
+  - pattern: "*.tmp"
+    negated: true
+"###
         );
     }
 
@@ -380,20 +352,17 @@ mod tests {
 
         let walk_roots = WalkRoots::build(globs).expect("determine should succeed");
         assert_yaml_snapshot!(
-            snapshot_walk_roots(&walk_roots),
-            { ".**" => insta::sorted_redaction() },
-            @r###"
-        - globs:
-            - pattern: "**/*.md"
-              negated: false
-          path: docs
-        - globs:
-            - pattern: "**/*.rs"
-              negated: false
-            - pattern: "**/generated.rs"
-              negated: true
-          path: src
-        "###
+            snapshot_walk_roots(&walk_roots, Path::new("workspace")),
+            @r###"---
+root: workspace
+globs:
+  - pattern: src/**/*.rs
+    negated: false
+  - pattern: src/**/generated.rs
+    negated: true
+  - pattern: docs/**/*.md
+    negated: false
+"###
         );
     }
 
@@ -404,14 +373,13 @@ mod tests {
         let walk_roots = WalkRoots::build(globs).expect("determine should succeed");
 
         assert_yaml_snapshot!(
-            snapshot_walk_roots(&walk_roots),
-            { ".**" => insta::sorted_redaction() },
-            @r###"
-        - globs:
-            - pattern: ".pixi/**"
-              negated: true
-          path: ""
-        "###
+            snapshot_walk_roots(&walk_roots, Path::new("workspace/baz")),
+            @r###"---
+root: workspace/baz
+globs:
+  - pattern: ".pixi/**"
+    negated: true
+"###
         );
     }
 }

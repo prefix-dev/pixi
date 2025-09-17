@@ -3,7 +3,7 @@ use parking_lot::Mutex;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use crate::glob_set::walk_roots::SimpleGlobItem;
+use crate::glob_set::walk_roots::SimpleGlob;
 
 use super::GlobSetIgnoreError;
 
@@ -71,9 +71,10 @@ impl ignore::ParallelVisitor for CollectVisitor {
     }
 }
 
+/// Walk over the globs in the specific root
 pub fn walk_globs(
     effective_walk_root: &Path,
-    globs: &[SimpleGlobItem<'_>],
+    globs: &[SimpleGlob],
 ) -> Result<Vec<ignore::DirEntry>, GlobSetIgnoreError> {
     let mut ob = ignore::overrides::OverrideBuilder::new(effective_walk_root);
     for glob in globs {
@@ -107,10 +108,12 @@ pub fn walk_globs(
     // Log some statistics as long as we are unsure with regards to performance
     let matched = results.len();
     let elapsed = start.elapsed();
-    let include_patterns = globs.iter().filter(|g| !g.negated).count();
-    let exclude_patterns = globs.len().saturating_sub(include_patterns);
+    let (include, excludes): (Vec<_>, Vec<_>) = globs.iter().partition(|g| !g.is_negated());
+    let include_patterns = include.iter().map(|g| g.to_pattern()).join(", ");
+    let exclude_patterns = excludes.iter().map(|g| g.to_pattern()).join(", ");
+
     tracing::debug!(
-        includes = include_patterns,
+        include = include_patterns,
         excludes = exclude_patterns,
         matched,
         elapsed_ms = elapsed.as_millis(),
