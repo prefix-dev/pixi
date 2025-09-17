@@ -1664,11 +1664,13 @@ If you get here you know all commands that *are* supported correctly listen to -
         )
 
 
+@pytest.mark.slow
 def test_add_url_no_channel(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """
     Check that a helpful error message is raised when attempting to
     add a `url::pkg` where `url` is not a channel of the workspace.
     """
+
     verify_cli_command([pixi, "init", tmp_pixi_workspace])
 
     # helpful error for missing channel
@@ -1712,7 +1714,7 @@ def test_add_url_no_channel(pixi: Path, tmp_pixi_workspace: Path) -> None:
         [
             pixi,
             "add",
-            "https://prefix.dev/conda-forge::xz",
+            "https://conda.anaconda.org/conda-forge::xz",
             "--feature=prefix",
             "--manifest-path",
             tmp_pixi_workspace,
@@ -1740,20 +1742,20 @@ def test_add_url_no_channel(pixi: Path, tmp_pixi_workspace: Path) -> None:
             tmp_pixi_workspace,
         ],
         expected_exit_code=ExitCode.FAILURE,
-        stderr_contains="unavailable channel 'https://prefix.dev/conda-forge/'",
+        stderr_contains="unavailable channel 'https://conda.anaconda.org/conda-forge/'",
     )
     # and helpful message now feature is used:
     verify_cli_command(
         [
             pixi,
             "add",
-            "https://prefix.dev/conda-forge::libzlib",
+            "https://conda.anaconda.org/conda-forge::libzlib",
             "--feature=prefix",
             "--manifest-path",
             tmp_pixi_workspace,
         ],
         expected_exit_code=ExitCode.FAILURE,
-        stderr_contains="pixi workspace channel add https://prefix.dev/conda-forge",
+        stderr_contains="pixi workspace channel add https://conda.anaconda.org/conda-forge",
     )
 
     verify_cli_command(
@@ -1763,7 +1765,7 @@ def test_add_url_no_channel(pixi: Path, tmp_pixi_workspace: Path) -> None:
             "channel",
             "add",
             "--feature=prefix",
-            "https://prefix.dev/conda-forge",
+            "https://conda.anaconda.org/conda-forge",
             "--manifest-path",
             tmp_pixi_workspace,
         ],
