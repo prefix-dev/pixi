@@ -27,7 +27,7 @@
 
 ## Overview
 
-`pixi` is a cross-platform, multi-language package manager and workflow tool built on the foundation of the conda ecosystem. It provides developers with an exceptional experience similar to popular package managers like `cargo` or `yarn`, but for any language.
+`pixi` is a cross-platform, multi-language package manager and workflow tool built on the foundation of the conda ecosystem. It provides developers with an exceptional experience similar to popular package managers like [`cargo`](https://doc.rust-lang.org/cargo/) or [`npm`](https://docs.npmjs.com), but for any language.
 
 Developed with ❤️ at [prefix.dev](https://prefix.dev).
 [![Real-time pixi_demo](https://github.com/prefix-dev/pixi/assets/12893423/0fc8f8c8-ac13-4c14-891b-dc613f25475b)](https://asciinema.org/a/636482)
@@ -36,7 +36,7 @@ Developed with ❤️ at [prefix.dev](https://prefix.dev).
 
 - Supports **multiple languages** including Python, C++, and R using Conda packages. You can find available packages on [prefix.dev](https://prefix.dev).
 - Compatible with all major operating systems: Linux, Windows, macOS (including Apple Silicon).
-- Always includes an up-to-date **lock file**.
+- Always includes an up-to-date [**lock file**](https://pixi.sh/latest/workspace/lockfile/).
 - Provides a clean and simple Cargo-like **command-line interface**.
 - Allows you to install tools **per-project** or **system-wide**.
 - Entirely written in **Rust** and built on top of the **[rattler](https://github.com/conda/rattler)** library.
@@ -305,13 +305,13 @@ Global Options:
       --no-progress    Hide all progress bars, always turned on if stderr is not a terminal [env: PIXI_NO_PROGRESS=]
 ```
 
-## Creating a Pixi project
+## Creating a Pixi workspace
 
-Initialize a new project and navigate to the project directory
+Initialize a new workspace and navigate to the workspace directory
 
 ```
-pixi init myproject
-cd myproject
+pixi init myworkspace
+cd myworkspace
 ```
 
 Add the dependencies you want to use
@@ -333,6 +333,8 @@ pixi shell
 cowpy "Thanks for using pixi"
 exit
 ```
+
+Check out https://pixi.sh/dev/first_workspace/ for a more detailed introduction to workspaces.
 
 ## Installing a conda package globally
 

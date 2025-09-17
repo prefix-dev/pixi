@@ -79,7 +79,7 @@ pub use reporter::{
 };
 use serde::Serialize;
 pub use solve_conda::SolveCondaEnvironmentSpec;
-pub use solve_pixi::{PixiEnvironmentSpec, SolvePixiEnvironmentError};
+pub use solve_pixi::{MissingChannelError, PixiEnvironmentSpec, SolvePixiEnvironmentError};
 pub use source_build::{SourceBuildError, SourceBuildResult, SourceBuildSpec};
 pub use source_build_cache_status::{
     CachedBuildStatus, SourceBuildCacheEntry, SourceBuildCacheStatusError,
