@@ -65,7 +65,10 @@ pub struct CondaEnvFile {
 #[serde(untagged)]
 pub enum CondaEnvDep {
     Conda(String),
-    Pip { pip: Vec<String> },
+    Pip {
+        #[serde(default)]
+        pip: Option<Vec<String>>,
+    },
 }
 
 type ParsedDependencies = (
@@ -143,9 +146,9 @@ impl CondaEnvFile {
 }
 
 fn parse_dependencies(deps: Vec<CondaEnvDep>) -> miette::Result<ParsedDependencies> {
-    let mut conda_deps = vec![];
-    let mut pip_deps = vec![];
-    let mut picked_up_channels = vec![];
+    let mut conda_deps = Vec::new();
+    let mut pip_deps = Vec::new();
+    let mut picked_up_channels = Vec::new();
     for dep in deps {
         match dep {
             CondaEnvDep::Conda(d) => {
@@ -162,15 +165,18 @@ fn parse_dependencies(deps: Vec<CondaEnvDep>) -> miette::Result<ParsedDependenci
                 }
                 conda_deps.push(match_spec);
             }
-            CondaEnvDep::Pip { pip } => pip_deps.extend(
-                pip.iter()
-                    .map(|dep| {
-                        pep508_rs::Requirement::from_str(dep)
-                            .into_diagnostic()
-                            .wrap_err(format!("Can't parse '{}' as pypi dependency", dep))
-                    })
-                    .collect::<miette::Result<Vec<_>>>()?,
-            ),
+            CondaEnvDep::Pip { pip } => {
+                let pip = pip.unwrap_or_default();
+                pip_deps.extend(
+                    pip.iter()
+                        .map(|dep| {
+                            pep508_rs::Requirement::from_str(dep)
+                                .into_diagnostic()
+                                .wrap_err(format!("Can't parse '{}' as pypi dependency", dep))
+                        })
+                        .collect::<miette::Result<Vec<_>>>()?,
+                )
+            }
         }
     }
 

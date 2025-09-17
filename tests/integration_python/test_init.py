@@ -1,6 +1,9 @@
+import tomllib
 from pathlib import Path
 
 import pytest
+from dirty_equals import IsPartialDict
+from inline_snapshot import snapshot
 
 from .common import ExitCode, verify_cli_command
 
@@ -44,6 +47,38 @@ def test_pixi_init_pixi_home_parent(pixi: Path, tmp_pixi_workspace: Path) -> Non
         # Test that we print a helpful error message
         stderr_contains="pixi init",
         env={"PIXI_HOME": str(pixi_home)},
+    )
+
+
+def test_pixi_init_import_environment_empty_pip(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    environment_file = tmp_pixi_workspace / "environment.yml"
+    environment_file.write_text(
+        """name: test
+channels:
+  - conda-forge
+dependencies:
+  - python=3.13
+  - pip
+  - pip:
+"""
+    )
+
+    verify_cli_command(
+        [pixi, "init", "--import", "environment.yml"],
+        ExitCode.SUCCESS,
+        cwd=tmp_pixi_workspace,
+    )
+
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    assert manifest.is_file()
+
+    assert tomllib.loads(manifest.read_text()) == snapshot(
+        {
+            "workspace": IsPartialDict,
+            "tasks": {},
+            "dependencies": {"python": "3.13.*", "pip": "*"},
+        }
     )
 
 
