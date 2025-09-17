@@ -279,17 +279,9 @@ impl ManifestDocument {
         array_name: &str,
         dependency_name: &PypiPackageName,
     ) -> Result<(), TomlError> {
-        eprintln!("manifest {:?}", self.manifest());
-
-        eprintln!("table parts {:?}", table_parts);
-        eprintln!("array name {:?}", array_name);
-        eprintln!("dependency name {:?}", dependency_name);
-
         let array = self
             .manifest_mut()
             .get_mut_toml_array(table_parts, array_name)?;
-
-        eprintln!("array before removal {:?}", array);
 
         if let Some(array) = array {
             array.retain(|x| {
