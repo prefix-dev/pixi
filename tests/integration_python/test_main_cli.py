@@ -32,7 +32,7 @@ def test_pixi(pixi: Path) -> None:
 def test_project_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest_path = tmp_pixi_workspace / "pixi.toml"
     # Create a new project
-    verify_cli_command([pixi, "init", tmp_pixi_workspace], ExitCode.SUCCESS)
+    verify_cli_command([pixi, "init", tmp_pixi_workspace])
 
     # Channel commands
     verify_cli_command(
@@ -252,7 +252,7 @@ def test_simple_project_setup(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest_path = tmp_pixi_workspace / "pixi.toml"
     conda_forge = "https://prefix.dev/conda-forge"
     # Create a new project
-    verify_cli_command([pixi, "init", "-c", conda_forge, tmp_pixi_workspace], ExitCode.SUCCESS)
+    verify_cli_command([pixi, "init", "-c", conda_forge, tmp_pixi_workspace])
 
     # Add package
     verify_cli_command(
@@ -822,7 +822,7 @@ def test_pixi_manifest_path(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest_path = tmp_pixi_workspace / "pixi.toml"
 
     # Create a new project
-    verify_cli_command([pixi, "init", tmp_pixi_workspace], ExitCode.SUCCESS)
+    verify_cli_command([pixi, "init", tmp_pixi_workspace])
 
     # Modify project without manifest path
     verify_cli_command(
@@ -1373,9 +1373,7 @@ def test_pixi_task_list_json(pixi: Path, tmp_pixi_workspace: Path) -> None:
         """
     manifest.write_text(toml)
 
-    result = verify_cli_command(
-        [pixi, "task", "list", "--json", "--manifest-path", manifest], ExitCode.SUCCESS
-    )
+    result = verify_cli_command([pixi, "task", "list", "--json", "--manifest-path", manifest])
 
     task_data = json.loads(result.stdout)
 
@@ -1426,9 +1424,7 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
 
     verify_cli_command([pixi, "install", "--manifest-path", manifest, "--all"])
 
-    result = verify_cli_command(
-        [pixi, "info", "--manifest-path", manifest, "--extended", "--json"], ExitCode.SUCCESS
-    )
+    result = verify_cli_command([pixi, "info", "--manifest-path", manifest, "--extended", "--json"])
     info_data = json.loads(result.stdout)
 
     # Stub out path, size and other dynamic data from snapshot()
@@ -1562,7 +1558,7 @@ def test_frozen_no_install_invariant(pixi: Path, tmp_pixi_workspace: Path) -> No
     ]
 
     # Create a new project with bzip2 (lightweight package)
-    verify_cli_command([pixi, "init", tmp_pixi_workspace], ExitCode.SUCCESS)
+    verify_cli_command([pixi, "init", tmp_pixi_workspace])
     # Add bzip2 package to keep installation time low
     verify_cli_command([pixi, "add", "--manifest-path", manifest_path, "bzip2"])
 

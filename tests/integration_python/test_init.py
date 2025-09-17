@@ -10,7 +10,7 @@ from .common import ExitCode, verify_cli_command
 
 def test_pixi_init_cwd(pixi: Path, tmp_pixi_workspace: Path) -> None:
     # Create a new project
-    verify_cli_command([pixi, "init", "."], ExitCode.SUCCESS, cwd=tmp_pixi_workspace)
+    verify_cli_command([pixi, "init", "."], cwd=tmp_pixi_workspace)
 
     # Verify that the manifest file is created
     manifest_path = tmp_pixi_workspace / "pixi.toml"
@@ -26,7 +26,7 @@ def test_pixi_init_non_existing_dir(pixi: Path, tmp_pixi_workspace: Path) -> Non
     project_dir = tmp_pixi_workspace / "project_dir"
 
     # Create a new project
-    verify_cli_command([pixi, "init", project_dir], ExitCode.SUCCESS)
+    verify_cli_command([pixi, "init", project_dir])
 
     # Verify that the manifest file is created
     manifest_path = project_dir / "pixi.toml"
@@ -65,7 +65,6 @@ dependencies:
 
     verify_cli_command(
         [pixi, "init", "--import", "environment.yml"],
-        ExitCode.SUCCESS,
         cwd=tmp_pixi_workspace,
     )
 
@@ -86,8 +85,6 @@ dependencies:
 def test_pixi_init_pyproject(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest_path = tmp_pixi_workspace / "pyproject.toml"
     # Create a new project
-    verify_cli_command(
-        [pixi, "init", tmp_pixi_workspace, "--format", "pyproject"], ExitCode.SUCCESS
-    )
+    verify_cli_command([pixi, "init", tmp_pixi_workspace, "--format", "pyproject"])
     # Verify that install works
-    verify_cli_command([pixi, "install", "--manifest-path", manifest_path], ExitCode.SUCCESS)
+    verify_cli_command([pixi, "install", "--manifest-path", manifest_path])
