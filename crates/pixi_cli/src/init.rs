@@ -271,8 +271,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mojoproject_manifest_path = dir.join(consts::MOJOPROJECT_MANIFEST);
     let gitignore_path = dir.join(".gitignore");
     let gitattributes_path = dir.join(".gitattributes");
-    let config = Config::load_global();
-
+    let config = Config::load(&dir);
     if is_init_dir_equal_to_pixi_home_parent(&dir) {
         let help_msg = format!(
             "Please follow the getting started guide at https://pixi.sh/v{}/init_getting_started/ or run the following command to create a new workspace in a subdirectory:\n\n  {}\n",
