@@ -96,7 +96,7 @@ impl Environment<'_> {
             }
             EnvironmentName::Default => self.workspace().display_name().to_string(),
         };
-        let mut map = IndexMap::from_iter([
+        let map = IndexMap::from_iter([
             (format!("{ENV_PREFIX}NAME"), self.name().to_string()),
             (
                 format!("{ENV_PREFIX}PLATFORMS"),
@@ -104,9 +104,6 @@ impl Environment<'_> {
             ),
             ("PIXI_PROMPT".to_string(), format!("({}) ", prompt)),
         ]);
-
-        // Add the activation environment variables
-        map.extend(self.activation_env(Some(Platform::current())));
         map
     }
 }
@@ -114,7 +111,6 @@ impl Environment<'_> {
 /// Get the complete activator for the environment.
 /// This method will create an activator for the environment and add the activation scripts from the project.
 /// The activator will be created for the current platform and the default shell.
-/// The activation scripts from the environment will be checked for existence and the extension will be checked for correctness.
 pub fn get_activator<'p>(
     environment: &'p Environment<'p>,
     shell: ShellEnum,
@@ -162,10 +158,15 @@ pub fn get_activator<'p>(
         .activation_scripts
         .extend(additional_activation_scripts);
 
-    // Add the environment variables from the project.
+    // Add the environment variables from the project (pre-activation script vars).
     activator
         .env_vars
         .extend(get_static_environment_variables(environment));
+
+    // Add environment variables that should be applied after activation scripts run.
+    activator
+        .post_activation_env_vars
+        .extend(environment.activation_env(Some(Platform::current())));
 
     Ok(activator)
 }
@@ -492,8 +493,8 @@ mod tests {
 
     #[test]
     fn test_metadata_env() {
-        let multi_env_project = r#"
-        [project]
+        let multi_env_workspace = r#"
+        [workspace]
         name = "pixi"
         channels = ["conda-forge"]
         platforms = ["linux-64", "osx-64", "win-64"]
@@ -506,7 +507,7 @@ mod tests {
         [environments]
         test = ["test"]
         "#;
-        let project = Workspace::from_str(Path::new("pixi.toml"), multi_env_project).unwrap();
+        let project = Workspace::from_str(Path::new("pixi.toml"), multi_env_workspace).unwrap();
 
         let default_env = project.default_environment();
         let env = default_env.get_metadata_env();
@@ -517,40 +518,46 @@ mod tests {
 
         let test_env = project.environment("test").unwrap();
         let env = test_env.get_metadata_env();
+        let post_activation_env = test_env.activation_env(Some(Platform::current()));
 
         assert_eq!(env.get("PIXI_ENVIRONMENT_NAME").unwrap(), "test");
         assert!(env.get("PIXI_PROMPT").unwrap().contains("pixi"));
         assert!(env.get("PIXI_PROMPT").unwrap().contains("test"));
-        assert!(env.get("TEST").unwrap().contains("123test123"));
+        assert!(
+            post_activation_env
+                .get("TEST")
+                .unwrap()
+                .contains("123test123")
+        );
     }
 
     #[test]
     fn test_metadata_project_env() {
-        let project = r#"
-        [project]
+        let workspace = r#"
+        [workspace]
         name = "pixi"
         version = "0.1.0"
         channels = ["conda-forge"]
         platforms = ["linux-64", "osx-64", "win-64"]
         "#;
-        let project = Workspace::from_str(Path::new("pixi.toml"), project).unwrap();
-        let env = project.get_metadata_env();
+        let workspace = Workspace::from_str(Path::new("pixi.toml"), workspace).unwrap();
+        let env = workspace.get_metadata_env();
 
         assert_eq!(
             env.get("PIXI_PROJECT_NAME").unwrap(),
-            project.display_name()
+            workspace.display_name()
         );
         assert_eq!(
             env.get("PIXI_PROJECT_ROOT").unwrap(),
-            project.root().to_str().unwrap()
+            workspace.root().to_str().unwrap()
         );
         assert_eq!(
             env.get("PIXI_PROJECT_MANIFEST").unwrap(),
-            project.workspace.provenance.path.to_str().unwrap()
+            workspace.workspace.provenance.path.to_str().unwrap()
         );
         assert_eq!(
             env.get("PIXI_PROJECT_VERSION").unwrap(),
-            &project
+            &workspace
                 .workspace
                 .value
                 .workspace
@@ -564,7 +571,7 @@ mod tests {
     #[test]
     fn test_metadata_project_env_order() {
         let project = r#"
-        [project]
+        [workspace]
         name = "pixi"
         channels = [""]
         platforms = ["linux-64", "osx-64", "win-64"]
@@ -574,22 +581,20 @@ mod tests {
         ZZZ = "123test123"
         ZAB = "123test123"
         "#;
-        let project = Workspace::from_str(Path::new("pixi.toml"), project).unwrap();
-        let env = get_static_environment_variables(&project.default_environment());
-
-        // Make sure the user defined environment variables are at the end.
-        assert!(
-            env.keys().position(|key| key == "PIXI_PROJECT_NAME")
-                < env.keys().position(|key| key == "ABC")
-        );
-        assert!(
-            env.keys().position(|key| key == "PIXI_PROJECT_NAME")
-                < env.keys().position(|key| key == "ZZZ")
-        );
+        let workspace = Workspace::from_str(Path::new("pixi.toml"), project).unwrap();
+        let post_activation_env = workspace
+            .default_environment()
+            .activation_env(Some(Platform::current()));
 
         // Make sure the user defined environment variables are sorted by input order.
-        assert!(env.keys().position(|key| key == "ABC") < env.keys().position(|key| key == "ZZZ"));
-        assert!(env.keys().position(|key| key == "ZZZ") < env.keys().position(|key| key == "ZAB"));
+        assert!(
+            post_activation_env.keys().position(|key| key == "ABC")
+                < post_activation_env.keys().position(|key| key == "ZZZ")
+        );
+        assert!(
+            post_activation_env.keys().position(|key| key == "ZZZ")
+                < post_activation_env.keys().position(|key| key == "ZAB")
+        );
     }
 
     #[test]
@@ -612,8 +617,8 @@ mod tests {
     #[tokio::test]
     async fn test_run_activation_cache_based_on_lockfile() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let project = r#"
-        [project]
+        let workspace = r#"
+        [workspace]
         name = "pixi"
         channels = []
         platforms = []
@@ -622,7 +627,7 @@ mod tests {
         TEST = "ACTIVATION123"
         "#;
         let project =
-            Workspace::from_str(temp_dir.path().join("pixi.toml").as_path(), project).unwrap();
+            Workspace::from_str(temp_dir.path().join("pixi.toml").as_path(), workspace).unwrap();
         let default_env = project.default_environment();
 
         // Don't create cache, by not giving it a lockfile
@@ -728,8 +733,8 @@ packages:
     #[tokio::test]
     async fn test_run_activation_cache_based_on_activation_env() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let project = r#"
-        [project]
+        let workspace = r#"
+        [workspace]
         name = "pixi"
         channels = []
         platforms = []
@@ -738,7 +743,7 @@ packages:
         TEST = "ACTIVATION123"
         "#;
         let project =
-            Workspace::from_str(temp_dir.path().join("pixi.toml").as_path(), project).unwrap();
+            Workspace::from_str(temp_dir.path().join("pixi.toml").as_path(), workspace).unwrap();
         let default_env = project.default_environment();
         let env = run_activation(
             &default_env,
@@ -758,8 +763,8 @@ packages:
         tokio_fs::write(&cache_file, modified).await.unwrap();
 
         // Check that the cache is invalidated when the activation.env changes.
-        let project = r#"
-        [project]
+        let workspace = r#"
+        [workspace]
         name = "pixi"
         channels = []
         platforms = []
@@ -769,7 +774,7 @@ packages:
         TEST2 = "ACTIVATION1234"
         "#;
         let project =
-            Workspace::from_str(temp_dir.path().join("pixi.toml").as_path(), project).unwrap();
+            Workspace::from_str(temp_dir.path().join("pixi.toml").as_path(), workspace).unwrap();
         let default_env = project.default_environment();
         let env = run_activation(
             &default_env,
@@ -791,77 +796,4 @@ packages:
             "The new variable should be set"
         );
     }
-
-    // This test works, most of the times.., so this is a good test to run locally.
-    // But it is to flaky for CI unfortunately!
-    // #[tokio::test]
-    // async fn test_run_activation_based_on_existing_env(){
-    //     let temp_dir = tempfile::tempdir().unwrap();
-    //     let project = r#"
-    //     [project]
-    //     name = "pixi"
-    //     channels = []
-    //     platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
-    //
-    //     [target.unix.activation.env]
-    //     TEST_ENV_VAR = "${TEST_ENV_VAR}_and_some_more"
-    //
-    //     [target.win.activation.env]
-    //     TEST_ENV_VAR = "%TEST_ENV_VAR%_and_some_more"
-    //     "#;
-    //     let project =
-    //         Project::from_str(temp_dir.path().join("pixi.toml").as_path(), project).unwrap();
-    //     let default_env = project.default_environment();
-    //
-    //     // Set the environment variable
-    //     std::env::set_var("TEST_ENV_VAR", "test_value");
-    //
-    //     // Run the activation script
-    //     let env = run_activation(
-    //         &default_env,
-    //         &CurrentEnvVarBehavior::Include,
-    //         Some(&LockFile::default()),
-    //         false,
-    //         true,
-    //     ).await.unwrap();
-    //
-    //     // Check that the environment variable is set correctly
-    //     assert_eq!(env.get("TEST_ENV_VAR").unwrap(), "test_value_and_some_more");
-    //
-    //     // Modify the environment variable
-    //     let cache_file = project.default_environment().activation_cache_file_path();
-    //     let contents = tokio_fs::read_to_string(&cache_file).await.unwrap();
-    //     let modified = contents.replace("test_value_and_some_more", "modified_cache");
-    //     tokio_fs::write(&cache_file, modified).await.unwrap();
-    //
-    //     // Run the activation script
-    //     let env = run_activation(
-    //         &default_env,
-    //         &CurrentEnvVarBehavior::Include,
-    //         Some(&LockFile::default()),
-    //         false,
-    //         true,
-    //     ).await.unwrap();
-    //
-    //     // Check that the environment variable is taken from cache
-    //     assert_eq!(env.get("TEST_ENV_VAR").unwrap(), "modified_cache");
-    //
-    //     // Reset the environment variable
-    //     std::env::set_var("TEST_ENV_VAR", "different_test_value");
-    //
-    //     // Run the activation script
-    //     let env = run_activation(
-    //         &default_env,
-    //         &CurrentEnvVarBehavior::Include,
-    //         Some(&LockFile::default()),
-    //         false,
-    //         true,
-    //     ).await.unwrap();
-    //
-    //     // Check that the environment variable reset, thus the cache was invalidated.
-    //     assert_eq!(env.get("TEST_ENV_VAR").unwrap(), "different_test_value_and_some_more");
-    //
-    //     // Unset the environment variable
-    //     std::env::remove_var("TEST_ENV_VAR");
-    // }
 }

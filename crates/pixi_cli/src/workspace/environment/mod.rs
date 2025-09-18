@@ -7,7 +7,7 @@ use pixi_core::WorkspaceLocator;
 
 use crate::cli_config::WorkspaceConfig;
 
-/// Commands to manage project environments.
+/// Commands to manage workspace environments.
 #[derive(Parser, Debug)]
 pub struct Args {
     #[clap(flatten)]

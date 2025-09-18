@@ -1326,8 +1326,8 @@ impl Config {
         ]
     }
 
-    /// Merge the given config into the current one.
-    /// The given config will have higher priority
+    /// Merge the `other` config into `self`.
+    /// The `other` config will have higher priority
     #[must_use]
     pub fn merge_config(mut self, mut other: Config) -> Self {
         self.mirrors.extend(other.mirrors);
