@@ -135,6 +135,7 @@ impl CondaEnvFile {
         let mut channels = parse_channels(self.channels().clone());
         let (conda_deps, pip_deps, extra_channels) =
             parse_dependencies(self.dependencies().clone())?;
+
         channels.extend(extra_channels);
         let mut channels: Vec<_> = channels.into_iter().unique().collect();
         if channels.is_empty() {
