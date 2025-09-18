@@ -1,6 +1,7 @@
 # Making a Pixi workspace
 
 Pixi's biggest strength is its ability to create reproducible, powerful, and flexible workspaces.
+A workspace lives in a directory on your system, and is a collection of Pixi environments that can be used to develop one or many projects in that directory.
 Let's go over the common steps to create a simple Pixi workspace.
 
 ## Creating a Pixi workspace
