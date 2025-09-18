@@ -131,6 +131,7 @@ impl CondaEnvFile {
         Vec<pep508_rs::Requirement>,
         Vec<NamedChannelOrUrl>,
     )> {
+        // TODO: should we be applying `config.channel_config` for parsed channels too?
         let mut channels = parse_channels(self.channels().clone());
         let (conda_deps, pip_deps, extra_channels) =
             parse_dependencies(self.dependencies().clone())?;
