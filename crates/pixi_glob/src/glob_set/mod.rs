@@ -82,7 +82,12 @@ mod tests {
     fn sorted_paths(entries: Vec<ignore::DirEntry>, root: &std::path::Path) -> Vec<String> {
         let mut paths: Vec<_> = entries
             .into_iter()
-            .map(|entry| relative_path(entry.path(), root).display().to_string())
+            .map(|entry| {
+                relative_path(entry.path(), root)
+                    .display()
+                    .to_string()
+                    .replace('\\', "/")
+            })
             .collect();
         paths.sort();
         paths
