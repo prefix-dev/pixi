@@ -181,4 +181,23 @@ mod tests {
         - pixi.toml
         "###);
     }
+
+    /// Because we are using ignore which uses gitignore style parsing of globs we need to do some extra processing
+    /// to make this more like unix globs in this case we check this explicitly here
+    #[test]
+    fn single_file_match() {
+        let temp_dir = tempdir().unwrap();
+        let workspace = temp_dir.path().join("workspace");
+        fs::create_dir(&workspace).unwrap();
+        let subdir = workspace.join("subdir");
+        fs::create_dir(&subdir).unwrap();
+
+        File::create(subdir.join("pixi.toml")).unwrap();
+
+        let glob_set = GlobSet::create(vec!["./pixi.toml"]);
+        let entries = glob_set.collect_matching(&workspace).unwrap();
+
+        let paths = sorted_paths(entries, &workspace);
+        assert_yaml_snapshot!(paths, @"[]");
+    }
 }

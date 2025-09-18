@@ -22,7 +22,8 @@ impl SimpleGlob {
         Self { glob, negated }
     }
 
-    pub fn pattern(&self) -> &str {
+    /// Returns the pattern without leading !
+    pub fn normalized_pattern(&self) -> &str {
         &self.glob
     }
 
@@ -30,6 +31,7 @@ impl SimpleGlob {
         self.negated
     }
 
+    /// Returns a proper glob pattern
     pub fn to_pattern(&self) -> String {
         if self.negated {
             format!("!{}", self.glob)
@@ -246,6 +248,9 @@ pub fn split_path_and_glob(input: &str) -> (&str, &str) {
         }
     }
 
+    // In this case we have not found any meta patterns and we can assume the glob can be in the form of a file match like
+    // foo/bar.txt, because we will need to add a current directory `./` separator as we are using ignore and gitignore style
+    // glob rules
     ("", input)
 }
 
@@ -288,7 +293,7 @@ mod tests {
             .globs
             .iter()
             .map(|g| SnapshotGlob {
-                pattern: g.pattern().to_string(),
+                pattern: g.normalized_pattern().to_string(),
                 negated: g.is_negated(),
             })
             .collect();

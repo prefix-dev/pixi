@@ -79,7 +79,7 @@ pub fn walk_globs(
 ) -> Result<Vec<ignore::DirEntry>, GlobSetError> {
     let mut ob = ignore::overrides::OverrideBuilder::new(effective_walk_root);
     for glob in globs {
-        let pattern = glob.to_pattern();
+        let pattern = anchor_literal_pattern(glob.to_pattern());
         ob.add(&pattern).map_err(GlobSetError::BuildOverrides)?;
     }
 
@@ -121,4 +121,82 @@ pub fn walk_globs(
     );
 
     results.into_iter().try_collect()
+}
+
+/// Ensures plain file names behave as "current directory" matches for the ignore crate.
+///
+/// Gitignore syntax treats bare literals (e.g. `pixi.toml`) as "match anywhere below the root".
+/// To keep parity with the previous wax-based globbing, which treated them like Unix globs anchored
+/// to the working directory, we prepend a `/` so the override only applies at the search root.
+/// Negated patterns stay untouched so `!foo` keeps behaving like a gitignore-style global
+/// exclusion. Anything containing meta characters or directory separators is also left untouched.
+fn anchor_literal_pattern(pattern: String) -> String {
+    fn needs_anchor(body: &str) -> bool {
+        if body.is_empty() {
+            return false;
+        }
+        // These will not occur when used in conjunction with GlobWalkRoot, but lets keep
+        // them for if this is not used in conjunction with these
+        if body.starts_with("./") || body.starts_with('/') || body.starts_with("../") {
+            return false;
+        }
+        if body.contains('/') {
+            return false;
+        }
+        if body.chars().any(|c| matches!(c, '*' | '?' | '[' | '{')) {
+            return false;
+        }
+        true
+    }
+
+    let (negated, body) = if let Some(rest) = pattern.strip_prefix('!') {
+        (true, rest)
+    } else {
+        (false, pattern.as_str())
+    };
+
+    if needs_anchor(&body) && !negated {
+        let mut anchored = String::with_capacity(pattern.len() + 2);
+        anchored.push('/');
+        anchored.push_str(body);
+        anchored
+    } else {
+        pattern
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::anchor_literal_pattern;
+
+    #[test]
+    fn anchors_literal_file_patterns() {
+        assert_eq!(
+            anchor_literal_pattern("pixi.toml".to_string()),
+            "/pixi.toml"
+        );
+        // Patterns that already specify a subdirectory should stay untouched.
+        assert_eq!(
+            anchor_literal_pattern("foo/bar/baz.txt".to_string()),
+            "foo/bar/baz.txt"
+        );
+    }
+
+    #[test]
+    fn leaves_non_literal_patterns_untouched() {
+        assert_eq!(
+            anchor_literal_pattern("!pixi.toml".to_string()),
+            "!pixi.toml"
+        );
+        assert_eq!(anchor_literal_pattern("*.toml".to_string()), "*.toml");
+        assert_eq!(anchor_literal_pattern("!*.toml".to_string()), "!*.toml");
+        assert_eq!(
+            anchor_literal_pattern("src/lib.rs".to_string()),
+            "src/lib.rs"
+        );
+        assert_eq!(
+            anchor_literal_pattern("../pixi.toml".to_string()),
+            "../pixi.toml"
+        );
+    }
 }
