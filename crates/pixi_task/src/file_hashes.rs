@@ -79,7 +79,6 @@ impl FileHashes {
         // Construct the custom filter
         let mut ignore_builder = vec![];
         for ignore_line in filters {
-            dbg!(ignore_line.as_ref());
             let path = root.join(ignore_line.as_ref());
             let pat = if ignore_line.as_ref().ends_with('/') {
                 format!("{}**", ignore_line.as_ref())
@@ -91,7 +90,6 @@ impl FileHashes {
 
             ignore_builder.push(pat);
         }
-        dbg!(&ignore_builder);
 
         let glob = GlobSet::create(ignore_builder.iter().map(|s| s.as_str()));
 
