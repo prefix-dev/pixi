@@ -671,6 +671,8 @@ pub async fn resolve_pypi(
             .map_err(|e| create_solve_error(e, &conda_python_packages))
     });
 
+    tracing::debug!("starting uv pypi resolution");
+
     // We try to distinguish between build dispatch panics and any other panics that occur
     let resolution = match resolution_future.catch_unwind().await {
         Ok(result) => result?,

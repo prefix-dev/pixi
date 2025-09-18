@@ -1,0 +1,11 @@
+[workspace]
+channels = ["conda-forge"]
+name = "test"
+platforms = ["osx-arm64"]
+version = "0.1.0"
+
+[dependencies]
+python = "*"
+
+[pypi-dependencies]
+kahypar = ">=1.0"

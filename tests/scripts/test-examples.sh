@@ -16,3 +16,6 @@ pixi run -v --manifest-path examples/conda_mapping/pixi.toml test
 echo "Running the solve-groups example:"
 pixi run -v --manifest-path examples/solve-groups/pixi.toml -e min-py38 test
 pixi run -v --manifest-path examples/solve-groups/pixi.toml -e max-py310 test
+
+echo "running panic example:"
+pixi lock -v --manifest-path examples/panic/pixi.toml
