@@ -1,3 +1,16 @@
+//! Convenience wrapper around `ignore` that emulates the glob semantics pixi expects.
+//!
+//! Notable behavioural tweaks compared to vanilla gitignore parsing, so that it behaves more like unix globbing with special rules:
+//! - Globs are rebased to a shared search root so patterns like `../src/*.rs` keep working even
+//!   when the caller starts from a nested directory.
+//! - Negated patterns that start with `**/` are treated as global exclusions. We skip rebasing
+//!   those so `!**/build.rs` still hides every `build.rs`, regardless of the effective root.
+//! - Plain file names without meta characters (e.g. `pixi.toml`) are anchored to the search root
+//!   instead of matching anywhere below it. This mirrors the behaviour we had with the previous
+//!   wax-based implementation.
+//! - Negated literals (e.g. `!pixi.toml`) are anchored the same way, which lets recipes ignore a
+//!   single file at the root without accidentally hiding copies deeper in the tree.
+
 mod glob_walk_root;
 mod walk;
 
@@ -194,7 +207,7 @@ mod tests {
 
         File::create(subdir.join("pixi.toml")).unwrap();
 
-        let glob_set = GlobSet::create(vec!["./pixi.toml"]);
+        let glob_set = GlobSet::create(vec!["pixi.toml"]);
         let entries = glob_set.collect_matching(&workspace).unwrap();
 
         let paths = sorted_paths(entries, &workspace);

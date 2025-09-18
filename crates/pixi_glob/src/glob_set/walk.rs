@@ -128,8 +128,9 @@ pub fn walk_globs(
 /// Gitignore syntax treats bare literals (e.g. `pixi.toml`) as "match anywhere below the root".
 /// To keep parity with the previous wax-based globbing, which treated them like Unix globs anchored
 /// to the working directory, we prepend a `/` so the override only applies at the search root.
-/// Negated patterns stay untouched so `!foo` keeps behaving like a gitignore-style global
-/// exclusion. Anything containing meta characters or directory separators is also left untouched.
+/// Literals are anchored whether they are positive or negated—`foo` matches only the root file and
+/// `!foo` excludes only that file—while anything containing meta characters or directory separators
+/// is left untouched and keeps gitignore semantics.
 fn anchor_literal_pattern(pattern: String) -> String {
     fn needs_anchor(body: &str) -> bool {
         if body.is_empty() {
@@ -155,8 +156,11 @@ fn anchor_literal_pattern(pattern: String) -> String {
         (false, pattern.as_str())
     };
 
-    if needs_anchor(&body) && !negated {
+    if needs_anchor(body) {
         let mut anchored = String::with_capacity(pattern.len() + 2);
+        if negated {
+            anchored.push('!');
+        }
         anchored.push('/');
         anchored.push_str(body);
         anchored
@@ -186,7 +190,7 @@ mod tests {
     fn leaves_non_literal_patterns_untouched() {
         assert_eq!(
             anchor_literal_pattern("!pixi.toml".to_string()),
-            "!pixi.toml"
+            "!/pixi.toml"
         );
         assert_eq!(anchor_literal_pattern("*.toml".to_string()), "*.toml");
         assert_eq!(anchor_literal_pattern("!*.toml".to_string()), "!*.toml");
