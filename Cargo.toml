@@ -123,7 +123,6 @@ uv-platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.8.5" }
 uv-pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.8.5" }
 uv-requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.8.5" }
 
-wax = "0.6.0"
 which = "8.0.0"
 
 # Rattler crates

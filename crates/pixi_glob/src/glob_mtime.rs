@@ -5,8 +5,7 @@ use std::{
 
 use thiserror::Error;
 
-use crate::glob_set;
-use crate::{GlobSetIgnore, GlobSetIgnoreError};
+use crate::{GlobSet, GlobSetError};
 
 /// Contains the newest modification time for the files that match the given glob patterns.
 #[derive(Debug, Clone)]
@@ -28,9 +27,7 @@ pub enum GlobModificationTimeError {
     #[error("error calculating modification time for {}", .0.display())]
     CalculateMTime(PathBuf, #[source] std::io::Error),
     #[error(transparent)]
-    GlobSet(#[from] glob_set::GlobSetError),
-    #[error(transparent)]
-    GlobSetIgnore(#[from] GlobSetIgnoreError),
+    GlobSetIgnore(#[from] GlobSetError),
 }
 
 impl GlobModificationTime {
@@ -54,7 +51,7 @@ impl GlobModificationTime {
             root.pop();
         }
 
-        let glob_set = GlobSetIgnore::create(globs);
+        let glob_set = GlobSet::create(globs);
         let entries = glob_set.collect_matching(root_dir)?;
 
         let mut latest = None;

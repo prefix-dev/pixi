@@ -10,8 +10,7 @@ use std::{
 use rattler_digest::{Sha256, Sha256Hash, digest::Digest};
 use thiserror::Error;
 
-use crate::glob_set::{self};
-use crate::{GlobSetIgnore, GlobSetIgnoreError};
+use crate::{GlobSet, GlobSetError};
 
 /// Contains a hash of the files that match the given glob patterns.
 #[derive(Debug, Clone, Default)]
@@ -25,9 +24,6 @@ pub struct GlobHash {
 #[derive(Error, Debug)]
 #[allow(missing_docs)]
 pub enum GlobHashError {
-    #[error(transparent)]
-    FilterGlobError(#[from] glob_set::GlobSetError),
-
     #[error("during line normalization, failed to access {}", .0.display())]
     NormalizeLineEnds(PathBuf, #[source] io::Error),
 
@@ -35,7 +31,7 @@ pub enum GlobHashError {
     Cancelled,
 
     #[error(transparent)]
-    GlobSetIgnore(#[from] GlobSetIgnoreError),
+    GlobSetIgnore(#[from] GlobSetError),
 }
 
 impl GlobHash {
@@ -50,7 +46,7 @@ impl GlobHash {
             return Ok(Self::default());
         }
 
-        let glob_set = GlobSetIgnore::create(globs);
+        let glob_set = GlobSet::create(globs);
         // Collect matching entries and convert to concrete DirEntry list, propagating errors.
         let mut entries: Vec<ignore::DirEntry> = glob_set.collect_matching(root_dir)?;
 

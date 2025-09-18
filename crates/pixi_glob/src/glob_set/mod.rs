@@ -1,272 +1,184 @@
-use std::{
-    io,
-    path::{Path, PathBuf},
-};
-
-use itertools::{Either, Itertools};
-use thiserror::Error;
-use wax::{Glob, WalkEntry};
-
-mod glob_set_ignore;
 mod glob_walk_root;
 mod walk;
 
-pub use glob_set_ignore::{GlobSetIgnore, GlobSetIgnoreError};
+use std::path::{Path, PathBuf};
 
-/// A set of globs to include and exclude from a directory.
-pub struct GlobSet<'t> {
-    /// The globs to include in the filter.
-    pub include: Vec<Glob<'t>>,
-    /// The globs to exclude from the filter.
-    pub exclude: Vec<Glob<'t>>,
+use thiserror::Error;
+
+use glob_walk_root::{GlobWalkRoot, WalkRootsError};
+
+/// A glob set implemented using the `ignore` crate (globset + fast walker).
+pub struct GlobSet {
+    /// Include patterns (gitignore-style), without leading '!'.
+    pub walk_roots: GlobWalkRoot,
 }
 
 #[derive(Error, Debug)]
 #[allow(missing_docs)]
 pub enum GlobSetError {
-    #[error("failed to access {}", .0.display())]
-    Io(PathBuf, #[source] io::Error),
+    #[error("failed to build globs")]
+    BuildOverrides(#[source] ignore::Error),
+
+    #[error("walk error at {0}")]
+    Walk(PathBuf, #[source] ignore::Error),
 
     #[error(transparent)]
-    DirWalk(#[from] io::Error),
-
-    #[error("failed to read metadata for {0}")]
-    Metadata(PathBuf, #[source] wax::WalkError),
-
-    #[error(transparent)]
-    Build(#[from] wax::BuildError),
-
-    #[error(transparent)]
-    StripPrefix(#[from] std::path::StripPrefixError),
+    WalkRoots(#[from] WalkRootsError),
 }
 
-impl<'t> GlobSet<'t> {
-    /// Create a new `GlobSet` from a list of globs.
-    ///
-    /// The globs are split into inclusion and exclusion globs based on whether they
-    /// start with `!`.
-    pub fn create(globs: impl IntoIterator<Item = &'t str>) -> Result<GlobSet<'t>, GlobSetError> {
-        // Split the globs into inclusion and exclusion globs based on whether they
-        // start with `!`.
-        let (inclusion_globs, exclusion_globs): (Vec<_>, Vec<_>) =
-            globs.into_iter().partition_map(|g| {
-                g.strip_prefix("!")
-                    .map(Either::Right)
-                    .unwrap_or(Either::Left(g))
-            });
-
-        // Parse all globs
-        let inclusion_globs = inclusion_globs
-            .into_iter()
-            .map(Glob::new)
-            .collect::<Result<Vec<_>, _>>()?;
-        let exclusion_globs = exclusion_globs
-            .into_iter()
-            .map(Glob::new)
-            .collect::<Result<Vec<_>, _>>()?;
-
-        Ok(Self {
-            include: inclusion_globs,
-            exclude: exclusion_globs,
-        })
+impl GlobSet {
+    /// Create a new `GlobSetIgnore` from a list of patterns. Leading '!' indicates exclusion.
+    pub fn create<'t>(globs: impl IntoIterator<Item = &'t str>) -> GlobSet {
+        GlobSet {
+            walk_roots: GlobWalkRoot::build(globs).expect("should not fail"),
+        }
     }
 
-    /// Create a function that filters out files that match the globs.
-    pub fn filter_directory(
-        &'t self,
-        root_dir: &Path,
-    ) -> impl Iterator<Item = Result<WalkEntry<'static>, GlobSetError>> + 't {
-        let root_dir = root_dir.to_path_buf();
-        let entries =
-            self.include
-                .iter()
-                .flat_map(move |glob| {
-                    let (effective_walk_root, glob) = if glob.has_semantic_literals() {
-                        // if the glob has semantic literals, we need to
-                        // join the root directory with the glob prefix
-                        // and use that as the effective walk root.
-                        // Example:
-                        // if `root_dir` is "/path/to/src" and `glob` is "../**/*.cpp",
-                        //   `effective_walk_root` becomes "/path/to".
-                        let (prefix, glob) = glob.clone().partition();
-                        (root_dir.join(&prefix), glob)
-                    } else {
-                        (root_dir.clone(), glob.clone())
-                    };
+    /// Walks files matching all include/exclude patterns using a single parallel walker.
+    /// Returns a flat Vec of results to keep lifetimes simple and predictable.
+    pub fn collect_matching(&self, root_dir: &Path) -> Result<Vec<ignore::DirEntry>, GlobSetError> {
+        if self.walk_roots.is_empty() {
+            return Ok(vec![]);
+        }
 
-                    let start = std::time::Instant::now();
-                    let walkable = glob
-                        .walk(&effective_walk_root)
-                        .not(self.exclude.clone())
-                        .expect("since the globs are already parsed this should not error")
-                        .collect_vec();
-
-                    let elapsed = start.elapsed();
-                    // Log per-include timing to help identify slow patterns
-                    // Uses Debug formatting for the glob pattern.
-                    let not_dbg = self
-                        .exclude
-                        .iter()
-                        .map(|e| e.to_string())
-                        .collect_vec()
-                        .join(",");
-                    tracing::error!(
-                        glob = glob.to_string(),
-                        not = not_dbg,
-                        matched = walkable.len(),
-                        elapsed_ms = elapsed.as_millis(),
-                        "glob include walk completed"
-                    );
-
-                    walkable.into_iter().map(move |w| {
-                        w.map_err(|e| GlobSetError::Metadata(effective_walk_root.clone(), e))
-                    })
-                })
-                .filter_map(|entry| {
-                    match entry {
-                        Ok(entry) if entry.file_type().is_dir() => None,
-                        Ok(entry) => Some(Ok(entry)),
-                        Err(e) => {
-                            match e {
-                                GlobSetError::Metadata(_, we) => {
-                                    let path = we.path().map(Path::to_path_buf);
-                                    let io_err = std::io::Error::from(we);
-                                    match io_err.kind() {
-                                        // Ignore DONE and permission errors
-                                        io::ErrorKind::NotFound
-                                        | io::ErrorKind::PermissionDenied => None,
-                                        _ => Some(Err(if let Some(path) = path {
-                                            GlobSetError::Io(path, io_err)
-                                        } else {
-                                            GlobSetError::DirWalk(io_err)
-                                        })),
-                                    }
-                                }
-                                _ => Some(Err(e)),
-                            }
-                        }
-                    }
-                });
-        entries
+        let rebased = self.walk_roots.rebase(root_dir)?;
+        walk::walk_globs(&rebased.root, &rebased.globs)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::GlobSet;
-    use fs_err::File;
-    use std::path::PathBuf;
+    use fs_err::{self as fs, File};
+    use insta::assert_yaml_snapshot;
+    use std::path::{Path, PathBuf};
     use tempfile::tempdir;
 
+    fn relative_path(path: &Path, root: &Path) -> PathBuf {
+        if let Ok(rel) = path.strip_prefix(root) {
+            return rel.to_path_buf();
+        }
+        if let Some(parent) = root.parent() {
+            if let Ok(rel) = path.strip_prefix(parent) {
+                return std::path::Path::new("..").join(rel);
+            }
+        }
+        path.to_path_buf()
+    }
+
+    fn sorted_paths(entries: Vec<ignore::DirEntry>, root: &std::path::Path) -> Vec<String> {
+        let mut paths: Vec<_> = entries
+            .into_iter()
+            .map(|entry| relative_path(entry.path(), root).display().to_string())
+            .collect();
+        paths.sort();
+        paths
+    }
+
+    // Test out a normal non-reseated globbing approach
     #[test]
-    fn test_filter_globs_inclusion_exclusion() {
+    fn collect_matching_inclusion_exclusion() {
         let temp_dir = tempdir().unwrap();
         let root_path = temp_dir.path();
 
-        // Create files and directories
         File::create(root_path.join("include1.txt")).unwrap();
         File::create(root_path.join("include2.log")).unwrap();
         File::create(root_path.join("exclude.txt")).unwrap();
-        fs_err::create_dir(root_path.join("subdir")).unwrap();
+        fs::create_dir(root_path.join("subdir")).unwrap();
         File::create(root_path.join("subdir/include_subdir.txt")).unwrap();
 
-        // Test globs: include all .txt but exclude exclude.txt
-        let filter_globs = GlobSet::create(vec!["**/*.txt", "!exclude.txt"]).unwrap();
+        let glob_set = GlobSet::create(vec!["**/*.txt", "!exclude.txt"]);
+        let entries = glob_set.collect_matching(root_path).unwrap();
 
-        // Filter directory and get results as strings
-        let mut filtered_files: Vec<_> = filter_globs
-            .filter_directory(root_path)
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap()
-            .into_iter()
-            .map(|p| p.path().strip_prefix(root_path).unwrap().to_path_buf())
-            .collect();
-
-        // Assert the expected files are present
-        filtered_files.sort();
-
-        let mut expected = vec![
-            "include1.txt".parse::<PathBuf>().unwrap(),
-            "subdir/include_subdir.txt".parse().unwrap(),
-        ];
-        expected.sort();
-        assert_eq!(filtered_files, expected);
+        let paths = sorted_paths(entries, root_path);
+        assert_yaml_snapshot!(paths, @r###"
+        - include1.txt
+        - subdir/include_subdir.txt
+        "###);
     }
 
+    // Check some general globbing support and make sure the correct things do not match
     #[test]
-    fn test_filters_with_relatives_globs() {
-        // In this test we want to make sure that when globbing over
-        // patterns that contains semantic relative path, like
-        // ../pixi.toml or ../sources/*.toml, we are able to
-        // distinguish between glob and just a semantic path.
+    fn collect_matching_relative_globs() {
         let temp_dir = tempdir().unwrap();
         let root_path = temp_dir.path();
+        let search_root = root_path.join("workspace");
+        fs::create_dir(&search_root).unwrap();
 
-        let temp_path_as_root = temp_dir.path().join("somewhere_inside");
-        fs_err::create_dir(&temp_path_as_root).unwrap();
-
-        // Create files and directories
-        fs_err::create_dir(root_path.join("subdir")).unwrap();
+        fs::create_dir(root_path.join("subdir")).unwrap();
         File::create(root_path.join("subdir/some_inner_source.cpp")).unwrap();
+        File::create(root_path.join("subdir/dont-match.txt")).unwrap();
+        File::create(search_root.join("match.txt")).unwrap();
 
-        // Test globs: we want to get the file inside the subdir using a relative glob.
-        let filter_globs = GlobSet::create(vec!["../**/*.cpp", "!exclude.txt"]).unwrap();
+        let glob_set = GlobSet::create(vec!["../**/*.cpp", "*.txt"]);
+        let entries = glob_set.collect_matching(&search_root).unwrap();
 
-        // Filter directory and get results as strings
-        let mut filtered_files: Vec<_> = filter_globs
-            // pretend that we are in the workspace folder
-            // and our recipe yaml is living inside some folder
-            // that will point outside
-            .filter_directory(&temp_path_as_root)
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap()
-            .into_iter()
-            .map(|p| {
-                p.path()
-                    .strip_prefix(&temp_path_as_root)
-                    .unwrap()
-                    .to_path_buf()
-            })
-            .collect();
-
-        // Assert the expected files are present
-        filtered_files.sort();
-
-        let expected = vec![
-            "../subdir/some_inner_source.cpp"
-                .parse::<PathBuf>()
-                .unwrap(),
-        ];
-        assert_eq!(filtered_files, expected);
+        let paths = sorted_paths(entries, &search_root);
+        assert_yaml_snapshot!(paths, @r###"
+        - "../subdir/some_inner_source.cpp"
+        - match.txt
+        "###);
     }
 
+    // Check that single matching file glob works with rebasing
     #[test]
-    fn test_filters_with_just_a_file_glob() {
+    fn collect_matching_file_glob() {
         let temp_dir = tempdir().unwrap();
-        let root_path = temp_dir.path();
+        let root_path = temp_dir.path().join("workspace");
+        fs::create_dir(&root_path).unwrap();
 
-        // Create files and directories
         File::create(root_path.join("pixi.toml")).unwrap();
 
-        // Test globs: include pixi.toml
-        let filter_globs = GlobSet::create(vec!["pixi.toml"]).unwrap();
+        let glob_set = GlobSet::create(vec!["pixi.toml", "../*.cpp"]);
+        let entries = glob_set.collect_matching(&root_path).unwrap();
 
-        // Filter directory and get results as strings
-        let mut filtered_files: Vec<_> = filter_globs
-            // pretend that we are in the workspace folder
-            // and our recipe yaml is living inside some folder
-            // that will point outside
-            .filter_directory(root_path)
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap()
-            .into_iter()
-            .map(|p| p.path().strip_prefix(root_path).unwrap().to_path_buf())
-            .collect();
+        let paths = sorted_paths(entries, &root_path);
+        assert_yaml_snapshot!(paths, @"- pixi.toml");
+    }
 
-        // Assert the expected files are present
-        filtered_files.sort();
+    // Check that global ignores !**/ patterns ignore everything even if the root has been
+    // rebased to a parent folder, this is just a convenience assumed to be preferable
+    // from a user standpoint
+    #[test]
+    fn check_global_ignore_ignores() {
+        let temp_dir = tempdir().unwrap();
+        let root_path = temp_dir.path().join("workspace");
+        fs::create_dir(&root_path).unwrap();
 
-        let expected = vec!["pixi.toml".parse::<PathBuf>().unwrap()];
-        assert_eq!(filtered_files, expected);
+        File::create(root_path.join("pixi.toml")).unwrap();
+        File::create(root_path.join("foo.txt")).unwrap();
+        // This would be picked up otherwise
+        File::create(temp_dir.path().join("foo.txt")).unwrap();
+
+        let glob_set = GlobSet::create(vec!["pixi.toml", "!**/foo.txt"]);
+        let entries = glob_set.collect_matching(&root_path).unwrap();
+
+        let paths = sorted_paths(entries, &root_path);
+        assert_yaml_snapshot!(paths, @"- pixi.toml");
+    }
+
+    // Check that we can ignore a subset of file when using the rebasing
+    // So we want to match all `.txt` and `*.toml` files except in the root location
+    // where want to exclude `foo.txt`
+    #[test]
+    fn check_subset_ignore() {
+        let temp_dir = tempdir().unwrap();
+        let root_path = temp_dir.path().join("workspace");
+        fs::create_dir(&root_path).unwrap();
+
+        File::create(root_path.join("pixi.toml")).unwrap();
+        // This should not be picked up
+        File::create(root_path.join("foo.txt")).unwrap();
+        // But because of the non-global ignore this should be
+        File::create(temp_dir.path().join("foo.txt")).unwrap();
+
+        let glob_set = GlobSet::create(vec!["../*.{toml,txt}", "!foo.txt"]);
+        let entries = glob_set.collect_matching(&root_path).unwrap();
+
+        let paths = sorted_paths(entries, &root_path);
+        assert_yaml_snapshot!(paths, @r###"
+        - "../foo.txt"
+        - pixi.toml
+        "###);
     }
 }

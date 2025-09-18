@@ -1,3 +1,4 @@
+//! Contains the directory walking implementation
 use itertools::Itertools;
 use parking_lot::Mutex;
 use std::path::{Path, PathBuf};
@@ -5,9 +6,9 @@ use std::sync::Arc;
 
 use crate::glob_set::glob_walk_root::SimpleGlob;
 
-use super::GlobSetIgnoreError;
+use super::GlobSetError;
 
-type SharedResults = Arc<Mutex<Option<Vec<Result<ignore::DirEntry, GlobSetIgnoreError>>>>>;
+type SharedResults = Arc<Mutex<Option<Vec<Result<ignore::DirEntry, GlobSetError>>>>>;
 
 struct CollectBuilder {
     // Shared aggregation storage wrapped in an Option so we can `take` at the end.
@@ -17,7 +18,7 @@ struct CollectBuilder {
 
 struct CollectVisitor {
     // Local per-thread buffer to append results without holding the lock.
-    local: Vec<Result<ignore::DirEntry, GlobSetIgnoreError>>,
+    local: Vec<Result<ignore::DirEntry, GlobSetError>>,
     // Reference to the shared sink.
     sink: SharedResults,
     err_root: PathBuf,
@@ -59,11 +60,11 @@ impl ignore::ParallelVisitor for CollectVisitor {
                         std::io::ErrorKind::NotFound | std::io::ErrorKind::PermissionDenied => {}
                         _ => self
                             .local
-                            .push(Err(GlobSetIgnoreError::Walk(self.err_root.clone(), e))),
+                            .push(Err(GlobSetError::Walk(self.err_root.clone(), e))),
                     }
                 } else {
                     self.local
-                        .push(Err(GlobSetIgnoreError::Walk(self.err_root.clone(), e)));
+                        .push(Err(GlobSetError::Walk(self.err_root.clone(), e)));
                 }
             }
         }
@@ -75,15 +76,14 @@ impl ignore::ParallelVisitor for CollectVisitor {
 pub fn walk_globs(
     effective_walk_root: &Path,
     globs: &[SimpleGlob],
-) -> Result<Vec<ignore::DirEntry>, GlobSetIgnoreError> {
+) -> Result<Vec<ignore::DirEntry>, GlobSetError> {
     let mut ob = ignore::overrides::OverrideBuilder::new(effective_walk_root);
     for glob in globs {
         let pattern = glob.to_pattern();
-        ob.add(&pattern)
-            .map_err(GlobSetIgnoreError::BuildOverrides)?;
+        ob.add(&pattern).map_err(GlobSetError::BuildOverrides)?;
     }
 
-    let overrides = ob.build().map_err(GlobSetIgnoreError::BuildOverrides)?;
+    let overrides = ob.build().map_err(GlobSetError::BuildOverrides)?;
 
     let walker = ignore::WalkBuilder::new(effective_walk_root)
         .git_ignore(true)

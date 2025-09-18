@@ -119,7 +119,7 @@ impl GlobWalkRoot {
                 }
             }
 
-            // We skip
+            // We skip !**/ patterns for rebasing, as we would probably always want to apply those
             let skip_rebase =
                 negated && normalized_prefix.as_os_str().is_empty() && pattern.starts_with("**/");
 
@@ -410,6 +410,25 @@ mod tests {
         globs:
           - pattern: baz/.pixi/**
             negated: true
+          - pattern: "*.{cc,cpp}"
+            negated: false
+        "###
+        );
+    }
+
+    #[test]
+    fn single_file_match() {
+        let globs = ["pixi.toml", "../*.{cc,cpp}"];
+
+        let walk_roots = GlobWalkRoot::build(globs).expect("determine should succeed");
+
+        assert_yaml_snapshot!(
+            snapshot_walk_roots(&walk_roots, Path::new("workspace/baz")),
+            @r###"
+        root: workspace
+        globs:
+          - pattern: baz/pixi.toml
+            negated: false
           - pattern: "*.{cc,cpp}"
             negated: false
         "###
