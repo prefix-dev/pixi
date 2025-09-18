@@ -15,8 +15,10 @@ fs-err = { workspace = true }
 itertools = { workspace = true }
 memchr = { workspace = true }
 rattler_digest = { workspace = true }
+rayon = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["sync", "rt"] }
+uv-configuration = { workspace = true }
 wax = { workspace = true }
 
 [dev-dependencies]
