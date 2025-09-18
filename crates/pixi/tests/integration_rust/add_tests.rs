@@ -90,17 +90,17 @@ async fn add_with_channel() {
 
     pixi.init().no_fast_prefix_overwrite(true).await.unwrap();
 
-    pixi.add("conda-forge::py_rattler")
+    pixi.add("https://prefix.dev/conda-forge::py_rattler")
         .with_install(false)
         .with_frozen(true)
         .await
         .unwrap();
 
     pixi.project_channel_add()
-        .with_channel("https://prefix.dev/conda-forge")
+        .with_channel("https://conda.anaconda.org/conda-forge")
         .await
         .unwrap();
-    pixi.add("https://prefix.dev/conda-forge::_r-mutex")
+    pixi.add("https://conda.anaconda.org/conda-forge::_r-mutex")
         .with_install(false)
         .await
         .unwrap();
@@ -115,14 +115,14 @@ async fn add_with_channel() {
     assert_eq!(name, PackageName::try_from("py_rattler").unwrap());
     assert_eq!(
         spec.into_detailed().unwrap().channel.unwrap().as_str(),
-        "conda-forge"
+        "https://prefix.dev/conda-forge"
     );
 
     let (name, spec) = specs.next().unwrap();
     assert_eq!(name, PackageName::try_from("_r-mutex").unwrap());
     assert_eq!(
         spec.into_detailed().unwrap().channel.unwrap().as_str(),
-        "https://prefix.dev/conda-forge"
+        "conda-forge"
     );
 }
 
