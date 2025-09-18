@@ -550,3 +550,70 @@ async fn test_pinned_help_message() {
         "The following PyPI packages have been pinned by the conda solve, and this version may be causing a conflict:\npandas==1.0.0"
     );
 }
+
+#[tokio::test]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn test_uv_index_correctly_parsed() {
+    setup_tracing();
+
+    // Provide a local simple index containing `foo` used in build-system requires.
+    let simple = PyPIDatabase::new()
+        .with(PyPIPackage::new("foo", "1.0.0"))
+        .into_simple_index()
+        .expect("failed to create simple index");
+
+    let pixi = PixiControl::from_pyproject_manifest(&format!(
+        r#"
+        [project]
+        name = "simple"
+        version = "0.1.0"
+        requires-python = ">=3.11"
+        dependencies = ["foo"]
+
+        [build-system]
+        requires = ["uv_build>=0.8.9,<0.9.0"]
+        build-backend = "uv_build"
+
+
+        [tool.uv.sources]
+        foo = [
+        {{ index = "our_index" }},
+        ]
+
+        [[tool.uv.index]]
+        name = "our_index"
+        url = "{index_url}"
+        explicit = true
+
+        [tool.uv.build-backend]
+        module-name = "simple"
+        module-root = ""
+
+        [tool.pixi.workspace]
+        channels = ["conda-forge"]
+        platforms = ["{platform}"]
+
+        [tool.pixi.pypi-dependencies]
+        simple = {{ path = "." }}
+        "#,
+        platform = Platform::current(),
+        index_url = simple.index_url(),
+    ))
+    .unwrap();
+
+    let project_path = pixi.workspace_path();
+    let src_dir = project_path.join("src").join("simple");
+    fs_err::create_dir_all(&src_dir).unwrap();
+    fs_err::write(src_dir.join("__init__.py"), "").unwrap();
+
+    let lock_file = pixi.update_lock_file().await.unwrap();
+    assert!(
+        lock_file
+            .get_pypi_package_url("default", Platform::current(), "foo")
+            .unwrap()
+            .as_path()
+            .unwrap()
+            .as_str()
+            .contains(&simple.index_path().display().to_string())
+    );
+}
