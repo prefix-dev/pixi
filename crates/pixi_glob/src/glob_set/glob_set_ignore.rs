@@ -2,13 +2,13 @@ use std::path::{Path, PathBuf};
 
 use thiserror::Error;
 
+use crate::glob_set::glob_walk_root::{GlobWalkRoot, WalkRootsError};
 use crate::glob_set::walk;
-use crate::glob_set::walk_roots::{WalkRoots, WalkRootsError};
 
 /// A glob set implemented using the `ignore` crate (globset + fast walker).
 pub struct GlobSetIgnore {
     /// Include patterns (gitignore-style), without leading '!'.
-    pub walk_roots: WalkRoots,
+    pub walk_roots: GlobWalkRoot,
 }
 
 #[derive(Error, Debug)]
@@ -28,7 +28,7 @@ impl GlobSetIgnore {
     /// Create a new `GlobSetIgnore` from a list of patterns. Leading '!' indicates exclusion.
     pub fn create<'t>(globs: impl IntoIterator<Item = &'t str>) -> GlobSetIgnore {
         GlobSetIgnore {
-            walk_roots: WalkRoots::build(globs).expect("should not fail"),
+            walk_roots: GlobWalkRoot::build(globs).expect("should not fail"),
         }
     }
 
@@ -52,9 +52,10 @@ mod tests {
     use super::GlobSetIgnore;
     use fs_err::{self as fs, File};
     use insta::assert_yaml_snapshot;
+    use std::path::{Path, PathBuf};
     use tempfile::tempdir;
 
-    fn relative_path(path: &std::path::Path, root: &std::path::Path) -> std::path::PathBuf {
+    fn relative_path(path: &Path, root: &Path) -> PathBuf {
         if let Ok(rel) = path.strip_prefix(root) {
             return rel.to_path_buf();
         }
