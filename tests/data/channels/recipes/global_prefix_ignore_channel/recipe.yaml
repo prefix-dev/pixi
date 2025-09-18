@@ -6,7 +6,7 @@ outputs:
     build:
       script:
         - mkdir -p $PREFIX/etc/pixi
-        - cp $RECIPE_DIR/global-config.json $PREFIX/etc/pixi/
+        - cp $RECIPE_DIR/global-ignore-conda-prefix $PREFIX/etc/pixi/
         - mkdir -p $PREFIX/bin
         - if: win
           then:

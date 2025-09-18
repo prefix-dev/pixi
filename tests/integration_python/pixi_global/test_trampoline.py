@@ -477,3 +477,34 @@ def test_trampoline_removes_trampolines_not_in_manifest(
     verify_cli_command([pixi, "global", "sync"], env=env)
     assert dummy_trampoline_original.is_file()
     assert not dummy_trampoline_new.is_file()
+
+
+def test_trampoline_considers_global_config_json(
+    pixi: Path, tmp_path: Path, global_prefix_ignore_channel: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    dummy_b = tmp_path / "bin" / exec_extension("prefix-ignore")
+
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            global_prefix_ignore_channel,
+            "prefix-ignore",
+        ],
+        env=env,
+    )
+
+    dummy_b_json = tmp_path / "bin" / "trampoline_configuration" / "prefix-ignore.json"
+
+    trampoline_metadata = json.loads(dummy_b_json.read_text())
+
+    # get envs of the trampoline
+    trampoline_env = trampoline_metadata["env"]
+    assert "CONDA_PREFIX" not in trampoline_env
+
+    # now execute the binary
+    verify_cli_command([dummy_b], stdout_contains="NOT_PRESENT")
