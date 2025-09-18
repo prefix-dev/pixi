@@ -433,7 +433,7 @@ impl BuildContext for LazyBuildDispatch<'_> {
         // because the initialization takes time
         match self.get_or_try_init().await {
             Ok(dispatch) => dispatch.interpreter().await,
-            Err(e) => {
+            Err(_e) => {
                 // Store the error for later retrieval
                 // let _ = self.lazy_deps.last_error.set(e).unwrap();
                 panic!("could not initialize build dispatch correctly")
