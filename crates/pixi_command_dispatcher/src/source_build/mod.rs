@@ -87,6 +87,10 @@ pub struct SourceBuildSpec {
     /// The protocols that are enabled for this source
     #[serde(skip_serializing_if = "crate::is_default")]
     pub enabled_protocols: EnabledProtocols,
+
+    /// Optional path to lock file for reading/writing package_build_source entries
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pinned_build_source: Option<PinnedSourceSpec>,
 }
 
 #[derive(Debug, Clone)]
@@ -130,6 +134,7 @@ impl SourceBuildSpec {
             } else {
                 // Query the source build cache.
                 let build_cache = command_dispatcher
+                    .clone()
                     .source_build_cache_status(SourceBuildCacheStatusSpec {
                         package: self.package.clone(),
                         build_environment: self.build_environment.clone(),
@@ -153,7 +158,7 @@ impl SourceBuildSpec {
             };
 
         // Check out the source code.
-        let source_checkout = command_dispatcher
+        let manifest_source_checkout = command_dispatcher
             .checkout_pinned_source(self.source.clone())
             .await
             .map_err_with(SourceBuildError::SourceCheckout)?;
@@ -162,7 +167,7 @@ impl SourceBuildSpec {
         // path).
         let discovered_backend = command_dispatcher
             .discover_backend(
-                &source_checkout.path,
+                &manifest_source_checkout.path,
                 self.channel_config.clone(),
                 self.enabled_protocols.clone(),
             )
@@ -172,6 +177,30 @@ impl SourceBuildSpec {
         // Compute the package input hash for caching purposes.
         let package_build_input_hash = PackageBuildInputHash::from(discovered_backend.as_ref());
 
+        // Determine the build source to use: either from lock file or workspace
+
+        // Here we have to get path in which we will run build. We have those options in order of decreasing priority:
+        // 1. Lock file `package_build_source`. Since we're running lock file update before building package it should pin source in there.
+        // 2. Manifest package build. This can happen if package isn't added to the dependencies of manifest, so no pinning happens in that case.
+        // 3. Manifest source. Just assume that source is located at the same directory as the manifest.
+        let build_source_dir = if let Some(pinned_build_source) = self.pinned_build_source.clone() {
+            let build_source_checkout = command_dispatcher
+                .checkout_pinned_source(pinned_build_source)
+                .await
+                .map_err_with(SourceBuildError::SourceCheckout)?;
+            build_source_checkout.path
+        } else if let Some(manifest_build_source) =
+            discovered_backend.init_params.build_source.clone()
+        {
+            let build_source_checkout = command_dispatcher
+                .pin_and_checkout(manifest_build_source)
+                .await
+                .map_err_with(SourceBuildError::SourceCheckout)?;
+            build_source_checkout.path
+        } else {
+            manifest_source_checkout.path
+        };
+
         // Instantiate the backend with the discovered information.
         let backend = command_dispatcher
             .instantiate_backend(InstantiateBackendSpec {
@@ -180,6 +209,7 @@ impl SourceBuildSpec {
                     .clone()
                     .resolve(SourceAnchor::from(SourceSpec::from(self.source.clone()))),
                 init_params: discovered_backend.init_params.clone(),
+                build_source_dir,
                 channel_config: self.channel_config.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
             })
@@ -213,22 +243,24 @@ impl SourceBuildSpec {
 
         // Build the package based on the support backend capabilities.
         let mut built_source = if backend.capabilities().provides_conda_build_v1() {
-            self.build_v1(
-                command_dispatcher,
-                backend,
-                work_directory,
-                package_build_input_hash,
-                reporter,
-            )
-            .await?
+            self.clone()
+                .build_v1(
+                    command_dispatcher.clone(),
+                    backend,
+                    work_directory,
+                    package_build_input_hash,
+                    reporter,
+                )
+                .await?
         } else {
-            self.build_v0(
-                command_dispatcher,
-                backend,
-                work_directory,
-                package_build_input_hash,
-            )
-            .await?
+            self.clone()
+                .build_v0(
+                    command_dispatcher.clone(),
+                    backend,
+                    work_directory,
+                    package_build_input_hash,
+                )
+                .await?
         };
 
         // Create the output directory if it does not exist.
@@ -304,7 +336,7 @@ impl SourceBuildSpec {
             let mut entry = build_cache.entry.lock().await;
             entry
                 .insert(CachedBuild {
-                    source: source_checkout
+                    source: manifest_source_checkout
                         .pinned
                         .is_mutable()
                         .then_some(built_source.metadata),
@@ -319,6 +351,38 @@ impl SourceBuildSpec {
             output_file: built_source.output_file,
             record,
         })
+    }
+
+    /// Little helper function the build a `BuildHostPackage` from expected and
+    /// installed records.
+    fn extract_prefix_repodata(
+        records: Vec<PixiRecord>,
+        prefix: Option<InstallPixiEnvironmentResult>,
+    ) -> Vec<BuildHostPackage> {
+        let Some(prefix) = prefix else {
+            return vec![];
+        };
+
+        records
+            .into_iter()
+            .map(|record| match record {
+                PixiRecord::Binary(repodata_record) => BuildHostPackage {
+                    repodata_record,
+                    source: None,
+                },
+                PixiRecord::Source(source) => {
+                    let repodata_record = prefix
+                        .resolved_source_records
+                        .get(&source.package_record.name)
+                        .cloned()
+                        .expect("the source record should be present in the result sources");
+                    BuildHostPackage {
+                        repodata_record,
+                        source: Some(source.source),
+                    }
+                }
+            })
+            .collect()
     }
 
     /// Returns whether the package should be built in an editable mode.
@@ -605,38 +669,6 @@ impl SourceBuildSpec {
         })
     }
 
-    /// Little helper function the build a `BuildHostPackage` from expected and
-    /// installed records.
-    fn extract_prefix_repodata(
-        records: Vec<PixiRecord>,
-        prefix: Option<InstallPixiEnvironmentResult>,
-    ) -> Vec<BuildHostPackage> {
-        let Some(prefix) = prefix else {
-            return vec![];
-        };
-
-        records
-            .into_iter()
-            .map(|record| match record {
-                PixiRecord::Binary(repodata_record) => BuildHostPackage {
-                    repodata_record,
-                    source: None,
-                },
-                PixiRecord::Source(source) => {
-                    let repodata_record = prefix
-                        .resolved_source_records
-                        .get(&source.package_record.name)
-                        .cloned()
-                        .expect("the source record should be present in the result sources");
-                    BuildHostPackage {
-                        repodata_record,
-                        source: Some(source.source),
-                    }
-                }
-            })
-            .collect()
-    }
-
     async fn solve_dependencies(
         &self,
         name: String,
@@ -669,6 +701,7 @@ impl SourceBuildSpec {
                 channel_config: self.channel_config.clone(),
                 variants: self.variants.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
+                override_pinned_source_for_package: None,
             })
             .await
     }
@@ -815,6 +848,21 @@ pub enum SourceBuildError {
 
     #[error("the package does not contain a valid subdir")]
     ConvertSubdir(#[source] ConvertSubdirError),
+
+    #[error("failed to read lock file {}: {}", .0.display(), .1)]
+    LockFileError(PathBuf, String),
+
+    #[error("invalid git revision '{}': {}", .0, .1)]
+    InvalidGitRev(String, String),
+
+    #[error("failed to write lock file {}: {}", .0.display(), .1)]
+    LockFileWriteError(PathBuf, std::io::Error),
+
+    #[error("unsupported source type: {}", .0)]
+    UnsupportedSourceType(String),
+
+    #[error("lock file usage violation: {0}")]
+    LockFilePolicyViolation(String),
 }
 
 impl From<DependenciesError> for SourceBuildError {
