@@ -11,8 +11,8 @@ outputs:
         - if: win
           then:
             - echo "@echo off" > $PREFIX/bin/prefix-ignore.bat
-            - echo "echo %CONDA_PREFIX:NOT_PRESENT=%" >> $PREFIX/bin/prefix-ignore.bat
+            - echo 'echo %CONDA_PREFIX:NOT_PRESENT=%' >> $PREFIX/bin/prefix-ignore.bat
           else:
             - echo "#!/usr/bin/env bash" > $PREFIX/bin/prefix-ignore
-            - echo "echo ${CONDA_PREFIX:-NOT_PRESENT}" >> $PREFIX/bin/prefix-ignore
+            - echo 'echo ${CONDA_PREFIX:-NOT_PRESENT}' >> $PREFIX/bin/prefix-ignore
             - chmod +x $PREFIX/bin/prefix-ignore

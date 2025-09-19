@@ -507,4 +507,7 @@ def test_trampoline_considers_global_config_json(
     assert "CONDA_PREFIX" not in trampoline_env
 
     # now execute the binary
-    verify_cli_command([dummy_b], stdout_contains="NOT_PRESENT")
+    current_env = dict(os.environ)
+    current_env.pop("CONDA_PREFIX")
+    env = current_env | env
+    verify_cli_command([dummy_b], stdout_contains="NOT_PRESENT", env=env, reset_env=True)
