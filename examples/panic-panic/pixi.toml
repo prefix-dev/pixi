@@ -8,4 +8,4 @@ version = "0.1.0"
 python = "*"
 
 [pypi-dependencies]
-kahypar = ">=1.0"
+kahypar = "*"

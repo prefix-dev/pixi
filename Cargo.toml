@@ -217,6 +217,7 @@ codegen-units = 16
 inherits = "release"
 lto = false
 opt-level = 3
+panic = "abort"
 strip = false
 
 [profile.profiling]
