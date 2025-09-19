@@ -8,5 +8,5 @@ version = "0.1.0"
 python = "*"
 
 [pypi-dependencies]
-# kahypar = "*"
-sdist = "*"
+kahypar = "==1.0"
+# sdist = "*"
