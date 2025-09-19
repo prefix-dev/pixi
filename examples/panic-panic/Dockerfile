@@ -1,6 +1,5 @@
 # Use Ubuntu as base image for debugging (force x86_64/linux-64)
-ARG TARGETPLATFORM=linux/amd64
-FROM --platform=$TARGETPLATFORM ubuntu:22.04
+FROM ubuntu:22.04
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
@@ -23,10 +22,10 @@ WORKDIR /workspace
 COPY . .
 
 # Set working directory to the specific example
-WORKDIR /workspace/examples/relative-paths-tasks
+WORKDIR /workspace/examples/panic-panic
 
 # Build pixi in debug mode for better debugging
 RUN cargo build --bin pixi
 
 # Run the failing command with maximum verbosity
-CMD ["../../target/debug/pixi", "lock", "-vvv", "&&", "cat", "pixi.lock"]
+CMD ["../../target/debug/pixi", "lock", "-vvv"]
