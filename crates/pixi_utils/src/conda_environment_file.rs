@@ -161,7 +161,7 @@ fn parse_dependencies(deps: Vec<CondaEnvDep>) -> miette::Result<ParsedDependenci
                         // named channels are given a url with default channel config in `MatchSpec::from_str`
                         NamedChannelOrUrl::from_str(channel.base_url.as_str())
                             .into_diagnostic()
-                            .wrap_err(format!("Can't parse '{}' as channel", channel.base_url))?,
+                            .wrap_err(format!("can't parse '{}' as channel", channel.base_url))?,
                     );
                 }
                 conda_deps.push(match_spec);
