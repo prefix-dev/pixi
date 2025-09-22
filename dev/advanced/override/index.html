@@ -10,24 +10,28 @@
       
       
       
-        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/global/uninstall/">
+        <link rel="canonical" href="https://prefix-dev.github.io/pixi/dev/advanced/override/">
       
       
+        <link rel="prev" href="../explain_info_command/">
       
       
-      <link rel="icon" href="../../../../../assets/pixi.png">
+        <link rel="next" href="../shebang/">
+      
+      
+      <link rel="icon" href="../../assets/pixi.png">
       <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.14">
     
     
       
-        <title>Uninstall - Pixi by prefix.dev</title>
+        <title>Dependency Overrides - Pixi by prefix.dev</title>
       
     
     
-      <link rel="stylesheet" href="../../../../../assets/stylesheets/main.342714a4.min.css">
+      <link rel="stylesheet" href="../../assets/stylesheets/main.342714a4.min.css">
       
         
-        <link rel="stylesheet" href="../../../../../assets/stylesheets/palette.06af60db.min.css">
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
       
       
 
@@ -46,9 +50,9 @@
       
     
     
-      <link rel="stylesheet" href="../../../../../stylesheets/extra.css">
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
     
-    <script>__md_scope=new URL("../../../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
     
       
 
@@ -57,11 +61,11 @@
       
         <meta  property="og:type"  content="website" >
       
-        <meta  property="og:title"  content="Uninstall - Pixi by prefix.dev" >
+        <meta  property="og:title"  content="Dependency Overrides - Pixi by prefix.dev" >
       
         <meta  property="og:description"  content="Pixi Documentation — Next-gen package manager for reproducible development setups" >
       
-        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/reference/cli/pixi/global/uninstall.png" >
+        <meta  property="og:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/advanced/override.png" >
       
         <meta  property="og:image:type"  content="image/png" >
       
@@ -69,15 +73,15 @@
       
         <meta  property="og:image:height"  content="630" >
       
-        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/reference/cli/pixi/global/uninstall/" >
+        <meta  property="og:url"  content="https://prefix-dev.github.io/pixi/dev/advanced/override/" >
       
         <meta  name="twitter:card"  content="summary_large_image" >
       
-        <meta  name="twitter:title"  content="Uninstall - Pixi by prefix.dev" >
+        <meta  name="twitter:title"  content="Dependency Overrides - Pixi by prefix.dev" >
       
         <meta  name="twitter:description"  content="Pixi Documentation — Next-gen package manager for reproducible development setups" >
       
-        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/reference/cli/pixi/global/uninstall.png" >
+        <meta  name="twitter:image"  content="https://prefix-dev.github.io/pixi/dev/assets/images/social/advanced/override.png" >
       
     
     
@@ -100,7 +104,7 @@
     <div data-md-component="skip">
       
         
-        <a href="#pixi-global-uninstall" class="md-skip">
+        <a href="#overview" class="md-skip">
           Skip to content
         </a>
       
@@ -120,9 +124,9 @@
 
 <header class="md-header md-header--shadow" data-md-component="header">
   <nav class="md-header__inner md-grid" aria-label="Header">
-    <a href="../../../../.." title="Pixi by prefix.dev" class="md-header__button md-logo" aria-label="Pixi by prefix.dev" data-md-component="logo">
+    <a href="../.." title="Pixi by prefix.dev" class="md-header__button md-logo" aria-label="Pixi by prefix.dev" data-md-component="logo">
       
-  <img src="../../../../../assets/pixi.png" alt="logo">
+  <img src="../../assets/pixi.png" alt="logo">
 
     </a>
     <label class="md-header__button md-icon" for="__drawer">
@@ -139,7 +143,7 @@
         <div class="md-header__topic" data-md-component="header-topic">
           <span class="md-ellipsis">
             
-              Uninstall
+              Dependency Overrides
             
           </span>
         </div>
@@ -265,9 +269,9 @@
 
 <nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
   <label class="md-nav__title" for="__drawer">
-    <a href="../../../../.." title="Pixi by prefix.dev" class="md-nav__button md-logo" aria-label="Pixi by prefix.dev" data-md-component="logo">
+    <a href="../.." title="Pixi by prefix.dev" class="md-nav__button md-logo" aria-label="Pixi by prefix.dev" data-md-component="logo">
       
-  <img src="../../../../../assets/pixi.png" alt="logo">
+  <img src="../../assets/pixi.png" alt="logo">
 
     </a>
     Pixi by prefix.dev
@@ -294,7 +298,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../.." class="md-nav__link">
+      <a href="../.." class="md-nav__link">
         
   
   
@@ -359,7 +363,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../installation/" class="md-nav__link">
+      <a href="../../installation/" class="md-nav__link">
         
   
   
@@ -382,7 +386,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../first_workspace/" class="md-nav__link">
+      <a href="../../first_workspace/" class="md-nav__link">
         
   
   
@@ -405,7 +409,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../getting_started/" class="md-nav__link">
+      <a href="../../getting_started/" class="md-nav__link">
         
   
   
@@ -518,7 +522,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../python/tutorial/" class="md-nav__link">
+      <a href="../../python/tutorial/" class="md-nav__link">
         
   
   
@@ -541,7 +545,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../python/pyproject_toml/" class="md-nav__link">
+      <a href="../../python/pyproject_toml/" class="md-nav__link">
         
   
   
@@ -564,7 +568,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../python/pytorch/" class="md-nav__link">
+      <a href="../../python/pytorch/" class="md-nav__link">
         
   
   
@@ -595,7 +599,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../tutorials/ros2/" class="md-nav__link">
+      <a href="../../tutorials/ros2/" class="md-nav__link">
         
   
   
@@ -618,7 +622,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../tutorials/rust/" class="md-nav__link">
+      <a href="../../tutorials/rust/" class="md-nav__link">
         
   
   
@@ -681,7 +685,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../switching_from/poetry/" class="md-nav__link">
+      <a href="../../switching_from/poetry/" class="md-nav__link">
         
   
   
@@ -704,7 +708,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../switching_from/conda/" class="md-nav__link">
+      <a href="../../switching_from/conda/" class="md-nav__link">
         
   
   
@@ -735,7 +739,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../tutorials/multi_environment/" class="md-nav__link">
+      <a href="../../tutorials/multi_environment/" class="md-nav__link">
         
   
   
@@ -758,7 +762,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../global_tools/introduction/" class="md-nav__link">
+      <a href="../../global_tools/introduction/" class="md-nav__link">
         
   
   
@@ -831,7 +835,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../workspace/environment/" class="md-nav__link">
+      <a href="../../workspace/environment/" class="md-nav__link">
         
   
   
@@ -854,7 +858,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../workspace/advanced_tasks/" class="md-nav__link">
+      <a href="../../workspace/advanced_tasks/" class="md-nav__link">
         
   
   
@@ -877,7 +881,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../workspace/multi_platform_configuration/" class="md-nav__link">
+      <a href="../../workspace/multi_platform_configuration/" class="md-nav__link">
         
   
   
@@ -900,7 +904,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../workspace/multi_environment/" class="md-nav__link">
+      <a href="../../workspace/multi_environment/" class="md-nav__link">
         
   
   
@@ -923,7 +927,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../workspace/lockfile/" class="md-nav__link">
+      <a href="../../workspace/lockfile/" class="md-nav__link">
         
   
   
@@ -946,7 +950,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../workspace/system_requirements/" class="md-nav__link">
+      <a href="../../workspace/system_requirements/" class="md-nav__link">
         
   
   
@@ -969,7 +973,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../concepts/conda_pypi/" class="md-nav__link">
+      <a href="../../concepts/conda_pypi/" class="md-nav__link">
         
   
   
@@ -1032,7 +1036,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../global_tools/manifest/" class="md-nav__link">
+      <a href="../../global_tools/manifest/" class="md-nav__link">
         
   
   
@@ -1055,7 +1059,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../global_tools/trampolines/" class="md-nav__link">
+      <a href="../../global_tools/trampolines/" class="md-nav__link">
         
   
   
@@ -1136,7 +1140,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../build/getting_started/" class="md-nav__link">
+      <a href="../../build/getting_started/" class="md-nav__link">
         
   
   
@@ -1199,7 +1203,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../build/python/" class="md-nav__link">
+      <a href="../../build/python/" class="md-nav__link">
         
   
   
@@ -1222,7 +1226,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../build/cpp/" class="md-nav__link">
+      <a href="../../build/cpp/" class="md-nav__link">
         
   
   
@@ -1245,7 +1249,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../build/ros/" class="md-nav__link">
+      <a href="../../build/ros/" class="md-nav__link">
         
   
   
@@ -1268,7 +1272,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../build/workspace/" class="md-nav__link">
+      <a href="../../build/workspace/" class="md-nav__link">
         
   
   
@@ -1291,7 +1295,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../build/variants/" class="md-nav__link">
+      <a href="../../build/variants/" class="md-nav__link">
         
   
   
@@ -1314,7 +1318,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../build/advanced_cpp/" class="md-nav__link">
+      <a href="../../build/advanced_cpp/" class="md-nav__link">
         
   
   
@@ -1345,7 +1349,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../build/dependency_types/" class="md-nav__link">
+      <a href="../../build/dependency_types/" class="md-nav__link">
         
   
   
@@ -1368,7 +1372,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../build/backends/" class="md-nav__link">
+      <a href="../../build/backends/" class="md-nav__link">
         
   
   
@@ -1391,7 +1395,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../build/package_source/" class="md-nav__link">
+      <a href="../../build/package_source/" class="md-nav__link">
         
   
   
@@ -1464,7 +1468,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../deployment/pixi_pack/" class="md-nav__link">
+      <a href="../../deployment/pixi_pack/" class="md-nav__link">
         
   
   
@@ -1487,7 +1491,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../deployment/authentication/" class="md-nav__link">
+      <a href="../../deployment/authentication/" class="md-nav__link">
         
   
   
@@ -1510,7 +1514,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../deployment/container/" class="md-nav__link">
+      <a href="../../deployment/container/" class="md-nav__link">
         
   
   
@@ -1533,7 +1537,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../deployment/s3/" class="md-nav__link">
+      <a href="../../deployment/s3/" class="md-nav__link">
         
   
   
@@ -1646,7 +1650,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../integration/editor/vscode/" class="md-nav__link">
+      <a href="../../integration/editor/vscode/" class="md-nav__link">
         
   
   
@@ -1669,7 +1673,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../integration/editor/jetbrains/" class="md-nav__link">
+      <a href="../../integration/editor/jetbrains/" class="md-nav__link">
         
   
   
@@ -1692,7 +1696,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../integration/editor/zed/" class="md-nav__link">
+      <a href="../../integration/editor/zed/" class="md-nav__link">
         
   
   
@@ -1715,7 +1719,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../integration/editor/r_studio/" class="md-nav__link">
+      <a href="../../integration/editor/r_studio/" class="md-nav__link">
         
   
   
@@ -1738,7 +1742,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../integration/editor/jupyterlab/" class="md-nav__link">
+      <a href="../../integration/editor/jupyterlab/" class="md-nav__link">
         
   
   
@@ -1809,7 +1813,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../integration/ci/github_actions/" class="md-nav__link">
+      <a href="../../integration/ci/github_actions/" class="md-nav__link">
         
   
   
@@ -1832,7 +1836,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../integration/ci/updates_github_actions/" class="md-nav__link">
+      <a href="../../integration/ci/updates_github_actions/" class="md-nav__link">
         
   
   
@@ -1903,7 +1907,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../integration/extensions/introduction/" class="md-nav__link">
+      <a href="../../integration/extensions/introduction/" class="md-nav__link">
         
   
   
@@ -1926,7 +1930,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../integration/extensions/pixi_diff/" class="md-nav__link">
+      <a href="../../integration/extensions/pixi_diff/" class="md-nav__link">
         
   
   
@@ -1949,7 +1953,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../integration/ci/updates_github_actions/" class="md-nav__link">
+      <a href="../../integration/ci/updates_github_actions/" class="md-nav__link">
         
   
   
@@ -1972,7 +1976,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../integration/extensions/pixi_inject/" class="md-nav__link">
+      <a href="../../integration/extensions/pixi_inject/" class="md-nav__link">
         
   
   
@@ -1995,7 +1999,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../integration/extensions/pixi_install_to_prefix/" class="md-nav__link">
+      <a href="../../integration/extensions/pixi_install_to_prefix/" class="md-nav__link">
         
   
   
@@ -2018,7 +2022,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../deployment/pixi_pack/" class="md-nav__link">
+      <a href="../../deployment/pixi_pack/" class="md-nav__link">
         
   
   
@@ -2089,7 +2093,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../integration/third_party/conda_deny/" class="md-nav__link">
+      <a href="../../integration/third_party/conda_deny/" class="md-nav__link">
         
   
   
@@ -2112,7 +2116,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../integration/third_party/direnv/" class="md-nav__link">
+      <a href="../../integration/third_party/direnv/" class="md-nav__link">
         
   
   
@@ -2135,7 +2139,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../integration/third_party/starship/" class="md-nav__link">
+      <a href="../../integration/third_party/starship/" class="md-nav__link">
         
   
   
@@ -2170,8 +2174,10 @@
       
   
   
+    
   
   
+  
     
     
     
@@ -2182,11 +2188,11 @@
       
     
     
-    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
         
           
           <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
@@ -2202,7 +2208,7 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
           <label class="md-nav__title" for="__nav_8">
             <span class="md-nav__icon md-icon"></span>
             Advanced
@@ -2216,7 +2222,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../advanced/channel_logic/" class="md-nav__link">
+      <a href="../channel_logic/" class="md-nav__link">
         
   
   
@@ -2239,7 +2245,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../advanced/explain_info_command/" class="md-nav__link">
+      <a href="../explain_info_command/" class="md-nav__link">
         
   
   
@@ -2259,10 +2265,30 @@
                 
   
   
+    
   
   
-    <li class="md-nav__item">
-      <a href="../../../../../advanced/override/" class="md-nav__link">
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Dependency Overrides
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
         
   
   
@@ -2273,6 +2299,75 @@
   
 
       </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      Overview
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example" class="md-nav__link">
+    <span class="md-ellipsis">
+      Example
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Example">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#override-a-dependency-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      Override a dependency version
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#override-a-dependency-version-in-a-specific-feature" class="md-nav__link">
+    <span class="md-ellipsis">
+      Override a dependency version in a specific feature
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#interact-with-other-overrides" class="md-nav__link">
+    <span class="md-ellipsis">
+      Interact with other overrides
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
     </li>
   
 
@@ -2285,7 +2380,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../advanced/shebang/" class="md-nav__link">
+      <a href="../shebang/" class="md-nav__link">
         
   
   
@@ -2308,7 +2403,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../advanced/pixi_shell/" class="md-nav__link">
+      <a href="../pixi_shell/" class="md-nav__link">
         
   
   
@@ -2381,7 +2476,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../pixi_manifest/" class="md-nav__link">
+      <a href="../../reference/pixi_manifest/" class="md-nav__link">
         
   
   
@@ -2404,7 +2499,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../pixi_configuration/" class="md-nav__link">
+      <a href="../../reference/pixi_configuration/" class="md-nav__link">
         
   
   
@@ -2427,7 +2522,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../" class="md-nav__link">
+      <a href="../../reference/cli/pixi/" class="md-nav__link">
         
   
   
@@ -2450,7 +2545,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../environment_variables/" class="md-nav__link">
+      <a href="../../reference/environment_variables/" class="md-nav__link">
         
   
   
@@ -2523,7 +2618,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../CHANGELOG/" class="md-nav__link">
+      <a href="../../CHANGELOG/" class="md-nav__link">
         
   
   
@@ -2546,7 +2641,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../misc/vision/" class="md-nav__link">
+      <a href="../../misc/vision/" class="md-nav__link">
         
   
   
@@ -2569,7 +2664,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../misc/packaging/" class="md-nav__link">
+      <a href="../../misc/packaging/" class="md-nav__link">
         
   
   
@@ -2592,7 +2687,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../misc/Community/" class="md-nav__link">
+      <a href="../../misc/Community/" class="md-nav__link">
         
   
   
@@ -2615,7 +2710,7 @@
   
   
     <li class="md-nav__item">
-      <a href="../../../../../misc/FAQ/" class="md-nav__link">
+      <a href="../../misc/FAQ/" class="md-nav__link">
         
   
   
@@ -2655,8 +2750,6 @@
   
   
   
-    
-  
   
     <label class="md-nav__title" for="__toc">
       <span class="md-nav__icon md-icon"></span>
@@ -2665,56 +2758,53 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
-  <a href="#about" class="md-nav__link">
+  <a href="#overview" class="md-nav__link">
     <span class="md-ellipsis">
-      About
+      Overview
     </span>
   </a>
   
 </li>
       
         <li class="md-nav__item">
-  <a href="#usage" class="md-nav__link">
+  <a href="#example" class="md-nav__link">
     <span class="md-ellipsis">
-      Usage
+      Example
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Example">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#override-a-dependency-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      Override a dependency version
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#arguments" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#override-a-dependency-version-in-a-specific-feature" class="md-nav__link">
     <span class="md-ellipsis">
-      Arguments
+      Override a dependency version in a specific feature
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#config-options" class="md-nav__link">
+        
+          <li class="md-nav__item">
+  <a href="#interact-with-other-overrides" class="md-nav__link">
     <span class="md-ellipsis">
-      Config Options
+      Interact with other overrides
     </span>
   </a>
   
 </li>
-      
-        <li class="md-nav__item">
-  <a href="#description" class="md-nav__link">
-    <span class="md-ellipsis">
-      Description
-    </span>
-  </a>
-  
-</li>
-      
-        <li class="md-nav__item">
-  <a href="#examples" class="md-nav__link">
-    <span class="md-ellipsis">
-      Examples
-    </span>
-  </a>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -2734,7 +2824,7 @@
 
 
   
-    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/reference/cli/pixi/global/uninstall.md" title="Edit this page" class="md-content__button md-icon">
+    <a href="https://github.com/prefix-dev/pixi/edit/main/docs/advanced/override.md" title="Edit this page" class="md-content__button md-icon">
       
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20.71 7.04c.39-.39.39-1.04 0-1.41l-2.34-2.34c-.37-.39-1.02-.39-1.41 0l-1.84 1.83 3.75 3.75M3 17.25V21h3.75L17.81 9.93l-3.75-3.75z"/></svg>
     </a>
@@ -2742,84 +2832,62 @@
   
 
 
-<!--- This file is autogenerated. Do not edit manually! -->
-<h1 id="pixi-global-uninstall"><code><a href="../../">pixi</a> <a href="../">global</a> uninstall</code><a class="headerlink" href="#pixi-global-uninstall" title="Permanent link">#</a></h1>
-<h2 id="about">About<a class="headerlink" href="#about" title="Permanent link">#</a></h2>
-<p>Uninstalls environments from the global environment.</p>
-<h2 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">#</a></h2>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi global uninstall [OPTIONS] &lt;ENVIRONMENT&gt;...
+  <h1>Dependency Overrides</h1>
+
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">#</a></h2>
+<p>Sometimes our direct dependency declares outdated intermediate dependency or is too tight to solve with other direct dependencies. In this case, we can override the intermediate dependency in our <code>pyproject.toml</code>or <code>pixi.toml</code> file.</p>
+<blockquote>
+<p>[!Note] This option is not recommended unless you know what you are doing, as uv will ignore all the version constraints of the dependency and use the version you specified.</p>
+</blockquote>
+<h2 id="example">Example<a class="headerlink" href="#example" title="Permanent link">#</a></h2>
+<h3 id="override-a-dependency-version">Override a dependency version<a class="headerlink" href="#override-a-dependency-version" title="Permanent link">#</a></h3>
+<p><div class="language-toml highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># pyproject.toml</span>
+</span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">[tool.pixi.pypi-options.dependency-overrides]</span>
+</span><span id="__span-0-3"><a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">numpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=2.0.0&quot;</span>
 </span></code></pre></div>
-<h2 id="arguments">Arguments<a class="headerlink" href="#arguments" title="Permanent link">#</a></h2>
-<ul>
-<li>
-<dl>
-<dt><a id="arg-\<ENVIRONMENT>" href="#arg-\<ENVIRONMENT>"><code>&lt;ENVIRONMENT&gt;</code></a></dt>
-<dd>Specifies the environments that are to be removed
-<br>May be provided more than once.
-<br><strong>required</strong>: <code>true</code></dd>
-</dl>
-</li>
-</ul>
-<h2 id="config-options">Config Options<a class="headerlink" href="#config-options" title="Permanent link">#</a></h2>
-<ul>
-<li>
-<dl>
-<dt><a id="arg---auth-file" href="#arg---auth-file"><code>--auth-file &lt;AUTH_FILE&gt;</code></a></dt>
-<dd>Path to the file containing the authentication token</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---concurrent-downloads" href="#arg---concurrent-downloads"><code>--concurrent-downloads &lt;CONCURRENT_DOWNLOADS&gt;</code></a></dt>
-<dd>Max concurrent network requests, default is <code>50</code></dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---concurrent-solves" href="#arg---concurrent-solves"><code>--concurrent-solves &lt;CONCURRENT_SOLVES&gt;</code></a></dt>
-<dd>Max concurrent solves, default is the number of CPUs</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---pinning-strategy" href="#arg---pinning-strategy"><code>--pinning-strategy &lt;PINNING_STRATEGY&gt;</code></a></dt>
-<dd>Set pinning strategy
-<br><strong>options</strong>: <code>semver</code>, <code>minor</code>, <code>major</code>, <code>latest-up</code>, <code>exact-version</code>, <code>no-pin</code></dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---pypi-keyring-provider" href="#arg---pypi-keyring-provider"><code>--pypi-keyring-provider &lt;PYPI_KEYRING_PROVIDER&gt;</code></a></dt>
-<dd>Specifies whether to use the keyring to look up credentials for PyPI
-<br><strong>options</strong>: <code>disabled</code>, <code>subprocess</code></dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---run-post-link-scripts" href="#arg---run-post-link-scripts"><code>--run-post-link-scripts</code></a></dt>
-<dd>Run post-link scripts (insecure)</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---tls-no-verify" href="#arg---tls-no-verify"><code>--tls-no-verify</code></a></dt>
-<dd>Do not verify the TLS certificate of the server</dd>
-</dl>
-</li>
-<li>
-<dl>
-<dt><a id="arg---use-environment-activation-cache" href="#arg---use-environment-activation-cache"><code>--use-environment-activation-cache</code></a></dt>
-<dd>Use environment activation cache (experimental)</dd>
-</dl>
-</li>
-</ul>
-<h2 id="description">Description<a class="headerlink" href="#description" title="Permanent link">#</a></h2>
-<p>Uninstalls environments from the global environment.</p>
-<p>Example: <code>pixi global uninstall pixi-pack rattler-build</code></p>
-<h2 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">#</a></h2>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>uninstall<span class="w"> </span>my-env
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>pixi<span class="w"> </span>global<span class="w"> </span>uninstall<span class="w"> </span>pixi-pack<span class="w"> </span>rattler-build
+or in <code>pixi.toml</code>:</p>
+<p><div class="language-toml highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># pixi.toml</span>
+</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="k">[pypi-options.dependency-overrides]</span>
+</span><span id="__span-1-3"><a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">numpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=2.0.0&quot;</span>
 </span></code></pre></div>
+This will override the version of <code>numpy</code> used by all dependencies to be at least <code>2.0.0</code>, regardless of what the dependencies specify.
+This is useful if you need a specific version of a library that is not compatible with the versions specified by your dependencies.</p>
+<h3 id="override-a-dependency-version-in-a-specific-feature">Override a dependency version in a specific feature<a class="headerlink" href="#override-a-dependency-version-in-a-specific-feature" title="Permanent link">#</a></h3>
+<p>it can also be specified in feature level,
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[features.dev.pypi-options.dependency-overrides]</span>
+</span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">numpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=2.0.0&quot;</span>
+</span></code></pre></div>
+This will override the version of <code>numpy</code> used by all dependencies in the <code>dev</code> feature to be at least <code>2.0.0</code>, regardless of what the dependencies specify when the <code>dev</code> feature is enabled.</p>
+<h3 id="interact-with-other-overrides">Interact with other overrides<a class="headerlink" href="#interact-with-other-overrides" title="Permanent link">#</a></h3>
+<p>For a specific environment, all the <code>dependency-overrides</code> defined in different features will be combined in the order they were when defining the environment.</p>
+<p>If the same dependency is overridden multiple times, we'll use the override from the <strong>prior</strong> feature in that environment.</p>
+<p>Also, the default feature will always come, and come last in the list of all overrides.</p>
+<p><div class="language-toml highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># pixi.toml</span>
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="k">[pypi-options]</span>
+</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="n">dependency-overrides</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">numpy</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;&gt;=2.1.0&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-3-4"><a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
+</span><span id="__span-3-5"><a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="k">[pypi-dependencies]</span>
+</span><span id="__span-3-6"><a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="n">numpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;&gt;=1.25.0&quot;</span>
+</span><span id="__span-3-7"><a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>
+</span><span id="__span-3-8"><a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="k">[feature.dev.pypi-options.dependency-overrides]</span>
+</span><span id="__span-3-9"><a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a><span class="n">numpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;==2.0.0&quot;</span>
+</span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>
+</span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="k">[feature.outdated.pypi-options.dependency-overrides]</span>
+</span><span id="__span-3-12"><a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a><span class="n">numpy</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;==1.21.0&quot;</span>
+</span><span id="__span-3-13"><a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>
+</span><span id="__span-3-14"><a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a><span class="k">[environments]</span>
+</span><span id="__span-3-15"><a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a><span class="n">dev</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;dev&quot;</span><span class="p">]</span>
+</span><span id="__span-3-16"><a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a><span class="n">outdated</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;outdated&quot;</span><span class="p">]</span>
+</span><span id="__span-3-17"><a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a><span class="n">conflict_a</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;outdated&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;dev&quot;</span><span class="p">]</span>
+</span><span id="__span-3-18"><a id="__codelineno-3-18" name="__codelineno-3-18" href="#__codelineno-3-18"></a><span class="n">conflict_b</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;dev&quot;</span><span class="p">,</span><span class="s2">&quot;outdated&quot;</span><span class="p">]</span>
+</span></code></pre></div>
+the following constrains are merged out:
+default: <code>numpy &gt;= 2.1.0</code>
+dev: <code>numpy == 2.0.0</code>
+outdated: <code>numpy == 1.21.0</code>
+conflict_a: <code>numpy == 1.21.0</code> (from <code>outdated</code>)
+conflict_b: <code>numpy == 2.0.0</code> (from <code>dev</code>)</p>
+<p>This may contrast with the intuition that all overrides are applied and combined to a result, but it is done this way to avoid conflicts and confusion. Since users are granted fully control over the overrides, it is up to ourselves to choose the right overrides for the environment.</p>
 
 
 
@@ -2880,6 +2948,60 @@
     <!-- Link to previous and/or next page -->
     
       
+        
+        <nav
+          class="md-footer__inner md-grid"
+          aria-label="Footer"
+          
+        >
+
+          <!-- Link to previous page -->
+          
+            
+            <a
+              href="../explain_info_command/"
+              class="md-footer__link md-footer__link--prev"
+              aria-label="Previous: Info Command"
+            >
+              <div class="md-footer__button md-icon">
+                
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+              </div>
+              <div class="md-footer__title">
+                <span class="md-footer__direction">
+                  Previous
+                </span>
+                <div class="md-ellipsis">
+                  Info Command
+                </div>
+              </div>
+            </a>
+          
+
+          <!-- Link to next page -->
+          
+            
+            <a
+              href="../shebang/"
+              class="md-footer__link md-footer__link--next"
+              aria-label="Next: Shebang"
+            >
+              <div class="md-footer__title">
+                <span class="md-footer__direction">
+                  Next
+                </span>
+                <div class="md-ellipsis">
+                  Shebang
+                </div>
+              </div>
+              <div class="md-footer__button md-icon">
+                
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M4 11v2h12l-5.5 5.5 1.42 1.42L19.84 12l-7.92-7.92L10.5 5.5 16 11z"/></svg>
+              </div>
+            </a>
+          
+        </nav>
+      
     
 
     <!-- Further information -->
@@ -2898,7 +3020,7 @@
         <!-- prefix logo -->
         <div class="md-footer-meta__item md-footer-meta__item--prefix-logo">
             <a href="https://prefix.dev" target="_blank">
-                <img src="../../../../../assets/logo_dark.svg" alt="">
+                <img src="../../assets/logo_dark.svg" alt="">
             </a>
         </div>
 
@@ -2979,12 +3101,12 @@
     
     
       
-      <script id="__config" type="application/json">{"base": "../../../../..", "features": ["content.tabs.link", "content.code.copy", "content.action.edit", "content.code.annotate", "content.tooltips", "content.code.select", "navigation.instant", "navigation.instant.progress", "navigation.tracking", "navigation.sections", "navigation.top", "navigation.footer"], "search": "../../../../../assets/javascripts/workers/search.d50fe291.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+      <script id="__config" type="application/json">{"base": "../..", "features": ["content.tabs.link", "content.code.copy", "content.action.edit", "content.code.annotate", "content.tooltips", "content.code.select", "navigation.instant", "navigation.instant.progress", "navigation.tracking", "navigation.sections", "navigation.top", "navigation.footer"], "search": "../../assets/javascripts/workers/search.d50fe291.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
     
     
-      <script src="../../../../../assets/javascripts/bundle.13a4f30d.min.js"></script>
+      <script src="../../assets/javascripts/bundle.13a4f30d.min.js"></script>
       
-        <script src="../../../../../javascripts/extra.js"></script>
+        <script src="../../javascripts/extra.js"></script>
       
     
   </body>
