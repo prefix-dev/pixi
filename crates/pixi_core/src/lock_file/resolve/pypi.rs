@@ -2,7 +2,7 @@ use std::{
     cell::RefCell,
     collections::{HashMap, HashSet},
     iter::once,
-    // ops::Deref,
+    ops::Deref,
     panic,
     path::{Path, PathBuf},
     rc::Rc,
@@ -580,6 +580,8 @@ pub async fn resolve_pypi(
 
     // Wrap the resolution in panic catching to handle conda prefix initialization failures
     // This includes both lookahead resolution and main resolution since both use lazy_build_dispatch
+    let package_requests = Rc::new(RefCell::new(Default::default()));
+
     let resolution_future = panic::AssertUnwindSafe(async {
         let lookahead_index = InMemoryIndex::default();
         let lookaheads = LookaheadResolver::new(
@@ -632,7 +634,7 @@ pub async fn resolve_pypi(
             &build_options,
             &context.capabilities,
         );
-        let package_requests = Rc::new(RefCell::new(Default::default()));
+
         let provider = CondaResolverProvider {
             fallback: fallback_provider,
             conda_python_identifiers: &conda_python_packages,
@@ -706,7 +708,7 @@ pub async fn resolve_pypi(
     let resolution = Resolution::from(resolution);
 
     // Print the overridden package requests
-    // print_overridden_requests(package_requests.borrow().deref());
+    print_overridden_requests(package_requests.borrow().deref());
 
     // Print any diagnostics
     for diagnostic in resolution.diagnostics() {
