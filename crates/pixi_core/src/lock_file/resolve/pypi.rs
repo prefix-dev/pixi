@@ -581,7 +581,6 @@ pub async fn resolve_pypi(
     // Wrap the resolution in panic catching to handle conda prefix initialization failures
     // This includes both lookahead resolution and main resolution since both use lazy_build_dispatch
     let resolution_future = panic::AssertUnwindSafe(async {
-        // Move lookahead resolution inside catch_unwind
         let lookahead_index = InMemoryIndex::default();
         let lookaheads = LookaheadResolver::new(
             &requirements,

@@ -1,14 +1,14 @@
 [workspace]
 channels = ["conda-forge"]
 name = "test"
-platforms = ["osx-arm64"]
+platforms = ["osx-64"]
 # platforms = ["linux-64"]
 version = "0.1.0"
 
 [dependencies]
-python = "*"
+python = "3.9"
 
 [pypi-dependencies]
-kahypar = "==1.0"
+# kahypar = "==1.0"
 # panic-panic = { path = "." }
-# sdist = "*"
+sdist = "*"
