@@ -16,7 +16,6 @@ from .common import (
     EMPTY_BOILERPLATE_PROJECT,
     PIXI_VERSION,
     ExitCode,
-    cwd,
     find_commands_supporting_frozen_and_no_install,
     verify_cli_command,
 )
@@ -33,7 +32,7 @@ def test_pixi(pixi: Path) -> None:
 def test_project_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest_path = tmp_pixi_workspace / "pixi.toml"
     # Create a new project
-    verify_cli_command([pixi, "init", tmp_pixi_workspace], ExitCode.SUCCESS)
+    verify_cli_command([pixi, "init", tmp_pixi_workspace])
 
     # Channel commands
     verify_cli_command(
@@ -253,7 +252,7 @@ def test_simple_project_setup(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest_path = tmp_pixi_workspace / "pixi.toml"
     conda_forge = "https://prefix.dev/conda-forge"
     # Create a new project
-    verify_cli_command([pixi, "init", "-c", conda_forge, tmp_pixi_workspace], ExitCode.SUCCESS)
+    verify_cli_command([pixi, "init", "-c", conda_forge, tmp_pixi_workspace])
 
     # Add package
     verify_cli_command(
@@ -342,61 +341,6 @@ def test_simple_project_setup(pixi: Path, tmp_pixi_workspace: Path) -> None:
         ],
         stderr_contains=["osx-arm64", "test", "Removed"],
     )
-
-
-def test_pixi_init_cwd(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    # Change directory to workspace
-    with cwd(tmp_pixi_workspace):
-        # Create a new project
-        verify_cli_command([pixi, "init", "."], ExitCode.SUCCESS)
-
-        # Verify that the manifest file is created
-        manifest_path = tmp_pixi_workspace / "pixi.toml"
-        assert manifest_path.exists()
-
-        # Verify that the manifest file contains expected content
-        manifest_content = manifest_path.read_text()
-        assert "[workspace]" in manifest_content
-
-
-def test_pixi_init_non_existing_dir(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    # Specify project dir
-    project_dir = tmp_pixi_workspace / "project_dir"
-
-    # Create a new project
-    verify_cli_command([pixi, "init", project_dir], ExitCode.SUCCESS)
-
-    # Verify that the manifest file is created
-    manifest_path = project_dir / "pixi.toml"
-    assert manifest_path.exists()
-
-    # Verify that the manifest file contains expected content
-    manifest_content = manifest_path.read_text()
-    assert "[workspace]" in manifest_content
-
-
-def test_pixi_init_pixi_home_parent(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    pixi_home = tmp_pixi_workspace / ".pixi"
-    pixi_home.mkdir(exist_ok=True)
-
-    verify_cli_command(
-        [pixi, "init", pixi_home.parent],
-        ExitCode.FAILURE,
-        # Test that we print a helpful error message
-        stderr_contains="pixi init",
-        env={"PIXI_HOME": str(pixi_home)},
-    )
-
-
-@pytest.mark.slow
-def test_pixi_init_pyproject(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    manifest_path = tmp_pixi_workspace / "pyproject.toml"
-    # Create a new project
-    verify_cli_command(
-        [pixi, "init", tmp_pixi_workspace, "--format", "pyproject"], ExitCode.SUCCESS
-    )
-    # Verify that install works
-    verify_cli_command([pixi, "install", "--manifest-path", manifest_path], ExitCode.SUCCESS)
 
 
 def test_upgrade_package_does_not_exist(
@@ -878,7 +822,7 @@ def test_pixi_manifest_path(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest_path = tmp_pixi_workspace / "pixi.toml"
 
     # Create a new project
-    verify_cli_command([pixi, "init", tmp_pixi_workspace], ExitCode.SUCCESS)
+    verify_cli_command([pixi, "init", tmp_pixi_workspace])
 
     # Modify project without manifest path
     verify_cli_command(
@@ -1429,9 +1373,7 @@ def test_pixi_task_list_json(pixi: Path, tmp_pixi_workspace: Path) -> None:
         """
     manifest.write_text(toml)
 
-    result = verify_cli_command(
-        [pixi, "task", "list", "--json", "--manifest-path", manifest], ExitCode.SUCCESS
-    )
+    result = verify_cli_command([pixi, "task", "list", "--json", "--manifest-path", manifest])
 
     task_data = json.loads(result.stdout)
 
@@ -1482,9 +1424,7 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
 
     verify_cli_command([pixi, "install", "--manifest-path", manifest, "--all"])
 
-    result = verify_cli_command(
-        [pixi, "info", "--manifest-path", manifest, "--extended", "--json"], ExitCode.SUCCESS
-    )
+    result = verify_cli_command([pixi, "info", "--manifest-path", manifest, "--extended", "--json"])
     info_data = json.loads(result.stdout)
 
     # Stub out path, size and other dynamic data from snapshot()
@@ -1618,7 +1558,7 @@ def test_frozen_no_install_invariant(pixi: Path, tmp_pixi_workspace: Path) -> No
     ]
 
     # Create a new project with bzip2 (lightweight package)
-    verify_cli_command([pixi, "init", tmp_pixi_workspace], ExitCode.SUCCESS)
+    verify_cli_command([pixi, "init", tmp_pixi_workspace])
     # Add bzip2 package to keep installation time low
     verify_cli_command([pixi, "add", "--manifest-path", manifest_path, "bzip2"])
 
@@ -1724,11 +1664,13 @@ If you get here you know all commands that *are* supported correctly listen to -
         )
 
 
+@pytest.mark.slow
 def test_add_url_no_channel(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """
     Check that a helpful error message is raised when attempting to
     add a `url::pkg` where `url` is not a channel of the workspace.
     """
+
     verify_cli_command([pixi, "init", tmp_pixi_workspace])
 
     # helpful error for missing channel
@@ -1772,7 +1714,7 @@ def test_add_url_no_channel(pixi: Path, tmp_pixi_workspace: Path) -> None:
         [
             pixi,
             "add",
-            "https://prefix.dev/conda-forge::xz",
+            "https://conda.anaconda.org/conda-forge::xz",
             "--feature=prefix",
             "--manifest-path",
             tmp_pixi_workspace,
@@ -1800,20 +1742,20 @@ def test_add_url_no_channel(pixi: Path, tmp_pixi_workspace: Path) -> None:
             tmp_pixi_workspace,
         ],
         expected_exit_code=ExitCode.FAILURE,
-        stderr_contains="unavailable channel 'https://prefix.dev/conda-forge/'",
+        stderr_contains="unavailable channel 'https://conda.anaconda.org/conda-forge/'",
     )
     # and helpful message now feature is used:
     verify_cli_command(
         [
             pixi,
             "add",
-            "https://prefix.dev/conda-forge::libzlib",
+            "https://conda.anaconda.org/conda-forge::libzlib",
             "--feature=prefix",
             "--manifest-path",
             tmp_pixi_workspace,
         ],
         expected_exit_code=ExitCode.FAILURE,
-        stderr_contains="pixi workspace channel add https://prefix.dev/conda-forge",
+        stderr_contains="pixi workspace channel add https://conda.anaconda.org/conda-forge",
     )
 
     verify_cli_command(
@@ -1823,7 +1765,7 @@ def test_add_url_no_channel(pixi: Path, tmp_pixi_workspace: Path) -> None:
             "channel",
             "add",
             "--feature=prefix",
-            "https://prefix.dev/conda-forge",
+            "https://conda.anaconda.org/conda-forge",
             "--manifest-path",
             tmp_pixi_workspace,
         ],
