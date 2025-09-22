@@ -676,13 +676,10 @@ pub async fn resolve_pypi(
             .map_err(|e| create_solve_error(e, &conda_python_packages))
     });
 
-    tracing::debug!("starting uv pypi resolution");
-
     // We try to distinguish between build dispatch panics and any other panics that occur
     let resolution = match resolution_future.catch_unwind().await {
         Ok(result) => result?,
         Err(panic_payload) => {
-            tracing::error!("panic occurred during PyPI resolution");
             // Try to get the stored initialization error from the lazy build dispatch
             if let Some(stored_error) = lazy_build_dispatch.last_initialization_error() {
                 return Err(SolveError::BuildDispatchPanic {
@@ -708,7 +705,7 @@ pub async fn resolve_pypi(
     };
     let resolution = Resolution::from(resolution);
 
-    // // Print the overridden package requests
+    // Print the overridden package requests
     // print_overridden_requests(package_requests.borrow().deref());
 
     // Print any diagnostics
