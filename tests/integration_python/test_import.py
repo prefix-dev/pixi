@@ -506,6 +506,11 @@ class TestCondaEnv:
         )
 
     def test_import_url_channel_dep(self, pixi: Path, tmp_pixi_workspace: Path) -> None:
+        """
+        Check that channels are parsed correctly when a conda-env file provides a
+        dependency of the form `url::pkg` under `dependencies:`.
+        Regression test for prefix-dev/pixi#4195.
+        """
         manifest_path = tmp_pixi_workspace / "pixi.toml"
 
         import_file_path = tmp_pixi_workspace / "url_channel_dep_env.yml"
