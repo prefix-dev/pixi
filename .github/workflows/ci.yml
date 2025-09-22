@@ -924,12 +924,12 @@ jobs:
           cache-write: ${{ github.event_name == 'push' && github.ref_name == 'main' }}
 
       - name: Download pixi artifacts
-        run: pixi run download-artifacts pixi --run-id ${{ github.run_id }}
+        run: pixi run download-artifacts --repo pixi --run-id ${{ github.run_id }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download pixi-build-backends artifacts
-        run: pixi run download-artifacts pixi-build-backends
+        run: pixi run download-artifacts --repo pixi-build-backends
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
