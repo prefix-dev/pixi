@@ -5458,6 +5458,7 @@ dependencies = [
  "rattler_lock",
  "serde_json",
  "thiserror 2.0.16",
+ "tracing",
  "url",
  "uv-configuration",
  "uv-distribution-filename",

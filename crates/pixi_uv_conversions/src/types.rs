@@ -142,6 +142,9 @@ pub enum ConversionError {
     #[error(transparent)]
     TrustedHostError(#[from] uv_configuration::TrustedHostError),
 
+    #[error(transparent)]
+    FmtError(#[from] std::fmt::Error),
+
     #[error("expected an archive but found path")]
     ExpectedArchiveButFoundPath(PathBuf, #[source] ExtensionError),
 }
