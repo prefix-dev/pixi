@@ -7944,9 +7944,7 @@ Pixi extensions are standalone executables that follow a simple naming conventio
 For example:
 
 - `pixi diff` → looks for `pixi-diff` executable
-
 - `pixi pack` → looks for `pixi-pack` executable
-
 - `pixi deploy` → looks for `pixi-deploy` executable
 
 ## Extension Discovery

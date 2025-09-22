@@ -3032,10 +3032,12 @@ When executing e.g. <code>pixi diff</code>, Pixi will search for the executable 
 Then it will execute it by passing any additional arguments to it.</p>
 <h2 id="how-extensions-work">How Extensions Work<a class="headerlink" href="#how-extensions-work" title="Permanent link">#</a></h2>
 <p>Pixi extensions are standalone executables that follow a simple naming convention: they must be named <code>pixi-{command}</code> where <code>{command}</code> is the name of the subcommand you want to add. When you run <code>pixi {command}</code>, Pixi will automatically discover and execute the corresponding <code>pixi-{command}</code> executable.</p>
-<p>For example:
-- <code>pixi diff</code> → looks for <code>pixi-diff</code> executable
-- <code>pixi pack</code> → looks for <code>pixi-pack</code> executable<br />
-- <code>pixi deploy</code> → looks for <code>pixi-deploy</code> executable</p>
+<p>For example:</p>
+<ul>
+<li><code>pixi diff</code> → looks for <code>pixi-diff</code> executable</li>
+<li><code>pixi pack</code> → looks for <code>pixi-pack</code> executable  </li>
+<li><code>pixi deploy</code> → looks for <code>pixi-deploy</code> executable</li>
+</ul>
 <h2 id="extension-discovery">Extension Discovery<a class="headerlink" href="#extension-discovery" title="Permanent link">#</a></h2>
 <p>Pixi discovers extensions by searching for <code>pixi-*</code> executables in the following locations, in order:</p>
 <h3 id="1-path-environment-variable">1. PATH Environment Variable<a class="headerlink" href="#1-path-environment-variable" title="Permanent link">#</a></h3>
