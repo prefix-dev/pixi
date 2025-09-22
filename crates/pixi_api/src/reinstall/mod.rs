@@ -67,19 +67,30 @@ pub(crate) async fn reinstall<I: Interface>(
             "".to_string()
         };
 
+    let is_cli = interface.is_cli().await;
+    let installed_envs_names: Vec<String> = installed_envs
+        .iter()
+        .map(|env| {
+            if is_cli {
+                env.fancy_display().to_string()
+            } else {
+                env.to_string()
+            }
+        })
+        .collect();
+
     if installed_envs.len() == 1 {
         interface
             .success(&format!(
                 "The {} environment has been re-installed{}.",
-                installed_envs[0].fancy_display(),
-                detached_envs_message
+                installed_envs_names[0], detached_envs_message
             ))
             .await;
     } else {
         interface
             .success(&format!(
                 "The following environments have been re-installed: {}\t{}",
-                installed_envs.iter().map(|n| n.fancy_display()).join(", "), // TODO: What to do with fancy display, we probably can't use that for non-cli use cases
+                installed_envs_names.iter().join(", "),
                 detached_envs_message
             ))
             .await;
