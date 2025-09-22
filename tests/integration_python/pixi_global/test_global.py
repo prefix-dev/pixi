@@ -1145,7 +1145,7 @@ def test_install_continues_past_failing_env(
         ],
         ExitCode.FAILURE,
         env=env,
-        stderr_contains="No candidates were found for dummy-x",
+        stderr_contains="No candidates were found for 'dummy-x'",
     )
 
     # Both valid packages are installed despite the error in between
