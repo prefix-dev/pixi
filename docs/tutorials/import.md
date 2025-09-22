@@ -30,6 +30,8 @@ python = "*"
 simple-env = { features = ["simple-env"], no-default-feature = true }
 ```
 
+It is then possible to define tasks for that environment, run commands in that environment, and launch a [`pixi shell`](https://pixi.sh/latest/reference/cli/pixi/shell) in that environment — see the [getting started guide](../getting_started.md) for links to start learning about these topics!
+
 For files without a `name` field, or to override the default behaviour, you can specify custom `--feature` and `--environment` names. This also allows importing into existing features and environments (including the `default` feature and environment). For example, given this other environment file to import:
 
 ```yaml title="env2.yml"
@@ -96,6 +98,8 @@ my-feature1 = { features = ["my-feature1"], no-default-feature = true }
 ```
 
 Any dependencies listed in the file are added as [`pypi-dependencies`](https://pixi.sh/latest/reference/pixi_manifest/#pypi-dependencies). An environment will be created with [`no-default-feature`](https://pixi.sh/latest/reference/pixi_manifest/#the-environments-table) set if the given environment name does not already exist.
+
+It is then possible to define tasks for that environment, run commands in that environment, and launch a [`pixi shell`](https://pixi.sh/latest/reference/cli/pixi/shell) in that environment — see the [getting started guide](../getting_started.md) for links to start learning about these topics!
 
 Just like the `conda-env` format, it is possible to import into existing features/environments (including the `default` feature/environment), and set specific platforms for the feature. See the previous section for details.
 
