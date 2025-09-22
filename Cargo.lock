@@ -4696,7 +4696,9 @@ name = "pixi_api"
 version = "0.1.0"
 dependencies = [
  "dunce",
+ "fancy_display",
  "fs-err",
+ "itertools 0.14.0",
  "miette 7.6.0",
  "minijinja",
  "pixi_config",

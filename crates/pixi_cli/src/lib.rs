@@ -23,7 +23,7 @@ pub mod add;
 mod build;
 pub mod clean;
 pub mod cli_config;
-mod cli_interface;
+pub mod cli_interface;
 pub mod command_info;
 pub mod completion;
 pub mod config;

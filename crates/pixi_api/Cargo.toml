@@ -10,7 +10,9 @@ version = "0.1.0"
 
 [dependencies]
 dunce = { workspace = true }
+fancy_display = { workspace = true }
 fs-err = { workspace = true }
+itertools = { workspace = true }
 miette = { workspace = true }
 minijinja = { workspace = true }
 pixi_config = { workspace = true }
