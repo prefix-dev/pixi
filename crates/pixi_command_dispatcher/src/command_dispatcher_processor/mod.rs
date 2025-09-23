@@ -391,6 +391,9 @@ impl CommandDispatcherProcessor {
                 self.on_source_build_cache_status(task)
             }
             ForegroundMessage::ClearReporter(sender) => self.clear_reporter(sender),
+            ForegroundMessage::ClearFilesystemCaches(sender) => {
+                self.clear_filesystem_caches(sender)
+            }
             ForegroundMessage::SourceMetadata(task) => self.on_source_metadata(task),
             ForegroundMessage::BackendSourceBuild(task) => self.on_backend_source_build(task),
         }
@@ -553,6 +556,17 @@ impl CommandDispatcherProcessor {
         if let Some(reporter) = self.reporter.as_mut() {
             reporter.on_clear()
         }
+        let _ = sender.send(());
+    }
+
+    /// Clears cached results based on the filesystem, preserving in-flight tasks.
+    fn clear_filesystem_caches(&mut self, sender: oneshot::Sender<()>) {
+        self.inner.glob_hash_cache.clear();
+
+        // Clear source build cache status, preserving in-flight tasks.
+        self.source_build_cache_status
+            .retain(|_, v| matches!(v, PendingDeduplicatingTask::Pending(_, _)));
+
         let _ = sender.send(());
     }
 

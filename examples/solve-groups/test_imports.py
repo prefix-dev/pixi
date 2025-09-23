@@ -1,3 +1,5 @@
+# pyright: reportUnusedImport=false
+
 import os
 import sys
 

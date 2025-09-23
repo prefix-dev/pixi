@@ -1,5 +1,6 @@
 import json
 import os
+import platform
 import shutil
 import signal
 import subprocess
@@ -202,7 +203,7 @@ def test_run_with_activation(pixi: Path, tmp_pixi_workspace: Path) -> None:
         stdout_contains="test123",
     )
 
-    # Validate that without experimental it does not use the cache
+    # Validate that without experimental caching it does not use the cache
     assert not tmp_pixi_workspace.joinpath(".pixi/activation-env-v0").exists()
 
     # Enable the experimental cache config
@@ -1451,6 +1452,104 @@ def test_shell_quoting_run_commands(pixi: Path, tmp_pixi_workspace: Path) -> Non
     )
 
 
+def test_run_with_environment_variable_priority(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    is_windows = platform.system() == "Windows"
+    script_extension = ".bat" if is_windows else ".sh"
+    script_manifest = tmp_pixi_workspace.joinpath(f"env_setup{script_extension}")
+    toml = f"""
+    [workspace]
+    name = "test"
+    channels = ["{dummy_channel_1}"]
+    platforms = ["linux-64", "osx-64", "osx-arm64", "win-64"]
+    [activation.env]
+    MY_ENV = "test123"
+    [target.unix.activation]
+    scripts = ["env_setup.sh"]
+    [target.win-64.activation]
+    scripts = ["env_setup.bat"]
+    [tasks.task]
+    cmd = "echo $MY_ENV"
+    env = {{ MY_ENV = "test456" }}
+    [tasks.foo]
+    cmd = "echo $MY_ENV"
+    [tasks.foobar]
+    cmd = "echo $FOO_PATH"
+    [tasks.bar]
+    cmd = "echo $BAR_PATH"
+    [tasks.outside]
+    cmd = "echo $OUTSIDE_ENV"
+    [dependencies]
+    pixi-foobar = "*"
+    """
+
+    manifest.write_text(toml)
+    # Generate platform-specific script content
+    if is_windows:
+        script_content = """@echo off
+    set "MY_ENV=activation script"
+    set "FOO_PATH=activation_script"
+    """
+    else:
+        script_content = """#!/bin/bash
+    # Activation script for Unix-like systems
+    export MY_ENV="activation script"
+    export FOO_PATH="activation_script"
+    """
+    script_manifest.write_text(script_content)
+
+    # Test 1: task.env > activation.env - should use environment variable defined in specific tasks
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "task"],
+        stdout_contains="test456",
+    )
+
+    # Test 2: activation.env > activation.script - should use activation.env
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "foo"],
+        stdout_contains="test123",
+    )
+
+    # Test 3: activation.script > activation scripts from dependencies
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "foobar"],
+        stdout_contains="activation_script",
+    )
+
+    # Test 4: activation scripts from dependencies > outside environment variable
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "bar"],
+        stdout_contains="bar",
+        stdout_excludes="outside_env",
+        env={"BAR_PATH": "outside_env"},
+    )
+
+    # Test 5: if nothing specified, use outside environment variable
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "outside"],
+        stdout_contains="outside_env",
+        env={"OUTSIDE_ENV": "outside_env"},
+    )
+
+    # Test 6: activation.env > outside environment variable - should use activation.env
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "foo"],
+        stdout_contains="test123",
+        stdout_excludes="outside_env",
+        env={"MY_ENV": "outside_env"},
+    )
+
+    # Test 7: task.env > outside environment variable - should use environment variable defined in specific tasks
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "task"],
+        stdout_contains="test456",
+        stdout_excludes="outside_env",
+        env={"MY_ENV": "outside_env"},
+    )
+
+
 @pytest.mark.skipif(
     sys.platform == "win32",
     reason="Signal handling is different on Windows",
@@ -1494,3 +1593,46 @@ def test_signal_forwarding(pixi: Path, tmp_pixi_workspace: Path) -> None:
             )
     else:
         raise AssertionError("Output file was not created")
+
+
+@pytest.mark.parametrize("in_out", ["input", "output"])
+def test_task_inputs_outputs_missing_no_initial_cache(
+    pixi: Path, tmp_pixi_workspace: Path, in_out: str
+) -> None:
+    """Test that nothing is cached when inputs/outputs are missing.
+
+    Expected behavior (outputs):
+    - First run: no cache is created and a warning is emitted that no outputs matched.
+    - Second run: still no cache hit (since outputs didn't exist), and warning is emitted again.
+
+    Expected behavior (inputs):
+    - First run: warning about missing inputs; no cache is created (no cache hit next run).
+    - Second run: still no cache hit, since inputs still do not exist.
+    """
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+
+    manifest_content["tasks"] = {
+        "test": {
+            "cmd": "echo 'running; no files are created'",
+            f"{in_out}s": ["test.txt"],
+        }
+    }
+
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    # First invocation: expect NO cache hit and a warning about inputs / missing outputs
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "test"],
+        stdout_contains="running; no files are created",
+        stderr_contains=f"No files matched the {in_out} globs",
+        stderr_excludes="cache hit",
+    )
+
+    # Second invocation: still should not be a cache hit
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "test"],
+        stdout_contains="running; no files are created",
+        stderr_excludes="cache hit",
+    )

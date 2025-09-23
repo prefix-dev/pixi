@@ -1123,6 +1123,36 @@ def test_install_only_reverts_failing(pixi: Path, tmp_path: Path, dummy_channel_
     assert not dummy_x.is_file()
 
 
+def test_install_continues_past_failing_env(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
+
+    # Order matters: fail in the middle (dummy-x), ensure it continues to install later packages
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "dummy-a",
+            "dummy-x",  # does not exist in dummy_channel_1
+            "dummy-b",
+        ],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="No candidates were found for dummy-x",
+    )
+
+    # Both valid packages are installed despite the error in between
+    assert dummy_a.is_file()
+    assert dummy_b.is_file()
+
+
 @pytest.mark.slow
 def test_install_platform(pixi: Path, tmp_path: Path) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
@@ -1494,6 +1524,38 @@ def test_uninstall_only_reverts_failing(pixi: Path, tmp_path: Path, dummy_channe
     assert not tmp_path.joinpath("envs", "dummy-a").is_dir()
     assert dummy_b.is_file()
     assert tmp_path.joinpath("envs", "dummy-b").is_dir()
+
+
+def test_uninstall_continues_past_missing_env(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
+
+    # Install two environments
+    verify_cli_command(
+        [pixi, "global", "install", "--channel", dummy_channel_1, "dummy-a", "dummy-b"],
+        env=env,
+    )
+    assert dummy_a.is_file()
+    assert dummy_b.is_file()
+
+    # Uninstall with a missing environment in between; should continue and remove both existing ones
+    missing_env = "does-not-exist"
+    verify_cli_command(
+        [pixi, "global", "uninstall", "dummy-a", missing_env, "dummy-b"],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains=f"Environment {missing_env} doesn't exist",
+    )
+
+    # Both existing environments are removed despite the error in between
+    assert not dummy_a.is_file()
+    assert not tmp_path.joinpath("envs", "dummy-a").is_dir()
+    assert not dummy_b.is_file()
+    assert not tmp_path.joinpath("envs", "dummy-b").is_dir()
 
 
 def test_global_update_single_package(
@@ -2114,7 +2176,7 @@ def test_tree_with_filter(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> N
     )
 
 
-def test_tree_nonexistent_environment(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+def test_tree_nonexistent_environment(pixi: Path, tmp_path: Path) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
 
     # Try to show tree for non-existent environment

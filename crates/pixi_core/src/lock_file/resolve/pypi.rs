@@ -577,66 +577,73 @@ pub async fn resolve_pypi(
     let resolver_env = ResolverEnvironment::specific(marker_environment.clone().into());
 
     let constraints = Constraints::from_requirements(constraints.iter().cloned());
-    let lookahead_index = InMemoryIndex::default();
-    let lookaheads = LookaheadResolver::new(
-        &requirements,
-        &constraints,
-        &overrides,
-        &context.hash_strategy,
-        &lookahead_index,
-        DistributionDatabase::new(
-            &registry_client,
-            &lazy_build_dispatch,
-            context.concurrency.downloads,
-        ),
-    )
-    .with_reporter(UvReporter::new_arc(
-        UvReporterOptions::new().with_existing(pb.clone()),
-    ))
-    .resolve(&resolver_env)
-    .await
-    .into_diagnostic()?;
-
-    let manifest = Manifest::new(
-        requirements,
-        constraints,
-        overrides,
-        Preferences::from_iter(preferences, &resolver_env),
-        None,
-        Default::default(),
-        uv_resolver::Exclusions::default(),
-        lookaheads,
-    );
-
-    let provider_tags = tags.clone();
-    let fallback_provider = DefaultResolverProvider::new(
-        DistributionDatabase::new(
-            &registry_client,
-            &lazy_build_dispatch,
-            context.concurrency.downloads,
-        ),
-        &flat_index,
-        Some(&provider_tags),
-        &requires_python,
-        AllowedYanks::from_manifest(&manifest, &resolver_env, options.dependency_mode),
-        &context.hash_strategy,
-        options.exclude_newer.clone(),
-        &build_options,
-        &context.capabilities,
-    );
-    let package_requests = Rc::new(RefCell::new(Default::default()));
-    let provider = CondaResolverProvider {
-        fallback: fallback_provider,
-        conda_python_identifiers: &conda_python_packages,
-        package_requests: package_requests.clone(),
-    };
-
-    // We need a new in-memory index for the resolver so that it does not conflict
-    // with the build dispatch one. As we have noted in the comment above.
-    let resolver_in_memory_index = InMemoryIndex::default();
 
     // Wrap the resolution in panic catching to handle conda prefix initialization failures
+    // This includes both lookahead resolution and main resolution since both use lazy_build_dispatch
+    let package_requests = Rc::new(RefCell::new(Default::default()));
+
     let resolution_future = panic::AssertUnwindSafe(async {
+        let lookahead_index = InMemoryIndex::default();
+        let lookaheads = LookaheadResolver::new(
+            &requirements,
+            &constraints,
+            &overrides,
+            &context.hash_strategy,
+            &lookahead_index,
+            DistributionDatabase::new(
+                &registry_client,
+                &lazy_build_dispatch,
+                context.concurrency.downloads,
+            ),
+        )
+        .with_reporter(UvReporter::new_arc(
+            UvReporterOptions::new().with_existing(pb.clone()),
+        ))
+        .resolve(&resolver_env)
+        .await
+        .into_diagnostic()
+        .map_err(|e| SolveError::GeneralPanic {
+            message: format!("Failed to do lookahead resolution: {}", e),
+        })?;
+
+        // Move manifest and provider setup inside catch_unwind
+        let manifest = Manifest::new(
+            requirements,
+            constraints,
+            overrides,
+            Preferences::from_iter(preferences, &resolver_env),
+            None,
+            Default::default(),
+            uv_resolver::Exclusions::default(),
+            lookaheads,
+        );
+
+        let provider_tags = tags.clone();
+        let fallback_provider = DefaultResolverProvider::new(
+            DistributionDatabase::new(
+                &registry_client,
+                &lazy_build_dispatch,
+                context.concurrency.downloads,
+            ),
+            &flat_index,
+            Some(&provider_tags),
+            &requires_python,
+            AllowedYanks::from_manifest(&manifest, &resolver_env, options.dependency_mode),
+            &context.hash_strategy,
+            options.exclude_newer.clone(),
+            &build_options,
+            &context.capabilities,
+        );
+
+        let provider = CondaResolverProvider {
+            fallback: fallback_provider,
+            conda_python_identifiers: &conda_python_packages,
+            package_requests: package_requests.clone(),
+        };
+
+        // We need a new in-memory index for the resolver so that it does not conflict
+        // with the build dispatch one. As we have noted in the comment above.
+        let resolver_in_memory_index = InMemoryIndex::default();
         let resolver = Resolver::new_custom_io(
             manifest,
             options,
@@ -671,7 +678,7 @@ pub async fn resolve_pypi(
             .map_err(|e| create_solve_error(e, &conda_python_packages))
     });
 
-    // We try to distinguis between build dispatch panics and any other panics that occur
+    // We try to distinguish between build dispatch panics and any other panics that occur
     let resolution = match resolution_future.catch_unwind().await {
         Ok(result) => result?,
         Err(panic_payload) => {

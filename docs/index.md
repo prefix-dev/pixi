@@ -83,7 +83,7 @@ pixi global install gh nvim ipython btop ripgrep
 | Supports Multiple Languages | ✅    | ✅     | ❌   | ❌      | ❌  |
 | Lockfiles                   | ✅    | ❌     | ❌   | ✅      | ✅  |
 | Task runner                 | ✅    | ❌     | ❌   | ❌      | ❌  |
-| Project Management          | ✅    | ❌     | ❌   | ✅      | ✅  |
+| Workspace Management        | ✅    | ❌     | ❌   | ✅      | ✅  |
 
 ---
 
@@ -186,7 +186,7 @@ To install `pixi`, run:
         ```
         pixi add rust
         ```
-    3. **Create your project:**
+    3. **Create your workspace:**
         ```
         pixi run cargo init
         ```

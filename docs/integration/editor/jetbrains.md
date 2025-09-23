@@ -38,7 +38,7 @@ Under the hood it redirects all calls to the corresponding `pixi` equivalent.
 
 !!!warning "Use the conda shim from this Pixi workspace"
     Please make sure that this is the `conda` shim from this Pixi workspace and not another one.
-    If you use multiple Pixi projects, you might have to adjust the path accordingly as PyCharm remembers the path to the conda executable.
+    If you use multiple Pixi workspaces, you might have to adjust the path accordingly as PyCharm remembers the path to the conda executable.
 
 ![Add Python Interpreter](https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/add-conda-environment-light.png#only-light)
 ![Add Python Interpreter](https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/add-conda-environment-dark.png#only-dark)
@@ -83,9 +83,9 @@ You can then specify the corresponding environment in the bottom right corner of
 ![Specify environment](https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/specify-interpreter-light.png#only-light)
 ![Specify environment](https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/specify-interpreter-dark.png#only-dark)
 
-### Multiple Pixi projects
+### Multiple Pixi workspaces
 
-When using multiple Pixi projects, remember to select the correct _Conda Executable_ for each workspace as mentioned above.
+When using multiple Pixi workspaces, remember to select the correct _Conda Executable_ for each workspace as mentioned above.
 It also might come up that you have multiple environments with the same name.
 
 ![Multiple default environments](https://raw.githubusercontent.com/pavelzw/pixi-pycharm/main/.github/assets/multiple-default-envs-light.png#only-light)
@@ -143,32 +143,32 @@ In production, you then just run `pixi run -e prod COMMAND`, and the minimal pro
 
 There is another approach for configuring PyCharm that avoids the need for the pixi-pycharm shim. It requires that you have conda installed locally (PyCharm will detect it automatically if installed in a standard location).
 
-To configure an interpreter for a new project:
+To configure an interpreter for a new workspace:
 
 1. Edit conda's environment list located at `~/.conda/environments.txt`. Simply append the full file paths of any pixi
     environments you wish to include, e.g.:
 
     ```
     ...
-    /Users/jdoe/my-project/.pixi/envs/default
-    /Users/jdoe/my-project/.pixi/envs/dev
+    /Users/jdoe/my-workspace/.pixi/envs/default
+    /Users/jdoe/my-workspace/.pixi/envs/dev
     ```
 
-2. In PyCharm, when adding the interpreter for your project, scroll down to the bottom of the Python Interpreter
+2. In PyCharm, when adding the interpreter for your workspace, scroll down to the bottom of the Python Interpreter
     dropdown menu and choose *Show All ...* to bring up the Python Interpreters dialog.
 
 3. Select the `+` button to add a new local existing conda interpreter using the standard conda location and
     choose the desired prefix from the list. (If you edited the environment file while PyCharm was running, you
-    may need to reload the environments.) 
-    
-4. This will add the environment but will automatically give it a name matching the last component of the 
+    may need to reload the environments.)
+
+4. This will add the environment but will automatically give it a name matching the last component of the
     directory path, which will often just be `default` for pixi environments. This is particularly problematic
-    if you work on many projects. You can change PyCharm's name for the environment by clicking on the pencil icon
-    or using the right-click dropdown menu. 
+    if you work on many workspaces. You can change PyCharm's name for the environment by clicking on the pencil icon
+    or using the right-click dropdown menu.
 
 5. Once you have added and renamed the environments, select the desired interpreter to use in PyCharm from the list.
 
-If your project uses more than one environment, you can switch between them by selecting interpreter name in the
+If your workspace uses more than one environment, you can switch between them by selecting interpreter name in the
 status bar at the bottom of the PyCharm window and selecting the interpreter for the desired interpreter from the list.
 Note that this will trigger PyCharm reindexing and might not be very fast.
 

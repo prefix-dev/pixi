@@ -108,7 +108,7 @@ nav:
   - Home: index.md
   - Getting Started:
       - Installation: installation.md
-      - First Project: first_project.md
+      - First Workspace: first_workspace.md
       - Basic Usage: getting_started.md
   - Tutorials:
       - Python:
@@ -174,7 +174,7 @@ nav:
   - Advanced:
       - Channel Logic: advanced/channel_logic.md
       - Info Command: advanced/explain_info_command.md
-      - Dependency Overrides: overrides/override.md
+      - Dependency Overrides: advanced/override.md
       - Shebang: advanced/shebang.md
       - Shell: advanced/pixi_shell.md
   - Reference:
@@ -207,6 +207,7 @@ not_in_nav: |
 plugins:
   - redirects:
       redirect_maps:
+        "first_project.md": "first_workspace.md"
         "configuration.md": "reference/pixi_manifest.md"
         "reference/project_configuration.md": "reference/pixi_manifest.md"
         "basic_usage.md": "getting_started.md"
@@ -240,11 +241,12 @@ plugins:
         "integration/editor/devcontainer.md": "integration/editor/vscode.md"
         "integration/editor/pycharm.md": "integration/editor/jetbrains.md"
         "advanced/installation.md": "installation.md"
+        "overrides/override.md": "advanced/override.md"
 
         # Redirects for links from code to make sure we don't break them.
         # Using descriptive names that never existed, to avoid conflicts.
         # crates/pixi_cli/src/init.rs
-        "init_getting_started.md": "first_project.md"
+        "init_getting_started.md": "first_workspace.md"
 
   - search
   - social

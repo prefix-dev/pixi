@@ -12,6 +12,7 @@ use pixi_manifest::pypi::pypi_options::{
 };
 use pixi_record::{LockedGitUrl, PinnedGitCheckout, PinnedGitSpec};
 use pixi_spec::GitReference as PixiReference;
+use std::fmt::Write;
 use uv_configuration::BuildOptions;
 use uv_distribution_types::{GitSourceDist, Index, IndexLocations, IndexUrl};
 use uv_pep508::{InvalidNameError, PackageName, VerbatimUrl, VerbatimUrlError};
@@ -346,14 +347,79 @@ pub fn to_uv_specifiers(
 pub fn to_requirements<'req>(
     requirements: impl Iterator<Item = &'req uv_distribution_types::Requirement>,
 ) -> Result<Vec<pep508_rs::Requirement>, crate::ConversionError> {
-    let requirements: Result<Vec<pep508_rs::Requirement>, _> = requirements
+    let requirements: Result<Vec<pep508_rs::Requirement>, ConversionError> = requirements
         .map(|requirement| {
-            pep508_rs::Requirement::from_str(&requirement.to_string())
+            // First we convert `uv_distribution_types::Requirement` into a string
+            // The implementation is nearly identical to `requirement.to_string()`.
+            // However, we ignore the uv specific index since
+            // `pep508_rs::Requirement::from_str` isn't able to parse that
+
+            let uv_distribution_types::Requirement {
+                extras,
+                name,
+                source,
+                marker,
+                groups: _groups,
+                origin: _origin,
+            } = requirement;
+
+            let mut package_string = String::new();
+            write!(&mut package_string, "{}", name)?;
+            if !extras.is_empty() {
+                write!(
+                    package_string,
+                    "[{}]",
+                    extras
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(",")
+                )?;
+            }
+            match &source {
+                uv_distribution_types::RequirementSource::Registry {
+                    specifier, index, ..
+                } => {
+                    write!(package_string, "{specifier}")?;
+                    if let Some(index) = index {
+                        // This is the main difference to the `requirement.to_string()`
+                        // We only log this value, but don't put it into the final string
+                        tracing::info!("Ignore specified index '{}' of '{}'", index.url, name);
+                    }
+                }
+                uv_distribution_types::RequirementSource::Url { url, .. } => {
+                    write!(package_string, " @ {url}")?;
+                }
+                uv_distribution_types::RequirementSource::Git {
+                    url: _,
+                    git,
+                    subdirectory,
+                } => {
+                    write!(package_string, " @ git+{}", git.repository())?;
+                    if let Some(reference) = git.reference().as_str() {
+                        write!(package_string, "@{reference}")?;
+                    }
+                    if let Some(subdirectory) = subdirectory {
+                        writeln!(package_string, "#subdirectory={}", subdirectory.display())?;
+                    }
+                }
+                uv_distribution_types::RequirementSource::Path { url, .. } => {
+                    write!(package_string, " @ {url}")?;
+                }
+                uv_distribution_types::RequirementSource::Directory { url, .. } => {
+                    write!(package_string, " @ {url}")?;
+                }
+            }
+            if let Some(marker) = marker.contents() {
+                write!(package_string, " ; {marker}")?;
+            }
+            pep508_rs::Requirement::from_str(&package_string)
                 .map_err(crate::Pep508Error::Pep508Error)
+                .map_err(From::from)
         })
         .collect();
 
-    Ok(requirements?)
+    requirements
 }
 
 /// Convert back to PEP508 without the VerbatimParsedUrl

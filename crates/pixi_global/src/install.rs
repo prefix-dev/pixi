@@ -91,6 +91,8 @@ pub(crate) async fn create_executable_trampolines(
     prefix: &Prefix,
     env_name: &EnvironmentName,
 ) -> miette::Result<StateChanges> {
+    const IGNORE_CONDA_PREFIX_MARKER: &str = "etc/pixi/global-ignore-conda-prefix";
+
     #[derive(Debug)]
     enum AddedOrChanged {
         Unchanged,
@@ -104,6 +106,9 @@ pub(crate) async fn create_executable_trampolines(
     // Get PATH environment variables
     let path_current = std::env::var("PATH").into_diagnostic()?;
     let mut activation_variables = prefix.run_activation().await?;
+    if prefix.root().join(IGNORE_CONDA_PREFIX_MARKER).is_file() {
+        activation_variables.remove("CONDA_PREFIX");
+    }
     let path_after_activation = activation_variables
         .remove("PATH")
         .or_else(|| activation_variables.remove("Path"))

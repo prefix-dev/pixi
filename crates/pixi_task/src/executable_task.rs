@@ -268,6 +268,81 @@ impl<'p> ExecutableTask<'p> {
         })
     }
 
+    /// Compute the post-run task hash by updating inputs and outputs.
+    /// This does not emit any warnings; it only reflects the current filesystem state.
+    pub async fn compute_post_run_hash(
+        &self,
+        lock_file: &LockFile,
+        previous_hash: Option<TaskHash>,
+    ) -> Result<Option<TaskHash>, InputHashesError> {
+        // Start from provided hash if available, otherwise from current task state.
+        // If neither is available, create a minimal hash so we can report warnings
+        // and make a consistent caching decision.
+        let mut hash = if let Some(hash) = previous_hash {
+            hash
+        } else if let Some(hash) = TaskHash::from_task(self, lock_file).await? {
+            hash
+        } else {
+            TaskHash {
+                command: self.full_command().ok().flatten(),
+                inputs: None,
+                outputs: None,
+                environment: pixi_core::environment::EnvironmentHash::from_environment(
+                    &self.run_environment,
+                    &std::collections::HashMap::new(),
+                    lock_file,
+                ),
+            }
+        };
+
+        // Update inputs/outputs based on the current filesystem
+        hash.update_output(self).await?;
+        hash.update_input(self).await?;
+        Ok(Some(hash))
+    }
+
+    /// Emit warnings for missing input/output globs given a computed hash.
+    pub fn warn_on_missing_globs(&self, post_hash: &TaskHash) {
+        let (rendered_inputs, rendered_outputs) = match self.task().as_execute() {
+            Ok(exe) => {
+                let ins = exe
+                    .inputs
+                    .as_ref()
+                    .map(|p| p.render(Some(self.args())).unwrap_or_default());
+                let outs = exe
+                    .outputs
+                    .as_ref()
+                    .map(|p| p.render(Some(self.args())).unwrap_or_default());
+                (ins, outs)
+            }
+            Err(_) => (None, None),
+        };
+
+        // Outputs warning
+        if rendered_outputs.is_some() && post_hash.outputs.is_none() {
+            if let Some(globs) = rendered_outputs.as_ref() {
+                tracing::warn!(
+                    "No files matched the output globs for task '{}'",
+                    self.name().unwrap_or_default()
+                );
+                let formatted = globs.iter().map(|g| format!("`{}`", g.inner())).join(", ");
+                tracing::warn!("Output globs: {}", formatted);
+            }
+        }
+
+        // Inputs warning
+        if rendered_inputs.is_some() && post_hash.inputs.is_none() {
+            if let Some(globs) = rendered_inputs.as_ref() {
+                tracing::warn!(
+                    "No files matched the input globs for task '{}'",
+                    self.name().unwrap_or_default()
+                );
+                let formatted = globs.iter().map(|g| format!("`{}`", g.inner())).join(", ");
+                tracing::warn!("Input globs: {}", formatted);
+            }
+        }
+    }
+
     /// We store the hashes of the inputs and the outputs of the task in a file
     /// in the cache. The current name is something like
     /// `run_environment-task_name.json`.
@@ -307,28 +382,37 @@ impl<'p> ExecutableTask<'p> {
         Ok(CanSkip::No(None))
     }
 
-    /// Saves the cache of the task. This function will update the cache file
-    /// with the new hash of the task (inputs and outputs). If the task has
-    /// no hash, it will not save the cache.
+    /// Saves the cache of the task using the provided post-run hash.
+    /// If the task has no inputs or outputs (hash is None), it will not save the cache.
     pub async fn save_cache(
         &self,
-        lock_file: &LockFile,
-        previous_hash: Option<TaskHash>,
+        post_run_hash: Option<TaskHash>,
     ) -> Result<(), CacheUpdateError> {
-        let task_cache_folder = self.project().task_cache_folder();
-        let args_cache = TaskHash::task_args_hash(self)?;
-        let cache_file = task_cache_folder.join(self.cache_name(args_cache));
-        let new_hash = if let Some(mut previous_hash) = previous_hash {
-            previous_hash.update_output(self).await?;
-            previous_hash
-        } else if let Some(hash) = TaskHash::from_task(self, lock_file).await? {
-            hash
+        let execute = if let Ok(task) = self.task().as_execute() {
+            task
         } else {
+            // Don't save cache for non-execute tasks
             return Ok(());
         };
 
-        tokio::fs::create_dir_all(&task_cache_folder).await?;
+        let task_cache_folder = self.project().task_cache_folder();
+        let args_cache = TaskHash::task_args_hash(self)?;
+        let cache_file = task_cache_folder.join(self.cache_name(args_cache));
 
+        // Use the post-run hash provided by the caller
+        let new_hash = match post_run_hash {
+            Some(hash) => hash,
+            None => return Ok(()),
+        };
+
+        // If any configured globs (inputs or outputs) did not match, do not create a cache entry
+        let outputs_unmatched = execute.outputs.is_some() && new_hash.outputs.is_none();
+        let inputs_unmatched = execute.inputs.is_some() && new_hash.inputs.is_none();
+        if outputs_unmatched || inputs_unmatched {
+            return Ok(());
+        }
+
+        tokio::fs::create_dir_all(&task_cache_folder).await?;
         let cache = TaskCache {
             hash: new_hash.computation_hash(),
         };
@@ -383,18 +467,18 @@ fn get_output_writer_and_handle() -> (ShellPipeWriter, JoinHandle<String>) {
 }
 
 /// Task specific environment variables.
+///
+/// These are rendered as `export KEY=VALUE` statements and prepended to the
+/// task script. At runtime they are interpreted by `deno_task_shell`, not by an
+/// external OS shell, so `$VAR`-style expansion follows deno-task-shell’s
+/// semantics.
 fn get_export_specific_task_env(task: &Task) -> String {
     // Append the environment variables if they don't exist
     let mut export = String::new();
     if let Some(env) = task.env() {
         for (key, value) in env {
-            if value.contains(format!("${}", key).as_str()) || std::env::var(key.as_str()).is_err()
-            {
-                tracing::info!("Setting environment variable: {}=\"{}\"", key, value);
-                export.push_str(&format!("export \"{}={}\";\n", key, value));
-            } else {
-                tracing::info!("Environment variable {} already set", key);
-            }
+            tracing::debug!("Setting environment variable: {}=\"{}\"", key, value);
+            export.push_str(&format!("export \"{}={}\";\n", key, value));
         }
     }
     export
