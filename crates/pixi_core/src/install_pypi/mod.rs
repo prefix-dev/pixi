@@ -19,8 +19,8 @@ use pixi_progress::await_in_progress;
 use pixi_record::PixiRecord;
 use pixi_utils::prefix::Prefix;
 use pixi_uv_conversions::{
-    BuildIsolation, locked_indexes_to_index_locations, pypi_options_to_build_options,
-    to_exclude_newer, to_index_strategy,
+    BuildIsolation, configure_insecure_hosts_for_tls_bypass, locked_indexes_to_index_locations,
+    pypi_options_to_build_options, to_exclude_newer, to_index_strategy,
 };
 use plan::{InstallPlanner, InstallReason, NeedReinstall, PyPIInstallationPlan};
 use pypi_modifiers::{
@@ -225,9 +225,18 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             pypi_options_to_build_options(self.build_config.no_build, self.build_config.no_binary)
                 .into_diagnostic()?;
 
+        let allow_insecure_hosts = configure_insecure_hosts_for_tls_bypass(
+            self.context_config
+                .uv_context
+                .allow_insecure_host
+                .clone(),
+            self.context_config.uv_context.tls_no_verify,
+            &index_locations,
+        );
+
         let mut uv_client_builder =
             RegistryClientBuilder::new(self.context_config.uv_context.cache.clone())
-                .allow_insecure_host(self.context_config.uv_context.allow_insecure_host.clone())
+                .allow_insecure_host(allow_insecure_hosts)
                 .keyring(self.context_config.uv_context.keyring_provider)
                 .connectivity(Connectivity::Online)
                 .extra_middleware(self.context_config.uv_context.extra_middleware.clone())
