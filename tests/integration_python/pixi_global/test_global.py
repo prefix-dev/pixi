@@ -2214,38 +2214,145 @@ def test_tree_invert(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     )
 
 
-def test_conda_file(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
-    """Test directly installing a `.conda` file with `pixi global --path`"""
-    env = {"PIXI_HOME": str(tmp_path)}
+class TestCondaFile:
+    @pytest.mark.parametrize("path_arg", [True, False])
+    def test_install_conda_file(
+        self, pixi: Path, tmp_path: Path, dummy_channel_1: str, path_arg: bool
+    ) -> None:
+        """Test directly installing a `.conda` file with `pixi global`"""
+        env = {"PIXI_HOME": str(tmp_path)}
+        os.chdir(tmp_path)
 
-    conda_file = Path.from_uri(dummy_channel_1) / "osx-arm64" / "dummy-c-0.1.0-h60d57d3_0.conda"
+        conda_file = tmp_path / "dummy-c-0.1.0-h60d57d3_0.conda"
+        shutil.copyfile(
+            Path.from_uri(dummy_channel_1) / "osx-arm64" / "dummy-c-0.1.0-h60d57d3_0.conda",
+            conda_file,
+        )
 
-    def check_install(conda_file_path: Path):
+        def check_install(conda_file_path: Path):
+            if path_arg:
+                verify_cli_command(
+                    [pixi, "global", "install", "--path", conda_file_path],
+                    env=env,
+                )
+            else:
+                verify_cli_command(
+                    [pixi, "global", "install", conda_file_path],
+                    env=env,
+                    expected_exit_code=ExitCode.FAILURE,
+                    stderr_contains="please pass `--path`",
+                )
+
+        # check absolute path
+        check_install(conda_file)
+
+        # check relative path in same dir
+        os.chdir(conda_file.parent)
+        relative_conda_file = conda_file.relative_to(Path.cwd(), walk_up=True)
+        check_install(relative_conda_file)
+
+        # check relative path in subdir
+        os.chdir(conda_file.parent.parent)
+        relative_conda_file = conda_file.relative_to(Path.cwd(), walk_up=True)
+        check_install(relative_conda_file)
+
+        # check relative path in a 'cousin' relative directory
+        os.chdir(tmp_path)
+        relative_conda_file = conda_file.relative_to(Path.cwd(), walk_up=True)
+        check_install(relative_conda_file)
+
+    def test_update_sync_conda_file(self, pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+        """Test that `pixi global {update, sync}` work and use the existing file."""
+        env = {"PIXI_HOME": str(tmp_path)}
+        os.chdir(tmp_path)
+
+        dummy_c_file = "dummy-c-0.1.0-h60d57d3_0.conda"
+        conda_file = tmp_path / dummy_c_file
+        shutil.copyfile(
+            Path.from_uri(dummy_channel_1) / "osx-arm64" / dummy_c_file,
+            conda_file,
+        )
+
         verify_cli_command(
             [
                 pixi,
                 "global",
                 "install",
                 "--path",
-                conda_file_path,
+                conda_file,
             ],
             env=env,
         )
 
-    # check absolute path
-    check_install(conda_file)
+        # update with file still there
+        verify_cli_command(
+            [
+                pixi,
+                "global",
+                "update",
+                "dummy-c",
+            ],
+            env=env,
+            stderr_contains="Environment dummy-c was already up-to-date.",
+        )
 
-    # check relative path in same dir
-    os.chdir(conda_file.parent)
-    relative_conda_file = conda_file.relative_to(Path.cwd(), walk_up=True)
-    check_install(relative_conda_file)
+        # sync with file still there
+        verify_cli_command(
+            [
+                pixi,
+                "global",
+                "sync",
+            ],
+            env=env,
+            stderr_contains="Nothing to do",
+        )
 
-    # check relative path in subdir
-    os.chdir(conda_file.parent.parent)
-    relative_conda_file = conda_file.relative_to(Path.cwd(), walk_up=True)
-    check_install(relative_conda_file)
+        os.remove(conda_file)
 
-    # check relative path in a 'cousin' relative directory
-    os.chdir(tmp_path)
-    relative_conda_file = conda_file.relative_to(Path.cwd(), walk_up=True)
-    check_install(relative_conda_file)
+        # update with file gone
+        verify_cli_command(
+            [
+                pixi,
+                "global",
+                "update",
+                "dummy-c",
+            ],
+            env=env,
+            stderr_contains="Environment dummy-c was already up-to-date.",
+        )
+
+        # sync with file gone
+        verify_cli_command(
+            [
+                pixi,
+                "global",
+                "sync",
+            ],
+            env=env,
+            stderr_contains="Nothing to do",
+        )
+
+        # remove the environment
+        # XXX: should this fail instead?
+        shutil.rmtree(tmp_path / "envs" / "dummy-c")
+
+        # update with environment removed
+        verify_cli_command(
+            [
+                pixi,
+                "global",
+                "update",
+                "dummy-c",
+            ],
+            env=env,
+        )
+
+        # sync with environment removed
+        verify_cli_command(
+            [
+                pixi,
+                "global",
+                "sync",
+            ],
+            env=env,
+        )
