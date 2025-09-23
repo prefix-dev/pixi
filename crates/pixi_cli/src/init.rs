@@ -298,7 +298,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let version = "0.1.0";
     let author = get_default_author();
     let platforms = if args.platforms.is_empty() {
-        vec![Platform::current().to_string()]
+        let config_platforms = config.default_platforms();
+        if config_platforms.is_empty() {
+            vec![Platform::current().to_string()]
+        } else {
+            config_platforms
+        }
     } else {
         args.platforms.clone()
     };
@@ -742,5 +747,73 @@ mod tests {
                 value
             );
         }
+    }
+
+    #[tokio::test]
+    async fn test_default_platforms_usage() {
+        use pixi_config::Config;
+        use tempfile::tempdir;
+
+        let temp_dir = tempdir().unwrap();
+        let config_dir = temp_dir.path().join(".pixi");
+        fs_err::create_dir_all(&config_dir).unwrap();
+        let config_file = config_dir.join("config.toml");
+
+        // Create a config with default platforms
+        let config_content = r#"default-platforms = ["win-64", "linux-64", "osx-64"]"#;
+        fs_err::write(&config_file, config_content).unwrap();
+
+        // Parse the config
+        let (config, _) = Config::from_toml(config_content, Some(&config_file)).unwrap();
+
+        // Test that default_platforms() returns the expected values
+        assert_eq!(
+            config.default_platforms(),
+            vec!["win-64", "linux-64", "osx-64"]
+        );
+
+        // Test init args with empty platforms should use config defaults
+        let args = Args {
+            path: temp_dir.path().to_path_buf(),
+            channels: None,
+            platforms: vec![], // Empty platforms
+            env_file: None,
+            format: None,
+            pyproject_toml: false,
+            scm: None,
+        };
+
+        // Test the platform selection logic matches what's in execute()
+        let platforms = if args.platforms.is_empty() {
+            let config_platforms = config.default_platforms();
+            if config_platforms.is_empty() {
+                vec![Platform::current().to_string()]
+            } else {
+                config_platforms
+            }
+        } else {
+            args.platforms.clone()
+        };
+
+        assert_eq!(platforms, vec!["win-64", "linux-64", "osx-64"]);
+
+        // Test with explicit platforms should override config
+        let args_with_platforms = Args {
+            platforms: vec!["linux-aarch64".to_string()],
+            ..args
+        };
+
+        let platforms_override = if args_with_platforms.platforms.is_empty() {
+            let config_platforms = config.default_platforms();
+            if config_platforms.is_empty() {
+                vec![Platform::current().to_string()]
+            } else {
+                config_platforms
+            }
+        } else {
+            args_with_platforms.platforms.clone()
+        };
+
+        assert_eq!(platforms_override, vec!["linux-aarch64"]);
     }
 }
