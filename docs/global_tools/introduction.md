@@ -242,7 +242,7 @@ Pixi activates the target environment before running a globally exposed executab
 Some tools inspect `CONDA_PREFIX` and expect it to point to a standard Conda installation, which can lead to confusing behavior when the tool runs from a Pixi-managed prefix.
 
 Package authors can opt out of exporting `CONDA_PREFIX` by shipping a marker file at `etc/pixi/global-ignore-conda-prefix` inside the environment.
-When this file is present, Pixi removes `CONDA_PREFIX` from the trampoline's environment variables,
+When this file is present, Pixi removes `CONDA_PREFIX` from the environment variables,
 letting the tool behave as if no Conda environment is active.
 
 Here's a minimal `recipe.yaml` snippet that adds the marker while building the package:
