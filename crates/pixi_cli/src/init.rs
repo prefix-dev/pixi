@@ -1,7 +1,7 @@
 use std::{cmp::PartialEq, path::PathBuf};
 
 use clap::{Parser, ValueEnum};
-use pixi_api::{context::ApiContext, init::InitOptions, interface::Interface};
+use pixi_api::{context::WorkspaceContext, interface::Interface, workspace::init::InitOptions};
 use rattler_conda_types::NamedChannelOrUrl;
 
 use crate::cli_interface::CliInterface;
@@ -67,15 +67,15 @@ pub enum GitAttributes {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let format = args.format.map(|f| match f {
-        ManifestFormat::Pixi => pixi_api::init::ManifestFormat::Pixi,
-        ManifestFormat::Pyproject => pixi_api::init::ManifestFormat::Pyproject,
-        ManifestFormat::Mojoproject => pixi_api::init::ManifestFormat::Mojoproject,
+        ManifestFormat::Pixi => pixi_api::workspace::init::ManifestFormat::Pixi,
+        ManifestFormat::Pyproject => pixi_api::workspace::init::ManifestFormat::Pyproject,
+        ManifestFormat::Mojoproject => pixi_api::workspace::init::ManifestFormat::Mojoproject,
     });
 
     let scm = args.scm.map(|s| match s {
-        GitAttributes::Github => pixi_api::init::GitAttributes::Github,
-        GitAttributes::Gitlab => pixi_api::init::GitAttributes::Gitlab,
-        GitAttributes::Codeberg => pixi_api::init::GitAttributes::Codeberg,
+        GitAttributes::Github => pixi_api::workspace::init::GitAttributes::Github,
+        GitAttributes::Gitlab => pixi_api::workspace::init::GitAttributes::Gitlab,
+        GitAttributes::Codeberg => pixi_api::workspace::init::GitAttributes::Codeberg,
     });
 
     let mut options = InitOptions {
@@ -94,11 +94,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             console::style("--pyproject").bold().red(),
             console::style("--format pyproject").bold().green(),
         )).await;
-        options.format = Some(pixi_api::init::ManifestFormat::Pyproject);
+        options.format = Some(pixi_api::workspace::init::ManifestFormat::Pyproject);
     }
 
-    let api = ApiContext::new(CliInterface {});
-    api.init(options).await?;
+    WorkspaceContext::init(CliInterface {}, options).await?;
 
     Ok(())
 }

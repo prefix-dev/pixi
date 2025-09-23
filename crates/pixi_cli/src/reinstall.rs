@@ -1,6 +1,6 @@
 use clap::Parser;
-use pixi_api::context::ApiContext;
-use pixi_api::reinstall::ReinstallOptions;
+use pixi_api::context::WorkspaceContext;
+use pixi_api::workspace::reinstall::ReinstallOptions;
 use pixi_config::ConfigCli;
 use pixi_core::WorkspaceLocator;
 use pixi_core::lock_file::{ReinstallEnvironment, ReinstallPackages};
@@ -71,8 +71,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         reinstall_environments,
     };
 
-    let api = ApiContext::new(CliInterface {});
-    api.reinstall(options, workspace, args.lock_file_usage.to_usage())
+    let workspace_context = WorkspaceContext::new(CliInterface {}, workspace);
+    workspace_context
+        .reinstall(options, args.lock_file_usage.to_usage())
         .await?;
 
     Ok(())

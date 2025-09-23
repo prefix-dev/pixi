@@ -1,5 +1,4 @@
-pub mod init;
-pub mod reinstall;
+pub mod workspace;
 
 pub mod context;
 pub mod interface;

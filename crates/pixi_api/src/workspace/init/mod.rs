@@ -10,7 +10,7 @@ use miette::{Context, IntoDiagnostic};
 use minijinja::{Environment, context};
 use pixi_config::{Config, get_default_author, pixi_home};
 use pixi_consts::consts;
-use pixi_core::workspace::WorkspaceMut;
+use pixi_core::{Workspace, workspace::WorkspaceMut};
 use pixi_manifest::{FeatureName, pyproject::PyProjectManifest};
 use pixi_utils::conda_environment_file::CondaEnvFile;
 use rattler_conda_types::{NamedChannelOrUrl, Platform};
@@ -26,7 +26,10 @@ mod template;
 
 pub use options::{GitAttributes, InitOptions, ManifestFormat};
 
-pub(crate) async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::Result<()> {
+pub(crate) async fn init<I: Interface>(
+    interface: &I,
+    options: InitOptions,
+) -> miette::Result<Workspace> {
     let env = Environment::new();
     // Fail silently if the directory already exists or cannot be created.
     fs_err::create_dir_all(&options.path).ok();
@@ -65,7 +68,7 @@ pub(crate) async fn init<I: Interface>(interface: &I, options: InitOptions) -> m
 
     // Create a 'pixi.toml' manifest and populate it by importing a conda
     // environment file
-    if let Some(env_file_path) = options.env_file {
+    let workspace = if let Some(env_file_path) = options.env_file {
         // Check if the 'pixi.toml' file doesn't already exist. We don't want to
         // overwrite it.
         if pixi_manifest_path.is_file() {
@@ -112,6 +115,8 @@ pub(crate) async fn init<I: Interface>(interface: &I, options: InitOptions) -> m
                 workspace.workspace.provenance.path.display()
             ))
             .await;
+
+        workspace
     } else {
         let channels = if let Some(channels) = options.channels {
             channels
@@ -145,7 +150,8 @@ pub(crate) async fn init<I: Interface>(interface: &I, options: InitOptions) -> m
             // Early exit if 'pyproject.toml' already contains a '[tool.pixi.workspace]' table
             if pyproject.has_pixi_table() {
                 interface.info("Nothing to do here: 'pyproject.toml' already contains a '[tool.pixi.workspace]' section.").await;
-                return Ok(());
+                let workspace = Workspace::from_path(&pyproject_manifest_path)?;
+                return Ok(workspace);
             }
 
             let (name, pixi_name) = match pyproject.name() {
@@ -199,6 +205,8 @@ pub(crate) async fn init<I: Interface>(interface: &I, options: InitOptions) -> m
                 }
             }
 
+            Workspace::from_path(&pyproject_manifest_path)?
+
             // Create a 'pyproject.toml' manifest
         } else if pyproject {
             // Python package names cannot contain '-', so we replace them with '_'
@@ -249,6 +257,7 @@ pub(crate) async fn init<I: Interface>(interface: &I, options: InitOptions) -> m
                 }
             };
 
+            Workspace::from_path(&pyproject_manifest_path)?
         // Create a 'pixi.toml' manifest
         } else {
             let path = if options.format == Some(ManifestFormat::Mojoproject) {
@@ -276,8 +285,9 @@ pub(crate) async fn init<I: Interface>(interface: &I, options: InitOptions) -> m
                 None,
             );
             save_manifest_file(interface, &path, rv).await?;
-        };
-    }
+            Workspace::from_path(&path)?
+        }
+    };
 
     // create a .gitignore if one is missing
     if let Err(e) =
@@ -301,7 +311,7 @@ pub(crate) async fn init<I: Interface>(interface: &I, options: InitOptions) -> m
         );
     }
 
-    Ok(())
+    Ok(workspace)
 }
 
 fn is_init_dir_equal_to_pixi_home_parent(init_dir: &Path) -> bool {
