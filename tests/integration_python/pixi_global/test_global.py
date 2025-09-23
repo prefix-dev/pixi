@@ -2223,9 +2223,10 @@ class TestCondaFile:
         env = {"PIXI_HOME": str(tmp_path)}
         os.chdir(tmp_path)
 
-        conda_file = tmp_path / "dummy-c-0.1.0-h60d57d3_0.conda"
+        conda_file_name = "pixi-editor-1.0.0-h4616a5c_0.conda"
+        conda_file = tmp_path / conda_file_name
         shutil.copyfile(
-            Path.from_uri(dummy_channel_1) / "osx-arm64" / "dummy-c-0.1.0-h60d57d3_0.conda",
+            Path.from_uri(dummy_channel_1) / "noarch" / conda_file_name,
             conda_file,
         )
 
@@ -2266,10 +2267,11 @@ class TestCondaFile:
         env = {"PIXI_HOME": str(tmp_path)}
         os.chdir(tmp_path)
 
-        dummy_c_file = "dummy-c-0.1.0-h60d57d3_0.conda"
-        conda_file = tmp_path / dummy_c_file
+        package_name = "pixi-editor"
+        conda_file_name = "pixi-editor-1.0.0-h4616a5c_0.conda"
+        conda_file = tmp_path / conda_file_name
         shutil.copyfile(
-            Path.from_uri(dummy_channel_1) / "osx-arm64" / dummy_c_file,
+            Path.from_uri(dummy_channel_1) / "noarch" / conda_file_name,
             conda_file,
         )
 
@@ -2334,7 +2336,7 @@ class TestCondaFile:
 
         # remove the environment
         # XXX: should this fail instead?
-        shutil.rmtree(tmp_path / "envs" / "dummy-c")
+        shutil.rmtree(tmp_path / "envs" / package_name)
 
         # update with environment removed
         verify_cli_command(
