@@ -2217,16 +2217,15 @@ def test_tree_invert(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
 class TestCondaFile:
     @pytest.mark.parametrize("path_arg", [True, False])
     def test_install_conda_file(
-        self, pixi: Path, tmp_path: Path, dummy_channel_1: str, path_arg: bool
+        self, pixi: Path, tmp_path: Path, shortcuts_channel_1: str, path_arg: bool
     ) -> None:
         """Test directly installing a `.conda` file with `pixi global`"""
-        env = {"PIXI_HOME": str(tmp_path)}
+        env = {"PIXI_HOME": str(tmp_path), "PIXI_CACHE_DIR": str(tmp_path / "foo")}
         os.chdir(tmp_path)
 
-        conda_file_name = "pixi-editor-1.0.0-h4616a5c_0.conda"
-        conda_file = tmp_path / conda_file_name
+        conda_file = tmp_path / "pixi-editor-1.0.0-h4616a5c_0.conda"
         shutil.copyfile(
-            Path.from_uri(dummy_channel_1) / "noarch" / conda_file_name,
+            Path.from_uri(shortcuts_channel_1) / "noarch" / "pixi-editor-1.0.0-h4616a5c_0.conda",
             conda_file,
         )
 
@@ -2262,16 +2261,18 @@ class TestCondaFile:
         relative_conda_file = conda_file.relative_to(Path.cwd(), walk_up=True)
         check_install(relative_conda_file)
 
-    def test_update_sync_conda_file(self, pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    def test_update_sync_conda_file(
+        self, pixi: Path, tmp_path: Path, dummy_conda_pkg: tuple[Path, str]
+    ) -> None:
         """Test that `pixi global {update, sync}` work and use the existing file."""
-        env = {"PIXI_HOME": str(tmp_path)}
+        env = {"PIXI_HOME": str(tmp_path), "PIXI_CACHE_DIR": str(tmp_path / "foo")}
         os.chdir(tmp_path)
 
+        dummy_pkg, conda_file_name = dummy_conda_pkg
         package_name = "pixi-editor"
-        conda_file_name = "pixi-editor-1.0.0-h4616a5c_0.conda"
         conda_file = tmp_path / conda_file_name
         shutil.copyfile(
-            Path.from_uri(dummy_channel_1) / "noarch" / conda_file_name,
+            dummy_pkg,
             conda_file,
         )
 
@@ -2292,10 +2293,10 @@ class TestCondaFile:
                 pixi,
                 "global",
                 "update",
-                "dummy-c",
+                "pixi-editor",
             ],
             env=env,
-            stderr_contains="Environment dummy-c was already up-to-date.",
+            stderr_contains="Environment pixi-editor was already up-to-date.",
         )
 
         # sync with file still there
@@ -2317,10 +2318,10 @@ class TestCondaFile:
                 pixi,
                 "global",
                 "update",
-                "dummy-c",
+                "pixi-editor",
             ],
             env=env,
-            stderr_contains="Environment dummy-c was already up-to-date.",
+            stderr_contains="Environment pixi-editor was already up-to-date.",
         )
 
         # sync with file gone
@@ -2344,7 +2345,7 @@ class TestCondaFile:
                 pixi,
                 "global",
                 "update",
-                "dummy-c",
+                "pixi-editor",
             ],
             env=env,
         )
