@@ -122,7 +122,7 @@ nav:
           - Conda/Mamba: switching_from/conda.md
       - Multi Environment: tutorials/multi_environment.md
       - Global Tools: global_tools/introduction.md
-      - Import: tutorials/import.md
+      - Import Environments: tutorials/import.md
   - Concepts:
       - Environments: workspace/environment.md
       - Tasks: workspace/advanced_tasks.md
