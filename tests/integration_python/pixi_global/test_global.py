@@ -2215,47 +2215,37 @@ def test_tree_invert(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
 
 
 def test_conda_file(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
-    """Test directly installing a `.conda` file with pixi global"""
+    """Test directly installing a `.conda` file with `pixi global --path`"""
     env = {"PIXI_HOME": str(tmp_path)}
-    manifests = tmp_path.joinpath("manifests")
-    manifests.mkdir()
-    os.chdir(tmp_path.joinpath("manifests"))
 
     conda_file = Path.from_uri(dummy_channel_1) / "osx-arm64" / "dummy-c-0.1.0-h60d57d3_0.conda"
-    relative_conda_file = conda_file.relative_to(Path.cwd(), walk_up=True)
 
-    # check relative path
-    verify_cli_command(
-        [
-            pixi,
-            "global",
-            "install",
-            "--path",
-            relative_conda_file,
-        ],
-        env=env,
-    )
+    def check_install(conda_file_path: Path):
+        verify_cli_command(
+            [
+                pixi,
+                "global",
+                "install",
+                "--path",
+                conda_file_path,
+            ],
+            env=env,
+        )
 
     # check absolute path
-    verify_cli_command(
-        [
-            pixi,
-            "global",
-            "install",
-            "--path",
-            conda_file,
-        ],
-        env=env,
-    )
+    check_install(conda_file)
 
-    # check that it fails without `--path`
-    verify_cli_command(
-        [
-            pixi,
-            "global",
-            "install",
-            conda_file,
-        ],
-        env=env,
-        expected_exit_code=ExitCode.FAILURE,
-    )
+    # check relative path in same dir
+    os.chdir(conda_file.parent)
+    relative_conda_file = conda_file.relative_to(Path.cwd(), walk_up=True)
+    check_install(relative_conda_file)
+
+    # check relative path in subdir
+    os.chdir(conda_file.parent.parent)
+    relative_conda_file = conda_file.relative_to(Path.cwd(), walk_up=True)
+    check_install(relative_conda_file)
+
+    # check relative path in a 'cousin' relative directory
+    os.chdir(tmp_path)
+    relative_conda_file = conda_file.relative_to(Path.cwd(), walk_up=True)
+    check_install(relative_conda_file)
