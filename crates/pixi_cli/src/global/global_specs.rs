@@ -95,7 +95,7 @@ impl GlobalSpecs {
             }))
         } else {
             fn pathlike(s: &str) -> bool {
-                s.contains(".conda") || s.contains('/') || s.contains('\\') || s.contains('.')
+                s.contains(".conda") || s.contains('/') || s.contains('\\')
             }
             if let Some(pathlike_input) = self.specs.iter().find(|s| pathlike(s)) {
                 return Err(GlobalSpecsConversionError::MissingPathArg(

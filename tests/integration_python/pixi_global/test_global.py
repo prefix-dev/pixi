@@ -2262,17 +2262,16 @@ class TestCondaFile:
         check_install(relative_conda_file)
 
     def test_update_sync_conda_file(
-        self, pixi: Path, tmp_path: Path, dummy_conda_pkg: tuple[Path, str]
+        self, pixi: Path, tmp_path: Path, shortcuts_channel_1: str
     ) -> None:
         """Test that `pixi global {update, sync}` work and use the existing file."""
         env = {"PIXI_HOME": str(tmp_path), "PIXI_CACHE_DIR": str(tmp_path / "foo")}
         os.chdir(tmp_path)
 
-        dummy_pkg, conda_file_name = dummy_conda_pkg
         package_name = "pixi-editor"
-        conda_file = tmp_path / conda_file_name
+        conda_file = tmp_path / "pixi-editor-1.0.0-h4616a5c_0.conda"
         shutil.copyfile(
-            dummy_pkg,
+            Path.from_uri(shortcuts_channel_1) / "noarch" / "pixi-editor-1.0.0-h4616a5c_0.conda",
             conda_file,
         )
 
