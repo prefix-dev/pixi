@@ -3088,7 +3088,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.59.0",
+ "windows-core 0.61.2",
 ]
 
 [[package]]
@@ -4672,6 +4672,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixi_api"
+version = "0.1.0"
+dependencies = [
+ "dunce",
+ "fancy_display",
+ "fs-err",
+ "itertools 0.14.0",
+ "miette 7.6.0",
+ "minijinja",
+ "pixi_config",
+ "pixi_consts",
+ "pixi_core",
+ "pixi_manifest",
+ "pixi_utils",
+ "rattler_conda_types",
+ "same-file",
+ "serde",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "url",
+ "uv-normalize",
+]
+
+[[package]]
 name = "pixi_build_discovery"
 version = "0.1.0"
 dependencies = [
@@ -4771,10 +4796,10 @@ dependencies = [
  "itertools 0.14.0",
  "libc",
  "miette 7.6.0",
- "minijinja",
  "nix 0.29.0",
  "pathdiff",
  "pep508_rs",
+ "pixi_api",
  "pixi_command_dispatcher",
  "pixi_config",
  "pixi_consts",
@@ -4804,7 +4829,6 @@ dependencies = [
  "regex",
  "reqwest",
  "reqwest-middleware",
- "same-file",
  "self-replace",
  "serde",
  "serde_json",
@@ -5644,7 +5668,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a56d757972c98b346a9b766e3f02746cde6dd1cd1d1d563472929fdd74bec4d"
 dependencies = [
  "anyhow",
- "itertools 0.11.0",
+ "itertools 0.14.0",
  "proc-macro2",
  "quote",
  "syn",
@@ -7690,7 +7714,7 @@ dependencies = [
  "ntapi",
  "objc2-core-foundation",
  "objc2-io-kit",
- "windows 0.59.0",
+ "windows 0.61.3",
 ]
 
 [[package]]
@@ -9786,7 +9810,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]

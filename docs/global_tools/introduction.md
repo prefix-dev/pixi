@@ -175,6 +175,7 @@ end
 
     Completions of packages are installed as long as their binaries are exposed under the same name: e.g. `exposed = { git = "git" }`.
 
+
 ## Adding a Series of Tools at Once
 
 Without specifying an environment, you can add multiple tools at once:
@@ -232,3 +233,25 @@ platforms = ["osx-64"]
 dependencies = { python = "*" }
 # ...
 ```
+
+## Packaging
+
+### Opt Out of `CONDA_PREFIX`
+
+Pixi activates the target environment before running a globally exposed executable, which usually sets `CONDA_PREFIX` to that environment's path.
+Some tools inspect `CONDA_PREFIX` and expect it to point to a standard Conda installation, which can lead to confusing behavior when the tool runs from a Pixi-managed prefix.
+
+Package authors can opt out of exporting `CONDA_PREFIX` by shipping a marker file at `etc/pixi/global-ignore-conda-prefix` inside the environment.
+When this file is present, Pixi removes `CONDA_PREFIX` from the environment variables,
+letting the tool behave as if no Conda environment is active.
+
+Here's a minimal `recipe.yaml` snippet that adds the marker while building the package:
+
+```yaml
+build:
+  script:
+    - mkdir -p $PREFIX/etc/pixi
+    - touch $PREFIX/etc/pixi/global-ignore-conda-prefix
+```
+
+After installing such a package with `pixi global install`, the exposed executable no longer sees `CONDA_PREFIX` and can fall back to its default behavior.

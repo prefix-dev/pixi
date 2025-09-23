@@ -36,6 +36,7 @@ use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Arch, GenericVirtualPackage, PackageName, ParseChannelError, Platform};
 use rattler_lock::{LockFile, LockedPackageRef, ParseCondaLockError};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::Semaphore;
 use tracing::Instrument;
@@ -245,10 +246,18 @@ pub struct UpdateLockFileOptions {
     pub max_concurrent_solves: usize,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub enum ReinstallPackages {
     #[default]
     None,
+    All,
+    Some(HashSet<String>),
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub enum ReinstallEnvironment {
+    #[default]
+    Default,
     All,
     Some(HashSet<String>),
 }
