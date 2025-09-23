@@ -44,36 +44,41 @@ pub struct Args {
     pub all: bool,
 }
 
+impl From<Args> for ReinstallOptions {
+    fn from(args: Args) -> Self {
+        let reinstall_packages = args
+            .packages
+            .map(|p| p.into_iter().collect())
+            .map(ReinstallPackages::Some)
+            .unwrap_or(ReinstallPackages::All);
+
+        let mut reinstall_environments = args
+            .environment
+            .map(|e| e.into_iter().collect())
+            .map(ReinstallEnvironment::Some)
+            .unwrap_or(ReinstallEnvironment::Default);
+
+        if args.all {
+            reinstall_environments = ReinstallEnvironment::All;
+        }
+
+        ReinstallOptions {
+            reinstall_packages,
+            reinstall_environments,
+        }
+    }
+}
+
 pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.project_config.workspace_locator_start())
         .locate()?
-        .with_cli_config(args.config);
+        .with_cli_config(args.config.clone());
 
-    let reinstall_packages = args
-        .packages
-        .map(|p| p.into_iter().collect())
-        .map(ReinstallPackages::Some)
-        .unwrap_or(ReinstallPackages::All);
-
-    let mut reinstall_environments = args
-        .environment
-        .map(|e| e.into_iter().collect())
-        .map(ReinstallEnvironment::Some)
-        .unwrap_or(ReinstallEnvironment::Default);
-
-    if args.all {
-        reinstall_environments = ReinstallEnvironment::All;
-    }
-
-    let options = ReinstallOptions {
-        reinstall_packages,
-        reinstall_environments,
-    };
-
+    let lock_file_usage = args.lock_file_usage.to_usage();
     let workspace_context = WorkspaceContext::new(CliInterface {}, workspace);
     workspace_context
-        .reinstall(options, args.lock_file_usage.to_usage())
+        .reinstall(args.into(), lock_file_usage)
         .await?;
 
     Ok(())

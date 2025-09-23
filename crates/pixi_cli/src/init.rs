@@ -65,30 +65,37 @@ pub enum GitAttributes {
     Codeberg,
 }
 
+impl From<Args> for InitOptions {
+    fn from(args: Args) -> Self {
+        let format = args.format.map(|f| match f {
+            ManifestFormat::Pixi => pixi_api::workspace::init::ManifestFormat::Pixi,
+            ManifestFormat::Pyproject => pixi_api::workspace::init::ManifestFormat::Pyproject,
+            ManifestFormat::Mojoproject => pixi_api::workspace::init::ManifestFormat::Mojoproject,
+        });
+
+        let scm = args.scm.map(|s| match s {
+            GitAttributes::Github => pixi_api::workspace::init::GitAttributes::Github,
+            GitAttributes::Gitlab => pixi_api::workspace::init::GitAttributes::Gitlab,
+            GitAttributes::Codeberg => pixi_api::workspace::init::GitAttributes::Codeberg,
+        });
+
+        InitOptions {
+            path: args.path,
+            channels: args.channels,
+            platforms: args.platforms,
+            env_file: args.env_file,
+            format,
+            scm,
+        }
+    }
+}
+
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let format = args.format.map(|f| match f {
-        ManifestFormat::Pixi => pixi_api::workspace::init::ManifestFormat::Pixi,
-        ManifestFormat::Pyproject => pixi_api::workspace::init::ManifestFormat::Pyproject,
-        ManifestFormat::Mojoproject => pixi_api::workspace::init::ManifestFormat::Mojoproject,
-    });
-
-    let scm = args.scm.map(|s| match s {
-        GitAttributes::Github => pixi_api::workspace::init::GitAttributes::Github,
-        GitAttributes::Gitlab => pixi_api::workspace::init::GitAttributes::Gitlab,
-        GitAttributes::Codeberg => pixi_api::workspace::init::GitAttributes::Codeberg,
-    });
-
-    let mut options = InitOptions {
-        path: args.path,
-        channels: args.channels,
-        platforms: args.platforms,
-        env_file: args.env_file,
-        format,
-        scm,
-    };
+    let uses_deprecated_pyproject_flag = args.pyproject_toml;
+    let mut options: InitOptions = args.into();
 
     // Deprecation warning for the `pyproject` option
-    if args.pyproject_toml {
+    if uses_deprecated_pyproject_flag {
         CliInterface::default().warning(&format!(
             "The '{}' option is deprecated and will be removed in the future.\nUse '{}' instead.",
             console::style("--pyproject").bold().red(),
