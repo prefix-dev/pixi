@@ -32,8 +32,8 @@ pub(crate) async fn init<I: Interface>(
 ) -> miette::Result<Workspace> {
     let env = Environment::new();
     // Fail silently if the directory already exists or cannot be created.
-    fs_err::create_dir_all(&options.path).ok();
-    let dir = options.path.canonicalize().into_diagnostic()?;
+    fs_err::create_dir_all(&options.path).into_diagnostic()?;
+    let dir = dunce::canonicalize(options.path).into_diagnostic()?;
     let pixi_manifest_path = dir.join(consts::WORKSPACE_MANIFEST);
     let pyproject_manifest_path = dir.join(consts::PYPROJECT_MANIFEST);
     let mojoproject_manifest_path = dir.join(consts::MOJOPROJECT_MANIFEST);
