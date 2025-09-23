@@ -124,11 +124,11 @@ Unlike `pixi import`, this by default uses the `default` feature and environment
 
 One difference is that `pixi init --import` will by default inherit its name from the given import file (if the file specifies the `name` field), rather than from its working directory.
 
-??? warning "Supported formats"
+!!! note "Supported formats"
     At the time of writing, only the `conda-env` format is supported by `pixi init --import`.
 
 ## Conclusion
 For further details, please see the CLI reference documentation for [`pixi import`](https://pixi.sh/latest/reference/cli/pixi/import/) and [`pixi init --import`](https://pixi.sh/latest/reference/cli/pixi/init/#arg---import).
 If there are any questions, or you know how to improve this tutorial, feel free to reach out to us on [GitHub](https://github.com/prefix-dev/pixi).
 
-At the time of writing, there are plans for many potential extensions to our import capabilities — you can follow along with that work at [the `import` roadmap issue on GitHub](https://github.com/prefix-dev/pixi/issues/4192).
+At the time of writing, there are plans for many potential extensions to our import capabilities — you can follow along with that work at the `import` [roadmap issue on GitHub](https://github.com/prefix-dev/pixi/issues/4192).
