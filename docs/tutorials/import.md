@@ -91,7 +91,7 @@ Suppose our environment to import is specified in this file:
 
 ```yaml title="requirements.txt"
 cowpy
-array-api-extra
+array-api-extra>=0.8
 ```
 
 We can then run `pixi import --format=pypi-txt --feature=my-feature1 requirements.txt` to import the environment into our workspace. It is necessary to specify a `feature` or `environment` name (or both) via the arguments of the same names. If only one of these names is provided, a matching name is used for the other field. Hence, the following lines are added to our workspace manifest:
@@ -99,7 +99,7 @@ We can then run `pixi import --format=pypi-txt --feature=my-feature1 requirement
 ```toml title="pixi.toml"
 [feature.my-feature1.pypi-dependencies]
 cowpy = "*"
-array-api-extra = "*"
+array-api-extra = ">=0.8"
 
 [environments]
 my-feature1 = { features = ["my-feature1"], no-default-feature = true }
