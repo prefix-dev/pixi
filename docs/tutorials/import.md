@@ -15,6 +15,8 @@ name: simple-env
 channels: ["conda-forge"]
 dependencies:
 - python
+- pip:
+  - httpx
 ```
 
 We can then run `pixi import --format=conda-env environment.yml` to import the environment into our workspace. By default, since our `environment.yml` has a `name` field, this creates a `feature` of the same name (or uses the feature of that name if it already exists), and creates an `environment` containing that feature (with [`no-default-feature`](https://pixi.sh/latest/reference/pixi_manifest/#the-environments-table) set):
@@ -25,6 +27,9 @@ channels = ["conda-forge"]
 
 [feature.simple-env.dependencies]
 python = "*"
+
+[feature.simple-env.pypi-dependencies]
+httpx = "*"
 
 [environments]
 simple-env = { features = ["simple-env"], no-default-feature = true }
@@ -48,6 +53,9 @@ channels = ["conda-forge"]
 
 [feature.simple-env.dependencies]
 python = "*"
+
+[feature.simple-env.pypi-dependencies]
+httpx = "*"
 
 [feature.numpy]
 channels = ["conda-forge"]
@@ -118,6 +126,9 @@ version = "0.1.0"
 
 [dependencies]
 python = "*"
+
+[pypi-dependencies]
+httpx = "*"
 ```
 
 Unlike `pixi import`, this by default uses the `default` feature and environment. Thus, it achieves a very similar workspace to that obtained by running `pixi init ` and `pixi import --feature=default environment.yml`.
