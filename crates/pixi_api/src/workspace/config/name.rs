@@ -24,12 +24,7 @@ pub(crate) async fn set<I: Interface>(
     interface
         .success(&format!(
             "Updated workspace name to '{}'.",
-            workspace
-                .workspace
-                .value
-                .workspace
-                .name
-                .expect("workspace name must have been set")
+            workspace.display_name()
         ))
         .await;
 
