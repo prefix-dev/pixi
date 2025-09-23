@@ -1,10 +1,8 @@
-pub mod get;
-pub mod set;
-
 use clap::Parser;
+use pixi_api::context::WorkspaceContext;
 use pixi_core::WorkspaceLocator;
 
-use crate::cli_config::WorkspaceConfig;
+use crate::{cli_config::WorkspaceConfig, cli_interface::CliInterface};
 
 /// Commands to manage workspace name.
 #[derive(Parser, Debug)]
@@ -18,6 +16,13 @@ pub struct Args {
 }
 
 #[derive(Parser, Debug)]
+pub struct SetArgs {
+    /// The workspace name, please only use lowercase letters (a-z), digits (0-9), hyphens (-), and underscores (_)
+    #[clap(required = true, num_args = 1)]
+    pub name: String,
+}
+
+#[derive(Parser, Debug)]
 pub enum Command {
     /// Get the workspace name.
     Get,
@@ -25,7 +30,7 @@ pub enum Command {
     ///
     /// Example:
     /// `pixi workspace name set "my-workspace"`
-    Set(set::Args),
+    Set(SetArgs),
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -33,9 +38,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
 
+    let workspace_context = WorkspaceContext::new(CliInterface {}, workspace);
+
     match args.command {
-        Command::Get => get::execute(workspace).await?,
-        Command::Set(args) => set::execute(workspace, args).await?,
+        Command::Get => print!("{}", workspace_context.name().await),
+        Command::Set(args) => workspace_context.set_name(&args.name).await?,
     }
 
     Ok(())
