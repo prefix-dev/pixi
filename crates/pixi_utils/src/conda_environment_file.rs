@@ -131,6 +131,7 @@ impl CondaEnvFile {
         Vec<pep508_rs::Requirement>,
         Vec<NamedChannelOrUrl>,
     )> {
+        // TODO: should we be applying `config.channel_config` for parsed channels too?
         let mut channels = parse_channels(self.channels().clone());
         let (conda_deps, pip_deps, extra_channels) =
             parse_dependencies(self.dependencies().clone())?;
@@ -156,11 +157,11 @@ fn parse_dependencies(deps: Vec<CondaEnvDep>) -> miette::Result<ParsedDependenci
                     .into_diagnostic()
                     .wrap_err(format!("Can't parse '{}' as conda dependency", d))?;
                 if let Some(channel) = &match_spec.channel {
-                    // TODO: This is a bit hacky, we should probably have a better way to handle this.
                     picked_up_channels.push(
-                        NamedChannelOrUrl::from_str(channel.name())
+                        // named channels are given a url with default channel config in `MatchSpec::from_str`
+                        NamedChannelOrUrl::from_str(channel.base_url.as_str())
                             .into_diagnostic()
-                            .wrap_err(format!("Can't parse '{}' as channel", channel.name()))?,
+                            .wrap_err(format!("can't parse '{}' as channel", channel.base_url))?,
                     );
                 }
                 conda_deps.push(match_spec);
@@ -202,7 +203,7 @@ fn parse_channels(channels: Vec<NamedChannelOrUrl>) -> Vec<NamedChannelOrUrl> {
 mod tests {
     use std::{io::Write, path::Path, str::FromStr};
 
-    use rattler_conda_types::{MatchSpec, ParseStrictness::Strict};
+    use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, ParseStrictness::Strict};
 
     use super::*;
 
@@ -231,13 +232,16 @@ mod tests {
         let (_file, path) = f.into_parts();
 
         let conda_env_file_data = CondaEnvFile::from_path(&path).unwrap();
+        let channel_config = ChannelConfig::default_with_root_dir(
+            std::env::current_dir().expect("Could not get current directory"),
+        );
 
         assert_eq!(conda_env_file_data.name(), Some("pixi_example_project"));
         assert_eq!(
             conda_env_file_data.channels(),
             &vec![
                 NamedChannelOrUrl::from_str("conda-forge").unwrap(),
-                NamedChannelOrUrl::from_str("https://custom-server.com/channel").unwrap()
+                NamedChannelOrUrl::from_str("https://custom-server.com/channel").unwrap(),
             ]
         );
 
@@ -249,7 +253,20 @@ mod tests {
             vec![
                 NamedChannelOrUrl::from_str("conda-forge").unwrap(),
                 NamedChannelOrUrl::from_str("https://custom-server.com/channel").unwrap(),
-                NamedChannelOrUrl::from_str("pytorch").unwrap(),
+                NamedChannelOrUrl::from_str(
+                    Channel::from_str("pytorch", &channel_config)
+                        .unwrap()
+                        .base_url
+                        .as_str()
+                )
+                .unwrap(),
+                NamedChannelOrUrl::from_str(
+                    Channel::from_str("conda-forge", &channel_config)
+                        .unwrap()
+                        .base_url
+                        .as_str()
+                )
+                .unwrap(),
             ]
         );
 
