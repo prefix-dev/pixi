@@ -867,6 +867,30 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#packaging" class="md-nav__link">
+    <span class="md-ellipsis">
+      Packaging
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Packaging">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#opt-out-of-conda_prefix" class="md-nav__link">
+    <span class="md-ellipsis">
+      Opt Out of CONDA_PREFIX
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -2820,6 +2844,30 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#packaging" class="md-nav__link">
+    <span class="md-ellipsis">
+      Packaging
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Packaging">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#opt-out-of-conda_prefix" class="md-nav__link">
+    <span class="md-ellipsis">
+      Opt Out of CONDA_PREFIX
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -3013,6 +3061,20 @@ will create the following entry in the manifest:
 </span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">python</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
 </span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="c1"># ...</span>
 </span></code></pre></div></p>
+<h2 id="packaging">Packaging<a class="headerlink" href="#packaging" title="Permanent link">#</a></h2>
+<h3 id="opt-out-of-conda_prefix">Opt Out of <code>CONDA_PREFIX</code><a class="headerlink" href="#opt-out-of-conda_prefix" title="Permanent link">#</a></h3>
+<p>Pixi activates the target environment before running a globally exposed executable, which usually sets <code>CONDA_PREFIX</code> to that environment's path.
+Some tools inspect <code>CONDA_PREFIX</code> and expect it to point to a standard Conda installation, which can lead to confusing behavior when the tool runs from a Pixi-managed prefix.</p>
+<p>Package authors can opt out of exporting <code>CONDA_PREFIX</code> by shipping a marker file at <code>etc/pixi/global-ignore-conda-prefix</code> inside the environment.
+When this file is present, Pixi removes <code>CONDA_PREFIX</code> from the environment variables,
+letting the tool behave as if no Conda environment is active.</p>
+<p>Here's a minimal <code>recipe.yaml</code> snippet that adds the marker while building the package:</p>
+<div class="language-yaml highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="nt">build</span><span class="p">:</span>
+</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="w">  </span><span class="nt">script</span><span class="p">:</span>
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mkdir -p $PREFIX/etc/pixi</span>
+</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">touch $PREFIX/etc/pixi/global-ignore-conda-prefix</span>
+</span></code></pre></div>
+<p>After installing such a package with <code>pixi global install</code>, the exposed executable no longer sees <code>CONDA_PREFIX</code> and can fall back to its default behavior.</p>
 
 
 
