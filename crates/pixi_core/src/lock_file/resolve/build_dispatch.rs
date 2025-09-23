@@ -310,113 +310,114 @@ impl<'a> LazyBuildDispatch<'a> {
     /// Lazy initialization of the `BuildDispatch`. This also implies
     /// initializing the conda prefix.
     async fn get_or_try_init(&self) -> Result<&BuildDispatch<'a>, LazyBuildDispatchError> {
-        Box::pin(self.build_dispatch.get_or_try_init(async {
-            // Disallow installing if the flag is set.
-            if self.disallow_install_conda_prefix {
-                return Err(LazyBuildDispatchError::InstallationRequiredButDisallowed);
-            }
-            tracing::debug!(
-                "PyPI solve requires instantiation of conda prefix for '{}'",
-                self.prefix_updater.name().as_str()
-            );
+        self.build_dispatch
+            .get_or_try_init(async {
+                // Disallow installing if the flag is set.
+                if self.disallow_install_conda_prefix {
+                    return Err(LazyBuildDispatchError::InstallationRequiredButDisallowed);
+                }
+                tracing::debug!(
+                    "PyPI solve requires instantiation of conda prefix for '{}'",
+                    self.prefix_updater.name().as_str()
+                );
 
-            let repodata_records = self
-                .repodata_records
-                .replace(None)
-                .expect("this function cannot be called twice")
-                .map_err(|err| LazyBuildDispatchError::InitializationError(err.into()))?;
+                let repodata_records = self
+                    .repodata_records
+                    .replace(None)
+                    .expect("this function cannot be called twice")
+                    .map_err(|err| LazyBuildDispatchError::InitializationError(err.into()))?;
 
-            let prefix = self
-                .prefix_updater
-                .update(
-                    repodata_records.to_vec(),
+                let prefix = self
+                    .prefix_updater
+                    .update(
+                        repodata_records.to_vec(),
+                        None,
+                        self.ignore_packages.clone(),
+                    )
+                    .await
+                    .map_err(|err| LazyBuildDispatchError::InitializationError(err.into()))?;
+
+                // get the activation vars
+                let env_vars = get_activated_environment_variables(
+                    &self.project_env_vars,
+                    &self.environment,
+                    CurrentEnvVarBehavior::Exclude,
                     None,
-                    self.ignore_packages.clone(),
+                    false,
+                    false,
                 )
                 .await
                 .map_err(|err| LazyBuildDispatchError::InitializationError(err.into()))?;
 
-            // get the activation vars
-            let env_vars = get_activated_environment_variables(
-                &self.project_env_vars,
-                &self.environment,
-                CurrentEnvVarBehavior::Exclude,
-                None,
-                false,
-                false,
-            )
+                let python_path = prefix
+                    .python_status
+                    .location()
+                    .map(|path| prefix.prefix.root().join(path))
+                    .ok_or_else(|| LazyBuildDispatchError::PythonMissingError {
+                        prefix: prefix.prefix.root().display().to_string(),
+                    })?;
+
+                let interpreter = self
+                    .lazy_deps
+                    .interpreter
+                    .get_or_try_init(|| Interpreter::query(python_path, self.cache()))
+                    .map_err(LazyBuildDispatchError::from)?;
+
+                let non_isolated_packages = self
+                    .lazy_deps
+                    .non_isolated_packages
+                    .get_or_try_init(|| BuildIsolation::try_from(self.no_build_isolation.clone()))
+                    .map_err(LazyBuildDispatchError::from)?;
+
+                let build_isolation = non_isolated_packages.to_uv_with(|| {
+                    self.lazy_deps
+                        .python_env
+                        .get_or_init(|| PythonEnvironment::from_interpreter(interpreter.clone()))
+                });
+
+                let constraints = self
+                    .lazy_deps
+                    .constraints
+                    .get_or_init(|| self.params.constraints.clone());
+
+                let extra_build_requires = self
+                    .lazy_deps
+                    .extra_build_requires
+                    .get_or_init(|| self.params.extra_build_requires.clone());
+
+                let package_config_settings = self
+                    .lazy_deps
+                    .package_config_settings
+                    .get_or_init(|| self.params.package_config_settings.clone());
+
+                let build_dispatch = BuildDispatch::new(
+                    self.params.client,
+                    self.params.cache,
+                    constraints,
+                    interpreter,
+                    self.params.index_locations,
+                    self.params.flat_index,
+                    self.params.dependency_metadata,
+                    self.params.shared_state.clone(),
+                    self.params.index_strategy,
+                    self.params.config_settings,
+                    package_config_settings,
+                    build_isolation,
+                    extra_build_requires,
+                    self.params.link_mode,
+                    self.params.build_options,
+                    self.params.hasher,
+                    self.params.exclude_newer.clone().unwrap_or_default(),
+                    self.params.sources,
+                    self.params.workspace_cache.clone(),
+                    self.params.concurrency,
+                    self.params.preview,
+                )
+                .with_build_extra_env_vars(env_vars);
+
+                Ok(build_dispatch)
+            })
             .await
-            .map_err(|err| LazyBuildDispatchError::InitializationError(err.into()))?;
-
-            let python_path = prefix
-                .python_status
-                .location()
-                .map(|path| prefix.prefix.root().join(path))
-                .ok_or_else(|| LazyBuildDispatchError::PythonMissingError {
-                    prefix: prefix.prefix.root().display().to_string(),
-                })?;
-
-            let interpreter = self
-                .lazy_deps
-                .interpreter
-                .get_or_try_init(|| Interpreter::query(python_path, self.cache()))
-                .map_err(LazyBuildDispatchError::from)?;
-
-            let non_isolated_packages = self
-                .lazy_deps
-                .non_isolated_packages
-                .get_or_try_init(|| BuildIsolation::try_from(self.no_build_isolation.clone()))
-                .map_err(LazyBuildDispatchError::from)?;
-
-            let build_isolation = non_isolated_packages.to_uv_with(|| {
-                self.lazy_deps
-                    .python_env
-                    .get_or_init(|| PythonEnvironment::from_interpreter(interpreter.clone()))
-            });
-
-            let constraints = self
-                .lazy_deps
-                .constraints
-                .get_or_init(|| self.params.constraints.clone());
-
-            let extra_build_requires = self
-                .lazy_deps
-                .extra_build_requires
-                .get_or_init(|| self.params.extra_build_requires.clone());
-
-            let package_config_settings = self
-                .lazy_deps
-                .package_config_settings
-                .get_or_init(|| self.params.package_config_settings.clone());
-
-            let build_dispatch = BuildDispatch::new(
-                self.params.client,
-                self.params.cache,
-                constraints,
-                interpreter,
-                self.params.index_locations,
-                self.params.flat_index,
-                self.params.dependency_metadata,
-                self.params.shared_state.clone(),
-                self.params.index_strategy,
-                self.params.config_settings,
-                package_config_settings,
-                build_isolation,
-                extra_build_requires,
-                self.params.link_mode,
-                self.params.build_options,
-                self.params.hasher,
-                self.params.exclude_newer.clone().unwrap_or_default(),
-                self.params.sources,
-                self.params.workspace_cache.clone(),
-                self.params.concurrency,
-                self.params.preview,
-            )
-            .with_build_extra_env_vars(env_vars);
-
-            Ok(build_dispatch)
-        }))
-        .await
     }
 }
 
