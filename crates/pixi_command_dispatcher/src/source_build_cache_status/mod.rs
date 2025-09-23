@@ -317,7 +317,7 @@ impl SourceBuildCacheStatusSpec {
         // Compute the modification time of the files that match the source input globs.
         let glob_time = match GlobModificationTime::from_patterns(
             &source_checkout.path,
-            source_info.globs.iter().map(String::as_str), // .chain(DEFAULT_BUILD_IGNORE_GLOBS.iter().copied()),
+            source_info.globs.iter().map(String::as_str),
         ) {
             Ok(glob_time) => glob_time,
             Err(e) => {

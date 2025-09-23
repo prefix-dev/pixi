@@ -13,6 +13,7 @@ type SharedResults = Arc<Mutex<Option<Vec<Result<ignore::DirEntry, GlobSetError>
 struct CollectBuilder {
     // Shared aggregation storage wrapped in an Option so we can `take` at the end.
     sink: SharedResults,
+    // The root we are walking, used for error reporting
     err_root: PathBuf,
 }
 
@@ -21,6 +22,7 @@ struct CollectVisitor {
     local: Vec<Result<ignore::DirEntry, GlobSetError>>,
     // Reference to the shared sink.
     sink: SharedResults,
+    // The root we are walking, used for error reporting
     err_root: PathBuf,
 }
 
@@ -46,13 +48,13 @@ impl<'s> ignore::ParallelVisitorBuilder<'s> for CollectBuilder {
 impl ignore::ParallelVisitor for CollectVisitor {
     /// This function loops over all matches, ignores directories, and ignores PermissionDenied and
     /// NotFound errors
-    fn visit(&mut self, dent: Result<ignore::DirEntry, ignore::Error>) -> ignore::WalkState {
-        match dent {
-            Ok(dent) => {
-                if dent.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
+    fn visit(&mut self, dir_entry: Result<ignore::DirEntry, ignore::Error>) -> ignore::WalkState {
+        match dir_entry {
+            Ok(dir_entry) => {
+                if dir_entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false) {
                     return ignore::WalkState::Continue;
                 }
-                self.local.push(Ok(dent));
+                self.local.push(Ok(dir_entry));
             }
             Err(e) => {
                 if let Some(ioe) = e.io_error() {

@@ -48,7 +48,7 @@ impl GlobHash {
 
         let glob_set = GlobSet::create(globs);
         // Collect matching entries and convert to concrete DirEntry list, propagating errors.
-        let mut entries: Vec<ignore::DirEntry> = glob_set.collect_matching(root_dir)?;
+        let mut entries = glob_set.collect_matching(root_dir)?;
 
         // Sort deterministically by path
         entries.sort_by_key(|e| e.path().to_path_buf());

@@ -68,13 +68,17 @@ struct GlobSpec {
 
 /// Contains the globs and the joinable path
 pub struct GlobWalkRoot {
+    // The parsed glob specifications
     specs: Vec<GlobSpec>,
+    // The maximum number of parent dirs we need to ascend
     max_parent_dirs: usize,
 }
 
 /// Globs rebased to a common root
 pub struct RebasedGlobs {
+    // The new root directory to search from
     pub root: PathBuf,
+    // The globs with the rebased patterns
     pub globs: Vec<SimpleGlob>,
 }
 

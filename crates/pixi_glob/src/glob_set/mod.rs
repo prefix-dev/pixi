@@ -40,7 +40,7 @@ pub enum GlobSetError {
 }
 
 impl GlobSet {
-    /// Create a new `GlobSetIgnore` from a list of patterns. Leading '!' indicates exclusion.
+    /// Create a new [`GlobSet`] from a list of patterns. Leading '!' indicates exclusion.
     pub fn create<'t>(globs: impl IntoIterator<Item = &'t str>) -> GlobSet {
         GlobSet {
             walk_roots: GlobWalkRoot::build(globs).expect("should not fail"),
