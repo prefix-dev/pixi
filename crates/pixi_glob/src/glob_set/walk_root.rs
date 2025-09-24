@@ -67,7 +67,7 @@ struct GlobSpec {
 }
 
 /// Contains the globs and the joinable path
-pub struct GlobWalkRoot {
+pub struct WalkRoot {
     // The parsed glob specifications
     specs: Vec<GlobSpec>,
     // The maximum number of parent dirs we need to ascend
@@ -82,7 +82,7 @@ pub struct RebasedGlobs {
     pub globs: Vec<SimpleGlob>,
 }
 
-impl GlobWalkRoot {
+impl WalkRoot {
     /// Build a list of globs into a structure that we can use to rebase or reparent
     /// the globs when given
     pub fn build<'t>(globs: impl IntoIterator<Item = &'t str>) -> Result<Self, WalkRootsError> {
@@ -274,7 +274,7 @@ pub fn normalize_relative(path: &Path) -> PathBuf {
 mod tests {
     use std::path::Path;
 
-    use super::{GlobWalkRoot, normalize_relative, split_path_and_glob};
+    use super::{WalkRoot, normalize_relative, split_path_and_glob};
     use insta::assert_yaml_snapshot;
     use serde::Serialize;
 
@@ -290,7 +290,7 @@ mod tests {
         negated: bool,
     }
 
-    fn snapshot_walk_roots(plan: &GlobWalkRoot, root: &Path) -> SnapshotWalk {
+    fn snapshot_walk_roots(plan: &WalkRoot, root: &Path) -> SnapshotWalk {
         let rebased = plan.rebase(root).expect("rebase should succeed");
         let root_str = rebased.root.display().to_string().replace('\\', "/");
         let globs = rebased
@@ -343,7 +343,7 @@ mod tests {
             "**/*.cpp",
         ];
 
-        let walk_roots = GlobWalkRoot::build(globs).expect("determine should succeed");
+        let walk_roots = WalkRoot::build(globs).expect("determine should succeed");
 
         assert_yaml_snapshot!(
             snapshot_walk_roots(&walk_roots, Path::new("workspace/baz")),
@@ -371,7 +371,7 @@ mod tests {
     fn determine_handles_globs_without_prefix() {
         let globs = ["*.rs", "!*.tmp"];
 
-        let walk_roots = GlobWalkRoot::build(globs).expect("determine should succeed");
+        let walk_roots = WalkRoot::build(globs).expect("determine should succeed");
 
         assert_yaml_snapshot!(
             snapshot_walk_roots(&walk_roots, Path::new("workspace/baz")),
@@ -390,7 +390,7 @@ mod tests {
     fn iterates_over_roots_and_globs() {
         let globs = ["src/**/*.rs", "!src/**/generated.rs", "docs/**/*.md"];
 
-        let walk_roots = GlobWalkRoot::build(globs).expect("determine should succeed");
+        let walk_roots = WalkRoot::build(globs).expect("determine should succeed");
         assert_yaml_snapshot!(
             snapshot_walk_roots(&walk_roots, Path::new("workspace")),
             @r###"
@@ -410,7 +410,7 @@ mod tests {
     fn determine_negated_directory_glob_sticks_to_root() {
         let globs = ["!.pixi/**", "../*.{cc,cpp}"];
 
-        let walk_roots = GlobWalkRoot::build(globs).expect("determine should succeed");
+        let walk_roots = WalkRoot::build(globs).expect("determine should succeed");
 
         assert_yaml_snapshot!(
             snapshot_walk_roots(&walk_roots, Path::new("workspace/baz")),
@@ -429,7 +429,7 @@ mod tests {
     fn single_file_match() {
         let globs = ["pixi.toml", "../*.{cc,cpp}"];
 
-        let walk_roots = GlobWalkRoot::build(globs).expect("determine should succeed");
+        let walk_roots = WalkRoot::build(globs).expect("determine should succeed");
 
         assert_yaml_snapshot!(
             snapshot_walk_roots(&walk_roots, Path::new("workspace/baz")),

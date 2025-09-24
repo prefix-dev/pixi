@@ -4,7 +4,7 @@ use parking_lot::Mutex;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use crate::glob_set::glob_walk_root::SimpleGlob;
+use crate::glob_set::walk_root::SimpleGlob;
 
 use super::GlobSetError;
 

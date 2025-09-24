@@ -11,19 +11,19 @@
 //! - Negated literals (e.g. `!pixi.toml`) are anchored the same way, which lets recipes ignore a
 //!   single file at the root without accidentally hiding copies deeper in the tree.
 
-mod glob_walk_root;
 mod walk;
+mod walk_root;
 
 use std::path::{Path, PathBuf};
 
 use thiserror::Error;
 
-use glob_walk_root::{GlobWalkRoot, WalkRootsError};
+use walk_root::{WalkRoot, WalkRootsError};
 
 /// A glob set implemented using the `ignore` crate (globset + fast walker).
 pub struct GlobSet {
     /// Include patterns (gitignore-style), without leading '!'.
-    pub walk_roots: GlobWalkRoot,
+    pub walk_roots: WalkRoot,
 }
 
 #[derive(Error, Debug)]
@@ -43,7 +43,7 @@ impl GlobSet {
     /// Create a new [`GlobSet`] from a list of patterns. Leading '!' indicates exclusion.
     pub fn create<'t>(globs: impl IntoIterator<Item = &'t str>) -> GlobSet {
         GlobSet {
-            walk_roots: GlobWalkRoot::build(globs).expect("should not fail"),
+            walk_roots: WalkRoot::build(globs).expect("should not fail"),
         }
     }
 
