@@ -13,13 +13,10 @@ slow_integration_tests = []
 
 [dependencies]
 ahash = { workspace = true }
-assert_matches = { workspace = true }
 async-once-cell = { workspace = true }
-async-trait = { workspace = true }
 barrier_cell = { workspace = true }
 chrono = { workspace = true }
 console = { workspace = true }
-csv = { workspace = true }
 dashmap = { workspace = true }
 dialoguer = { workspace = true }
 dunce = { workspace = true }
@@ -37,7 +34,6 @@ once_cell = { workspace = true }
 pathdiff = { workspace = true }
 pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }
-percent-encoding = { workspace = true }
 pixi_build_discovery = { workspace = true }
 pixi_build_frontend = { workspace = true }
 pixi_build_type_conversions = { workspace = true }
@@ -69,7 +65,6 @@ rattler_repodata_gateway = { workspace = true }
 rattler_shell = { workspace = true }
 rattler_solve = { workspace = true }
 rattler_virtual_packages = { workspace = true }
-rayon = { workspace = true }
 reqwest = { workspace = true }
 reqwest-middleware = { workspace = true }
 rlimit = { workspace = true }
@@ -84,10 +79,8 @@ toml_edit = { workspace = true }
 tracing = { workspace = true }
 typed-path = { workspace = true }
 url = { workspace = true }
-uv-auth = { workspace = true }
 uv-build-frontend = { workspace = true }
 uv-cache = { workspace = true }
-uv-cache-info = { workspace = true }
 uv-client = { workspace = true }
 uv-configuration = { workspace = true }
 uv-dispatch = { workspace = true }
@@ -97,7 +90,6 @@ uv-distribution-types = { workspace = true }
 uv-git = { workspace = true }
 uv-git-types = { workspace = true }
 uv-install-wheel = { workspace = true }
-uv-installer = { workspace = true }
 uv-normalize = { workspace = true }
 uv-pep440 = { workspace = true }
 uv-pep508 = { workspace = true }
