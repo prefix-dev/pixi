@@ -1,4 +1,10 @@
+use fs_err::create_dir_all;
 use miette::{Context, IntoDiagnostic};
+use pixi_config::{self, Config, get_cache_dir};
+use pixi_consts::consts;
+use pixi_utils::reqwest::uv_middlewares;
+use pixi_uv_conversions::{ConversionError, to_uv_trusted_host};
+use tracing::debug;
 use uv_cache::Cache;
 use uv_client::ExtraMiddleware;
 use uv_configuration::{Concurrency, PackageConfigSettings, Preview, SourceStrategy, TrustedHost};
@@ -6,12 +12,6 @@ use uv_dispatch::SharedState;
 use uv_distribution_types::{ExtraBuildRequires, IndexCapabilities};
 use uv_types::{HashStrategy, InFlight};
 use uv_workspace::WorkspaceCache;
-
-use crate::Workspace;
-use pixi_config::{self, get_cache_dir};
-use pixi_consts::consts;
-use pixi_utils::reqwest::uv_middlewares;
-use pixi_uv_conversions::{ConversionError, to_uv_trusted_host};
 
 /// Objects that are needed for resolutions which can be shared between different resolutions.
 #[derive(Clone)]
@@ -34,29 +34,28 @@ pub struct UvResolutionContext {
 }
 
 impl UvResolutionContext {
-    pub fn from_workspace(project: &Workspace) -> miette::Result<Self> {
+    pub fn from_config(config: &Config) -> miette::Result<Self> {
         let uv_cache = get_cache_dir()?.join(consts::PYPI_CACHE_DIR);
         if !uv_cache.exists() {
-            fs_err::create_dir_all(&uv_cache)
+            create_dir_all(&uv_cache)
                 .into_diagnostic()
                 .context("failed to create uv cache directory")?;
         }
 
         let cache = Cache::from_path(uv_cache);
 
-        let keyring_provider = match project.config().pypi_config().use_keyring() {
+        let keyring_provider = match config.pypi_config.use_keyring() {
             pixi_config::KeyringProvider::Subprocess => {
-                tracing::debug!("using uv keyring (subprocess) provider");
+                debug!("using uv keyring (subprocess) provider");
                 uv_configuration::KeyringProviderType::Subprocess
             }
             pixi_config::KeyringProvider::Disabled => {
-                tracing::debug!("uv keyring provider is disabled");
+                debug!("uv keyring provider is disabled");
                 uv_configuration::KeyringProviderType::Disabled
             }
         };
 
-        let allow_insecure_host = project
-            .config()
+        let allow_insecure_host = config
             .pypi_config
             .allow_insecure_host
             .iter()
@@ -80,8 +79,8 @@ impl UvResolutionContext {
             capabilities: IndexCapabilities::default(),
             allow_insecure_host,
             shared_state: SharedState::default(),
-            extra_middleware: ExtraMiddleware(uv_middlewares(project.config())),
-            proxies: project.config().get_proxies().into_diagnostic()?,
+            extra_middleware: ExtraMiddleware(uv_middlewares(config)),
+            proxies: config.get_proxies().into_diagnostic()?,
             package_config_settings: PackageConfigSettings::default(),
             extra_build_requires: ExtraBuildRequires::default(),
             preview: Preview::default(),

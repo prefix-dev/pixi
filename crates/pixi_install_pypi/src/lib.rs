@@ -4,7 +4,6 @@ use std::{
     sync::Arc,
 };
 
-use crate::environment::{ContinuePyPIPrefixUpdate, on_python_interpreter_change};
 use chrono::{DateTime, Utc};
 use conda_pypi_clobber::PypiCondaClobberRegistry;
 use fancy_display::FancyDisplay;
@@ -16,8 +15,10 @@ use pixi_manifest::{
     pypi::pypi_options::{NoBinary, NoBuild, NoBuildIsolation},
 };
 use pixi_progress::await_in_progress;
+use pixi_python_status::PythonStatus;
 use pixi_record::PixiRecord;
 use pixi_utils::prefix::Prefix;
+use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
     BuildIsolation, locked_indexes_to_index_locations, pypi_options_to_build_options,
     to_exclude_newer, to_index_strategy,
@@ -29,6 +30,7 @@ use pypi_modifiers::{
 };
 use rattler_conda_types::Platform;
 use rattler_lock::{PypiIndexes, PypiPackageData, PypiPackageEnvironmentData};
+use rayon::prelude::*;
 use utils::elapsed;
 use uv_auth::store_credentials_from_url;
 use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
@@ -47,17 +49,116 @@ use uv_pep508::PackageName;
 use uv_python::{Interpreter, PythonEnvironment};
 use uv_resolver::{ExcludeNewer, FlatIndex};
 
-use crate::{
-    install_pypi::plan::{CachedWheels, RequiredDists},
-    lock_file::UvResolutionContext,
-};
+use crate::plan::{CachedWheels, RequiredDists};
 use pixi_reporters::{UvReporter, UvReporterOptions};
+
+pub type PyPIRecords = (PypiPackageData, PypiPackageEnvironmentData);
 
 pub(crate) mod conda_pypi_clobber;
 pub(crate) mod conversions;
 pub(crate) mod install_wheel;
 pub(crate) mod plan;
 pub(crate) mod utils;
+
+/// Continue or skip a PyPI prefix update based on the interpreter state.
+pub enum ContinuePyPIPrefixUpdate<'a> {
+    /// Continue with the update using the provided interpreter metadata.
+    Continue(&'a rattler::install::PythonInfo),
+    /// Skip the update entirely.
+    Skip,
+}
+
+/// Remove site-packages installed for an outdated interpreter so the next run
+/// starts from a clean slate.
+async fn uninstall_outdated_site_packages(site_packages: &Path) -> miette::Result<()> {
+    let mut dist_dirs = Vec::new();
+    for entry in fs_err::read_dir(site_packages).into_diagnostic()? {
+        let entry = entry.into_diagnostic()?;
+        if entry.file_type().into_diagnostic()?.is_dir() {
+            dist_dirs.push(entry.path());
+        }
+    }
+
+    let installed = dist_dirs
+        .into_par_iter()
+        .flat_map(|path| {
+            let installer_path = path.join("INSTALLER");
+            match fs_err::metadata(&installer_path) {
+                Ok(metadata) if metadata.len() as usize != consts::PIXI_UV_INSTALLER.len() => {
+                    return None;
+                }
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                    return None;
+                }
+                Ok(_) | Err(_) => {}
+            }
+
+            let Ok(Some(installed_dist)) = InstalledDist::try_from_path(&path) else {
+                return None;
+            };
+
+            let Ok(installer) = installed_dist.installer() else {
+                tracing::warn!(
+                    "could not get installer for {}: will not remove distribution",
+                    installed_dist.name()
+                );
+                return None;
+            };
+
+            if installer.unwrap_or_default() == consts::PIXI_UV_INSTALLER {
+                Some(installed_dist)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    for dist_info in installed {
+        uv_installer::uninstall(&dist_info)
+            .await
+            .expect("uninstallation of old site-packages failed");
+    }
+
+    Ok(())
+}
+
+/// React on interpreter changes before running the PyPI updater. This may
+/// trigger cleanup of outdated site-packages or skip the update entirely.
+pub async fn on_python_interpreter_change<'a>(
+    status: &'a PythonStatus,
+    prefix: &Prefix,
+    pypi_records: &[PyPIRecords],
+) -> miette::Result<ContinuePyPIPrefixUpdate<'a>> {
+    match status {
+        PythonStatus::Removed { old } => {
+            let site_packages_path = prefix.root().join(&old.site_packages_path);
+            if site_packages_path.exists() {
+                uninstall_outdated_site_packages(&site_packages_path).await?;
+            }
+            Ok(ContinuePyPIPrefixUpdate::Skip)
+        }
+        PythonStatus::Changed { old, new } => {
+            if old.site_packages_path != new.site_packages_path {
+                let site_packages_path = prefix.root().join(&old.site_packages_path);
+                if site_packages_path.exists() {
+                    uninstall_outdated_site_packages(&site_packages_path).await?;
+                }
+            }
+            Ok(ContinuePyPIPrefixUpdate::Continue(new))
+        }
+        PythonStatus::Unchanged(info) | PythonStatus::Added { new: info } => {
+            if pypi_records.is_empty() {
+                let site_packages_path = prefix.root().join(&info.site_packages_path);
+                if site_packages_path.exists() {
+                    uninstall_outdated_site_packages(&site_packages_path).await?;
+                }
+                return Ok(ContinuePyPIPrefixUpdate::Skip);
+            }
+            Ok(ContinuePyPIPrefixUpdate::Continue(info))
+        }
+        PythonStatus::DoesNotExist => Ok(ContinuePyPIPrefixUpdate::Skip),
+    }
+}
 
 /// Configuration for PyPI environment updates, grouping basic environment settings
 pub struct PyPIUpdateConfig<'a> {
@@ -110,8 +211,6 @@ pub struct PyPIEnvironmentUpdater<'a> {
     ignored_extraneous: HashSet<PackageName>,
 }
 
-type PyPIRecords = (PypiPackageData, PypiPackageEnvironmentData);
-
 /// Struct holding (regular distributions, no-build-isolation distributions)
 #[derive(Debug, Clone)]
 pub struct SeparatedDistributions {
@@ -148,16 +247,15 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
     /// Update PyPI packages in the environment, handling all setup, planning, and execution
     pub async fn update(
         &self,
+        python_status: &PythonStatus,
         pixi_records: &[PixiRecord],
         pypi_records: &[PyPIRecords],
-        python_status: &crate::environment::PythonStatus,
     ) -> miette::Result<()> {
-        // Determine global site-packages status
         let python_info =
             match on_python_interpreter_change(python_status, self.config.prefix, pypi_records)
                 .await?
             {
-                ContinuePyPIPrefixUpdate::Continue(python_info) => python_info,
+                ContinuePyPIPrefixUpdate::Continue(info) => info,
                 ContinuePyPIPrefixUpdate::Skip => return Ok(()),
             };
 
@@ -167,9 +265,12 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
                 "updating pypi packages in '{}'",
                 self.config.environment_name.fancy_display()
             ),
-            |_| async {
-                self.execute_update(pixi_records, pypi_records, python_info)
-                    .await
+            move |_| {
+                let python_info = python_info;
+                async move {
+                    self.execute_update(pixi_records, pypi_records, python_info)
+                        .await
+                }
             },
         )
         .await
