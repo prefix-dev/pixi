@@ -268,7 +268,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             move |_| {
                 let python_info = python_info;
                 async move {
-                    self.execute_update(pixi_records, pypi_records, &python_info)
+                    self.execute_update(pixi_records, pypi_records, python_info)
                         .await
                 }
             },
