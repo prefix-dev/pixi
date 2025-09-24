@@ -19,7 +19,6 @@ pixi upgrade [OPTIONS] [PACKAGES]...
 ## Options
 - <a id="arg---feature" href="#arg---feature">`--feature (-f) <FEATURE>`</a>
 :  The feature to update
-<br>**default**: `default`
 - <a id="arg---exclude" href="#arg---exclude">`--exclude <EXCLUDE>`</a>
 :  The packages which should be excluded
 <br>May be provided more than once.
@@ -65,7 +64,7 @@ pixi upgrade [OPTIONS] [PACKAGES]...
 ## Description
 Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file.
 
-`pixi upgrade` loosens the requirements for the given packages, updates the lock file and the adapts the manifest accordingly.
+`pixi upgrade` loosens the requirements for the given packages, updates the lock file and the adapts the manifest accordingly. By default, all features are upgraded.
 
 
 --8<-- "docs/reference/cli/pixi/upgrade_extender:example"
