@@ -5,11 +5,14 @@ use std::{
     fs::File,
     io::{self, BufRead, Read, Write},
     path::{Path, PathBuf},
+    sync::LazyLock,
 };
 
 use itertools::Itertools;
 use rattler_digest::{Sha256, Sha256Hash, digest::Digest};
+use rayon::prelude::*;
 use thiserror::Error;
+use uv_configuration::RAYON_INITIALIZE;
 
 use crate::glob_set::{self, GlobSet};
 
@@ -59,21 +62,38 @@ impl GlobHash {
         #[cfg(test)]
         let mut matching_files = Vec::new();
 
+        // Force the initialization of the rayon thread pool to avoid implicit creation conflicts
+        LazyLock::force(&RAYON_INITIALIZE);
+
+        // Process files in parallel to compute their content data
+        let file_data: Result<Vec<_>, GlobHashError> = entries
+            .into_par_iter()
+            .map(|entry| -> Result<(String, Vec<u8>), GlobHashError> {
+                // Construct a normalized file path to ensure consistent hashing across
+                // platforms.
+                let relative_path = entry.strip_prefix(root_dir).unwrap_or(&entry);
+                let normalized_file_path = relative_path.to_string_lossy().replace("\\", "/");
+
+                // Read file contents with normalized line endings
+                let mut content_buffer = Vec::new();
+                File::open(&entry)
+                    .and_then(|mut file| normalize_line_endings(&mut file, &mut content_buffer))
+                    .map_err(move |e| GlobHashError::NormalizeLineEnds(entry, e))?;
+
+                Ok((normalized_file_path, content_buffer))
+            })
+            .collect();
+
+        let file_data = file_data?;
+
+        // Combine all file data in deterministic order to maintain original hash behavior
         let mut hasher = Sha256::default();
-        for entry in entries {
-            // Construct a normalized file path to ensure consistent hashing across
-            // platforms. And add it to the hash.
-            let relative_path = entry.strip_prefix(root_dir).unwrap_or(&entry);
-            let normalized_file_path = relative_path.to_string_lossy().replace("\\", "/");
+        for (normalized_file_path, content) in file_data {
             rattler_digest::digest::Update::update(&mut hasher, normalized_file_path.as_bytes());
+            rattler_digest::digest::Update::update(&mut hasher, &content);
 
             #[cfg(test)]
             matching_files.push(normalized_file_path);
-
-            // Concatenate the contents of the file to the hash.
-            File::open(&entry)
-                .and_then(|mut file| normalize_line_endings(&mut file, &mut hasher))
-                .map_err(move |e| GlobHashError::NormalizeLineEnds(entry, e))?;
         }
 
         if let Some(additional_hash) = additional_hash {

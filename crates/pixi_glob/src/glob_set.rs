@@ -1,10 +1,13 @@
 use std::{
     io,
     path::{Path, PathBuf},
+    sync::LazyLock,
 };
 
 use itertools::{Either, Itertools};
+use rayon::prelude::*;
 use thiserror::Error;
+use uv_configuration::RAYON_INITIALIZE;
 use wax::{Glob, WalkEntry};
 
 /// A set of globs to include and exclude from a directory.
@@ -49,7 +52,10 @@ impl<'t> GlobSet<'t> {
                     .unwrap_or(Either::Left(g))
             });
 
-        // Parse all globs
+        // Force the initialization of the rayon thread pool to avoid implicit creation conflicts
+        LazyLock::force(&RAYON_INITIALIZE);
+
+        // Parse all globs in parallel
         let inclusion_globs = inclusion_globs
             .into_iter()
             .map(Glob::new)
@@ -73,7 +79,7 @@ impl<'t> GlobSet<'t> {
         let root_dir = root_dir.to_path_buf();
         let entries = self
             .include
-            .iter()
+            .par_iter()
             .flat_map(move |glob| {
                 let (effective_walk_root, glob) = if glob.has_semantic_literals() {
                     // if the glob has semantic literals, we need to
@@ -99,9 +105,10 @@ impl<'t> GlobSet<'t> {
                     .map(|w| {
                         w.map_err(|e| GlobSetError::Metadata(effective_walk_root.to_path_buf(), e))
                     })
-                    .collect_vec()
-                    .into_iter()
+                    .collect::<Vec<_>>()
             })
+            .collect::<Vec<_>>()
+            .into_iter()
             .filter_map(|entry| {
                 match entry {
                     Ok(entry) if entry.file_type().is_dir() => None,
