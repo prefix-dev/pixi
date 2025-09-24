@@ -121,8 +121,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into_diagnostic()?;
 
     // Determine the source of the package.
+    let search_start_dir = if search_start.is_file() {
+        if let Some(parent) = search_start.parent() {
+            parent
+        } else {
+            miette::bail!("search start doesn't have a parent");
+        }
+    } else {
+        search_start.as_ref()
+    };
     let source: PinnedSourceSpec = PinnedPathSpec {
-        path: search_start.to_string_lossy().into_owned().into(),
+        path: search_start_dir.to_string_lossy().into_owned().into(),
     }
     .into();
 
