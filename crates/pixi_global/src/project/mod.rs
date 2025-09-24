@@ -121,7 +121,7 @@ pub struct Project {
     /// The manifest for the project
     pub manifest: Manifest,
     /// The global configuration as loaded from the config file(s)
-    config: Config,
+    pub config: Config,
     /// Root directory of the global environments
     pub(crate) env_root: EnvRoot,
     /// Binary directory
@@ -305,6 +305,11 @@ impl Project {
             .to_owned();
 
         let config = Config::load(&root);
+        let root_config = Config {
+            channel_config: rattler_conda_types::ChannelConfig::default_with_root_dir(root.clone()),
+            ..Default::default()
+        };
+        let config = config.merge_config(root_config);
 
         let client = OnceCell::new();
         let repodata_gateway = OnceCell::new();
@@ -472,6 +477,7 @@ impl Project {
         bin_dir: BinDir,
     ) -> miette::Result<Self> {
         let manifest = Manifest::from_path(manifest_path)?;
+        dbg!(&Project::from_manifest(manifest.clone(), env_root.clone(), bin_dir.clone()).config());
         Ok(Project::from_manifest(manifest, env_root, bin_dir))
     }
 

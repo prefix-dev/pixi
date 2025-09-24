@@ -5,7 +5,7 @@ use indexmap::IndexMap;
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
-use miette::{Context, IntoDiagnostic, Report};
+use miette::Report;
 use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, Platform};
 
 use crate::global::{global_specs::GlobalSpecs, revert_environment_after_error};
@@ -81,15 +81,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let project_original = pixi_global::Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
-
-    // Capture the current working directory for proper relative path resolution
-    let current_dir = std::env::current_dir()
-        .into_diagnostic()
-        .wrap_err("Could not retrieve the current directory")?;
-    let channel_config = rattler_conda_types::ChannelConfig {
-        root_dir: current_dir,
-        ..project_original.global_channel_config().clone()
+    let root_config = Config {
+        channel_config: rattler_conda_types::ChannelConfig::default_with_root_dir(
+            project_original.root.clone(),
+        ),
+        ..Default::default()
     };
+    let project_config = project_original.config.clone().merge_config(root_config);
+    let project_original = project_original.with_cli_config(project_config);
+
+    let channel_config = project_original.global_channel_config().clone();
 
     let specs = args
         .packages
