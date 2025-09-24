@@ -4,7 +4,7 @@ use std::{
     sync::Arc,
 };
 
-use crate::environment::{ContinuePyPIPrefixUpdate, on_python_interpreter_change};
+use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use conda_pypi_clobber::PypiCondaClobberRegistry;
 use fancy_display::FancyDisplay;
@@ -18,6 +18,7 @@ use pixi_manifest::{
 use pixi_progress::await_in_progress;
 use pixi_record::PixiRecord;
 use pixi_utils::prefix::Prefix;
+use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
     BuildIsolation, locked_indexes_to_index_locations, pypi_options_to_build_options,
     to_exclude_newer, to_index_strategy,
@@ -47,11 +48,19 @@ use uv_pep508::PackageName;
 use uv_python::{Interpreter, PythonEnvironment};
 use uv_resolver::{ExcludeNewer, FlatIndex};
 
-use crate::{
-    install_pypi::plan::{CachedWheels, RequiredDists},
-    lock_file::UvResolutionContext,
-};
+use crate::plan::{CachedWheels, RequiredDists};
 use pixi_reporters::{UvReporter, UvReporterOptions};
+
+pub type PyPIRecords = (PypiPackageData, PypiPackageEnvironmentData);
+
+#[async_trait]
+pub trait PythonEnvironmentProvider: Send + Sync {
+    async fn python_info_for_update(
+        &self,
+        prefix: &Prefix,
+        planned_records: &[PyPIRecords],
+    ) -> miette::Result<Option<rattler::install::PythonInfo>>;
+}
 
 pub(crate) mod conda_pypi_clobber;
 pub(crate) mod conversions;
@@ -102,15 +111,14 @@ struct UvInstallerConfig {
 
 /// High-level interface for PyPI environment updates that handles all complexity internally
 /// This is full of lifetime, because internal uv datastructs require it.
-pub struct PyPIEnvironmentUpdater<'a> {
+pub struct PyPIEnvironmentUpdater<'a, P: PythonEnvironmentProvider> {
     config: PyPIUpdateConfig<'a>,
     build_config: PyPIBuildConfig<'a>,
     context_config: PyPIContextConfig<'a>,
+    python_env_provider: &'a P,
     // Names that should never be marked as extraneous in PyPI planning
     ignored_extraneous: HashSet<PackageName>,
 }
-
-type PyPIRecords = (PypiPackageData, PypiPackageEnvironmentData);
 
 /// Struct holding (regular distributions, no-build-isolation distributions)
 #[derive(Debug, Clone)]
@@ -119,17 +127,22 @@ pub struct SeparatedDistributions {
     pub no_build_isolation_dists: Vec<(uv_distribution_types::Dist, InstallReason)>,
 }
 
-impl<'a> PyPIEnvironmentUpdater<'a> {
+impl<'a, P> PyPIEnvironmentUpdater<'a, P>
+where
+    P: PythonEnvironmentProvider,
+{
     /// Create a new PyPI environment updater with the given configurations
     pub fn new(
         config: PyPIUpdateConfig<'a>,
         build_config: PyPIBuildConfig<'a>,
         context_config: PyPIContextConfig<'a>,
+        python_env_provider: &'a P,
     ) -> Self {
         Self {
             config,
             build_config,
             context_config,
+            python_env_provider,
             ignored_extraneous: Default::default(),
         }
     }
@@ -150,16 +163,16 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         &self,
         pixi_records: &[PixiRecord],
         pypi_records: &[PyPIRecords],
-        python_status: &crate::environment::PythonStatus,
     ) -> miette::Result<()> {
         // Determine global site-packages status
-        let python_info =
-            match on_python_interpreter_change(python_status, self.config.prefix, pypi_records)
-                .await?
-            {
-                ContinuePyPIPrefixUpdate::Continue(python_info) => python_info,
-                ContinuePyPIPrefixUpdate::Skip => return Ok(()),
-            };
+        let python_info = match self
+            .python_env_provider
+            .python_info_for_update(self.config.prefix, pypi_records)
+            .await?
+        {
+            Some(info) => info,
+            None => return Ok(()),
+        };
 
         // Install and/or remove python packages
         await_in_progress(
@@ -167,9 +180,12 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
                 "updating pypi packages in '{}'",
                 self.config.environment_name.fancy_display()
             ),
-            |_| async {
-                self.execute_update(pixi_records, pypi_records, python_info)
-                    .await
+            move |_| {
+                let python_info = python_info;
+                async move {
+                    self.execute_update(pixi_records, pypi_records, &python_info)
+                        .await
+                }
             },
         )
         .await
