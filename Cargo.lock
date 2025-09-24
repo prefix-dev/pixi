@@ -4835,6 +4835,7 @@ dependencies = [
  "pixi_spec",
  "pixi_task",
  "pixi_utils",
+ "pixi_uv_context",
  "pixi_uv_conversions",
  "pypi_modifiers",
  "rattler",
@@ -4981,13 +4982,11 @@ name = "pixi_core"
 version = "0.1.0"
 dependencies = [
  "ahash",
- "assert_matches",
  "async-once-cell",
  "async-trait",
  "barrier_cell",
  "chrono",
  "console 0.15.11",
- "csv",
  "dashmap",
  "dialoguer",
  "dunce",
@@ -5009,7 +5008,6 @@ dependencies = [
  "pathdiff",
  "pep440_rs",
  "pep508_rs",
- "percent-encoding",
  "pixi_build_discovery",
  "pixi_build_frontend",
  "pixi_build_type_conversions",
@@ -5019,14 +5017,17 @@ dependencies = [
  "pixi_default_versions",
  "pixi_git",
  "pixi_glob",
+ "pixi_install_pypi",
  "pixi_manifest",
  "pixi_progress",
  "pixi_pypi_spec",
+ "pixi_python_status",
  "pixi_record",
  "pixi_reporters",
  "pixi_spec",
  "pixi_test_utils",
  "pixi_utils",
+ "pixi_uv_context",
  "pixi_uv_conversions",
  "pypi_mapping",
  "pypi_modifiers",
@@ -5039,7 +5040,6 @@ dependencies = [
  "rattler_shell",
  "rattler_solve",
  "rattler_virtual_packages",
- "rayon",
  "reqwest",
  "reqwest-middleware",
  "rlimit",
@@ -5054,10 +5054,8 @@ dependencies = [
  "tracing",
  "typed-path",
  "url",
- "uv-auth",
  "uv-build-frontend",
  "uv-cache",
- "uv-cache-info",
  "uv-client",
  "uv-configuration",
  "uv-dispatch",
@@ -5067,7 +5065,6 @@ dependencies = [
  "uv-git",
  "uv-git-types",
  "uv-install-wheel",
- "uv-installer",
  "uv-normalize",
  "uv-pep440",
  "uv-pep508",
@@ -5194,6 +5191,68 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixi_install_pypi"
+version = "0.1.0"
+dependencies = [
+ "ahash",
+ "assert_matches",
+ "chrono",
+ "console 0.15.11",
+ "csv",
+ "fancy_display",
+ "fs-err",
+ "insta",
+ "itertools 0.14.0",
+ "miette 7.6.0",
+ "pep440_rs",
+ "pep508_rs",
+ "percent-encoding",
+ "pixi_consts",
+ "pixi_git",
+ "pixi_manifest",
+ "pixi_progress",
+ "pixi_python_status",
+ "pixi_record",
+ "pixi_reporters",
+ "pixi_utils",
+ "pixi_uv_context",
+ "pixi_uv_conversions",
+ "pypi_modifiers",
+ "rattler",
+ "rattler_conda_types",
+ "rattler_lock",
+ "rayon",
+ "rstest",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.16",
+ "tokio",
+ "tracing",
+ "typed-path",
+ "url",
+ "uv-auth",
+ "uv-cache",
+ "uv-cache-info",
+ "uv-client",
+ "uv-configuration",
+ "uv-dispatch",
+ "uv-distribution",
+ "uv-distribution-filename",
+ "uv-distribution-types",
+ "uv-install-wheel",
+ "uv-installer",
+ "uv-normalize",
+ "uv-pep440",
+ "uv-pep508",
+ "uv-pypi-types",
+ "uv-python",
+ "uv-redacted",
+ "uv-resolver",
+ "uv-types",
+]
+
+[[package]]
 name = "pixi_manifest"
 version = "0.1.0"
 dependencies = [
@@ -5277,6 +5336,14 @@ dependencies = [
  "toml_edit 0.22.27",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "pixi_python_status"
+version = "0.1.0"
+dependencies = [
+ "rattler",
+ "rattler_conda_types",
 ]
 
 [[package]]
@@ -5462,6 +5529,28 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "uv-configuration",
+]
+
+[[package]]
+name = "pixi_uv_context"
+version = "0.1.0"
+dependencies = [
+ "fs-err",
+ "miette 7.6.0",
+ "pixi_config",
+ "pixi_consts",
+ "pixi_utils",
+ "pixi_uv_conversions",
+ "reqwest",
+ "tracing",
+ "uv-cache",
+ "uv-client",
+ "uv-configuration",
+ "uv-dispatch",
+ "uv-distribution-types",
+ "uv-pep508",
+ "uv-types",
+ "uv-workspace",
 ]
 
 [[package]]

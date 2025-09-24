@@ -1,6 +1,6 @@
-use crate::install_pypi::plan::InstallPlanner;
-use crate::install_pypi::plan::cache::DistCache;
-use crate::install_pypi::plan::installed_dists::InstalledDists;
+use crate::plan::InstallPlanner;
+use crate::plan::cache::DistCache;
+use crate::plan::installed_dists::InstalledDists;
 use pixi_consts::consts;
 use pixi_uv_conversions::GitUrlWithPrefix;
 use rattler_lock::{PypiPackageData, UrlOrPath};

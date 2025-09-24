@@ -11,7 +11,7 @@ use rattler_lock::PypiPackageData;
 use uv_distribution_types::Dist;
 use uv_normalize::PackageName;
 
-use crate::install_pypi::conversions::{ConvertToUvDistError, convert_to_dist};
+use crate::conversions::{ConvertToUvDistError, convert_to_dist};
 
 /// A collection of required distributions with their associated package data.
 /// This struct owns the Dist objects to ensure proper lifetimes for the install planner.
