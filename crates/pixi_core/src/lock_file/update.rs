@@ -9,7 +9,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use async_trait::async_trait;
 use barrier_cell::BarrierCell;
 use dashmap::DashMap;
 use fancy_display::FancyDisplay;
@@ -51,10 +50,9 @@ use crate::{
     Workspace,
     activation::CurrentEnvVarBehavior,
     environment::{
-        CondaPrefixUpdated, ContinuePyPIPrefixUpdate, EnvironmentFile, InstallFilter,
-        LockFileUsage, LockedEnvironmentHash, PerEnvironmentAndPlatform, PerGroup,
-        PerGroupAndPlatform, PythonStatus, on_python_interpreter_change, read_environment_file,
-        write_environment_file,
+        CondaPrefixUpdated, EnvironmentFile, InstallFilter, LockFileUsage, LockedEnvironmentHash,
+        PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PythonStatus,
+        read_environment_file, write_environment_file,
     },
     lock_file::{
         self, PypiRecord, reporter::SolveProgressBar,
@@ -66,29 +64,9 @@ use crate::{
     },
 };
 use pixi_install_pypi::{
-    PyPIBuildConfig, PyPIContextConfig, PyPIEnvironmentUpdater, PyPIRecords, PyPIUpdateConfig,
-    PythonEnvironmentProvider,
+    PyPIBuildConfig, PyPIContextConfig, PyPIEnvironmentUpdater, PyPIUpdateConfig,
 };
 use pixi_uv_context::UvResolutionContext;
-use rattler::install::PythonInfo;
-
-struct WorkspacePythonEnv<'a> {
-    status: &'a PythonStatus,
-}
-
-#[async_trait]
-impl<'a> PythonEnvironmentProvider for WorkspacePythonEnv<'a> {
-    async fn python_info_for_update(
-        &self,
-        prefix: &Prefix,
-        planned_records: &[PyPIRecords],
-    ) -> miette::Result<Option<PythonInfo>> {
-        match on_python_interpreter_change(self.status, prefix, planned_records).await? {
-            ContinuePyPIPrefixUpdate::Continue(info) => Ok(Some(info.clone())),
-            ContinuePyPIPrefixUpdate::Skip => Ok(None),
-        }
-    }
-}
 
 impl Workspace {
     /// Ensures that the lock-file is up-to-date with the project.
@@ -630,19 +608,10 @@ impl<'p> LockFileDerivedData<'p> {
                         .map(to_uv_normalize)
                         .collect::<Result<Vec<_>, _>>()
                         .into_diagnostic()?;
-                    let python_env_provider = WorkspacePythonEnv {
-                        status: &python_status,
-                    };
-
-                    PyPIEnvironmentUpdater::new(
-                        config,
-                        build_config,
-                        context_config,
-                        &python_env_provider,
-                    )
-                    .with_ignored_extraneous(names)
-                    .update(&pixi_records, &pypi_records)
-                    .await
+                    PyPIEnvironmentUpdater::new(config, build_config, context_config)
+                        .with_ignored_extraneous(names)
+                        .update(&python_status, &pixi_records, &pypi_records)
+                        .await
                 }
                 .with_context(|| {
                     format!(

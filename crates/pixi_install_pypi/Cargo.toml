@@ -10,7 +10,6 @@ version = "0.1.0"
 
 [dependencies]
 ahash = { workspace = true }
-async-trait = { workspace = true }
 chrono = { workspace = true }
 console = { workspace = true }
 csv = { workspace = true }
@@ -25,6 +24,7 @@ pixi_consts = { workspace = true }
 pixi_git = { workspace = true }
 pixi_manifest = { workspace = true, features = ["rattler_lock"] }
 pixi_progress = { workspace = true }
+pixi_python_status = { workspace = true }
 pixi_record = { workspace = true }
 pixi_reporters = { workspace = true }
 pixi_utils = { workspace = true, default-features = false }
@@ -34,6 +34,7 @@ pypi_modifiers = { workspace = true }
 rattler = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_lock = { workspace = true }
+rayon = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

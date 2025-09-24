@@ -5024,6 +5024,7 @@ dependencies = [
  "pixi_manifest",
  "pixi_progress",
  "pixi_pypi_spec",
+ "pixi_python_status",
  "pixi_record",
  "pixi_reporters",
  "pixi_spec",
@@ -5202,7 +5203,6 @@ version = "0.1.0"
 dependencies = [
  "ahash",
  "assert_matches",
- "async-trait",
  "chrono",
  "console 0.15.11",
  "csv",
@@ -5218,6 +5218,7 @@ dependencies = [
  "pixi_git",
  "pixi_manifest",
  "pixi_progress",
+ "pixi_python_status",
  "pixi_record",
  "pixi_reporters",
  "pixi_utils",
@@ -5227,6 +5228,7 @@ dependencies = [
  "rattler",
  "rattler_conda_types",
  "rattler_lock",
+ "rayon",
  "rstest",
  "serde",
  "serde_json",
@@ -5342,6 +5344,14 @@ dependencies = [
  "toml_edit 0.22.27",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "pixi_python_status"
+version = "0.1.0"
+dependencies = [
+ "rattler",
+ "rattler_conda_types",
 ]
 
 [[package]]

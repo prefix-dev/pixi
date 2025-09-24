@@ -194,6 +194,7 @@ pixi_install_pypi = { path = "crates/pixi_install_pypi" }
 pixi_manifest = { path = "crates/pixi_manifest" }
 pixi_progress = { path = "crates/pixi_progress" }
 pixi_pypi_spec = { path = "crates/pixi_pypi_spec" }
+pixi_python_status = { path = "crates/pixi_python_status" }
 pixi_record = { path = "crates/pixi_record" }
 pixi_reporters = { path = "crates/pixi_reporters" }
 pixi_spec = { path = "crates/pixi_spec" }
