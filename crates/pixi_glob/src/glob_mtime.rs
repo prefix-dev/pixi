@@ -5,7 +5,7 @@ use std::{
 
 use thiserror::Error;
 
-use crate::glob_set::{self, GlobSet};
+use crate::{GlobSet, GlobSetError};
 
 /// Contains the newest modification time for the files that match the given glob patterns.
 #[derive(Debug, Clone)]
@@ -27,7 +27,7 @@ pub enum GlobModificationTimeError {
     #[error("error calculating modification time for {}", .0.display())]
     CalculateMTime(PathBuf, #[source] std::io::Error),
     #[error(transparent)]
-    GlobSet(#[from] glob_set::GlobSetError),
+    GlobSetIgnore(#[from] GlobSetError),
 }
 
 impl GlobModificationTime {
@@ -36,38 +36,49 @@ impl GlobModificationTime {
         root_dir: &Path,
         globs: impl IntoIterator<Item = &'a str>,
     ) -> Result<Self, GlobModificationTimeError> {
-        // If the root is not a directory or does not exist, return NoMatches.
+        // Delegate to the ignore-based implementation for performance.
+        Self::from_patterns_ignore(root_dir, globs)
+    }
+
+    /// Same as `from_patterns` but uses the `ignore` crate for walking/matching.
+    pub fn from_patterns_ignore<'a>(
+        root_dir: &Path,
+        globs: impl IntoIterator<Item = &'a str>,
+    ) -> Result<Self, GlobModificationTimeError> {
+        // Normalize root to a directory if a file was passed.
         let mut root = root_dir.to_owned();
         if !root.is_dir() {
             root.pop();
         }
 
-        let glob_set = GlobSet::create(globs)?;
-        let entries: Vec<_> = glob_set
-            .filter_directory(root_dir)
-            .collect::<Result<Vec<_>, _>>()?;
+        let glob_set = GlobSet::create(globs);
+        let entries = glob_set.collect_matching(root_dir)?;
 
         let mut latest = None;
         let mut designated_file = PathBuf::new();
 
-        // Find the newest modification time and the designated file
         for entry in entries {
-            let matched_path = entry.path().to_owned();
-            let metadata = entry.metadata().map_err(|e| {
-                GlobModificationTimeError::CalculateMTime(matched_path.clone(), e.into())
-            })?;
-            let modified_entry = metadata
+            let matched_path = entry.path().to_path_buf();
+            let md = match entry.metadata() {
+                Ok(md) => md,
+                Err(e) => {
+                    return Err(GlobModificationTimeError::CalculateMTime(
+                        matched_path,
+                        std::io::Error::new(std::io::ErrorKind::Other, e.to_string()),
+                    ));
+                }
+            };
+            let modified = md
                 .modified()
                 .map_err(|e| GlobModificationTimeError::CalculateMTime(matched_path.clone(), e))?;
 
-            if let Some(ref current_latest) = latest {
-                if *current_latest >= modified_entry {
+            if let Some(cur) = latest {
+                if cur >= modified {
                     continue;
                 }
             }
-
-            latest = Some(modified_entry);
-            designated_file = matched_path.clone();
+            latest = Some(modified);
+            designated_file = matched_path;
         }
 
         match latest {
