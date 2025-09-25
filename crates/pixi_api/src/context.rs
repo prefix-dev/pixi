@@ -21,11 +21,11 @@ impl<I: Interface> WorkspaceContext<I> {
     }
 
     pub async fn name(&self) -> String {
-        crate::workspace::config::name::get(self.workspace.clone()).await
+        crate::workspace::workspace::name::get(self.workspace.clone()).await
     }
 
     pub async fn set_name(&self, name: &str) -> miette::Result<()> {
-        crate::workspace::config::name::set(&self.interface, self.workspace.clone(), name).await
+        crate::workspace::workspace::name::set(&self.interface, self.workspace.clone(), name).await
     }
 
     pub async fn reinstall(

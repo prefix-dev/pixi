@@ -6,7 +6,7 @@ use pixi_core::{
     lock_file::{ReinstallEnvironment, UpdateMode},
 };
 
-use crate::{interface::Interface, styled_text::StyledText};
+use crate::interface::Interface;
 
 mod options;
 
@@ -59,10 +59,7 @@ pub(crate) async fn reinstall<I: Interface>(
     // Message what's installed
     let detached_envs_message =
         if let Ok(Some(path)) = workspace.config().detached_environments().path() {
-            format!(
-                " in '{}'",
-                interface.styled(StyledText::new(path.display().to_string()).bold())
-            )
+            format!(" in '{}'", console::style(path.display()).bold())
         } else {
             "".to_string()
         };
