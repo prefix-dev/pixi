@@ -2188,6 +2188,32 @@ def test_tree_nonexistent_environment(pixi: Path, tmp_path: Path) -> None:
     )
 
 
+def test_tree_invert(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+
+    # Install dummy-a which has dummy-c as a dependency
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "dummy-a==0.1.0",
+        ],
+        env=env,
+    )
+
+    # Verify inverted tree showing what depends on dummy-c
+    verify_cli_command(
+        [pixi, "global", "tree", "--environment", "dummy-a", "--invert", "dummy-c"],
+        env=env,
+        stdout_contains=["dummy-c", "dummy-a 0.1.0"],
+    )
+
+
 class TestCondaFile:
     @pytest.mark.parametrize("path_arg", [True, False])
     def test_install_conda_file(
@@ -2338,29 +2364,4 @@ class TestCondaFile:
             ],
             env=env,
             cwd=cwd,
-        )
-
-    def test_tree_invert(self, pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
-        env = {"PIXI_HOME": str(tmp_path)}
-        manifests = tmp_path.joinpath("manifests")
-        manifests.mkdir()
-
-        # Install dummy-a which has dummy-c as a dependency
-        verify_cli_command(
-            [
-                pixi,
-                "global",
-                "install",
-                "--channel",
-                dummy_channel_1,
-                "dummy-a==0.1.0",
-            ],
-            env=env,
-        )
-
-        # Verify inverted tree showing what depends on dummy-c
-        verify_cli_command(
-            [pixi, "global", "tree", "--environment", "dummy-a", "--invert", "dummy-c"],
-            env=env,
-            stdout_contains=["dummy-c", "dummy-a 0.1.0"],
         )
