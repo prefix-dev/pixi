@@ -304,12 +304,10 @@ impl Project {
             .expect("manifest path should always have a parent")
             .to_owned();
 
-        let config = Config::load(&root);
-        let root_config = Config {
-            channel_config: rattler_conda_types::ChannelConfig::default_with_root_dir(root.clone()),
-            ..Default::default()
-        };
-        let config = config.merge_config(root_config);
+        // Load the global config and ensure
+        // that the root_dir is relative to the manifest directory
+        let mut config = Config::load_global();
+        config.channel_config.root_dir = root.clone();
 
         let client = OnceCell::new();
         let repodata_gateway = OnceCell::new();
@@ -477,7 +475,6 @@ impl Project {
         bin_dir: BinDir,
     ) -> miette::Result<Self> {
         let manifest = Manifest::from_path(manifest_path)?;
-        dbg!(&Project::from_manifest(manifest.clone(), env_root.clone(), bin_dir.clone()).config());
         Ok(Project::from_manifest(manifest, env_root, bin_dir))
     }
 

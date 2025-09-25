@@ -1346,9 +1346,11 @@ impl Config {
             // Extended self.mirrors with other.mirrors
             mirrors: self.mirrors,
             loaded_from: other.loaded_from,
-            // XXX: broken
-            // currently this is always the default so just use the other value
-            channel_config: other.channel_config,
+            channel_config: if other.channel_config == default_channel_config() {
+                self.channel_config
+            } else {
+                other.channel_config
+            },
             repodata_config: self.repodata_config.merge(other.repodata_config),
             pypi_config: self.pypi_config.merge(other.pypi_config),
             s3_options: {

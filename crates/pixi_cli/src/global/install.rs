@@ -78,18 +78,12 @@ pub struct Args {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
+
+    // Load the global config and ensure
+    // that the root_dir is relative to the manifest directory
     let project_original = pixi_global::Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
-    let root_config = Config {
-        channel_config: rattler_conda_types::ChannelConfig::default_with_root_dir(
-            project_original.root.clone(),
-        ),
-        ..Default::default()
-    };
-    let project_config = project_original.config.clone().merge_config(root_config);
-    let project_original = project_original.with_cli_config(project_config);
-
     let channel_config = project_original.global_channel_config().clone();
 
     let specs = args
