@@ -41,13 +41,17 @@ pub fn fish_prompt(env_name: &str) -> String {
             end
         end
 
+        function return_last_status
+            return $argv
+        end
+
         function fish_prompt
             set -l last_status $status
             if set -q PIXI_LEFT_PROMPT
                 __pixi_add_prompt
             end
+            return_last_status $last_status
             __fish_prompt_orig
-            return $last_status
         end
 
         function fish_right_prompt
