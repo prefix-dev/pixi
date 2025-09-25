@@ -2188,32 +2188,6 @@ def test_tree_nonexistent_environment(pixi: Path, tmp_path: Path) -> None:
     )
 
 
-def test_tree_invert(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
-    env = {"PIXI_HOME": str(tmp_path)}
-    manifests = tmp_path.joinpath("manifests")
-    manifests.mkdir()
-
-    # Install dummy-a which has dummy-c as a dependency
-    verify_cli_command(
-        [
-            pixi,
-            "global",
-            "install",
-            "--channel",
-            dummy_channel_1,
-            "dummy-a==0.1.0",
-        ],
-        env=env,
-    )
-
-    # Verify inverted tree showing what depends on dummy-c
-    verify_cli_command(
-        [pixi, "global", "tree", "--environment", "dummy-a", "--invert", "dummy-c"],
-        env=env,
-        stdout_contains=["dummy-c", "dummy-a 0.1.0"],
-    )
-
-
 class TestCondaFile:
     @pytest.mark.parametrize("path_arg", [True, False])
     def test_install_conda_file(
@@ -2221,7 +2195,7 @@ class TestCondaFile:
     ) -> None:
         """Test directly installing a `.conda` file with `pixi global`"""
         env = {"PIXI_HOME": str(tmp_path), "PIXI_CACHE_DIR": str(tmp_path / "foo")}
-        os.chdir(tmp_path)
+        cwd = tmp_path
 
         conda_file = tmp_path / "pixi-editor-1.0.0-h4616a5c_0.conda"
         shutil.copyfile(
@@ -2229,11 +2203,10 @@ class TestCondaFile:
             conda_file,
         )
 
-        def check_install(conda_file_path: Path):
+        def check_install(conda_file_path: Path, cwd: Path):
             if path_arg:
                 verify_cli_command(
-                    [pixi, "global", "install", "--path", conda_file_path],
-                    env=env,
+                    [pixi, "global", "install", "--path", conda_file_path], env=env, cwd=cwd
                 )
             else:
                 verify_cli_command(
@@ -2241,32 +2214,33 @@ class TestCondaFile:
                     env=env,
                     expected_exit_code=ExitCode.FAILURE,
                     stderr_contains="please pass `--path`",
+                    cwd=cwd,
                 )
 
         # check absolute path
-        check_install(conda_file)
+        check_install(conda_file, cwd)
 
         # check relative path in same dir
-        os.chdir(conda_file.parent)
-        relative_conda_file = conda_file.relative_to(Path.cwd(), walk_up=True)
-        check_install(relative_conda_file)
+        cwd = conda_file.parent
+        relative_conda_file = conda_file.relative_to(cwd, walk_up=True)
+        check_install(relative_conda_file, cwd)
 
         # check relative path in subdir
-        os.chdir(conda_file.parent.parent)
-        relative_conda_file = conda_file.relative_to(Path.cwd(), walk_up=True)
-        check_install(relative_conda_file)
+        cwd = conda_file.parent.parent
+        relative_conda_file = conda_file.relative_to(cwd, walk_up=True)
+        check_install(relative_conda_file, cwd)
 
         # check relative path in a 'cousin' relative directory
-        os.chdir(tmp_path)
-        relative_conda_file = conda_file.relative_to(Path.cwd(), walk_up=True)
-        check_install(relative_conda_file)
+        cwd = tmp_path
+        relative_conda_file = conda_file.relative_to(cwd, walk_up=True)
+        check_install(relative_conda_file, cwd)
 
     def test_update_sync_conda_file(
         self, pixi: Path, tmp_path: Path, shortcuts_channel_1: str
     ) -> None:
         """Test that `pixi global {update, sync}` work and use the existing file."""
         env = {"PIXI_HOME": str(tmp_path), "PIXI_CACHE_DIR": str(tmp_path / "foo")}
-        os.chdir(tmp_path)
+        cwd = tmp_path
 
         package_name = "pixi-editor"
         conda_file = tmp_path / "pixi-editor-1.0.0-h4616a5c_0.conda"
@@ -2284,6 +2258,7 @@ class TestCondaFile:
                 conda_file,
             ],
             env=env,
+            cwd=cwd,
         )
 
         # update with file still there
@@ -2295,6 +2270,7 @@ class TestCondaFile:
                 "pixi-editor",
             ],
             env=env,
+            cwd=cwd,
             stderr_contains="Environment pixi-editor was already up-to-date.",
         )
 
@@ -2306,6 +2282,7 @@ class TestCondaFile:
                 "sync",
             ],
             env=env,
+            cwd=cwd,
             stderr_contains="Nothing to do",
         )
 
@@ -2320,6 +2297,7 @@ class TestCondaFile:
                 "pixi-editor",
             ],
             env=env,
+            cwd=cwd,
             stderr_contains="Environment pixi-editor was already up-to-date.",
         )
 
@@ -2331,6 +2309,7 @@ class TestCondaFile:
                 "sync",
             ],
             env=env,
+            cwd=cwd,
             stderr_contains="Nothing to do",
         )
 
@@ -2347,6 +2326,7 @@ class TestCondaFile:
                 "pixi-editor",
             ],
             env=env,
+            cwd=cwd,
         )
 
         # sync with environment removed
@@ -2357,4 +2337,30 @@ class TestCondaFile:
                 "sync",
             ],
             env=env,
+            cwd=cwd,
+        )
+
+    def test_tree_invert(self, pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+        env = {"PIXI_HOME": str(tmp_path)}
+        manifests = tmp_path.joinpath("manifests")
+        manifests.mkdir()
+
+        # Install dummy-a which has dummy-c as a dependency
+        verify_cli_command(
+            [
+                pixi,
+                "global",
+                "install",
+                "--channel",
+                dummy_channel_1,
+                "dummy-a==0.1.0",
+            ],
+            env=env,
+        )
+
+        # Verify inverted tree showing what depends on dummy-c
+        verify_cli_command(
+            [pixi, "global", "tree", "--environment", "dummy-a", "--invert", "dummy-c"],
+            env=env,
+            stdout_contains=["dummy-c", "dummy-a 0.1.0"],
         )
