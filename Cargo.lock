@@ -3730,7 +3730,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "07033963ba89ebaf1584d767badaa2e8fcec21aedea6b8c0346d487d49c28667"
 dependencies = [
  "cfg-if",
- "windows-targets 0.53.3",
+ "windows-targets 0.48.5",
 ]
 
 [[package]]
@@ -4692,6 +4692,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixi_api"
+version = "0.1.0"
+dependencies = [
+ "dunce",
+ "fancy_display",
+ "fs-err",
+ "itertools 0.14.0",
+ "miette 7.6.0",
+ "minijinja",
+ "pixi_config",
+ "pixi_consts",
+ "pixi_core",
+ "pixi_manifest",
+ "pixi_utils",
+ "rattler_conda_types",
+ "same-file",
+ "serde",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "url",
+ "uv-normalize",
+]
+
+[[package]]
 name = "pixi_build_discovery"
 version = "0.1.0"
 dependencies = [
@@ -4791,10 +4816,10 @@ dependencies = [
  "itertools 0.14.0",
  "libc",
  "miette 7.6.0",
- "minijinja",
  "nix 0.29.0",
  "pathdiff",
  "pep508_rs",
+ "pixi_api",
  "pixi_command_dispatcher",
  "pixi_config",
  "pixi_consts",
@@ -4810,6 +4835,7 @@ dependencies = [
  "pixi_spec",
  "pixi_task",
  "pixi_utils",
+ "pixi_uv_context",
  "pixi_uv_conversions",
  "pypi_modifiers",
  "rattler",
@@ -4824,7 +4850,6 @@ dependencies = [
  "regex",
  "reqwest",
  "reqwest-middleware",
- "same-file",
  "self-replace",
  "serde",
  "serde_json",
@@ -4957,13 +4982,11 @@ name = "pixi_core"
 version = "0.1.0"
 dependencies = [
  "ahash",
- "assert_matches",
  "async-once-cell",
  "async-trait",
  "barrier_cell",
  "chrono",
  "console 0.15.11",
- "csv",
  "dashmap",
  "dialoguer",
  "dunce",
@@ -4985,7 +5008,6 @@ dependencies = [
  "pathdiff",
  "pep440_rs",
  "pep508_rs",
- "percent-encoding",
  "pixi_build_discovery",
  "pixi_build_frontend",
  "pixi_build_type_conversions",
@@ -4995,14 +5017,17 @@ dependencies = [
  "pixi_default_versions",
  "pixi_git",
  "pixi_glob",
+ "pixi_install_pypi",
  "pixi_manifest",
  "pixi_progress",
  "pixi_pypi_spec",
+ "pixi_python_status",
  "pixi_record",
  "pixi_reporters",
  "pixi_spec",
  "pixi_test_utils",
  "pixi_utils",
+ "pixi_uv_context",
  "pixi_uv_conversions",
  "pypi_mapping",
  "pypi_modifiers",
@@ -5015,7 +5040,6 @@ dependencies = [
  "rattler_shell",
  "rattler_solve",
  "rattler_virtual_packages",
- "rayon",
  "reqwest",
  "reqwest-middleware",
  "rlimit",
@@ -5030,10 +5054,8 @@ dependencies = [
  "tracing",
  "typed-path",
  "url",
- "uv-auth",
  "uv-build-frontend",
  "uv-cache",
- "uv-cache-info",
  "uv-client",
  "uv-configuration",
  "uv-dispatch",
@@ -5043,7 +5065,6 @@ dependencies = [
  "uv-git",
  "uv-git-types",
  "uv-install-wheel",
- "uv-installer",
  "uv-normalize",
  "uv-pep440",
  "uv-pep508",
@@ -5170,6 +5191,68 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixi_install_pypi"
+version = "0.1.0"
+dependencies = [
+ "ahash",
+ "assert_matches",
+ "chrono",
+ "console 0.15.11",
+ "csv",
+ "fancy_display",
+ "fs-err",
+ "insta",
+ "itertools 0.14.0",
+ "miette 7.6.0",
+ "pep440_rs",
+ "pep508_rs",
+ "percent-encoding",
+ "pixi_consts",
+ "pixi_git",
+ "pixi_manifest",
+ "pixi_progress",
+ "pixi_python_status",
+ "pixi_record",
+ "pixi_reporters",
+ "pixi_utils",
+ "pixi_uv_context",
+ "pixi_uv_conversions",
+ "pypi_modifiers",
+ "rattler",
+ "rattler_conda_types",
+ "rattler_lock",
+ "rayon",
+ "rstest",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.16",
+ "tokio",
+ "tracing",
+ "typed-path",
+ "url",
+ "uv-auth",
+ "uv-cache",
+ "uv-cache-info",
+ "uv-client",
+ "uv-configuration",
+ "uv-dispatch",
+ "uv-distribution",
+ "uv-distribution-filename",
+ "uv-distribution-types",
+ "uv-install-wheel",
+ "uv-installer",
+ "uv-normalize",
+ "uv-pep440",
+ "uv-pep508",
+ "uv-pypi-types",
+ "uv-python",
+ "uv-redacted",
+ "uv-resolver",
+ "uv-types",
+]
+
+[[package]]
 name = "pixi_manifest"
 version = "0.1.0"
 dependencies = [
@@ -5253,6 +5336,14 @@ dependencies = [
  "toml_edit 0.22.27",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "pixi_python_status"
+version = "0.1.0"
+dependencies = [
+ "rattler",
+ "rattler_conda_types",
 ]
 
 [[package]]
@@ -5438,6 +5529,28 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "uv-configuration",
+]
+
+[[package]]
+name = "pixi_uv_context"
+version = "0.1.0"
+dependencies = [
+ "fs-err",
+ "miette 7.6.0",
+ "pixi_config",
+ "pixi_consts",
+ "pixi_utils",
+ "pixi_uv_conversions",
+ "reqwest",
+ "tracing",
+ "uv-cache",
+ "uv-client",
+ "uv-configuration",
+ "uv-dispatch",
+ "uv-distribution-types",
+ "uv-pep508",
+ "uv-types",
+ "uv-workspace",
 ]
 
 [[package]]
@@ -5973,9 +6086,9 @@ dependencies = [
 
 [[package]]
 name = "rattler"
-version = "0.37.3"
+version = "0.37.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8bde5385d34e38d403d24d141cff078d96f02acfe9880a52cf8a7ee651925ad3"
+checksum = "c38b76878f37ebe3061fefc83bb9c2b65a7df53318110ce8f7249635cb1615ab"
 dependencies = [
  "anyhow",
  "clap",
@@ -6146,9 +6259,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_menuinst"
-version = "0.2.26"
+version = "0.2.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5103aaeb791fdf9e1ac62b7573bb0fd165f21fe66bb46224c3a46b8078e70b66"
+checksum = "28bce831eb3bf85a44face3998746e22c924d32ac5eab950f24a3a39b7b6bd99"
 dependencies = [
  "chrono",
  "configparser",

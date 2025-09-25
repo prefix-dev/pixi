@@ -8,7 +8,7 @@ use url::Url;
 use uv_distribution_types::InstalledDist;
 use uv_pypi_types::{ParsedGitUrl, ParsedUrlError};
 
-use crate::install_pypi::utils::{check_url_freshness, strip_direct_scheme};
+use crate::utils::{check_url_freshness, strip_direct_scheme};
 
 use super::{NeedReinstall, models::ValidateCurrentInstall};
 use pixi_uv_conversions::ConversionError;
