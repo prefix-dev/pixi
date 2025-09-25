@@ -326,13 +326,16 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             pypi_options_to_build_options(self.build_config.no_build, self.build_config.no_binary)
                 .into_diagnostic()?;
 
+        let index_strategy = to_index_strategy(self.build_config.index_strategy);
+
         let mut uv_client_builder =
             RegistryClientBuilder::new(self.context_config.uv_context.cache.clone())
                 .allow_insecure_host(self.context_config.uv_context.allow_insecure_host.clone())
                 .keyring(self.context_config.uv_context.keyring_provider)
                 .connectivity(Connectivity::Online)
                 .extra_middleware(self.context_config.uv_context.extra_middleware.clone())
-                .index_locations(&index_locations);
+                .index_locations(&index_locations)
+                .index_strategy(index_strategy);
 
         for p in &self.context_config.uv_context.proxies {
             uv_client_builder = uv_client_builder.proxy(p.clone())
@@ -390,7 +393,6 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             .try_into()
             .into_diagnostic()?;
 
-        let index_strategy = to_index_strategy(self.build_config.index_strategy);
         let exclude_newer = self
             .build_config
             .exclude_newer
