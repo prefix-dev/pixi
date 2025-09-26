@@ -16,6 +16,10 @@ Then it will remove all fields, apart from:
 - `url`
 - `subdir`.
 
+Note
+
+In v0.55.0 and earlier releases, by default only the `default` feature was upgraded. Pass `--feature=default` if you want to emulate this behaviour on newer releases.
+
 ## Usage
 
 ```text
@@ -32,8 +36,6 @@ pixi upgrade [OPTIONS] [PACKAGES]...
 ## Options
 
 - [`--feature (-f) <FEATURE>`](#arg---feature) The feature to update
-
-  **default**: `default`
 
 - [`--exclude <EXCLUDE>`](#arg---exclude) The packages which should be excluded
 
@@ -85,7 +87,7 @@ pixi upgrade [OPTIONS] [PACKAGES]...
 
 Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file.
 
-`pixi upgrade` loosens the requirements for the given packages, updates the lock file and the adapts the manifest accordingly.
+`pixi upgrade` loosens the requirements for the given packages, updates the lock file and the adapts the manifest accordingly. By default, all features are upgraded.
 
 ## Examples
 

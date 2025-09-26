@@ -2808,6 +2808,11 @@
 <li><code>subdir</code>.</li>
 </ul>
 </div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>In v0.55.0 and earlier releases, by default only the <code>default</code> feature was upgraded.
+Pass <code>--feature=default</code> if you want to emulate this behaviour on newer releases.</p>
+</div>
 <h2 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">#</a></h2>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi upgrade [OPTIONS] [PACKAGES]...
 </span></code></pre></div>
@@ -2826,8 +2831,7 @@
 <li>
 <dl>
 <dt><a id="arg---feature" href="#arg---feature"><code>--feature (-f) &lt;FEATURE&gt;</code></a></dt>
-<dd>The feature to update
-<br><strong>default</strong>: <code>default</code></dd>
+<dd>The feature to update</dd>
 </dl>
 </li>
 <li>
@@ -2937,7 +2941,7 @@
 </ul>
 <h2 id="description">Description<a class="headerlink" href="#description" title="Permanent link">#</a></h2>
 <p>Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file.</p>
-<p><code>pixi upgrade</code> loosens the requirements for the given packages, updates the lock file and the adapts the manifest accordingly.</p>
+<p><code>pixi upgrade</code> loosens the requirements for the given packages, updates the lock file and the adapts the manifest accordingly. By default, all features are upgraded.</p>
 <h2 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">#</a></h2>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi<span class="w"> </span>upgrade<span class="w"> </span><span class="c1"># (1)!</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>pixi<span class="w"> </span>upgrade<span class="w"> </span>numpy<span class="w"> </span><span class="c1"># (2)!</span>
