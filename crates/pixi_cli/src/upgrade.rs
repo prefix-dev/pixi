@@ -81,7 +81,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     feature_arg.fancy_display()
                 )
             };
-            vec![feature.clone()]
+            Vec::from([feature.clone()])
         } else {
             workspace
                 .workspace()
@@ -90,7 +90,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .features
                 .clone()
                 .into_values()
-                .collect::<Vec<Feature>>()
+                .collect()
         }
     };
 
@@ -130,7 +130,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     }
 
-    let specs_by_feature: SpecsByFeature = features
+    let specs_by_feature = features
         .into_iter()
         .map(|f| {
             let specs = collect_specs_by_target(&f, &args, &workspace, &all_platforms)?;
