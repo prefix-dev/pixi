@@ -123,7 +123,6 @@ uv-platform-tags = { git = "https://github.com/astral-sh/uv", tag = "0.8.5" }
 uv-pypi-types = { git = "https://github.com/astral-sh/uv", tag = "0.8.5" }
 uv-requirements-txt = { git = "https://github.com/astral-sh/uv", tag = "0.8.5" }
 
-wax = "0.6.0"
 which = "8.0.0"
 
 # Rattler crates
@@ -176,6 +175,7 @@ barrier_cell = { path = "crates/barrier_cell" }
 fancy_display = { path = "crates/fancy_display" }
 pixi = { path = "crates/pixi" }
 pixi_allocator = { path = "crates/pixi_allocator" }
+pixi_api = { path = "crates/pixi_api" }
 pixi_build_discovery = { path = "crates/pixi_build_discovery" }
 pixi_build_frontend = { path = "crates/pixi_build_frontend" }
 pixi_build_type_conversions = { path = "crates/pixi_build_type_conversions" }
@@ -189,9 +189,11 @@ pixi_default_versions = { path = "crates/pixi_default_versions" }
 pixi_git = { path = "crates/pixi_git" }
 pixi_glob = { path = "crates/pixi_glob" }
 pixi_global = { path = "crates/pixi_global" }
+pixi_install_pypi = { path = "crates/pixi_install_pypi" }
 pixi_manifest = { path = "crates/pixi_manifest" }
 pixi_progress = { path = "crates/pixi_progress" }
 pixi_pypi_spec = { path = "crates/pixi_pypi_spec" }
+pixi_python_status = { path = "crates/pixi_python_status" }
 pixi_record = { path = "crates/pixi_record" }
 pixi_reporters = { path = "crates/pixi_reporters" }
 pixi_spec = { path = "crates/pixi_spec" }
@@ -201,6 +203,7 @@ pixi_task = { path = "crates/pixi_task" }
 pixi_test_utils = { path = "crates/pixi_test_utils" }
 pixi_toml = { path = "crates/pixi_toml" }
 pixi_utils = { path = "crates/pixi_utils", default-features = false }
+pixi_uv_context = { path = "crates/pixi_uv_context" }
 pixi_uv_conversions = { path = "crates/pixi_uv_conversions" }
 pypi_mapping = { path = "crates/pypi_mapping" }
 pypi_modifiers = { path = "crates/pypi_modifiers" }

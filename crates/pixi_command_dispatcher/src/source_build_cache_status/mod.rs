@@ -18,11 +18,6 @@ use crate::{
     },
 };
 
-/// A list of globs that should be ignored when calculating any input hash.
-/// These are typically used for build artifacts that should not be included in
-/// the input hash.
-pub const DEFAULT_BUILD_IGNORE_GLOBS: &[&str] = &["!.pixi/**"];
-
 /// A query to retrieve information from the source build cache. This is
 /// memoized to allow querying information from the cache while it is also
 /// overwritten at the same time by a build.
@@ -322,11 +317,7 @@ impl SourceBuildCacheStatusSpec {
         // Compute the modification time of the files that match the source input globs.
         let glob_time = match GlobModificationTime::from_patterns(
             &source_checkout.path,
-            source_info
-                .globs
-                .iter()
-                .map(String::as_str)
-                .chain(DEFAULT_BUILD_IGNORE_GLOBS.iter().copied()),
+            source_info.globs.iter().map(String::as_str),
         ) {
             Ok(glob_time) => glob_time,
             Err(e) => {

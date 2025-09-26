@@ -58,7 +58,7 @@ use crate::{
     environment::CondaPrefixUpdated,
     lock_file::{
         CondaPrefixUpdater, LockedPypiPackages, PixiRecordsByName, PypiPackageIdentifier,
-        PypiRecord, UvResolutionContext,
+        PypiRecord,
         records_by_name::HasNameVersion,
         resolve::{
             build_dispatch::{
@@ -69,6 +69,7 @@ use crate::{
     },
     workspace::{Environment, EnvironmentVars},
 };
+use pixi_uv_context::UvResolutionContext;
 
 #[derive(Debug, thiserror::Error)]
 #[error("Invalid hash: {0} type: {1}")]
