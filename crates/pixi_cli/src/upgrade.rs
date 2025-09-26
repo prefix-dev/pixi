@@ -23,6 +23,7 @@ use crate::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
 /// Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest file.
 ///
 /// `pixi upgrade` loosens the requirements for the given packages, updates the lock file and the adapts the manifest accordingly.
+/// By default, all features are upgraded.
 #[derive(Parser, Debug, Default)]
 pub struct Args {
     #[clap(flatten)]
@@ -55,8 +56,8 @@ pub struct UpgradeSpecsArgs {
     pub packages: Option<Vec<String>>,
 
     /// The feature to update
-    #[clap(long = "feature", short = 'f', default_value_t)]
-    pub feature: FeatureName,
+    #[clap(long = "feature", short = 'f')]
+    pub feature: Option<FeatureName>,
 
     /// The packages which should be excluded
     #[clap(long, conflicts_with = "packages")]
@@ -71,19 +72,27 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let mut workspace = workspace.modify()?;
 
-    // Ensure that the given feature exists
-    let Some(feature) = workspace
-        .workspace()
-        .workspace
-        .value
-        .feature(&args.specs.feature)
-    else {
-        miette::bail!(
-            "could not find a feature named {}",
-            args.specs.feature.fancy_display()
-        )
+    let features = {
+        if let Some(feature_arg) = &args.specs.feature {
+            // Ensure that the given feature exists
+            let Some(feature) = workspace.workspace().workspace.value.feature(feature_arg) else {
+                miette::bail!(
+                    "could not find a feature named {}",
+                    feature_arg.fancy_display()
+                )
+            };
+            Vec::from([feature.clone()])
+        } else {
+            workspace
+                .workspace()
+                .workspace
+                .value
+                .features
+                .clone()
+                .into_values()
+                .collect()
+        }
     };
-    let feature = feature.clone();
 
     if !args.no_install_config.allow_installs()
         && (args.lock_file_update_config.lock_file_usage.frozen
@@ -105,18 +114,29 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .collect();
 
     if let Some(package_names) = &args.specs.packages {
-        let available_set = collect_available_packages(&feature, &all_platforms);
-        let available_packages: Vec<String> = available_set.into_iter().collect();
+        let available_packages: Vec<String> = features
+            .clone()
+            .into_iter()
+            .map(|f| collect_available_packages(&f, &all_platforms))
+            .fold(IndexSet::new(), |mut acc, set| {
+                acc.extend(set);
+                acc
+            })
+            .into_iter()
+            .collect();
+
         for package in package_names {
             ensure_package_exists(package, &available_packages)?;
         }
     }
 
-    let SpecsByTarget {
-        default_match_specs,
-        default_pypi_deps,
-        per_platform,
-    } = collect_specs_by_target(&feature, &args, &workspace, &all_platforms)?;
+    let specs_by_feature = features
+        .into_iter()
+        .map(|f| {
+            let specs = collect_specs_by_target(&f, &args, &workspace, &all_platforms)?;
+            Ok((f.name.clone(), specs))
+        })
+        .collect::<miette::Result<SpecsByFeature>>()?;
 
     let lock_file_usage = args.lock_file_update_config.lock_file_usage()?;
 
@@ -124,60 +144,69 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let original_lock_file = workspace.workspace().load_lock_file().await?;
 
     let mut printed_any = false;
-    if !default_match_specs.is_empty() || !default_pypi_deps.is_empty() {
-        if let Some(update) = workspace
-            .update_dependencies(
-                default_match_specs,
-                default_pypi_deps,
-                IndexMap::default(),
-                args.no_install_config.no_install,
-                &lock_file_usage,
-                &args.specs.feature,
-                &[],
-                false,
-                args.dry_run,
-            )
-            .await?
-        {
-            let diff = update.lock_file_diff;
-            if !args.json {
-                diff.print()
-                    .into_diagnostic()
-                    .context("failed to print lock-file diff")?;
-            }
-            printed_any = true;
-        }
-    }
 
-    for (platform, (platform_match_specs, platform_pypi_deps)) in per_platform {
-        if platform_match_specs.is_empty() && platform_pypi_deps.is_empty() {
-            continue;
-        }
+    for (feature_name, specs) in specs_by_feature {
+        let SpecsByTarget {
+            default_match_specs,
+            default_pypi_deps,
+            per_platform,
+        } = specs;
 
-        if let Some(update) = workspace
-            .update_dependencies(
-                platform_match_specs,
-                platform_pypi_deps,
-                IndexMap::default(),
-                args.no_install_config.no_install,
-                &lock_file_usage,
-                &args.specs.feature,
-                &[platform],
-                false,
-                args.dry_run,
-            )
-            .await?
-        {
-            let diff = update.lock_file_diff;
-            if !args.json {
-                if printed_any {
-                    println!();
+        if !default_match_specs.is_empty() || !default_pypi_deps.is_empty() {
+            if let Some(update) = workspace
+                .update_dependencies(
+                    default_match_specs,
+                    default_pypi_deps,
+                    IndexMap::default(),
+                    args.no_install_config.no_install,
+                    &lock_file_usage,
+                    &feature_name,
+                    &[],
+                    false,
+                    args.dry_run,
+                )
+                .await?
+            {
+                let diff = update.lock_file_diff;
+                if !args.json {
+                    diff.print()
+                        .into_diagnostic()
+                        .context("failed to print lock-file diff")?;
                 }
-                diff.print()
-                    .into_diagnostic()
-                    .context("failed to print lock-file diff")?;
+                printed_any = true;
             }
-            printed_any = true;
+        }
+
+        for (platform, (platform_match_specs, platform_pypi_deps)) in per_platform {
+            if platform_match_specs.is_empty() && platform_pypi_deps.is_empty() {
+                continue;
+            }
+
+            if let Some(update) = workspace
+                .update_dependencies(
+                    platform_match_specs,
+                    platform_pypi_deps,
+                    IndexMap::default(),
+                    args.no_install_config.no_install,
+                    &lock_file_usage,
+                    &feature_name,
+                    &[platform],
+                    false,
+                    args.dry_run,
+                )
+                .await?
+            {
+                let diff = update.lock_file_diff;
+                if !args.json {
+                    if printed_any {
+                        println!();
+                    }
+                    diff.print()
+                        .into_diagnostic()
+                        .context("failed to print lock-file diff")?;
+                }
+                printed_any = true;
+            }
         }
     }
 
@@ -235,6 +264,8 @@ struct SpecsByTarget {
     default_pypi_deps: PypiDeps,
     per_platform: IndexMap<Platform, (MatchSpecs, PypiDeps)>,
 }
+
+type SpecsByFeature = IndexMap<FeatureName, SpecsByTarget>;
 
 /// Collects specs for the default target and for each platform, partitioning
 /// out default-owned names so platform targets only get platform-owned entries.
@@ -461,7 +492,7 @@ pub fn parse_specs_for_platform(
             let location =
                 workspace
                     .document()
-                    .pypi_dependency_location(&name, platform, &args.specs.feature);
+                    .pypi_dependency_location(&name, platform, &feature.name);
             (name, (req, Some(pixi_req), location))
         })
         .collect();
