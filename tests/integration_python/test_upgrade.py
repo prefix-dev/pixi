@@ -380,3 +380,121 @@ def test_upgrade_remove_info(
     assert multiple_versions_channel_1 in parsed_manifest["dependencies"]["package3"]["channel"]
     # Remove build
     assert "build" not in parsed_manifest["dependencies"]["package3"]
+
+
+def test_upgrade_features(
+    pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
+) -> None:
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+
+    # Create a new project
+    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, tmp_pixi_workspace])
+
+    # Add package3 pinned to version 0.1.0 to feature "foo"
+    verify_cli_command(
+        [
+            pixi,
+            "add",
+            "--manifest-path",
+            manifest_path,
+            "--feature",
+            "foo",
+            f"package3==0.1.0[channel={multiple_versions_channel_1}]",
+        ]
+    )
+    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    package3 = parsed_manifest["feature"]["foo"]["dependencies"]["package3"]
+    assert package3["version"] == "==0.1.0"
+    assert package3["channel"] == multiple_versions_channel_1
+
+    # Add package2 pinned to version 0.1.0 to feature "bar"
+    verify_cli_command(
+        [
+            pixi,
+            "add",
+            "--manifest-path",
+            manifest_path,
+            "--feature",
+            "bar",
+            f"package2==0.1.0[channel={multiple_versions_channel_1}]",
+        ]
+    )
+    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    package2 = parsed_manifest["feature"]["bar"]["dependencies"]["package2"]
+    assert package2["version"] == "==0.1.0"
+    assert package2["channel"] == multiple_versions_channel_1
+
+    # Add package pinned to version 0.1.0 to default feature
+    verify_cli_command(
+        [
+            pixi,
+            "add",
+            "--manifest-path",
+            manifest_path,
+            f"package==0.1.0[channel={multiple_versions_channel_1}]",
+        ]
+    )
+    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    package = parsed_manifest["dependencies"]["package"]
+    assert package["version"] == "==0.1.0"
+    assert package["channel"] == multiple_versions_channel_1
+
+    # make features used
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "environment",
+            "add",
+            "--manifest-path",
+            manifest_path,
+            "--force",
+            "default",
+            "--feature=foo",
+            "--feature=bar",
+        ]
+    )
+
+    # lock before upgrades
+    verify_cli_command(
+        [
+            pixi,
+            "lock",
+            "--manifest-path",
+            manifest_path,
+        ]
+    )
+
+    # Upgrading with `--feature=default` should only upgrade the package in the default feature
+    verify_cli_command(
+        [pixi, "upgrade", "--manifest-path", manifest_path, "--feature=default"],
+        stderr_excludes=["package3", "package2"],
+        stderr_contains=["package", "0.1.0", "0.2.0"],
+    )
+    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    package3 = parsed_manifest["feature"]["foo"]["dependencies"]["package3"]
+    package2 = parsed_manifest["feature"]["bar"]["dependencies"]["package2"]
+    package = parsed_manifest["dependencies"]["package"]
+    assert package3["version"] == package2["version"] == "==0.1.0"
+    assert package["version"] == ">=0.2.0,<0.3"
+
+    # Upgrading with `--feature=foo` should not upgrade the package in feature "bar"
+    verify_cli_command(
+        [pixi, "upgrade", "--manifest-path", manifest_path, "--feature=foo"],
+        stderr_excludes=["package2"],
+        stderr_contains=["package3", "0.1.0", "0.2.0"],
+    )
+    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    package3 = parsed_manifest["feature"]["foo"]["dependencies"]["package3"]
+    package2 = parsed_manifest["feature"]["bar"]["dependencies"]["package2"]
+    assert package2["version"] == "==0.1.0"
+    assert package3["version"] == ">=0.2.0,<0.3"
+
+    # Upgrading with no specified feature should upgrade all features (hence "package2" in feature "bar")
+    verify_cli_command(
+        [pixi, "upgrade", "--manifest-path", manifest_path],
+        stderr_contains=["package2", "0.1.0", "0.2.0"],
+    )
+    parsed_manifest = tomllib.loads(manifest_path.read_text())
+    package2 = parsed_manifest["feature"]["bar"]["dependencies"]["package2"]
+    assert package2["version"] == ">=0.2.0,<0.3"
