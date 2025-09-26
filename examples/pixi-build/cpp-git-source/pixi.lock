@@ -49,8 +49,8 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-64/libvorbis-1.3.7-h54a6638_2.conda
       - conda: https://prefix.dev/conda-forge/linux-64/libxcb-1.17.0-h8a09558_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/libxkbcommon-1.11.0-hca5e8e5_1.conda
-      - conda: https://prefix.dev/conda-forge/linux-64/libxml2-16-2.15.0-ha9997c6_0.conda
-      - conda: https://prefix.dev/conda-forge/linux-64/libxml2-2.15.0-h26afc86_0.conda
+      - conda: https://prefix.dev/conda-forge/linux-64/libxml2-16-2.15.0-ha9997c6_1.conda
+      - conda: https://prefix.dev/conda-forge/linux-64/libxml2-2.15.0-h26afc86_1.conda
       - conda: https://prefix.dev/conda-forge/linux-64/libzlib-1.3.1-hb9d3cd8_2.conda
       - conda: https://prefix.dev/conda-forge/linux-64/lz4-c-1.10.0-h5888daf_1.conda
       - conda: https://prefix.dev/conda-forge/linux-64/mpg123-1.32.9-hc50e24c_0.conda
@@ -75,7 +75,7 @@ environments:
       osx-arm64:
       - conda: https://prefix.dev/conda-forge/osx-arm64/bzip2-1.0.8-hd037594_8.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/dbus-1.16.2-hda038a8_0.conda
-      - conda: https://prefix.dev/conda-forge/osx-arm64/libcxx-21.1.1-hf598326_0.conda
+      - conda: https://prefix.dev/conda-forge/osx-arm64/libcxx-21.1.2-hf598326_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/libexpat-2.7.1-hec049ff_0.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/libffi-3.4.6-h1da3d7d_1.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/libglib-2.86.0-h1bb475b_0.conda
@@ -253,15 +253,15 @@ packages:
   license_family: BSD
   size: 121852
   timestamp: 1744577167992
-- conda: https://prefix.dev/conda-forge/osx-arm64/libcxx-21.1.1-hf598326_0.conda
-  sha256: 6af03355967b7b097d5820dde05e0c709945fdb01f4bc56d11499d8bf7435239
-  md5: d5790f3769fedeea4e021483272bdc53
+- conda: https://prefix.dev/conda-forge/osx-arm64/libcxx-21.1.2-hf598326_0.conda
+  sha256: 3de00998c8271f599d6ed9aea60dc0b3e5b1b7ff9f26f8eac95f86f135aa9beb
+  md5: edfa256c5391f789384e470ce5c9f340
   depends:
   - __osx >=11.0
   license: Apache-2.0 WITH LLVM-exception
   license_family: Apache
-  size: 568291
-  timestamp: 1757525671408
+  size: 568154
+  timestamp: 1758698306949
 - conda: https://prefix.dev/conda-forge/linux-64/libdrm-2.4.125-hb03c661_1.conda
   sha256: c076a213bd3676cc1ef22eeff91588826273513ccc6040d9bea68bccdc849501
   md5: 9314bc5a1fe7d1044dc9dfd3ef400535
@@ -692,24 +692,24 @@ packages:
   license_family: MIT
   size: 800138
   timestamp: 1757977095650
-- conda: https://prefix.dev/conda-forge/linux-64/libxml2-2.15.0-h26afc86_0.conda
-  sha256: 09b6703783b2ac600794f7eb2bb5d9e8753a2de607735414e3dbd46d95b17a4c
-  md5: c52b54db4660b44ca75b6a61c533b9f5
+- conda: https://prefix.dev/conda-forge/linux-64/libxml2-2.15.0-h26afc86_1.conda
+  sha256: 4310577d7eea817d35a1c05e1e54575b06ce085d73e6dd59aa38523adf50168f
+  md5: 8337b675e0cad517fbcb3daf7588087a
   depends:
   - __glibc >=2.17,<3.0.a0
   - icu >=75.1,<76.0a0
   - libgcc >=14
   - libiconv >=1.18,<2.0a0
   - liblzma >=5.8.1,<6.0a0
-  - libxml2-16 2.15.0 ha9997c6_0
+  - libxml2-16 2.15.0 ha9997c6_1
   - libzlib >=1.3.1,<2.0a0
   license: MIT
   license_family: MIT
-  size: 45279
-  timestamp: 1757953270047
-- conda: https://prefix.dev/conda-forge/linux-64/libxml2-16-2.15.0-ha9997c6_0.conda
-  sha256: fba83a62276fb3d885e689afc7650b255a93d6e001ceacaccef4e36bbcb9d545
-  md5: 84bed2bfefc14e4878bd16979782e522
+  size: 45363
+  timestamp: 1758640621036
+- conda: https://prefix.dev/conda-forge/linux-64/libxml2-16-2.15.0-ha9997c6_1.conda
+  sha256: 5420ea77505a8d5ca7b5351ddb2da7e8a178052fccf8fca00189af7877608e89
+  md5: b24dd2bd61cd8e4f8a13ee2a945a723c
   depends:
   - __glibc >=2.17,<3.0.a0
   - icu >=75.1,<76.0a0
@@ -721,8 +721,8 @@ packages:
   - libxml2 2.15.0
   license: MIT
   license_family: MIT
-  size: 559002
-  timestamp: 1757953263066
+  size: 556276
+  timestamp: 1758640612398
 - conda: https://prefix.dev/conda-forge/linux-64/libzlib-1.3.1-hb9d3cd8_2.conda
   sha256: d4bfe88d7cb447768e31650f06257995601f89076080e76df55e3112d4e47dc4
   md5: edb0dca6bc32e4f4789199455a1dbeb8
@@ -922,8 +922,8 @@ packages:
     hash: 21845b1fd51f8827fc89a50b134dc086fba8a8b5f8c9cc5ed3b800c99ea61f57
     globs: []
   package_build_source:
-    git: https://github.com/prefix-dev/pixi-build-testsuite
-    rev: 19ee9a6a472c06916841c541245f0021bb9c26e9
+    git: https://github.com/prefix-dev/pixi-build-testsuite?subdirectory=tests%2Fdata%2Fpixi_build%2Fcpp-with-path-to-source%2Fproject
+    rev: 6f94028045df9c753596a3084ce6ca2df4bc25c5
 - conda: .
   name: sdl_example
   version: 0.1.0
@@ -937,8 +937,8 @@ packages:
     hash: 21845b1fd51f8827fc89a50b134dc086fba8a8b5f8c9cc5ed3b800c99ea61f57
     globs: []
   package_build_source:
-    git: https://github.com/prefix-dev/pixi-build-testsuite
-    rev: 19ee9a6a472c06916841c541245f0021bb9c26e9
+    git: https://github.com/prefix-dev/pixi-build-testsuite?subdirectory=tests%2Fdata%2Fpixi_build%2Fcpp-with-path-to-source%2Fproject
+    rev: 6f94028045df9c753596a3084ce6ca2df4bc25c5
 - conda: .
   name: sdl_example
   version: 0.1.0
@@ -951,8 +951,8 @@ packages:
     hash: 21845b1fd51f8827fc89a50b134dc086fba8a8b5f8c9cc5ed3b800c99ea61f57
     globs: []
   package_build_source:
-    git: https://github.com/prefix-dev/pixi-build-testsuite
-    rev: 19ee9a6a472c06916841c541245f0021bb9c26e9
+    git: https://github.com/prefix-dev/pixi-build-testsuite?subdirectory=tests%2Fdata%2Fpixi_build%2Fcpp-with-path-to-source%2Fproject
+    rev: 6f94028045df9c753596a3084ce6ca2df4bc25c5
 - conda: https://prefix.dev/conda-forge/win-64/ucrt-10.0.26100.0-h57928b3_0.conda
   sha256: 3005729dce6f3d3f5ec91dfc49fc75a0095f9cd23bab49efb899657297ac91a5
   md5: 71b24316859acd00bdb8b38f5e2ce328

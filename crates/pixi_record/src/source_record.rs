@@ -59,16 +59,41 @@ impl From<SourceRecord> for CondaPackageData {
                 url: pinned_url_spec.url,
                 sha256: pinned_url_spec.sha256,
             }),
-            PinnedSourceSpec::Git(pinned_git_spec) => Some(PackageBuildSource::Git {
-                url: pinned_git_spec.git,
-                spec: match pinned_git_spec.source.reference {
-                    GitReference::Branch(branch) => Some(GitShallowSpec::Branch(branch)),
-                    GitReference::Tag(tag) => Some(GitShallowSpec::Tag(tag)),
-                    GitReference::Rev(_) => None,
-                    GitReference::DefaultBranch => None, // Is this correct?
-                },
-                rev: pinned_git_spec.source.commit.to_string(),
-            }),
+            PinnedSourceSpec::Git(pinned_git_spec) => {
+                let mut url = pinned_git_spec.git.clone();
+
+                // Preserve existing query parameters and add the subdirectory if present.
+                let mut query_pairs: Vec<(String, String)> = url
+                    .query_pairs()
+                    .map(|(k, v)| (k.into_owned(), v.into_owned()))
+                    .collect();
+                if let Some(subdir) = pinned_git_spec.source.subdirectory.as_ref() {
+                    // Drop any previously stored subdirectory before adding the current one.
+                    query_pairs.retain(|(k, _)| k != "subdirectory");
+                    query_pairs.push(("subdirectory".to_string(), subdir.clone()));
+                }
+
+                url.set_query(None);
+                if !query_pairs.is_empty() {
+                    let mut serializer = url::form_urlencoded::Serializer::new(String::new());
+                    for (key, value) in query_pairs {
+                        serializer.append_pair(&key, &value);
+                    }
+                    let query = serializer.finish();
+                    url.set_query(Some(&query));
+                }
+
+                Some(PackageBuildSource::Git {
+                    url,
+                    spec: match pinned_git_spec.source.reference {
+                        GitReference::Branch(branch) => Some(GitShallowSpec::Branch(branch)),
+                        GitReference::Tag(tag) => Some(GitShallowSpec::Tag(tag)),
+                        GitReference::Rev(_) => None,
+                        GitReference::DefaultBranch => None, // Is this correct?
+                    },
+                    rev: pinned_git_spec.source.commit.to_string(),
+                })
+            }
             PinnedSourceSpec::Path(_) => None,
         });
         CondaPackageData::Source(CondaSourceData {
@@ -95,11 +120,34 @@ impl TryFrom<CondaSourceData> for SourceRecord {
     fn try_from(value: CondaSourceData) -> Result<Self, Self::Error> {
         let pinned_source_spec = value.package_build_source.map(|source| match source {
             PackageBuildSource::Git { url, spec, rev } => {
+                let mut clean_url = url.clone();
+                let mut subdirectory = None;
+
+                let mut query_pairs: Vec<(String, String)> = clean_url
+                    .query_pairs()
+                    .map(|(k, v)| (k.into_owned(), v.into_owned()))
+                    .collect();
+                if !query_pairs.is_empty() {
+                    clean_url.set_query(None);
+                    let mut serializer = url::form_urlencoded::Serializer::new(String::new());
+                    for (key, value) in query_pairs.drain(..) {
+                        if key == "subdirectory" {
+                            subdirectory = Some(value);
+                        } else {
+                            serializer.append_pair(&key, &value);
+                        }
+                    }
+                    let remainder = serializer.finish();
+                    if !remainder.is_empty() {
+                        clean_url.set_query(Some(&remainder));
+                    }
+                }
+
                 PinnedSourceSpec::Git(crate::PinnedGitSpec {
-                    git: url,
+                    git: clean_url,
                     source: PinnedGitCheckout {
                         commit: GitSha::from_str(&rev).unwrap(),
-                        subdirectory: None,
+                        subdirectory,
                         reference: match spec {
                             Some(GitShallowSpec::Branch(branch)) => GitReference::Branch(branch),
                             Some(GitShallowSpec::Tag(tag)) => GitReference::Tag(tag),
@@ -168,5 +216,66 @@ impl Matches<SourceRecord> for MatchSpec {
 impl AsRef<PackageRecord> for SourceRecord {
     fn as_ref(&self) -> &PackageRecord {
         &self.package_record
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pixi_git::sha::GitSha;
+    use serde_json::json;
+    use std::str::FromStr;
+    use url::Url;
+
+    #[test]
+    fn package_build_source_roundtrip_preserves_git_subdirectory() {
+        let package_record: PackageRecord = serde_json::from_value(json!({
+            "name": "example",
+            "version": "1.0.0",
+            "build": "0",
+            "build_number": 0,
+            "subdir": "noarch",
+        }))
+        .expect("valid package record");
+
+        let git_url = Url::parse("https://example.com/repo.git").unwrap();
+        let pinned_source = PinnedSourceSpec::Git(crate::PinnedGitSpec {
+            git: git_url.clone(),
+            source: PinnedGitCheckout {
+                commit: GitSha::from_str("0123456789abcdef0123456789abcdef01234567").unwrap(),
+                subdirectory: Some("nested/project".to_string()),
+                reference: GitReference::Branch("main".to_string()),
+            },
+        });
+
+        let record = SourceRecord {
+            package_record,
+            source: pinned_source.clone(),
+            pinned_source_spec: Some(pinned_source.clone()),
+            input_hash: None,
+            sources: Default::default(),
+        };
+
+        let CondaPackageData::Source(conda_source) = record.clone().into() else {
+            panic!("expected source package data");
+        };
+
+        let lock_url = match conda_source.package_build_source.as_ref().unwrap() {
+            PackageBuildSource::Git { url, .. } => url.clone(),
+            _ => panic!("expected git package build source"),
+        };
+        assert_eq!(lock_url.path(), "/repo.git");
+        assert_eq!(lock_url.host_str(), Some("example.com"));
+        assert_eq!(lock_url.query(), Some("subdirectory=nested%2Fproject"));
+
+        let roundtrip = SourceRecord::try_from(conda_source).expect("roundtrip should succeed");
+        let Some(PinnedSourceSpec::Git(roundtrip_git)) = roundtrip.pinned_source_spec else {
+            panic!("expected git pinned source");
+        };
+        assert_eq!(
+            roundtrip_git.source.subdirectory.as_deref(),
+            Some("nested/project")
+        );
+        assert_eq!(roundtrip_git.git, git_url);
     }
 }

@@ -9,7 +9,7 @@ use pixi_build_discovery::EnabledProtocols;
 use pixi_build_frontend::Backend;
 use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
 use pixi_record::{PinnedSourceSpec, PixiRecord};
-use pixi_spec::{SourceAnchor, SourceSpec};
+use pixi_spec::{SourceAnchor, SourceLocationSpec, SourceSpec};
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, ConvertSubdirError, InvalidPackageNameError, PackageRecord,
     Platform, RepoDataRecord, prefix::Prefix,
@@ -179,11 +179,23 @@ impl SourceBuildSpec {
 
         // Determine the build source to use: either from lock file or workspace
 
+        // Ensure legacy lock entries that missed the git subdirectory pick it up from the
+        // manifest so we check out the correct directory.
+        let mut pinned_build_source = self.pinned_build_source.clone();
+        if let (Some(PinnedSourceSpec::Git(pinned_git)), Some(SourceLocationSpec::Git(git_spec))) = (
+            pinned_build_source.as_mut(),
+            discovered_backend.init_params.build_source.clone(),
+        ) {
+            if pinned_git.source.subdirectory.is_none() {
+                pinned_git.source.subdirectory = git_spec.subdirectory.clone();
+            }
+        }
+
         // Here we have to get path in which we will run build. We have those options in order of decreasing priority:
         // 1. Lock file `package_build_source`. Since we're running lock file update before building package it should pin source in there.
         // 2. Manifest package build. This can happen if package isn't added to the dependencies of manifest, so no pinning happens in that case.
         // 3. Manifest source. Just assume that source is located at the same directory as the manifest.
-        let build_source_dir = if let Some(pinned_build_source) = self.pinned_build_source.clone() {
+        let build_source_dir = if let Some(pinned_build_source) = pinned_build_source {
             let build_source_checkout = command_dispatcher
                 .checkout_pinned_source(pinned_build_source)
                 .await
