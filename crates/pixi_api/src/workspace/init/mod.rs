@@ -19,7 +19,7 @@ use tokio::fs::OpenOptions;
 use url::Url;
 use uv_normalize::PackageName;
 
-use crate::{interface::Interface, styled_text::StyleExt};
+use crate::interface::Interface;
 
 mod options;
 mod template;
@@ -46,7 +46,7 @@ pub(crate) async fn init<I: Interface>(
             format!(
                 "Please follow the getting started guide at https://pixi.sh/v{}/init_getting_started/ or run the following command to create a new workspace in a subdirectory:\n\n  {}\n",
                 consts::PIXI_VERSION,
-                interface.styled("pixi init my_workspace".style().bold()),
+                console::style("pixi init my_workspace").bold(),
             )
         } else {
             "You have to select a subdirectory to create a new workspace".to_string()
@@ -135,8 +135,8 @@ pub(crate) async fn init<I: Interface>(
         {
             interface.confirm(&format!(
                 "A '{}' file already exists. Do you want to extend it with the '{}' configuration?",
-                interface.styled(consts::PYPROJECT_MANIFEST.style().bold()),
-                interface.styled("[tool.pixi]".style().bold().green()),
+                console::style(consts::PYPROJECT_MANIFEST).bold(),
+                console::style("[tool.pixi]").bold().green()
             )).await?
         } else {
             options.format == Some(ManifestFormat::Pyproject)
