@@ -4666,6 +4666,7 @@ dependencies = [
 name = "pixi_api"
 version = "0.1.0"
 dependencies = [
+ "console 0.15.11",
  "dunce",
  "fancy_display",
  "fs-err",
