@@ -62,14 +62,7 @@ Installations with `pixi global` get their own isolated environment. Installing 
 
 ## Automated switching
 
-With `pixi` you can import `environment.yml` files into a Pixi workspace. (See [import](../../reference/cli/pixi/init/))
-
-```shell
-pixi init --import environment.yml
-
-```
-
-This will create a new workspace with the dependencies from the `environment.yml` file.
+You can import `environment.yml` files into a Pixi workspace — see our [import tutorial](../../tutorials/import/).
 
 Exporting your environment
 

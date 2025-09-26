@@ -32,6 +32,7 @@ for further details on how to use the software.
 - [Basic Usage](https://prefix-dev.github.io/pixi/dev/python/tutorial/index.md)
 - [Conda/Mamba](https://prefix-dev.github.io/pixi/dev/switching_from/conda/index.md)
 - [Poetry](https://prefix-dev.github.io/pixi/dev/switching_from/poetry/index.md)
+- [Import Environments](https://prefix-dev.github.io/pixi/dev/tutorials/import/index.md)
 - [Multi Environment](https://prefix-dev.github.io/pixi/dev/tutorials/multi_environment/index.md)
 - [ROS 2](https://prefix-dev.github.io/pixi/dev/tutorials/ros2/index.md)
 - [Rust](https://prefix-dev.github.io/pixi/dev/tutorials/rust/index.md)

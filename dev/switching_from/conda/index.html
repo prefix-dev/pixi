@@ -874,6 +874,29 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/import/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Import Environments
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -2934,14 +2957,11 @@ Installing <code>pip</code> with <code>pixi global</code> will create a new isol
 Using that <code>pip</code> binary will install packages in the <code>pip</code> environment, making it unreachable form anywhere as you can't activate it.</p>
 </div>
 <h2 id="automated-switching">Automated switching<a class="headerlink" href="#automated-switching" title="Permanent link">#</a></h2>
-<p>With <code>pixi</code> you can import <code>environment.yml</code> files into a Pixi workspace. (See <a href="../../reference/cli/pixi/init/">import</a>)
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>init<span class="w"> </span>--import<span class="w"> </span>environment.yml
-</span></code></pre></div>
-This will create a new workspace with the dependencies from the <code>environment.yml</code> file.</p>
+<p>You can import <code>environment.yml</code> files into a Pixi workspace — see our <a href="../../tutorials/import/">import tutorial</a>.</p>
 <details class="tip">
 <summary>Exporting your environment</summary>
 <p>If you are working with Conda users or systems, you can <a href="../../reference/cli/pixi/workspace/export/">export your environment to a <code>environment.yml</code></a> file to share them.
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi<span class="w"> </span>workspace<span class="w"> </span><span class="nb">export</span><span class="w"> </span>conda-environment
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>pixi<span class="w"> </span>workspace<span class="w"> </span><span class="nb">export</span><span class="w"> </span>conda-environment
 </span></code></pre></div>
 Additionally you can export a <a href="../../reference/cli/pixi/workspace/export/">conda explicit specification</a>.</p>
 </details>
