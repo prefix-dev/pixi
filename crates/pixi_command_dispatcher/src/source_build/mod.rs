@@ -431,7 +431,10 @@ impl SourceBuildSpec {
             .map_err_with(Box::new)
             .map_err_with(SourceBuildError::SolveBuildEnvironment)?;
 
-        let gateway = command_dispatcher.gateway();
+        let gateway = command_dispatcher
+            .gateway()
+            .map_err(SourceBuildError::Gateway)
+            .map_err(CommandDispatcherError::Failed)?;
         let build_run_exports = build_dependencies
             .extract_run_exports(
                 &mut build_records,
@@ -464,11 +467,16 @@ impl SourceBuildSpec {
             .await
             .map_err_with(Box::new)
             .map_err_with(SourceBuildError::SolveBuildEnvironment)?;
+        let gateway = command_dispatcher
+            .gateway()
+            .map_err(SourceBuildError::Gateway)
+            .map_err(CommandDispatcherError::Failed)?;
+
         let host_run_exports = host_dependencies
             .extract_run_exports(
                 &mut host_records,
                 &output.ignore_run_exports,
-                command_dispatcher.gateway(),
+                gateway,
                 reporter,
             )
             .await
@@ -815,6 +823,9 @@ pub enum SourceBuildError {
 
     #[error("the package does not contain a valid subdir")]
     ConvertSubdir(#[source] ConvertSubdirError),
+
+    #[error("failed to build the gateway {0}")]
+    Gateway(miette::Report),
 }
 
 impl From<DependenciesError> for SourceBuildError {

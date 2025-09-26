@@ -149,7 +149,10 @@ impl SourceMetadataSpec {
             )
             .await?;
 
-        let gateway = command_dispatcher.gateway();
+        let gateway = command_dispatcher
+            .gateway()
+            .map_err(SourceMetadataError::Gateway)
+            .map_err(CommandDispatcherError::Failed)?;
         let build_run_exports = build_dependencies
             .extract_run_exports(
                 &mut build_records,
@@ -500,6 +503,9 @@ pub enum SourceMetadataError {
 
     #[error("the dependencies of some packages in the environment form a cycle")]
     Cycle(Cycle),
+
+    #[error("can't build the gateway {0}")]
+    Gateway(miette::Report),
 }
 
 impl From<DependenciesError> for SourceMetadataError {

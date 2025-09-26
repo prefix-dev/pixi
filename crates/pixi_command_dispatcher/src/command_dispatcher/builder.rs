@@ -1,5 +1,6 @@
 use std::{path::PathBuf, sync::Arc};
 
+// use once_cell::sync::OnceCell;
 use pixi_build_frontend::BackendOverride;
 use pixi_git::resolver::GitResolver;
 use pixi_glob::GlobHashCache;
@@ -10,6 +11,7 @@ use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use reqwest_middleware::ClientWithMiddleware;
 
 use crate::build::source_metadata_cache::SourceMetadataCache;
+use crate::command_dispatcher::GatewayBuilderData;
 use crate::discover_backend_cache::DiscoveryCache;
 use crate::{
     CacheDirs, CommandDispatcher, Executor, Limits, Reporter,
@@ -25,7 +27,8 @@ pub struct CommandDispatcherBuilder {
     root_dir: Option<PathBuf>,
     reporter: Option<Box<dyn Reporter>>,
     git_resolver: Option<GitResolver>,
-    download_client: Option<ClientWithMiddleware>,
+    download_client_factory:
+        Option<Box<dyn Fn() -> miette::Result<ClientWithMiddleware> + Send + Sync>>,
     cache_dirs: Option<CacheDirs>,
     build_backend_overrides: BackendOverride,
     max_download_concurrency: MaxConcurrency,
@@ -61,9 +64,12 @@ impl CommandDispatcherBuilder {
     }
 
     /// Sets the reqwest client to use for network fetches.
-    pub fn with_download_client(self, client: ClientWithMiddleware) -> Self {
+    pub fn with_download_client_factory<F>(self, factory: F) -> Self
+    where
+        F: Fn() -> miette::Result<ClientWithMiddleware> + Send + Sync + 'static,
+    {
         Self {
-            download_client: Some(client),
+            download_client_factory: Some(Box::new(factory)),
             ..self
         }
     }
@@ -141,16 +147,41 @@ impl CommandDispatcherBuilder {
         let cache_dirs = self
             .cache_dirs
             .unwrap_or_else(|| CacheDirs::new(root_dir.join(".cache")));
-        let download_client = self.download_client.unwrap_or_default();
+        // let (download_client_cell, download_client_factory, download_client_for_gateway) =
+        //     if let Some(factory) = self.download_client_factory {
+        //         let cell = OnceCell::new();
+        //         // Use the factory to get a client for the gateway now
+        //         let gateway_client = factory().unwrap_or_default();
+        //         (cell, factory, gateway_client)
+        //     } else {
+        //         let cell = OnceCell::new();
+        //         let client = ClientWithMiddleware::default();
+        //         let _ = cell.set(client.clone());
+        //         let boxed_factory: Box<dyn Fn() -> miette::Result<ClientWithMiddleware> + Send + Sync> =
+        //             Box::new(|| Ok(ClientWithMiddleware::default()));
+        //         (cell, boxed_factory, client)
+        //     };
         let package_cache = PackageCache::new(cache_dirs.packages());
-        let gateway = self.gateway.unwrap_or_else(|| {
-            Gateway::builder()
-                .with_client(download_client.clone())
-                .with_cache_dir(cache_dirs.root().clone())
-                .with_package_cache(package_cache.clone())
-                .with_max_concurrent_requests(self.max_download_concurrency)
-                .finish()
-        });
+        // let gateway = self.gateway.unwrap_or_else(|| {
+        //     Gateway::builder()
+        //         // .with_client(download_client_for_gateway.clone())
+        //         .with_cache_dir(cache_dirs.root().clone())
+        //         .with_package_cache(package_cache.clone())
+        //         .with_max_concurrent_requests(self.max_download_concurrency)
+        //         // .finish()
+        // });
+
+        // let gateway_builder_data = GatewayBuilderData {
+        //     cache: cache_dirs.root().clone(),
+        //     package_cache: package_cache.clone(),
+        //     max_concurrent_requests: self.max_download_concurrency,
+        // };
+
+        let gateway_builder = Gateway::builder()
+            // .with_client(download_client_for_gateway.clone())
+            .with_cache_dir(cache_dirs.root().clone())
+            .with_package_cache(package_cache.clone())
+            .with_max_concurrent_requests(self.max_download_concurrency);
 
         let git_resolver = self.git_resolver.unwrap_or_default();
         let source_metadata_cache = SourceMetadataCache::new(cache_dirs.source_metadata());
@@ -166,13 +197,17 @@ impl CommandDispatcherBuilder {
         });
 
         let data = Arc::new(CommandDispatcherData {
-            gateway,
+            gateway: Default::default(),
+            gateway_builder: gateway_builder,
             source_metadata_cache,
             build_cache,
             root_dir,
             git_resolver,
             cache_dirs,
-            download_client,
+            download_client: Default::default(),
+            download_client_factory: self
+                .download_client_factory
+                .unwrap_or(Box::new(|| Ok(ClientWithMiddleware::default()))),
             build_backend_overrides: self.build_backend_overrides,
             glob_hash_cache: GlobHashCache::default(),
             discovery_cache: DiscoveryCache::default(),

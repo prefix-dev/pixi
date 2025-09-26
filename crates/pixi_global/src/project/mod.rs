@@ -624,7 +624,12 @@ impl Project {
 
         command_dispatcher.clear_reporter().await;
 
-        let install_changes = get_install_changes(result.transaction);
+        let transaction = result
+            .transaction
+            .into_prefix_record(prefix.root())
+            .into_diagnostic()?;
+
+        let install_changes = get_install_changes(transaction);
         Ok(EnvironmentUpdate::new(install_changes, dependencies_names))
     }
 
@@ -1337,11 +1342,10 @@ impl Project {
                 )
                 .with_cache_dirs(cache_dirs)
                 .with_root_dir(self.root.clone())
-                .with_download_client(
-                    self.authenticated_client()
-                        .map_err(|e| CommandDispatcherError::AuthenticatedClient(e.into()))?
-                        .clone(),
-                )
+                .with_download_client_factory({
+                    let config = self.config().clone();
+                    move || build_reqwest_clients(Some(&config), None).map(|(_, client)| client)
+                })
                 .with_max_download_concurrency(self.concurrent_downloads_semaphore())
                 .with_limits(Limits {
                     max_concurrent_solves: self.config().max_concurrent_solves().into(),

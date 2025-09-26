@@ -11,6 +11,8 @@ use std::{
     sync::Arc,
 };
 
+use once_cell::sync::OnceCell;
+
 pub use builder::CommandDispatcherBuilder;
 pub use error::{CommandDispatcherError, CommandDispatcherErrorResultExt};
 pub(crate) use git::GitCheckoutTask;
@@ -23,7 +25,7 @@ use pixi_record::{PinnedPathSpec, PinnedSourceSpec, PixiRecord};
 use pixi_spec::{SourceLocationSpec, SourceSpec};
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, Platform};
-use rattler_repodata_gateway::Gateway;
+use rattler_repodata_gateway::{Gateway, GatewayBuilder, MaxConcurrency};
 use reqwest_middleware::ClientWithMiddleware;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
@@ -94,13 +96,24 @@ impl Drop for CommandDispatcher {
     }
 }
 
+pub(crate) struct GatewayBuilderData {
+    #[cfg(not(target_arch = "wasm32"))]
+    cache: std::path::PathBuf,
+    #[cfg(not(target_arch = "wasm32"))]
+    package_cache: PackageCache,
+    max_concurrent_requests: MaxConcurrency,
+}
+
 /// Contains shared data required by the [`CommandDispatcher`].
 ///
 /// This struct holds various components such as the gateway for querying
 /// repodata, cache directories, and network clients.
 pub(crate) struct CommandDispatcherData {
     /// The gateway to use to query conda repodata.
-    pub gateway: Gateway,
+    gateway: OnceCell<Gateway>,
+
+    /// The data necessary for the builder of the gateway to use for lazy initialization.
+    gateway_builder: GatewayBuilder,
 
     /// Source metadata cache used to store metadata for source packages.
     pub source_metadata_cache: SourceMetadataCache,
@@ -118,7 +131,11 @@ pub(crate) struct CommandDispatcherData {
     pub cache_dirs: CacheDirs,
 
     /// The reqwest client to use for network requests.
-    pub download_client: ClientWithMiddleware,
+    pub download_client: OnceCell<ClientWithMiddleware>,
+
+    /// Factory to create the reqwest client to use for network requests.
+    /// This is used to lazily initialize the client when it is first needed.
+    download_client_factory: Box<dyn Fn() -> miette::Result<ClientWithMiddleware> + Send + Sync>,
 
     /// Backend overrides for build environments.
     pub build_backend_overrides: BackendOverride,
@@ -145,6 +162,24 @@ pub(crate) struct CommandDispatcherData {
 
     /// The execution type of the dispatcher.
     pub executor: Executor,
+}
+
+impl CommandDispatcherData {
+    /// Returns the root directory to use for resolving relative paths.
+    pub fn download_client(&self) -> miette::Result<&ClientWithMiddleware> {
+        self.download_client
+            .get_or_try_init(|| (self.download_client_factory)())
+    }
+
+    pub fn gateway(&self) -> miette::Result<&Gateway> {
+        self.gateway.get_or_try_init(|| {
+            Ok(self
+                .gateway_builder
+                .clone()
+                .with_client(self.download_client()?.clone())
+                .finish())
+        })
+    }
 }
 
 /// A channel through which to send any messages to the command_dispatcher. Some
@@ -339,8 +374,8 @@ impl CommandDispatcher {
     }
 
     /// Returns the gateway used to query conda repodata.
-    pub fn gateway(&self) -> &Gateway {
-        &self.data.gateway
+    pub fn gateway(&self) -> miette::Result<&Gateway> {
+        self.data.gateway()
     }
 
     /// Returns any build backend overrides.
@@ -379,8 +414,10 @@ impl CommandDispatcher {
     }
 
     /// Returns the download client used by the command dispatcher.
-    pub fn download_client(&self) -> &ClientWithMiddleware {
-        &self.data.download_client
+    pub fn download_client(&self) -> miette::Result<&ClientWithMiddleware> {
+        self.data
+            .download_client
+            .get_or_try_init(|| (self.data.download_client_factory)())
     }
 
     /// Returns the package cache used by the command dispatcher.
