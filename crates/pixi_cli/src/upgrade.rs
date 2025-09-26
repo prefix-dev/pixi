@@ -13,7 +13,7 @@ use pixi_core::{
     lock_file::UpdateContext,
     workspace::{MatchSpecs, PypiDeps, WorkspaceMut},
 };
-use pixi_manifest::{Feature, FeatureName, SpecType};
+use pixi_manifest::{FeatureName, SpecType};
 use pixi_pypi_spec::PixiPypiSpec;
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{MatchSpec, Platform, StringMatcher};
