@@ -71,7 +71,7 @@ fn default_build_environment() -> BuildEnvironment {
 }
 
 #[tokio::test]
-#[ignore = "broken: multi-output recipes don't work with latest pixi-build-rattler-build"]
+#[ignore = "multi-output recipes don't work with pixi-build-rattler-build 0.3.3: https://github.com/prefix-dev/pixi-build-backends/issues/379"]
 //#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 pub async fn simple_test() {
     let (reporter, events) = EventReporter::new();
