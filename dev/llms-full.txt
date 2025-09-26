@@ -9523,7 +9523,7 @@ The GHCR mirror also contains `bioconda` packages. You can search the [available
 
 The mirrors also affect the PyPi resolving and downloading steps of `uv`. You can set mirrors for the main pypi index and extra indices. But the base part of downloading urls may vary from their index urls. For example, the default pypi index is `https://pypi.org/simple`, and the package downloading urls are in the form of `https://files.pythonhosted.org/packages/<h1>/<h2>/<hash>/<package>.whl`. You need two mirror config entries for `https://pypi.org/simple` and `https://files.pythonhosted.org/packages`.
 
-The `pixi.toml` is the workspace manifest, also known as the Pixi workspace configuration file.
+The `pixi.toml` is the workspace manifest, also known as the Pixi workspace configuration file. It specifies environments for a workspace, and the package dependency requirements for those environments. It can also specify tasks which can run in those environments, as well as many other configuration options.
 
 A `toml` file is structured in different tables. This document will explain the usage of the different tables.
 

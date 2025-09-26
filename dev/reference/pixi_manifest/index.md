@@ -1,4 +1,4 @@
-The `pixi.toml` is the workspace manifest, also known as the Pixi workspace configuration file.
+The `pixi.toml` is the workspace manifest, also known as the Pixi workspace configuration file. It specifies environments for a workspace, and the package dependency requirements for those environments. It can also specify tasks which can run in those environments, as well as many other configuration options.
 
 A `toml` file is structured in different tables. This document will explain the usage of the different tables.
 
