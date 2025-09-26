@@ -221,6 +221,7 @@ impl InstallPixiEnvironmentSpec {
                 clean: false,
                 // When we install a pixi environment we always build in development mode.
                 build_profile: BuildProfile::Development,
+                pinned_build_source: None,
             })
             .await?;
 

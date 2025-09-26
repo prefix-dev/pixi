@@ -1,0 +1,42 @@
+---
+source: crates/pixi_build_type_conversions/src/project_model.rs
+expression: project_model
+---
+{
+  "version": "1",
+  "data": {
+    "name": "sdl_example",
+    "version": "0.1.0",
+    "description": null,
+    "authors": null,
+    "license": null,
+    "licenseFile": null,
+    "readme": null,
+    "homepage": null,
+    "repository": null,
+    "documentation": null,
+    "targets": {
+      "defaultTarget": {
+        "hostDependencies": {
+          "sdl2": {
+            "binary": {
+              "version": ">=2.26.5,<3.0",
+              "build": null,
+              "buildNumber": null,
+              "fileName": null,
+              "channel": null,
+              "subdir": null,
+              "md5": null,
+              "sha256": null,
+              "url": null,
+              "license": null
+            }
+          }
+        },
+        "buildDependencies": {},
+        "runDependencies": {}
+      },
+      "targets": {}
+    }
+  }
+}
