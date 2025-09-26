@@ -12,6 +12,7 @@ use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_record::{PixiRecord, SourceRecord};
+use pixi_utils::AsyncPrefixGuard;
 use rattler::install::{
     Installer, InstallerError, Transaction,
     link_script::{LinkScriptError, PrePostLinkResult},
@@ -118,6 +119,34 @@ impl InstallPixiEnvironmentSpec {
         install_reporter: Option<Box<dyn rattler::install::Reporter>>,
     ) -> Result<InstallPixiEnvironmentResult, CommandDispatcherError<InstallPixiEnvironmentError>>
     {
+        // Acquire a lock on the prefix to prevent concurrent installations
+        let guard = AsyncPrefixGuard::new(self.prefix.path())
+            .await
+            .map_err(|e| {
+                CommandDispatcherError::Failed(InstallPixiEnvironmentError::AcquireLock(
+                    self.prefix.clone(),
+                    e,
+                ))
+            })?;
+
+        let mut write_guard = guard.write().await.map_err(|e| {
+            CommandDispatcherError::Failed(InstallPixiEnvironmentError::AcquireLock(
+                self.prefix.clone(),
+                e,
+            ))
+        })?;
+
+        // Mark that we're beginning installation. We always call begin() because:
+        // 1. We have the exclusive write lock, so no one else is installing
+        // 2. If a previous process crashed, the state might be stale
+        // 3. The begin() method is idempotent if already in "Installing" state
+        write_guard.begin().await.map_err(|e| {
+            CommandDispatcherError::Failed(InstallPixiEnvironmentError::UpdateLock(
+                self.prefix.clone(),
+                e,
+            ))
+        })?;
+
         // Split into source and binary records
         let (source_records, mut binary_records): (Vec<_>, Vec<_>) =
             std::mem::take(&mut self.records)
@@ -192,6 +221,14 @@ impl InstallPixiEnvironmentSpec {
             .map_err(InstallPixiEnvironmentError::Installer)
             .map_err(CommandDispatcherError::Failed)?;
 
+        // Mark the environment as ready
+        write_guard.finish().await.map_err(|e| {
+            CommandDispatcherError::Failed(InstallPixiEnvironmentError::UpdateLock(
+                self.prefix.clone(),
+                e,
+            ))
+        })?;
+
         Ok(InstallPixiEnvironmentResult {
             transaction: result.transaction,
             post_link_script_result: result.post_link_script_result,
@@ -261,4 +298,11 @@ pub enum InstallPixiEnvironmentError {
         #[source]
         SourceBuildError,
     ),
+
+    #[error("failed to acquire lock for prefix '{}'", .0.path().display())]
+    #[diagnostic(help("another process may be installing to the same environment"))]
+    AcquireLock(Prefix, #[source] std::io::Error),
+
+    #[error("failed to update lock for prefix '{}'", .0.path().display())]
+    UpdateLock(Prefix, #[source] std::io::Error),
 }
