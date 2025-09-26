@@ -159,6 +159,8 @@ impl PixiEnvironmentSpec {
         let fetch_repodata_start = Instant::now();
         let query = command_queue
             .gateway()
+            .map_err(SolvePixiEnvironmentError::Gateway)
+            .map_err(CommandDispatcherError::Failed)?
             .query(
                 self.channels.iter().cloned().map(Channel::from_url),
                 [self.build_environment.host_platform, Platform::NoArch],
@@ -282,6 +284,9 @@ pub enum SolvePixiEnvironmentError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     MissingChannel(MissingChannelError),
+
+    #[error("failed to build the gateway: {0}")]
+    Gateway(miette::Report),
 }
 
 /// An error for a missing channel in the solve request

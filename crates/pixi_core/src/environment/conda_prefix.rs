@@ -218,10 +218,15 @@ pub async fn update_prefix_conda(
 
     // Check in the prefix if there are any `post-link` scripts that have not been
     // executed, and if yes, issue a one-time warning to the user.
+    let transaction = result
+        .transaction
+        .into_prefix_record(prefix.root())
+        .into_diagnostic()?;
+
     if !command_dispatcher.allow_execute_link_scripts() {
         let mut skipped_scripts = Vec::new();
 
-        for package in result.transaction.installed_packages() {
+        for package in transaction.installed_packages() {
             let rel_script_path =
                 LinkScriptType::PreUnlink.get_path(&package.package_record, &host_platform);
             let post_link_script = prefix.root().join(&rel_script_path);
@@ -254,5 +259,5 @@ pub async fn update_prefix_conda(
     }
 
     // Determine if the python version changed.
-    Ok(PythonStatus::from_transaction(&result.transaction))
+    Ok(PythonStatus::from_transaction(&transaction))
 }

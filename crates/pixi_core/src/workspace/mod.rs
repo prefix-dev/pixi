@@ -534,7 +534,12 @@ impl Workspace {
             .with_gateway(self.repodata_gateway()?.clone())
             .with_cache_dirs(cache_dirs)
             .with_root_dir(self.root().to_path_buf())
-            .with_download_client(self.authenticated_client()?.clone())
+            .with_download_client_factory({
+                // let client = self.authenticated_client;
+                let config = self.config.clone();
+                let s3_config = self.s3_config.clone();
+                move || Ok(build_reqwest_clients(Some(&config), Some(s3_config.clone()))?.1)
+            })
             .with_max_download_concurrency(self.concurrent_downloads_semaphore())
             .with_limits(Limits {
                 max_concurrent_solves: self.config().max_concurrent_solves().into(),

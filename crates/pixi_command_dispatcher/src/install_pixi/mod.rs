@@ -13,7 +13,7 @@ use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_record::{PixiRecord, SourceRecord};
 use rattler::install::{
-    Installer, InstallerError, Transaction,
+    InstallationResultRecord, Installer, InstallerError, Transaction,
     link_script::{LinkScriptError, PrePostLinkResult},
 };
 use rattler_conda_types::{
@@ -73,7 +73,7 @@ pub struct InstallPixiEnvironmentSpec {
 /// The result of installing a Pixi environment.
 pub struct InstallPixiEnvironmentResult {
     /// The transaction that was applied
-    pub transaction: Transaction<PrefixRecord, RepoDataRecord>,
+    pub transaction: Transaction<InstallationResultRecord, RepoDataRecord>,
 
     /// The result of running pre link scripts. `None` if no
     /// pre-processing was performed, possibly because link scripts were
@@ -171,7 +171,17 @@ impl InstallPixiEnvironmentSpec {
         // Install the environment using the prefix installer
         let mut installer = Installer::new()
             .with_target_platform(self.build_environment.host_platform)
-            .with_download_client(command_dispatcher.download_client().clone())
+            .with_download_client(
+                command_dispatcher
+                    .download_client()
+                    .map_err(|e| {
+                        InstallPixiEnvironmentError::ReqwestClient(
+                            "failed to build reqwest client".to_string(),
+                        )
+                    })
+                    .map_err(|e| CommandDispatcherError::Failed(e))?
+                    .clone(),
+            )
             .with_package_cache(command_dispatcher.package_cache().clone())
             .with_reinstall_packages(self.force_reinstall)
             .with_ignored_packages(self.ignore_packages.unwrap_or_default())
@@ -261,4 +271,7 @@ pub enum InstallPixiEnvironmentError {
         #[source]
         SourceBuildError,
     ),
+
+    #[error("failed to build reqwest client")]
+    ReqwestClient(String),
 }

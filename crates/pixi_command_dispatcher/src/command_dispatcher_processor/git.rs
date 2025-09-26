@@ -45,7 +45,7 @@ impl CommandDispatcherProcessor {
                 }
 
                 let resolver = self.inner.git_resolver.clone();
-                let client = self.inner.download_client.clone();
+                let client = self.inner.download_client().unwrap().clone();
                 let cache_dir = self.inner.cache_dirs.git().clone();
                 self.pending_futures.push(
                     task.cancellation_token
