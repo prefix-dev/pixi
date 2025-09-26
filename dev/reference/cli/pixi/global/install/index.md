@@ -30,7 +30,7 @@ pixi global install [OPTIONS] [PACKAGE]...
 
 ## Options
 
-- [`--path <PATH>`](#arg---path) The path to the local directory
+- [`--path <PATH>`](#arg---path) The path to the local package
 
 - [`--channel (-c) <CHANNEL>`](#arg---channel) The channels to consider as a name or a url. Multiple channels can be specified by using this field multiple times
 

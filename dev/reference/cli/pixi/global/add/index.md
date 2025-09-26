@@ -19,7 +19,7 @@ pixi global add [OPTIONS] --environment <ENVIRONMENT> [PACKAGE]...
 
 ## Options
 
-- [`--path <PATH>`](#arg---path) The path to the local directory
+- [`--path <PATH>`](#arg---path) The path to the local package
 
 - [`--environment (-e) <ENVIRONMENT>`](#arg---environment) Specifies the environment that the dependencies need to be added to
 

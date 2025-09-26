@@ -13004,7 +13004,7 @@ pixi global add [OPTIONS] --environment <ENVIRONMENT> [PACKAGE]...
 
 ## Options
 
-- [`--path <PATH>`](#arg---path) The path to the local directory
+- [`--path <PATH>`](#arg---path) The path to the local package
 
 - [`--environment (-e) <ENVIRONMENT>`](#arg---environment) Specifies the environment that the dependencies need to be added to
 
@@ -13157,7 +13157,7 @@ pixi global install [OPTIONS] [PACKAGE]...
 
 ## Options
 
-- [`--path <PATH>`](#arg---path) The path to the local directory
+- [`--path <PATH>`](#arg---path) The path to the local package
 
 - [`--channel (-c) <CHANNEL>`](#arg---channel) The channels to consider as a name or a url. Multiple channels can be specified by using this field multiple times
 
