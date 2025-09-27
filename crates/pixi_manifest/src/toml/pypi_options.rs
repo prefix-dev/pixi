@@ -1,14 +1,17 @@
-use std::{collections::HashSet, path::PathBuf, str::FromStr};
+use std::{path::PathBuf, str::FromStr};
 
-use pixi_toml::{TomlEnum, TomlFromStr, TomlWith};
+use indexmap::IndexSet;
+use pixi_toml::{TomlEnum, TomlFromStr, TomlIndexMap, TomlWith};
 use toml_span::{
-    de_helpers::{expected, TableHelper},
-    value::ValueInner,
     DeserError, ErrorKind, Value,
+    de_helpers::{TableHelper, expected},
+    value::ValueInner,
 };
 use url::Url;
 
-use crate::pypi::pypi_options::{FindLinksUrlOrPath, NoBuild, PypiOptions};
+use crate::pypi::pypi_options::{
+    FindLinksUrlOrPath, NoBinary, NoBuild, NoBuildIsolation, PypiOptions,
+};
 
 /// A helper struct to deserialize a [`pep508_rs::PackageName`] from a TOML
 /// string.
@@ -42,11 +45,49 @@ impl<'de> toml_span::Deserialize<'de> for NoBuild {
         if value.as_array().is_some() {
             match value.take() {
                 ValueInner::Array(array) => {
-                    let mut packages = HashSet::with_capacity(array.len());
+                    let mut packages = IndexSet::with_capacity(array.len());
                     for mut value in array {
                         packages.insert(Pep508PackageName::deserialize(&mut value)?.0);
                     }
                     Ok(NoBuild::Packages(packages))
+                }
+                _ => Err(expected(
+                    "an array of packages e.g. [\"foo\", \"bar\"]",
+                    value.take(),
+                    value.span,
+                )
+                .into()),
+            }
+        } else {
+            Err(expected(
+                r#"either "all", "none" or an array of packages e.g. ["foo", "bar"] "#,
+                value.take(),
+                value.span,
+            )
+            .into())
+        }
+    }
+}
+
+impl<'de> toml_span::Deserialize<'de> for NoBinary {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        // It can be either `true` or `false` or an array of strings
+        if value.as_bool().is_some() {
+            if bool::deserialize(value)? {
+                return Ok(NoBinary::All);
+            } else {
+                return Ok(NoBinary::None);
+            }
+        }
+        // We assume it's an array of strings
+        if value.as_array().is_some() {
+            match value.take() {
+                ValueInner::Array(array) => {
+                    let mut packages = IndexSet::with_capacity(array.len());
+                    for mut value in array {
+                        packages.insert(Pep508PackageName::deserialize(&mut value)?.0);
+                    }
+                    Ok(NoBinary::Packages(packages))
                 }
                 _ => Err(expected(
                     "an array of packages e.g. [\"foo\", \"bar\"]",
@@ -77,12 +118,17 @@ impl<'de> toml_span::Deserialize<'de> for PypiOptions {
             .optional::<TomlWith<_, Vec<TomlFromStr<_>>>>("extra-index-urls")
             .map(|x| x.into_inner());
         let find_links = th.optional("find-links");
-        let no_build_isolation = th.optional("no-build-isolation");
+        let no_build_isolation = th.optional("no-build-isolation").unwrap_or_default();
         let index_strategy = th
             .optional::<TomlEnum<_>>("index-strategy")
             .map(TomlEnum::into_inner);
 
         let no_build = th.optional::<NoBuild>("no-build");
+        let dependency_overrides = th
+            .optional::<TomlIndexMap<_, _>>("dependency-overrides")
+            .map(TomlIndexMap::into_inner);
+
+        let no_binary = th.optional::<NoBinary>("no-binary");
 
         th.finalize(None)?;
 
@@ -93,6 +139,8 @@ impl<'de> toml_span::Deserialize<'de> for PypiOptions {
             no_build_isolation,
             index_strategy,
             no_build,
+            dependency_overrides,
+            no_binary,
         })
     }
 }
@@ -169,12 +217,36 @@ impl<'de> toml_span::Deserialize<'de> for FindLinksUrlOrPath {
     }
 }
 
+impl<'de> toml_span::Deserialize<'de> for NoBuildIsolation {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        match value.take() {
+            ValueInner::Boolean(value) if value => Ok(NoBuildIsolation::All),
+            ValueInner::Boolean(value) if !value => Ok(NoBuildIsolation::none()),
+            ValueInner::Array(values) => {
+                let mut packages = IndexSet::with_capacity(values.len());
+                for mut value in values {
+                    packages.insert(Pep508PackageName::deserialize(&mut value)?.0);
+                }
+                Ok(NoBuildIsolation::Packages(packages))
+            }
+            _ => Err(expected(
+                "a boolean or an array of packages e.g. [\"foo\", \"bar\"]",
+                value.take(),
+                value.span,
+            )
+            .into()),
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use insta::{assert_debug_snapshot, assert_snapshot};
+    use pixi_pypi_spec::PypiPackageName;
+    use pixi_test_utils::format_parse_error;
 
     use super::*;
-    use crate::{toml::FromTomlStr, utils::test_utils::format_parse_error};
+    use crate::toml::FromTomlStr;
 
     #[test]
     fn test_empty() {
@@ -195,6 +267,9 @@ mod test {
 
                  [[find-links]]
                  url = "https://flat.index"
+
+                 [dependency-overrides]
+                 numpy = ">=2.0.0"
              "#;
         let deserialized_options: PypiOptions = PypiOptions::from_toml_str(toml_str).unwrap();
         assert_eq!(
@@ -206,9 +281,19 @@ mod test {
                     FindLinksUrlOrPath::Path("/path/to/flat/index".into()),
                     FindLinksUrlOrPath::Url(Url::parse("https://flat.index").unwrap())
                 ]),
-                no_build_isolation: Some(vec!["pkg1".to_string(), "pkg2".to_string()]),
+                no_build_isolation: NoBuildIsolation::from_iter([
+                    "pkg1".parse().unwrap(),
+                    "pkg2".parse().unwrap()
+                ]),
                 index_strategy: None,
                 no_build: Default::default(),
+                dependency_overrides: Some(indexmap::IndexMap::from_iter([(
+                    PypiPackageName::from_str("numpy").unwrap(),
+                    pixi_pypi_spec::PixiPypiSpec::RawVersion(
+                        pixi_pypi_spec::VersionOrStar::from_str(">=2.0.0").unwrap()
+                    )
+                )]),),
+                no_binary: Default::default(),
             },
         );
     }
@@ -225,6 +310,7 @@ mod test {
         no-build-isolation = ["sigma"]
         index-strategy = "first-index"
         no-build = true
+        no-binary = ["package1", "package2"]
         "#;
         let options = PypiOptions::from_toml_str(input).unwrap();
         assert_debug_snapshot!(options);
@@ -234,6 +320,24 @@ mod test {
     fn test_no_build_packages() {
         let input = r#"
         no-build = ["package1"]
+        "#;
+        let options = PypiOptions::from_toml_str(input).unwrap();
+        assert_debug_snapshot!(options);
+    }
+
+    #[test]
+    fn test_no_binary_packages() {
+        let input = r#"
+        no-binary = ["package1"]
+        "#;
+        let options = PypiOptions::from_toml_str(input).unwrap();
+        assert_debug_snapshot!(options);
+    }
+
+    #[test]
+    fn test_no_build_isolation_boolean() {
+        let input = r#"
+        no-build-isolation = true
         "#;
         let options = PypiOptions::from_toml_str(input).unwrap();
         assert_debug_snapshot!(options);

@@ -1,12 +1,14 @@
+use std::fmt::Display;
 use std::path::{Path, PathBuf};
 
 use itertools::Either;
-use rattler_conda_types::{package::ArchiveIdentifier, NamelessMatchSpec};
+use rattler_conda_types::{NamelessMatchSpec, package::ArchiveIdentifier};
+use serde_with::serde_as;
 use typed_path::{Utf8NativePathBuf, Utf8TypedPathBuf};
 
 use crate::{BinarySpec, SpecConversionError};
 
-/// A specification of a package from a git repository.
+/// A specification of a package from a path.
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct PathSpec {
     /// The path to the package
@@ -14,6 +16,11 @@ pub struct PathSpec {
 }
 
 impl PathSpec {
+    /// Constructs a new [`PathSpec`] from the given path.
+    pub fn new(path: impl Into<Utf8TypedPathBuf>) -> Self {
+        Self { path: path.into() }
+    }
+
     /// Converts this instance into a [`NamelessMatchSpec`] if the path points
     /// to binary archive.
     pub fn try_into_nameless_match_spec(
@@ -65,12 +72,62 @@ impl PathSpec {
     }
 }
 
+impl Display for PathSpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.path)
+    }
+}
+
+// TODO: Contribute `impl FromStr for Utf8TypedPathBuf` to typed-path
+// to continue using `serde_as` and remove manual implementations of
+// serialization and deserialization below. See git blame history
+// right before this line was added.
+
 /// Path to a source package. Different from [`PathSpec`] in that this type only
 /// refers to source packages.
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct PathSourceSpec {
     /// The path to the package. Either a directory or an archive.
     pub path: Utf8TypedPathBuf,
+}
+
+impl Display for PathSourceSpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.path)
+    }
+}
+
+impl serde::Serialize for PathSourceSpec {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        #[derive(serde::Serialize)]
+        struct Raw {
+            path: String,
+        }
+
+        Raw {
+            path: self.path.to_string(),
+        }
+        .serialize(serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for PathSourceSpec {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(serde::Deserialize)]
+        struct Raw {
+            path: String,
+        }
+
+        Raw::deserialize(deserializer).map(|raw| PathSourceSpec {
+            path: raw.path.into(),
+        })
+    }
 }
 
 impl From<PathSourceSpec> for PathSpec {
@@ -92,9 +149,11 @@ impl PathSourceSpec {
 
 /// Path to a source package. Different from [`PathSpec`] in that this type only
 /// refers to source packages.
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+#[serde_as]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, ::serde::Serialize)]
 pub struct PathBinarySpec {
     /// The path to the package. Either a directory or an archive.
+    #[serde_as(as = "serde_with::DisplayFromStr")]
     pub path: Utf8TypedPathBuf,
 }
 

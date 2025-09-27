@@ -2,7 +2,7 @@
 # <code>[pixi](../../pixi.md) [global](../global.md) list</code>
 
 ## About
-Lists all packages previously installed into a globally accessible location via `pixi global install`.
+Lists global environments with their dependencies and exposed commands. Can also display all packages within a specific global environment when using the --environment flag.
 
 --8<-- "docs/reference/cli/pixi/global/list_extender:description"
 
@@ -17,27 +17,34 @@ pixi global list [OPTIONS] [REGEX]
 
 ## Options
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
-:  The name of the environment to list
+:  Allows listing all the packages installed in a specific environment, with an output similar to `pixi list`
 - <a id="arg---sort-by" href="#arg---sort-by">`--sort-by <SORT_BY>`</a>
 :  Sorting strategy for the package table of an environment
 <br>**default**: `name`
 <br>**options**: `size`, `name`
 
 ## Config Options
-- <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
-:  Do not verify the TLS certificate of the server
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
 :  Path to the file containing the authentication token
+- <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
+:  Max concurrent network requests, default is `50`
+- <a id="arg---concurrent-solves" href="#arg---concurrent-solves">`--concurrent-solves <CONCURRENT_SOLVES>`</a>
+:  Max concurrent solves, default is the number of CPUs
+- <a id="arg---pinning-strategy" href="#arg---pinning-strategy">`--pinning-strategy <PINNING_STRATEGY>`</a>
+:  Set pinning strategy
+<br>**options**: `semver`, `minor`, `major`, `latest-up`, `exact-version`, `no-pin`
 - <a id="arg---pypi-keyring-provider" href="#arg---pypi-keyring-provider">`--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>`</a>
 :  Specifies whether to use the keyring to look up credentials for PyPI
 <br>**options**: `disabled`, `subprocess`
-- <a id="arg---concurrent-solves" href="#arg---concurrent-solves">`--concurrent-solves <CONCURRENT_SOLVES>`</a>
-:  Max concurrent solves, default is the number of CPUs
-- <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
-:  Max concurrent network requests, default is `50`
+- <a id="arg---run-post-link-scripts" href="#arg---run-post-link-scripts">`--run-post-link-scripts`</a>
+:  Run post-link scripts (insecure)
+- <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
+:  Do not verify the TLS certificate of the server
+- <a id="arg---use-environment-activation-cache" href="#arg---use-environment-activation-cache">`--use-environment-activation-cache`</a>
+:  Use environment activation cache (experimental)
 
 ## Description
-Lists all packages previously installed into a globally accessible location via `pixi global install`.
+Lists global environments with their dependencies and exposed commands. Can also display all packages within a specific global environment when using the --environment flag.
 
 All environments:
 

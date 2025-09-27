@@ -1,0 +1,14 @@
+---
+source: crates/pixi_manifest/src/toml/pypi_options.rs
+expression: options
+---
+PypiOptions {
+    index_url: None,
+    extra_index_urls: None,
+    find_links: None,
+    no_build_isolation: All,
+    index_strategy: None,
+    no_build: None,
+    dependency_overrides: None,
+    no_binary: None,
+}

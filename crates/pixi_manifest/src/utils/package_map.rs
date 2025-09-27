@@ -2,15 +2,15 @@ use std::{fmt, marker::PhantomData, ops::Range, str::FromStr};
 
 use indexmap::IndexMap;
 use itertools::Itertools;
-use pixi_spec::PixiSpec;
+use pixi_spec::{BinarySpec, PixiSpec, SourceSpec};
 use rattler_conda_types::PackageName;
 use serde::{
-    de::{DeserializeSeed, MapAccess, Visitor},
     Deserialize, Deserializer, Serialize,
+    de::{DeserializeSeed, MapAccess, Visitor},
 };
-use toml_span::{de_helpers::expected, value::ValueInner, DeserError, Span, Value};
+use toml_span::{DeserError, Span, Value, de_helpers::expected, value::ValueInner};
 
-use crate::{error::GenericError, utils::PixiSpanned, TomlError};
+use crate::{TomlError, error::GenericError, utils::PixiSpanned};
 
 #[derive(Clone, Default, Debug, Serialize)]
 pub struct UniquePackageMap {
@@ -33,12 +33,12 @@ impl UniquePackageMap {
             if let Some((package_name, _)) = self.specs.iter().find(|(_, spec)| spec.is_source()) {
                 return Err(TomlError::Generic(
                     GenericError::new(
-                        "source dependencies are not allowed without enabling pixi-build",
+                        "conda source dependencies are not allowed without enabling the 'pixi-build' preview feature",
                     )
                     .with_opt_span(self.value_spans.get(package_name).cloned())
                     .with_span_label("source dependency specified here")
                     .with_help(
-                        "Add `workspace.preview = [\"pixi-build\"]` to enable pixi build support",
+                        "Add `preview = [\"pixi-build\"]` to the `workspace` or `project` table of your manifest",
                     ),
                 ));
             }
@@ -53,6 +53,42 @@ impl IntoIterator for UniquePackageMap {
 
     fn into_iter(self) -> Self::IntoIter {
         self.specs.into_iter()
+    }
+}
+
+impl Extend<(rattler_conda_types::PackageName, PixiSpec)> for UniquePackageMap {
+    fn extend<T: IntoIterator<Item = (rattler_conda_types::PackageName, PixiSpec)>>(
+        &mut self,
+        iter: T,
+    ) {
+        for (name, spec) in iter {
+            self.specs.insert(name, spec);
+            // Note: We don't set spans here as they're primarily used for TOML parsing
+        }
+    }
+}
+
+impl Extend<(rattler_conda_types::PackageName, SourceSpec)> for UniquePackageMap {
+    fn extend<T: IntoIterator<Item = (rattler_conda_types::PackageName, SourceSpec)>>(
+        &mut self,
+        iter: T,
+    ) {
+        for (name, spec) in iter {
+            self.specs.insert(name, spec.into());
+            // Note: We don't set spans here as they're primarily used for TOML parsing
+        }
+    }
+}
+
+impl Extend<(rattler_conda_types::PackageName, BinarySpec)> for UniquePackageMap {
+    fn extend<T: IntoIterator<Item = (rattler_conda_types::PackageName, BinarySpec)>>(
+        &mut self,
+        iter: T,
+    ) {
+        for (name, spec) in iter {
+            self.specs.insert(name, spec.into());
+            // Note: We don't set spans here as they're primarily used for TOML parsing
+        }
     }
 }
 
@@ -117,12 +153,10 @@ impl<'de> DeserializeSeed<'de> for PackageMap<'_> {
     {
         let package_name = Self::Value::deserialize(deserializer)?;
         match self.0.get_key_value(&package_name.value) {
-            Some((package_name, _)) => {
-                Err(serde::de::Error::custom(
-                    format!(
-                        "duplicate dependency: {} (please avoid using capitalized names for the dependencies)", package_name.as_source())
-                ))
-            }
+            Some((package_name, _)) => Err(serde::de::Error::custom(format!(
+                "duplicate dependency: {} (please avoid using capitalized names for the dependencies)",
+                package_name.as_source()
+            ))),
             None => Ok(package_name),
         }
     }
@@ -196,10 +230,10 @@ impl<'de> toml_span::Deserialize<'de> for UniquePackageMap {
 
 #[cfg(test)]
 mod test {
-    use insta::assert_snapshot;
-
     use super::*;
-    use crate::{toml::FromTomlStr, utils::test_utils::format_parse_error};
+    use crate::toml::FromTomlStr;
+    use insta::assert_snapshot;
+    use pixi_test_utils::format_parse_error;
 
     #[test]
     pub fn test_duplicate_package_name() {

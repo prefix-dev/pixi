@@ -6,29 +6,30 @@ use std::{
 
 use indexmap::IndexMap;
 use miette::LabeledSpan;
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_toml::{Same, TomlHashMap, TomlIndexMap, TomlWith};
 use rattler_conda_types::{Platform, Version};
 use toml_span::{
-    de_helpers::{expected, TableHelper},
-    value::ValueInner,
     DeserError, Spanned, Value,
+    de_helpers::{TableHelper, expected},
+    value::ValueInner,
 };
 use url::Url;
 
 use crate::{
+    Activation, Environment, EnvironmentName, Environments, Feature, FeatureName,
+    KnownPreviewFeature, SolveGroups, SystemRequirements, TargetSelector, Targets, Task, TaskName,
+    TomlError, Warning, WithWarnings, WorkspaceManifest,
     environment::EnvironmentIdx,
     error::{FeatureNotEnabled, GenericError},
     manifests::PackageManifest,
-    pypi::{pypi_options::PypiOptions, PyPiPackageName},
+    pypi::pypi_options::PypiOptions,
     toml::{
-        create_unsupported_selector_warning, environment::TomlEnvironmentList, task::TomlTask,
-        ExternalPackageProperties, PlatformSpan, TomlFeature, TomlPackage, TomlTarget,
-        TomlWorkspace,
+        PackageDefaults, PlatformSpan, TomlFeature, TomlPackage, TomlTarget, TomlWorkspace,
+        WorkspacePackageProperties, create_unsupported_selector_warning,
+        environment::TomlEnvironmentList, task::TomlTask,
     },
-    utils::{package_map::UniquePackageMap, PixiSpanned},
-    Activation, Environment, EnvironmentName, Environments, Feature, FeatureName,
-    KnownPreviewFeature, PyPiRequirement, SolveGroups, SystemRequirements, TargetSelector, Targets,
-    Task, TaskName, TomlError, Warning, WithWarnings, WorkspaceManifest,
+    utils::{PixiSpanned, package_map::UniquePackageMap},
 };
 
 /// Raw representation of a pixi manifest. This is the deserialized form of the
@@ -43,7 +44,7 @@ pub struct TomlManifest {
     pub dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
-    pub pypi_dependencies: Option<PixiSpanned<IndexMap<PyPiPackageName, PyPiRequirement>>>,
+    pub pypi_dependencies: Option<PixiSpanned<IndexMap<PypiPackageName, PixiPypiSpec>>>,
 
     /// Additional information to activate an environment.
     pub activation: Option<PixiSpanned<Activation>>,
@@ -70,6 +71,11 @@ impl TomlManifest {
         self.workspace.is_some()
     }
 
+    /// Returns true if the manifest contains a package.
+    pub fn has_package(&self) -> bool {
+        self.package.is_some()
+    }
+
     /// Assume that the manifest is a workspace manifest and convert it as such.
     ///
     /// If the manifest also contains a package section that will be converted
@@ -79,7 +85,8 @@ impl TomlManifest {
     /// paths are not checked.
     pub fn into_package_manifest(
         self,
-        external: ExternalPackageProperties,
+        external: WorkspacePackageProperties,
+        package_defaults: PackageDefaults,
         workspace: &WorkspaceManifest,
         root_directory: Option<&Path>,
     ) -> Result<(PackageManifest, Vec<Warning>), TomlError> {
@@ -110,7 +117,12 @@ impl TomlManifest {
         let WithWarnings {
             value: package,
             warnings,
-        } = package.into_manifest(external, workspace.preview(), root_directory)?;
+        } = package.into_manifest(
+            external,
+            package_defaults,
+            workspace.preview(),
+            root_directory,
+        )?;
         Ok((package, warnings))
     }
 
@@ -124,6 +136,7 @@ impl TomlManifest {
     pub fn into_workspace_manifest(
         self,
         mut external: ExternalWorkspaceProperties,
+        package_defaults: PackageDefaults,
         root_directory: Option<&Path>,
     ) -> Result<(WorkspaceManifest, Option<PackageManifest>, Vec<Warning>), TomlError> {
         let workspace = self
@@ -377,7 +390,7 @@ impl TomlManifest {
 
             warnings.push(Warning::from(
                 GenericError::new(format!(
-                    "The feature '{}' is defined but not used in any environment",
+                    "The feature '{}' is defined but not used in any environment. Dependencies of unused features are not resolved or checked, and use wildcard (*) version specifiers by default, disregarding any set `pinning-strategy`",
                     feature_name
                 ))
                 .with_opt_span(span)
@@ -390,7 +403,7 @@ impl TomlManifest {
             .package
             .as_ref()
             .and_then(|p| p.value.name.as_ref())
-            .cloned();
+            .and_then(|field| field.clone().value());
 
         let WithWarnings {
             warnings: mut workspace_warnings,
@@ -428,23 +441,12 @@ impl TomlManifest {
                 .into());
             }
 
-            let workspace = &workspace_manifest.workspace;
             let WithWarnings {
                 value: package_manifest,
                 warnings: mut package_warnings,
             } = package.into_manifest(
-                ExternalPackageProperties {
-                    name: workspace.name.clone(),
-                    version: workspace.version.clone(),
-                    description: workspace.description.clone(),
-                    authors: workspace.authors.clone(),
-                    license: workspace.license.clone(),
-                    license_file: workspace.license_file.clone(),
-                    readme: workspace.readme.clone(),
-                    homepage: workspace.homepage.clone(),
-                    repository: workspace.repository.clone(),
-                    documentation: workspace.documentation.clone(),
-                },
+                workspace_manifest.workspace_package_properties(),
+                package_defaults,
                 &workspace_manifest.workspace.preview,
                 root_directory,
             )?;
@@ -576,12 +578,10 @@ pub struct ExternalWorkspaceProperties {
 #[cfg(test)]
 mod test {
     use insta::assert_snapshot;
+    use pixi_test_utils::format_parse_error;
 
     use super::*;
-    use crate::{
-        toml::FromTomlStr,
-        utils::test_utils::{expect_parse_warnings, format_parse_error},
-    };
+    use crate::{toml::FromTomlStr, utils::test_utils::expect_parse_warnings};
 
     /// A helper function that generates a snapshot of the error message when
     /// parsing a manifest TOML. The error is returned.
@@ -589,7 +589,11 @@ mod test {
     pub(crate) fn expect_parse_failure(pixi_toml: &str) -> String {
         let parse_error = <TomlManifest as FromTomlStr>::from_toml_str(pixi_toml)
             .and_then(|manifest| {
-                manifest.into_workspace_manifest(ExternalWorkspaceProperties::default(), None)
+                manifest.into_workspace_manifest(
+                    ExternalWorkspaceProperties::default(),
+                    PackageDefaults::default(),
+                    None,
+                )
             })
             .expect_err("parsing should fail");
 
@@ -611,51 +615,6 @@ mod test {
         backend = { name = "foobar", version = "*" }
         "#,
         ));
-    }
-
-    #[test]
-    fn test_missing_version() {
-        assert_snapshot!(expect_parse_failure(
-            r#"
-        [workspace]
-        name = "foo"
-        channels = []
-        platforms = []
-        preview = ["pixi-build"]
-
-        [package]
-
-        [package.build]
-        backend = { name = "foobar", version = "*" }
-        "#,
-        ));
-    }
-
-    #[test]
-    fn test_missing_package_name() {
-        assert_snapshot!(expect_parse_failure(
-            r#"
-        [workspace]
-        channels = []
-        platforms = []
-        preview = ["pixi-build"]
-
-        [package]
-        # Since workspace doesnt define a name we expect an error here.
-
-        [package.build]
-        backend = { name = "foobar", version = "*" }
-        "#,
-        ), @r###"
-         × missing field 'name' in table
-          ╭─[pixi.toml:7:9]
-        6 │
-        7 │         [package]
-          ·         ──────────
-        8 │         # Since workspace doesnt define a name we expect an error here.
-        9 │
-          ╰────
-        "###);
     }
 
     #[test]

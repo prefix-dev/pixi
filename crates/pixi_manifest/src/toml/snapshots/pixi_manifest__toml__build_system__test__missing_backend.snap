@@ -1,7 +1,0 @@
----
-source: crates/pixi_manifest/src/toml/build_system.rs
-expression: "expect_parse_failure(\"\")"
----
-  × missing field 'backend' in table
-   ╭─[pixi.toml:1:1]
-   ╰────

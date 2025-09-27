@@ -6,12 +6,13 @@ import json
 from copy import deepcopy
 from pathlib import Path
 import tomllib
-from typing import Annotated, Any, Optional, Literal
+from typing import Annotated, Any, Literal, ClassVar, override
 from enum import Enum
 
 from pydantic import (
     AnyHttpUrl,
     BaseModel,
+    ConfigDict,
     Field,
     PositiveFloat,
     StringConstraints,
@@ -19,7 +20,7 @@ from pydantic import (
 
 #: latest version currently supported by the `taplo` TOML linter and language server
 SCHEMA_DRAFT = "http://json-schema.org/draft-07/schema#"
-CARGO_TOML = Path(__file__).parent.parent / "Cargo.toml"
+CARGO_TOML = Path(__file__).parent.parent / "crates" / "pixi" / "Cargo.toml"
 CARGO_TOML_DATA = tomllib.loads(CARGO_TOML.read_text(encoding="utf-8"))
 VERSION = CARGO_TOML_DATA["package"]["version"]
 SCHEMA_URI = f"https://pixi.sh/v{VERSION}/schema/manifest/schema.json"
@@ -32,6 +33,10 @@ Glob = NonEmptyStr
 UnsignedInt = Annotated[int, Field(strict=True, ge=0)]
 GitUrl = Annotated[
     str, StringConstraints(pattern=r"((git|ssh|http(s)?)|(git@[\w\.]+))(:(\/\/)?)([\w\.@:\/\\-~]+)")
+]
+ExcludeNewer = Annotated[
+    str,
+    StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}:\d{2}(Z|[+-]\d{2}:\d{2}))?$"),
 ]
 
 
@@ -65,9 +70,13 @@ class Platform(str, Enum):
 
 
 class StrictBaseModel(BaseModel):
-    class Config:
-        extra = "forbid"
-        alias_generator = hyphenize
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid", alias_generator=hyphenize)
+
+
+class WorkspaceInheritance(StrictBaseModel):
+    """Indicates that a field should inherit its value from the workspace."""
+
+    workspace: Literal[True] = Field(description="Must be true to inherit from workspace")
 
 
 ###################
@@ -125,9 +134,14 @@ class Workspace(StrictBaseModel):
     channel_priority: ChannelPriority | None = Field(
         None,
         examples=["strict", "disabled"],
-        description="The type of channel priority that is used in the solve."
-        "- 'strict': only take the package from the channel it exist in first."
-        "- 'disabled': group all dependencies together as if there is no channel difference.",
+        description="""The type of channel priority that is used in the solve.
+- 'strict': only take the package from the channel it exist in first.
+- 'disabled': group all dependencies together as if there is no channel difference.""",
+    )
+    exclude_newer: ExcludeNewer | None = Field(
+        None,
+        examples=["2023-11-03", "2023-11-03T03:33:12Z"],
+        description="Exclude any package newer than this date",
     )
     platforms: list[Platform] | None = Field(
         None, description="The platforms that the project supports"
@@ -169,6 +183,9 @@ class Workspace(StrictBaseModel):
         description="The required version spec for pixi itself to resolve and build the project.",
         examples=[">=0.40"],
     )
+    target: dict[TargetName, WorkspaceTarget] | None = Field(
+        None, description="The workspace targets"
+    )
 
 
 ########################
@@ -192,7 +209,7 @@ class MatchspecTable(StrictBaseModel):
     channel: NonEmptyStr | None = Field(
         None,
         description="The channel the packages needs to be fetched from",
-        examples=["conda-forge", "pytorch", "https://repo.prefix.dev/conda-forge"],
+        examples=["conda-forge", "pytorch", "https://prefix.dev/conda-forge"],
     )
     subdir: NonEmptyStr | None = Field(
         None, description="The subdir of the package, also known as platform"
@@ -224,7 +241,7 @@ class _PyPIRequirement(StrictBaseModel):
 
 
 class _PyPiGitRequirement(_PyPIRequirement):
-    git: NonEmptyStr = Field(
+    git: NonEmptyStr | None = Field(
         None,
         description="The `git` URL to the repo e.g https://github.com/prefix-dev/pixi",
     )
@@ -234,23 +251,23 @@ class _PyPiGitRequirement(_PyPIRequirement):
 
 
 class PyPIGitRevRequirement(_PyPiGitRequirement):
-    rev: Optional[NonEmptyStr] = Field(None, description="A `git` SHA revision to use")
+    rev: NonEmptyStr | None = Field(None, description="A `git` SHA revision to use")
 
 
 class PyPIGitBranchRequirement(_PyPiGitRequirement):
-    branch: Optional[NonEmptyStr] = Field(None, description="A `git` branch to use")
+    branch: NonEmptyStr | None = Field(None, description="A `git` branch to use")
 
 
 class PyPIGitTagRequirement(_PyPiGitRequirement):
-    tag: Optional[NonEmptyStr] = Field(None, description="A `git` tag to use")
+    tag: NonEmptyStr | None = Field(None, description="A `git` tag to use")
 
 
 class PyPIPathRequirement(_PyPIRequirement):
-    path: NonEmptyStr = Field(
+    path: NonEmptyStr | None = Field(
         None,
         description="A path to a local source or wheel",
     )
-    editable: Optional[bool] = Field(
+    editable: bool | None = Field(
         None, description="If `true` the package will be installed as editable"
     )
     subdirectory: NonEmptyStr | None = Field(
@@ -259,14 +276,14 @@ class PyPIPathRequirement(_PyPIRequirement):
 
 
 class PyPIUrlRequirement(_PyPIRequirement):
-    url: NonEmptyStr = Field(
+    url: NonEmptyStr | None = Field(
         None,
         description="A URL to a remote source or wheel",
     )
 
 
 class PyPIVersion(_PyPIRequirement):
-    version: NonEmptyStr = Field(
+    version: NonEmptyStr | None = Field(
         None,
         description="The version of the package in [PEP 440](https://www.python.org/dev/peps/pep-0440/) format",
     )
@@ -310,20 +327,29 @@ Dependencies = dict[CondaPackageName, MatchSpec] | None
 # Task section #
 ################
 TaskName = Annotated[str, Field(pattern=r"^[^\s\$]+$", description="A valid task name.")]
+TaskArgName = Annotated[
+    str, Field(pattern=r"^[a-zA-Z_][a-zA-Z\d_]*$", description="A valid task argument name")
+]
+TaskArgInlineTable = Annotated[
+    dict[TaskArgName, str],
+    Field(min_length=1, max_length=1, description="A single item task name/value object"),
+]
 
 
 class TaskArgs(StrictBaseModel):
     """The arguments of a task."""
 
-    arg: NonEmptyStr
-    default: NonEmptyStr | None = Field(None, description="The default value of the argument")
+    arg: TaskArgName = Field(description="The name of the argument")
+    default: str | None = Field(None, description="The default value of the argument")
 
 
 class DependsOn(StrictBaseModel):
     """The dependencies of a task."""
 
-    task: TaskName
-    args: list[NonEmptyStr] | None = Field(None, description="The arguments to pass to the task")
+    task: TaskName = Field(description="the name of the task to depend on")
+    args: list[str | TaskArgInlineTable] | None = Field(
+        None, description="The (positional or named) arguments to pass to the task"
+    )
     environment: EnvironmentName | None = Field(
         None, description="The environment to use for the task"
     )
@@ -369,10 +395,13 @@ class TaskInlineTable(StrictBaseModel):
         None,
         description="Whether to run in a clean environment, removing all environment variables except those defined in `env` and by pixi itself.",
     )
-    args: list[TaskArgs | NonEmptyStr] | None = Field(
+    args: list[TaskArgs | TaskArgName] | None = Field(
         None,
-        description="The arguments to pass to the task",
-        examples=["arg1", "arg2"],
+        description="The arguments to a task",
+        examples=[
+            ["arg1", "arg2"],
+            ["arg", {"arg": "arg2", "default": "2"}],
+        ],
     )
 
 
@@ -423,7 +452,7 @@ class Environment(StrictBaseModel):
         None,
         description="The group name for environments that should be solved together",
     )
-    no_default_feature: Optional[bool] = Field(
+    no_default_feature: bool = Field(
         False,
         description="Whether to add the default feature to this environment",
     )
@@ -451,6 +480,14 @@ class Activation(StrictBaseModel):
 # Target section #
 ##################
 TargetName = NonEmptyStr
+
+
+class WorkspaceTarget(StrictBaseModel):
+    """Target-specific configuration for a workspace"""
+
+    build_variants: dict[NonEmptyStr, list[str]] | None = Field(
+        None, description="The build variants for this workspace target"
+    )
 
 
 class Target(StrictBaseModel):
@@ -483,9 +520,9 @@ class Feature(StrictBaseModel):
     channel_priority: ChannelPriority | None = Field(
         None,
         examples=["strict", "disabled"],
-        description="The type of channel priority that is used in the solve."
-        "- 'strict': only take the package from the channel it exist in first."
-        "- 'disabled': group all dependencies together as if there is no channel difference.",
+        description="""The type of channel priority that is used in the solve.
+- 'strict': only take the package from the channel it exist in first.
+- 'disabled': group all dependencies together as if there is no channel difference.""",
     )
     platforms: list[Platform] | None = Field(
         None,
@@ -568,15 +605,15 @@ class PyPIOptions(StrictBaseModel):
         description="Additional PyPI registries that should be used as extra indexes",
         examples=[["https://pypi.org/simple"]],
     )
-    find_links: list[FindLinksPath | FindLinksURL] = Field(
+    find_links: list[FindLinksPath | FindLinksURL] | None = Field(
         None,
         description="Paths to directory containing",
         examples=[["https://pypi.org/simple"]],
     )
-    no_build_isolation: list[PyPIPackageName] = Field(
+    no_build_isolation: bool | list[PyPIPackageName] | None = Field(
         None,
         description="Packages that should NOT be isolated during the build process",
-        examples=[["numpy"]],
+        examples=[["numpy"], True],
     )
     index_strategy: (
         Literal["first-index"] | Literal["unsafe-first-match"] | Literal["unsafe-best-match"] | None
@@ -590,6 +627,18 @@ class PyPIOptions(StrictBaseModel):
         description="Packages that should NOT be built",
         examples=["true", "false"],
     )
+    dependency_overrides: dict[PyPIPackageName, PyPIRequirement] | None = Field(
+        None,
+        description="A list of PyPI dependencies that override the resolved dependencies",
+        examples=[
+            {"numpy": ">=1.21.0"},
+        ],
+    )
+    no_binary: bool | list[PyPIPackageName] | None = Field(
+        None,
+        description="Don't use pre-built wheels for these packages",
+        examples=["true", "false"],
+    )
 
 
 #######################
@@ -600,32 +649,47 @@ class PyPIOptions(StrictBaseModel):
 class Package(StrictBaseModel):
     """The package's metadata information."""
 
-    name: NonEmptyStr | None = Field(None, description="The name of the package")
-    version: NonEmptyStr | None = Field(
+    name: NonEmptyStr | WorkspaceInheritance | None = Field(
         None,
-        description="The version of the project; we advise use of [SemVer](https://semver.org)",
-        examples=["1.2.3"],
+        description="The name of the package. Can be a string or { workspace = true } to inherit from workspace",
     )
-    description: NonEmptyStr | None = Field(None, description="A short description of the project")
-    authors: list[NonEmptyStr] | None = Field(
-        None, description="The authors of the project", examples=["John Doe <j.doe@prefix.dev>"]
-    )
-    license: NonEmptyStr | None = Field(
+    version: NonEmptyStr | WorkspaceInheritance | None = Field(
         None,
-        description="The license of the project; we advise using an [SPDX](https://spdx.org/licenses/) identifier.",
+        description="The version of the project; we advise use of [SemVer](https://semver.org). Can be a string or { workspace = true } to inherit from workspace",
+        examples=["1.2.3", {"workspace": True}],
     )
-    license_file: PathNoBackslash | None = Field(
-        None, description="The path to the license file of the project"
+    description: NonEmptyStr | WorkspaceInheritance | None = Field(
+        None,
+        description="A short description of the project. Can be a string or { workspace = true } to inherit from workspace",
     )
-    readme: PathNoBackslash | None = Field(
-        None, description="The path to the readme file of the project"
+    authors: list[NonEmptyStr] | WorkspaceInheritance | None = Field(
+        None,
+        description="The authors of the project. Can be a list of strings or { workspace = true } to inherit from workspace",
+        examples=[["John Doe <j.doe@prefix.dev>"], {"workspace": True}],
     )
-    homepage: AnyHttpUrl | None = Field(None, description="The URL of the homepage of the project")
-    repository: AnyHttpUrl | None = Field(
-        None, description="The URL of the repository of the project"
+    license: NonEmptyStr | WorkspaceInheritance | None = Field(
+        None,
+        description="The license of the project; we advise using an [SPDX](https://spdx.org/licenses/) identifier. Can be a string or { workspace = true } to inherit from workspace",
     )
-    documentation: AnyHttpUrl | None = Field(
-        None, description="The URL of the documentation of the project"
+    license_file: PathNoBackslash | WorkspaceInheritance | None = Field(
+        None,
+        description="The path to the license file of the project. Can be a path or { workspace = true } to inherit from workspace",
+    )
+    readme: PathNoBackslash | WorkspaceInheritance | None = Field(
+        None,
+        description="The path to the readme file of the project. Can be a path or { workspace = true } to inherit from workspace",
+    )
+    homepage: AnyHttpUrl | WorkspaceInheritance | None = Field(
+        None,
+        description="The URL of the homepage of the project. Can be a URL or { workspace = true } to inherit from workspace",
+    )
+    repository: AnyHttpUrl | WorkspaceInheritance | None = Field(
+        None,
+        description="The URL of the repository of the project. Can be a URL or { workspace = true } to inherit from workspace",
+    )
+    documentation: AnyHttpUrl | WorkspaceInheritance | None = Field(
+        None,
+        description="The URL of the documentation of the project. Can be a URL or { workspace = true } to inherit from workspace",
     )
 
     build: Build = Field(..., description="The build configuration of the package")
@@ -641,21 +705,62 @@ class Package(StrictBaseModel):
     )
 
 
+class BuildTarget(StrictBaseModel):
+    """Target-specific build configuration for different platforms"""
+
+    config: dict[str, Any] | None = Field(
+        None, description="Target-specific configuration for the build backend"
+    )
+
+
+class SourceLocation(StrictBaseModel):
+    """The location of a package's source code."""
+
+    path: NonEmptyStr | None = Field(None, description="The path to the source")
+
+    # TODO: url and git source
+    # url: NonEmptyStr | None = Field(None, description="The URL to the source")
+    # md5: Md5Sum | None = Field(None, description="The md5 hash of the source")
+    # sha256: Sha256Sum | None = Field(None, description="The sha256 hash of the source")
+
+    # git: NonEmptyStr | None = Field(None, description="The git URL to the source repo")
+    # rev: NonEmptyStr | None = Field(None, description="A git SHA revision to use")
+    # tag: NonEmptyStr | None = Field(None, description="A git tag to use")
+    # branch: NonEmptyStr | None = Field(None, description="A git branch to use")
+    # subdirectory: NonEmptyStr | None = Field(None, description="A subdirectory to use in the repo")
+
+
 class Build(StrictBaseModel):
     backend: BuildBackend = Field(..., description="The build backend to instantiate")
-    channels: list[Channel] = Field(
+    channels: list[Channel] | None = Field(
         None, description="The `conda` channels that are used to fetch the build backend from"
     )
     additional_dependencies: Dependencies = Field(
         None, description="Additional dependencies to install alongside the build backend"
     )
-    configuration: dict[str, Any] = Field(
+    config: dict[str, Any] | None = Field(
         None, description="The configuration of the build backend"
+    )
+    target: dict[TargetName, BuildTarget] | None = Field(
+        None,
+        description="Target-specific build configuration for different platforms",
+        examples=[{"linux-64": {"config": {"key": "value"}}}],
+    )
+    source: SourceLocation | None = Field(
+        None,
+        description="The source from which to build the package",
+        examples=[{"path": "project"}],
     )
 
 
 class BuildBackend(MatchspecTable):
-    name: NonEmptyStr = Field(None, description="The name of the build backend package")
+    name: NonEmptyStr | None = Field(None, description="The name of the build backend package")
+    channels: list[Channel] | None = Field(
+        None, description="The `conda` channels that are used to fetch the build backend from"
+    )
+    additional_dependencies: Dependencies = Field(
+        None, description="Additional dependencies to install alongside the build backend"
+    )
 
 
 class PackageTarget(StrictBaseModel):
@@ -672,8 +777,8 @@ class PackageTarget(StrictBaseModel):
 class BaseManifest(StrictBaseModel):
     """The configuration for a [`pixi`](https://pixi.sh) project."""
 
-    class Config:
-        json_schema_extra = {
+    model_config: ClassVar[ConfigDict] = ConfigDict(
+        json_schema_extra={
             "$id": SCHEMA_URI,
             "$schema": SCHEMA_DRAFT,
             "title": "`pixi.toml` manifest file",
@@ -683,8 +788,9 @@ class BaseManifest(StrictBaseModel):
                 {"required": ["package"]},
             ],
         }
+    )
 
-    schema_: str | None = Field(
+    schema_: str | None = Field(  # pyright: ignore[reportCallIssue, reportUnknownVariableType]
         SCHEMA_URI,
         alias="$schema",
         title="Schema",
@@ -701,7 +807,6 @@ class BaseManifest(StrictBaseModel):
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies"
     )
-    pypi_options: PyPIOptions | None = Field(None, description="Options related to PyPI indexes")
     tasks: dict[TaskName, TaskInlineTable | list[DependsOn] | NonEmptyStr] | None = Field(
         None, description="The tasks of the project"
     )
@@ -723,7 +828,7 @@ class BaseManifest(StrictBaseModel):
         description="The targets of the project",
         examples=[{"linux": {"dependencies": {"python": "3.8"}}}],
     )
-    tool: dict[str, Any] = Field(
+    tool: dict[str, Any] | None = Field(
         None, description="Third-party tool configurations, ignored by pixi"
     )
     pypi_options: PyPIOptions | None = Field(
@@ -740,7 +845,7 @@ class BaseManifest(StrictBaseModel):
 class SchemaJsonEncoder(json.JSONEncoder):
     """A custom schema encoder for normalizing schema to be used with TOML files."""
 
-    HEADER_ORDER = [
+    HEADER_ORDER: list[str] = [
         "$schema",
         "$id",
         "$ref",
@@ -768,35 +873,36 @@ class SchemaJsonEncoder(json.JSONEncoder):
         "multipleOf",
         "pattern",
     ]
-    FOOTER_ORDER = [
+    FOOTER_ORDER: list[str] = [
         "examples",
         "$defs",
     ]
-    SORT_NESTED = [
+    SORT_NESTED: list[str] = [
         "items",
     ]
-    SORT_NESTED_OBJ = [
+    SORT_NESTED_OBJ: list[str] = [
         "properties",
         "$defs",
     ]
-    SORT_NESTED_MAYBE_OBJ = [
+    SORT_NESTED_MAYBE_OBJ: list[str] = [
         "additionalProperties",
     ]
-    SORT_NESTED_OBJ_OBJ = [
+    SORT_NESTED_OBJ_OBJ: list[str] = [
         "patternProperties",
     ]
-    SORT_NESTED_ARR = [
+    SORT_NESTED_ARR: list[str] = [
         "anyOf",
         "allOf",
         "oneOf",
     ]
 
-    def encode(self, obj):
+    @override
+    def encode(self, o: object):
         """Overload the default ``encode`` behavior."""
-        if isinstance(obj, dict):
-            obj = self.normalize_schema(deepcopy(obj))
+        if isinstance(o, dict):
+            o = self.normalize_schema(deepcopy(o))  # pyright: ignore[reportUnknownArgumentType]
 
-        return super().encode(obj)
+        return super().encode(o)
 
     def normalize_schema(self, obj: dict[str, Any]) -> dict[str, Any]:
         """Recursively normalize and apply an arbitrary sort order to a schema."""
@@ -863,7 +969,7 @@ class SchemaJsonEncoder(json.JSONEncoder):
         if key not in obj or not isinstance(obj[key], dict):
             return obj
         obj[key] = {
-            k: self.normalize_schema(v) if isinstance(v, dict) else v
+            k: self.normalize_schema(v) if isinstance(v, dict) else v  # pyright: ignore[reportUnknownArgumentType]
             for k, v in sorted(obj[key].items(), key=lambda kv: kv[0])
         }
         return obj

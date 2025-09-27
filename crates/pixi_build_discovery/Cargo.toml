@@ -1,0 +1,38 @@
+[package]
+authors.workspace = true
+description = "Discover the build backend from a source tree"
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi_build_discovery"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]
+dunce = { workspace = true }
+itertools = { workspace = true }
+miette = { workspace = true }
+ordermap = { workspace = true }
+serde = { workspace = true, optional = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+url = { workspace = true }
+
+rattler_conda_types = { workspace = true }
+
+pixi_build_type_conversions = { workspace = true }
+pixi_build_types = { workspace = true }
+pixi_manifest = { workspace = true }
+pixi_spec = { workspace = true }
+pixi_spec_containers = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true, features = [
+  "yaml",
+  "filters",
+  "glob",
+  "redactions",
+] }
+pixi_build_discovery = { path = ".", features = ["serde"] }
+pixi_test_utils = { workspace = true }

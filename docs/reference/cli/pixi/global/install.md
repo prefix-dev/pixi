@@ -8,16 +8,17 @@ Installs the defined packages in a globally accessible location and exposes thei
 
 ## Usage
 ```
-pixi global install [OPTIONS] <PACKAGE>...
+pixi global install [OPTIONS] [PACKAGE]...
 ```
 
 ## Arguments
 - <a id="arg-<PACKAGE>" href="#arg-<PACKAGE>">`<PACKAGE>`</a>
-:  Specifies the package that should be installed
+:  The dependency as names, conda MatchSpecs
 <br>May be provided more than once.
-<br>**required**: `true`
 
 ## Options
+- <a id="arg---path" href="#arg---path">`--path <PATH>`</a>
+:  The path to the local package
 - <a id="arg---channel" href="#arg---channel">`--channel (-c) <CHANNEL>`</a>
 :  The channels to consider as a name or a url. Multiple channels can be specified by using this field multiple times
 <br>May be provided more than once.
@@ -37,17 +38,36 @@ pixi global install [OPTIONS] <PACKAGE>...
 :  Specifies that no shortcuts should be created for the installed packages
 
 ## Config Options
-- <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
-:  Do not verify the TLS certificate of the server
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
 :  Path to the file containing the authentication token
+- <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
+:  Max concurrent network requests, default is `50`
+- <a id="arg---concurrent-solves" href="#arg---concurrent-solves">`--concurrent-solves <CONCURRENT_SOLVES>`</a>
+:  Max concurrent solves, default is the number of CPUs
+- <a id="arg---pinning-strategy" href="#arg---pinning-strategy">`--pinning-strategy <PINNING_STRATEGY>`</a>
+:  Set pinning strategy
+<br>**options**: `semver`, `minor`, `major`, `latest-up`, `exact-version`, `no-pin`
 - <a id="arg---pypi-keyring-provider" href="#arg---pypi-keyring-provider">`--pypi-keyring-provider <PYPI_KEYRING_PROVIDER>`</a>
 :  Specifies whether to use the keyring to look up credentials for PyPI
 <br>**options**: `disabled`, `subprocess`
-- <a id="arg---concurrent-solves" href="#arg---concurrent-solves">`--concurrent-solves <CONCURRENT_SOLVES>`</a>
-:  Max concurrent solves, default is the number of CPUs
-- <a id="arg---concurrent-downloads" href="#arg---concurrent-downloads">`--concurrent-downloads <CONCURRENT_DOWNLOADS>`</a>
-:  Max concurrent network requests, default is `50`
+- <a id="arg---run-post-link-scripts" href="#arg---run-post-link-scripts">`--run-post-link-scripts`</a>
+:  Run post-link scripts (insecure)
+- <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
+:  Do not verify the TLS certificate of the server
+- <a id="arg---use-environment-activation-cache" href="#arg---use-environment-activation-cache">`--use-environment-activation-cache`</a>
+:  Use environment activation cache (experimental)
+
+## Git Options
+- <a id="arg---git" href="#arg---git">`--git <GIT>`</a>
+:  The git url, e.g. `https://github.com/user/repo.git`
+- <a id="arg---branch" href="#arg---branch">`--branch <BRANCH>`</a>
+:  The git branch
+- <a id="arg---tag" href="#arg---tag">`--tag <TAG>`</a>
+:  The git tag
+- <a id="arg---rev" href="#arg---rev">`--rev <REV>`</a>
+:  The git revision
+- <a id="arg---subdir" href="#arg---subdir">`--subdir <SUBDIR>`</a>
+:  The subdirectory within the git repository
 
 ## Description
 Installs the defined packages in a globally accessible location and exposes their command line applications.

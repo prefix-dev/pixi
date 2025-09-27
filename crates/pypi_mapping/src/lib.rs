@@ -6,14 +6,14 @@ use std::{
     time::{Duration, Instant},
 };
 
-use futures::{stream::FuturesUnordered, StreamExt};
+use futures::{StreamExt, stream::FuturesUnordered};
 use http_cache_reqwest::{CACacheManager, Cache, CacheMode, HttpCache, HttpCacheOptions};
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_config::get_cache_dir;
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
-use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
+use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
 use thiserror::Error;
 use tokio::sync::Semaphore;
 use tracing::Instrument;
@@ -171,6 +171,7 @@ impl MappingClient {
                 path: get_cache_dir()
                     .expect("missing cache directory")
                     .join(pixi_consts::consts::CONDA_PYPI_MAPPING_CACHE_DIR),
+                remove_opts: Default::default(),
             },
             options: HttpCacheOptions::default(),
         });
@@ -298,11 +299,15 @@ impl MappingClient {
             amended_records,
             total_records,
             Duration::from_millis(duration.as_millis() as u64),
-            data.cache_hits, data.cache_misses,
+            data.cache_hits,
+            data.cache_misses,
             if data.cache_hits == 0 && data.cache_misses == 0 {
                 100.0
             } else {
-                ((data.cache_hits as f64)/((data.cache_misses + data.cache_hits) as f64) * 10000.0).round() / 100.0
+                ((data.cache_hits as f64) / ((data.cache_misses + data.cache_hits) as f64)
+                    * 10000.0)
+                    .round()
+                    / 100.0
             },
         );
 

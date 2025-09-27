@@ -1,0 +1,11 @@
+---
+source: crates/pixi_manifest/src/toml/build_backend.rs
+expression: "expect_parse_failure(r#\"\n            backend = { name = \"foobar\" }\n        \"#)"
+---
+  × one of `version`, `build`, `build-number`, `file-name`, `channel`, `subdir`, `md5`, `sha256`, `git`, `url`, or `path` must be specified
+   ╭─[pixi.toml:2:23]
+ 1 │
+ 2 │             backend = { name = "foobar" }
+   ·                       ───────────────────
+ 3 │
+   ╰────

@@ -19,11 +19,12 @@ pixi global <COMMAND>
 | [`install`](global/install.md) | Installs the defined packages in a globally accessible location and exposes their command line applications. |
 | [`uninstall`](global/uninstall.md) | Uninstalls environments from the global environment. |
 | [`remove`](global/remove.md) | Removes dependencies from an environment |
-| [`list`](global/list.md) | Lists all packages previously installed into a globally accessible location via `pixi global install`. |
+| [`list`](global/list.md) | Lists global environments with their dependencies and exposed commands. Can also display all packages within a specific global environment when using the --environment flag. |
 | [`sync`](global/sync.md) | Sync global manifest with installed environments |
 | [`expose`](global/expose.md) | Interact with the exposure of binaries in the global environment |
 | [`shortcut`](global/shortcut.md) | Interact with the shortcuts on your machine |
 | [`update`](global/update.md) | Updates environments in the global environment |
+| [`tree`](global/tree.md) | Show a tree of dependencies for a specific global environment |
 
 
 ## Description

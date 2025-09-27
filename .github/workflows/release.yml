@@ -14,8 +14,7 @@
 # title/body based on your changelogs.
 
 name: Release
-permissions:
-  "contents": "write"
+permissions: read-all
 
 # This task will run whenever you workflow_dispatch with a tag that looks like a version
 # like "1.0.0", "v0.1.0-prerelease.1", "my-app/0.1.0", "releases/v1.0.0", etc.
@@ -59,7 +58,7 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
           submodules: recursive
       # Turn back on when we're on the released version of dist
@@ -72,18 +71,23 @@ jobs:
 
       # Use fork of dist to allow for binaries in the root of the tarball
       - name: Install cargo-dist from git
-        uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3 # v3
+        uses: baptiste0928/cargo-install@e38323ef017552d7f7af73a3f4db467f278310ed # v3
         with:
-          crate: cargo-dist
-          git: https://github.com/ruben-arts/cargo-dist
-          branch: feature/allow_binaries_in_root_of_tar
+          crate: dist
+          git: https://github.com/ruben-arts/cargo-dist.git
+          rev: d4085f9cf734dbfeb49d6ff89b16c768b7977ad3 # feature/update_bin_in_root_tar
+
+      - uses: prefix-dev/setup-pixi@main
+        with:
+          environments: dist
+          activate-environment: true
 
       - name: Cache dist
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: cargo-dist-cache
           # TODO: revert after switching back to released dist
-          path: ~/.cargo-install/cargo-dist/bin/dist
+          path: ~/.cargo-install/dist/bin/dist
       # sure would be cool if github gave us proper conditionals...
       # so here's a doubly-nested ternary-via-truthiness to try to provide the best possible
       # functionality based on whether this is a pull_request, and whether it's from a fork.
@@ -108,6 +112,9 @@ jobs:
     needs:
       - plan
     if: ${{ fromJson(needs.plan.outputs.val).ci.github.artifacts_matrix.include != null && (needs.plan.outputs.publishing == 'true' || fromJson(needs.plan.outputs.val).ci.github.pr_run_mode == 'upload') || inputs.tag == 'dry-run' }}
+    permissions:
+      attestations: write
+      id-token: write
     strategy:
       fail-fast: false
       # Target platforms/runners are computed by dist in create-release.
@@ -136,19 +143,34 @@ jobs:
       - name: enable windows longpaths
         run: |
           git config --global core.longpaths true
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
           submodules: recursive
-      # Install fork of dist to allow for binaries in the root of the tarball
+
+      # Use fork of dist to allow for binaries in the root of the tarball
       - name: Install cargo-dist from git
-        uses: baptiste0928/cargo-install@91c5da15570085bcde6f4d7aed98cb82d6769fd3 # v3
+        uses: baptiste0928/cargo-install@e38323ef017552d7f7af73a3f4db467f278310ed # v3
         with:
-          crate: cargo-dist
-          git: https://github.com/ruben-arts/cargo-dist
-          branch: feature/allow_binaries_in_root_of_tar
+          crate: dist
+          git: https://github.com/ruben-arts/cargo-dist.git
+          rev: d4085f9cf734dbfeb49d6ff89b16c768b7977ad3 # feature/update_bin_in_root_tar
+
+      - name: Install cargo-zigbuild
+        # Only install on non windows platforms
+        if: ${{ contains(matrix.runner, 'windows') == false }}
+        uses: baptiste0928/cargo-install@e38323ef017552d7f7af73a3f4db467f278310ed # v3
+        with:
+          crate: cargo-zigbuild
+          version: "0.20.1"
+
+      - uses: prefix-dev/setup-pixi@main
+        with:
+          environments: dist
+          activate-environment: true
+
       # Get the dist-manifest
       - name: Fetch local artifacts
-        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           pattern: artifacts-*
           path: target/distrib/
@@ -169,6 +191,12 @@ jobs:
           # Actually do builds and make zips and whatnot
           dist build ${{ needs.plan.outputs.tag-flag }} --print=linkage --output-format=json ${{ matrix.dist_args }} > dist-manifest.json
           echo "dist ran successfully"
+      - name: Attest Builds
+        id: attest
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        with:
+          subject-path: "target/distrib/*${{ join(matrix.targets, ', ') }}"
+      - run: cp ${{ steps.attest.outputs.bundle-path }} target/distrib/attestations-${{ join(matrix.targets, ', ') }}.intoto.jsonl
       - id: cargo-dist
         name: Post-build
         # We force bash here just because github makes it really hard to get values up
@@ -189,6 +217,7 @@ jobs:
           path: |
             ${{ steps.cargo-dist.outputs.paths }}
             ${{ env.BUILD_MANIFEST_NAME }}
+            target/distrib/attestations-${{ join(matrix.targets, ', ') }}.intoto.jsonl
 
   # Build and package all the platform-agnostic(ish) things
   build-global-artifacts:
@@ -200,18 +229,18 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       BUILD_MANIFEST_NAME: target/distrib/global-dist-manifest.json
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
           submodules: recursive
       - name: Install cached dist
-        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           name: cargo-dist-cache
           path: ~/.cargo/bin/
       - run: chmod +x ~/.cargo/bin/dist
       # Get all the local artifacts for the global tasks to use (for e.g. checksums)
       - name: Fetch local artifacts
-        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           pattern: artifacts-*
           path: target/distrib/
@@ -249,18 +278,18 @@ jobs:
     outputs:
       val: ${{ steps.host.outputs.manifest }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
           submodules: recursive
       - name: Install cached dist
-        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           name: cargo-dist-cache
           path: ~/.cargo/bin/
       - run: chmod +x ~/.cargo/bin/dist
       # Fetch artifacts from scratch-storage
       - name: Fetch artifacts
-        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           pattern: artifacts-*
           path: target/distrib/
@@ -343,6 +372,18 @@ jobs:
           name: artifacts-pixi-aarch64-pc-windows-msvc.exe
           path: unpacked-artifacts/pixi-aarch64-pc-windows-msvc.exe
 
+      # Upload installer scripts
+      - name: Upload install.sh
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: artifacts-install.sh
+          path: install/install.sh
+      - name: Upload install.ps1
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: artifacts-install.ps1
+          path: install/install.ps1
+
   # Create a GitHub Release while uploading all files to it
   announce:
     needs:
@@ -355,13 +396,15 @@ jobs:
     runs-on: "ubuntu-latest"
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
           submodules: recursive
       # Create a GitHub Release while uploading all files to it
       - name: "Download GitHub Artifacts"
-        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           pattern: artifacts-*
           path: artifacts

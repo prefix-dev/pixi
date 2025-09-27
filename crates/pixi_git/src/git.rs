@@ -18,8 +18,8 @@ use reqwest_middleware::ClientWithMiddleware;
 use url::Url;
 
 use crate::{
-    sha::{GitOid, GitSha},
     GitError,
+    sha::{GitOid, GitSha},
 };
 
 /// A file indicates that if present, `git reset` has been done and a repo
@@ -53,8 +53,18 @@ enum RefspecStrategy {
 
 /// A reference to commit or commit-ish.
 #[derive(
-    Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    serde::Serialize,
+    serde::Deserialize,
+    Default,
 )]
+#[serde(rename_all = "kebab-case")]
 pub enum GitReference {
     /// A specific branch.
     Branch(String),
@@ -71,6 +81,7 @@ pub enum GitReference {
     /// From a specific revision, using a full 40-character commit hash.
     FullCommit(String),
     /// The default branch of the repository, the reference named `HEAD`.
+    #[default]
     DefaultBranch,
 }
 
@@ -168,6 +179,10 @@ impl GitReference {
     /// Whether a `rev` looks like a commit hash (ASCII hex digits).
     pub fn looks_like_full_commit_hash(rev: &str) -> bool {
         rev.len() == 40 && rev.chars().all(|ch| ch.is_ascii_hexdigit())
+    }
+
+    pub fn is_default(&self) -> bool {
+        matches!(self, Self::DefaultBranch)
     }
 }
 

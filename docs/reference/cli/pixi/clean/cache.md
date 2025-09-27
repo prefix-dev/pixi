@@ -22,8 +22,10 @@ pixi clean cache [OPTIONS]
 :  Clean only `exec` cache
 - <a id="arg---repodata" href="#arg---repodata">`--repodata`</a>
 :  Clean only the repodata cache
-- <a id="arg---tool" href="#arg---tool">`--tool`</a>
-:  Clean only the build backend tools cache
+- <a id="arg---build-backends" href="#arg---build-backends">`--build-backends`</a>
+:  Clean only the build backends environments cache
+- <a id="arg---build" href="#arg---build">`--build`</a>
+:  Clean only the build related cache
 - <a id="arg---yes" href="#arg---yes">`--yes (-y)`</a>
 :  Answer yes to all questions
 

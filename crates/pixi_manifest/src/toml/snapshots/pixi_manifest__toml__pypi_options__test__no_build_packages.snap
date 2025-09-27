@@ -6,7 +6,9 @@ PypiOptions {
     index_url: None,
     extra_index_urls: None,
     find_links: None,
-    no_build_isolation: None,
+    no_build_isolation: Packages(
+        {},
+    ),
     index_strategy: None,
     no_build: Some(
         Packages(
@@ -17,4 +19,6 @@ PypiOptions {
             },
         ),
     ),
+    dependency_overrides: None,
+    no_binary: None,
 }

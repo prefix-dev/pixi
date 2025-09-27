@@ -1,9 +1,9 @@
 
 The `pixi.toml` is the workspace manifest, also known as the Pixi workspace configuration file.
+It specifies environments for a workspace, and the package dependency requirements for those environments. It can also specify tasks which can run in those environments, as well as many other configuration options.
 
 A `toml` file is structured in different tables.
 This document will explain the usage of the different tables.
-For more technical documentation check Pixi on [docs.rs](https://docs.rs/pixi/latest/pixi/workspace/manifest/struct.ProjectManifest.html).
 
 !!! tip
     We also support the `pyproject.toml` file. It has the same structure as the `pixi.toml` file. except that you need to prepend the tables with `tool.pixi` instead of just the table name.
@@ -66,7 +66,7 @@ Pixi solves the dependencies for all these platforms and puts them in the lock f
 --8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_platforms"
 ```
 
-The available platforms are listed here: [link](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/enum.Platform.html)
+The available platforms are listed here: [link](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/platform/enum.Platform.html)
 
 !!! tip "Special macOS behavior"
     macOS has two platforms: `osx-64` for Intel Macs and `osx-arm64` for Apple Silicon Macs.
@@ -238,6 +238,80 @@ requires-pixi = ">=0.40,<1.0"
     This option should be used to improve the reproducibility of building the workspace. A complicated
     requirement spec may be an obstacle to setup the building environment.
 
+
+### `exclude-newer` (optional)
+
+When specified this will exclude any package from consideration that is newer than the specified date.
+This is useful to reproduce installations regardless of new package releases.
+
+The date may be specified in the following formats:
+
+* As an [RFC 3339](https://www.rfc-editor.org/rfc/rfc3339.html) timestamp (e.g. `2023-10-01T00:00:00Z`)
+* As a date in the format `YYYY-MM-DD` (e.g. `2023-10-01`) in the systems time zone.
+
+Both PyPi and conda packages are considered.
+
+!! note Note that for Pypi package indexes the package index must support the `upload-time` field as specified in [`PEP 700`](https://peps.python.org/pep-0700/).
+If the field is not present for a given distribution, the distribution will be treated as unavailable. PyPI provides `upload-time` for all packages.
+
+### `build-variants` (optional)
+
+!!! warning "Preview Feature"
+    Build variants require the `pixi-build` preview feature to be enabled:
+    ```toml
+    [workspace]
+    preview = ["pixi-build"]
+    ```
+
+Build variants allow you to specify different dependency versions for building packages in your workspace, creating a "build matrix" that targets multiple configurations. This is particularly useful for testing packages against different compiler versions, Python versions, or other critical dependencies.
+
+Build variants are defined as key-value pairs where each key represents a dependency name and the value is a list of version specifications to build against.
+
+#### Basic Usage
+
+```toml
+[workspace.build-variants]
+python = ["3.11.*", "3.12.*"]
+c_compiler_version = ["11.4", "14.0"]
+```
+
+#### How Build Variants Work
+
+When build variants are specified, Pixi will:
+
+1. **Create variant combinations**: Generate all possible combinations of the specified variants
+2. **Build separate packages**: Create distinct package builds for each variant combination
+3. **Resolve dependencies**: Ensure each variant resolves with compatible dependency versions
+4. **Generate unique build strings**: Each variant gets a unique build identifier in the package name
+
+#### Platform-Specific Variants
+
+Build variants can also be specified per-platform:
+
+```toml
+[workspace.build-variants]
+python = ["3.11.*", "3.12.*"]
+
+# Windows-specific variants
+[workspace.target.win-64.build-variants]
+python = ["3.11.*"]  # Only Python 3.11 on Windows
+c_compiler = ["vs2019"]
+
+# Linux-specific variants
+[workspace.target.linux-64.build-variants]
+c_compiler = ["gcc"]
+c_compiler_version = ["11.4", "13.0"]
+```
+
+#### Common Use Cases
+
+- **Multi-version Python packages**: Build against Python 3.11 and 3.12
+- **Compiler variants**: Test with different compiler versions for C/C++ packages
+- **Dependency compatibility**: Ensure packages work with different versions of key dependencies
+- **Cross-platform builds**: Different build configurations per operating system
+
+For detailed examples and tutorials, see the [build variants documentation](../build/variants.md).
+
 ## The `tasks` table
 
 Tasks are a way to automate certain custom commands in your workspace.
@@ -304,6 +378,7 @@ The options that can be defined are:
 - `find-links`: similar to `--find-links` option in `pip`.
 - `no-build-isolation`: disables build isolation, can only be set per package.
 - `no-build`: don't build source distributions.
+- `no-binary`: don't use pre-build wheels.
 - `index-strategy`: allows for specifying the index strategy to use.
 
 These options are explained in the sections below. Most of these options are taken directly or with slight modifications from the [uv settings](https://docs.astral.sh/uv/reference/settings/). If any are missing that you need feel free to create an issue [requesting](https://github.com/prefix-dev/pixi/issues) them.
@@ -355,6 +430,19 @@ no-build-isolation = ["detectron2"]
 detectron2 = { git = "https://github.com/facebookresearch/detectron2.git", rev = "5b72c27ae39f99db75d43f18fd1312e1ea934e60"}
 ```
 
+Setting `no-build-isolation` also affects the order in which PyPI packages are installed.
+Packages are installed in that order:
+- conda packages in one go
+- packages with build isolation in one go
+- packages without build isolation installed in the order they are added to `no-build-isolation`
+
+It is also possible to remove all packages from build isolation by setting the `no-build-isolation` to `true`.
+
+```toml
+[pypi-options]
+no-build-isolation = true
+```
+
 !!! tip "Conda dependencies define the build environment"
     To use `no-build-isolation` effectively, use conda dependencies to define the build environment. These are installed before the PyPI dependencies are resolved, this way these dependencies are available during the build process. In the example above adding `torch` as a PyPI dependency would be ineffective, as it would not yet be installed during the PyPI resolution phase.
 
@@ -376,6 +464,29 @@ no-build = ["package1", "package2"]
 When features are merged, the following priority is adhered:
 `no-build = true` > `no-build = ["package1", "package2"]` > `no-build = false`
 So, to expand: if `no-build = true` is set for *any* feature in the environment, this will be used as the setting for the environment.
+
+
+### No Binary
+Don't install pre-built wheels.
+
+The given packages will be built and installed from source. The resolver will still use pre-built wheels to extract package metadata, if available.
+
+Can be either set per package or globally.
+
+```toml
+[pypi-options]
+# Never use pre-build wheels
+no-binary = true # default is false
+```
+or:
+```toml
+[pypi-options]
+no-binary = ["package1", "package2"]
+```
+
+When features are merged, the following priority is adhered:
+`no-binary = true` > `no-binary = ["package1", "package2"]` > `no-binary = false`
+So, to expand: if `no-binary = true` is set for *any* feature in the environment, this will be used as the setting for the environment.
 
 
 ### Index Strategy
@@ -449,29 +560,6 @@ rust = "==1.72"
 pytorch-cpu = { version = "~=1.1", channel = "pytorch" }
 ```
 
-
-### `host-dependencies`
-
-```toml
-[host-dependencies]
-python = "~=3.10.3"
-```
-Typical examples of host dependencies are:
-
-- Base interpreters: a Python package would list `python` here and an R package would list `mro-base` or `r-base`.
-- Libraries your workspace links against during compilation like `openssl`, `rapidjson`, or `xtensor`.
-
-### `build-dependencies`
-
-This table contains dependencies that are needed to build the workspace.
-Different from `dependencies` and `host-dependencies` these packages are installed for the architecture of the _build_ machine.
-This enables cross-compiling from one machine architecture to another.
-
-```toml
-[build-dependencies]
-cmake = "~=3.24"
-```
-
 ### `pypi-dependencies`
 
 ??? info "Details regarding the PyPI integration"
@@ -536,6 +624,10 @@ click = { url = "https://github.com/pallets/click/releases/download/8.1.7/click-
 # You can also just the default git repo, it will checkout the default branch
 pytest = { git = "https://github.com/pytest-dev/pytest.git"}
 ```
+
+!!! warning "Using git SSH URLs"
+    When using SSH URLs in git dependencies, make sure to have your SSH key added to your SSH agent.
+    You can do this by running `ssh-add` which will prompt you for your SSH key passphrase. Make sure that the `ssh-add` agent or service is running and you have a generated public/private SSH key. For more details on how to do this, check the [Github SSH documentation](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent).
 
 #### Full specification
 
@@ -859,55 +951,134 @@ An example of a preview feature in the manifest:
 
 Preview features in the documentation will be marked as such on the relevant pages.
 
-## Pixi Build
 
-Pixi build is an experimental feature that requires `preview = ["pixi-build"]` to be set in `[workspace]`
+## The `package` section
 
-### Workspace section
+!!! warning "Important note"
+    `pixi-build` is a [preview feature](#preview-features), and will change until it is stabilized.
+    Please keep that in mind when you use it for your workspaces.
+    ```toml
+    --8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:preview"
+    ```
 
-Currently, `workspace` is an alias for `project` and we recommend using `workspace` instead of `project`,
-when making use of the `pixi-build` preview feature.
-To use this keyword the preview feature *does not* need to be enabled, but for now we do recommend it for that use-case solely.
+The package section can be added
+to a workspace manifest to define the package that is built by Pixi.
 
-### Package section
+A package section needs to be inside a `workspace`,
+either in the same manifest file as the `[workspace]` table or in a sub folder `pixi.toml`/`pyproject.toml` file.
 
-The package section is used to define the package that is built by the project.
-Pixi only allows this table if `preview = ["pixi-build"]` is set in `[workspace]`.
+These packages will be built into a conda package that can be installed into a conda environment.
+The package section is defined using the following fields:
+
+- `name`: The name of the package.
+- `version`: The version of the package.
+- `build`: The build system used to build the package.
+- `build-dependencies`: The build dependencies of the package.
+- `host-dependencies`: The host dependencies of the package.
+- `run-dependencies`: The run dependencies of the package.
+- `target`: The target table to configure target specific dependencies. (Similar to the [target](#the-target-table) table)
+
+And to extend the basics, it can also contain the following fields:
+
+- `description`: A short description of the package.
+- `authors`: A list of authors of the package.
+- `license`: The license of the package.
+- `license-file`: The license file of the package.
+- `readme`: The README file of the package.
+- `homepage`: The homepage link of the package.
+- `repository`: The repository link of the package.
+- `documentation`: The documentation link of the package.
 
 ```toml
---8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:package"
+--8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:package"
+--8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:extra-fields"
 ```
 
-### Host, Build, dependencies
+!!! note "Workspace inheritance"
+    Most extra fields can be inherited from the workspace manifest.
+    This means that you can define the `description`, `authors`, `license` in the workspace manifest, and they will be inherited by the package manifest.
+    ```toml
+    [workspace]
+    name = "my-workspace"
 
-The package section re-uses the `host-dependencies` and `build-dependencies`,
-which you can read about here: [host-build-dependencies](#host-dependencies) and [build-dependencies](#build-dependencies).
-If you have the `preview = ["pixi-build"]` enabled these are interpreted as part of the package.
+    [package]
+    name = { workspace = true } # Inherit the name from the workspace
+    ```
 
-### Run dependencies
-
-Run dependencies are dependencies that are required at runtime by your package.
-For Python packages, these are the most common dependency types.
-For compiled languages, these are less common and would basically be dependencies that you do not need when compiling the package but are needed when running it.
-
-```toml
---8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:run-dependencies"
-```
-
-### The `build-system`
+### `build` table
 
 The build system specifies how the package can be built.
 The build system is a table that can contain the following fields:
 
+- `source`: specifies the location of the source code for the package. Default: manifest directory. Currently supported options:
+  - `path`: a string representing a relative or absolute path to the source code.
 - `channels`: specifies the channels to get the build backend from.
-- `build-backend`: specifies the build backend to use. This is a table that can contain the following fields:
+- `backend`: specifies the build backend to use. This is a table that can contain the following fields:
   - `name`: the name of the build backend to use. This will also be the executable name.
   - `version`: the version of the build backend to use.
+- `configuration`: a table that contains the configuration options for the build backend.
+- `target`: a table that can contain target specific build configuration.
+
+More documentation on the backends can be found in the [build backend documentation](../build/backends.md).
 
 ```toml
---8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:build-system"
+--8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:build-system"
 ```
 
-!!! note
-    We are currently not publishing the backends on conda-forge, but will do so in the future.
-    For now the backends are published at [conda channel](https://prefix.dev/channels/pixi-build-backends).
+
+### The `build` `host` and `run` dependencies tables
+The dependencies of a package are split into three tables.
+Each of these tables has a different purpose and is used to define the dependencies of the package.
+
+- [`build-dependencies`](#build-dependencies): Dependencies that are required to build the package on the build platform.
+- [`host-dependencies`](#host-dependencies): Dependencies that are required during the build process, to link against the package on the target platform.
+- [`run-dependencies`](#run-dependencies): Dependencies that are required to run the package on the target platform.
+
+
+### `build-dependencies`
+Build dependencies are required in the build environment and contain all tools that are not needed on the host of the package.
+
+Following packages are examples of typical build dependencies:
+
+- compilers (`gcc`, `clang`, `gfortran`)
+- build tools (`cmake`, `ninja`, `meson`)
+- `make`
+- `pkg-config`
+- VSC packages (`git`, `svn`)
+
+??? warning "Using git SSH URLs"
+    When using SSH URLs in git dependencies, make sure to have your SSH key added to your SSH agent.
+    You can do this by running `ssh-add` which will prompt you for your SSH key passphrase.
+    Make sure that the `ssh-add` agent or service is running and you have a generated public/private SSH key.
+    For more details on how to do this, check the [Github SSH documentation](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent).
+
+
+```toml
+--8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:build-dependencies"
+```
+
+### `host-dependencies`
+
+Host dependencies are required during build phase, but in contrast to build packages they have to be present on the host.
+
+Following packages are typical examples for host dependencies:
+
+- shared libraries (c/c++)
+- python/r libraries that link against c libraries
+- `python`, `r-base`
+- `setuptools`, `pip`
+
+```toml
+--8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:host-dependencies"
+```
+
+### `run-dependencies`
+The `run-dependencies` are the packages that will be installed in the environment when the package is run.
+
+- Libraries
+- Extra data file packages
+- Python/R packages that are not needed during build time
+
+```toml
+--8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:run-dependencies"
+```

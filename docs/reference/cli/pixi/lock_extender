@@ -6,6 +6,7 @@
 pixi lock
 pixi lock --manifest-path ~/myworkspace/pixi.toml
 pixi lock --json
+pixi lock --check
 ```
 
 --8<-- [end:example]

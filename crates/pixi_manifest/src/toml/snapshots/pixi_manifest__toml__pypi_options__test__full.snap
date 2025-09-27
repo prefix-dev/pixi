@@ -74,15 +74,30 @@ PypiOptions {
             ),
         ],
     ),
-    no_build_isolation: Some(
-        [
-            "sigma",
-        ],
+    no_build_isolation: Packages(
+        {
+            PackageName(
+                "sigma",
+            ),
+        },
     ),
     index_strategy: Some(
         FirstIndex,
     ),
     no_build: Some(
         All,
+    ),
+    dependency_overrides: None,
+    no_binary: Some(
+        Packages(
+            {
+                PackageName(
+                    "package1",
+                ),
+                PackageName(
+                    "package2",
+                ),
+            },
+        ),
     ),
 }

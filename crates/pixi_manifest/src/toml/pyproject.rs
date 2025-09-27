@@ -12,9 +12,9 @@ use pyproject_toml::{
     OptionalDependencies, Project, ReadMe,
 };
 use toml_span::{
-    de_helpers::{expected, TableHelper},
-    value::ValueInner,
     DeserError, Deserialize, Error, ErrorKind, Spanned, Value,
+    de_helpers::{TableHelper, expected},
+    value::ValueInner,
 };
 
 use crate::pyproject::{PyProjectManifest, Tool, ToolPoetry};

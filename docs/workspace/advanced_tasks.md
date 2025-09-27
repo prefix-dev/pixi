@@ -80,6 +80,8 @@ pixi task add lint pylint
 --8<-- "docs/source_files/pixi_tomls/pixi_task_alias.toml:not-all"
 ```
 
+!!! tip "Hiding Tasks"
+    Tasks can be hidden from user facing commands by [naming them](#task-names) with an `_` prefix.
 
 ### Shorthand Syntax
 
@@ -237,6 +239,19 @@ pixi run partial-override
 ✨ Pixi task (base-task in default): echo Base task with override1 and default2
 ```
 
+For a dependent task to accept arguments to pass to the dependency, you can use the same syntax as passing arguments to the command:
+
+```toml title="pixi.toml"
+--8<-- "docs/source_files/pixi_tomls/task_arguments_partial.toml:project_tasks_with_arg"
+```
+
+```shell
+pixi run partial-override-with-arg
+✨ Pixi task (base-task in default): echo Base task with override1 and new-default2
+pixi run partial-override-with-arg cli-arg
+✨ Pixi task (base-task in default): echo Base task with override1 and cli-arg
+```
+
 ### MiniJinja Templating for Task Arguments
 
 Task commands support MiniJinja templating syntax for accessing and formatting argument values. This provides powerful flexibility when constructing commands.
@@ -255,6 +270,20 @@ You can also use filters to transform argument values:
 
 For more information about available filters and template syntax, see the [MiniJinja documentation](https://docs.rs/minijinja/latest/minijinja/filters/index.html).
 
+## Task Names
+
+A task name follows these rules:
+
+- **No spaces** are allowed in the name.
+- Must **be unique** within the table.
+- [`_`]("underscores") at the start of the name will **hide** the task from the `pixi task list` command.
+
+Hiding tasks can be useful if your workspace defines many tasks but your users only need to use a subset of them.
+
+```toml title="pixi.toml"
+--8<-- "docs/source_files/pixi_tomls/task_visibility.toml:project_tasks"
+```
+
 ## Caching
 
 When you specify `inputs` and/or `outputs` to a task, Pixi will reuse the result of the task.
@@ -269,18 +298,23 @@ For the cache, Pixi checks that the following are true:
 
 If all of these conditions are met, Pixi will not run the task again and instead use the existing result.
 
-Inputs and outputs can be specified as globs, which will be expanded to all matching files.
+Inputs and outputs can be specified as globs, which will be expanded to all matching files. You can also use MiniJinja templates in your `inputs` and `outputs` fields to parameterize the paths, making tasks more reusable:
 
 ```toml title="pixi.toml"
-[tasks]
-# This task will only run if the `main.py` file has changed.
-run = { cmd = "python main.py", inputs = ["main.py"] }
+--8<-- "docs/source_files/pixi_tomls/tasks_minijinja_inputs_outputs.toml:tasks"
+```
 
-# This task will remember the result of the `curl` command and not run it again if the file `data.csv` already exists.
-download_data = { cmd = "curl -o data.csv https://example.com/data.csv", outputs = ["data.csv"] }
+When using template variables in inputs/outputs, Pixi expands the templates using the provided arguments or environment variables, and uses the resolved paths for caching decisions. This allows you to create generic tasks that can handle different files without duplicating task configurations:
 
-# This task will only run if the `src` directory has changed and will remember the result of the `make` command.
-build = { cmd = "make", inputs = ["src/*.cpp", "include/*.hpp"], outputs = ["build/app.exe"] }
+```shell
+# First run processes the file and caches the result
+pixi run process-file data1
+
+# Second run with the same argument uses the cached result
+pixi run process-file data1  # [cache hit]
+
+# Run with a different argument processes a different file
+pixi run process-file data2
 ```
 
 Note: if you want to debug the globs you can use the `--verbose` flag to see which files are selected.
@@ -290,33 +324,54 @@ Note: if you want to debug the globs you can use the `--verbose` flag to see whi
 pixi run -v start
 ```
 
-## Environment variables
-You can set environment variables for a task.
-These are seen as "default" values for the variables as you can overwrite them from the shell.
+## Environment Variables
 
-```toml title="pixi.toml"
-[tasks]
-echo = { cmd = "echo $ARGUMENT", env = { ARGUMENT = "hello" } }
-```
-If you run `pixi run echo` it will output `hello`.
-When you set the environment variable `ARGUMENT` before running the task, it will use that value instead.
+You can set environment variables directly for a task, as well as by other means.
+See [the environment variable priority documentation](../reference/environment_variables.md#environment-variable-priority) for full details of ways to set environment variables,
+and how those ways interact with each other.
 
-```shell
-ARGUMENT=world pixi run echo
-✨ Pixi task (echo in default): echo $ARGUMENT
-world
-```
+Notes on environment variables in tasks:
+- Values set via `tasks.<name>.env` are interpreted by `deno_task_shell` when the task runs. Shell-style expansions like `env = { VAR = "$FOO" }` therefore work the same on all operating systems.
 
-These variables are not shared over tasks, so you need to define these for every task you want to use them in.
+!!! warning
 
-!!! note "Extend instead of overwrite"
-    If you use the same environment variable in the value as in the key of the map you will also overwrite the variable.
-    For example overwriting a `PATH`
+    In older versions of Pixi, this priority was not well-defined, and there are a number of known
+    deviations from the current priority which exist in some older versions:
+
+    - `activation.scripts` used to take priority over `activation.env`
+    - activation scripts of dependencies used to take priority over `activation.env`
+    - outside environment variables used to override variables set in `task.env`
+
+    If you previously relied on a certain priority which no longer applies, you may need to change your
+    task definitions.
+
+    For the specific case of overriding `task.env` with outside environment variables, this behaviour can
+    now be recreated using [task arguments](#task-arguments). For example, if you were previously using
+    a setup like:
+
     ```toml title="pixi.toml"
     [tasks]
-    echo = { cmd = "echo $PATH", env = { PATH = "/tmp/path:$PATH" } }
+    echo = { cmd = "echo $ARGUMENT", env = { ARGUMENT = "hello" } }
     ```
-    This will output `/tmp/path:/usr/bin:/bin` instead of the original `/usr/bin:/bin`.
+
+    ```shell
+    ARGUMENT=world pixi run echo
+    ✨ Pixi task (echo in default): echo $ARGUMENT
+    world
+    ```
+
+    you can now recreate this behaviour like:
+
+    ```toml title="pixi.toml"
+    [tasks]
+    echo = { cmd = "echo {{ ARGUMENT }}", args = [{"arg" = "ARGUMENT", "default" = "hello" }]}
+    ```
+
+    ```shell
+    pixi run echo world
+    ✨ Pixi task (echo): echo world
+    world
+    ```
 
 ## Clean environment
 You can make sure the environment of a task is "Pixi only".
@@ -342,6 +397,7 @@ This setting can also be set from the command line with `pixi run --clean-env TA
 To support the different OS's (Windows, OSX and Linux), Pixi integrates a shell that can run on all of them.
 This is [`deno_task_shell`](https://deno.land/manual@v1.35.0/tools/task_runner#built-in-commands).
 The task shell is a limited implementation of a bourne-shell interface.
+Task command lines and the values of `tasks.<name>.env` are parsed and expanded by this shell.
 
 ### Built-in commands
 

@@ -11,11 +11,16 @@ There are different tags for different base images available:
 - `latest` - based on `ubuntu:jammy`
 - `focal` - based on `ubuntu:focal`
 - `bullseye` - based on `debian:bullseye`
-- `jammy-cuda-12.2.2` - based on `nvidia/cuda:12.2.2-jammy`
+- `noble-cuda-12.9.1` - based on `nvidia/cuda:12.9.1-base-ubuntu24.04`
+- `noble-cuda-13.0.0` - based on `nvidia/cuda:13.0.0-base-ubuntu24.04`
 - ... and more
 
 !!!tip "All tags"
     For all tags, take a look at the [build script](https://github.com/prefix-dev/pixi-docker/blob/main/.github/workflows/build.yml).
+
+!!!tip "Best practices for docker with pixi"
+    [@pavelzw](https://github.com/pavelzw) wrote a blog post about [shipping conda environments to production using pixi](https://tech.quantco.com/blog/pixi-production).
+    If you want to know more about best practices using docker with pixi, feel free to check out their blog post.
 
 ### Example Usage
 

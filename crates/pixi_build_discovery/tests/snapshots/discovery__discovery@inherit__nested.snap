@@ -1,0 +1,39 @@
+---
+source: crates/pixi_build_discovery/tests/discovery.rs
+expression: backend
+input_file: tests/data/discovery/inherit/nested/TEST-CASE
+---
+backend-spec:
+  type: json-rpc
+  name: pixi_build_backend
+  command:
+    type: environment-spec
+    requirement:
+      - pixi_build_backend
+      - version: "*"
+    channels:
+      - "https://prefix.dev/pixi-build-backends"
+init-params:
+  workspace-root: "file://<ROOT>/inherit"
+  source: ~
+  source-anchor: "file://<ROOT>/inherit/nested"
+  manifest-path: "file://<ROOT>/inherit/nested/pixi.toml"
+  project-model:
+    name: simple
+    version: 0.1.0
+    description: ~
+    authors: ~
+    license: ~
+    licenseFile: ~
+    readme: ~
+    homepage: ~
+    repository: ~
+    documentation: ~
+    targets:
+      defaultTarget:
+        hostDependencies: {}
+        buildDependencies: {}
+        runDependencies: {}
+      targets: {}
+  configuration: ~
+  target-configuration: ~

@@ -1,11 +1,6 @@
 name: Update Trampoline Binaries
 
 on:
-  push:
-    paths:
-      - "trampoline/**"
-      - ".github/workflows/trampoline.yaml"
-      - "src/global/trampoline.rs"
   workflow_dispatch:
   pull_request:
     paths:
@@ -13,9 +8,7 @@ on:
       - ".github/workflows/trampoline.yaml"
       - "src/global/trampoline.rs"
 
-permissions:
-  contents: write # Allow write permissions for contents (like pushing to the repo)
-  pull-requests: write
+permissions: read-all
 
 jobs:
   build:
@@ -40,6 +33,10 @@ jobs:
             target: riscv64gc-unknown-linux-gnu
             os: ubuntu-latest
 
+          - name: "Linux-loong64"
+            target: loongarch64-unknown-linux-gnu
+            os: ubuntu-latest
+
           - name: "macOS-x86"
             target: x86_64-apple-darwin
             os: macos-13
@@ -58,7 +55,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
         with:
           fetch-depth: 0 # Fetch full history so we have branch information
 
@@ -84,12 +81,16 @@ jobs:
   aggregate:
     runs-on: ubuntu-latest
     needs: build # This ensures the aggregation job runs after the build jobs
+    permissions:
+      contents: write # Allow write permissions for contents (like pushing to the repo)
+      pull-requests: write
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5
 
       - name: Download all binaries
-        uses: actions/download-artifact@95815c38cf2ff2164869cbab79da8d1f422bc89e # v4
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
         with:
           path: trampoline/binaries/
           merge-multiple: true

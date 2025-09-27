@@ -1,0 +1,7 @@
+---
+source: src/lock_file/satisfiability/mod.rs
+expression: s
+---
+environment 'default' does not satisfy the requirements of the project for platform 'win-64'
+    Diagnostic severity: error
+    Caused by: the pixi.toml does not describe a package

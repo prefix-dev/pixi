@@ -1,0 +1,66 @@
+[package]
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi_global"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]
+ahash = { workspace = true }
+console = { workspace = true }
+dirs = { workspace = true }
+dunce = { workspace = true }
+fancy_display = { workspace = true }
+fs-err = { workspace = true }
+futures = { workspace = true }
+indexmap = { workspace = true }
+indicatif = { workspace = true }
+is_executable = { workspace = true }
+itertools = { workspace = true }
+miette = { workspace = true }
+once_cell = { workspace = true }
+pixi_build_discovery = { workspace = true }
+pixi_build_frontend = { workspace = true }
+pixi_command_dispatcher = { workspace = true }
+pixi_config = { workspace = true }
+pixi_consts = { workspace = true }
+pixi_core = { workspace = true }
+pixi_manifest = { workspace = true }
+pixi_progress = { workspace = true }
+pixi_reporters = { workspace = true }
+pixi_spec = { workspace = true }
+pixi_spec_containers = { workspace = true }
+pixi_toml = { workspace = true }
+pixi_utils = { workspace = true, default-features = false }
+rattler = { workspace = true }
+rattler_conda_types = { workspace = true }
+rattler_lock = { workspace = true }
+rattler_menuinst = { workspace = true }
+rattler_repodata_gateway = { workspace = true }
+rattler_shell = { workspace = true }
+rattler_virtual_packages = { workspace = true }
+regex = { workspace = true }
+reqwest = { workspace = true }
+reqwest-middleware = { workspace = true }
+rstest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_with = { workspace = true }
+tempfile = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+toml-span = { workspace = true }
+toml_edit = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
+zstd = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
+libc = { workspace = true }
+
+[dev-dependencies]
+fake = "4.0.0"
+insta = { workspace = true, features = ["yaml", "glob", "filters"] }

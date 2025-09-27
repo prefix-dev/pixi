@@ -27,12 +27,21 @@ expression: project_model
               "channel": null,
               "subdir": null,
               "md5": null,
-              "sha256": null
+              "sha256": null,
+              "url": null,
+              "license": null
             }
           }
         },
         "buildDependencies": {},
         "runDependencies": {
+          "cpp_math": {
+            "source": {
+              "Path": {
+                "path": "packages/cpp_math"
+              }
+            }
+          },
           "rich": {
             "binary": {
               "version": "13.9.*",
@@ -42,7 +51,9 @@ expression: project_model
               "channel": null,
               "subdir": null,
               "md5": null,
-              "sha256": null
+              "sha256": null,
+              "url": null,
+              "license": null
             }
           }
         }

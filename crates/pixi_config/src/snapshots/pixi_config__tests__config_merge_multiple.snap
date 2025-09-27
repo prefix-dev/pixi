@@ -1,7 +1,6 @@
 ---
 source: crates/pixi_config/src/lib.rs
 expression: debug
-snapshot_kind: text
 ---
 Config {
     default_channels: [
@@ -140,6 +139,15 @@ Config {
         http: None,
         non_proxy_hosts: [],
     },
+    build: BuildConfig {
+        package_format: Some(
+            PackageFormatAndCompression {
+                archive_type: Conda,
+                compression_level: Highest,
+            },
+        ),
+    },
+    tool_platform: None,
     change_ps1: None,
     force_activate: None,
 }

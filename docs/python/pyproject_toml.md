@@ -45,7 +45,7 @@ python = ">=3.9"
 ## Dependency section
 
 The `pyproject.toml` file supports the `dependencies` field.
-Pixi understands that field and automatically adds the dependencies to the project as `[pypi-dependencies]`.
+Pixi understands that field and automatically adds the dependencies to the workspace as `[pypi-dependencies]`.
 
 This is an example of a `pyproject.toml` file with the `dependencies` field:
 
@@ -110,7 +110,7 @@ As Pixi takes the conda dependencies over the pypi dependencies.
 
 If your python project includes groups of optional dependencies, Pixi will automatically interpret them as [Pixi features](../reference/pixi_manifest.md#the-feature-table) of the same name with the associated `pypi-dependencies`.
 
-You can add them to Pixi environments manually, or use `pixi init` to setup the project, which will create one environment per feature. Self-references to other groups of optional dependencies are also handled.
+You can add them to Pixi environments manually, or use `pixi init` to setup the workspace, which will create one environment per feature. Self-references to other groups of optional dependencies are also handled.
 
 For instance, imagine you have a project folder with a `pyproject.toml` file similar to:
 
@@ -157,7 +157,7 @@ All environments will be solved together, as indicated by the common `solve-grou
 
 If your python project includes dependency groups, Pixi will automatically interpret them as [Pixi features](../reference/pixi_manifest.md#the-feature-table) of the same name with the associated `pypi-dependencies`.
 
-You can add them to Pixi environments manually, or use `pixi init` to setup the project, which will create one environment per dependency group.
+You can add them to Pixi environments manually, or use `pixi init` to setup the workspace, which will create one environment per dependency group.
 
 For instance, imagine you have a project folder with a `pyproject.toml` file similar to:
 
@@ -265,3 +265,51 @@ The advantages of `hatchling` over `setuptools` are outlined on its [website](ht
 build-backend = "hatchling.build"
 requires = ["hatchling"]
 ```
+
+## Development dependencies with `[tool.uv.sources]`
+Because pixi is using `uv` for building its `pypi-dependencies`, one can use the `tool.uv.sources` section to specify sources for any pypi-dependencies referenced from the main pixi manifest.
+
+### Why is this useful?
+When you are setting up a monorepo of some sort and you want to be able for source dependencies to reference each other, you need to use the `[tool.uv.sources]` section to specify the sources for those dependencies. This is because `uv` handles both the resolution of PyPI dependencies and the building of any source dependencies.
+
+### Example
+Given a source tree:
+
+```
+.
+├── main_project
+│   └── pyproject.toml (references a)
+├── a
+│   └── pyproject.toml (has a dependency on b)
+└── b
+    └── pyproject.toml
+```
+
+Concretly what this looks like in the `pyproject.toml` for `main_project`:
+
+```toml
+[tool.pixi.pypi-dependencies]
+a = { path = "../a" }
+```
+
+Then the `pyproject.toml` for `a` should contain a `[tool.uv.sources]` section.
+
+```toml
+[project]
+name = "a"
+# other fields
+dependencies = ["flask", "b"]
+
+[tool.uv.sources]
+# Override the default source for flask with main git branch
+flask = { git = "github.com/pallets/flask", branch = "main" }
+# Reference to b
+b = { path = "../b" }
+```
+
+More information about what is allowed in this sections is available in the [uv docs](https://docs.astral.sh/uv/concepts/projects/dependencies/#dependency-sources)
+
+!!! note
+    The main `pixi.toml` or `pyproject.toml` is parsed directly by pixi and not processed by `uv`.
+    This means that you **cannot** use the `[tool.uv.sources]` section in the main `pixi.toml` or `pyproject.toml`.
+    This is a limitation we are aware of, feel free to open an issue if you would like support for [this](https://github.com/prefix-dev/pixi/issues/new/choose).

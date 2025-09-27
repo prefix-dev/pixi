@@ -1,5 +1,6 @@
 site_name: "Pixi by prefix.dev"
 site_url: https://prefix-dev.github.io/pixi
+site_description: Pixi Documentation — Next-gen package manager for reproducible development setups
 
 theme:
   name: material
@@ -44,7 +45,8 @@ theme:
     - content.code.copy
     - content.action.edit
     - content.code.annotate
-    # - content.code.select Sponsor only
+    - content.tooltips
+    - content.code.select
     - navigation.instant
     - navigation.instant.progress
     - navigation.tracking
@@ -54,14 +56,19 @@ theme:
 
 extra_css:
   - stylesheets/extra.css
+extra_javascript:
+  - javascripts/extra.js
 
 repo_url: https://github.com/prefix-dev/pixi/
 edit_uri: edit/main/docs/
 
 markdown_extensions:
   - admonition
+  - abbr
   - def_list
   - footnotes
+  - attr_list
+  - pymdownx.extra
   - pymdownx.tasklist:
       custom_checkbox: true
   - pymdownx.highlight:
@@ -98,39 +105,52 @@ extra:
     provider: mike
 
 nav:
-  - Frontpage: index.md
-  - Getting Started: getting_started.md
-  - Workspace:
+  - Home: index.md
+  - Getting Started:
+      - Installation: installation.md
+      - First Workspace: first_workspace.md
+      - Basic Usage: getting_started.md
+  - Tutorials:
+      - Python:
+          - Basic Usage: python/tutorial.md
+          - pyproject.toml: python/pyproject_toml.md
+          - Pytorch Installation: python/pytorch.md
+      - ROS 2: tutorials/ros2.md
+      - Rust: tutorials/rust.md
+      - Switching From...:
+          - Poetry: switching_from/poetry.md
+          - Conda/Mamba: switching_from/conda.md
+      - Multi Environment: tutorials/multi_environment.md
+      - Global Tools: global_tools/introduction.md
+      - Import Environments: tutorials/import.md
+  - Concepts:
       - Environments: workspace/environment.md
       - Tasks: workspace/advanced_tasks.md
       - Multi Platform: workspace/multi_platform_configuration.md
       - Multi Environment: workspace/multi_environment.md
-      - Lockfile: workspace/lockfile.md
+      - Lock File: workspace/lockfile.md
       - System Requirements: workspace/system_requirements.md
+      - Conda & PyPI: concepts/conda_pypi.md
+      - Global Tools:
+          - Manifest: global_tools/manifest.md
+          - Trampolines: global_tools/trampolines.md
   - Building:
-      - Getting started: build/getting_started.md
+      - Getting Started: build/getting_started.md
       - Tutorials:
           - Building a Python Package: build/python.md
           - Building a C++ Package: build/cpp.md
+          - Building a ROS Package: build/ros.md
           - Multiple Packages in Workspace: build/workspace.md
           - Variants: build/variants.md
           - Advanced Building Using rattler-build: build/advanced_cpp.md
       - Dependency Types: build/dependency_types.md
       - Build Backends: build/backends.md
+      - Package Source: build/package_source.md
   - Distributing:
       - Pixi Pack: deployment/pixi_pack.md
       - Authentication: deployment/authentication.md
       - Container: deployment/container.md
       - S3: deployment/s3.md
-  - Python:
-      - Tutorial: python/tutorial.md
-      - Pyproject.toml: python/pyproject_toml.md
-      - Pytorch Installation: python/pytorch.md
-  - Global Tools:
-      - Introduction: global_tools/introduction.md
-      - Manifest: global_tools/manifest.md
-      - Concepts: global_tools/concepts.md
-      - Examples: global_tools/examples.md
   - Integration:
       - Editor:
           - VSCode: integration/editor/vscode.md
@@ -140,22 +160,22 @@ nav:
           - JupyterLab: integration/editor/jupyterlab.md
       - Continuous Integration:
           - GitHub Actions: integration/ci/github_actions.md
-          - Lockfile Updates: integration/ci/updates_github_actions.md
+          - Pixi Diff-to-markdown: integration/ci/updates_github_actions.md
+      - Extensions:
+          - Introduction: integration/extensions/introduction.md
+          - Pixi Diff: integration/extensions/pixi_diff.md
+          - Pixi Diff-to-markdown: integration/ci/updates_github_actions.md
+          - Pixi Inject: integration/extensions/pixi_inject.md
+          - Pixi Install-to-prefix: integration/extensions/pixi_install_to_prefix.md
+          - Pixi Pack: deployment/pixi_pack.md
       - Third Party:
-          - Pixi Diff: integration/third_party/pixi_diff.md
+          - Conda Deny: integration/third_party/conda_deny.md
           - Direnv: integration/third_party/direnv.md
           - Starship: integration/third_party/starship.md
-  - Switching from:
-      - Poetry: switching_from/poetry.md
-      - Conda/Mamba: switching_from/conda.md
-  - Tutorials:
-      - ROS 2: tutorials/ros2.md
-      - Rust: tutorials/rust.md
-      - Multi Environment: tutorials/multi_environment.md
   - Advanced:
-      - Installation: advanced/installation.md
       - Channel Logic: advanced/channel_logic.md
       - Info Command: advanced/explain_info_command.md
+      - Dependency Overrides: advanced/override.md
       - Shebang: advanced/shebang.md
       - Shell: advanced/pixi_shell.md
   - Reference:
@@ -183,10 +203,12 @@ validation:
 
 not_in_nav: |
   reference/cli/
+  partials/
 
 plugins:
   - redirects:
       redirect_maps:
+        "first_project.md": "first_workspace.md"
         "configuration.md": "reference/pixi_manifest.md"
         "reference/project_configuration.md": "reference/pixi_manifest.md"
         "basic_usage.md": "getting_started.md"
@@ -207,7 +229,7 @@ plugins:
         "advanced/channel_priority.md": "advanced/channel_logic.md"
         "advanced/github_actions.md": "integration/ci/github_actions.md"
         "advanced/updates_github_actions.md": "integration/ci/updates_github_actions.md"
-        "advanced/lockfile_diffs.md": "integration/third_party/pixi_diff.md"
+        "advanced/lockfile_diffs.md": "integration/extensions/pixi_diff.md"
         "advanced/production_deployment.md": "deployment/container.md"
         "advanced/pyproject_toml.md": "python/pyproject_toml.md"
         "advanced/s3.md": "deployment/s3.md"
@@ -219,6 +241,13 @@ plugins:
         "FAQ.md": "misc/FAQ.md"
         "integration/editor/devcontainer.md": "integration/editor/vscode.md"
         "integration/editor/pycharm.md": "integration/editor/jetbrains.md"
+        "advanced/installation.md": "installation.md"
+        "overrides/override.md": "advanced/override.md"
+
+        # Redirects for links from code to make sure we don't break them.
+        # Using descriptive names that never existed, to avoid conflicts.
+        # crates/pixi_cli/src/init.rs
+        "init_getting_started.md": "first_workspace.md"
 
   - search
   - social
@@ -231,3 +260,51 @@ plugins:
     # version_selector: true
     # css_dir: css
     # javascript_dir: js
+  # llmstxt must come after the mike plugin:
+  - llmstxt:
+      enabled: !ENV [CI, false]
+      full_output: llms-full.txt
+      markdown_description: |-
+        Pixi is a fast, modern, and reproducible package management tool
+        for developers of all backgrounds. Pixi is a cross-platform package manager
+        and project management tool that creates reproducible environments using conda and PyPI packages.
+
+        To use Pixi, start by running `pixi init my_project` to create a new project with a `pixi.toml` manifest file,
+        then add dependencies using `pixi add package1 package2 ...` for conda packages
+        or `pixi add --pypi python_package ...` for PyPI packages. Pixi automatically generates a lockfile (`pixi.lock`)
+        to ensure reproducible environments across different systems.
+        You can define and run tasks using `pixi task add task_name "command arg1 arg2"` and `pixi run task_name`,
+        and work within the project's virtual environment using `pixi run` for single commands
+        or `pixi shell` for an interactive session.
+
+        The tool combines dependency management, task running, and environment isolation in a single workflow,
+        making it easy to share consistent development environments with others. See other documentation sections
+        for further details on how to use the software.
+      sections:
+        Getting Started documentation:
+          - index.md
+          - installation.md
+          - getting_started.md
+          - first_project.md
+        Tutorials documentation:
+          - python/*.md
+          - tutorials/*.md
+          - switching_from/*.md
+          - global_tools/introduction.md
+        Concepts documentation:
+          - workspace/*.md
+          - global_tools/manifest.md
+          - global_tools/trampolines.md
+        Building documentation:
+          - build/*.md
+        Distributing documentation:
+          - deployment/*.md
+        Integration documentation:
+          - integration/**/*.md
+        Advanced documentation:
+          - advanced/*.md
+        Reference documentation:
+          - reference/*.md
+        Miscellaneous documentation:
+          - CHANGELOG.md
+          - misc/*.md

@@ -15,9 +15,9 @@ Or if you need the changes of an unreleased version of one of your dependencies.
 ## Let's Get Started
 
 In this tutorial we will showcase how to develop two packages in one workspace.
-For that we will use the `python_rich` Python package developed in chapter [Building a Python package](python.md) and let it depend on the `python_binding` C++ package developed in chapter [Building a C++ package](cpp.md).
+For that we will use the `python_rich` Python package developed in chapter [Building a Python package](python.md) and let it depend on the `cpp_math` C++ package developed in chapter [Building a C++ package](cpp.md).
 
-We will start with the original setup of `python_rich` and copy `python_binding` into a folder called `packages`.
+We will start with the original setup of `python_rich` and copy `cpp_math` into a folder called `packages`.
 The source directory structure now looks like this:
 
 ```shell
@@ -37,10 +37,10 @@ The source directory structure now looks like this:
 ```
 
 Within a Pixi manifest, you can manage a workspace and/or describe a package.
-In the case of `python_rich` we choose to do both, so the only thing we have to add is the dependency on the `cpp_math`.
+In the case of `python_rich` we choose to do both, so the only thing we have to add `cpp_math` as a [run dependency](../reference/pixi_manifest.md#run-dependencies) of `python_rich`.
 
 ```py title="pixi.toml"
---8<-- "docs/source_files/pixi_workspaces/pixi_build/workspace/pixi.toml:workspace"
+--8<-- "docs/source_files/pixi_workspaces/pixi_build/workspace/pixi.toml:run-dependencies"
 ```
 
 We only want to use the `workspace` table of the top-level manifest.
@@ -48,10 +48,7 @@ Therefore, we can remove the workspace section in the manifest of `cpp_math`.
 
 ```diff title="packages/cpp_math/pixi.toml"
 -[workspace]
--channels = [
--  "https://prefix.dev/pixi-build-backends",
--  "https://prefix.dev/conda-forge",
--]
+-channels = ["https://prefix.dev/conda-forge"]
 -platforms = ["osx-arm64", "osx-64", "linux-64", "win-64"]
 -preview = ["pixi-build"]
 -

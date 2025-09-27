@@ -7,13 +7,17 @@ use std::{
 
 use miette::IntoDiagnostic;
 use pixi_git::{
-    sha::GitSha,
-    url::{redact_credentials, RepositoryUrl},
     GitUrl,
+    sha::GitSha,
+    url::{RepositoryUrl, redact_credentials},
 };
-use pixi_spec::{GitReference, GitSpec, PathSourceSpec, SourceSpec, UrlSourceSpec};
+use pixi_spec::{
+    GitReference, GitSpec, PathSourceSpec, SourceLocationSpec, SourceSpec, UrlSourceSpec,
+};
 use rattler_digest::{Md5Hash, Sha256Hash};
 use rattler_lock::UrlOrPath;
+use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use thiserror::Error;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
@@ -21,7 +25,8 @@ use url::Url;
 /// Describes an exact revision of a source checkout. This is used to pin a
 /// particular source definition to a revision. A git source spec does not
 /// describe an exact commit. This struct describes an exact commit.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[serde(untagged)]
 pub enum PinnedSourceSpec {
     /// A pinned url source package.
     Url(PinnedUrlSpec),
@@ -107,6 +112,23 @@ impl PinnedSourceSpec {
     pub fn is_immutable(&self) -> bool {
         !matches!(self, PinnedSourceSpec::Path(_))
     }
+
+    /// Returns true if the pinned source may change even if the pinned source
+    /// itself does not. This indicates that the contents of this instance may
+    /// change over time, such as a local path.
+    pub fn is_mutable(&self) -> bool {
+        matches!(self, PinnedSourceSpec::Path(_))
+    }
+
+    /// Returns a URL that uniquely identifies this path spec. This URL is not
+    /// portable, e.g. it might result in a different URL on different systems.
+    pub fn identifiable_url(&self) -> Url {
+        match self {
+            PinnedSourceSpec::Url(spec) => spec.identifiable_url(),
+            PinnedSourceSpec::Git(spec) => spec.identifiable_url(),
+            PinnedSourceSpec::Path(spec) => spec.identifiable_url(),
+        }
+    }
 }
 
 impl MutablePinnedSourceSpec {
@@ -134,14 +156,28 @@ impl From<MutablePinnedSourceSpec> for PinnedSourceSpec {
 }
 
 /// A pinned url archive.
-#[derive(Debug, Clone)]
+#[serde_as]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct PinnedUrlSpec {
     /// The URL of the archive.
     pub url: Url,
     /// The sha256 hash of the archive.
+    #[serde_as(as = "rattler_digest::serde::SerializableHash<rattler_digest::Sha256>")]
     pub sha256: Sha256Hash,
     /// The md5 hash of the archive.
+    #[serde_as(as = "Option<rattler_digest::serde::SerializableHash<rattler_digest::Md5>>")]
     pub md5: Option<Md5Hash>,
+}
+
+impl PinnedUrlSpec {
+    /// Returns a URL that uniquely identifies this path spec. This URL is not
+    /// portable, e.g. it might result in a different URL on different systems.
+    pub fn identifiable_url(&self) -> Url {
+        let mut url = self.url.clone();
+        url.query_pairs_mut()
+            .append_pair("sha256", &format!("{:x}", self.sha256));
+        url
+    }
 }
 
 impl From<PinnedUrlSpec> for PinnedSourceSpec {
@@ -151,13 +187,15 @@ impl From<PinnedUrlSpec> for PinnedSourceSpec {
 }
 
 /// A pinned version of a git checkout.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct PinnedGitCheckout {
     /// The commit hash of the git checkout.
     pub commit: GitSha,
     /// The subdirectory of the git checkout.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub subdirectory: Option<String>,
     /// The reference of the git checkout.
+    #[serde(skip_serializing_if = "GitReference::is_default")]
     pub reference: GitReference,
 }
 
@@ -234,12 +272,13 @@ impl PinnedGitCheckout {
 
 /// A pinned version of a git checkout.
 /// Similar with [`GitUrl`] but with a resolved commit field.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, serde::Serialize, Deserialize)]
 pub struct PinnedGitSpec {
     /// The URL of the repository without the revision and subdirectory
     /// fragment.
     pub git: Url,
     /// The resolved git checkout.
+    #[serde(flatten)]
     pub source: PinnedGitCheckout,
 }
 
@@ -247,6 +286,12 @@ impl PinnedGitSpec {
     /// Creates a new pinned git spec.
     pub fn new(git: Url, source: PinnedGitCheckout) -> Self {
         Self { git, source }
+    }
+
+    /// Returns a URL that uniquely identifies this path spec. This URL is not
+    /// portable, e.g. it might result in a different URL on different systems.
+    pub fn identifiable_url(&self) -> Url {
+        self.into_locked_git_url().to_url()
     }
 
     /// Construct the lockfile-compatible [`Url`] from [`PinnedGitSpec`].
@@ -313,9 +358,14 @@ impl From<PinnedGitSpec> for PinnedSourceSpec {
 /// A pinned version of a path based source dependency. Different from a
 /// `PathSpec` this path is always either absolute or relative to the project
 /// root.
-#[derive(Debug, Clone)]
+#[serde_as]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct PinnedPathSpec {
     /// The path of the source.
+    #[serde_as(
+        serialize_as = "serde_with::DisplayFromStr",
+        deserialize_as = "serde_with::FromInto<String>"
+    )]
     pub path: Utf8TypedPathBuf,
 }
 
@@ -328,6 +378,17 @@ impl PinnedPathSpec {
         } else {
             project_root.join(native_path)
         }
+    }
+
+    /// Returns a URL that uniquely identifies this path spec. This URL is not
+    /// portable, e.g. it might result in a different URL on different systems.
+    pub fn identifiable_url(&self) -> Url {
+        let resolved = if cfg!(windows) {
+            self.resolve(Path::new("\\\\localhost\\"))
+        } else {
+            self.resolve(Path::new("/"))
+        };
+        Url::from_directory_path(resolved).expect("expected valid URL")
     }
 }
 
@@ -496,7 +557,9 @@ pub enum SourceMismatchError {
         requested: Url,
     },
 
-    #[error("the locked {hash} of url '{url}' ({locked}) does not match the requested {hash} ({requested})")]
+    #[error(
+        "the locked {hash} of url '{url}' ({locked}) does not match the requested {hash} ({requested})"
+    )]
     /// The locked hash of the url does not match the requested hash.
     UrlHashMismatch {
         /// The hash
@@ -509,7 +572,9 @@ pub enum SourceMismatchError {
         requested: String,
     },
 
-    #[error("the locked git rev '{locked}' for '{git}' does not match the requested git rev '{requested}'")]
+    #[error(
+        "the locked git rev '{locked}' for '{git}' does not match the requested git rev '{requested}'"
+    )]
     /// The locked git rev does not match the requested git rev.
     GitRevMismatch {
         /// The git url.
@@ -520,7 +585,9 @@ pub enum SourceMismatchError {
         requested: String,
     },
 
-    #[error("the locked git subdirectory '{locked:?}' for '{git}' does not match the requested git subdirectory '{requested:?}'")]
+    #[error(
+        "the locked git subdirectory '{locked:?}' for '{git}' does not match the requested git subdirectory '{requested:?}'"
+    )]
     /// The locked git rev does not match the requested git rev.
     GitSubdirectoryMismatch {
         /// The git url.
@@ -540,7 +607,7 @@ impl PinnedPathSpec {
     #[allow(clippy::result_large_err)]
     /// Verifies if the locked path satisfies the requested path.
     pub fn satisfies(&self, spec: &PathSourceSpec) -> Result<(), SourceMismatchError> {
-        if spec.path != self.path {
+        if spec.path.normalize() != self.path.normalize() {
             return Err(SourceMismatchError::PathMismatch {
                 locked: self.path.clone(),
                 requested: spec.path.clone(),
@@ -629,10 +696,16 @@ impl PinnedSourceSpec {
     #[allow(clippy::result_large_err)]
     /// Verifies if the locked source satisfies the requested source.
     pub fn satisfies(&self, spec: &SourceSpec) -> Result<(), SourceMismatchError> {
-        match (self, spec) {
-            (PinnedSourceSpec::Path(locked), SourceSpec::Path(spec)) => locked.satisfies(spec),
-            (PinnedSourceSpec::Url(locked), SourceSpec::Url(spec)) => locked.satisfies(spec),
-            (PinnedSourceSpec::Git(locked), SourceSpec::Git(spec)) => locked.satisfies(spec),
+        match (self, &spec.location) {
+            (PinnedSourceSpec::Path(locked), SourceLocationSpec::Path(spec)) => {
+                locked.satisfies(spec)
+            }
+            (PinnedSourceSpec::Url(locked), SourceLocationSpec::Url(spec)) => {
+                locked.satisfies(spec)
+            }
+            (PinnedSourceSpec::Git(locked), SourceLocationSpec::Git(spec)) => {
+                locked.satisfies(spec)
+            }
             (_, _) => Err(SourceMismatchError::SourceTypeMismatch),
         }
     }
@@ -669,9 +742,15 @@ impl Display for PinnedGitSpec {
 impl From<PinnedSourceSpec> for SourceSpec {
     fn from(value: PinnedSourceSpec) -> Self {
         match value {
-            PinnedSourceSpec::Url(url) => SourceSpec::Url(url.into()),
-            PinnedSourceSpec::Git(git) => SourceSpec::Git(git.into()),
-            PinnedSourceSpec::Path(path) => SourceSpec::Path(path.into()),
+            PinnedSourceSpec::Url(url) => SourceSpec {
+                location: SourceLocationSpec::Url(url.into()),
+            },
+            PinnedSourceSpec::Git(git) => SourceSpec {
+                location: SourceLocationSpec::Git(git.into()),
+            },
+            PinnedSourceSpec::Path(path) => SourceSpec {
+                location: SourceLocationSpec::Path(path.into()),
+            },
         }
     }
 }

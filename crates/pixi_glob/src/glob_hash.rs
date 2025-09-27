@@ -3,16 +3,14 @@
 //! This is useful for finding out if you need to rebuild a target based on the files that match a glob pattern.
 use std::{
     fs::File,
-    io,
-    io::{BufRead, Read, Write},
+    io::{self, BufRead, Read, Write},
     path::{Path, PathBuf},
 };
 
-use itertools::Itertools;
-use rattler_digest::{digest::Digest, Sha256, Sha256Hash};
+use rattler_digest::{Sha256, Sha256Hash, digest::Digest};
 use thiserror::Error;
 
-use crate::glob_set::{self, GlobSet};
+use crate::{GlobSet, GlobSetError};
 
 /// Contains a hash of the files that match the given glob patterns.
 #[derive(Debug, Clone, Default)]
@@ -26,14 +24,14 @@ pub struct GlobHash {
 #[derive(Error, Debug)]
 #[allow(missing_docs)]
 pub enum GlobHashError {
-    #[error(transparent)]
-    FilterGlobError(#[from] glob_set::GlobSetError),
-
     #[error("during line normalization, failed to access {}", .0.display())]
     NormalizeLineEnds(PathBuf, #[source] io::Error),
 
     #[error("the operation was cancelled")]
     Cancelled,
+
+    #[error(transparent)]
+    GlobSetIgnore(#[from] GlobSetError),
 }
 
 impl GlobHash {
@@ -41,20 +39,19 @@ impl GlobHash {
     pub fn from_patterns<'a>(
         root_dir: &Path,
         globs: impl IntoIterator<Item = &'a str>,
+        additional_hash: Option<Vec<u8>>,
     ) -> Result<Self, GlobHashError> {
         // If the root is not a directory or does not exist, return an empty map.
         if !root_dir.is_dir() {
             return Ok(Self::default());
         }
 
-        let glob_set = GlobSet::create(globs)?;
-        let mut entries = glob_set
-            .filter_directory(root_dir)
-            .collect::<Result<Vec<_>, _>>()?
-            .into_iter()
-            .map(|entry| entry.path().to_path_buf())
-            .collect_vec();
-        entries.sort();
+        let glob_set = GlobSet::create(globs);
+        // Collect matching entries and convert to concrete DirEntry list, propagating errors.
+        let mut entries = glob_set.collect_matching(root_dir)?;
+
+        // Sort deterministically by path
+        entries.sort_by_key(|e| e.path().to_path_buf());
 
         #[cfg(test)]
         let mut matching_files = Vec::new();
@@ -63,7 +60,7 @@ impl GlobHash {
         for entry in entries {
             // Construct a normalized file path to ensure consistent hashing across
             // platforms. And add it to the hash.
-            let relative_path = entry.strip_prefix(root_dir).unwrap_or(&entry);
+            let relative_path = entry.path().strip_prefix(root_dir).unwrap_or(entry.path());
             let normalized_file_path = relative_path.to_string_lossy().replace("\\", "/");
             rattler_digest::digest::Update::update(&mut hasher, normalized_file_path.as_bytes());
 
@@ -71,10 +68,17 @@ impl GlobHash {
             matching_files.push(normalized_file_path);
 
             // Concatenate the contents of the file to the hash.
-            File::open(&entry)
+            File::open(entry.path())
                 .and_then(|mut file| normalize_line_endings(&mut file, &mut hasher))
-                .map_err(move |e| GlobHashError::NormalizeLineEnds(entry, e))?;
+                .map_err(move |e| {
+                    GlobHashError::NormalizeLineEnds(entry.path().to_path_buf(), e)
+                })?;
         }
+
+        if let Some(additional_hash) = additional_hash {
+            rattler_digest::digest::Update::update(&mut hasher, &additional_hash);
+        }
+
         let hash = hasher.finalize();
 
         Ok(Self {
@@ -183,7 +187,7 @@ mod test {
             .parent()
             .and_then(Path::parent)
             .unwrap();
-        let glob_hash = GlobHash::from_patterns(root_dir, globs.iter().copied()).unwrap();
+        let glob_hash = GlobHash::from_patterns(root_dir, globs.iter().copied(), None).unwrap();
         let snapshot = format!(
             "Globs:\n{}\nHash: {:x}\nMatched files:\n{}",
             globs

@@ -160,7 +160,7 @@ To install keyring you can use `pixi global install`:
 
 For other registries, you will need to adapt these instructions to add the right keyring backend.
 
-#### Configuring your project to use keyring
+#### Configuring your workspace to use keyring
 
 === "Basic Auth"
     Use keyring to store your credentials e.g:
@@ -213,7 +213,7 @@ For other registries, you will need to adapt these instructions to add the right
 Either configure your [Global Config](../reference/pixi_configuration.md#pypi-config), or use the flag `--pypi-keyring-provider` which can either be set to `subprocess` (activated) or `disabled`:
 
 ```shell
-# From an existing pixi project
+# From an existing pixi workspace
 pixi install --pypi-keyring-provider subprocess
 ```
 

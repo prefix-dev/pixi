@@ -1,6 +1,7 @@
 /// Derived from `uv-git` implementation
 /// Source: https://github.com/astral-sh/uv/blob/4b8cc3e29e4c2a6417479135beaa9783b05195d3/crates/uv-git/src/source.rs
-/// This module expose `GitSource` type that represents a remote Git source that can be checked out locally.
+/// This module expose `GitSource` type that represents a remote Git source that
+/// can be checked out locally.
 use std::{
     borrow::Cow,
     hash::{DefaultHasher, Hash, Hasher},
@@ -12,11 +13,12 @@ use reqwest_middleware::ClientWithMiddleware;
 use tracing::instrument;
 
 use crate::{
+    GitError, GitUrl, Reporter,
     credentials::GIT_STORE,
     git::GitRemote,
+    resolver::RepositoryReference,
     sha::{GitOid, GitSha},
     url::RepositoryUrl,
-    GitError, GitUrl, Reporter,
 };
 
 /// A remote Git source that can be checked out locally.
@@ -56,7 +58,7 @@ impl GitSource {
     }
 
     /// Fetch the underlying Git repository at the given revision.
-    #[instrument(skip(self), fields(repository = %self.git.repository, rev = ?self.git.precise))]
+    #[instrument(skip(self), fields(repository = %self.git.repository, rev = self.git.precise.map(tracing::field::display)))]
     pub fn fetch(self) -> Result<Fetch, GitError> {
         // Compute the canonical URL for the repository.
         let canonical = RepositoryUrl::new(&self.git.repository);
@@ -123,9 +125,9 @@ impl GitSource {
             .join(short_id.as_str());
 
         tracing::debug!(
-            "Copying git revision {:?} to path {:?}",
+            "Copying git revision `{}` to path `{}`",
             actual_rev,
-            checkout_path
+            checkout_path.display()
         );
         db.copy_to(actual_rev.into(), &checkout_path)?;
 
@@ -136,10 +138,14 @@ impl GitSource {
             }
         }
 
-        tracing::debug!("Finished fetching Git source `{}`", self.git.repository);
+        tracing::trace!("Finished fetching Git source `{}`", self.git.repository);
 
         Ok(Fetch {
-            git: self.git.with_precise(actual_rev),
+            repository: RepositoryReference {
+                url: canonical,
+                reference: self.git.reference.clone(),
+            },
+            commit: actual_rev,
             path: checkout_path,
         })
     }
@@ -147,23 +153,27 @@ impl GitSource {
 
 #[derive(Debug, Clone)]
 pub struct Fetch {
-    /// The [`GitUrl`] reference that was fetched.
-    git: GitUrl,
-    /// The path to the checked out repository.
+    /// The [`RepositoryReference`] reference that was fetched.
+    repository: RepositoryReference,
+
+    /// The precise git checkout
+    commit: GitSha,
+
+    /// The path to the checked-out repository.
     path: PathBuf,
 }
 
 impl Fetch {
-    pub fn git(&self) -> &GitUrl {
-        &self.git
+    pub fn repository(&self) -> &RepositoryReference {
+        &self.repository
+    }
+
+    pub fn commit(&self) -> GitSha {
+        self.commit
     }
 
     pub fn path(&self) -> &Path {
         &self.path
-    }
-
-    pub fn into_git(self) -> GitUrl {
-        self.git
     }
 
     pub fn into_path(self) -> PathBuf {

@@ -2,15 +2,16 @@ use std::{fmt, str::FromStr, sync::Arc};
 
 use miette::{Diagnostic, NamedSource};
 use pixi_consts::consts;
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{PackageName, Platform};
 use thiserror::Error;
-use toml_edit::{value, Array, DocumentMut, Item, Table, Value};
+use toml_edit::{Array, DocumentMut, Item, Table, Value, value};
 
 use crate::{
-    manifests::table_name::TableName, pypi::PyPiPackageName, toml::TomlDocument,
-    utils::WithSourceCode, FeatureName, LibCSystemRequirement, ManifestKind, ManifestProvenance,
-    PyPiRequirement, PypiDependencyLocation, SpecType, SystemRequirements, Task, TomlError,
+    FeatureName, LibCSystemRequirement, ManifestKind, ManifestProvenance, PypiDependencyLocation,
+    SpecType, SystemRequirements, Task, TomlError, manifests::table_name::TableName,
+    toml::TomlDocument, utils::WithSourceCode,
 };
 
 /// Discriminates between a 'pixi.toml' and a 'pyproject.toml' manifest.
@@ -18,6 +19,7 @@ use crate::{
 pub enum ManifestDocument {
     PyProjectToml(TomlDocument),
     PixiToml(TomlDocument),
+    MojoProjectToml(TomlDocument),
 }
 
 impl fmt::Display for ManifestDocument {
@@ -25,6 +27,7 @@ impl fmt::Display for ManifestDocument {
         match self {
             ManifestDocument::PyProjectToml(document) => write!(f, "{}", document),
             ManifestDocument::PixiToml(document) => write!(f, "{}", document),
+            ManifestDocument::MojoProjectToml(document) => write!(f, "{}", document),
         }
     }
 }
@@ -99,6 +102,7 @@ impl ManifestDocument {
         let document = match self {
             ManifestDocument::PyProjectToml(document) => document,
             ManifestDocument::PixiToml(document) => document,
+            ManifestDocument::MojoProjectToml(document) => document,
         };
         document
             .to_string()
@@ -124,13 +128,14 @@ impl ManifestDocument {
                     ),
                     error: TomlError::from(err),
                 })
-                .into())
+                .into());
             }
         };
 
         match provenance.kind {
             ManifestKind::Pyproject => Ok(ManifestDocument::PyProjectToml(toml)),
             ManifestKind::Pixi => Ok(ManifestDocument::PixiToml(toml)),
+            ManifestKind::MojoProject => Ok(ManifestDocument::MojoProjectToml(toml)),
         }
     }
 
@@ -139,6 +144,7 @@ impl ManifestDocument {
         match self {
             ManifestDocument::PyProjectToml(_) => ManifestKind::Pyproject,
             ManifestDocument::PixiToml(_) => ManifestKind::Pixi,
+            ManifestDocument::MojoProjectToml(_) => ManifestKind::MojoProject,
         }
     }
 
@@ -152,6 +158,7 @@ impl ManifestDocument {
         match self {
             ManifestDocument::PyProjectToml(_) => Some(consts::PYPROJECT_PIXI_PREFIX),
             ManifestDocument::PixiToml(_) => None,
+            ManifestDocument::MojoProjectToml(_) => None,
         }
     }
 
@@ -159,6 +166,7 @@ impl ManifestDocument {
         match self {
             ManifestDocument::PyProjectToml(document) => document,
             ManifestDocument::PixiToml(document) => document,
+            ManifestDocument::MojoProjectToml(document) => document,
         }
     }
 
@@ -167,6 +175,7 @@ impl ManifestDocument {
         match self {
             ManifestDocument::PyProjectToml(document) => document,
             ManifestDocument::PixiToml(document) => document,
+            ManifestDocument::MojoProjectToml(document) => document,
         }
     }
 
@@ -214,13 +223,14 @@ impl ManifestDocument {
             .with_table(table);
 
         self.manifest_mut()
-            .get_or_insert_toml_array_mut(table_name.to_string().as_str(), array_name)
+            .get_or_insert_toml_array_mut(&table_name.as_keys(), array_name)
     }
 
     fn as_table_mut(&mut self) -> &mut Table {
         match self {
             ManifestDocument::PyProjectToml(document) => document.as_table_mut(),
             ManifestDocument::PixiToml(document) => document.as_table_mut(),
+            ManifestDocument::MojoProjectToml(document) => document.as_table_mut(),
         }
     }
 
@@ -230,45 +240,20 @@ impl ManifestDocument {
     /// If will be a no-op if the dependency is not found.
     pub fn remove_pypi_dependency(
         &mut self,
-        dep: &PyPiPackageName,
+        dep: &PypiPackageName,
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> Result<(), TomlError> {
         // For 'pyproject.toml' manifest, try and remove the dependency from native
         // arrays
-        let remove_requirement =
-            |source: &mut ManifestDocument, table, array_name| -> Result<(), TomlError> {
-                let array = source
-                    .manifest_mut()
-                    .get_mut_toml_array(table, array_name)?;
-                if let Some(array) = array {
-                    array.retain(|x| {
-                        let req: pep508_rs::Requirement = x
-                            .as_str()
-                            .unwrap_or("")
-                            .parse()
-                            .expect("should be a valid pep508 dependency");
-                        let name = PyPiPackageName::from_normalized(req.name);
-                        name != *dep
-                    });
-                    if array.is_empty() {
-                        source
-                            .manifest_mut()
-                            .get_or_insert_nested_table(table)?
-                            .remove(array_name);
-                    }
-                }
-                Ok(())
-            };
-
         match self {
             ManifestDocument::PyProjectToml(_) if feature_name.is_default() => {
-                remove_requirement(self, "project", "dependencies")?;
+                self.remove_pypi_requirement(&["project"], "dependencies", dep)?;
             }
             ManifestDocument::PyProjectToml(_) => {
                 let name = feature_name.to_string();
-                remove_requirement(self, "project.optional-dependencies", &name)?;
-                remove_requirement(self, "dependency-groups", &name)?;
+                self.remove_pypi_requirement(&["project", "optional-dependencies"], &name, dep)?;
+                self.remove_pypi_requirement(&["dependency-groups"], &name, dep)?;
             }
             _ => (),
         };
@@ -282,8 +267,38 @@ impl ManifestDocument {
             .with_table(Some(consts::PYPI_DEPENDENCIES));
 
         self.manifest_mut()
-            .get_or_insert_nested_table(table_name.to_string().as_str())
+            .get_or_insert_nested_table(&table_name.as_keys())
             .map(|t| t.remove(dep.as_source()))?;
+        Ok(())
+    }
+
+    /// Removes a pypi requirement from a particular array.
+    fn remove_pypi_requirement(
+        &mut self,
+        table_parts: &[&str],
+        array_name: &str,
+        dependency_name: &PypiPackageName,
+    ) -> Result<(), TomlError> {
+        let array = self
+            .manifest_mut()
+            .get_mut_toml_array(table_parts, array_name)?;
+
+        if let Some(array) = array {
+            array.retain(|x| {
+                let req: pep508_rs::Requirement = x
+                    .as_str()
+                    .unwrap_or("")
+                    .parse()
+                    .expect("should be a valid pep508 dependency");
+                let name = PypiPackageName::from_normalized(req.name);
+                name != *dependency_name
+            });
+            if array.is_empty() {
+                self.manifest_mut()
+                    .get_or_insert_nested_table(table_parts)?
+                    .remove(array_name);
+            }
+        }
         Ok(())
     }
 
@@ -305,7 +320,7 @@ impl ManifestDocument {
             .with_table(Some(spec_type.name()));
 
         self.manifest_mut()
-            .get_or_insert_nested_table(table_name.to_string().as_str())
+            .get_or_insert_nested_table(&table_name.as_keys())
             .map(|t| t.remove(dep.as_source()))?;
         Ok(())
     }
@@ -328,8 +343,31 @@ impl ManifestDocument {
             .with_table(Some(spec_type.name()));
 
         self.manifest_mut()
-            .get_or_insert_nested_table(dependency_table.to_string().as_str())
-            .map(|t| t.insert(name.as_normalized(), Item::Value(spec.to_toml_value())))?;
+            .get_or_insert_nested_table(&dependency_table.as_keys())
+            .map(|t| {
+                let mut new_value = spec.to_toml_value();
+
+                // Check if there is an existing entry that is represented by an inline value.
+                let existing_value = t.iter_mut().find_map(|(key, value)| {
+                    let package_key_name = PackageName::from_str(key.get()).ok()?;
+                    if package_key_name == *name {
+                        value.as_value_mut()
+                    } else {
+                        None
+                    }
+                });
+
+                // If there exists an existing value, we update it with the new value, but we
+                // keep the decoration.
+                if let Some(existing_value) = existing_value {
+                    *new_value.decor_mut() = existing_value.decor().clone();
+                    *existing_value = new_value;
+                } else {
+                    // Otherwise, just reinsert the value. This might overwrite an existing
+                    // decorations.
+                    t.insert(name.as_normalized(), Item::Value(new_value));
+                }
+            })?;
 
         Ok(())
     }
@@ -341,22 +379,12 @@ impl ManifestDocument {
     pub fn add_pypi_dependency(
         &mut self,
         requirement: &pep508_rs::Requirement,
+        pixi_requirement: Option<&PixiPypiSpec>,
         platform: Option<Platform>,
         feature_name: &FeatureName,
         editable: Option<bool>,
-        location: &Option<PypiDependencyLocation>,
+        location: Option<PypiDependencyLocation>,
     ) -> Result<(), TomlError> {
-        // Pypi dependencies can be stored in different places in pyproject.toml
-        // manifests so we remove any potential dependency of the same name
-        // before adding it back
-        if matches!(self, ManifestDocument::PyProjectToml(_)) {
-            self.remove_pypi_dependency(
-                &PyPiPackageName::from_normalized(requirement.name.clone()),
-                platform,
-                feature_name,
-            )?;
-        }
-
         // The '[pypi-dependencies]' or '[tool.pixi.pypi-dependencies]' table is
         // selected
         //  - For 'pixi.toml' manifests where it is the only choice
@@ -369,23 +397,50 @@ impl ManifestDocument {
             || editable.is_some_and(|e| e)
         {
             let mut pypi_requirement =
-                PyPiRequirement::try_from(requirement.clone()).map_err(Box::new)?;
+                PixiPypiSpec::try_from((requirement.clone(), pixi_requirement.cloned()))
+                    .map_err(Box::new)?;
             if let Some(editable) = editable {
                 pypi_requirement.set_editable(editable);
             }
 
-            let dependency_table = TableName::new()
+            let dependency_table_name = TableName::new()
                 .with_prefix(self.table_prefix())
                 .with_platform(platform.as_ref())
                 .with_feature_name(Some(feature_name))
                 .with_table(Some(consts::PYPI_DEPENDENCIES));
 
-            self.manifest_mut()
-                .get_or_insert_nested_table(dependency_table.to_string().as_str())?
-                .insert(
-                    requirement.name.as_ref(),
-                    Item::Value(pypi_requirement.into()),
-                );
+            let table = self
+                .manifest_mut()
+                .get_or_insert_nested_table(&dependency_table_name.as_keys())?;
+
+            let mut new_value = Value::from(pypi_requirement);
+
+            // Check if there exists an existing entry in the table that we should overwrite
+            // instead.
+            let existing_value = table.iter_mut().find_map(|(key, value)| {
+                let existing_name = pep508_rs::PackageName::from_str(key.get()).ok()?;
+                if existing_name == requirement.name {
+                    value.as_value_mut()
+                } else {
+                    None
+                }
+            });
+
+            // If there exists an existing entry, we overwrite it but keep the decoration.
+            if let Some(existing_value) = existing_value {
+                *new_value.decor_mut() = existing_value.decor().clone();
+                *existing_value = new_value;
+            } else {
+                table.insert(requirement.name.as_ref(), Item::Value(new_value));
+            }
+
+            // Remove the entry from the project native array.
+            self.remove_pypi_requirement(
+                &["project"],
+                "dependencies",
+                &PypiPackageName::from_normalized(requirement.name.clone()),
+            )?;
+
             return Ok(());
         }
 
@@ -393,26 +448,44 @@ impl ManifestDocument {
         //   - the [project.dependencies] array is selected for the default feature
         //   - the [dependency-groups.feature_name] array is selected unless
         //   - optional-dependencies is explicitly requested as location
-        let add_requirement =
-            |source: &mut ManifestDocument, table, array| -> Result<(), TomlError> {
-                source
-                    .manifest_mut()
-                    .get_or_insert_toml_array_mut(table, array)?
-                    .push(requirement.to_string());
-                Ok(())
-            };
+        let add_requirement = |source: &mut ManifestDocument,
+                               table_parts: &[&str],
+                               array: &str|
+         -> Result<(), TomlError> {
+            let array = source
+                .manifest_mut()
+                .get_or_insert_toml_array_mut(table_parts, array)?;
+
+            // Check if there is an existing entry that we should replace. Replacing will
+            // preserve any existing formatting.
+            let existing_entry_idx = array.iter().position(|item| {
+                let Ok(req): Result<pep508_rs::Requirement, _> =
+                    item.as_str().unwrap_or_default().parse()
+                else {
+                    return false;
+                };
+                req.name == requirement.name
+            });
+
+            if let Some(idx) = existing_entry_idx {
+                array.replace(idx, requirement.to_string());
+            } else {
+                array.push(requirement.to_string());
+            }
+            Ok(())
+        };
         if feature_name.is_default()
             || matches!(location, Some(PypiDependencyLocation::Dependencies))
         {
-            add_requirement(self, "project", "dependencies")?
+            add_requirement(self, &["project"], "dependencies")?
         } else if matches!(location, Some(PypiDependencyLocation::OptionalDependencies)) {
             add_requirement(
                 self,
-                "project.optional-dependencies",
+                &["project", "optional-dependencies"],
                 &feature_name.to_string(),
             )?
         } else {
-            add_requirement(self, "dependency-groups", &feature_name.to_string())?
+            add_requirement(self, &["dependency-groups"], &feature_name.to_string())?
         }
         Ok(())
     }
@@ -439,7 +512,7 @@ impl ManifestDocument {
     /// found, or `None` if it is not found in any of the checked sections.
     pub fn pypi_dependency_location(
         &self,
-        package_name: &PyPiPackageName,
+        package_name: &PypiPackageName,
         platform: Option<Platform>,
         feature_name: &FeatureName,
     ) -> Option<PypiDependencyLocation> {
@@ -451,10 +524,7 @@ impl ManifestDocument {
             .with_platform(platform.as_ref())
             .with_table(Some(consts::PYPI_DEPENDENCIES));
 
-        let pypi_dependency_table = self
-            .manifest()
-            .get_nested_table(table_name.to_string().as_str())
-            .ok();
+        let pypi_dependency_table = self.manifest().get_nested_table(&table_name.as_keys()).ok();
 
         if pypi_dependency_table
             .and_then(|table| table.get(package_name.as_source()))
@@ -465,7 +535,7 @@ impl ManifestDocument {
 
         if self
             .manifest()
-            .get_toml_array("project", "dependencies")
+            .get_toml_array(&["project"], "dependencies")
             .is_ok()
         {
             return Some(PypiDependencyLocation::Dependencies);
@@ -474,7 +544,7 @@ impl ManifestDocument {
 
         if self
             .manifest()
-            .get_toml_array("project.optional-dependencies", &name)
+            .get_toml_array(&["project", "optional-dependencies"], &name)
             .is_ok()
         {
             return Some(PypiDependencyLocation::OptionalDependencies);
@@ -482,7 +552,7 @@ impl ManifestDocument {
 
         if self
             .manifest()
-            .get_toml_array("dependency-groups", &name)
+            .get_toml_array(&["dependency-groups"], &name)
             .is_ok()
         {
             return Some(PypiDependencyLocation::DependencyGroups);
@@ -508,7 +578,7 @@ impl ManifestDocument {
             .with_table(Some("tasks"));
 
         self.manifest_mut()
-            .get_or_insert_nested_table(task_table.to_string().as_str())?
+            .get_or_insert_nested_table(&task_table.as_keys())?
             .remove(name);
 
         Ok(())
@@ -530,7 +600,7 @@ impl ManifestDocument {
             .with_table(Some("tasks"));
 
         self.manifest_mut()
-            .get_or_insert_nested_table(task_table.to_string().as_str())?
+            .get_or_insert_nested_table(&task_table.as_keys())?
             .insert(name, task.into());
 
         Ok(())
@@ -570,7 +640,7 @@ impl ManifestDocument {
 
         // Insert into the environment table
         self.manifest_mut()
-            .get_or_insert_nested_table(env_table.to_string().as_str())?
+            .get_or_insert_nested_table(&env_table.as_keys())?
             .insert(&name.into(), item);
 
         Ok(())
@@ -586,7 +656,7 @@ impl ManifestDocument {
 
         Ok(self
             .manifest_mut()
-            .get_or_insert_nested_table(env_table.to_string().as_str())?
+            .get_or_insert_nested_table(&env_table.as_keys())?
             .remove(name)
             .is_some())
     }
@@ -606,7 +676,7 @@ impl ManifestDocument {
         if let Some(linux) = &system_requirements.linux {
             inserted |= self
                 .manifest_mut()
-                .get_or_insert_nested_table(system_requirements_table.to_string().as_str())?
+                .get_or_insert_nested_table(&system_requirements_table.as_keys())?
                 .insert("linux", toml_edit::Item::from(linux.to_string()))
                 .is_some();
         }
@@ -614,7 +684,7 @@ impl ManifestDocument {
         if let Some(cuda) = &system_requirements.cuda {
             inserted |= self
                 .manifest_mut()
-                .get_or_insert_nested_table(system_requirements_table.to_string().as_str())?
+                .get_or_insert_nested_table(&system_requirements_table.as_keys())?
                 .insert("cuda", toml_edit::Item::from(cuda.to_string()))
                 .is_some();
         }
@@ -622,7 +692,7 @@ impl ManifestDocument {
         if let Some(macos) = &system_requirements.macos {
             inserted |= self
                 .manifest_mut()
-                .get_or_insert_nested_table(system_requirements_table.to_string().as_str())?
+                .get_or_insert_nested_table(&system_requirements_table.as_keys())?
                 .insert("macos", toml_edit::Item::from(macos.to_string()))
                 .is_some();
         }
@@ -632,7 +702,7 @@ impl ManifestDocument {
                 LibCSystemRequirement::GlibC(version) => {
                     inserted |= self
                         .manifest_mut()
-                        .get_or_insert_nested_table(system_requirements_table.to_string().as_str())?
+                        .get_or_insert_nested_table(&system_requirements_table.as_keys())?
                         .insert("libc", toml_edit::Item::from(version.to_string()))
                         .is_some();
                 }
@@ -646,9 +716,7 @@ impl ManifestDocument {
                         );
                         inserted |= self
                             .manifest_mut()
-                            .get_or_insert_nested_table(
-                                system_requirements_table.to_string().as_str(),
-                            )?
+                            .get_or_insert_nested_table(&system_requirements_table.as_keys())?
                             .insert(
                                 "libc",
                                 toml_edit::Item::from(libc_table.into_inline_table()),
@@ -657,9 +725,7 @@ impl ManifestDocument {
                     } else {
                         inserted |= self
                             .manifest_mut()
-                            .get_or_insert_nested_table(
-                                system_requirements_table.to_string().as_str(),
-                            )?
+                            .get_or_insert_nested_table(&system_requirements_table.as_keys())?
                             .insert(
                                 "libc",
                                 toml_edit::Item::from(
@@ -675,7 +741,7 @@ impl ManifestDocument {
         if let Some(archspec) = &system_requirements.archspec {
             inserted |= self
                 .manifest_mut()
-                .get_or_insert_nested_table(system_requirements_table.to_string().as_str())?
+                .get_or_insert_nested_table(&system_requirements_table.as_keys())?
                 .insert("archspec", archspec.into())
                 .is_some();
         }
@@ -723,7 +789,7 @@ impl ManifestDocument {
 
         let table = self
             .manifest_mut()
-            .get_or_insert_nested_table(table_name.to_string().as_str())?;
+            .get_or_insert_nested_table(&table_name.as_keys())?;
 
         if let Some(version) = version {
             if let Some(item) = table.get_mut("requires-pixi") {
@@ -736,5 +802,191 @@ impl ManifestDocument {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    /// This test checks that when calling `add_dependency` with a dependency
+    /// that already exists in the document the formatting and comments are
+    /// preserved.
+    ///
+    /// This test also verifies that the name of the dependency is correctly
+    /// found and kept in the situation where the user has a non-normalized name
+    /// in the document (e.g. "hTTPx" vs 'HtTpX').
+    #[test]
+    pub fn add_dependency_retains_decoration() {
+        let manifest_content = r#"[project]
+name = "test"
+
+[tool.pixi.project]
+channels = []
+platforms = []
+
+[tool.pixi.dependencies]
+# Hello world!
+hTTPx = ">=0.28.1,<0.29" # Some comment.
+
+# newline
+"#;
+
+        let mut document = ManifestDocument::PyProjectToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        // Overwrite the existing dependency.
+        document
+            .add_dependency(
+                &PackageName::from_str("HtTpX").unwrap(),
+                &PixiSpec::Version("0.1.*".parse().unwrap()),
+                SpecType::Run,
+                None,
+                &FeatureName::default(),
+            )
+            .unwrap();
+
+        insta::assert_snapshot!(document.to_string());
+    }
+
+    /// This test checks that when calling `add_pypi_dependency` with
+    /// dependencies that already exist in different locations the
+    /// formatting and comments are preserved across all PyPI dependency
+    /// storage formats.
+    ///
+    /// This test also verifies that the name of the dependency is correctly
+    /// found and kept in the situation where the user has a non-normalized name
+    /// in the document (e.g. "rEquEsTs" vs 'ReQuEsTs').
+    #[test]
+    pub fn add_pypi_dependency_retains_decoration() {
+        let manifest_content = r#"[project]
+name = "test"
+dependencies = [
+    # Main dependency comment
+    "rEquEsTs>=2.28.1,<3.0", # inline comment
+]
+
+[project.optional-dependencies]
+dev = [
+    # Dev dependency comment  
+    "PyYaML>=6.0", # dev inline comment
+]
+
+[tool.pixi.project]
+channels = []
+platforms = []
+
+[tool.pixi.pypi-dependencies]
+# Table dependency comment
+NumPy = ">=1.20.0" # table inline comment
+"#;
+
+        let mut document = ManifestDocument::PyProjectToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        // Update dependencies in different locations
+        let requests_req = pep508_rs::Requirement::from_str("ReQuEsTs>=2.30.0").unwrap();
+        document
+            .add_pypi_dependency(
+                &requests_req,
+                None,
+                None,
+                &FeatureName::default(),
+                None,
+                Some(PypiDependencyLocation::Dependencies),
+            )
+            .unwrap();
+
+        let pyyaml_req = pep508_rs::Requirement::from_str("PyYAML>=6.1.0").unwrap();
+        document
+            .add_pypi_dependency(
+                &pyyaml_req,
+                None,
+                None,
+                &FeatureName::from_str("dev").unwrap(),
+                None,
+                Some(PypiDependencyLocation::OptionalDependencies),
+            )
+            .unwrap();
+
+        let numpy_req = pep508_rs::Requirement::from_str("numpy>=1.21.0").unwrap();
+        document
+            .add_pypi_dependency(
+                &numpy_req,
+                None,
+                None,
+                &FeatureName::default(),
+                None,
+                Some(crate::PypiDependencyLocation::PixiPypiDependencies),
+            )
+            .unwrap();
+
+        insta::assert_snapshot!(document.to_string());
+    }
+
+    /// This test checks that removing a pypi dependency
+    /// uses the same source name as the one used to add it.
+    #[test]
+    pub fn remove_pypi_dependency() {
+        let manifest_content = r#"
+[project]
+name = "pixi-demo"
+requires-python = ">= 3.11"
+version = "0.1.0"
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["osx-arm64"]
+
+[tool.pixi.pypi-dependencies]
+pixi_demo = { path = ".", editable = true }
+"#;
+
+        let mut document = ManifestDocument::PyProjectToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        let pypi_name = PypiPackageName::from_str("pixi_demo").unwrap();
+
+        document
+            .remove_pypi_dependency(&pypi_name, None, &FeatureName::default())
+            .unwrap();
+
+        insta::assert_snapshot!(document.to_string());
+    }
+
+    /// This test checks that removing a pypi dependency
+    /// with a different name casing will not remove it.
+    #[test]
+    pub fn remove_pypi_dependency_with_different_name() {
+        let manifest_content = r#"
+[project]
+name = "pixi-demo"
+requires-python = ">= 3.11"
+version = "0.1.0"
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["osx-arm64"]
+
+[tool.pixi.pypi-dependencies]
+pixi_demo = { path = ".", editable = true }
+"#;
+
+        let mut document = ManifestDocument::PyProjectToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        // Important bit here that is different from `remove_pypi_dependency` test:
+        // using a dash instead of an underscore
+        let pypi_name = PypiPackageName::from_str("pixi-demo").unwrap();
+
+        document
+            .remove_pypi_dependency(&pypi_name, None, &FeatureName::default())
+            .unwrap();
+
+        insta::assert_snapshot!(document.to_string());
     }
 }

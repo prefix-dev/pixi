@@ -1,0 +1,7 @@
+---
+source: src/lock_file/satisfiability/mod.rs
+expression: s
+---
+environment 'default' does not satisfy the requirements of the project
+    Diagnostic severity: error
+    Caused by: the lock-file was solved with exclude-newer set to 2023-10-01 00:00:00 UTC, but the environment does not have this option set

@@ -1,5 +1,0 @@
-# this is just a empty recipe for smoke tests
-
-package:
-  name: smokey
-  version: 1.2.3
