@@ -168,7 +168,7 @@ uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.8.5" }
 uv-workspace = { git = "https://github.com/astral-sh/uv", tag = "0.8.5" }
 winapi = { version = "0.3.9", default-features = false }
 xxhash-rust = "0.8.15"
-zip = { version = "2.4.2", default-features = false }
+zip = { version = "5.0.0", default-features = false }
 zstd = { version = "0.13.3", default-features = false }
 
 barrier_cell = { path = "crates/barrier_cell" }
