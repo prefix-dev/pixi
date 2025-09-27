@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Run from the root of the project using `bash tests/test_export.sh`
+# Run from the root of the project using `bash tests/scripts/test_export.sh`
 set -e
 set -x
 echo "Running test_export.sh"
@@ -15,6 +15,11 @@ echo "Creating the export test environment with micromamba"
 micromamba create -y -f test-env.yml -n export-test
 micromamba env list
 micromamba env remove -y -n export-test
+# Test for correct subdirectory format
+export _PIXITEST_TMP=`mktemp -d`
+pixi init -i test-env.yml $_PIXITEST_TMP
+pixi install --manifest-path $_PIXITEST_TMP
+rm -rf pixi-tmp
 rm test-env.yml
 cd ../../../..
 
