@@ -3088,7 +3088,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.59.0",
+ "windows-core 0.61.2",
 ]
 
 [[package]]
@@ -3701,7 +3701,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "07033963ba89ebaf1584d767badaa2e8fcec21aedea6b8c0346d487d49c28667"
 dependencies = [
  "cfg-if",
- "windows-targets 0.48.5",
+ "windows-targets 0.53.3",
 ]
 
 [[package]]
@@ -5749,7 +5749,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a56d757972c98b346a9b766e3f02746cde6dd1cd1d1d563472929fdd74bec4d"
 dependencies = [
  "anyhow",
- "itertools 0.12.1",
+ "itertools 0.14.0",
  "proc-macro2",
  "quote",
  "syn",
@@ -5855,16 +5855,16 @@ dependencies = [
 
 [[package]]
 name = "pyproject-toml"
-version = "0.13.5"
+version = "0.13.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b0f6160dc48298b9260d9b958ad1d7f96f6cd0b9df200b22329204e09334663"
+checksum = "ec768e063102b426e8962989758115e8659485124de9207bc365fab524125d65"
 dependencies = [
  "indexmap 2.11.1",
  "pep440_rs",
  "pep508_rs",
  "serde",
  "thiserror 2.0.16",
- "toml 0.8.23",
+ "toml",
 ]
 
 [[package]]
@@ -7795,7 +7795,7 @@ dependencies = [
  "ntapi",
  "objc2-core-foundation",
  "objc2-io-kit",
- "windows 0.59.0",
+ "windows 0.61.3",
 ]
 
 [[package]]
@@ -8115,18 +8115,6 @@ dependencies = [
  "futures-sink",
  "pin-project-lite",
  "tokio",
-]
-
-[[package]]
-name = "toml"
-version = "0.8.23"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc1beb996b9d83529a9e75c17a1686767d148d70663143c7854d8b4a09ced362"
-dependencies = [
- "serde",
- "serde_spanned 0.6.9",
- "toml_datetime 0.6.11",
- "toml_edit 0.22.27",
 ]
 
 [[package]]
@@ -8582,7 +8570,7 @@ dependencies = [
  "spdx",
  "tar",
  "thiserror 2.0.16",
- "toml 0.9.5",
+ "toml",
  "tracing",
  "uv-distribution-filename",
  "uv-fs",
@@ -8670,7 +8658,7 @@ dependencies = [
  "globwalk",
  "serde",
  "thiserror 2.0.16",
- "toml 0.9.5",
+ "toml",
  "tracing",
  "walkdir",
 ]
@@ -8843,7 +8831,7 @@ dependencies = [
  "thiserror 2.0.16",
  "tokio",
  "tokio-util",
- "toml 0.9.5",
+ "toml",
  "tracing",
  "url",
  "uv-cache",
@@ -9342,7 +9330,7 @@ dependencies = [
  "rustc-hash",
  "serde",
  "thiserror 2.0.16",
- "toml 0.9.5",
+ "toml",
  "tracing",
  "url",
  "uv-cache-key",
@@ -9415,7 +9403,7 @@ dependencies = [
  "thiserror 2.0.16",
  "tokio",
  "tokio-stream",
- "toml 0.9.5",
+ "toml",
  "toml_edit 0.23.4",
  "tracing",
  "url",
@@ -9595,7 +9583,7 @@ dependencies = [
  "serde",
  "thiserror 2.0.16",
  "tokio",
- "toml 0.9.5",
+ "toml",
  "toml_edit 0.23.4",
  "tracing",
  "uv-build-backend",
@@ -9891,7 +9879,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.0",
 ]
 
 [[package]]
