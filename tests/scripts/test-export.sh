@@ -16,7 +16,7 @@ micromamba create -y -f test-env.yml -n export-test
 micromamba env list
 micromamba env remove -y -n export-test
 # Test for correct subdirectory format
-export _PIXITEST_TMP=`mktemp -d`
+export _PIXITEST_TMP=$(mktemp -d)
 pixi init -i test-env.yml $_PIXITEST_TMP
 pixi install --manifest-path $_PIXITEST_TMP
 rm -rf pixi-tmp

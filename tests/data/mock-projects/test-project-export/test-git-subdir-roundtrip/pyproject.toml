@@ -1,7 +1,7 @@
 [project]
-name = "test-git-subdir-roundtrip"
-version = "0.1.0"
+dependencies = []
 description = "Add your description here"
+name = "test-git-subdir-roundtrip"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+version = "0.1.0"
