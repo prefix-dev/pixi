@@ -63,6 +63,11 @@ impl From<SourceRecord> for CondaPackageData {
                 let mut url = pinned_git_spec.git.clone();
 
                 // Preserve existing query parameters and add the subdirectory if present.
+                // TODO(remi): This is a temporary workaround. We inject the git
+                // subdirectory into the URL query because rattler_lock::PackageBuildSource::Git
+                // does not expose a dedicated subdirectory field yet. Once the lock schema
+                // grows that field we should store the value there and delete this query
+                // manipulation.
                 let mut query_pairs: Vec<(String, String)> = url
                     .query_pairs()
                     .map(|(k, v)| (k.into_owned(), v.into_owned()))
@@ -123,6 +128,8 @@ impl TryFrom<CondaSourceData> for SourceRecord {
                 let mut clean_url = url.clone();
                 let mut subdirectory = None;
 
+                // TODO(remi): Keep this in sync with the serialization workaround above.
+                // Drop this once the lock format can carry git subdirectories explicitly.
                 let mut query_pairs: Vec<(String, String)> = clean_url
                     .query_pairs()
                     .map(|(k, v)| (k.into_owned(), v.into_owned()))
