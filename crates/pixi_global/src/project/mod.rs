@@ -31,6 +31,7 @@ use pixi_core::repodata::Repodata;
 use pixi_manifest::PrioritizedChannel;
 use pixi_progress::global_multi_progress;
 use pixi_reporters::TopLevelProgress;
+use pixi_spec::{BinarySpec, PathBinarySpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_utils::{
     executable_from_path,
@@ -40,7 +41,7 @@ use pixi_utils::{
 };
 use rattler_conda_types::{
     ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, PrefixRecord,
-    menuinst::MenuMode,
+    menuinst::MenuMode, package::ArchiveIdentifier,
 };
 use rattler_repodata_gateway::Gateway;
 // Removed unused rattler_solve imports
@@ -120,7 +121,7 @@ pub struct Project {
     /// The manifest for the project
     pub manifest: Manifest,
     /// The global configuration as loaded from the config file(s)
-    config: Config,
+    pub config: Config,
     /// Root directory of the global environments
     pub(crate) env_root: EnvRoot,
     /// Binary directory
@@ -303,7 +304,10 @@ impl Project {
             .expect("manifest path should always have a parent")
             .to_owned();
 
-        let config = Config::load(&root);
+        // Load the global config and ensure
+        // that the root_dir is relative to the manifest directory
+        let mut config = Config::load_global();
+        config.channel_config.root_dir = root.clone();
 
         let client = OnceCell::new();
         let repodata_gateway = OnceCell::new();
@@ -1361,26 +1365,18 @@ impl Project {
         })
     }
 
-    /// Infer the package name from a PixiSpec (path or git) by examining build
-    /// outputs
-    pub async fn infer_package_name_from_spec(
+    /// Infer the package name from a SourceSpec by examining build outputs
+    async fn infer_package_name_from_source_spec(
         &self,
-        pixi_spec: &pixi_spec::PixiSpec,
+        source_spec: pixi_spec::SourceSpec,
     ) -> Result<PackageName, InferPackageNameError> {
-        let pinned_source_spec = match pixi_spec.clone().into_source_or_binary() {
-            Either::Left(source_spec) => {
-                let command_dispatcher = self.command_dispatcher()?;
-                let checkout = command_dispatcher
-                    .pin_and_checkout(source_spec)
-                    .await
-                    .map_err(|e| InferPackageNameError::BuildBackendMetadata(Box::new(e)))?;
+        let command_dispatcher = self.command_dispatcher()?;
+        let checkout = command_dispatcher
+            .pin_and_checkout(source_spec)
+            .await
+            .map_err(|e| InferPackageNameError::BuildBackendMetadata(Box::new(e)))?;
 
-                checkout.pinned
-            }
-            Either::Right(_) => {
-                return Err(InferPackageNameError::UnsupportedSpecType);
-            }
-        };
+        let pinned_source_spec = checkout.pinned;
 
         // Create the metadata spec
         let metadata_spec = BuildBackendMetadataSpec {
@@ -1420,6 +1416,27 @@ impl Project {
                     package_names: package_names.join(", "),
                 })
             }
+        }
+    }
+
+    /// Infer the package name from a PixiSpec (path or git) by examining build
+    /// outputs
+    pub async fn infer_package_name_from_spec(
+        &self,
+        pixi_spec: &pixi_spec::PixiSpec,
+    ) -> Result<PackageName, InferPackageNameError> {
+        match pixi_spec.clone().into_source_or_binary() {
+            Either::Left(source_spec) => {
+                self.infer_package_name_from_source_spec(source_spec).await
+            }
+            Either::Right(binary_spec) => match binary_spec {
+                BinarySpec::Path(PathBinarySpec { path }) => path
+                    .file_name()
+                    .and_then(ArchiveIdentifier::try_from_filename)
+                    .and_then(|iden| PackageName::from_str(&iden.name).ok())
+                    .ok_or(InferPackageNameError::UnsupportedSpecType),
+                _ => Err(InferPackageNameError::UnsupportedSpecType),
+            },
         }
     }
 }
