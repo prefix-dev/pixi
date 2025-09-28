@@ -11,7 +11,7 @@ version = "0.1.0"
 [dependencies]
 python = ">=3.12.5,<4"
 # Specific channel and version
-ca-certificates = { version = "2024.8.30", channel = "conda-forge" }
+ca-certificates = { version = "==2024.8.30", channel = "conda-forge" }
 
 [pypi-dependencies]
 rich = ">=13.8.0, <14"
