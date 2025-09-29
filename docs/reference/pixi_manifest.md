@@ -312,6 +312,35 @@ c_compiler_version = ["11.4", "13.0"]
 
 For detailed examples and tutorials, see the [build variants documentation](../build/variants.md).
 
+### `build-variant-files` (optional)
+
+!!! warning "Preview Feature"
+    Build variant files require the `pixi-build` preview feature to be enabled:
+    ```toml
+    [workspace]
+    preview = ["pixi-build"]
+    ```
+
+Use `build-variant-files` to reference external variant definitions from YAML files.
+Paths are resolved relative to the workspace root and processed in the listed
+order—entries from earlier files take precedence over values loaded from later ones.
+
+```toml
+[workspace]
+build-variant-files = [
+    { file = "./pinning/conda_build_config.yaml" },
+    { file = "./variants/overrides.yaml" },
+]
+
+[workspace.target.linux-64]
+build-variant-files = [{ file = "./variants/linux.yaml" }]
+```
+
+Each entry must provide a `file` key that points to either a `conda_build_config.yaml`
+or `variants.yaml` file. Target-specific variant files are merged on top of the
+workspace entries for matching platforms. Referencing conda packages as variant
+sources is not supported yet.
+
 ## The `tasks` table
 
 Tasks are a way to automate certain custom commands in your workspace.

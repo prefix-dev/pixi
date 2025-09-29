@@ -797,7 +797,7 @@ fn handle_missing_target(
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
+    use std::{path::PathBuf, str::FromStr};
 
     use indexmap::{IndexMap, IndexSet};
     use insta::{assert_debug_snapshot, assert_snapshot, assert_yaml_snapshot};
@@ -822,6 +822,7 @@ mod tests {
         to_options,
         toml::{FromTomlStr, TomlDocument},
         utils::{WithSourceCode, test_utils::expect_parse_failure},
+        workspace::BuildVariantSource,
     };
 
     const PROJECT_BOILERPLATE: &str = r#"
@@ -1388,6 +1389,44 @@ start = "python -m flask run --port=5050"
             .resolve(Some(Platform::Win64))
             .collect::<Vec<_>>();
         assert_debug_snapshot!(resolved_win);
+    }
+
+    #[test]
+    fn test_build_variant_files() {
+        let contents = r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = []
+        build-variant-files = [
+            { file = "variants/a.yaml" },
+            { file = "variants/b.yaml" },
+        ]
+
+        [workspace.target.win-64]
+        build-variant-files = [{ file = "windows.yaml" }]
+        "#;
+
+        let manifest = parse_pixi_toml(contents).manifest;
+
+        assert_eq!(
+            manifest.workspace.build_variant_files.default(),
+            &vec![
+                BuildVariantSource::File(PathBuf::from("variants/a.yaml")),
+                BuildVariantSource::File(PathBuf::from("variants/b.yaml")),
+            ]
+        );
+
+        let win_variant_files = manifest
+            .workspace
+            .build_variant_files
+            .for_target(&TargetSelector::Platform(Platform::Win64))
+            .unwrap();
+
+        assert_eq!(
+            win_variant_files,
+            &vec![BuildVariantSource::File(PathBuf::from("windows.yaml"))],
+        );
     }
 
     #[test]

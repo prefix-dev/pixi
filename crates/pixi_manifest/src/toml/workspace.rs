@@ -17,12 +17,18 @@ use crate::{
     pypi::pypi_options::PypiOptions,
     toml::{manifest::ExternalWorkspaceProperties, platform::TomlPlatform, preview::TomlPreview},
     utils::PixiSpanned,
-    workspace::ChannelPriority,
+    workspace::{BuildVariantSource, ChannelPriority},
 };
+
+#[derive(Debug, Clone)]
+pub struct TomlBuildVariantFile {
+    file: Spanned<PathBuf>,
+}
 
 #[derive(Debug, Clone)]
 pub struct TomlWorkspaceTarget {
     build_variants: Option<HashMap<String, Vec<String>>>,
+    build_variant_files: Option<Vec<TomlBuildVariantFile>>,
 }
 
 /// The TOML representation of the `[[workspace]]` section in a pixi manifest.
@@ -50,6 +56,7 @@ pub struct TomlWorkspace {
     pub preview: TomlPreview,
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlWorkspaceTarget>,
     pub build_variants: Option<HashMap<String, Vec<String>>>,
+    pub build_variant_files: Option<Vec<TomlBuildVariantFile>>,
     pub requires_pixi: Option<VersionSpec>,
     pub exclude_newer: Option<ExcludeNewer>,
 
@@ -110,6 +117,18 @@ impl TomlWorkspace {
 
         let warnings = preview_warnings;
 
+        let build_variant_files_default =
+            convert_build_variant_files(self.build_variant_files, root_directory)?;
+        let build_variant_files_targets = self
+            .target
+            .clone()
+            .into_iter()
+            .map(|(selector, target)| {
+                convert_build_variant_files(target.build_variant_files, root_directory)
+                    .map(|files| (selector, files))
+            })
+            .collect::<Result<IndexMap<_, _>, _>>()?;
+
         Ok(WithWarnings::from(Workspace {
             name: self.name.or(external.name),
             version: self.version.or(external.version),
@@ -131,6 +150,10 @@ impl TomlWorkspace {
             pypi_options: self.pypi_options,
             s3_options: self.s3_options,
             preview,
+            build_variant_files: Targets::from_default_and_user_defined(
+                build_variant_files_default,
+                build_variant_files_targets,
+            ),
             build_variants: Targets::from_default_and_user_defined(
                 self.build_variants,
                 self.target
@@ -143,6 +166,20 @@ impl TomlWorkspace {
             exclude_newer: self.exclude_newer,
         })
         .with_warnings(warnings))
+    }
+}
+
+fn convert_build_variant_files(
+    entries: Option<Vec<TomlBuildVariantFile>>,
+    root_directory: Option<&Path>,
+) -> Result<Vec<BuildVariantSource>, TomlError> {
+    if let Some(entries) = entries {
+        entries
+            .into_iter()
+            .map(|entry| entry.into_workspace_source(root_directory))
+            .collect()
+    } else {
+        Ok(Vec::new())
     }
 }
 
@@ -190,6 +227,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
         let target = th
             .optional::<TomlIndexMap<_, _>>("target")
             .map(TomlIndexMap::into_inner);
+        let build_variant_files = th.optional::<Vec<TomlBuildVariantFile>>("build-variant-files");
         let build_variants = th
             .optional::<TomlHashMap<_, _>>("build-variants")
             .map(TomlHashMap::into_inner);
@@ -222,6 +260,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             preview,
             target: target.unwrap_or_default(),
             build_variants,
+            build_variant_files,
             requires_pixi,
             exclude_newer,
             span: value.span,
@@ -236,10 +275,14 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspaceTarget {
         let build_variants = th
             .optional::<TomlHashMap<_, _>>("build-variants")
             .map(TomlHashMap::into_inner);
+        let build_variant_files = th.optional::<Vec<TomlBuildVariantFile>>("build-variant-files");
 
         th.finalize(None)?;
 
-        Ok(TomlWorkspaceTarget { build_variants })
+        Ok(TomlWorkspaceTarget {
+            build_variants,
+            build_variant_files,
+        })
     }
 }
 
@@ -311,6 +354,28 @@ mod test {
     }
 
     #[test]
+    fn test_missing_build_variant_file() {
+        let input = r#"
+        channels = []
+        platforms = []
+        build-variant-files = [{ file = "missing.yaml" }]
+        "#;
+        let path = Path::new("");
+        let parse_error = TomlWorkspace::from_toml_str(input)
+            .and_then(|w| w.into_workspace(ExternalWorkspaceProperties::default(), Some(path)))
+            .unwrap_err();
+        assert_snapshot!(format_parse_error(input, parse_error), @r#"
+         × 'missing.yaml' does not exist
+          ╭─[pixi.toml:4:42]
+        3 │         platforms = []
+        4 │         build-variant-files = [{ file = "missing.yaml" }]
+          ·                                          ────────────
+        5 │
+          ╰────
+        "#);
+    }
+
+    #[test]
     fn test_invalid_exclude_newer() {
         let input = r#"
         channels = []
@@ -330,5 +395,48 @@ mod test {
         5 │
           ╰────
         "###);
+    }
+}
+impl<'de> toml_span::Deserialize<'de> for TomlBuildVariantFile {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        let mut th = TableHelper::new(value)?;
+
+        let file = th
+            .required::<TomlWith<_, Spanned<TomlFromStr<PathBuf>>>>("file")?
+            .into_inner();
+
+        th.finalize(None)?;
+
+        Ok(Self { file })
+    }
+}
+
+impl TomlBuildVariantFile {
+    fn into_workspace_source(
+        self,
+        root_directory: Option<&Path>,
+    ) -> Result<BuildVariantSource, TomlError> {
+        let Spanned { value: path, span } = self.file;
+        let span_range = if span.is_empty() {
+            None
+        } else {
+            Some(span.into())
+        };
+
+        // Ensure that file exists
+        if let Some(root_directory) = root_directory {
+            let full_path = root_directory.join(&path);
+            if !full_path.is_file() {
+                return Err(TomlError::from(
+                    GenericError::new(format!(
+                        "'{}' does not exist",
+                        dunce::simplified(&full_path).display()
+                    ))
+                    .with_opt_span(span_range),
+                ));
+            }
+        }
+
+        Ok(BuildVariantSource::File(path))
     }
 }
