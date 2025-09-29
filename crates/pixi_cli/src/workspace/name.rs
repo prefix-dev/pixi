@@ -1,5 +1,5 @@
 use clap::Parser;
-use pixi_api::context::WorkspaceContext;
+use pixi_api::WorkspaceContext;
 use pixi_core::WorkspaceLocator;
 
 use crate::{cli_config::WorkspaceConfig, cli_interface::CliInterface};

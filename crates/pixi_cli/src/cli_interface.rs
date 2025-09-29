@@ -1,5 +1,5 @@
 use miette::IntoDiagnostic;
-use pixi_api::interface::Interface;
+use pixi_api::Interface;
 
 #[derive(Default)]
 pub struct CliInterface {}

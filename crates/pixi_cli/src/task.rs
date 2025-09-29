@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     error::Error,
     io::Write,
     path::PathBuf,
@@ -11,6 +11,7 @@ use fancy_display::FancyDisplay;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
+use pixi_api::WorkspaceContext;
 use pixi_manifest::{
     EnvironmentName, FeatureName,
     task::{Alias, CmdArgs, Dependency, Execute, Task, TaskArg, TaskName, quote},
@@ -19,13 +20,12 @@ use rattler_conda_types::Platform;
 use serde::Serialize;
 use serde_with::serde_as;
 
-use pixi_core::workspace::virtual_packages::verify_current_platform_can_run_environment;
 use pixi_core::{
     Workspace, WorkspaceLocator,
     workspace::{Environment, WorkspaceMut},
 };
 
-use crate::cli_config::WorkspaceConfig;
+use crate::{cli_config::WorkspaceConfig, cli_interface::CliInterface};
 
 #[derive(Parser, Debug)]
 pub enum Operation {
@@ -255,7 +255,7 @@ fn print_heading(value: &str) {
 /// Create a human-readable representation of a list of tasks.
 /// Using a tabwriter for described tasks.
 fn print_tasks(
-    task_map: HashMap<Environment, HashMap<TaskName, &Task>>,
+    task_map: HashMap<EnvironmentName, HashMap<TaskName, Task>>,
     summary: bool,
 ) -> Result<(), std::io::Error> {
     if summary {
@@ -266,7 +266,7 @@ fn print_tasks(
                 .sorted()
                 .map(|name| name.fancy_display())
                 .join(", ");
-            eprintln!("{}: {}", env.name().fancy_display().bold(), formatted);
+            eprintln!("{}: {}", env.fancy_display().bold(), formatted);
         }
         return Ok(());
     }
@@ -323,70 +323,29 @@ async fn list_tasks(workspace: Workspace, args: ListArgs) -> miette::Result<()> 
         return Ok(());
     }
 
-    let explicit_environment = args
-        .environment
-        .map(|n| EnvironmentName::from_str(n.as_str()))
-        .transpose()?
-        .map(|n| {
-            workspace
-                .environment(&n)
-                .ok_or_else(|| miette::miette!("unknown environment '{n}'"))
-        })
-        .transpose()?;
+    let workspace_context = WorkspaceContext::new(CliInterface {}, workspace);
+    let tasks_per_env = workspace_context
+        .list_tasks(
+            args.environment
+                .and_then(|e| EnvironmentName::from_str(&e.to_string()).ok()),
+        )
+        .await?;
 
-    let lockfile = workspace.load_lock_file().await.ok();
-
-    let env_task_map: HashMap<Environment, HashSet<TaskName>> =
-        if let Some(explicit_environment) = explicit_environment {
-            HashMap::from([(
-                explicit_environment.clone(),
-                explicit_environment.get_filtered_tasks(),
-            )])
-        } else {
-            workspace
-                .environments()
-                .iter()
-                .filter_map(|env| {
-                    if verify_current_platform_can_run_environment(env, lockfile.as_ref()).is_ok() {
-                        Some((env.clone(), env.get_filtered_tasks()))
-                    } else {
-                        None
-                    }
-                })
-                .collect()
-        };
-
-    let available_tasks: HashSet<TaskName> = env_task_map.values().flatten().cloned().collect();
-
-    if available_tasks.is_empty() {
+    if tasks_per_env.is_empty() {
         eprintln!("No tasks found",);
         return Ok(());
     }
 
     if args.machine_readable {
-        let unformatted: String = available_tasks
+        let unformatted: String = tasks_per_env
             .iter()
+            .flat_map(|(_, v)| v.keys())
             .sorted()
             .map(|name| name.as_str())
             .join(" ");
         println!("{}", unformatted);
         return Ok(());
     }
-
-    let tasks_per_env = env_task_map
-        .into_iter()
-        .map(|(env, task_names)| {
-            let task_map = task_names
-                .into_iter()
-                .flat_map(|task_name| {
-                    env.task(&task_name, Some(env.best_platform()))
-                        .ok()
-                        .map(|task| (task_name, task))
-                })
-                .collect();
-            (env, task_map)
-        })
-        .collect();
 
     print_tasks(tasks_per_env, args.summary).into_diagnostic()?;
     Ok(())

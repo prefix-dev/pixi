@@ -1,6 +1,6 @@
 use clap::Parser;
-use pixi_api::context::WorkspaceContext;
-use pixi_api::workspace::reinstall::ReinstallOptions;
+use pixi_api::WorkspaceContext;
+use pixi_api::workspace::ReinstallOptions;
 use pixi_config::ConfigCli;
 use pixi_core::WorkspaceLocator;
 use pixi_core::lock_file::{ReinstallEnvironment, ReinstallPackages};

@@ -1,7 +1,10 @@
+use std::collections::HashMap;
+
 use pixi_core::{Workspace, environment::LockFileUsage};
+use pixi_manifest::{EnvironmentName, Task, TaskName};
 
 use crate::interface::Interface;
-use crate::workspace::{init::InitOptions, reinstall::ReinstallOptions};
+use crate::workspace::{InitOptions, ReinstallOptions};
 
 pub struct WorkspaceContext<I: Interface> {
     interface: I,
@@ -28,6 +31,13 @@ impl<I: Interface> WorkspaceContext<I> {
         crate::workspace::workspace::name::set(&self.interface, self.workspace.clone(), name).await
     }
 
+    pub async fn list_tasks(
+        &self,
+        environment: Option<EnvironmentName>,
+    ) -> miette::Result<HashMap<EnvironmentName, HashMap<TaskName, Task>>> {
+        crate::workspace::task::list_tasks(&self.interface, self.workspace.clone(), environment)
+            .await
+    }
     pub async fn reinstall(
         &self,
         options: ReinstallOptions,
