@@ -1,6 +1,8 @@
 [package]
 edition = "2021"
+license = "MIT OR Apache-2.0"
 name = "pixi_bench"
+publish = false
 version = "0.1.0"
 
 [dev-dependencies]
