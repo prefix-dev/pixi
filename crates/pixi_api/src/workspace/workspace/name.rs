@@ -3,11 +3,11 @@ use pixi_core::Workspace;
 
 use crate::interface::Interface;
 
-pub(crate) async fn get(workspace: Workspace) -> String {
+pub async fn get(workspace: Workspace) -> String {
     workspace.display_name().to_string()
 }
 
-pub(crate) async fn set<I: Interface>(
+pub async fn set<I: Interface>(
     interface: &I,
     workspace: Workspace,
     name: &str,

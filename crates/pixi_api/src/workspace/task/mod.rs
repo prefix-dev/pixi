@@ -8,7 +8,7 @@ use pixi_manifest::{EnvironmentName, Task, TaskName};
 
 use crate::interface::Interface;
 
-pub(crate) async fn list_tasks<I: Interface>(
+pub async fn list_tasks<I: Interface>(
     _interface: &I,
     workspace: Workspace,
     environment: Option<EnvironmentName>,

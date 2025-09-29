@@ -12,7 +12,7 @@ mod options;
 
 pub use options::ReinstallOptions;
 
-pub(crate) async fn reinstall<I: Interface>(
+pub async fn reinstall<I: Interface>(
     interface: &I,
     options: ReinstallOptions,
     workspace: Workspace,
