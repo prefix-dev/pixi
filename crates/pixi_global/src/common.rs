@@ -87,7 +87,6 @@ impl BinDir {
     /// `bin_dir` with the provided `exposed_name`. If the target platform is
     /// Windows, it sets the file extension to `.exe`.
     pub(crate) fn executable_trampoline_path(&self, exposed_name: &ExposedName) -> PathBuf {
-        // Add .bat to the windows executable
         let exposed_name = if cfg!(windows) {
             // Not using `.set_extension()` because it will break the `.` in the name for cases like `python3.9.1`
             format!("{}.exe", exposed_name)

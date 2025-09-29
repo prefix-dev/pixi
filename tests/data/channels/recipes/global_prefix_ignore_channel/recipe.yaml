@@ -5,8 +5,8 @@ outputs:
 
     build:
       script:
-        - mkdir -p $PREFIX/etc/pixi
-        - cp $RECIPE_DIR/global-ignore-conda-prefix $PREFIX/etc/pixi/
+        - mkdir -p $PREFIX/etc/pixi/prefix-ignore
+        - cp $RECIPE_DIR/global-ignore-conda-prefix $PREFIX/etc/pixi/prefix-ignore/
         - mkdir -p $PREFIX/bin
         - if: win
           then:
