@@ -39,6 +39,7 @@ rattler = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_lock = { workspace = true }
 rattler_menuinst = { workspace = true }
+rattler_networking = { workspace = true }
 rattler_repodata_gateway = { workspace = true }
 rattler_shell = { workspace = true }
 rattler_virtual_packages = { workspace = true }
