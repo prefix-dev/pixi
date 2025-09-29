@@ -129,7 +129,7 @@ pub(crate) async fn create_executable_trampolines(
                 global_script_path.display()
             )
         })?;
-        let executable_name = executable_from_path(global_script_path);
+        let executable_name = executable_from_path(&original_executable);
 
         let mut env_for_trampoline = activation_variables.clone();
         if pixi_config_dir

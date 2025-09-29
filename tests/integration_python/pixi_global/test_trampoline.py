@@ -483,9 +483,7 @@ def test_trampoline_considers_global_config_json(
     pixi: Path, tmp_path: Path, global_prefix_ignore_channel: str
 ) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
-
-    dummy_b = tmp_path / "bin" / exec_extension("prefix-ignore")
-
+    executable_name = "different-name"
     verify_cli_command(
         [
             pixi,
@@ -493,14 +491,18 @@ def test_trampoline_considers_global_config_json(
             "install",
             "--channel",
             global_prefix_ignore_channel,
+            "--expose",
+            f"{executable_name}=prefix-ignore",  # The original executable name should count, not the exposed name
             "prefix-ignore",
         ],
         env=env,
     )
 
-    dummy_b_json = tmp_path / "bin" / "trampoline_configuration" / "prefix-ignore.json"
+    trampoline_configuration = (
+        tmp_path / "bin" / "trampoline_configuration" / f"{executable_name}.json"
+    )
 
-    trampoline_metadata = json.loads(dummy_b_json.read_text())
+    trampoline_metadata = json.loads(trampoline_configuration.read_text())
 
     # get envs of the trampoline
     trampoline_env = trampoline_metadata["env"]
@@ -508,6 +510,7 @@ def test_trampoline_considers_global_config_json(
 
     # now execute the binary
     current_env = dict(os.environ)
-    current_env.pop("CONDA_PREFIX")
+    current_env.pop("CONDA_PREFIX")  # Necessary if we run this test within a Pixi shell
     env = current_env | env
-    verify_cli_command([dummy_b], stdout_contains="NOT_PRESENT", env=env, reset_env=True)
+    exposed_executable = tmp_path / "bin" / exec_extension(f"{executable_name}")
+    verify_cli_command([exposed_executable], stdout_contains="NOT_PRESENT", env=env, reset_env=True)
