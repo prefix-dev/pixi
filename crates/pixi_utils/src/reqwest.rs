@@ -4,7 +4,7 @@ use std::{
     collections::HashMap,
     path::PathBuf,
     sync::{Arc, LazyLock},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use miette::IntoDiagnostic;
@@ -224,10 +224,13 @@ impl LazyReqwestClient {
 
         Ok(Self {
             client: Arc::new(LazyLock::new(Box::new(move || {
-                builder
+                let start = Instant::now();
+                let client = builder
                     .danger_accept_invalid_certs(tls_no_verify)
                     .build()
-                    .expect("failed to create reqwest Client")
+                    .expect("failed to create reqwest Client");
+                tracing::debug!("instantiating reqwest Client took {:?}", start.elapsed());
+                client
             }))),
         })
     }
