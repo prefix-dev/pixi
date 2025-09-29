@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use pixi_core::{Workspace, environment::LockFileUsage};
-use pixi_manifest::{EnvironmentName, Task, TaskName};
+use pixi_manifest::{EnvironmentName, FeatureName, Task, TaskName};
+use rattler_conda_types::Platform;
 
 use crate::interface::Interface;
 use crate::workspace::{InitOptions, ReinstallOptions};
@@ -38,6 +39,23 @@ impl<I: Interface> WorkspaceContext<I> {
         crate::workspace::task::list_tasks(&self.interface, self.workspace.clone(), environment)
             .await
     }
+
+    pub async fn remove_task(
+        &self,
+        names: Vec<TaskName>,
+        platform: Option<Platform>,
+        feature: FeatureName,
+    ) -> miette::Result<()> {
+        crate::workspace::task::remove_tasks(
+            &self.interface,
+            self.workspace.clone(),
+            names,
+            platform,
+            feature,
+        )
+        .await
+    }
+
     pub async fn reinstall(
         &self,
         options: ReinstallOptions,

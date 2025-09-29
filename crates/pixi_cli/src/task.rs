@@ -311,7 +311,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .locate()?;
     match args.operation {
         Operation::Add(args) => add_task(workspace.modify()?, args).await,
-        Operation::Remove(args) => remove_tasks(workspace.modify()?, args).await,
+        Operation::Remove(args) => remove_tasks(workspace, args).await,
         Operation::Alias(args) => alias_task(workspace.modify()?, args).await,
         Operation::List(args) => list_tasks(workspace, args).await,
     }
@@ -370,67 +370,16 @@ async fn alias_task(mut workspace: WorkspaceMut, args: AliasArgs) -> miette::Res
     Ok(())
 }
 
-async fn remove_tasks(mut workspace: WorkspaceMut, args: RemoveArgs) -> miette::Result<()> {
-    let mut to_remove = Vec::new();
-    let feature = args
-        .feature
-        .map_or_else(FeatureName::default, FeatureName::from);
-    for name in args.names.iter() {
-        if let Some(platform) = args.platform {
-            if !workspace
-                .workspace()
-                .workspace
-                .value
-                .tasks(Some(platform), &feature)?
-                .contains_key(name)
-            {
-                eprintln!(
-                    "{}Task '{}' does not exist on {}",
-                    console::style(console::Emoji("❌ ", "X")).red(),
-                    name.fancy_display().bold(),
-                    console::style(platform.as_str()).bold(),
-                );
-                continue;
-            }
-        } else if !workspace
-            .workspace()
-            .workspace
-            .value
-            .tasks(None, &feature)?
-            .contains_key(name)
-        {
-            eprintln!(
-                "{}Task `{}` does not exist for the `{}` feature",
-                console::style(console::Emoji("❌ ", "X")).red(),
-                name.fancy_display().bold(),
-                console::style(&feature).bold(),
-            );
-            continue;
-        }
-
-        // Safe to remove
-        to_remove.push((name, args.platform));
-    }
-
-    let mut removed = Vec::with_capacity(to_remove.len());
-    for (name, platform) in to_remove {
-        workspace
-            .manifest()
-            .remove_task(name.clone(), platform, &feature)?;
-        removed.push(name);
-    }
-
-    workspace.save().await.into_diagnostic()?;
-
-    for name in removed {
-        eprintln!(
-            "{}Removed task `{}` ",
-            console::style(console::Emoji("✔ ", "+")).green(),
-            name.fancy_display().bold(),
-        );
-    }
-
-    Ok(())
+async fn remove_tasks(workspace: Workspace, args: RemoveArgs) -> miette::Result<()> {
+    let workspace_context = WorkspaceContext::new(CliInterface {}, workspace);
+    workspace_context
+        .remove_task(
+            args.names,
+            args.platform,
+            args.feature
+                .map_or_else(FeatureName::default, FeatureName::from),
+        )
+        .await
 }
 
 async fn add_task(mut workspace: WorkspaceMut, args: AddArgs) -> miette::Result<()> {

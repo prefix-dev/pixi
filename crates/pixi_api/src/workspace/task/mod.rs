@@ -1,10 +1,13 @@
 use std::collections::{HashMap, HashSet};
 
+use fancy_display::FancyDisplay;
+use miette::IntoDiagnostic;
 use pixi_core::{
     Workspace,
     workspace::{Environment, virtual_packages::verify_current_platform_can_run_environment},
 };
-use pixi_manifest::{EnvironmentName, Task, TaskName};
+use pixi_manifest::{EnvironmentName, FeatureName, Task, TaskName};
+use rattler_conda_types::Platform;
 
 use crate::interface::Interface;
 
@@ -59,4 +62,74 @@ pub async fn list_tasks<I: Interface>(
             (env_name, task_map)
         })
         .collect())
+}
+
+pub async fn remove_tasks<I: Interface>(
+    interface: &I,
+    workspace: Workspace,
+    names: Vec<TaskName>,
+    platform: Option<Platform>,
+    feature: FeatureName,
+) -> miette::Result<()> {
+    let mut workspace = workspace.modify()?;
+    let mut to_remove = Vec::new();
+
+    for name in names.iter() {
+        if let Some(platform) = platform {
+            if !workspace
+                .workspace()
+                .workspace
+                .value
+                .tasks(Some(platform), &feature)?
+                .contains_key(name)
+            {
+                interface
+                    .error(&format!(
+                        "Task '{}' does not exist on {}",
+                        name.fancy_display().bold(),
+                        console::style(platform.as_str()).bold(),
+                    ))
+                    .await;
+                continue;
+            }
+        } else if !workspace
+            .workspace()
+            .workspace
+            .value
+            .tasks(None, &feature)?
+            .contains_key(name)
+        {
+            interface
+                .error(&format!(
+                    "Task `{}` does not exist for the `{}` feature",
+                    name.fancy_display().bold(),
+                    console::style(&feature).bold(),
+                ))
+                .await;
+            continue;
+        }
+
+        // Safe to remove
+        to_remove.push((name, platform));
+    }
+
+    let mut removed = Vec::with_capacity(to_remove.len());
+    for (name, platform) in to_remove {
+        workspace
+            .manifest()
+            .remove_task(name.clone(), platform, &feature)?;
+        removed.push(name);
+    }
+
+    workspace.save().await.into_diagnostic()?;
+
+    for name in removed {
+        eprintln!(
+            "{}Removed task `{}` ",
+            console::style(console::Emoji("✔ ", "+")).green(),
+            name.fancy_display().bold(),
+        );
+    }
+
+    Ok(())
 }
