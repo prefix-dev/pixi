@@ -240,6 +240,7 @@ reqwest-retry = { git = "https://github.com/astral-sh/reqwest-middleware", rev =
 version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "06ec5a5f59ffaeb6cf5079c6cb184467da06c9db" }
 
 # pixi-rattler-patches - START
+coalesced_map = { git = "https://github.com/baszalmstra/rattler", branch = "perf/lazy-client" }
 file_url = { git = "https://github.com/baszalmstra/rattler", branch = "perf/lazy-client" }
 rattler = { git = "https://github.com/baszalmstra/rattler", branch = "perf/lazy-client" }
 rattler_cache = { git = "https://github.com/baszalmstra/rattler", branch = "perf/lazy-client" }

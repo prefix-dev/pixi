@@ -1359,16 +1359,6 @@ checksum = "b94f61472cee1439c0b966b47e3aca9ae07e45d070759512cd390ea2bebc6675"
 [[package]]
 name = "coalesced_map"
 version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7cf5a7a58a9d5b914bddb0a3a2bd920af2be897114dc8128af022af81fc43b8b"
-dependencies = [
- "dashmap",
- "tokio",
-]
-
-[[package]]
-name = "coalesced_map"
-version = "0.1.2"
 source = "git+https://github.com/baszalmstra/rattler?branch=perf%2Flazy-client#8f66658f1243768f7e1e38717ce89764d860ef2e"
 dependencies = [
  "dashmap",
@@ -4866,7 +4856,7 @@ dependencies = [
  "async-fd-lock",
  "base64 0.22.1",
  "chrono",
- "coalesced_map 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "coalesced_map",
  "derive_more",
  "dirs",
  "dunce",
@@ -4902,7 +4892,6 @@ dependencies = [
  "rattler_shell",
  "rattler_solve",
  "rattler_virtual_packages",
- "reqwest-middleware",
  "serde",
  "serde_json",
  "serde_with",
@@ -5021,7 +5010,6 @@ dependencies = [
  "rattler_solve",
  "rattler_virtual_packages",
  "reqwest",
- "reqwest-middleware",
  "rlimit",
  "rstest",
  "serde",
@@ -5159,8 +5147,6 @@ dependencies = [
  "rattler_shell",
  "rattler_virtual_packages",
  "regex",
- "reqwest",
- "reqwest-middleware",
  "rstest",
  "serde",
  "serde_json",
@@ -5328,7 +5314,6 @@ name = "pixi_python_status"
 version = "0.1.0"
 dependencies = [
  "rattler",
- "rattler_conda_types",
 ]
 
 [[package]]
@@ -6351,7 +6336,7 @@ dependencies = [
  "cache_control",
  "cfg-if",
  "chrono",
- "coalesced_map 0.1.2 (git+https://github.com/baszalmstra/rattler?branch=perf%2Flazy-client)",
+ "coalesced_map",
  "dashmap",
  "dirs",
  "file_url",

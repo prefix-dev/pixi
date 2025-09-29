@@ -10,4 +10,3 @@ version = "0.1.0"
 
 [dependencies]
 rattler = { workspace = true }
-rattler_conda_types = { workspace = true }
