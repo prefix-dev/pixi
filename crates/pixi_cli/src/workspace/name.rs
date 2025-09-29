@@ -38,11 +38,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
 
-    let workspace_context = WorkspaceContext::new(CliInterface {}, workspace);
+    let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace);
 
     match args.command {
-        Command::Get => print!("{}", workspace_context.name().await),
-        Command::Set(args) => workspace_context.set_name(&args.name).await?,
+        Command::Get => print!("{}", workspace_ctx.name().await),
+        Command::Set(args) => workspace_ctx.set_name(&args.name).await?,
     }
 
     Ok(())

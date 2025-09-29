@@ -1,7 +1,7 @@
 use std::{cmp::PartialEq, path::PathBuf};
 
 use clap::{Parser, ValueEnum};
-use pixi_api::{Interface, WorkspaceContext, workspace::InitOptions};
+use pixi_api::{WorkspaceContext, workspace::InitOptions};
 use rattler_conda_types::NamedChannelOrUrl;
 
 use crate::cli_interface::CliInterface;
@@ -96,11 +96,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Deprecation warning for the `pyproject` option
     if uses_deprecated_pyproject_flag {
-        CliInterface::default().warning(&format!(
-            "The '{}' option is deprecated and will be removed in the future.\nUse '{}' instead.",
+        eprintln!(
+            "{}The '{}' option is deprecated and will be removed in the future.\nUse '{}' instead.",
+            console::style(console::Emoji("⚠️ ", "")).yellow(),
             console::style("--pyproject").bold().red(),
             console::style("--format pyproject").bold().green(),
-        )).await;
+        );
         options.format = Some(pixi_api::workspace::ManifestFormat::Pyproject);
     }
 

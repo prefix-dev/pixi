@@ -309,22 +309,27 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
+
+    let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace.clone());
+
     match args.operation {
         Operation::Add(args) => add_task(workspace.modify()?, args).await,
-        Operation::Remove(args) => remove_tasks(workspace, args).await,
+        Operation::Remove(args) => remove_tasks(workspace_ctx, args).await,
         Operation::Alias(args) => alias_task(workspace.modify()?, args).await,
-        Operation::List(args) => list_tasks(workspace, args).await,
+        Operation::List(args) => list_tasks(workspace_ctx, args).await,
     }
 }
 
-async fn list_tasks(workspace: Workspace, args: ListArgs) -> miette::Result<()> {
+async fn list_tasks(
+    workspace_ctx: WorkspaceContext<CliInterface>,
+    args: ListArgs,
+) -> miette::Result<()> {
     if args.json {
-        print_tasks_json(&workspace);
+        print_tasks_json(&workspace_ctx.workspace());
         return Ok(());
     }
 
-    let workspace_context = WorkspaceContext::new(CliInterface {}, workspace);
-    let tasks_per_env = workspace_context
+    let tasks_per_env = workspace_ctx
         .list_tasks(
             args.environment
                 .and_then(|e| EnvironmentName::from_str(&e.to_string()).ok()),
@@ -370,9 +375,11 @@ async fn alias_task(mut workspace: WorkspaceMut, args: AliasArgs) -> miette::Res
     Ok(())
 }
 
-async fn remove_tasks(workspace: Workspace, args: RemoveArgs) -> miette::Result<()> {
-    let workspace_context = WorkspaceContext::new(CliInterface {}, workspace);
-    workspace_context
+async fn remove_tasks(
+    workspace_ctx: WorkspaceContext<CliInterface>,
+    args: RemoveArgs,
+) -> miette::Result<()> {
+    workspace_ctx
         .remove_task(
             args.names,
             args.platform,
