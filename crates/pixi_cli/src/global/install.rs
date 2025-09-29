@@ -5,7 +5,7 @@ use indexmap::IndexMap;
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
-use miette::{Context, IntoDiagnostic};
+use miette::Report;
 use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, Platform};
 
 use crate::global::{global_specs::GlobalSpecs, revert_environment_after_error};
@@ -78,18 +78,13 @@ pub struct Args {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = Config::with_cli_config(&args.config);
+
+    // Load the global config and ensure
+    // that the root_dir is relative to the manifest directory
     let project_original = pixi_global::Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
-
-    // Capture the current working directory for proper relative path resolution
-    let current_dir = std::env::current_dir()
-        .into_diagnostic()
-        .wrap_err("Could not retrieve the current directory")?;
-    let channel_config = rattler_conda_types::ChannelConfig {
-        root_dir: current_dir,
-        ..project_original.global_channel_config().clone()
-    };
+    let channel_config = project_original.global_channel_config().clone();
 
     let specs = args
         .packages
@@ -119,14 +114,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let mut env_changes = EnvChanges::default();
     let mut last_updated_project = project_original;
+    let mut errors: Vec<(EnvironmentName, Report)> = Vec::new();
     // Convert the packages into named global specs
 
     for (env_name, specs) in &env_to_specs {
         let mut project = last_updated_project.clone();
-        match setup_environment(env_name, &args, specs, &mut project)
-            .await
-            .wrap_err_with(|| format!("Couldn't install {}", env_name.fancy_display()))
-        {
+        match setup_environment(env_name, &args, specs, &mut project).await {
             Ok(state_changes) => {
                 if state_changes.has_changed() {
                     env_changes
@@ -138,6 +131,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         EnvState::NotChanged(NotChangedReason::AlreadyInstalled),
                     )
                 };
+                // Only advance project on success
+                last_updated_project = project;
             }
             Err(err) => {
                 if let Err(revert_err) =
@@ -146,10 +141,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     tracing::warn!("Reverting of the operation failed");
                     tracing::info!("Reversion error: {:?}", revert_err);
                 }
-                return Err(err);
+                errors.push((env_name.clone(), err));
             }
         }
-        last_updated_project = project;
     }
 
     // After installing, we always want to list the changed environments
@@ -162,7 +156,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     )
     .await?;
 
-    Ok(())
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        for (env_name, err) in errors {
+            tracing::warn!("Couldn't install {}\n{err:?}", env_name.fancy_display());
+        }
+        Err(miette::miette!("Some environments couldn't be installed."))
+    }
 }
 
 async fn setup_environment(

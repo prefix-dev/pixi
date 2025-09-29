@@ -1,0 +1,14 @@
+---
+source: crates/pixi/tests/integration_rust/add_tests.rs
+expression: pixi.workspace().unwrap().workspace.provenance.read().unwrap().into_inner()
+---
+[project]
+name = "test-channel-change"
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["<PLATFORM>"]
+
+[dependencies]
+python = ">=3.13.2,<3.14"
+
+[pypi-dependencies]
+boltons = { git = "https://github.com/mahmoud/boltons.git" }

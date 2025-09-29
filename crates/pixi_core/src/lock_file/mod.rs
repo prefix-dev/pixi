@@ -13,15 +13,18 @@ pub use crate::environment::CondaPrefixUpdater;
 pub use install_subset::{FilteredPackages, InstallSubset};
 pub use package_identifier::PypiPackageIdentifier;
 use pixi_record::PixiRecord;
+pub use pixi_uv_context::UvResolutionContext;
 use rattler_lock::{PypiPackageData, PypiPackageEnvironmentData};
 pub use records_by_name::{PixiRecordsByName, PypiRecordsByName};
-pub use resolve::{pypi::resolve_pypi, uv_resolution_context::UvResolutionContext};
+pub use resolve::pypi::resolve_pypi;
 pub use satisfiability::{
     EnvironmentUnsat, PlatformUnsat, verify_environment_satisfiability,
     verify_platform_satisfiability,
 };
-pub use update::{LockFileDerivedData, PackageFilterNames, ReinstallPackages, UpdateContext};
-pub use update::{UpdateLockFileOptions, UpdateMode};
+pub use update::{
+    LockFileDerivedData, PackageFilterNames, ReinstallEnvironment, ReinstallPackages,
+    SolveCondaEnvironmentError, UpdateContext, UpdateLockFileOptions, UpdateMode,
+};
 pub use utils::filter_lock_file;
 
 pub use utils::IoConcurrencyLimit;

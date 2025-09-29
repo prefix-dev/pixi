@@ -23,6 +23,7 @@ pub mod add;
 mod build;
 pub mod clean;
 pub mod cli_config;
+pub mod cli_interface;
 pub mod command_info;
 pub mod completion;
 pub mod config;
@@ -200,11 +201,6 @@ pub struct LockFileUsageConfig {
     #[clap(
         long,
         env = "PIXI_FROZEN",
-        action = clap::ArgAction::Set,
-        default_value_t = false,
-        num_args = 0..=1,
-        default_missing_value = "true",
-        require_equals = true,
         help_heading = consts::CLAP_UPDATE_OPTIONS
     )]
     pub frozen: bool,
@@ -213,11 +209,6 @@ pub struct LockFileUsageConfig {
     #[clap(
         long,
         env = "PIXI_LOCKED",
-        action = clap::ArgAction::Set,
-        default_value_t = false,
-        num_args = 0..=1,
-        default_missing_value = "true",
-        require_equals = true,
         help_heading = consts::CLAP_UPDATE_OPTIONS
     )]
     pub locked: bool,
@@ -602,24 +593,5 @@ mod tests {
                 ));
             },
         );
-    }
-
-    #[test]
-    fn test_require_equals_for_boolean_flags() {
-        // Disallow space-separated value for --locked
-        let err = LockFileUsageConfig::try_parse_from(["test", "--locked", "true"]);
-        assert!(
-            err.is_err(),
-            "--locked true should not be accepted (require_equals)"
-        );
-
-        // Allow equals form
-        let ok = LockFileUsageConfig::try_parse_from(["test", "--locked=true"])
-            .expect("--locked=true should parse");
-        assert!(ok.locked);
-
-        // Bare flag still sets true
-        let ok2 = LockFileUsageConfig::try_parse_from(["test", "--locked"]).unwrap();
-        assert!(ok2.locked);
     }
 }

@@ -9,6 +9,7 @@ Then it will execute it by passing any additional arguments to it.
 Pixi extensions are standalone executables that follow a simple naming convention: they must be named `pixi-{command}` where `{command}` is the name of the subcommand you want to add. When you run `pixi {command}`, Pixi will automatically discover and execute the corresponding `pixi-{command}` executable.
 
 For example:
+
 - `pixi diff` → looks for `pixi-diff` executable
 - `pixi pack` → looks for `pixi-pack` executable  
 - `pixi deploy` → looks for `pixi-deploy` executable
@@ -23,7 +24,7 @@ Pixi searches all directories in your `PATH` environment variable for executable
 ### 2. `pixi global` Directories  
 Pixi also searches in directories managed by `pixi global`, which allows for organized extension management without cluttering your system PATH.
 
-When you run `pixi --help`, all discovered extensions are automatically listed in the "Available Extensions" section, making them easily discoverable alongside built-in commands.
+When you run `pixi --list`, all discovered extensions are automatically listed alongside all built-in commands, making the commands easily discoverable.
 
 ## Installing Extensions
 
@@ -43,7 +44,7 @@ This approach has several advantages:
 - **Isolated environments**: Each extension gets its own environment, preventing dependency conflicts
 - **Automatic discovery**: Extensions are automatically found by Pixi without modifying PATH
 - **Easy management**: Use `pixi global list` and `pixi global remove` to manage extensions
-- **Consistent experience**: Extensions appear in `pixi --help` just like built-in commands
+- **Consistent experience**: Extensions appear in `pixi --list` with all the built-in commands, just like how `Cargo` handles it
 
 ### Manual Installation
 
@@ -105,7 +106,7 @@ This works for both built-in commands and any extensions you have installed, mak
 
 ## Getting Help
 
-- **List available extensions**: Run `pixi --help` to see all available extensions
+- **List available extensions**: Run `pixi --list` to see all available extensions
 - **Community**: Join our [Discord](https://discord.gg/kKV8ZxyzY4) for discussions and support
 
 ## See Also

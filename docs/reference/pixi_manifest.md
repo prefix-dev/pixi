@@ -1,5 +1,6 @@
 
 The `pixi.toml` is the workspace manifest, also known as the Pixi workspace configuration file.
+It specifies environments for a workspace, and the package dependency requirements for those environments. It can also specify tasks which can run in those environments, as well as many other configuration options.
 
 A `toml` file is structured in different tables.
 This document will explain the usage of the different tables.
@@ -65,7 +66,7 @@ Pixi solves the dependencies for all these platforms and puts them in the lock f
 --8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_platforms"
 ```
 
-The available platforms are listed here: [link](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/enum.Platform.html)
+The available platforms are listed here: [link](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/platform/enum.Platform.html)
 
 !!! tip "Special macOS behavior"
     macOS has two platforms: `osx-64` for Intel Macs and `osx-arm64` for Apple Silicon Macs.
@@ -279,7 +280,7 @@ c_compiler_version = ["11.4", "14.0"]
 When build variants are specified, Pixi will:
 
 1. **Create variant combinations**: Generate all possible combinations of the specified variants
-2. **Build separate packages**: Create distinct package builds for each variant combination  
+2. **Build separate packages**: Create distinct package builds for each variant combination
 3. **Resolve dependencies**: Ensure each variant resolves with compatible dependency versions
 4. **Generate unique build strings**: Each variant gets a unique build identifier in the package name
 
@@ -296,7 +297,7 @@ python = ["3.11.*", "3.12.*"]
 python = ["3.11.*"]  # Only Python 3.11 on Windows
 c_compiler = ["vs2019"]
 
-# Linux-specific variants  
+# Linux-specific variants
 [workspace.target.linux-64.build-variants]
 c_compiler = ["gcc"]
 c_compiler_version = ["11.4", "13.0"]
@@ -963,7 +964,7 @@ Preview features in the documentation will be marked as such on the relevant pag
 The package section can be added
 to a workspace manifest to define the package that is built by Pixi.
 
-A package section needs to be inside a `workspace`, 
+A package section needs to be inside a `workspace`,
 either in the same manifest file as the `[workspace]` table or in a sub folder `pixi.toml`/`pyproject.toml` file.
 
 These packages will be built into a conda package that can be installed into a conda environment.
@@ -997,9 +998,9 @@ And to extend the basics, it can also contain the following fields:
     Most extra fields can be inherited from the workspace manifest.
     This means that you can define the `description`, `authors`, `license` in the workspace manifest, and they will be inherited by the package manifest.
     ```toml
-    [workspace]    
+    [workspace]
     name = "my-workspace"
-    
+
     [package]
     name = { workspace = true } # Inherit the name from the workspace
     ```

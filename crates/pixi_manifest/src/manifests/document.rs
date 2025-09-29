@@ -282,6 +282,7 @@ impl ManifestDocument {
         let array = self
             .manifest_mut()
             .get_mut_toml_array(table_parts, array_name)?;
+
         if let Some(array) = array {
             array.retain(|x| {
                 let req: pep508_rs::Requirement = x
@@ -920,6 +921,70 @@ NumPy = ">=1.20.0" # table inline comment
                 None,
                 Some(crate::PypiDependencyLocation::PixiPypiDependencies),
             )
+            .unwrap();
+
+        insta::assert_snapshot!(document.to_string());
+    }
+
+    /// This test checks that removing a pypi dependency
+    /// uses the same source name as the one used to add it.
+    #[test]
+    pub fn remove_pypi_dependency() {
+        let manifest_content = r#"
+[project]
+name = "pixi-demo"
+requires-python = ">= 3.11"
+version = "0.1.0"
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["osx-arm64"]
+
+[tool.pixi.pypi-dependencies]
+pixi_demo = { path = ".", editable = true }
+"#;
+
+        let mut document = ManifestDocument::PyProjectToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        let pypi_name = PypiPackageName::from_str("pixi_demo").unwrap();
+
+        document
+            .remove_pypi_dependency(&pypi_name, None, &FeatureName::default())
+            .unwrap();
+
+        insta::assert_snapshot!(document.to_string());
+    }
+
+    /// This test checks that removing a pypi dependency
+    /// with a different name casing will not remove it.
+    #[test]
+    pub fn remove_pypi_dependency_with_different_name() {
+        let manifest_content = r#"
+[project]
+name = "pixi-demo"
+requires-python = ">= 3.11"
+version = "0.1.0"
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["osx-arm64"]
+
+[tool.pixi.pypi-dependencies]
+pixi_demo = { path = ".", editable = true }
+"#;
+
+        let mut document = ManifestDocument::PyProjectToml(TomlDocument::new(
+            DocumentMut::from_str(manifest_content).unwrap(),
+        ));
+
+        // Important bit here that is different from `remove_pypi_dependency` test:
+        // using a dash instead of an underscore
+        let pypi_name = PypiPackageName::from_str("pixi-demo").unwrap();
+
+        document
+            .remove_pypi_dependency(&pypi_name, None, &FeatureName::default())
             .unwrap();
 
         insta::assert_snapshot!(document.to_string());

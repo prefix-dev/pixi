@@ -36,13 +36,14 @@ use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Arch, GenericVirtualPackage, PackageName, ParseChannelError, Platform};
 use rattler_lock::{LockFile, LockedPackageRef, ParseCondaLockError};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::Semaphore;
 use tracing::Instrument;
 use uv_normalize::ExtraName;
 
 use super::{
-    CondaPrefixUpdater, InstallSubset, PixiRecordsByName, PypiRecordsByName, UvResolutionContext,
+    CondaPrefixUpdater, InstallSubset, PixiRecordsByName, PypiRecordsByName,
     outdated::OutdatedEnvironments, utils::IoConcurrencyLimit,
 };
 use crate::{
@@ -53,7 +54,6 @@ use crate::{
         PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PythonStatus,
         read_environment_file, write_environment_file,
     },
-    install_pypi::{PyPIBuildConfig, PyPIContextConfig, PyPIEnvironmentUpdater, PyPIUpdateConfig},
     lock_file::{
         self, PypiRecord, reporter::SolveProgressBar,
         virtual_packages::validate_system_meets_environment_requirements,
@@ -63,6 +63,10 @@ use crate::{
         grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
     },
 };
+use pixi_install_pypi::{
+    PyPIBuildConfig, PyPIContextConfig, PyPIEnvironmentUpdater, PyPIUpdateConfig,
+};
+use pixi_uv_context::UvResolutionContext;
 
 impl Workspace {
     /// Ensures that the lock-file is up-to-date with the project.
@@ -245,10 +249,18 @@ pub struct UpdateLockFileOptions {
     pub max_concurrent_solves: usize,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub enum ReinstallPackages {
     #[default]
     None,
+    All,
+    Some(HashSet<String>),
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub enum ReinstallEnvironment {
+    #[default]
+    Default,
     All,
     Some(HashSet<String>),
 }
@@ -535,7 +547,7 @@ impl<'p> LockFileDerivedData<'p> {
 
                 let uv_context = self
                     .uv_context
-                    .get_or_try_init(|| UvResolutionContext::from_workspace(self.workspace))?
+                    .get_or_try_init(|| UvResolutionContext::from_config(self.workspace.config()))?
                     .clone()
                     .set_cache_refresh(uv_reinstall, uv_packages);
 
@@ -598,7 +610,7 @@ impl<'p> LockFileDerivedData<'p> {
                         .into_diagnostic()?;
                     PyPIEnvironmentUpdater::new(config, build_config, context_config)
                         .with_ignored_extraneous(names)
-                        .update(&pixi_records, &pypi_records, &python_status)
+                        .update(&python_status, &pixi_records, &pypi_records)
                         .await
                 }
                 .with_context(|| {
@@ -1454,7 +1466,7 @@ impl<'p> UpdateContext<'p> {
                 };
 
             let uv_context = uv_context
-                .get_or_try_init(|| UvResolutionContext::from_workspace(project))?
+                .get_or_try_init(|| UvResolutionContext::from_config(project.config()))?
                 .clone();
 
             let locked_group_records = self

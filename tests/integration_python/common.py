@@ -1,15 +1,15 @@
 import os
 import platform
 import subprocess
-from contextlib import contextmanager
+import sys
+from collections.abc import Sequence
 from enum import IntEnum
 from pathlib import Path
-import sys
-from typing import Generator, Optional, Sequence, Set, Tuple
+from typing import override
 
 from rattler import Platform
 
-PIXI_VERSION = "0.54.1"
+PIXI_VERSION = "0.55.0"
 
 
 ALL_PLATFORMS = '["linux-64", "osx-64", "osx-arm64", "win-64", "linux-ppc64le", "linux-aarch64"]'
@@ -45,6 +45,7 @@ class Output:
         self.stderr = stderr
         self.returncode = returncode
 
+    @override
     def __str__(self) -> str:
         return f"command: {self.command}"
 
@@ -160,17 +161,7 @@ def get_manifest(directory: Path) -> Path:
         raise ValueError("Neither pixi.toml nor pyproject.toml found")
 
 
-@contextmanager
-def cwd(path: str | Path) -> Generator[None, None, None]:
-    oldpwd = os.getcwd()
-    os.chdir(path)
-    try:
-        yield
-    finally:
-        os.chdir(oldpwd)
-
-
-def run_and_get_env(pixi: Path, *args: str, env_var: str) -> Tuple[Optional[str], Output]:
+def run_and_get_env(pixi: Path, *args: str, env_var: str) -> tuple[str | None, Output]:
     if sys.platform.startswith("win"):
         cmd = [str(pixi), "exec", *args, "--", "cmd", "/c", f"echo %{env_var}%"]
     else:
@@ -208,7 +199,7 @@ def discover_pixi_commands() -> set[str]:
     """Discover all available pixi commands by walking the docs/reference/cli/pixi directory.
 
     Returns:
-        Set[str]: Set of command names in the format "pixi command subcommand ..."
+        set[str]: Set of command names in the format "pixi command subcommand ..."
 
     Examples:
         {"pixi add", "pixi workspace channel add", "pixi shell", ...}
@@ -241,7 +232,7 @@ def check_command_supports_flags(command_parts: list[str], *flag_names: str) -> 
         *flag_names: Variable number of flag names to check for (e.g., "--frozen", "--no-install")
 
     Returns:
-        Tuple[bool, ...]: Tuple of booleans indicating support for each flag in order
+        tuple[bool, ...]: Tuple of booleans indicating support for each flag in order
 
     Examples:
         check_command_supports_flags(["add"], "--frozen", "--no-install")
@@ -261,7 +252,7 @@ def check_command_supports_flags(command_parts: list[str], *flag_names: str) -> 
         doc_content = doc_file.read_text()
 
         # Check each flag
-        results = []
+        results: list[bool] = []
         for flag_name in flag_names:
             results.append(flag_name in doc_content)
 
@@ -288,7 +279,7 @@ def find_commands_supporting_flags(*flag_names: str) -> list[str]:
         # Returns: ["pixi shell"] (special case that uses --locked instead of --frozen)
     """
     all_commands = discover_pixi_commands()
-    supported_commands = []
+    supported_commands: list[str] = []
 
     for command_str in all_commands:
         # Skip the "pixi" prefix to get command parts
@@ -310,7 +301,7 @@ def find_commands_supporting_flags(*flag_names: str) -> list[str]:
     return sorted(supported_commands)
 
 
-def find_commands_supporting_frozen_and_no_install() -> Set[str]:
+def find_commands_supporting_frozen_and_no_install() -> set[str]:
     """Convenience function to find commands supporting both --frozen and --no-install flags.
 
     This also includes commands that use --locked instead of --frozen (like pixi shell).

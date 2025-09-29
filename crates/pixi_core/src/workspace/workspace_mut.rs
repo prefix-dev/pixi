@@ -5,11 +5,15 @@ use std::{
     sync::Arc,
 };
 
+use crate::lock_file::SolveCondaEnvironmentError;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, NamedSource};
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{Requirement, VersionOrUrl::VersionSpecifier};
+use pixi_command_dispatcher::{
+    CommandDispatcherError, MissingChannelError, SolvePixiEnvironmentError::MissingChannel,
+};
 use pixi_config::PinningStrategy;
 use pixi_manifest::{
     DependencyOverwriteBehavior, FeatureName, FeaturesExt, HasFeaturesIter, LoadManifestsError,
@@ -365,7 +369,25 @@ impl WorkspaceMut {
             .finish()
             .await?
             .update()
-            .await?;
+            .await
+            .map_err(|mut e| {
+                if let Some(SolveCondaEnvironmentError::SolveFailed {
+                    source:
+                        CommandDispatcherError::Failed(MissingChannel(MissingChannelError {
+                            package: _,
+                            channel,
+                            advice,
+                        })),
+                    ..
+                }) = e.downcast_mut::<SolveCondaEnvironmentError>()
+                {
+                    *advice = Some(format!(
+                        "To add the missing channel to a workspace, use:\n\n  {}",
+                        console::style(format!("pixi workspace channel add {}", channel)).bold(),
+                    ));
+                }
+                e
+            })?;
 
         let mut implicit_constraints = HashMap::new();
         if !conda_specs_to_add_constraints_for.is_empty() {

@@ -2,6 +2,7 @@ import os
 import tomllib
 
 from pathlib import Path
+from collections.abc import Iterable
 
 from dirty_equals import IsPartialDict
 from inline_snapshot import snapshot
@@ -14,7 +15,7 @@ from .common import (
 
 
 class TestImport:
-    simple_env_yaml = {
+    simple_env_yaml: dict[str, Iterable[str]] = {
         "name": "simple-env",
         "channels": ["conda-forge"],
         "dependencies": ["python"],
@@ -46,33 +47,41 @@ class TestImport:
 
 
 class TestCondaEnv:
-    simple_env_yaml = {
+    simple_env_yaml: dict[str, Iterable[str]] = {
         "name": "simple-env",
         "channels": ["conda-forge"],
         "dependencies": ["python"],
     }
 
-    cowpy_env_yaml = {
+    cowpy_env_yaml: dict[str, Iterable[str]] = {
         "name": "cowpy",
         "channels": ["conda-forge"],
         "dependencies": ["cowpy"],
     }
 
-    noname_env_yaml = {
+    noname_env_yaml: dict[str, Iterable[str]] = {
         "channels": ["conda-forge"],
         "dependencies": ["python"],
     }
 
-    xpx_env_yaml = {
+    xpx_env_yaml: dict[str, Iterable[str]] = {
         "name": "array-api-extra",
         "channels": ["conda-forge"],
         "dependencies": ["array-api-extra"],
     }
 
-    complex_env_yaml = {
+    complex_env_yaml: dict[str, Iterable[str]] = {
         "name": "complex-env",
         "channels": ["conda-forge", "bioconda"],
         "dependencies": ["cowpy=1.1.4", "libblas=*=*openblas", "snakemake-minimal"],
+    }
+
+    url_channel_dep_env_yaml: dict[str, Iterable[str]] = {
+        "name": "url-channel-dep-env",
+        "channels": ["conda-forge"],
+        "dependencies": [
+            "https://someartifactory.com/artifactory/api/conda/chaos-conda-dev/::somepackage==0.1.0"
+        ],
     }
 
     def test_import_conda_env(self, pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -496,12 +505,71 @@ class TestCondaEnv:
             }
         )
 
+    def test_import_url_channel_dep(self, pixi: Path, tmp_pixi_workspace: Path) -> None:
+        """
+        Check that channels are parsed correctly when a conda-env file provides a
+        dependency of the form `url::pkg` under `dependencies:`.
+        Regression test for prefix-dev/pixi#4195.
+        """
+        manifest_path = tmp_pixi_workspace / "pixi.toml"
+
+        import_file_path = tmp_pixi_workspace / "url_channel_dep_env.yml"
+        with open(import_file_path, "w") as file:
+            yaml.dump(self.url_channel_dep_env_yaml, file)
+
+        verify_cli_command([pixi, "init", tmp_pixi_workspace])
+
+        # Import an environment with a `url::pkg` dependency
+        verify_cli_command(
+            [
+                pixi,
+                "import",
+                "--manifest-path",
+                manifest_path,
+                import_file_path,
+                "--format=conda-env",
+            ],
+        )
+
+        parsed_manifest = tomllib.loads(manifest_path.read_text())
+        assert (
+            "https://someartifactory.com/artifactory/api/conda/chaos-conda-dev"
+            in parsed_manifest["feature"]["url-channel-dep-env"]["channels"]
+        )
+        assert parsed_manifest == snapshot(
+            {
+                "workspace": IsPartialDict,
+                "tasks": {},
+                "dependencies": {},
+                "feature": {
+                    "url-channel-dep-env": {
+                        "channels": [
+                            "conda-forge",
+                            "https://someartifactory.com/artifactory/api/conda/chaos-conda-dev",
+                        ],
+                        "dependencies": {
+                            "somepackage": {
+                                "version": "==0.1.0",
+                                "channel": "https://someartifactory.com/artifactory/api/conda/chaos-conda-dev",
+                            }
+                        },
+                    }
+                },
+                "environments": {
+                    "url-channel-dep-env": {
+                        "features": ["url-channel-dep-env"],
+                        "no-default-feature": True,
+                    }
+                },
+            }
+        )
+
 
 class TestPypiTxt:
-    simple_txt = "cowpy"
-    xpx_txt = "array-api-extra"
-    numpy_txt = "numpy<2"
-    complex_txt = """
+    simple_txt: str = "cowpy"
+    xpx_txt: str = "array-api-extra"
+    numpy_txt: str = "numpy<2"
+    complex_txt: str = """
 -c numpy_requirements.txt
 cowpy==1.1.4
 -r xpx_requirements.txt

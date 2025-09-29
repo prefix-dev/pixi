@@ -1,5 +1,4 @@
 import json
-import os
 import platform
 import shutil
 import sys
@@ -7,18 +6,17 @@ import tomllib
 from pathlib import Path
 
 import pytest
-from dirty_equals import IsStr, IsList, AnyThing
+from dirty_equals import AnyThing, IsList, IsStr
 from inline_snapshot import snapshot
 
 from .common import (
+    CONDA_FORGE_CHANNEL,
     CURRENT_PLATFORM,
     EMPTY_BOILERPLATE_PROJECT,
     PIXI_VERSION,
     ExitCode,
-    cwd,
-    verify_cli_command,
-    CONDA_FORGE_CHANNEL,
     find_commands_supporting_frozen_and_no_install,
+    verify_cli_command,
 )
 
 
@@ -33,7 +31,7 @@ def test_pixi(pixi: Path) -> None:
 def test_project_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest_path = tmp_pixi_workspace / "pixi.toml"
     # Create a new project
-    verify_cli_command([pixi, "init", tmp_pixi_workspace], ExitCode.SUCCESS)
+    verify_cli_command([pixi, "init", tmp_pixi_workspace])
 
     # Channel commands
     verify_cli_command(
@@ -253,7 +251,7 @@ def test_simple_project_setup(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest_path = tmp_pixi_workspace / "pixi.toml"
     conda_forge = "https://prefix.dev/conda-forge"
     # Create a new project
-    verify_cli_command([pixi, "init", "-c", conda_forge, tmp_pixi_workspace], ExitCode.SUCCESS)
+    verify_cli_command([pixi, "init", "-c", conda_forge, tmp_pixi_workspace])
 
     # Add package
     verify_cli_command(
@@ -342,430 +340,6 @@ def test_simple_project_setup(pixi: Path, tmp_pixi_workspace: Path) -> None:
         ],
         stderr_contains=["osx-arm64", "test", "Removed"],
     )
-
-
-def test_pixi_init_cwd(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    # Change directory to workspace
-    with cwd(tmp_pixi_workspace):
-        # Create a new project
-        verify_cli_command([pixi, "init", "."], ExitCode.SUCCESS)
-
-        # Verify that the manifest file is created
-        manifest_path = tmp_pixi_workspace / "pixi.toml"
-        assert manifest_path.exists()
-
-        # Verify that the manifest file contains expected content
-        manifest_content = manifest_path.read_text()
-        assert "[workspace]" in manifest_content
-
-
-def test_pixi_init_non_existing_dir(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    # Specify project dir
-    project_dir = tmp_pixi_workspace / "project_dir"
-
-    # Create a new project
-    verify_cli_command([pixi, "init", project_dir], ExitCode.SUCCESS)
-
-    # Verify that the manifest file is created
-    manifest_path = project_dir / "pixi.toml"
-    assert manifest_path.exists()
-
-    # Verify that the manifest file contains expected content
-    manifest_content = manifest_path.read_text()
-    assert "[workspace]" in manifest_content
-
-
-def test_pixi_init_pixi_home_parent(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    pixi_home = tmp_pixi_workspace / ".pixi"
-    pixi_home.mkdir(exist_ok=True)
-
-    verify_cli_command(
-        [pixi, "init", pixi_home.parent],
-        ExitCode.FAILURE,
-        stderr_contains="You cannot create a workspace in the parent of the pixi home directory",
-        env={"PIXI_HOME": str(pixi_home)},
-    )
-
-
-@pytest.mark.slow
-def test_pixi_init_pyproject(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    manifest_path = tmp_pixi_workspace / "pyproject.toml"
-    # Create a new project
-    verify_cli_command(
-        [pixi, "init", tmp_pixi_workspace, "--format", "pyproject"], ExitCode.SUCCESS
-    )
-    # Verify that install works
-    verify_cli_command([pixi, "install", "--manifest-path", manifest_path], ExitCode.SUCCESS)
-
-
-def test_upgrade_package_does_not_exist(
-    pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
-) -> None:
-    manifest_path = tmp_pixi_workspace / "pixi.toml"
-
-    # Create a new project
-    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, tmp_pixi_workspace])
-
-    # Add package
-    verify_cli_command([pixi, "add", "--manifest-path", manifest_path, "package"])
-
-    # Similar package names that don't exist should get suggestions
-    verify_cli_command(
-        [pixi, "upgrade", "--manifest-path", manifest_path, "package_similar_name"],
-        ExitCode.FAILURE,
-        stderr_contains=[
-            "could not find a package named 'package_similar_name'",
-            "did you mean 'package'",
-        ],
-    )
-
-    verify_cli_command(
-        [pixi, "upgrade", "--manifest-path", manifest_path, "different_name"],
-        ExitCode.FAILURE,
-        stderr_contains="could not find a package named 'different_name'",
-        stderr_excludes="did you mean 'package'",
-    )
-
-
-def test_upgrade_conda_package(
-    pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
-) -> None:
-    manifest_path = tmp_pixi_workspace / "pixi.toml"
-
-    # Create a new project
-    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, tmp_pixi_workspace])
-
-    # Add package pinned to version 0.1.0
-    verify_cli_command(
-        [
-            pixi,
-            "add",
-            "--manifest-path",
-            manifest_path,
-            f"package==0.1.0[channel={multiple_versions_channel_1},build_number=0]",
-        ]
-    )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
-    package = parsed_manifest["dependencies"]["package"]
-    assert package["version"] == "==0.1.0"
-    assert package["channel"] == multiple_versions_channel_1
-    assert package["build-number"] == "==0"
-
-    # Upgrade package, it should now be at 0.2.0, with semver ranges
-    # The channel should still be specified
-    verify_cli_command(
-        [pixi, "upgrade", "--manifest-path", manifest_path, "package"],
-        stderr_contains=["package", "0.1.0", "0.2.0"],
-    )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
-    package = parsed_manifest["dependencies"]["package"]
-    assert package["version"] == ">=0.2.0,<0.3"
-    assert package["channel"] == multiple_versions_channel_1
-    assert "build-number" not in package
-
-
-def test_upgrade_exclude(
-    pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
-) -> None:
-    manifest_path = tmp_pixi_workspace / "pixi.toml"
-
-    # Create a new project
-    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, tmp_pixi_workspace])
-
-    # Add package pinned to version 0.1.0
-    verify_cli_command(
-        [pixi, "add", "--manifest-path", manifest_path, "package==0.1.0", "package2==0.1.0"]
-    )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
-    assert parsed_manifest["dependencies"]["package"] == "==0.1.0"
-    assert parsed_manifest["dependencies"]["package2"] == "==0.1.0"
-
-    # Upgrade package, it should now be at 0.2.0, with semver ranges
-    # package2, should still be at 0.1.0, since we excluded it
-    verify_cli_command(
-        [pixi, "upgrade", "--manifest-path", manifest_path, "--exclude", "package2"],
-        stderr_contains=["package", "0.1.0", "0.2.0"],
-        stderr_excludes="package2",
-    )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
-    assert parsed_manifest["dependencies"]["package"] == ">=0.2.0,<0.3"
-    assert parsed_manifest["dependencies"]["package2"] == "==0.1.0"
-
-
-def test_upgrade_json_output(
-    pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
-) -> None:
-    manifest_path = tmp_pixi_workspace / "pixi.toml"
-
-    # Create a new project
-    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, tmp_pixi_workspace])
-
-    # Add package pinned to version 0.1.0
-    verify_cli_command(
-        [pixi, "add", "--manifest-path", manifest_path, "package==0.1.0", "package2==0.1.0"]
-    )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
-    assert parsed_manifest["dependencies"]["package"] == "==0.1.0"
-    assert parsed_manifest["dependencies"]["package2"] == "==0.1.0"
-
-    # Check if json output is correct and readable
-    result = verify_cli_command(
-        [pixi, "upgrade", "--manifest-path", manifest_path, "--json"],
-        stdout_contains=["package", "package2", "0.1.0", "0.2.0", 'version": ', "before", "after"],
-    )
-
-    data = json.loads(result.stdout)
-    assert data["environment"]["default"]
-
-
-def test_upgrade_dryrun(
-    pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
-) -> None:
-    manifest_path = tmp_pixi_workspace / "pixi.toml"
-    lock_file_path = tmp_pixi_workspace / "pixi.lock"
-    # Create a new project
-    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, tmp_pixi_workspace])
-
-    # Add package pinned to version 0.1.0
-    verify_cli_command(
-        [pixi, "add", "--manifest-path", manifest_path, "package==0.1.0", "package2==0.1.0"]
-    )
-
-    manifest_content = manifest_path.read_text()
-    lock_file_content = lock_file_path.read_text()
-    # Rename .pixi folder, no remove to avoid remove logic.
-    os.renames(tmp_pixi_workspace / ".pixi", tmp_pixi_workspace / ".pixi_backup")
-
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
-    assert parsed_manifest["dependencies"]["package"] == "==0.1.0"
-    assert parsed_manifest["dependencies"]["package2"] == "==0.1.0"
-
-    verify_cli_command(
-        [pixi, "upgrade", "--manifest-path", manifest_path, "--dry-run"],
-        stderr_contains=["package", "0.1.0", "0.2.0"],
-    )
-
-    # Verify the manifest, lock file and .pixi folder are not modified
-    assert manifest_path.read_text() == manifest_content
-    assert lock_file_path.read_text() == lock_file_content
-    assert not os.path.exists(tmp_pixi_workspace / ".pixi")
-
-
-@pytest.mark.slow
-def test_upgrade_pypi_package(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    manifest_path = tmp_pixi_workspace / "pixi.toml"
-
-    # Create a new project
-    verify_cli_command([pixi, "init", tmp_pixi_workspace])
-
-    # Add python
-    verify_cli_command([pixi, "add", "--manifest-path", manifest_path, "python=3.13"])
-
-    # Add httpx pinned to version 0.26.0
-    verify_cli_command(
-        [
-            pixi,
-            "add",
-            "--manifest-path",
-            manifest_path,
-            "--pypi",
-            "httpx[cli]==0.26.0",
-        ]
-    )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
-    assert parsed_manifest["pypi-dependencies"]["httpx"]["version"] == "==0.26.0"
-    assert parsed_manifest["pypi-dependencies"]["httpx"]["extras"] == ["cli"]
-
-    # Upgrade httpx, it should now be upgraded
-    # Extras should be preserved
-    verify_cli_command(
-        [pixi, "upgrade", "--manifest-path", manifest_path, "httpx"],
-        stderr_contains=["httpx", "0.26.0"],
-    )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
-    assert parsed_manifest["pypi-dependencies"]["httpx"]["version"] != "==0.26.0"
-    assert parsed_manifest["pypi-dependencies"]["httpx"]["extras"] == ["cli"]
-
-
-@pytest.mark.slow
-def test_upgrade_pypi_and_conda_package(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    manifest_path = tmp_pixi_workspace / "pyproject.toml"
-
-    # Create a new project
-    verify_cli_command(
-        [
-            pixi,
-            "init",
-            "--format",
-            "pyproject",
-            tmp_pixi_workspace,
-            "--channel",
-            "https://prefix.dev/conda-forge",
-        ]
-    )
-
-    # Add pinned numpy as conda and pypi dependency
-    verify_cli_command([pixi, "add", "--manifest-path", manifest_path, "numpy==1.*"])
-    verify_cli_command([pixi, "add", "--manifest-path", manifest_path, "--pypi", "numpy==1.*"])
-
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
-    numpy_pypi = parsed_manifest["project"]["dependencies"][0]
-    assert numpy_pypi == "numpy==1.*"
-    numpy_conda = parsed_manifest["tool"]["pixi"]["dependencies"]["numpy"]
-    assert numpy_conda == "1.*"
-
-    # Upgrade numpy, both conda and pypi should be upgraded
-    verify_cli_command(
-        [pixi, "upgrade", "--manifest-path", manifest_path, "numpy"],
-        stderr_contains=["numpy", "1."],
-    )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
-    numpy_pypi = parsed_manifest["project"]["dependencies"][0]
-    assert "1.*" not in numpy_pypi
-    numpy_conda = parsed_manifest["tool"]["pixi"]["dependencies"]["numpy"]
-    assert numpy_conda != "1.*"
-
-
-@pytest.mark.slow
-def test_upgrade_dependency_location_pixi(pixi: Path, tmp_path: Path) -> None:
-    # Test based on https://github.com/prefix-dev/pixi/issues/2470
-    # Making sure pixi places the upgraded package in the correct location
-    manifest_path = tmp_path / "pyproject.toml"
-    pyproject = f"""
-[project]
-name = "test-upgrade"
-dependencies = ["numpy==1.*"]
-requires-python = "==3.13"
-
-[project.optional-dependencies]
-cli = ["rich==12"]
-
-[dependency-groups]
-test = ["pytest==6"]
-
-[tool.pixi.project]
-channels = ["https://prefix.dev/conda-forge"]
-platforms = ["{CURRENT_PLATFORM}"]
-
-[tool.pixi.pypi-dependencies]
-polars = "==0.*"
-
-[tool.pixi.environments]
-test = ["test"]
-    """
-
-    manifest_path.write_text(pyproject)
-
-    # Upgrade numpy, both conda and pypi should be upgraded
-    verify_cli_command(
-        [pixi, "upgrade", "--manifest-path", manifest_path],
-        stderr_contains=["polars"],
-    )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
-
-    # Check that `requrires-python` is the same
-    assert parsed_manifest["project"]["requires-python"] == "==3.13"
-
-    # Check that `tool.pixi.dependencies.python` isn't added
-    assert "python" not in parsed_manifest.get("tool", {}).get("pixi", {}).get("dependencies", {})
-
-    # Check that project.dependencies are upgraded
-    project_dependencies = parsed_manifest["project"]["dependencies"]
-    numpy_pypi = project_dependencies[0]
-    assert "numpy" in numpy_pypi
-    assert "==1.*" not in numpy_pypi
-    assert "polars" not in project_dependencies
-
-    # Check that the pypi-dependencies are upgraded
-    pypi_dependencies = parsed_manifest["tool"]["pixi"]["pypi-dependencies"]
-    polars_pypi = pypi_dependencies["polars"]
-    assert polars_pypi != "==0.*"
-    assert "numpy" not in pypi_dependencies
-
-
-def test_upgrade_keep_info(
-    pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
-) -> None:
-    manifest_path = tmp_pixi_workspace / "pixi.toml"
-
-    # Create a new project
-    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, tmp_pixi_workspace])
-
-    # Add package pinned to version 0.1.0
-    verify_cli_command(
-        [
-            pixi,
-            "add",
-            "--manifest-path",
-            manifest_path,
-            f"{multiple_versions_channel_1}::package3==0.1.0=ab*",
-        ]
-    )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
-    assert "==0.1.0" in parsed_manifest["dependencies"]["package3"]["version"]
-    assert "ab*" in parsed_manifest["dependencies"]["package3"]["build"]
-    assert multiple_versions_channel_1 in parsed_manifest["dependencies"]["package3"]["channel"]
-
-    # Upgrade all, it should now be at 0.2.0, with the build intact
-    verify_cli_command(
-        [pixi, "upgrade", "--manifest-path", manifest_path],
-        stderr_contains=["package3", "0.1.0", "0.2.0"],
-    )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
-    # Update version
-    assert parsed_manifest["dependencies"]["package3"]["version"] == ">=0.2.0,<0.3"
-    # Keep build
-    assert "ab*" in parsed_manifest["dependencies"]["package3"]["build"]
-    # Keep channel
-    assert multiple_versions_channel_1 in parsed_manifest["dependencies"]["package3"]["channel"]
-
-    # Upgrade package3, it should now be at 0.2.0, with the build intact because it has a wildcard
-    verify_cli_command(
-        [pixi, "upgrade", "--manifest-path", manifest_path, "package3"],
-    )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
-    # Update version
-    assert parsed_manifest["dependencies"]["package3"]["version"] == ">=0.2.0,<0.3"
-    # Keep build
-    assert "ab*" in parsed_manifest["dependencies"]["package3"]["build"]
-    # Keep channel
-    assert multiple_versions_channel_1 in parsed_manifest["dependencies"]["package3"]["channel"]
-
-
-def test_upgrade_remove_info(
-    pixi: Path, tmp_pixi_workspace: Path, multiple_versions_channel_1: str
-) -> None:
-    manifest_path = tmp_pixi_workspace / "pixi.toml"
-
-    # Create a new project
-    verify_cli_command([pixi, "init", "--channel", multiple_versions_channel_1, tmp_pixi_workspace])
-
-    # Add package pinned to version 0.1.0
-    verify_cli_command(
-        [
-            pixi,
-            "add",
-            "--manifest-path",
-            manifest_path,
-            f"{multiple_versions_channel_1}::package3==0.1.0=abc",
-        ]
-    )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
-    assert "==0.1.0" in parsed_manifest["dependencies"]["package3"]["version"]
-    assert "abc" in parsed_manifest["dependencies"]["package3"]["build"]
-    assert multiple_versions_channel_1 in parsed_manifest["dependencies"]["package3"]["channel"]
-
-    # Upgrade package3, it should now be at 0.2.0, without the build but with the channel
-    verify_cli_command(
-        [pixi, "upgrade", "--manifest-path", manifest_path, "package3"],
-    )
-    parsed_manifest = tomllib.loads(manifest_path.read_text())
-    # Update version
-    assert parsed_manifest["dependencies"]["package3"]["version"] == ">=0.2.0,<0.3"
-    # Keep channel
-    assert multiple_versions_channel_1 in parsed_manifest["dependencies"]["package3"]["channel"]
-    # Remove build
-    assert "build" not in parsed_manifest["dependencies"]["package3"]
 
 
 def test_concurrency_flags(
@@ -877,7 +451,7 @@ def test_pixi_manifest_path(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest_path = tmp_pixi_workspace / "pixi.toml"
 
     # Create a new project
-    verify_cli_command([pixi, "init", tmp_pixi_workspace], ExitCode.SUCCESS)
+    verify_cli_command([pixi, "init", tmp_pixi_workspace])
 
     # Modify project without manifest path
     verify_cli_command(
@@ -1087,9 +661,15 @@ def test_pixi_lock(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -
 
 @pytest.mark.extra_slow
 def test_pixi_auth(pixi: Path) -> None:
-    verify_cli_command([pixi, "auth", "login", "--token", "DUMMY_TOKEN", "https://prefix.dev/"])
     verify_cli_command(
-        [pixi, "auth", "login", "--token", "DUMMY_TOKEN", "https://repo.prefix.dev/"]
+        [pixi, "auth", "login", "--token", "DUMMY_TOKEN", "https://prefix.dev/"],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="Unauthorized or invalid token",
+    )
+    verify_cli_command(
+        [pixi, "auth", "login", "--token", "DUMMY_TOKEN", "https://repo.prefix.dev/"],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="Unauthorized or invalid token",
     )
     verify_cli_command(
         [pixi, "auth", "login", "--conda-token", "DUMMY_TOKEN", "https://conda.anaconda.org"]
@@ -1422,9 +1002,7 @@ def test_pixi_task_list_json(pixi: Path, tmp_pixi_workspace: Path) -> None:
         """
     manifest.write_text(toml)
 
-    result = verify_cli_command(
-        [pixi, "task", "list", "--json", "--manifest-path", manifest], ExitCode.SUCCESS
-    )
+    result = verify_cli_command([pixi, "task", "list", "--json", "--manifest-path", manifest])
 
     task_data = json.loads(result.stdout)
 
@@ -1475,14 +1053,12 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
 
     verify_cli_command([pixi, "install", "--manifest-path", manifest, "--all"])
 
-    result = verify_cli_command(
-        [pixi, "info", "--manifest-path", manifest, "--extended", "--json"], ExitCode.SUCCESS
-    )
+    result = verify_cli_command([pixi, "info", "--manifest-path", manifest, "--extended", "--json"])
     info_data = json.loads(result.stdout)
 
     # Stub out path, size and other dynamic data from snapshot()
     # samuelcolvin/dirty-equals#116
-    IsAnyList = IsList(length=...)  # type: ignore[call-overload]
+    IsAnyList = IsList(length=...)  # pyright: ignore[reportArgumentType]
     assert info_data == snapshot(
         {
             "platform": IsStr,
@@ -1611,7 +1187,7 @@ def test_frozen_no_install_invariant(pixi: Path, tmp_pixi_workspace: Path) -> No
     ]
 
     # Create a new project with bzip2 (lightweight package)
-    verify_cli_command([pixi, "init", tmp_pixi_workspace], ExitCode.SUCCESS)
+    verify_cli_command([pixi, "init", tmp_pixi_workspace])
     # Add bzip2 package to keep installation time low
     verify_cli_command([pixi, "add", "--manifest-path", manifest_path, "bzip2"])
 
@@ -1709,9 +1285,128 @@ dependencies:
     if missing_commands:
         missing_list = "\n  - ".join(sorted(missing_commands))
         pytest.fail(
-            f"Found {len(missing_commands)} command(s) that support --frozen --no-install "
-            f"but are not included in the test:\n  - {missing_list}\n\n"
-            f"Please add these commands to the commands_to_test list in test_frozen_no_install_invariant "
-            f"to ensure comprehensive coverage.\n"
-            f"If you get here you know all commands that *are* supported correctly listen to --frozen and --no-install flags."
+            f"""Found {len(missing_commands)} command(s) that support --frozen --no-install\
+but are not included in the test:\n  - {missing_list}\n
+Please add these commands to the commands_to_test list in test_frozen_no_install_invariant\
+to ensure comprehensive coverage.
+If you get here you know all commands that *are* supported correctly listen to --frozen and --no-install flags."""
         )
+
+
+@pytest.mark.slow
+def test_add_url_no_channel(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """
+    Check that a helpful error message is raised when attempting to
+    add a `url::pkg` where `url` is not a channel of the workspace.
+    """
+
+    verify_cli_command([pixi, "init", tmp_pixi_workspace])
+
+    # helpful error for missing channel
+    verify_cli_command(
+        [
+            pixi,
+            "add",
+            "https://repo.prefix.dev/bioconda::snakemake-minimal",
+            "--manifest-path",
+            tmp_pixi_workspace,
+        ],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="pixi workspace channel add https://repo.prefix.dev/bioconda",
+    )
+
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "channel",
+            "add",
+            "https://repo.prefix.dev/bioconda",
+            "--manifest-path",
+            tmp_pixi_workspace,
+        ],
+    )
+    # successful after adding the channel
+    verify_cli_command(
+        [
+            pixi,
+            "add",
+            "https://repo.prefix.dev/bioconda::snakemake-minimal",
+            "--manifest-path",
+            tmp_pixi_workspace,
+        ],
+        stderr_contains="Added https://repo.prefix.dev/bioconda::snakemake-minimal",
+    )
+
+    # no message for initially unused feature...
+    verify_cli_command(
+        [
+            pixi,
+            "add",
+            "https://conda.anaconda.org/conda-forge::xz",
+            "--feature=prefix",
+            "--manifest-path",
+            tmp_pixi_workspace,
+        ],
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "environment",
+            "add",
+            "prefix",
+            "--feature=prefix",
+            "--manifest-path",
+            tmp_pixi_workspace,
+        ],
+    )
+    # ...but decent message on install:
+    verify_cli_command(
+        [
+            pixi,
+            "install",
+            "--environment=prefix",
+            "--manifest-path",
+            tmp_pixi_workspace,
+        ],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="unavailable channel 'https://conda.anaconda.org/conda-forge/'",
+    )
+    # and helpful message now feature is used:
+    verify_cli_command(
+        [
+            pixi,
+            "add",
+            "https://conda.anaconda.org/conda-forge::libzlib",
+            "--feature=prefix",
+            "--manifest-path",
+            tmp_pixi_workspace,
+        ],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="pixi workspace channel add https://conda.anaconda.org/conda-forge",
+    )
+
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "channel",
+            "add",
+            "--feature=prefix",
+            "https://conda.anaconda.org/conda-forge",
+            "--manifest-path",
+            tmp_pixi_workspace,
+        ],
+    )
+    # successful after adding the channel
+    verify_cli_command(
+        [
+            pixi,
+            "install",
+            "--environment=prefix",
+            "--manifest-path",
+            tmp_pixi_workspace,
+        ],
+        stderr_contains="The prefix environment has been installed",
+    )

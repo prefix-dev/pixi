@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::io::{Seek, Write};
 
 use flate2::read::GzDecoder;
@@ -251,10 +252,11 @@ pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Resu
     // Don't actually update the binary if `--dry-run` is passed
     if args.dry_run {
         if !is_quiet {
-            eprintln!(
-                "{} Pixi version has not been updated. If you want to update, run the command again without `--dry-run`.",
-                console::style(console::Emoji("ℹ️ ", "")).yellow()
-            );
+            let target_version = match target_version {
+                Some(target_version) => target_version,
+                None => latest_version().await?,
+            };
+            eprintln!("{}", get_dry_run_message(&current_version, &target_version));
         }
         return Ok(());
     }
@@ -405,6 +407,24 @@ pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Resu
     }
 
     Ok(())
+}
+
+/// Return the message that should be shown to users when executing with `--dry-run`.
+fn get_dry_run_message(current: &Version, target: &Version) -> String {
+    match target.cmp(current) {
+        Ordering::Equal => format!(
+            "{}Current pixi version already at latest version: {current}.",
+            console::style(console::Emoji("✔ ", "")).green()
+        ),
+        Ordering::Greater => format!(
+            "{}Pixi version would be updated from {current} to {target}, but `--dry-run` given.",
+            console::style(console::Emoji("ℹ️ ", "")).yellow()
+        ),
+        Ordering::Less => format!(
+            "{}Pixi version would be downgraded from {current} to {target}, but `--dry-run` given.",
+            console::style(console::Emoji("ℹ️ ", "")).yellow()
+        ),
+    }
 }
 
 /// Unpack files from a tar.gz archive to a target directory.

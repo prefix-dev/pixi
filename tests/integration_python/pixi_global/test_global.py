@@ -1,3 +1,4 @@
+import os
 import platform
 import shutil
 import tomllib
@@ -1122,6 +1123,36 @@ def test_install_only_reverts_failing(pixi: Path, tmp_path: Path, dummy_channel_
     assert not dummy_x.is_file()
 
 
+def test_install_continues_past_failing_env(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
+
+    # Order matters: fail in the middle (dummy-x), ensure it continues to install later packages
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "dummy-a",
+            "dummy-x",  # does not exist in dummy_channel_1
+            "dummy-b",
+        ],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="No candidates were found for dummy-x",
+    )
+
+    # Both valid packages are installed despite the error in between
+    assert dummy_a.is_file()
+    assert dummy_b.is_file()
+
+
 @pytest.mark.slow
 def test_install_platform(pixi: Path, tmp_path: Path) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
@@ -1493,6 +1524,38 @@ def test_uninstall_only_reverts_failing(pixi: Path, tmp_path: Path, dummy_channe
     assert not tmp_path.joinpath("envs", "dummy-a").is_dir()
     assert dummy_b.is_file()
     assert tmp_path.joinpath("envs", "dummy-b").is_dir()
+
+
+def test_uninstall_continues_past_missing_env(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+    dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
+
+    # Install two environments
+    verify_cli_command(
+        [pixi, "global", "install", "--channel", dummy_channel_1, "dummy-a", "dummy-b"],
+        env=env,
+    )
+    assert dummy_a.is_file()
+    assert dummy_b.is_file()
+
+    # Uninstall with a missing environment in between; should continue and remove both existing ones
+    missing_env = "does-not-exist"
+    verify_cli_command(
+        [pixi, "global", "uninstall", "dummy-a", missing_env, "dummy-b"],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains=f"Environment {missing_env} doesn't exist",
+    )
+
+    # Both existing environments are removed despite the error in between
+    assert not dummy_a.is_file()
+    assert not tmp_path.joinpath("envs", "dummy-a").is_dir()
+    assert not dummy_b.is_file()
+    assert not tmp_path.joinpath("envs", "dummy-b").is_dir()
 
 
 def test_global_update_single_package(
@@ -2113,7 +2176,7 @@ def test_tree_with_filter(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> N
     )
 
 
-def test_tree_nonexistent_environment(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+def test_tree_nonexistent_environment(pixi: Path, tmp_path: Path) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
 
     # Try to show tree for non-existent environment
@@ -2149,3 +2212,156 @@ def test_tree_invert(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
         env=env,
         stdout_contains=["dummy-c", "dummy-a 0.1.0"],
     )
+
+
+class TestCondaFile:
+    @pytest.mark.parametrize("path_arg", [True, False])
+    def test_install_conda_file(
+        self, pixi: Path, tmp_path: Path, shortcuts_channel_1: str, path_arg: bool
+    ) -> None:
+        """Test directly installing a `.conda` file with `pixi global`"""
+        env = {"PIXI_HOME": str(tmp_path), "PIXI_CACHE_DIR": str(tmp_path / "foo")}
+        cwd = tmp_path
+
+        conda_file = tmp_path / "pixi-editor-1.0.0-h4616a5c_0.conda"
+        shutil.copyfile(
+            Path.from_uri(shortcuts_channel_1) / "noarch" / "pixi-editor-1.0.0-h4616a5c_0.conda",
+            conda_file,
+        )
+
+        def check_install(conda_file_path: Path, cwd: Path):
+            if path_arg:
+                verify_cli_command(
+                    [pixi, "global", "install", "--path", conda_file_path], env=env, cwd=cwd
+                )
+            else:
+                verify_cli_command(
+                    [pixi, "global", "install", conda_file_path],
+                    env=env,
+                    expected_exit_code=ExitCode.FAILURE,
+                    stderr_contains="please pass `--path`",
+                    cwd=cwd,
+                )
+
+        # check absolute path
+        check_install(conda_file, cwd)
+
+        # check relative path in same dir
+        cwd = conda_file.parent
+        relative_conda_file = conda_file.relative_to(cwd, walk_up=True)
+        check_install(relative_conda_file, cwd)
+
+        # check relative path in subdir
+        cwd = conda_file.parent.parent
+        relative_conda_file = conda_file.relative_to(cwd, walk_up=True)
+        check_install(relative_conda_file, cwd)
+
+        # check relative path in a 'cousin' relative directory
+        cwd = tmp_path
+        relative_conda_file = conda_file.relative_to(cwd, walk_up=True)
+        check_install(relative_conda_file, cwd)
+
+    def test_update_sync_conda_file(
+        self, pixi: Path, tmp_path: Path, shortcuts_channel_1: str
+    ) -> None:
+        """Test that `pixi global {update, sync}` work and use the existing file."""
+        env = {"PIXI_HOME": str(tmp_path), "PIXI_CACHE_DIR": str(tmp_path / "foo")}
+        cwd = tmp_path
+
+        package_name = "pixi-editor"
+        conda_file = tmp_path / "pixi-editor-1.0.0-h4616a5c_0.conda"
+        shutil.copyfile(
+            Path.from_uri(shortcuts_channel_1) / "noarch" / "pixi-editor-1.0.0-h4616a5c_0.conda",
+            conda_file,
+        )
+
+        verify_cli_command(
+            [
+                pixi,
+                "global",
+                "install",
+                "--path",
+                conda_file,
+            ],
+            env=env,
+            cwd=cwd,
+        )
+
+        # update with file still there
+        verify_cli_command(
+            [
+                pixi,
+                "global",
+                "update",
+                "pixi-editor",
+            ],
+            env=env,
+            cwd=cwd,
+            stderr_contains="Environment pixi-editor was already up-to-date.",
+        )
+
+        # sync with file still there
+        verify_cli_command(
+            [
+                pixi,
+                "global",
+                "sync",
+            ],
+            env=env,
+            cwd=cwd,
+            stderr_contains="Nothing to do",
+        )
+
+        os.remove(conda_file)
+
+        # update with file gone
+        verify_cli_command(
+            [
+                pixi,
+                "global",
+                "update",
+                "pixi-editor",
+            ],
+            env=env,
+            cwd=cwd,
+            stderr_contains="Environment pixi-editor was already up-to-date.",
+        )
+
+        # sync with file gone
+        verify_cli_command(
+            [
+                pixi,
+                "global",
+                "sync",
+            ],
+            env=env,
+            cwd=cwd,
+            stderr_contains="Nothing to do",
+        )
+
+        # remove the environment
+        # XXX: should this fail instead?
+        shutil.rmtree(tmp_path / "envs" / package_name)
+
+        # update with environment removed
+        verify_cli_command(
+            [
+                pixi,
+                "global",
+                "update",
+                "pixi-editor",
+            ],
+            env=env,
+            cwd=cwd,
+        )
+
+        # sync with environment removed
+        verify_cli_command(
+            [
+                pixi,
+                "global",
+                "sync",
+            ],
+            env=env,
+            cwd=cwd,
+        )

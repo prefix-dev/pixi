@@ -20,3 +20,10 @@
     <style>.md-content__button {display:none !important}; </style>
     <style>.md-header__topic {font-weight:700 !important}</style>
 {% endblock %}
+
+{% block outdated %}
+  You're not viewing the latest version.
+  <a href="{{ '../' ~ base_url }}"> 
+    <strong>Click here to go to latest.</strong>
+  </a>
+{% endblock %}
