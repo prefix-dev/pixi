@@ -4890,6 +4890,7 @@ dependencies = [
 name = "pixi_bench"
 version = "0.1.0"
 dependencies = [
+ "clap",
  "codspeed-criterion-compat",
  "fs-err 2.11.0",
  "miette 7.6.0",

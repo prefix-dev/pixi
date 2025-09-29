@@ -1,3 +1,4 @@
+use clap::Parser;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use fs_err as fs;
 use once_cell::sync::Lazy;
@@ -359,11 +360,7 @@ format = "black ."
         let start = Instant::now();
 
         // Create clean arguments
-        let mut clean_args: clean::Args = unsafe { std::mem::zeroed() };
-        clean_args.workspace_config = pixi_cli::cli_config::WorkspaceConfig::default();
-        clean_args.environment = environment.map(|s| s.to_string());
-        clean_args.activation_cache = false;
-        clean_args.build = false;
+        let clean_args = clean::Args::parse_from(["clean", "-y"]);
 
         // Execute pixi clean directly
         let result = clean::execute(clean_args).await;
