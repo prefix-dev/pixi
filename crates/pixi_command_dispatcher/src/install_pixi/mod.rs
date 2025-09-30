@@ -179,7 +179,12 @@ impl InstallPixiEnvironmentSpec {
         let result = installer
             .install(self.prefix.path(), binary_records)
             .await
-            .map_err(InstallPixiEnvironmentError::Installer)
+            .map_err(|err| match err {
+                InstallerError::FailedToDetectInstalledPackages(err) => {
+                    InstallPixiEnvironmentError::ReadInstalledPackages(self.prefix, err)
+                }
+                err => InstallPixiEnvironmentError::Installer(err),
+            })
             .map_err(CommandDispatcherError::Failed)?;
 
         Ok(InstallPixiEnvironmentResult {
@@ -220,6 +225,10 @@ impl InstallPixiEnvironmentSpec {
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum InstallPixiEnvironmentError {
+    #[error("failed to collect prefix records from '{}'", .0.path().display())]
+    #[diagnostic(help("try `pixi clean` to reset the environment and run the command again"))]
+    ReadInstalledPackages(Prefix, #[source] std::io::Error),
+
     #[error(transparent)]
     Installer(InstallerError),
 
