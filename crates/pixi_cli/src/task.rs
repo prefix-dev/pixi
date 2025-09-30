@@ -322,7 +322,7 @@ async fn list_tasks(
     args: ListArgs,
 ) -> miette::Result<()> {
     if args.json {
-        print_tasks_json(&workspace_ctx.workspace());
+        print_tasks_json(workspace_ctx.workspace());
         return Ok(());
     }
 

@@ -20,8 +20,8 @@ impl<I: Interface> WorkspaceContext<I> {
         }
     }
 
-    pub fn workspace(&self) -> Workspace {
-        self.workspace.clone()
+    pub fn workspace(&self) -> &Workspace {
+        &self.workspace
     }
 
     pub async fn init(interface: I, options: InitOptions) -> miette::Result<Workspace> {
