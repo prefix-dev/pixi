@@ -13,7 +13,7 @@ use crate::interface::Interface;
 
 pub async fn list_tasks<I: Interface>(
     _interface: &I,
-    workspace: Workspace,
+    workspace: &Workspace,
     environment: Option<EnvironmentName>,
 ) -> miette::Result<HashMap<EnvironmentName, HashMap<TaskName, Task>>> {
     let explicit_environment = environment
@@ -66,13 +66,13 @@ pub async fn list_tasks<I: Interface>(
 
 pub async fn add_task<I: Interface>(
     interface: &I,
-    workspace: Workspace,
+    workspace: &Workspace,
     name: TaskName,
     task: Task,
     feature: FeatureName,
     platform: Option<Platform>,
 ) -> miette::Result<()> {
-    let mut workspace = workspace.modify()?;
+    let mut workspace = workspace.clone().modify()?;
 
     workspace
         .manifest()
@@ -92,12 +92,12 @@ pub async fn add_task<I: Interface>(
 
 pub async fn alias_task<I: Interface>(
     interface: &I,
-    workspace: Workspace,
+    workspace: &Workspace,
     name: TaskName,
     task: Task,
     platform: Option<Platform>,
 ) -> miette::Result<()> {
-    let mut workspace = workspace.modify()?;
+    let mut workspace = workspace.clone().modify()?;
 
     workspace
         .manifest()
@@ -117,12 +117,12 @@ pub async fn alias_task<I: Interface>(
 
 pub async fn remove_tasks<I: Interface>(
     interface: &I,
-    workspace: Workspace,
+    workspace: &Workspace,
     names: Vec<TaskName>,
     platform: Option<Platform>,
     feature: FeatureName,
 ) -> miette::Result<()> {
-    let mut workspace = workspace.modify()?;
+    let mut workspace = workspace.clone().modify()?;
     let mut to_remove = Vec::new();
 
     for name in names.iter() {

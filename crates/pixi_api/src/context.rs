@@ -29,19 +29,18 @@ impl<I: Interface> WorkspaceContext<I> {
     }
 
     pub async fn name(&self) -> String {
-        crate::workspace::workspace::name::get(self.workspace.clone()).await
+        crate::workspace::workspace::name::get(&self.workspace).await
     }
 
     pub async fn set_name(&self, name: &str) -> miette::Result<()> {
-        crate::workspace::workspace::name::set(&self.interface, self.workspace.clone(), name).await
+        crate::workspace::workspace::name::set(&self.interface, &self.workspace, name).await
     }
 
     pub async fn list_tasks(
         &self,
         environment: Option<EnvironmentName>,
     ) -> miette::Result<HashMap<EnvironmentName, HashMap<TaskName, Task>>> {
-        crate::workspace::task::list_tasks(&self.interface, self.workspace.clone(), environment)
-            .await
+        crate::workspace::task::list_tasks(&self.interface, &self.workspace, environment).await
     }
 
     pub async fn add_task(
@@ -53,7 +52,7 @@ impl<I: Interface> WorkspaceContext<I> {
     ) -> miette::Result<()> {
         crate::workspace::task::add_task(
             &self.interface,
-            self.workspace.clone(),
+            &self.workspace,
             name,
             task,
             feature,
@@ -68,14 +67,8 @@ impl<I: Interface> WorkspaceContext<I> {
         task: Task,
         platform: Option<Platform>,
     ) -> miette::Result<()> {
-        crate::workspace::task::alias_task(
-            &self.interface,
-            self.workspace.clone(),
-            name,
-            task,
-            platform,
-        )
-        .await
+        crate::workspace::task::alias_task(&self.interface, &self.workspace, name, task, platform)
+            .await
     }
 
     pub async fn remove_task(
@@ -86,7 +79,7 @@ impl<I: Interface> WorkspaceContext<I> {
     ) -> miette::Result<()> {
         crate::workspace::task::remove_tasks(
             &self.interface,
-            self.workspace.clone(),
+            &self.workspace,
             names,
             platform,
             feature,
@@ -101,8 +94,8 @@ impl<I: Interface> WorkspaceContext<I> {
     ) -> miette::Result<()> {
         crate::workspace::reinstall::reinstall(
             &self.interface,
+            &self.workspace,
             options,
-            self.workspace.clone(),
             lock_file_usage,
         )
         .await

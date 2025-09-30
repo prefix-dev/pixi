@@ -3,16 +3,16 @@ use pixi_core::Workspace;
 
 use crate::interface::Interface;
 
-pub async fn get(workspace: Workspace) -> String {
+pub async fn get(workspace: &Workspace) -> String {
     workspace.display_name().to_string()
 }
 
 pub async fn set<I: Interface>(
     interface: &I,
-    workspace: Workspace,
+    workspace: &Workspace,
     name: &str,
 ) -> miette::Result<()> {
-    let mut workspace = workspace.modify()?;
+    let mut workspace = workspace.clone().modify()?;
 
     // Set the new workspace name
     workspace.manifest().set_name(name)?;

@@ -14,8 +14,8 @@ pub use options::ReinstallOptions;
 
 pub async fn reinstall<I: Interface>(
     interface: &I,
+    workspace: &Workspace,
     options: ReinstallOptions,
-    workspace: Workspace,
     lock_file_usage: LockFileUsage,
 ) -> miette::Result<()> {
     // Install either:

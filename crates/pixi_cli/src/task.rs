@@ -364,7 +364,7 @@ async fn add_task(
 
     workspace_ctx
         .add_task(
-            args.clone().name,
+            args.name.clone(),
             args.clone().into(),
             feature,
             args.platform,
