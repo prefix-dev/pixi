@@ -360,7 +360,7 @@ format = "black ."
         let start = Instant::now();
 
         // Create clean arguments
-        let clean_args = clean::Args::parse_from(["clean", "-y"]);
+        let clean_args = clean::Args::parse_from(["clean", "cache", "-y"]);
 
         // Execute pixi clean directly
         let result = clean::execute(clean_args).await;
