@@ -44,6 +44,24 @@ impl<I: Interface> WorkspaceContext<I> {
             .await
     }
 
+    pub async fn add_task(
+        &self,
+        name: TaskName,
+        task: Task,
+        feature: FeatureName,
+        platform: Option<Platform>,
+    ) -> miette::Result<()> {
+        crate::workspace::task::add_task(
+            &self.interface,
+            self.workspace.clone(),
+            name,
+            task,
+            feature,
+            platform,
+        )
+        .await
+    }
+
     pub async fn remove_task(
         &self,
         names: Vec<TaskName>,

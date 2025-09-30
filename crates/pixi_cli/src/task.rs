@@ -313,7 +313,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace.clone());
 
     match args.operation {
-        Operation::Add(args) => add_task(workspace.modify()?, args).await,
+        Operation::Add(args) => add_task(workspace_ctx, args).await,
         Operation::Remove(args) => remove_tasks(workspace_ctx, args).await,
         Operation::Alias(args) => alias_task(workspace.modify()?, args).await,
         Operation::List(args) => list_tasks(workspace_ctx, args).await,
@@ -389,22 +389,24 @@ async fn remove_tasks(
         .await
 }
 
-async fn add_task(mut workspace: WorkspaceMut, args: AddArgs) -> miette::Result<()> {
-    let name = &args.name;
-    let task: Task = args.clone().into();
+async fn add_task(
+    workspace_ctx: WorkspaceContext<CliInterface>,
+    args: AddArgs,
+) -> miette::Result<()> {
     let feature = args
+        .clone()
         .feature
         .map_or_else(FeatureName::default, FeatureName::from);
-    workspace
-        .manifest()
-        .add_task(name.clone(), task.clone(), args.platform, &feature)?;
-    workspace.save().await.into_diagnostic()?;
-    eprintln!(
-        "{}Added task `{}`: {}",
-        console::style(console::Emoji("✔ ", "+")).green(),
-        name.fancy_display().bold(),
-        task,
-    );
+
+    workspace_ctx
+        .add_task(
+            args.clone().name,
+            args.clone().into(),
+            feature,
+            args.platform,
+        )
+        .await?;
+
     Ok(())
 }
 
