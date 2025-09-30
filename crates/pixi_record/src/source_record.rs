@@ -7,8 +7,11 @@ use pixi_git::sha::GitSha;
 use pixi_spec::{GitReference, SourceSpec};
 use rattler_conda_types::{MatchSpec, Matches, NamelessMatchSpec, PackageRecord};
 use rattler_digest::{Sha256, Sha256Hash};
-use rattler_lock::{CondaPackageData, CondaSourceData, GitShallowSpec, PackageBuildSource};
+use rattler_lock::{
+    CondaPackageData, CondaSourceData, GitShallowSpec, PackageBuildSource, PackageBuildSourceKind,
+};
 use serde::{Deserialize, Serialize};
+use typed_path::Utf8TypedPathBuf;
 
 use crate::{ParseLockFileError, PinnedGitCheckout, PinnedSourceSpec};
 
@@ -55,48 +58,34 @@ pub struct InputHash {
 impl From<SourceRecord> for CondaPackageData {
     fn from(value: SourceRecord) -> Self {
         let package_build_source = value.pinned_source_spec.and_then(|s| match s {
-            PinnedSourceSpec::Url(pinned_url_spec) => Some(PackageBuildSource::Url {
-                url: pinned_url_spec.url,
-                sha256: pinned_url_spec.sha256,
+            PinnedSourceSpec::Url(pinned_url_spec) => Some(PackageBuildSource {
+                kind: PackageBuildSourceKind::Url {
+                    url: pinned_url_spec.url,
+                    sha256: pinned_url_spec.sha256,
+                },
+                subdirectory: None,
             }),
             PinnedSourceSpec::Git(pinned_git_spec) => {
-                let mut url = pinned_git_spec.git.clone();
+                let subdirectory = pinned_git_spec
+                    .source
+                    .subdirectory
+                    .as_deref()
+                    .map(Utf8TypedPathBuf::from);
 
-                // Preserve existing query parameters and add the subdirectory if present.
-                // TODO(remi): This is a temporary workaround. We inject the git
-                // subdirectory into the URL query because rattler_lock::PackageBuildSource::Git
-                // does not expose a dedicated subdirectory field yet. Once the lock schema
-                // grows that field we should store the value there and delete this query
-                // manipulation.
-                let mut query_pairs: Vec<(String, String)> = url
-                    .query_pairs()
-                    .map(|(k, v)| (k.into_owned(), v.into_owned()))
-                    .collect();
-                if let Some(subdir) = pinned_git_spec.source.subdirectory.as_ref() {
-                    // Drop any previously stored subdirectory before adding the current one.
-                    query_pairs.retain(|(k, _)| k != "subdirectory");
-                    query_pairs.push(("subdirectory".to_string(), subdir.clone()));
-                }
+                let spec = match &pinned_git_spec.source.reference {
+                    GitReference::Branch(branch) => Some(GitShallowSpec::Branch(branch.clone())),
+                    GitReference::Tag(tag) => Some(GitShallowSpec::Tag(tag.clone())),
+                    GitReference::Rev(_) => Some(GitShallowSpec::Rev),
+                    GitReference::DefaultBranch => None,
+                };
 
-                url.set_query(None);
-                if !query_pairs.is_empty() {
-                    let mut serializer = url::form_urlencoded::Serializer::new(String::new());
-                    for (key, value) in query_pairs {
-                        serializer.append_pair(&key, &value);
-                    }
-                    let query = serializer.finish();
-                    url.set_query(Some(&query));
-                }
-
-                Some(PackageBuildSource::Git {
-                    url,
-                    spec: match pinned_git_spec.source.reference {
-                        GitReference::Branch(branch) => Some(GitShallowSpec::Branch(branch)),
-                        GitReference::Tag(tag) => Some(GitShallowSpec::Tag(tag)),
-                        GitReference::Rev(_) => None,
-                        GitReference::DefaultBranch => None, // Is this correct?
+                Some(PackageBuildSource {
+                    kind: PackageBuildSourceKind::Git {
+                        url: pinned_git_spec.git,
+                        spec,
+                        rev: pinned_git_spec.source.commit.to_string(),
                     },
-                    rev: pinned_git_spec.source.commit.to_string(),
+                    subdirectory,
                 })
             }
             PinnedSourceSpec::Path(_) => None,
@@ -124,52 +113,34 @@ impl TryFrom<CondaSourceData> for SourceRecord {
 
     fn try_from(value: CondaSourceData) -> Result<Self, Self::Error> {
         let pinned_source_spec = value.package_build_source.map(|source| match source {
-            PackageBuildSource::Git { url, spec, rev } => {
-                let mut clean_url = url.clone();
-                let mut subdirectory = None;
-
-                // TODO(remi): Keep this in sync with the serialization workaround above.
-                // Drop this once the lock format can carry git subdirectories explicitly.
-                let mut query_pairs: Vec<(String, String)> = clean_url
-                    .query_pairs()
-                    .map(|(k, v)| (k.into_owned(), v.into_owned()))
-                    .collect();
-                if !query_pairs.is_empty() {
-                    clean_url.set_query(None);
-                    let mut serializer = url::form_urlencoded::Serializer::new(String::new());
-                    for (key, value) in query_pairs.drain(..) {
-                        if key == "subdirectory" {
-                            subdirectory = Some(value);
-                        } else {
-                            serializer.append_pair(&key, &value);
-                        }
-                    }
-                    let remainder = serializer.finish();
-                    if !remainder.is_empty() {
-                        clean_url.set_query(Some(&remainder));
-                    }
-                }
+            PackageBuildSource {
+                kind: PackageBuildSourceKind::Git { url, spec, rev },
+                subdirectory,
+            } => {
+                let reference = match spec {
+                    Some(GitShallowSpec::Branch(branch)) => GitReference::Branch(branch),
+                    Some(GitShallowSpec::Tag(tag)) => GitReference::Tag(tag),
+                    Some(GitShallowSpec::Rev) => GitReference::Rev(rev.clone()),
+                    None => GitReference::DefaultBranch,
+                };
 
                 PinnedSourceSpec::Git(crate::PinnedGitSpec {
-                    git: clean_url,
+                    git: url,
                     source: PinnedGitCheckout {
                         commit: GitSha::from_str(&rev).unwrap(),
-                        subdirectory,
-                        reference: match spec {
-                            Some(GitShallowSpec::Branch(branch)) => GitReference::Branch(branch),
-                            Some(GitShallowSpec::Tag(tag)) => GitReference::Tag(tag),
-                            None => GitReference::DefaultBranch,
-                        },
+                        subdirectory: subdirectory.map(|s| s.to_string()),
+                        reference,
                     },
                 })
             }
-            PackageBuildSource::Url { url, sha256 } => {
-                PinnedSourceSpec::Url(crate::PinnedUrlSpec {
-                    url,
-                    sha256,
-                    md5: None,
-                })
-            }
+            PackageBuildSource {
+                kind: PackageBuildSourceKind::Url { url, sha256 },
+                ..
+            } => PinnedSourceSpec::Url(crate::PinnedUrlSpec {
+                url,
+                sha256,
+                md5: None,
+            }),
         });
         Ok(Self {
             package_record: value.package_record,
@@ -267,13 +238,24 @@ mod tests {
             panic!("expected source package data");
         };
 
-        let lock_url = match conda_source.package_build_source.as_ref().unwrap() {
-            PackageBuildSource::Git { url, .. } => url.clone(),
-            _ => panic!("expected git package build source"),
+        let package_build_source = conda_source
+            .package_build_source
+            .as_ref()
+            .expect("expected package build source");
+        let PackageBuildSource { kind, subdirectory } = package_build_source;
+
+        let PackageBuildSourceKind::Git { url, spec, rev } = kind else {
+            panic!("expected git package build source");
         };
-        assert_eq!(lock_url.path(), "/repo.git");
-        assert_eq!(lock_url.host_str(), Some("example.com"));
-        assert_eq!(lock_url.query(), Some("subdirectory=nested%2Fproject"));
+
+        assert_eq!(url.path(), "/repo.git");
+        assert_eq!(url.host_str(), Some("example.com"));
+        assert_eq!(
+            subdirectory.as_ref().map(|s| s.as_str()),
+            Some("nested/project")
+        );
+        assert!(matches!(spec, Some(GitShallowSpec::Branch(branch)) if branch == "main"));
+        assert_eq!(rev, "0123456789abcdef0123456789abcdef01234567");
 
         let roundtrip = SourceRecord::try_from(conda_source).expect("roundtrip should succeed");
         let Some(PinnedSourceSpec::Git(roundtrip_git)) = roundtrip.pinned_source_spec else {
