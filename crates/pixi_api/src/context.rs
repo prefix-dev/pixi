@@ -62,6 +62,22 @@ impl<I: Interface> WorkspaceContext<I> {
         .await
     }
 
+    pub async fn alias_task(
+        &self,
+        name: TaskName,
+        task: Task,
+        platform: Option<Platform>,
+    ) -> miette::Result<()> {
+        crate::workspace::task::alias_task(
+            &self.interface,
+            self.workspace.clone(),
+            name,
+            task,
+            platform,
+        )
+        .await
+    }
+
     pub async fn remove_task(
         &self,
         names: Vec<TaskName>,

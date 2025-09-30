@@ -20,10 +20,7 @@ use rattler_conda_types::Platform;
 use serde::Serialize;
 use serde_with::serde_as;
 
-use pixi_core::{
-    Workspace, WorkspaceLocator,
-    workspace::{Environment, WorkspaceMut},
-};
+use pixi_core::{Workspace, WorkspaceLocator, workspace::Environment};
 
 use crate::{cli_config::WorkspaceConfig, cli_interface::CliInterface};
 
@@ -315,7 +312,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     match args.operation {
         Operation::Add(args) => add_task(workspace_ctx, args).await,
         Operation::Remove(args) => remove_tasks(workspace_ctx, args).await,
-        Operation::Alias(args) => alias_task(workspace.modify()?, args).await,
+        Operation::Alias(args) => alias_task(workspace_ctx, args).await,
         Operation::List(args) => list_tasks(workspace_ctx, args).await,
     }
 }
@@ -356,39 +353,6 @@ async fn list_tasks(
     Ok(())
 }
 
-async fn alias_task(mut workspace: WorkspaceMut, args: AliasArgs) -> miette::Result<()> {
-    let name = &args.alias;
-    let task: Task = args.clone().into();
-    workspace.manifest().add_task(
-        name.clone(),
-        task.clone(),
-        args.platform,
-        &FeatureName::DEFAULT,
-    )?;
-    workspace.save().await.into_diagnostic()?;
-    eprintln!(
-        "{} Added alias `{}`: {}",
-        console::style("@").blue(),
-        name.fancy_display().bold(),
-        task,
-    );
-    Ok(())
-}
-
-async fn remove_tasks(
-    workspace_ctx: WorkspaceContext<CliInterface>,
-    args: RemoveArgs,
-) -> miette::Result<()> {
-    workspace_ctx
-        .remove_task(
-            args.names,
-            args.platform,
-            args.feature
-                .map_or_else(FeatureName::default, FeatureName::from),
-        )
-        .await
-}
-
 async fn add_task(
     workspace_ctx: WorkspaceContext<CliInterface>,
     args: AddArgs,
@@ -408,6 +372,31 @@ async fn add_task(
         .await?;
 
     Ok(())
+}
+
+async fn alias_task(
+    workspace_ctx: WorkspaceContext<CliInterface>,
+    args: AliasArgs,
+) -> miette::Result<()> {
+    workspace_ctx
+        .alias_task(args.clone().alias, args.clone().into(), args.platform)
+        .await?;
+
+    Ok(())
+}
+
+async fn remove_tasks(
+    workspace_ctx: WorkspaceContext<CliInterface>,
+    args: RemoveArgs,
+) -> miette::Result<()> {
+    workspace_ctx
+        .remove_task(
+            args.names,
+            args.platform,
+            args.feature
+                .map_or_else(FeatureName::default, FeatureName::from),
+        )
+        .await
 }
 
 fn print_tasks_json(project: &Workspace) {

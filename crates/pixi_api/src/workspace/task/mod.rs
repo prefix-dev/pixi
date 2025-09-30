@@ -90,6 +90,31 @@ pub async fn add_task<I: Interface>(
     Ok(())
 }
 
+pub async fn alias_task<I: Interface>(
+    interface: &I,
+    workspace: Workspace,
+    name: TaskName,
+    task: Task,
+    platform: Option<Platform>,
+) -> miette::Result<()> {
+    let mut workspace = workspace.modify()?;
+
+    workspace
+        .manifest()
+        .add_task(name.clone(), task.clone(), platform, &FeatureName::DEFAULT)?;
+    workspace.save().await.into_diagnostic()?;
+
+    interface
+        .success(&format!(
+            "Added alias `{}`: {}",
+            name.fancy_display().bold(),
+            task,
+        ))
+        .await;
+
+    Ok(())
+}
+
 pub async fn remove_tasks<I: Interface>(
     interface: &I,
     workspace: Workspace,
