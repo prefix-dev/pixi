@@ -175,11 +175,9 @@ pub async fn remove_tasks<I: Interface>(
     workspace.save().await.into_diagnostic()?;
 
     for name in removed {
-        eprintln!(
-            "{}Removed task `{}` ",
-            console::style(console::Emoji("✔ ", "+")).green(),
-            name.fancy_display().bold(),
-        );
+        interface
+            .success(&format!("Removed task `{}` ", name.fancy_display().bold()))
+            .await;
     }
 
     Ok(())
