@@ -3088,14 +3088,14 @@ will create the following entry in the manifest:
 <h3 id="opt-out-of-conda_prefix">Opt Out of <code>CONDA_PREFIX</code><a class="headerlink" href="#opt-out-of-conda_prefix" title="Permanent link">#</a></h3>
 <p>Pixi activates the target environment before running a globally exposed executable, which usually sets <code>CONDA_PREFIX</code> to that environment's path.
 Some tools inspect <code>CONDA_PREFIX</code> and expect it to point to a standard Conda installation, which can lead to confusing behavior when the tool runs from a Pixi-managed prefix.</p>
-<p>Package authors can opt out of exporting <code>CONDA_PREFIX</code> by shipping a marker file at <code>etc/pixi/global-ignore-conda-prefix</code> inside the environment.
-When this file is present, Pixi removes <code>CONDA_PREFIX</code> from the environment variables,
+<p>Package authors can opt out of exporting <code>CONDA_PREFIX</code> by shipping a marker file at <code>etc/pixi/&lt;executable&gt;/global-ignore-conda-prefix</code> inside the environment (for example <code>etc/pixi/borg/global-ignore-conda-prefix</code> for an executable named <code>borg</code>).
+When this file is present for the exposed executable, Pixi removes <code>CONDA_PREFIX</code> from the environment variables,
 letting the tool behave as if no Conda environment is active.</p>
-<p>Here's a minimal <code>recipe.yaml</code> snippet that adds the marker while building the package:</p>
+<p>Here's a minimal <code>recipe.yaml</code> snippet that adds the marker while building the package with executable <code>borg</code>:</p>
 <div class="language-yaml highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="nt">build</span><span class="p">:</span>
 </span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="w">  </span><span class="nt">script</span><span class="p">:</span>
-</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mkdir -p $PREFIX/etc/pixi</span>
-</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">touch $PREFIX/etc/pixi/global-ignore-conda-prefix</span>
+</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">mkdir -p $PREFIX/etc/pixi/borg</span>
+</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">touch $PREFIX/etc/pixi/borg/global-ignore-conda-prefix</span>
 </span></code></pre></div>
 <p>After installing such a package with <code>pixi global install</code>, the exposed executable no longer sees <code>CONDA_PREFIX</code> and can fall back to its default behavior.</p>
 
