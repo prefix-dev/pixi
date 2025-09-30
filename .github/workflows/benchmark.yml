@@ -16,7 +16,7 @@ jobs:
     env:
       RUST_BACKTRACE: full
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332
 
       - name: Install system dependencies
         run: |
@@ -24,7 +24,7 @@ jobs:
           sudo apt-get install -y tar bzip2
 
       - name: Setup rust toolchain, cache and cargo-codspeed binary
-        uses: moonrepo/setup-rust@v1
+        uses: moonrepo/setup-rust@e013866c4215f77c925f42f60257dec7dd18836e
         with:
           channel: stable
           cache-target: release
@@ -34,7 +34,7 @@ jobs:
         run: cargo codspeed build -p pixi_bench
 
       - name: Run the benchmarks
-        uses: CodSpeedHQ/action@v4
+        uses: CodSpeedHQ/action@v4.0.1
         with:
           run: |
             export PATH="~/.cargo/bin:$PATH"
