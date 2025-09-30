@@ -1359,7 +1359,8 @@ checksum = "b94f61472cee1439c0b966b47e3aca9ae07e45d070759512cd390ea2bebc6675"
 [[package]]
 name = "coalesced_map"
 version = "0.1.2"
-source = "git+https://github.com/baszalmstra/rattler?branch=perf%2Flazy-client#8f66658f1243768f7e1e38717ce89764d860ef2e"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7cf5a7a58a9d5b914bddb0a3a2bd920af2be897114dc8128af022af81fc43b8b"
 dependencies = [
  "dashmap",
  "tokio",
@@ -2166,7 +2167,8 @@ dependencies = [
 [[package]]
 name = "file_url"
 version = "0.2.6"
-source = "git+https://github.com/baszalmstra/rattler?branch=perf%2Flazy-client#8f66658f1243768f7e1e38717ce89764d860ef2e"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "765662dc0b26e038099a5a1529f5d48443111eea45377c312be892997651710e"
 dependencies = [
  "itertools 0.14.0",
  "percent-encoding",
@@ -4436,8 +4438,9 @@ checksum = "1e91099d4268b0e11973f036e885d652fb0b21fedcf69738c627f94db6a44f42"
 
 [[package]]
 name = "path_resolver"
-version = "0.2.0"
-source = "git+https://github.com/baszalmstra/rattler?branch=perf%2Flazy-client#8f66658f1243768f7e1e38717ce89764d860ef2e"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "67957e099f5b76f4cad98e0d41dd53746ab3a2debc1da12ee5b1cccb1d7b8dc8"
 dependencies = [
  "fs-err",
  "fxhash",
@@ -6048,8 +6051,9 @@ dependencies = [
 
 [[package]]
 name = "rattler"
-version = "0.37.4"
-source = "git+https://github.com/baszalmstra/rattler?branch=perf%2Flazy-client#8f66658f1243768f7e1e38717ce89764d860ef2e"
+version = "0.37.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "061a19d1252198a856a647fe8434692995ddae72c6bba863082909653bebac8c"
 dependencies = [
  "anyhow",
  "clap",
@@ -6092,8 +6096,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_cache"
-version = "0.3.34"
-source = "git+https://github.com/baszalmstra/rattler?branch=perf%2Flazy-client#8f66658f1243768f7e1e38717ce89764d860ef2e"
+version = "0.3.35"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2c5a97bf7728b72cd8c3e70d63d0da11789959182743d9552439ece81f74fcad"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -6124,8 +6129,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_conda_types"
-version = "0.39.2"
-source = "git+https://github.com/baszalmstra/rattler?branch=perf%2Flazy-client#8f66658f1243768f7e1e38717ce89764d860ef2e"
+version = "0.39.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11048d6facd778e987418c62fe9263d8ad15daf5fe9ced37f598027d13010920"
 dependencies = [
  "chrono",
  "core-foundation 0.10.1",
@@ -6166,7 +6172,8 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "1.1.5"
-source = "git+https://github.com/baszalmstra/rattler?branch=perf%2Flazy-client#8f66658f1243768f7e1e38717ce89764d860ef2e"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f40b746768824bc3306dcb597e549e836eda023dab8d7407d32b9f342c70cc5d"
 dependencies = [
  "blake2",
  "digest",
@@ -6182,8 +6189,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_lock"
-version = "0.24.1"
-source = "git+https://github.com/baszalmstra/rattler?branch=perf%2Flazy-client#8f66658f1243768f7e1e38717ce89764d860ef2e"
+version = "0.24.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9412db1c14bccdade131375849e41176ece899ed596d8f227d30e00295cf7c2b"
 dependencies = [
  "chrono",
  "file_url",
@@ -6208,7 +6216,8 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "1.0.11"
-source = "git+https://github.com/baszalmstra/rattler?branch=perf%2Flazy-client#8f66658f1243768f7e1e38717ce89764d860ef2e"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "988d5d7ace4fb1d7549008236cf08de95e8ea2f1f80754109324a08c31e6dc6a"
 dependencies = [
  "quote",
  "syn",
@@ -6216,8 +6225,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_menuinst"
-version = "0.2.27"
-source = "git+https://github.com/baszalmstra/rattler?branch=perf%2Flazy-client#8f66658f1243768f7e1e38717ce89764d860ef2e"
+version = "0.2.28"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a77f1dc963b791246e2c8f89296117e89aa711cf6f1bd18a7c8f9a168576339b"
 dependencies = [
  "chrono",
  "configparser",
@@ -6245,8 +6255,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_networking"
-version = "0.25.13"
-source = "git+https://github.com/baszalmstra/rattler?branch=perf%2Flazy-client#8f66658f1243768f7e1e38717ce89764d860ef2e"
+version = "0.25.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d59b505998f3f5af0ef5fae0e8466e03895a097787e51a17e56ec2c712442db"
 dependencies = [
  "anyhow",
  "async-once-cell",
@@ -6275,8 +6286,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_package_streaming"
-version = "0.23.4"
-source = "git+https://github.com/baszalmstra/rattler?branch=perf%2Flazy-client#8f66658f1243768f7e1e38717ce89764d860ef2e"
+version = "0.23.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba85366951a5ec70f7d355d6f7d7fe9c2391134824031ebf11d75a05a344ca22"
 dependencies = [
  "bzip2 0.6.0",
  "chrono",
@@ -6305,7 +6317,8 @@ dependencies = [
 [[package]]
 name = "rattler_pty"
 version = "0.2.6"
-source = "git+https://github.com/baszalmstra/rattler?branch=perf%2Flazy-client#8f66658f1243768f7e1e38717ce89764d860ef2e"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "76a7edbf8f23a099ccb32cc4f024886e35a873c462ca83f86c286556c275bf06"
 dependencies = [
  "libc",
  "nix 0.30.1",
@@ -6315,7 +6328,8 @@ dependencies = [
 [[package]]
 name = "rattler_redaction"
 version = "0.1.12"
-source = "git+https://github.com/baszalmstra/rattler?branch=perf%2Flazy-client#8f66658f1243768f7e1e38717ce89764d860ef2e"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3aa5057629aeb20861919e9ae56875985d58028f3c6f433a20b5ded086e1cec5"
 dependencies = [
  "reqwest",
  "reqwest-middleware",
@@ -6324,8 +6338,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_repodata_gateway"
-version = "0.24.4"
-source = "git+https://github.com/baszalmstra/rattler?branch=perf%2Flazy-client#8f66658f1243768f7e1e38717ce89764d860ef2e"
+version = "0.24.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e28fa692522331b806e4a533ff1893aa8a0a359797b8acbfed0aadbfba82849e"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -6383,8 +6398,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_shell"
-version = "0.25.0"
-source = "git+https://github.com/baszalmstra/rattler?branch=perf%2Flazy-client#8f66658f1243768f7e1e38717ce89764d860ef2e"
+version = "0.25.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e823fb6cec3bd53cf22d1a02fd9bb2bdf1c6ef7e55bb9354f9ada704d3dea056"
 dependencies = [
  "anyhow",
  "enum_dispatch",
@@ -6403,8 +6419,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_solve"
-version = "3.0.3"
-source = "git+https://github.com/baszalmstra/rattler?branch=perf%2Flazy-client#8f66658f1243768f7e1e38717ce89764d860ef2e"
+version = "3.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9651a8c014cc2d900d7a8544b75444421aebbb964aaec4173245566b1f99ffe2"
 dependencies = [
  "chrono",
  "futures",
@@ -6420,8 +6437,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_virtual_packages"
-version = "2.1.5"
-source = "git+https://github.com/baszalmstra/rattler?branch=perf%2Flazy-client#8f66658f1243768f7e1e38717ce89764d860ef2e"
+version = "2.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "84d246dc5defe7846ff6527c25cf9eaf6514cc7b7e6b94679146d638be96a14c"
 dependencies = [
  "archspec",
  "libloading",
@@ -7509,7 +7527,8 @@ checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
 [[package]]
 name = "simple_spawn_blocking"
 version = "1.1.0"
-source = "git+https://github.com/baszalmstra/rattler?branch=perf%2Flazy-client#8f66658f1243768f7e1e38717ce89764d860ef2e"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "55c0b0b683828aa9d4f5c0e59b0c856a12c30a65b5f1ca4292664734d76fa9c2"
 dependencies = [
  "tokio",
 ]
