@@ -1,4 +1,7 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    hash::{Hash, Hasher},
+};
 
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
@@ -9,8 +12,7 @@ use pixi_build_frontend::{
         procedures::conda_metadata::CondaMetadataParams,
     },
 };
-use pixi_build_type_conversions::compute_project_model_hash;
-use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
+use pixi_build_types::{ProjectModelV1, procedures::conda_outputs::CondaOutputsParams};
 use pixi_glob::GlobHashKey;
 use pixi_record::{InputHash, PinnedSourceSpec};
 use pixi_spec::{SourceAnchor, SourceSpec};
@@ -18,6 +20,7 @@ use rand::random;
 use rattler_conda_types::{ChannelConfig, ChannelUrl};
 use thiserror::Error;
 use tracing::instrument;
+use xxhash_rust::xxh3::Xxh3;
 
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
@@ -101,11 +104,8 @@ impl BuildBackendMetadataSpec {
             .map_err_with(BuildBackendMetadataError::Discovery)?;
 
         // Calculate the hash of the project model
-        let project_model_hash = discovered_backend
-            .init_params
-            .project_model
-            .as_ref()
-            .map(compute_project_model_hash);
+        let additional_glob_hash =
+            additional_glob_hash(&discovered_backend.init_params.project_model);
 
         // Check the source metadata cache, short circuit if there is a cache hit that
         // is still fresh.
@@ -120,7 +120,7 @@ impl BuildBackendMetadataSpec {
             &source_checkout,
             &command_dispatcher,
             metadata,
-            &project_model_hash,
+            &additional_glob_hash,
         )
         .await?
         {
@@ -157,7 +157,7 @@ impl BuildBackendMetadataSpec {
                 command_dispatcher,
                 source_checkout,
                 backend,
-                project_model_hash,
+                additional_glob_hash,
             )
             .await?
         } else if backend.capabilities().provides_conda_metadata() {
@@ -169,7 +169,7 @@ impl BuildBackendMetadataSpec {
                 command_dispatcher,
                 source_checkout,
                 backend,
-                project_model_hash,
+                additional_glob_hash,
             )
             .await?
         } else {
@@ -198,7 +198,7 @@ impl BuildBackendMetadataSpec {
         source_checkout: &SourceCheckout,
         command_dispatcher: &CommandDispatcher,
         metadata: Option<CachedCondaMetadata>,
-        project_model_hash: &Option<Vec<u8>>,
+        additional_glob_hash: &Vec<u8>,
     ) -> Result<Option<CachedCondaMetadata>, CommandDispatcherError<BuildBackendMetadataError>>
     {
         let Some(metadata) = metadata else {
@@ -226,7 +226,7 @@ impl BuildBackendMetadataSpec {
             .compute_hash(GlobHashKey::new(
                 source_checkout.path.clone(),
                 input_globs.globs.clone(),
-                project_model_hash.clone(),
+                additional_glob_hash.clone(),
             ))
             .await
             .map_err(BuildBackendMetadataError::GlobHash)
@@ -248,7 +248,7 @@ impl BuildBackendMetadataSpec {
         command_dispatcher: CommandDispatcher,
         source_checkout: SourceCheckout,
         backend: Backend,
-        project_model_hash: Option<Vec<u8>>,
+        additional_glob_hash: Vec<u8>,
     ) -> Result<CachedCondaMetadata, CommandDispatcherError<BuildBackendMetadataError>> {
         let params = CondaOutputsParams {
             channels: self.channels,
@@ -277,7 +277,7 @@ impl BuildBackendMetadataSpec {
             command_dispatcher,
             &source_checkout,
             outputs.input_globs.clone(),
-            project_model_hash,
+            additional_glob_hash,
         )
         .await?;
 
@@ -296,7 +296,7 @@ impl BuildBackendMetadataSpec {
         command_dispatcher: CommandDispatcher,
         source_checkout: SourceCheckout,
         backend: Backend,
-        project_model_hash: Option<Vec<u8>>,
+        additional_glob_hash: Vec<u8>,
     ) -> Result<CachedCondaMetadata, CommandDispatcherError<BuildBackendMetadataError>> {
         // Query the backend for metadata.
         let params = CondaMetadataParams {
@@ -335,7 +335,7 @@ impl BuildBackendMetadataSpec {
             command_dispatcher,
             &source_checkout,
             metadata.input_globs.clone().unwrap_or_default(),
-            project_model_hash,
+            additional_glob_hash,
         )
         .await?;
 
@@ -353,7 +353,7 @@ impl BuildBackendMetadataSpec {
         command_queue: CommandDispatcher,
         source: &SourceCheckout,
         input_globs: BTreeSet<String>,
-        project_model_hash: Option<Vec<u8>>,
+        additional_glob_hash: Vec<u8>,
     ) -> Result<Option<InputHash>, CommandDispatcherError<BuildBackendMetadataError>> {
         if source.pinned.is_immutable() {
             // If the source is immutable (e.g., a git commit), we do not need to compute an
@@ -367,7 +367,7 @@ impl BuildBackendMetadataSpec {
             .compute_hash(GlobHashKey::new(
                 &source.path,
                 input_globs.clone(),
-                project_model_hash,
+                additional_glob_hash,
             ))
             .await
             .map_err(BuildBackendMetadataError::GlobHash)
@@ -422,4 +422,11 @@ pub enum BuildBackendMetadataError {
 
     #[error(transparent)]
     Cache(#[from] source_metadata_cache::SourceMetadataCacheError),
+}
+
+/// Computes an additional hash to be used in glob hash
+pub fn additional_glob_hash(project_model: &Option<ProjectModelV1>) -> Vec<u8> {
+    let mut hasher = Xxh3::new();
+    project_model.hash(&mut hasher);
+    hasher.finish().to_ne_bytes().to_vec()
 }
