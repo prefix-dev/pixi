@@ -43,7 +43,7 @@ use uv_pypi_types::ParsedUrlError;
 use super::{
     PixiRecordsByName, PypiRecord, PypiRecordsByName, package_identifier::ConversionError,
 };
-use crate::workspace::{Environment, grouped_environment::GroupedEnvironment};
+use crate::workspace::{Environment, HasWorkspaceRef, grouped_environment::GroupedEnvironment};
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum EnvironmentUnsat {
@@ -1511,8 +1511,10 @@ pub(crate) async fn verify_package_platform_satisfiability(
         .map_err(PlatformUnsat::BackendDiscovery)
         .map_err(Box::new)?;
 
-        let additional_glob_hash =
-            calculate_additional_glob_hash(&discovered_backend.init_params.project_model);
+        let additional_glob_hash = calculate_additional_glob_hash(
+            &discovered_backend.init_params.project_model,
+            &Some(environment.workspace().variants(platform)),
+        );
 
         let input_hash = input_hash_cache
             .compute_hash(GlobHashKey::new(
