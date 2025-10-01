@@ -34,7 +34,7 @@ jobs:
         run: cargo codspeed build -p pixi_bench
 
       - name: Run the benchmarks
-        uses: CodSpeedHQ/action@1b1c30d00b603c1e5f8e8b5b8e0c42e1f3c4d5e6
+        uses: CodSpeedHQ/action@cc824aeb2c86848c39cf722ab4c2b6c5bf290530
         with:
           run: |
             export PATH="~/.cargo/bin:$PATH"
