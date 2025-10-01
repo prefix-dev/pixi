@@ -12,7 +12,7 @@ on:
 jobs:
   benchmarks:
     name: Run benchmarks
-    runs-on: ubuntu-latest
+    runs-on: codspeed-macro
     env:
       RUST_BACKTRACE: full
     steps:
@@ -39,5 +39,5 @@ jobs:
           run: |
             export PATH="~/.cargo/bin:$PATH"
             cargo codspeed run -p pixi_bench
-          mode: "instrumentation"
+          mode: walltime
           token: ${{ secrets.CODSPEED_TOKEN }}
