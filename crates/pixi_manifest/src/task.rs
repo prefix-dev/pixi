@@ -153,7 +153,7 @@ impl TypedDependency {
 }
 
 /// Represents different types of scripts
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum Task {
     Plain(TemplateString),
     Execute(Box<Execute>),
@@ -324,7 +324,7 @@ impl Deref for GlobPatterns {
 }
 
 /// A command script executes a single command from the environment
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Execute {
     /// A list of arguments, the first argument denotes the command to run. When
     /// deserializing both an array of strings and a single string are
@@ -409,7 +409,7 @@ impl std::str::FromStr for TaskArg {
 }
 
 /// A custom command script executes a single command in the environment
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Custom {
     /// A list of arguments, the first argument denotes the command to run. When
     /// deserializing both an array of strings and a single string are
@@ -571,7 +571,7 @@ impl TemplateStringError {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub enum CmdArgs {
     Single(TemplateString),
     Multiple(Vec<TemplateString>),
@@ -640,7 +640,7 @@ impl CmdArgs {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Alias {
     /// A list of commands that should be run before this one
     pub depends_on: Vec<Dependency>,
