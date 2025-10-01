@@ -1372,7 +1372,7 @@ impl Project {
     ) -> Result<PackageName, InferPackageNameError> {
         let command_dispatcher = self.command_dispatcher()?;
         let checkout = command_dispatcher
-            .pin_and_checkout(source_spec)
+            .pin_and_checkout(source_spec.location)
             .await
             .map_err(|e| InferPackageNameError::BuildBackendMetadata(Box::new(e)))?;
 
@@ -1391,6 +1391,7 @@ impl Project {
             build_environment: pixi_command_dispatcher::BuildEnvironment::default(),
             variants: None,
             enabled_protocols: Default::default(),
+            override_pinned_build_source: None,
         };
 
         // Get the metadata using the command dispatcher
