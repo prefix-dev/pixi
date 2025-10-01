@@ -1,5 +1,5 @@
 use miette::IntoDiagnostic;
-use pixi_core::Workspace;
+use pixi_core::{Workspace, workspace::WorkspaceMut};
 
 use crate::interface::Interface;
 
@@ -9,11 +9,9 @@ pub async fn get(workspace: &Workspace) -> String {
 
 pub async fn set<I: Interface>(
     interface: &I,
-    workspace: &Workspace,
+    mut workspace: WorkspaceMut,
     name: &str,
 ) -> miette::Result<()> {
-    let mut workspace = workspace.clone().modify()?;
-
     // Set the new workspace name
     workspace.manifest().set_name(name)?;
 

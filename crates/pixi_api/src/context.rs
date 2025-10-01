@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use miette::IntoDiagnostic;
+use pixi_core::workspace::WorkspaceMut;
 use pixi_core::{Workspace, environment::LockFileUsage};
 use pixi_manifest::{EnvironmentName, FeatureName, Task, TaskName};
 use rattler_conda_types::Platform;
@@ -24,6 +26,10 @@ impl<I: Interface> WorkspaceContext<I> {
         &self.workspace
     }
 
+    pub fn workspace_mut(&self) -> miette::Result<WorkspaceMut> {
+        self.workspace.clone().modify().into_diagnostic()
+    }
+
     pub async fn init(interface: I, options: InitOptions) -> miette::Result<Workspace> {
         crate::workspace::init::init(&interface, options).await
     }
@@ -33,7 +39,7 @@ impl<I: Interface> WorkspaceContext<I> {
     }
 
     pub async fn set_name(&self, name: &str) -> miette::Result<()> {
-        crate::workspace::workspace::name::set(&self.interface, &self.workspace, name).await
+        crate::workspace::workspace::name::set(&self.interface, self.workspace_mut()?, name).await
     }
 
     pub async fn list_tasks(
@@ -52,7 +58,7 @@ impl<I: Interface> WorkspaceContext<I> {
     ) -> miette::Result<()> {
         crate::workspace::task::add_task(
             &self.interface,
-            &self.workspace,
+            self.workspace_mut()?,
             name,
             task,
             feature,
@@ -67,8 +73,14 @@ impl<I: Interface> WorkspaceContext<I> {
         task: Task,
         platform: Option<Platform>,
     ) -> miette::Result<()> {
-        crate::workspace::task::alias_task(&self.interface, &self.workspace, name, task, platform)
-            .await
+        crate::workspace::task::alias_task(
+            &self.interface,
+            self.workspace_mut()?,
+            name,
+            task,
+            platform,
+        )
+        .await
     }
 
     pub async fn remove_task(
@@ -79,7 +91,7 @@ impl<I: Interface> WorkspaceContext<I> {
     ) -> miette::Result<()> {
         crate::workspace::task::remove_tasks(
             &self.interface,
-            &self.workspace,
+            self.workspace_mut()?,
             names,
             platform,
             feature,

@@ -4,7 +4,9 @@ use fancy_display::FancyDisplay;
 use miette::IntoDiagnostic;
 use pixi_core::{
     Workspace,
-    workspace::{Environment, virtual_packages::verify_current_platform_can_run_environment},
+    workspace::{
+        Environment, WorkspaceMut, virtual_packages::verify_current_platform_can_run_environment,
+    },
 };
 use pixi_manifest::{EnvironmentName, FeatureName, Task, TaskName};
 use rattler_conda_types::Platform;
@@ -66,14 +68,12 @@ pub async fn list_tasks<I: Interface>(
 
 pub async fn add_task<I: Interface>(
     interface: &I,
-    workspace: &Workspace,
+    mut workspace: WorkspaceMut,
     name: TaskName,
     task: Task,
     feature: FeatureName,
     platform: Option<Platform>,
 ) -> miette::Result<()> {
-    let mut workspace = workspace.clone().modify()?;
-
     workspace
         .manifest()
         .add_task(name.clone(), task.clone(), platform, &feature)?;
@@ -92,13 +92,11 @@ pub async fn add_task<I: Interface>(
 
 pub async fn alias_task<I: Interface>(
     interface: &I,
-    workspace: &Workspace,
+    mut workspace: WorkspaceMut,
     name: TaskName,
     task: Task,
     platform: Option<Platform>,
 ) -> miette::Result<()> {
-    let mut workspace = workspace.clone().modify()?;
-
     workspace
         .manifest()
         .add_task(name.clone(), task.clone(), platform, &FeatureName::DEFAULT)?;
@@ -117,12 +115,11 @@ pub async fn alias_task<I: Interface>(
 
 pub async fn remove_tasks<I: Interface>(
     interface: &I,
-    workspace: &Workspace,
+    mut workspace: WorkspaceMut,
     names: Vec<TaskName>,
     platform: Option<Platform>,
     feature: FeatureName,
 ) -> miette::Result<()> {
-    let mut workspace = workspace.clone().modify()?;
     let mut to_remove = Vec::new();
 
     for name in names.iter() {
