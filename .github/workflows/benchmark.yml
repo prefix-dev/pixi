@@ -1,0 +1,43 @@
+name: CodSpeed
+
+on:
+  push:
+    branches:
+      - "feature/codespeed" # or "master"
+  pull_request: # required to have reports on PRs
+  # `workflow_dispatch` allows CodSpeed to trigger backtest
+  # performance analysis in order to generate initial data.
+  workflow_dispatch:
+
+jobs:
+  benchmarks:
+    name: Run benchmarks
+    runs-on: codspeed-macro
+    env:
+      RUST_BACKTRACE: full
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y tar bzip2
+
+      - name: Setup rust toolchain, cache and cargo-codspeed binary
+        uses: moonrepo/setup-rust@e013866c4215f77c925f42f60257dec7dd18836e
+        with:
+          channel: stable
+          cache-target: release
+          bins: cargo-codspeed
+
+      - name: Build the benchmark target(s)
+        run: cargo codspeed build -p pixi_bench
+
+      - name: Run the benchmarks
+        uses: CodSpeedHQ/action@cc824aeb2c86848c39cf722ab4c2b6c5bf290530
+        with:
+          run: |
+            export PATH="~/.cargo/bin:$PATH"
+            cargo codspeed run -p pixi_bench
+          mode: walltime
+          token: ${{ secrets.CODSPEED_TOKEN }}
