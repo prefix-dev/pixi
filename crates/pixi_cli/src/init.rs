@@ -1,7 +1,7 @@
 use std::{cmp::PartialEq, path::PathBuf};
 
 use clap::{Parser, ValueEnum};
-use pixi_api::{context::WorkspaceContext, interface::Interface, workspace::init::InitOptions};
+use pixi_api::{WorkspaceContext, workspace::InitOptions};
 use rattler_conda_types::NamedChannelOrUrl;
 
 use crate::cli_interface::CliInterface;
@@ -68,15 +68,15 @@ pub enum GitAttributes {
 impl From<Args> for InitOptions {
     fn from(args: Args) -> Self {
         let format = args.format.map(|f| match f {
-            ManifestFormat::Pixi => pixi_api::workspace::init::ManifestFormat::Pixi,
-            ManifestFormat::Pyproject => pixi_api::workspace::init::ManifestFormat::Pyproject,
-            ManifestFormat::Mojoproject => pixi_api::workspace::init::ManifestFormat::Mojoproject,
+            ManifestFormat::Pixi => pixi_api::workspace::ManifestFormat::Pixi,
+            ManifestFormat::Pyproject => pixi_api::workspace::ManifestFormat::Pyproject,
+            ManifestFormat::Mojoproject => pixi_api::workspace::ManifestFormat::Mojoproject,
         });
 
         let scm = args.scm.map(|s| match s {
-            GitAttributes::Github => pixi_api::workspace::init::GitAttributes::Github,
-            GitAttributes::Gitlab => pixi_api::workspace::init::GitAttributes::Gitlab,
-            GitAttributes::Codeberg => pixi_api::workspace::init::GitAttributes::Codeberg,
+            GitAttributes::Github => pixi_api::workspace::GitAttributes::Github,
+            GitAttributes::Gitlab => pixi_api::workspace::GitAttributes::Gitlab,
+            GitAttributes::Codeberg => pixi_api::workspace::GitAttributes::Codeberg,
         });
 
         InitOptions {
@@ -96,12 +96,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Deprecation warning for the `pyproject` option
     if uses_deprecated_pyproject_flag {
-        CliInterface::default().warning(&format!(
-            "The '{}' option is deprecated and will be removed in the future.\nUse '{}' instead.",
+        eprintln!(
+            "{}The '{}' option is deprecated and will be removed in the future.\nUse '{}' instead.",
+            console::style(console::Emoji("⚠️ ", "")).yellow(),
             console::style("--pyproject").bold().red(),
             console::style("--format pyproject").bold().green(),
-        )).await;
-        options.format = Some(pixi_api::workspace::init::ManifestFormat::Pyproject);
+        );
+        options.format = Some(pixi_api::workspace::ManifestFormat::Pyproject);
     }
 
     WorkspaceContext::init(CliInterface {}, options).await?;

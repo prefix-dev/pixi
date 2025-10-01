@@ -12,6 +12,7 @@ use clap::Parser;
 use deno_task_shell::KillSignal;
 use dialoguer::theme::ColorfulTheme;
 use fancy_display::FancyDisplay;
+use indicatif::ProgressDrawTarget;
 use itertools::Itertools;
 use miette::{Diagnostic, IntoDiagnostic};
 use pixi_config::{ConfigCli, ConfigCliActivation};
@@ -22,6 +23,7 @@ use pixi_core::{
     workspace::{Environment, errors::UnsupportedPlatformError},
 };
 use pixi_manifest::{FeaturesExt, TaskName};
+use pixi_progress::global_multi_progress;
 use pixi_task::{
     AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
     SearchEnvironments, TaskAndEnvironment, TaskGraph, get_task_env,
@@ -91,6 +93,11 @@ pub struct Args {
 /// When running the sigints are ignored and child can react to them. As it
 /// pleases.
 pub async fn execute(args: Args) -> miette::Result<()> {
+    // Following statements don't spawn any progress bar, so set
+    // progress draw target to hidden. Otherwise output may be
+    // incorrect.
+    global_multi_progress().set_draw_target(ProgressDrawTarget::hidden());
+
     let cli_config = args
         .activation_config
         .merge_config(args.config.clone().into());
@@ -116,6 +123,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         command_not_found(&workspace, explicit_environment);
         return Ok(());
     }
+
+    // We expect progress bar to be used afterwards, so set draw
+    // target to the original one.
+    global_multi_progress().set_draw_target(ProgressDrawTarget::stderr_with_hz(20));
 
     // Sanity check of prefix location
     sanity_check_workspace(&workspace).await?;

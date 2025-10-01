@@ -91,7 +91,7 @@ pub(crate) async fn create_executable_trampolines(
     prefix: &Prefix,
     env_name: &EnvironmentName,
 ) -> miette::Result<StateChanges> {
-    const IGNORE_CONDA_PREFIX_MARKER: &str = "etc/pixi/global-ignore-conda-prefix";
+    const IGNORE_CONDA_PREFIX_MARKER: &str = "global-ignore-conda-prefix";
 
     #[derive(Debug)]
     enum AddedOrChanged {
@@ -103,12 +103,11 @@ pub(crate) async fn create_executable_trampolines(
 
     let mut state_changes = StateChanges::default();
 
+    let pixi_config_dir = prefix.root().join("etc").join("pixi");
+
     // Get PATH environment variables
     let path_current = std::env::var("PATH").into_diagnostic()?;
     let mut activation_variables = prefix.run_activation().await?;
-    if prefix.root().join(IGNORE_CONDA_PREFIX_MARKER).is_file() {
-        activation_variables.remove("CONDA_PREFIX");
-    }
     let path_after_activation = activation_variables
         .remove("PATH")
         .or_else(|| activation_variables.remove("Path"))
@@ -124,14 +123,24 @@ pub(crate) async fn create_executable_trampolines(
         tracing::debug!("Create trampoline {}", global_script_path.display());
         let exe = prefix.root().join(original_executable);
 
-        let metadata = Configuration::new(exe, path_diff.clone(), activation_variables.clone());
-
         let parent_dir = global_script_path.parent().ok_or_else(|| {
             miette::miette!(
                 "{} needs to have a parent directory",
                 global_script_path.display()
             )
         })?;
+        let executable_name = executable_from_path(original_executable);
+
+        let mut env_for_trampoline = activation_variables.clone();
+        if pixi_config_dir
+            .join(executable_name)
+            .join(IGNORE_CONDA_PREFIX_MARKER)
+            .is_file()
+        {
+            env_for_trampoline.remove("CONDA_PREFIX");
+        }
+        let metadata = Configuration::new(exe, path_diff.clone(), env_for_trampoline);
+
         let exposed_name = Trampoline::name(global_script_path)?;
         let json_path = Configuration::path_from_trampoline(parent_dir, &exposed_name);
 
@@ -172,21 +181,7 @@ pub(crate) async fn create_executable_trampolines(
             }
         };
 
-        let executable_name = executable_from_path(global_script_path);
-        let exposed_name = ExposedName::from_str(&executable_name)?;
-
-        let global_script_path_parent = global_script_path.parent().ok_or_else(|| {
-            miette::miette!(
-                "Cannot find parent directory of '{}'",
-                original_executable.display()
-            )
-        })?;
-
-        let trampoline = Trampoline::new(
-            exposed_name.clone(),
-            global_script_path_parent.to_path_buf(),
-            metadata,
-        );
+        let trampoline = Trampoline::new(exposed_name.clone(), parent_dir.to_path_buf(), metadata);
         trampoline.save().await?;
 
         match changed {
