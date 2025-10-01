@@ -66,7 +66,6 @@ rattler_shell = { workspace = true }
 rattler_solve = { workspace = true }
 rattler_virtual_packages = { workspace = true }
 reqwest = { workspace = true }
-reqwest-middleware = { workspace = true }
 rlimit = { workspace = true }
 rstest = { workspace = true }
 serde = { workspace = true }

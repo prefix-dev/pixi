@@ -5,9 +5,9 @@ use pixi_git::resolver::GitResolver;
 use pixi_glob::GlobHashCache;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
+use rattler_networking::LazyClient;
 use rattler_repodata_gateway::{Gateway, MaxConcurrency};
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
-use reqwest_middleware::ClientWithMiddleware;
 
 use crate::build::source_metadata_cache::SourceMetadataCache;
 use crate::discover_backend_cache::DiscoveryCache;
@@ -25,7 +25,7 @@ pub struct CommandDispatcherBuilder {
     root_dir: Option<PathBuf>,
     reporter: Option<Box<dyn Reporter>>,
     git_resolver: Option<GitResolver>,
-    download_client: Option<ClientWithMiddleware>,
+    download_client: Option<LazyClient>,
     cache_dirs: Option<CacheDirs>,
     build_backend_overrides: BackendOverride,
     max_download_concurrency: MaxConcurrency,
@@ -61,7 +61,7 @@ impl CommandDispatcherBuilder {
     }
 
     /// Sets the reqwest client to use for network fetches.
-    pub fn with_download_client(self, client: ClientWithMiddleware) -> Self {
+    pub fn with_download_client(self, client: LazyClient) -> Self {
         Self {
             download_client: Some(client),
             ..self

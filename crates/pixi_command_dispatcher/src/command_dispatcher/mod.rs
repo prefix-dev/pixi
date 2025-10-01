@@ -23,8 +23,8 @@ use pixi_record::{PinnedPathSpec, PinnedSourceSpec, PixiRecord};
 use pixi_spec::{SourceLocationSpec, SourceSpec};
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, Platform};
+use rattler_networking::LazyClient;
 use rattler_repodata_gateway::Gateway;
-use reqwest_middleware::ClientWithMiddleware;
 use tokio::sync::{mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use typed_path::Utf8TypedPath;
@@ -118,7 +118,7 @@ pub(crate) struct CommandDispatcherData {
     pub cache_dirs: CacheDirs,
 
     /// The reqwest client to use for network requests.
-    pub download_client: ClientWithMiddleware,
+    pub download_client: LazyClient,
 
     /// Backend overrides for build environments.
     pub build_backend_overrides: BackendOverride,
@@ -379,7 +379,7 @@ impl CommandDispatcher {
     }
 
     /// Returns the download client used by the command dispatcher.
-    pub fn download_client(&self) -> &ClientWithMiddleware {
+    pub fn download_client(&self) -> &LazyClient {
         &self.data.download_client
     }
 

@@ -14,6 +14,7 @@ dashmap = { workspace = true }
 dunce = { workspace = true }
 fs-err = { workspace = true, features = ["tokio"] }
 pixi_utils = { workspace = true, features = ["rustls-tls"] }
+rattler_networking = { workspace = true }
 reqwest = { workspace = true, features = ["blocking"] }
 reqwest-middleware = { workspace = true }
 serde = { workspace = true }
