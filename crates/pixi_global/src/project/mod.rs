@@ -36,19 +36,18 @@ use pixi_spec_containers::DependencyMap;
 use pixi_utils::{
     executable_from_path,
     prefix::{Executable, Prefix},
-    reqwest::build_reqwest_clients,
     rlimit::try_increase_rlimit_to_sensible,
 };
 use rattler_conda_types::{
     ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, PrefixRecord,
     menuinst::MenuMode, package::ArchiveIdentifier,
 };
+use rattler_networking::LazyClient;
 use rattler_repodata_gateway::Gateway;
 // Removed unused rattler_solve imports
 use rattler_virtual_packages::{
     DetectVirtualPackageError, VirtualPackage, VirtualPackageOverrides,
 };
-use reqwest_middleware::ClientWithMiddleware;
 use tokio::sync::Semaphore;
 use toml_edit::DocumentMut;
 
@@ -75,6 +74,7 @@ mod manifest;
 mod parsed_manifest;
 pub use global_spec::{FromMatchSpecError, GlobalSpec};
 use pixi_build_frontend::BackendOverride;
+use pixi_utils::reqwest::{LazyReqwestClient, build_lazy_reqwest_clients};
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
 pub enum CommandDispatcherError {
@@ -129,7 +129,7 @@ pub struct Project {
     /// Reqwest client shared for this project.
     /// This is wrapped in a `OnceCell` to allow for lazy initialization.
     // TODO: once https://github.com/rust-lang/rust/issues/109737 is stabilized, switch to OnceLock
-    client: OnceCell<(reqwest::Client, ClientWithMiddleware)>,
+    client: OnceCell<(LazyReqwestClient, rattler_networking::LazyClient)>,
     /// The repodata gateway to use for answering queries about repodata.
     /// This is wrapped in a `OnceCell` to allow for lazy initialization.
     // TODO: once https://github.com/rust-lang/rust/issues/109737 is stabilized, switch to OnceLock
@@ -509,15 +509,15 @@ impl Project {
 
     /// Create an authenticated reqwest client for this project
     /// use authentication from `rattler_networking`
-    pub fn authenticated_client(&self) -> miette::Result<&ClientWithMiddleware> {
-        Ok(&self.client_and_authenticated_client()?.1)
+    pub fn authenticated_client(&self) -> miette::Result<&LazyClient> {
+        Ok(&self.lazy_client_and_authenticated_client()?.1)
     }
 
-    fn client_and_authenticated_client(
+    fn lazy_client_and_authenticated_client(
         &self,
-    ) -> miette::Result<&(reqwest::Client, ClientWithMiddleware)> {
+    ) -> miette::Result<&(LazyReqwestClient, rattler_networking::LazyClient)> {
         self.client
-            .get_or_try_init(|| build_reqwest_clients(Some(&self.config), None))
+            .get_or_try_init(|| build_lazy_reqwest_clients(Some(self.config()), None))
     }
 
     pub fn config(&self) -> &Config {

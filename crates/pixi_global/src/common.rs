@@ -1,5 +1,12 @@
-use super::trampoline::{GlobalExecutable, Trampoline};
-use super::{EnvironmentName, ExposedName, Mapping};
+use std::{
+    collections::HashMap,
+    ffi::OsStr,
+    io::Read,
+    iter::Peekable,
+    ops::Not,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 use ahash::HashSet;
 use console::StyledObject;
@@ -12,23 +19,18 @@ use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pixi_config::pixi_home;
 use pixi_manifest::PrioritizedChannel;
-use pixi_utils::executable_from_path;
-use pixi_utils::prefix::Executable;
+use pixi_utils::{executable_from_path, prefix::Executable};
 use rattler::install::{Transaction, TransactionOperation};
 use rattler_conda_types::{
-    Channel, ChannelConfig, NamedChannelOrUrl, PackageName, PackageRecord, PrefixRecord,
-    RepoDataRecord, Version,
-};
-use std::collections::HashMap;
-use std::ffi::OsStr;
-use std::iter::Peekable;
-use std::ops::Not;
-use std::str::FromStr;
-use std::{
-    io::Read,
-    path::{Path, PathBuf},
+    Channel, ChannelConfig, HasArtifactIdentificationRefs, NamedChannelOrUrl, PackageName,
+    PackageRecord, PrefixRecord, Version,
 };
 use url::Url;
+
+use super::{
+    EnvironmentName, ExposedName, Mapping,
+    trampoline::{GlobalExecutable, Trampoline},
+};
 
 /// Global binaries directory, default to `$HOME/.pixi/bin`
 #[derive(Debug, Clone)]
@@ -56,9 +58,10 @@ impl BinDir {
 
     /// Asynchronously retrieves all files in the binary executable directory.
     ///
-    /// This function reads the directory specified by `self.0` and try to collect all
-    /// file paths into a vector. It returns a `miette::Result` containing the
-    /// vector of `GlobalExecutable`or an error if the directory can't be read.
+    /// This function reads the directory specified by `self.0` and try to
+    /// collect all file paths into a vector. It returns a `miette::Result`
+    /// containing the vector of `GlobalExecutable`or an error if the
+    /// directory can't be read.
     pub(crate) async fn executables(&self) -> miette::Result<Vec<GlobalExecutable>> {
         let mut files = Vec::new();
         let mut entries = tokio_fs::read_dir(&self.0).await.into_diagnostic()?;
@@ -83,12 +86,13 @@ impl BinDir {
 
     /// Returns the path to the executable script for the given exposed name.
     ///
-    /// This function constructs the path to the executable script by joining the
-    /// `bin_dir` with the provided `exposed_name`. If the target platform is
-    /// Windows, it sets the file extension to `.exe`.
+    /// This function constructs the path to the executable script by joining
+    /// the `bin_dir` with the provided `exposed_name`. If the target
+    /// platform is Windows, it sets the file extension to `.exe`.
     pub(crate) fn executable_trampoline_path(&self, exposed_name: &ExposedName) -> PathBuf {
         let exposed_name = if cfg!(windows) {
-            // Not using `.set_extension()` because it will break the `.` in the name for cases like `python3.9.1`
+            // Not using `.set_extension()` because it will break the `.` in the name for
+            // cases like `python3.9.1`
             format!("{}.exe", exposed_name)
         } else {
             exposed_name.to_string()
@@ -150,7 +154,8 @@ impl EnvDir {
         Self { path }
     }
 
-    /// Create a global environment directory based on passed global environment root
+    /// Create a global environment directory based on passed global environment
+    /// root
     pub(crate) async fn from_env_root(
         env_root: EnvRoot,
         environment_name: &EnvironmentName,
@@ -168,7 +173,8 @@ impl EnvDir {
     }
 }
 
-/// Checks if a file is binary by reading the first 1024 bytes and checking for null bytes.
+/// Checks if a file is binary by reading the first 1024 bytes and checking for
+/// null bytes.
 pub(crate) fn is_binary(file_path: impl AsRef<Path>) -> miette::Result<bool> {
     let mut file = fs::File::open(file_path.as_ref()).into_diagnostic()?;
     let mut buffer = [0; 1024];
@@ -349,7 +355,8 @@ impl EnvironmentUpdate {
     }
 
     /// Get only the package changes that were explicitly requested by the user.
-    /// This filters out transitive dependency changes to focus on user-installed packages.
+    /// This filters out transitive dependency changes to focus on
+    /// user-installed packages.
     pub fn user_requested_changes(
         &self,
         requested_packages: &[PackageName],
@@ -387,7 +394,8 @@ pub struct StateChanges {
 }
 
 impl StateChanges {
-    /// Creates a new `StateChanges` instance with a single environment name and an empty vector as its value.
+    /// Creates a new `StateChanges` instance with a single environment name and
+    /// an empty vector as its value.
     pub fn new_with_env(env_name: EnvironmentName) -> Self {
         Self {
             changes: HashMap::from([(env_name, Vec::new())]),
@@ -424,7 +432,8 @@ impl StateChanges {
         user_requested_changes: HashMap<PackageName, InstallChange>,
         project: &super::Project,
     ) -> miette::Result<()> {
-        // Convert to StateChange::AddedPackage for packages that were installed or upgraded
+        // Convert to StateChange::AddedPackage for packages that were installed or
+        // upgraded
         for (package_name, install_change) in user_requested_changes {
             if matches!(
                 install_change,
@@ -848,7 +857,8 @@ pub(crate) fn channel_url_to_prioritized_channel(
     channel: &str,
     channel_config: &ChannelConfig,
 ) -> miette::Result<PrioritizedChannel> {
-    // If channel url contains channel config alias as a substring, don't use it as a URL
+    // If channel url contains channel config alias as a substring, don't use it as
+    // a URL
     if channel.contains(channel_config.channel_alias.as_str()) {
         // Create channel from URL for parsing
         let channel = Channel::from_url(Url::from_str(channel).expect("channel should be url"));
@@ -864,12 +874,13 @@ pub(crate) fn channel_url_to_prioritized_channel(
         .into())
 }
 
-/// Determines which shortcuts need to be installed or removed by comparing the requested shortcuts
-/// with the installed package records.
+/// Determines which shortcuts need to be installed or removed by comparing the
+/// requested shortcuts with the installed package records.
 ///
-/// This function filters the provided `prefix_records` to find those that contain menuinst JSON files.
-/// It then compares these records with the requested `shortcuts` to
-/// determine which records need to be installed and which need to be uninstalled.
+/// This function filters the provided `prefix_records` to find those that
+/// contain menuinst JSON files. It then compares these records with the
+/// requested `shortcuts` to determine which records need to be installed and
+/// which need to be uninstalled.
 pub(crate) fn shortcuts_sync_status(
     shortcuts: IndexSet<PackageName>,
     prefix_records: Vec<PrefixRecord>,
@@ -946,13 +957,15 @@ pub fn contains_menuinst_document(prefix_record: &PrefixRecord, prefix_root: &Pa
 
 /// Figures out what the status is of the exposed binaries of the environment.
 ///
-/// Returns a tuple of the exposed binaries to remove and the exposed binaries to add.
+/// Returns a tuple of the exposed binaries to remove and the exposed binaries
+/// to add.
 pub(crate) async fn expose_scripts_sync_status(
     bin_dir: &BinDir,
     env_dir: &EnvDir,
     mappings: &IndexSet<Mapping>,
 ) -> miette::Result<(Vec<GlobalExecutable>, IndexSet<ExposedName>)> {
-    // Get all paths to the binaries from trampolines or scripts in the bin directory.
+    // Get all paths to the binaries from trampolines or scripts in the bin
+    // directory.
     let locally_exposed = bin_dir.executables().await?;
     let executable_paths = futures::future::join_all(locally_exposed.iter().map(|global_bin| {
         let global_bin = global_bin.clone();
@@ -1015,7 +1028,8 @@ pub(crate) async fn expose_scripts_sync_status(
     Ok((to_remove, to_add))
 }
 
-/// Check if all binaries were exposed, or if the user selected a subset of them.
+/// Check if all binaries were exposed, or if the user selected a subset of
+/// them.
 pub fn check_all_exposed(
     env_binaries: &IndexMap<PackageName, Vec<Executable>>,
     exposed_mapping_binaries: &IndexSet<Mapping>,
@@ -1036,26 +1050,29 @@ pub fn check_all_exposed(
     auto_exposed
 }
 
-pub(crate) fn get_install_changes(
-    install_transaction: Transaction<PrefixRecord, RepoDataRecord>,
+pub(crate) fn get_install_changes<
+    Old: HasArtifactIdentificationRefs,
+    New: HasArtifactIdentificationRefs,
+>(
+    install_transaction: Transaction<Old, New>,
 ) -> HashMap<PackageName, InstallChange> {
     install_transaction
         .operations
         .into_iter()
         .map(|transaction| match transaction {
             TransactionOperation::Install(package) => {
-                let pkg_name = package.package_record.name;
+                let pkg_name = package.name();
 
                 (
-                    pkg_name,
-                    InstallChange::Installed(package.package_record.version.version().clone()),
+                    pkg_name.clone(),
+                    InstallChange::Installed(package.version().version().clone()),
                 )
             }
             TransactionOperation::Change { old, new } => {
-                let old_pkg_version = old.repodata_record.package_record.version;
-                let new_pkg_version = new.package_record.version;
+                let old_pkg_version = old.version();
+                let new_pkg_version = new.version();
 
-                let pkg_name = new.package_record.name;
+                let pkg_name = new.name();
 
                 let same_base_version = old_pkg_version == new_pkg_version;
 
@@ -1071,21 +1088,21 @@ pub(crate) fn get_install_changes(
                     )
                 };
 
-                (pkg_name, change)
+                (pkg_name.clone(), change)
             }
             TransactionOperation::Reinstall { old, new } => {
-                let pkg_name = new.package_record.name;
+                let pkg_name = new.name();
                 (
-                    pkg_name,
+                    pkg_name.clone(),
                     InstallChange::Reinstalled(
-                        old.repodata_record.package_record.version.version().clone(),
-                        new.package_record.version.version().clone(),
+                        old.version().version().clone(),
+                        new.version().version().clone(),
                     ),
                 )
             }
             TransactionOperation::Remove(package) => {
-                let pkg_name = package.repodata_record.package_record.name;
-                (pkg_name, InstallChange::Removed)
+                let pkg_name = package.name();
+                (pkg_name.clone(), InstallChange::Removed)
             }
         })
         .collect()
@@ -1093,12 +1110,13 @@ pub(crate) fn get_install_changes(
 
 #[cfg(test)]
 mod tests {
-    use crate::trampoline::Configuration;
+    use std::str::FromStr;
+
+    use rstest::rstest;
+    use tempfile::tempdir;
 
     use super::*;
-    use rstest::rstest;
-    use std::str::FromStr;
-    use tempfile::tempdir;
+    use crate::trampoline::Configuration;
 
     #[tokio::test]
     async fn test_create() {
@@ -1285,7 +1303,8 @@ mod tests {
             }
         };
 
-        // Test to_remove and to_add to see if the legacy scripts are removed and trampolines are added
+        // Test to_remove and to_add to see if the legacy scripts are removed and
+        // trampolines are added
         let (to_remove, to_add) = expose_scripts_sync_status(&bin_dir, &env_dir, &exposed)
             .await
             .unwrap();

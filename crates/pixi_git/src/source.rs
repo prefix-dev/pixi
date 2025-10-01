@@ -1,3 +1,4 @@
+use rattler_networking::LazyClient;
 /// Derived from `uv-git` implementation
 /// Source: https://github.com/astral-sh/uv/blob/4b8cc3e29e4c2a6417479135beaa9783b05195d3/crates/uv-git/src/source.rs
 /// This module expose `GitSource` type that represents a remote Git source that
@@ -8,8 +9,6 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
-
-use reqwest_middleware::ClientWithMiddleware;
 use tracing::instrument;
 
 use crate::{
@@ -26,7 +25,7 @@ pub struct GitSource {
     /// The Git reference from the manifest file.
     git: GitUrl,
     /// The HTTP client to use for fetching.
-    client: ClientWithMiddleware,
+    client: LazyClient,
     /// The path to the Git source database.
     cache: PathBuf,
     /// The reporter to use for this source.
@@ -35,14 +34,10 @@ pub struct GitSource {
 
 impl GitSource {
     /// Initialize a new Git source.
-    pub fn new(
-        git: GitUrl,
-        client: impl Into<ClientWithMiddleware>,
-        cache: impl Into<PathBuf>,
-    ) -> Self {
+    pub fn new(git: GitUrl, client: LazyClient, cache: impl Into<PathBuf>) -> Self {
         Self {
             git,
-            client: client.into(),
+            client,
             cache: cache.into(),
             reporter: None,
         }

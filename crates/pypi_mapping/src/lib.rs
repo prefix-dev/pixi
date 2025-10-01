@@ -12,7 +12,8 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_config::get_cache_dir;
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
-use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
+use rattler_networking::LazyClient;
+use reqwest_middleware::ClientBuilder;
 use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
 use thiserror::Error;
 use tokio::sync::Semaphore;
@@ -109,13 +110,13 @@ pub fn is_conda_forge_url(url: &Url) -> bool {
 /// - [`CondaForgeVerbatim`]
 #[derive(Clone)]
 pub struct MappingClient {
-    client: ClientWithMiddleware,
+    client: LazyClient,
     compressed_mapping: prefix::CompressedMappingClient,
     hash_mapping: prefix::HashMappingClient,
 }
 
 pub struct MappingClientBuilder {
-    client: ClientWithMiddleware,
+    client: LazyClient,
     compressed_mapping: prefix::CompressedMappingClientBuilder,
     hash_mapping: prefix::HashMappingClientBuilder,
 }
@@ -161,7 +162,7 @@ pub enum MappingError {
 
 impl MappingClient {
     /// Construct a new `MappingClientBuilder` with the provided `Client`.
-    pub fn builder(client: ClientWithMiddleware) -> MappingClientBuilder {
+    pub fn builder(client: LazyClient) -> MappingClientBuilder {
         // Construct a client with a retry policy and local caching
         let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
         let retry_strategy = RetryTransientMiddleware::new_with_policy(retry_policy);
@@ -176,15 +177,18 @@ impl MappingClient {
             options: HttpCacheOptions::default(),
         });
 
-        let client = ClientBuilder::from_client(client)
-            .with(cache_strategy)
-            .with(retry_strategy)
-            .build();
+        let wrapped_client = LazyClient::new(move || {
+            let client = client.client().clone();
+            ClientBuilder::from_client(client)
+                .with(retry_strategy)
+                .with(cache_strategy)
+                .build()
+        });
 
         MappingClientBuilder {
-            client: client.clone(),
-            compressed_mapping: prefix::CompressedMappingClient::builder(client.clone()),
-            hash_mapping: prefix::HashMappingClient::builder(client),
+            client: wrapped_client.clone(),
+            compressed_mapping: prefix::CompressedMappingClient::builder(wrapped_client.clone()),
+            hash_mapping: prefix::HashMappingClient::builder(wrapped_client),
         }
     }
 
