@@ -26,10 +26,7 @@ mod template;
 
 pub use options::{GitAttributes, InitOptions, ManifestFormat};
 
-pub(crate) async fn init<I: Interface>(
-    interface: &I,
-    options: InitOptions,
-) -> miette::Result<Workspace> {
+pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::Result<Workspace> {
     let env = Environment::new();
     // Fail silently if the directory already exists or cannot be created.
     fs_err::create_dir_all(&options.path).into_diagnostic()?;

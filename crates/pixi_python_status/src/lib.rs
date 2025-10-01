@@ -1,7 +1,6 @@
 use std::path::Path;
 
 use rattler::install::{PythonInfo, Transaction};
-use rattler_conda_types::{PrefixRecord, RepoDataRecord};
 
 /// Describes how the Python interpreter in a prefix changed between two
 /// transactions. This is used to determine whether site-packages need to be
@@ -26,7 +25,7 @@ pub enum PythonStatus {
 
 impl PythonStatus {
     /// Determine the [`PythonStatus`] from a [`Transaction`].
-    pub fn from_transaction(transaction: &Transaction<PrefixRecord, RepoDataRecord>) -> Self {
+    pub fn from_transaction<Old, New>(transaction: &Transaction<Old, New>) -> Self {
         match (
             transaction.current_python_info.as_ref(),
             transaction.python_info.as_ref(),
