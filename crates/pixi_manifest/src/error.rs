@@ -166,7 +166,7 @@ impl Display for TomlError {
                 write!(f, "Could not convert pep508 to pixi pypi requirement")
             }
             TomlError::InvalidNonPackageDependencies(err) => write!(f, "{err}"),
-            TomlError::ResolveError(err) => write!(f, "{}", err),
+            TomlError::ResolveError(err) => write!(f, "{err}"),
         }
     }
 }
