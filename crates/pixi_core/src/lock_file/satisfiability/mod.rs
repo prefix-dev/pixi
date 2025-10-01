@@ -12,7 +12,7 @@ use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pixi_build_discovery::{DiscoveredBackend, EnabledProtocols};
-use pixi_command_dispatcher::additional_glob_hash;
+use pixi_command_dispatcher::calculate_additional_glob_hash;
 use pixi_git::url::RepositoryUrl;
 use pixi_glob::{GlobHashCache, GlobHashError, GlobHashKey};
 use pixi_manifest::{FeaturesExt, pypi::pypi_options::NoBuild};
@@ -1512,7 +1512,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
         .map_err(Box::new)?;
 
         let additional_glob_hash =
-            additional_glob_hash(&discovered_backend.init_params.project_model);
+            calculate_additional_glob_hash(&discovered_backend.init_params.project_model);
 
         let input_hash = input_hash_cache
             .compute_hash(GlobHashKey::new(

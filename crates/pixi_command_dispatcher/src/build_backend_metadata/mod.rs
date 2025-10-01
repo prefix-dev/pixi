@@ -105,7 +105,7 @@ impl BuildBackendMetadataSpec {
 
         // Calculate the hash of the project model
         let additional_glob_hash =
-            additional_glob_hash(&discovered_backend.init_params.project_model);
+            calculate_additional_glob_hash(&discovered_backend.init_params.project_model);
 
         // Check the source metadata cache, short circuit if there is a cache hit that
         // is still fresh.
@@ -425,7 +425,7 @@ pub enum BuildBackendMetadataError {
 }
 
 /// Computes an additional hash to be used in glob hash
-pub fn additional_glob_hash(project_model: &Option<ProjectModelV1>) -> Vec<u8> {
+pub fn calculate_additional_glob_hash(project_model: &Option<ProjectModelV1>) -> Vec<u8> {
     let mut hasher = Xxh3::new();
     project_model.hash(&mut hasher);
     hasher.finish().to_ne_bytes().to_vec()
