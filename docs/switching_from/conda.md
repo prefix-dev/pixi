@@ -67,11 +67,7 @@ bat pixi.toml
 
 ## Automated switching
 
-With `pixi` you can import `environment.yml` files into a Pixi workspace. (See [import](../reference/cli/pixi/init.md))
-```shell
-pixi init --import environment.yml
-```
-This will create a new workspace with the dependencies from the `environment.yml` file.
+You can import `environment.yml` files into a Pixi workspace — see our [import tutorial](../tutorials/import.md).
 
 ??? tip "Exporting your environment"
     If you are working with Conda users or systems, you can [export your environment to a `environment.yml`](../reference/cli/pixi/workspace/export.md) file to share them.

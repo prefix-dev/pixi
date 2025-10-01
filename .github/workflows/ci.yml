@@ -107,7 +107,7 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: |
-          for package in $(cargo metadata --no-deps --format-version=1 | jq -r '.packages[] | .name'); do
+          for package in $(cargo metadata --no-deps --format-version=1 | jq -r '.packages[] | select(.name != "pixi_bench") | .name'); do
             cargo rustdoc -p "$package" --all-features -- -D warnings -W unreachable-pub
           done
 
