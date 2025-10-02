@@ -75,8 +75,11 @@ impl Prefix {
     /// to filter and collect executable files.
     /// Processes prefix records (that you can get by using
     /// `find_installed_packages`) to filter and collect executable files.
+    ///
+    /// This also scans binary folders for symlinks to executables that may not be
+    /// tracked in the prefix records (e.g., npm-installed packages).
     pub fn find_executables(&self, prefix_packages: &[PrefixRecord]) -> Vec<Executable> {
-        let executables = prefix_packages
+        let mut executables = prefix_packages
             .iter()
             .flat_map(|record| {
                 record
@@ -92,7 +95,18 @@ impl Prefix {
                         })
                     })
             })
-            .collect();
+            .collect::<Vec<_>>();
+
+        // Also scan binary folders for symlinks that aren't tracked in prefix records
+        if let Ok(additional_executables) = self.scan_binary_folders_for_executables() {
+            // Add executables that aren't already in the list
+            for exec in additional_executables {
+                if !executables.iter().any(|e| e.path == exec.path) {
+                    executables.push(exec);
+                }
+            }
+        }
+
         tracing::debug!(
             "In packages: {}, found executables: {:?} ",
             prefix_packages
@@ -102,6 +116,62 @@ impl Prefix {
             executables
         );
         executables
+    }
+
+    /// Scans binary folders in the prefix for executables (including symlinks).
+    /// This finds executables that may not be tracked in prefix records.
+    fn scan_binary_folders_for_executables(&self) -> Result<Vec<Executable>, std::io::Error> {
+        tracing::debug!(
+            "Scanning binary folders for executables in: {}",
+            self.root().display()
+        );
+
+        // These are the actual binary folders verified in:
+        // https://github.com/conda/rattler/blob/46cc244cd626090a089a86043a2148a332943ef7/crates/rattler_shell/src/activation.rs#L303-L316
+        let binary_folders = if cfg!(windows) {
+            vec![
+                "",
+                "Library/mingw-w64/bin/",
+                "Library/usr/bin/",
+                "Library/bin/",
+                "Scripts/",
+                "bin/",
+            ]
+        } else {
+            vec!["bin"]
+        };
+
+        let mut executables = Vec::new();
+
+        for bin_folder in binary_folders {
+            let bin_path = self.root().join(bin_folder);
+            if !bin_path.exists() || !bin_path.is_dir() {
+                continue;
+            }
+
+            let entries = std::fs::read_dir(&bin_path)?;
+            for entry in entries.filter_map(Result::ok) {
+                let path = entry.path();
+
+                // Check if it's executable (this works for both regular files and symlinks)
+                if is_executable::is_executable(&path) {
+                    if let Some(file_name) = path.file_name().and_then(OsStr::to_str) {
+                        let relative_path = if bin_folder.is_empty() {
+                            PathBuf::from(file_name)
+                        } else {
+                            PathBuf::from(bin_folder).join(file_name)
+                        };
+
+                        executables.push(Executable::new(
+                            strip_executable_extension(file_name.to_string()),
+                            relative_path,
+                        ));
+                    }
+                }
+            }
+        }
+
+        Ok(executables)
     }
 
     /// Checks if the given relative path points to an executable file.
@@ -140,7 +210,7 @@ impl Prefix {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Executable {
     pub name: String,
     pub path: PathBuf,
@@ -149,5 +219,48 @@ pub struct Executable {
 impl Executable {
     pub fn new(name: String, path: PathBuf) -> Self {
         Self { name, path }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::tempdir;
+
+    #[cfg(unix)]
+    #[test]
+    fn test_find_executables_includes_js_symlinks() {
+        // Create a temporary directory to act as the prefix root (simulating npm scenario)
+        let temp_dir = tempdir().unwrap();
+        let prefix_root = temp_dir.path();
+        let bin_dir = prefix_root.join("bin");
+        let lib_dir = prefix_root.join("lib/node_modules/mypackage");
+        fs::create_dir_all(&bin_dir).unwrap();
+        fs::create_dir_all(&lib_dir).unwrap();
+
+        // Create a JS file with shebang (like npm does)
+        let js_file = lib_dir.join("cli.js");
+        fs::write(&js_file, "#!/usr/bin/env node\nconsole.log('hello');\n").unwrap();
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&js_file, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        // Create a symlink to it in bin (like npm does)
+        let symlink = bin_dir.join("mycommand");
+        std::os::unix::fs::symlink("../lib/node_modules/mypackage/cli.js", &symlink).unwrap();
+
+        // Create the prefix
+        let prefix = Prefix::new(prefix_root);
+
+        // Find executables (with empty prefix records, simulating that symlinks aren't tracked)
+        let executables = prefix.find_executables(&[]);
+
+        // Should find the npm-style symlink
+        assert!(
+            executables.iter().any(|e| e.name == "mycommand"),
+            "Should find the npm-style symlink to JS file"
+        );
     }
 }

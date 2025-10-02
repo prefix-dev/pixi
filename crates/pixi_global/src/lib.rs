@@ -7,7 +7,6 @@ pub mod project;
 pub mod trampoline;
 
 pub use common::{BinDir, EnvChanges, EnvDir, EnvRoot, EnvState, StateChange, StateChanges};
-use pixi_utils::executable_from_path;
 pub use project::{EnvironmentName, ExposedName, Mapping, Project};
 
 use pixi_utils::prefix::{Executable, Prefix};
@@ -27,21 +26,14 @@ fn find_executables(prefix: &Prefix, prefix_package: &PrefixRecord) -> Vec<PathB
 
 /// Processes prefix records (that you can get by using `find_installed_packages`)
 /// to filter and collect executable files.
+///
+/// This also includes symlinks to executables that may not be tracked in prefix records
+/// (e.g., npm-installed packages).
 pub fn find_executables_for_many_records(
     prefix: &Prefix,
     prefix_packages: &[PrefixRecord],
 ) -> Vec<Executable> {
-    let executables = prefix_packages
-        .iter()
-        .flat_map(|record| {
-            record
-                .files
-                .iter()
-                .filter(|relative_path| is_executable(prefix, relative_path))
-                .map(|path| Executable::new(executable_from_path(path), path.clone()))
-        })
-        .collect();
-    executables
+    prefix.find_executables(prefix_packages)
 }
 
 fn is_executable(prefix: &Prefix, relative_path: &Path) -> bool {
