@@ -152,10 +152,10 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
             }
 
             let (name, pixi_name) = match pyproject.name() {
-                Some(name) => (name, false),
-                None => (default_name.as_str(), true),
+                Some(name) => (name.to_string(), false),
+                None => (default_name.clone(), true),
             };
-            let environments = pyproject.environments_from_extras().into_diagnostic()?;
+            let environments = pyproject.environments_from_groups().into_diagnostic()?;
             let rv = env
                 .render_named_str(
                     consts::PYPROJECT_MANIFEST,

@@ -1,13 +1,104 @@
-use std::io::Write;
+use std::{fs::File, io::Write, str::FromStr};
 
+use pep508_rs::Requirement;
 use rattler_conda_types::Platform;
 use tempfile::tempdir;
 use typed_path::Utf8TypedPath;
 
 use crate::common::pypi_index::{Database as PyPIDatabase, PyPIPackage};
-use crate::common::{LockFileExt, PixiControl};
+use crate::common::{
+    LockFileExt, PixiControl,
+    package_database::{Package, PackageDatabase},
+};
 use crate::setup_tracing;
-use std::fs::File;
+
+/// This tests if we can resolve pyproject optional dependencies recursively
+/// before when running `pixi list -e all`, this would have not included numpy
+/// we are now explicitly testing that this works
+#[tokio::test]
+async fn pyproject_optional_dependencies_resolve_recursively() {
+    setup_tracing();
+
+    let simple = PyPIDatabase::new()
+        .with(PyPIPackage::new("numpy", "1.0.0"))
+        .with(PyPIPackage::new("sphinx", "1.0.0"))
+        .with(PyPIPackage::new("pytest", "1.0.0"))
+        .into_simple_index()
+        .unwrap();
+
+    let platform = Platform::current();
+    let platform_str = platform.to_string();
+
+    let mut package_db = PackageDatabase::default();
+    package_db.add_package(
+        Package::build("python", "3.11.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+    let channel_url = channel.url();
+    let index_url = simple.index_url();
+
+    let pyproject = format!(
+        r#"
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "recursive-optional-groups"
+
+[project.optional-dependencies]
+np = ["numpy"]
+all = ["recursive-optional-groups[np]"]
+
+[dependency-groups]
+docs = ["sphinx"]
+test = ["recursive-optional-groups[np]", "pytest", {{include-group = "docs"}}]
+
+[tool.pixi.project]
+channels = ["{channel_url}"]
+platforms = ["{platform}"]
+
+[tool.pixi.dependencies]
+python = "==3.11.0"
+
+[tool.pixi.pypi-options]
+index-url = "{index_url}"
+
+[tool.pixi.environments]
+np = {{features = ["np"]}}
+all = {{features = ["all"]}}
+test = {{features = ["test"]}}
+"#,
+        platform = platform_str,
+        channel_url = channel_url,
+        index_url = index_url,
+    );
+
+    let pixi = PixiControl::from_pyproject_manifest(&pyproject).unwrap();
+
+    let lock = pixi.update_lock_file().await.unwrap();
+
+    let numpy_req = Requirement::from_str("numpy").unwrap();
+    let sphinx_req = Requirement::from_str("sphinx").unwrap();
+    assert!(
+        lock.contains_pep508_requirement("np", platform, numpy_req.clone()),
+        "np environment should include numpy from optional dependencies"
+    );
+    assert!(
+        lock.contains_pep508_requirement("all", platform, numpy_req.clone()),
+        "all environment should include numpy inherited from recursive optional dependency"
+    );
+    assert!(
+        lock.contains_pep508_requirement("test", platform, numpy_req),
+        "test environment should include numpy inherited from recursive optional dependency"
+    );
+    assert!(
+        lock.contains_pep508_requirement("test", platform, sphinx_req),
+        "test environment should include sphinx inherited from recursive dependency group"
+    );
+}
 
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
