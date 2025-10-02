@@ -472,47 +472,51 @@ impl Workspace {
 
     /// Returns the resolved variant configuration for a given platform.
     pub fn variants(&self, platform: Platform) -> Result<VariantConfig, VariantsError> {
-        // Get inline variants for all targets
-        let mut variants = BTreeMap::new();
-        // Resolves from most specific to least specific.
-        for build_variants in self
-            .workspace
-            .value
-            .workspace
-            .build_variants
-            .resolve(Some(platform))
-            .flatten()
-        {
-            // Update the hash map, but only items that are not already in the map.
-            for (key, value) in build_variants {
-                variants.entry(key.clone()).or_insert_with(|| value.clone());
-            }
-        }
+        self.variants
+            .get_or_try_init(|| {
+                // Get inline variants for all targets
+                let mut variants = BTreeMap::new();
+                // Resolves from most specific to least specific.
+                for build_variants in self
+                    .workspace
+                    .value
+                    .workspace
+                    .build_variants
+                    .resolve(Some(platform))
+                    .flatten()
+                {
+                    // Update the hash map, but only items that are not already in the map.
+                    for (key, value) in build_variants {
+                        variants.entry(key.clone()).or_insert_with(|| value.clone());
+                    }
+                }
 
-        // Read variant files
-        let variant_files = self
-            .workspace
-            .value
-            .workspace
-            .build_variant_files
-            .iter()
-            .map(|source| {
-                let file_path = match source {
-                    BuildVariantSource::File(path) => path,
-                };
-                let path = self.root.join(file_path);
+                // Read variant files
+                let variant_files = self
+                    .workspace
+                    .value
+                    .workspace
+                    .build_variant_files
+                    .iter()
+                    .map(|source| {
+                        let file_path = match source {
+                            BuildVariantSource::File(path) => path,
+                        };
+                        let path = self.root.join(file_path);
 
-                fs::read_to_string(&path).map_err(|source| VariantsError::ReadVariantFile {
-                    path: path.clone(),
-                    source,
+                        fs::read_to_string(&path).map_err(|source| VariantsError::ReadVariantFile {
+                            path: path.clone(),
+                            source,
+                        })
+                    })
+                    .collect::<Result<_, _>>()?;
+
+                Ok(VariantConfig {
+                    variants,
+                    variant_files,
                 })
             })
-            .collect::<Result<_, _>>()?;
-
-        Ok(VariantConfig {
-            variants,
-            variant_files,
-        })
+            .cloned()
     }
 
     // /// Returns the reqwest client used for http networking
