@@ -18,6 +18,7 @@ use pixi_glob::{GlobHashCache, GlobHashError, GlobHashKey};
 use pixi_manifest::{FeaturesExt, pypi::pypi_options::NoBuild};
 use pixi_record::{LockedGitUrl, ParseLockFileError, PixiRecord, SourceMismatchError};
 use pixi_spec::{PixiSpec, SourceAnchor, SourceSpec, SpecConversionError};
+use pixi_utils::variants::VariantConfig;
 use pixi_uv_conversions::{
     AsPep508Error, as_uv_req, into_pixi_reference, pep508_requirement_to_uv_requirement,
     to_normalize, to_uv_specifiers, to_uv_version,
@@ -1511,9 +1512,15 @@ pub(crate) async fn verify_package_platform_satisfiability(
         .map_err(PlatformUnsat::BackendDiscovery)
         .map_err(Box::new)?;
 
+        let VariantConfig {
+            variants,
+            variant_files,
+        } = environment.workspace().variants(platform);
+
         let additional_glob_hash = calculate_additional_glob_hash(
             &discovered_backend.init_params.project_model,
-            &Some(environment.workspace().variants(platform)),
+            &Some(variants),
+            &Some(variant_files),
         );
 
         let input_hash = input_hash_cache

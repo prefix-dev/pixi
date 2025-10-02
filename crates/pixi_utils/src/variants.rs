@@ -12,6 +12,11 @@ use std::collections::BTreeMap;
 /// numpy:
 ///     - 1.18
 /// ```
-///
-/// TODO: In the future we should turn this into a proper type.
-pub type VariantConfig = BTreeMap<String, Vec<String>>;
+#[derive(Debug, Clone)]
+pub struct VariantConfig {
+    /// Inline variant configuration
+    pub variants: BTreeMap<String, Vec<String>>,
+
+    /// Contents of variant files
+    pub variant_files: Vec<String>,
+}

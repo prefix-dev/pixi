@@ -206,8 +206,8 @@ pub async fn update_prefix_conda(
             build_environment,
             channels,
             channel_config,
-            variants: Some(variant_config),
-
+            variants: Some(variant_config.variants),
+            variant_files: Some(variant_config.variant_files),
             enabled_protocols: Default::default(),
         })
         .await?;

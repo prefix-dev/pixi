@@ -52,6 +52,9 @@ pub struct BuildBackendMetadataSpec {
     /// Variant configuration
     pub variants: Option<BTreeMap<String, Vec<String>>>,
 
+    /// Variant file contents
+    pub variant_files: Option<Vec<String>>,
+
     /// The protocols that are enabled for this source
     #[serde(skip_serializing_if = "crate::is_default")]
     pub enabled_protocols: EnabledProtocols,
@@ -107,6 +110,7 @@ impl BuildBackendMetadataSpec {
         let additional_glob_hash = calculate_additional_glob_hash(
             &discovered_backend.init_params.project_model,
             &self.variants,
+            &self.variant_files,
         );
 
         // Check the source metadata cache, short circuit if there is a cache hit that
@@ -430,9 +434,11 @@ pub enum BuildBackendMetadataError {
 pub fn calculate_additional_glob_hash(
     project_model: &Option<ProjectModelV1>,
     variants: &Option<BTreeMap<String, Vec<String>>>,
+    variant_files: &Option<Vec<String>>,
 ) -> Vec<u8> {
     let mut hasher = Xxh3::new();
     project_model.hash(&mut hasher);
     variants.hash(&mut hasher);
+    variant_files.hash(&mut hasher);
     hasher.finish().to_ne_bytes().to_vec()
 }

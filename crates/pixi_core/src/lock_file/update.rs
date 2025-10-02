@@ -26,7 +26,7 @@ use pixi_glob::GlobHashCache;
 use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
 use pixi_record::{ParseLockFileError, PixiRecord};
-use pixi_utils::prefix::Prefix;
+use pixi_utils::{prefix::Prefix, variants::VariantConfig};
 use pixi_uv_conversions::{
     ConversionError, to_extra_name, to_marker_environment, to_normalize, to_uv_extra_name,
     to_uv_normalize,
@@ -1929,7 +1929,10 @@ async fn spawn_solve_conda_environment_task(
         .collect::<Result<Vec<_>, _>>()?;
 
     // Determine the build variants
-    let variants = group.workspace().variants(platform);
+    let VariantConfig {
+        variants,
+        variant_files,
+    } = group.workspace().variants(platform);
 
     let start = Instant::now();
 
@@ -1947,6 +1950,7 @@ async fn spawn_solve_conda_environment_task(
             exclude_newer,
             channel_config,
             variants: Some(variants),
+            variant_files: Some(variant_files),
             enabled_protocols: Default::default(),
         })
         .await
