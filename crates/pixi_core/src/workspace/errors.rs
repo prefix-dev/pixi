@@ -2,7 +2,7 @@ use crate::Workspace;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::{Diagnostic, LabeledSpan};
-use pixi_manifest::{BuildVariantSource, EnvironmentName, TaskName};
+use pixi_manifest::{EnvironmentName, TaskName};
 use rattler_conda_types::Platform;
 use std::error::Error;
 use std::fmt::{Display, Formatter};

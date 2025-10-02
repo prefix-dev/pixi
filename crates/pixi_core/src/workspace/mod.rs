@@ -44,7 +44,6 @@ use pixi_spec::SourceSpec;
 use pixi_utils::reqwest::build_reqwest_clients;
 use pixi_utils::variants::VariantConfig;
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
-use pypi_modifiers::pypi_tags::package_name_is_python;
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform, Version};
 use rattler_lock::{LockFile, LockedPackageRef};
 use rattler_networking::s3_middleware;

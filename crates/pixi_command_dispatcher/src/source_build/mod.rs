@@ -342,6 +342,7 @@ impl SourceBuildSpec {
                     editable: self.editable(),
                     build_environment: self.build_environment,
                     variants: self.variants,
+                    variant_files: self.variant_files,
                     output_directory: self.output_directory,
                 }),
                 backend,
@@ -384,6 +385,7 @@ impl SourceBuildSpec {
                 host_platform,
                 build_platform,
                 variant_configuration: self.variants.clone(),
+                variant_files: self.variant_files.clone(),
                 work_directory: work_directory.clone(),
                 channels: self.channels.clone(),
             })

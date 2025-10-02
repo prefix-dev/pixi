@@ -261,6 +261,7 @@ impl BuildBackendMetadataSpec {
             host_platform: self.build_environment.host_platform,
             build_platform: self.build_environment.build_platform,
             variant_configuration: self.variants.map(|variants| variants.into_iter().collect()),
+            variant_files: self.variant_files.clone(),
             work_directory: command_dispatcher.cache_dirs().working_dirs().join(
                 WorkDirKey {
                     source: SourceRecordOrCheckout::Checkout {
@@ -319,6 +320,7 @@ impl BuildBackendMetadataSpec {
                 base_url: self.channel_config.channel_alias.clone(),
             },
             variant_configuration: self.variants.map(|variants| variants.into_iter().collect()),
+            variant_files: self.variant_files.clone(),
             work_directory: command_dispatcher.cache_dirs().working_dirs().join(
                 WorkDirKey {
                     source: SourceRecordOrCheckout::Checkout {
