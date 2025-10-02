@@ -523,6 +523,72 @@ async fn test_indexes_are_passed_when_solving_build_pypi_dependencies() {
     assert_eq!(local_pypi_index, lock_file_index,);
 }
 
+/// Ensures the unsafe-best-match index strategy is honored when resolving and building PyPI projects,
+/// even when the lower version appears first in `extra-index-urls`.
+/// This was an issue in: https://github.com/prefix-dev/pixi/issues/4588
+#[tokio::test]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+async fn test_index_strategy_respected_for_build_dependencies() {
+    setup_tracing();
+
+    // The first extra index exposes the lower version while the second extra exposes the higher
+    // one. `unsafe-best-match` should still select the best version even though the lower version
+    // is encountered earlier.
+    let first_extra_index = PyPIDatabase::new()
+        .with(PyPIPackage::new("foozy", "1.0.0"))
+        .into_simple_index()
+        .unwrap();
+    let second_extra_index = PyPIDatabase::new()
+        .with(PyPIPackage::new("foozy", "2.0.0"))
+        .into_simple_index()
+        .unwrap();
+
+    let pixi = PixiControl::from_pyproject_manifest(&format!(
+        r#"
+        [project]
+        name = "index-strategy-build"
+        requires-python = ">=3.10"
+        version = "0.1.0"
+
+        [build-system]
+        requires = [
+            "uv_build>=0.8.9,<0.9.0",
+            "foozy==2.0.0",
+        ]
+        build-backend = "uv_build"
+
+        [tool.pixi.project]
+        channels = ["https://prefix.dev/conda-forge"]
+        platforms = ["{platform}"]
+
+        [tool.pixi.dependencies]
+        python = "~=3.12.0"
+
+        [tool.pixi.pypi-options]
+        extra-index-urls = [
+            "{first_extra_index}",
+            "{second_extra_index}",
+        ]
+        # Without this the test will fail
+        index-strategy = "unsafe-best-match"
+
+        [tool.pixi.pypi-dependencies]
+        index-strategy-build = {{ path = ".", editable = true }}
+        "#,
+        platform = Platform::current(),
+        first_extra_index = first_extra_index.index_url(),
+        second_extra_index = second_extra_index.index_url(),
+    ))
+    .unwrap();
+
+    let project_path = pixi.workspace_path();
+    let src_dir = project_path.join("src").join("index_strategy_build");
+    fs_err::create_dir_all(&src_dir).unwrap();
+    fs_err::write(src_dir.join("__init__.py"), "").unwrap();
+
+    pixi.install().await.unwrap();
+}
+
 #[tokio::test]
 #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 async fn test_cross_platform_resolve_with_no_build() {
