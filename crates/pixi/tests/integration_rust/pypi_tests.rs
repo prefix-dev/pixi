@@ -21,6 +21,8 @@ async fn pyproject_optional_dependencies_resolve_recursively() {
 
     let simple = PyPIDatabase::new()
         .with(PyPIPackage::new("numpy", "1.0.0"))
+        .with(PyPIPackage::new("sphinx", "1.0.0"))
+        .with(PyPIPackage::new("pytest", "1.0.0"))
         .into_simple_index()
         .unwrap();
 
@@ -50,6 +52,10 @@ name = "recursive-optional-groups"
 np = ["numpy"]
 all = ["recursive-optional-groups[np]"]
 
+[dependency-groups]
+docs = ["sphinx"]
+test = ["recursive-optional-groups[np]", "pytest", {{include-group = "docs"}}]
+
 [tool.pixi.project]
 channels = ["{channel_url}"]
 platforms = ["{platform}"]
@@ -63,6 +69,7 @@ index-url = "{index_url}"
 [tool.pixi.environments]
 np = {{features = ["np"]}}
 all = {{features = ["all"]}}
+test = {{features = ["test"]}}
 "#,
         platform = platform_str,
         channel_url = channel_url,
@@ -74,13 +81,22 @@ all = {{features = ["all"]}}
     let lock = pixi.update_lock_file().await.unwrap();
 
     let numpy_req = Requirement::from_str("numpy").unwrap();
+    let sphinx_req = Requirement::from_str("sphinx").unwrap();
     assert!(
         lock.contains_pep508_requirement("np", platform, numpy_req.clone()),
         "np environment should include numpy from optional dependencies"
     );
     assert!(
-        lock.contains_pep508_requirement("all", platform, numpy_req),
+        lock.contains_pep508_requirement("all", platform, numpy_req.clone()),
         "all environment should include numpy inherited from recursive optional dependency"
+    );
+    assert!(
+        lock.contains_pep508_requirement("test", platform, numpy_req),
+        "test environment should include numpy inherited from recursive optional dependency"
+    );
+    assert!(
+        lock.contains_pep508_requirement("test", platform, sphinx_req),
+        "test environment should include sphinx inherited from recursive dependency group"
     );
 }
 
