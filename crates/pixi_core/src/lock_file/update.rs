@@ -59,7 +59,9 @@ use crate::{
         virtual_packages::validate_system_meets_environment_requirements,
     },
     workspace::{
-        Environment, EnvironmentVars, HasWorkspaceRef, get_activated_environment_variables,
+        Environment, EnvironmentVars, HasWorkspaceRef,
+        errors::VariantsError,
+        get_activated_environment_variables,
         grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
     },
 };
@@ -232,6 +234,10 @@ pub enum SolveCondaEnvironmentError {
 
     #[error(transparent)]
     ParseChannels(#[from] ParseChannelError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Variants(#[from] VariantsError),
 }
 
 /// Options to pass to [`Workspace::update_lock_file`].
@@ -1932,7 +1938,7 @@ async fn spawn_solve_conda_environment_task(
     let VariantConfig {
         variants,
         variant_files,
-    } = group.workspace().variants(platform);
+    } = group.workspace().variants(platform)?;
 
     let start = Instant::now();
 

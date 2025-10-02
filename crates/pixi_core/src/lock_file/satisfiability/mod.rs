@@ -44,7 +44,9 @@ use uv_pypi_types::ParsedUrlError;
 use super::{
     PixiRecordsByName, PypiRecord, PypiRecordsByName, package_identifier::ConversionError,
 };
-use crate::workspace::{Environment, HasWorkspaceRef, grouped_environment::GroupedEnvironment};
+use crate::workspace::{
+    Environment, HasWorkspaceRef, errors::VariantsError, grouped_environment::GroupedEnvironment,
+};
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum EnvironmentUnsat {
@@ -391,6 +393,10 @@ pub enum PlatformUnsat {
     #[error(transparent)]
     #[diagnostic(transparent)]
     BackendDiscovery(#[from] pixi_build_discovery::DiscoveryError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Variants(#[from] VariantsError),
 
     #[error("'{name}' is locked as a conda package but only requested by pypi dependencies")]
     CondaPackageShouldBePypi { name: String },
@@ -1515,7 +1521,10 @@ pub(crate) async fn verify_package_platform_satisfiability(
         let VariantConfig {
             variants,
             variant_files,
-        } = environment.workspace().variants(platform);
+        } = environment
+            .workspace()
+            .variants(platform)
+            .map_err(|err| Box::new(err.into()))?;
 
         let additional_glob_hash = calculate_additional_glob_hash(
             &discovered_backend.init_params.project_model,

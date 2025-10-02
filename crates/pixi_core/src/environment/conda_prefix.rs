@@ -68,6 +68,7 @@ impl CondaPrefixUpdaterBuilder<'_> {
             .into_diagnostic()?;
         let name = self.group.name();
         let prefix = self.group.prefix();
+        let variant_config = self.group.workspace().variants(self.platform)?;
 
         Ok(CondaPrefixUpdater::new(
             channels,
@@ -76,7 +77,7 @@ impl CondaPrefixUpdaterBuilder<'_> {
             prefix,
             self.platform,
             self.virtual_packages,
-            self.group.workspace().variants(self.platform),
+            variant_config,
             self.command_dispatcher,
         ))
     }

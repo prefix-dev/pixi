@@ -75,7 +75,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let VariantConfig {
         variants,
         variant_files,
-    } = workspace.variants(args.target_platform);
+    } = workspace.variants(args.target_platform)?;
 
     // Build platform virtual packages
     let build_virtual_packages: Vec<GenericVirtualPackage> = workspace
