@@ -4,6 +4,7 @@ use std::{
     future::{Future, ready},
     iter,
     path::PathBuf,
+    pin::Pin,
     str::FromStr,
     sync::Arc,
     time::{Duration, Instant},
@@ -23,10 +24,15 @@ use pixi_command_dispatcher::{
 };
 use pixi_consts::consts;
 use pixi_glob::GlobHashCache;
+use pixi_install_pypi::{
+    LazyEnvironmentVariables, PyPIBuildConfig, PyPIContextConfig, PyPIEnvironmentUpdater,
+    PyPIUpdateConfig,
+};
 use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
 use pixi_record::{ParseLockFileError, PixiRecord};
 use pixi_utils::prefix::Prefix;
+use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
     ConversionError, to_extra_name, to_marker_environment, to_normalize, to_uv_extra_name,
     to_uv_normalize,
@@ -63,10 +69,6 @@ use crate::{
         grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
     },
 };
-use pixi_install_pypi::{
-    PyPIBuildConfig, PyPIContextConfig, PyPIEnvironmentUpdater, PyPIUpdateConfig,
-};
-use pixi_uv_context::UvResolutionContext;
 
 impl Workspace {
     /// Ensures that the lock-file is up-to-date with the project.
@@ -551,17 +553,6 @@ impl<'p> LockFileDerivedData<'p> {
                     .clone()
                     .set_cache_refresh(uv_reinstall, uv_packages);
 
-                // TODO: This can be really slow (~200ms for pixi on @ruben-arts machine).
-                let env_variables = get_activated_environment_variables(
-                    self.workspace.env_vars(),
-                    environment,
-                    CurrentEnvVarBehavior::Exclude,
-                    None,
-                    false,
-                    false,
-                )
-                .await?;
-
                 let non_isolated_packages = environment.pypi_options().no_build_isolation;
                 let no_build = environment
                     .pypi_options()
@@ -596,10 +587,13 @@ impl<'p> LockFileDerivedData<'p> {
                         exclude_newer: exclude_newer.as_ref(),
                     };
 
+                    let lazy_env_vars = LazyPixiEnvironmentVars {
+                        environment: environment.clone(),
+                    };
                     let context_config = PyPIContextConfig {
                         uv_context: &uv_context,
                         pypi_indexes: pypi_indexes.as_ref(),
-                        environment_variables: env_variables,
+                        environment_variables_lazy: Some(&lazy_env_vars),
                     };
 
                     // Ignored pypi records
@@ -694,6 +688,32 @@ impl<'p> LockFileDerivedData<'p> {
             })
             .await
             .map(|(prefix, python_status)| (prefix.clone(), python_status.clone()))
+    }
+}
+
+/// A trait to lazily evaluate the environment variables for a given pixi environment.
+struct LazyPixiEnvironmentVars<'p> {
+    environment: Environment<'p>,
+}
+
+impl LazyEnvironmentVariables for LazyPixiEnvironmentVars<'_> {
+    fn resolve(
+        &self,
+    ) -> Pin<Box<dyn Future<Output = miette::Result<HashMap<String, String>>> + '_>> {
+        let environment = self.environment.clone();
+        Box::pin(async move {
+            let workspace = environment.workspace();
+            let result = get_activated_environment_variables(
+                workspace.env_vars(),
+                &environment,
+                CurrentEnvVarBehavior::Exclude,
+                None,
+                false,
+                false,
+            )
+            .await?;
+            Ok(result.clone())
+        })
     }
 }
 
