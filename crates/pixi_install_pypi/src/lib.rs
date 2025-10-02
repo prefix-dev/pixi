@@ -1,6 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     path::Path,
+    pin::Pin,
     sync::Arc,
 };
 
@@ -17,6 +18,7 @@ use pixi_manifest::{
 use pixi_progress::await_in_progress;
 use pixi_python_status::PythonStatus;
 use pixi_record::PixiRecord;
+use pixi_reporters::{UvReporter, UvReporterOptions};
 use pixi_utils::prefix::Prefix;
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
@@ -50,7 +52,6 @@ use uv_python::{Interpreter, PythonEnvironment};
 use uv_resolver::{ExcludeNewer, FlatIndex};
 
 use crate::plan::{CachedWheels, RequiredDists};
-use pixi_reporters::{UvReporter, UvReporterOptions};
 
 pub type PyPIRecords = (PypiPackageData, PypiPackageEnvironmentData);
 
@@ -160,7 +161,8 @@ pub async fn on_python_interpreter_change<'a>(
     }
 }
 
-/// Configuration for PyPI environment updates, grouping basic environment settings
+/// Configuration for PyPI environment updates, grouping basic environment
+/// settings
 pub struct PyPIUpdateConfig<'a> {
     pub environment_name: &'a EnvironmentName,
     pub prefix: &'a Prefix,
@@ -182,8 +184,17 @@ pub struct PyPIBuildConfig<'a> {
 pub struct PyPIContextConfig<'a> {
     pub uv_context: &'a UvResolutionContext,
     pub pypi_indexes: Option<&'a PypiIndexes>,
-    pub environment_variables: &'a HashMap<String, String>,
+    pub environment_variables_lazy: Option<&'a dyn LazyEnvironmentVariables>,
 }
+
+/// A trait to lazily evaluate environment variables needed when building an
+/// sdist.
+pub trait LazyEnvironmentVariables {
+    fn resolve(&self) -> LazyEnvVarsFuture<'_>;
+}
+
+type LazyEnvVarsFuture<'t> =
+    Pin<Box<dyn Future<Output = miette::Result<HashMap<String, String>>> + 't>>;
 
 /// Internal setup data for the uv installer
 struct UvInstallerConfig {
@@ -201,8 +212,9 @@ struct UvInstallerConfig {
     exclude_newer: ExcludeNewer,
 }
 
-/// High-level interface for PyPI environment updates that handles all complexity internally
-/// This is full of lifetime, because internal uv datastructs require it.
+/// High-level interface for PyPI environment updates that handles all
+/// complexity internally This is full of lifetime, because internal uv
+/// datastructs require it.
 pub struct PyPIEnvironmentUpdater<'a> {
     config: PyPIUpdateConfig<'a>,
     build_config: PyPIBuildConfig<'a>,
@@ -244,7 +256,8 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         self
     }
 
-    /// Update PyPI packages in the environment, handling all setup, planning, and execution
+    /// Update PyPI packages in the environment, handling all setup, planning,
+    /// and execution
     pub async fn update(
         &self,
         python_status: &PythonStatus,
@@ -486,7 +499,8 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         Ok(installation_plan)
     }
 
-    /// Separates distributions into those that require build isolation and those that don't
+    /// Separates distributions into those that require build isolation and
+    /// those that don't
     fn separate_distributions_by_build_isolation(
         &self,
         dists: &[(uv_distribution_types::Dist, InstallReason)],
@@ -718,7 +732,8 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         }
     }
 
-    /// This method prepares any remote distributions i.e. download and potentially build them
+    /// This method prepares any remote distributions i.e. download and
+    /// potentially build them
     async fn prepare_remote_distributions(
         &self,
         remote: &[(Dist, InstallReason)],
@@ -731,7 +746,12 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             .with_starting_tasks(remote.iter().map(|(d, _)| format!("{}", d.name())))
             .with_top_level_message("Preparing distributions");
 
-        let build_dispatch = self.create_build_dispatch(setup);
+        let env_vars = if let Some(lazy_vars) = &self.context_config.environment_variables_lazy {
+            lazy_vars.resolve().await?
+        } else {
+            HashMap::new()
+        };
+        let build_dispatch = self.create_build_dispatch(setup, &env_vars);
 
         let distribution_database = DistributionDatabase::new(
             setup.registry_client.as_ref(),
@@ -739,7 +759,8 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             self.context_config.uv_context.concurrency.downloads,
         );
 
-        // Before hitting the network let's make sure the credentials are available to uv
+        // Before hitting the network let's make sure the credentials are available to
+        // uv
         for url in setup.index_locations.indexes().map(|index| index.url()) {
             let success = store_credentials_from_url(url.url());
             tracing::debug!("Stored credentials for {}: {}", url, success);
@@ -781,6 +802,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
     fn create_build_dispatch<'setup>(
         &'setup self,
         setup: &'setup UvInstallerConfig,
+        env_vars: &HashMap<String, String>,
     ) -> BuildDispatch<'setup>
     where
         'a: 'setup,
@@ -809,7 +831,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             self.context_config.uv_context.preview,
         )
         // Important: this passes any CONDA activation to the uv build process
-        .with_build_extra_env_vars(self.context_config.environment_variables.iter())
+        .with_build_extra_env_vars(env_vars)
     }
 
     /// Remove metadata for duplicate packages
@@ -825,7 +847,8 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
     }
 
     /// Remove packages that are extraneous or need reinstallation
-    /// removes both packages that are unused (extraneous) and those that need reinstallation (reinstalls)
+    /// removes both packages that are unused (extraneous) and those that need
+    /// reinstallation (reinstalls)
     async fn remove_packages(
         &self,
         extraneous: &[InstalledDist],
@@ -891,8 +914,9 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
     }
 
     /// Check and warn about conflicts between PyPI and Conda packages.
-    /// clobbering may occur, so that a PyPI package will overwrite a conda package
-    /// this method will notify the user about any potential conflicts.
+    /// clobbering may occur, so that a PyPI package will overwrite a conda
+    /// package this method will notify the user about any potential
+    /// conflicts.
     async fn check_and_warn_about_conflicts(
         &self,
         all_dists: &[CachedDist],
@@ -926,7 +950,8 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             })
             .collect::<Vec<_>>();
 
-        // Verify if pypi wheels will override existing conda packages and warn if they are
+        // Verify if pypi wheels will override existing conda packages and warn if they
+        // are
         if let Ok(Some(clobber_packages)) =
             pypi_conda_clobber.clobber_on_installation(all_dists.to_vec(), &setup.venv)
         {
