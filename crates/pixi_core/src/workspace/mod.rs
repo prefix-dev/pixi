@@ -11,7 +11,7 @@ mod workspace_mut;
 #[cfg(not(windows))]
 use std::os::unix::fs::symlink;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fmt::{Debug, Formatter},
     hash::Hash,
     path::{Path, PathBuf},
@@ -170,6 +170,8 @@ pub struct Workspace {
 
     /// The concurrent request semaphore
     concurrent_downloads_semaphore: OnceCell<Arc<Semaphore>>,
+
+    variants: OnceCell<VariantConfig>,
 }
 
 impl Debug for Workspace {
@@ -240,6 +242,7 @@ impl Workspace {
             s3_config,
             repodata_gateway: Default::default(),
             concurrent_downloads_semaphore: OnceCell::default(),
+            variants: OnceCell::default(),
         }
     }
 
@@ -465,7 +468,7 @@ impl Workspace {
 
     /// Returns the resolved variant configuration for a given platform.
     pub fn variants(&self, platform: Platform) -> VariantConfig {
-        let mut result = VariantConfig::new();
+        let mut result = BTreeMap::new();
 
         // Resolves from most specific to least specific.
         for variants in self
@@ -482,7 +485,8 @@ impl Workspace {
             }
         }
 
-        result
+        // Read variant files
+        todo!();
     }
 
     // /// Returns the reqwest client used for http networking

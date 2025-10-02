@@ -59,7 +59,7 @@ pub use target::{PackageTarget, TargetSelector, Targets, WorkspaceTarget};
 pub use task::{Task, TaskName};
 use thiserror::Error;
 pub use warning::{Warning, WarningWithSource, WithWarnings};
-pub use workspace::{ChannelPriority, Workspace};
+pub use workspace::{BuildVariantSource, ChannelPriority, Workspace};
 
 pub use crate::{
     environments::Environments,

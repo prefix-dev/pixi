@@ -381,6 +381,7 @@ impl SourceMetadataSpec {
                 exclude_newer: None,
                 channel_config: self.backend_metadata.channel_config.clone(),
                 variants: self.backend_metadata.variants.clone(),
+                variant_files: self.backend_metadata.variant_files.clone(),
                 enabled_protocols: self.backend_metadata.enabled_protocols.clone(),
             })
             .await

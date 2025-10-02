@@ -27,6 +27,7 @@ pub struct SourceMetadataCollector {
     build_environment: BuildEnvironment,
     enabled_protocols: EnabledProtocols,
     variants: Option<BTreeMap<String, Vec<String>>>,
+    variant_files: Option<Vec<String>>,
 }
 
 #[derive(Default)]
@@ -72,6 +73,7 @@ impl SourceMetadataCollector {
         channel_config: ChannelConfig,
         build_environment: BuildEnvironment,
         variants: Option<BTreeMap<String, Vec<String>>>,
+        variant_files: Option<Vec<String>>,
         enabled_protocols: EnabledProtocols,
     ) -> Self {
         Self {
@@ -81,6 +83,7 @@ impl SourceMetadataCollector {
             enabled_protocols,
             channel_config,
             variants,
+            variant_files,
         }
     }
 
@@ -178,6 +181,7 @@ impl SourceMetadataCollector {
                     channels: self.channels.clone(),
                     build_environment: self.build_environment.clone(),
                     variants: self.variants.clone(),
+                    variant_files: self.variant_files.clone(),
                     enabled_protocols: self.enabled_protocols.clone(),
                 },
             })
