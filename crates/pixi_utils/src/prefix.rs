@@ -225,11 +225,13 @@ impl Executable {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
+    use fs_err as fs;
     use tempfile::tempdir;
 
     #[cfg(unix)]
     #[test]
+    // This test was added to simulate being able to expose scripts installed with npm
+    // that creates a symlinked executable script
     fn test_find_executables_includes_js_symlinks() {
         // Create a temporary directory to act as the prefix root (simulating npm scenario)
         let temp_dir = tempdir().unwrap();
@@ -244,7 +246,7 @@ mod tests {
         fs::write(&js_file, "#!/usr/bin/env node\nconsole.log('hello');\n").unwrap();
         {
             use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(&js_file, fs::Permissions::from_mode(0o755)).unwrap();
+            fs::set_permissions(&js_file, std::fs::Permissions::from_mode(0o755)).unwrap();
         }
 
         // Create a symlink to it in bin (like npm does)
