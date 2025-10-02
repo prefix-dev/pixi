@@ -1103,7 +1103,7 @@ platforms = ["linux-64"] # if executed on linux
 [tool.pixi.environments]
 default = {features = [], solve-group = "default"}
 test = {features = ["test"], solve-group = "default"}
-all = {features = ["all", "test"], solve-group = "default"}
+all = {features = ["all"], solve-group = "default"}
 
 ```
 
