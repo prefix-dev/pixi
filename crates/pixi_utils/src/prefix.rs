@@ -149,7 +149,7 @@ impl Prefix {
                 continue;
             }
 
-            let entries = std::fs::read_dir(&bin_path)?;
+            let entries = fs_err::read_dir(&bin_path)?;
             for entry in entries.filter_map(Result::ok) {
                 let path = entry.path();
 
