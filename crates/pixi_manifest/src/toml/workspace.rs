@@ -28,7 +28,6 @@ pub struct TomlBuildVariantFile {
 #[derive(Debug, Clone)]
 pub struct TomlWorkspaceTarget {
     build_variants: Option<HashMap<String, Vec<String>>>,
-    build_variant_files: Option<Vec<TomlBuildVariantFile>>,
 }
 
 /// The TOML representation of the `[[workspace]]` section in a pixi manifest.
@@ -119,15 +118,6 @@ impl TomlWorkspace {
 
         let build_variant_files_default =
             convert_build_variant_files(self.build_variant_files, root_directory)?;
-        let build_variant_files_targets = self
-            .target
-            .clone()
-            .into_iter()
-            .map(|(selector, target)| {
-                convert_build_variant_files(target.build_variant_files, root_directory)
-                    .map(|files| (selector, files))
-            })
-            .collect::<Result<IndexMap<_, _>, _>>()?;
 
         Ok(WithWarnings::from(Workspace {
             name: self.name.or(external.name),
@@ -150,10 +140,7 @@ impl TomlWorkspace {
             pypi_options: self.pypi_options,
             s3_options: self.s3_options,
             preview,
-            build_variant_files: Targets::from_default_and_user_defined(
-                build_variant_files_default,
-                build_variant_files_targets,
-            ),
+            build_variant_files: build_variant_files_default,
             build_variants: Targets::from_default_and_user_defined(
                 self.build_variants,
                 self.target
@@ -275,14 +262,10 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspaceTarget {
         let build_variants = th
             .optional::<TomlHashMap<_, _>>("build-variants")
             .map(TomlHashMap::into_inner);
-        let build_variant_files = th.optional::<Vec<TomlBuildVariantFile>>("build-variant-files");
 
         th.finalize(None)?;
 
-        Ok(TomlWorkspaceTarget {
-            build_variants,
-            build_variant_files,
-        })
+        Ok(TomlWorkspaceTarget { build_variants })
     }
 }
 

@@ -502,10 +502,6 @@ class WorkspaceTarget(StrictBaseModel):
     build_variants: dict[NonEmptyStr, list[str]] | None = Field(
         None, description="The build variants for this workspace target"
     )
-    build_variant_files: list[BuildVariantFileEntry] | None = Field(
-        None,
-        description="Variant definition files that only apply to this target.",
-    )
 
 
 class Target(StrictBaseModel):

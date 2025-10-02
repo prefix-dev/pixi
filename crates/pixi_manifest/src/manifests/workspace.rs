@@ -1403,29 +1403,35 @@ start = "python -m flask run --port=5050"
             { file = "variants/b.yaml" },
         ]
 
-        [workspace.target.win-64]
-        build-variant-files = [{ file = "windows.yaml" }]
         "#;
 
         let manifest = parse_pixi_toml(contents).manifest;
 
         assert_eq!(
-            manifest.workspace.build_variant_files.default(),
-            &vec![
+            manifest.workspace.build_variant_files,
+            vec![
                 BuildVariantSource::File(PathBuf::from("variants/a.yaml")),
                 BuildVariantSource::File(PathBuf::from("variants/b.yaml")),
             ]
         );
+    }
 
-        let win_variant_files = manifest
-            .workspace
-            .build_variant_files
-            .for_target(&TargetSelector::Platform(Platform::Win64))
-            .unwrap();
+    #[test]
+    fn test_target_build_variant_files_disallowed() {
+        let contents = r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = []
 
-        assert_eq!(
-            win_variant_files,
-            &vec![BuildVariantSource::File(PathBuf::from("windows.yaml"))],
+        [workspace.target.win-64]
+        build-variant-files = [{ file = "windows.yaml" }]
+        "#;
+
+        let error = expect_parse_failure(contents);
+        assert!(
+            error.contains("build-variant-files"),
+            "unexpected error message {error}"
         );
     }
 

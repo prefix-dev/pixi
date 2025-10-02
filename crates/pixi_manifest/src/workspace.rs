@@ -79,7 +79,7 @@ pub struct Workspace {
     pub build_variants: Targets<Option<HashMap<String, Vec<String>>>>,
 
     /// Ordered list of external variant configuration files.
-    pub build_variant_files: Targets<Vec<BuildVariantSource>>,
+    pub build_variant_files: Vec<BuildVariantSource>,
 
     /// Version requirement for pixi itself
     pub requires_pixi: Option<VersionSpec>,

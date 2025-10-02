@@ -33,7 +33,7 @@ use pixi_command_dispatcher::{CacheDirs, CommandDispatcher, CommandDispatcherBui
 use pixi_config::{Config, RunPostLinkScripts};
 use pixi_consts::consts;
 use pixi_manifest::{
-    AssociateProvenance, BuildVariantSource, EnvironmentName, Environments, ExplicitManifestError,
+    AssociateProvenance, EnvironmentName, Environments, ExplicitManifestError,
     HasWorkspaceManifest, LoadManifestsError, ManifestProvenance, Manifests, PackageManifest,
     SpecType, WithProvenance, WithWarnings, WorkspaceManifest,
 };
