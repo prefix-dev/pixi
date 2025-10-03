@@ -7,7 +7,7 @@ use pixi_consts::consts;
 use pixi_core::WorkspaceLocator;
 use pixi_core::workspace::WorkspaceLocatorError;
 use rattler_conda_types::NamedChannelOrUrl;
-use std::{path::PathBuf, str::FromStr};
+use std::{io::Write, path::PathBuf, str::FromStr};
 
 #[derive(Parser, Debug)]
 enum Subcommand {
@@ -175,7 +175,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             if out.is_empty() {
                 eprintln!("Configuration not set");
             }
-            println!("{}", out);
+            writeln!(std::io::stdout(), "{}", out)
+                .map_err(|e| {
+                    if e.kind() == std::io::ErrorKind::BrokenPipe {
+                        std::process::exit(0);
+                    }
+                    e
+                })
+                .into_diagnostic()?;
         }
         Subcommand::Prepend(args) => alter_config(
             &args.common,

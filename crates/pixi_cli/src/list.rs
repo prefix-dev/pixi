@@ -314,7 +314,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
 
         // print packages as table
-        print_packages_as_table(&packages_to_output).expect("an io error occurred");
+        print_packages_as_table(&packages_to_output)
+            .map_err(|e| {
+                if e.kind() == std::io::ErrorKind::BrokenPipe {
+                    std::process::exit(0);
+                } else {
+                    e
+                }
+            })
+            .into_diagnostic()?;
     }
 
     Ok(())
