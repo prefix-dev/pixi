@@ -4,15 +4,11 @@ use std::{
     str::FromStr,
 };
 
-use indexmap::IndexMap;
-use miette::{Diagnostic, IntoDiagnostic, Report, WrapErr};
-use pep440_rs::{Version, VersionSpecifiers};
-use pep508_rs::Requirement;
+use miette::{IntoDiagnostic, Report, WrapErr};
+use pep440_rs::VersionSpecifiers;
 use pixi_spec::PixiSpec;
-use pyproject_toml::{self, Contact, pep735_resolve::Pep735Error};
+use pyproject_toml::{self, Contact, ResolveError};
 use rattler_conda_types::{PackageName, ParseStrictness::Lenient, VersionSpec};
-use thiserror::Error;
-use toml_span::Spanned;
 
 use super::{
     DependencyOverwriteBehavior, Feature, SpecType, WorkspaceManifest,
@@ -20,11 +16,10 @@ use super::{
 };
 use crate::{
     FeatureName, ManifestKind, Warning,
-    error::{DependencyError, GenericError},
+    error::GenericError,
     manifests::PackageManifest,
     toml::{
         ExternalWorkspaceProperties, FromTomlStr, PackageDefaults, PyProjectToml, TomlManifest,
-        pyproject::{TomlContact, TomlDependencyGroups, TomlProject},
     },
 };
 
@@ -81,24 +76,10 @@ impl PyProjectManifest {
     ///  - the `[project]` table
     ///  - the `[tool.poetry]` table
     pub fn name(&self) -> Option<&str> {
-        if let Some(pixi_name) = self
-            .pixi_manifest()
+        self.pixi_manifest()
             .and_then(|p| p.workspace.as_ref()?.value.name.as_deref())
-        {
-            return Some(pixi_name);
-        }
-        if let Some(pyproject) = &self.project.project {
-            return Some(pyproject.name.value.as_str());
-        }
-        if let Some(poetry_name) = self.poetry().and_then(|p| p.name.as_ref()) {
-            return Some(poetry_name.as_str());
-        }
-        None
-    }
-
-    /// Returns the project name as PEP508 name
-    fn package_name(&self) -> Option<pep508_rs::PackageName> {
-        pep508_rs::PackageName::new(self.name()?.to_string()).ok()
+            .or_else(|| self.project.project.as_ref().map(|p| p.name.value.as_str()))
+            .or_else(|| self.poetry().and_then(|p| p.name.as_deref()))
     }
 
     fn tool(&self) -> Option<&Tool> {
@@ -106,7 +87,7 @@ impl PyProjectManifest {
     }
 
     /// Returns a reference to the poetry section if it exists.
-    pub fn poetry(&self) -> Option<&ToolPoetry> {
+    fn poetry(&self) -> Option<&ToolPoetry> {
         self.tool().and_then(|t| t.poetry.as_ref())
     }
 
@@ -121,114 +102,28 @@ impl PyProjectManifest {
         self.pixi_manifest().is_some()
     }
 
-    /// Returns optional dependencies from the `[project.optional-dependencies]`
-    /// table
-    fn optional_dependencies(&self) -> Option<IndexMap<String, Vec<Requirement>>> {
-        let project = self.project.project.as_ref()?;
-        let optional_dependencies = project.optional_dependencies.as_ref()?;
-        Some(
-            optional_dependencies
-                .iter()
-                .map(|(k, v)| (k.clone(), v.iter().cloned().map(Spanned::take).collect()))
-                .collect(),
-        )
-    }
-
-    /// Returns dependency groups from the `[dependency-groups]` table
-    fn dependency_groups(&self) -> Option<Result<IndexMap<String, Vec<Requirement>>, Pep735Error>> {
-        let dg = self.project.dependency_groups.as_ref()?;
-        Some(dg.value.0.resolve())
-    }
-
     /// Builds a list of pixi environments from pyproject groups of optional
     /// dependencies and/or dependency groups:
     ///  - one environment is created per group with the same name
     ///  - each environment includes the feature of the same name
-    ///  - it will also include other features inferred from any self references
-    ///    to other groups of optional dependencies (but won't for dependency
-    ///    groups, as recursion between groups is resolved upstream)
-    pub fn environments_from_extras(&self) -> Result<HashMap<String, Vec<String>>, Pep735Error> {
-        let mut environments = HashMap::new();
-        if let Some(extras) = self.optional_dependencies() {
-            let pname = self.package_name();
-            for (extra, reqs) in extras {
-                let mut features = vec![extra.to_string()];
-                // Add any references to other groups of extra dependencies
-                for req in reqs.iter() {
-                    if pname.as_ref() == Some(&req.name) {
-                        for extra in &req.extras {
-                            features.push(extra.to_string())
-                        }
-                    }
-                }
-                // Environments can only contain number, strings and dashes
-                environments.insert(extra.replace('_', "-").clone(), features);
-            }
-        }
+    pub fn environments_from_groups(self) -> Result<HashMap<String, Vec<String>>, ResolveError> {
+        let resolved = self.project.into_inner().resolve()?;
+        let mut groups = resolved.optional_dependencies;
+        groups.extend(resolved.dependency_groups);
 
-        if let Some(groups) = self.dependency_groups().transpose()? {
-            for group in groups.into_keys() {
-                let normalised = group.replace('_', "-");
-                // Nothing to do if a group of optional dependencies has the same name as the
-                // dependency group
-                if !environments.contains_key(&normalised) {
-                    environments.insert(normalised.clone(), vec![normalised]);
-                }
-            }
+        let mut environments = HashMap::new();
+        for group in groups.into_keys() {
+            environments.insert(group.replace('_', "-"), vec![group.clone()]);
         }
 
         Ok(environments)
     }
-}
 
-#[derive(Debug, Error, Diagnostic)]
-pub enum PyProjectToManifestError {
-    #[error("Unsupported pep508 requirement: '{0}'")]
-    DependencyError(Requirement, #[source] DependencyError),
-    #[error(transparent)]
-    DependencyGroupError(#[from] Pep735Error),
-    #[error(transparent)]
-    TomlError(#[from] TomlError),
-}
-
-#[derive(Default)]
-pub struct PyProjectFields {
-    pub name: Option<Spanned<String>>,
-    pub description: Option<Spanned<String>>,
-    pub version: Option<Spanned<Version>>,
-    pub authors: Option<Vec<Spanned<TomlContact>>>,
-    pub requires_python: Option<Spanned<VersionSpecifiers>>,
-    pub dependencies: Option<Vec<Spanned<Requirement>>>,
-    pub optional_dependencies: Option<IndexMap<String, Vec<Spanned<Requirement>>>>,
-}
-
-impl From<TomlProject> for PyProjectFields {
-    fn from(project: TomlProject) -> Self {
-        Self {
-            name: Some(project.name),
-            description: project.description,
-            version: project.version,
-            authors: project.authors,
-            requires_python: project.requires_python,
-            dependencies: project.dependencies,
-            optional_dependencies: project.optional_dependencies,
-        }
-    }
-}
-
-impl PyProjectManifest {
     /// Returns true if the pyproject.toml file also contains a pixi workspace.
     pub fn has_pixi_workspace(&self) -> bool {
         self.tool()
             .and_then(|t| t.pixi.as_ref())
             .is_some_and(TomlManifest::has_workspace)
-    }
-
-    /// Returns true if the pyproject.toml file also contains a pixi workspace.
-    pub fn has_pixi_package(&self) -> bool {
-        self.tool()
-            .and_then(|t| t.pixi.as_ref())
-            .is_some_and(TomlManifest::has_package)
     }
 
     /// Assume that the manifest is a workspace manifest and convert it as such.
@@ -240,44 +135,7 @@ impl PyProjectManifest {
         workspace: &WorkspaceManifest,
         root_directory: Option<&Path>,
     ) -> Result<(PackageManifest, Vec<Warning>), TomlError> {
-        // Load the data nested under '[tool.pixi]' as pixi manifest
-        let Some(Tool {
-            pixi: Some(pixi),
-            poetry,
-        }) = self.tool
-        else {
-            return Err(TomlError::MissingField("tool.pixi".into(), None));
-        };
-
-        // Extract some of the values we are interested in from the poetry table.
-        let poetry = poetry.unwrap_or_default();
-
-        // Extract the values we are interested in from the pyproject.toml
-        let project = self
-            .project
-            .project
-            .map(PyProjectFields::from)
-            .unwrap_or_default();
-
-        // Extract package defaults from [project] section
-        let package_defaults = PackageDefaults {
-            name: project.name.map(Spanned::take),
-            version: project
-                .version
-                .and_then(|v| v.take().to_string().parse().ok())
-                .or(poetry.version.and_then(|v| v.parse().ok())),
-            description: project
-                .description
-                .map(Spanned::take)
-                .or(poetry.description),
-            authors: project.authors.map(contacts_to_authors).or(poetry.authors),
-            license: None,
-            license_file: None,
-            readme: None,
-            homepage: None,
-            repository: None,
-            documentation: None,
-        };
+        let (pixi, _, package_defaults) = self.load_pixi_and_defaults()?;
 
         pixi.into_package_manifest(
             workspace.workspace_package_properties(),
@@ -287,17 +145,10 @@ impl PyProjectManifest {
         )
     }
 
-    #[allow(clippy::result_large_err)]
-    pub fn into_workspace_manifest(
+    /// Helper function to load the `[tool.pixi]` manifest and package defaults.
+    fn load_pixi_and_defaults(
         self,
-        root_directory: Option<&Path>,
-    ) -> Result<(WorkspaceManifest, Option<PackageManifest>, Vec<Warning>), TomlError> {
-        let PyProjectToml {
-            project,
-            dependency_groups,
-            ..
-        } = self.project;
-
+    ) -> Result<(TomlManifest, pyproject_toml::PyProjectToml, PackageDefaults), TomlError> {
         // Load the data nested under '[tool.pixi]' as pixi manifest
         let Some(Tool {
             pixi: Some(pixi),
@@ -307,85 +158,53 @@ impl PyProjectManifest {
             return Err(TomlError::MissingField("tool.pixi".into(), None));
         };
 
-        // Extract the values we are interested in from the pyproject.toml
-        let project = project.map(PyProjectFields::from).unwrap_or_default();
-
-        // Extract some of the values we are interested in from the poetry table.
         let poetry = poetry.unwrap_or_default();
+        let pyproject = self.project.into_inner();
+        let package_defaults = get_package_defaults(&pyproject, &poetry);
 
-        // Define an iterator over both optional dependencies and dependency groups
-        let pypi_dependency_groups =
-            Self::extract_dependency_groups(dependency_groups, project.optional_dependencies)?;
+        Ok((pixi, pyproject, package_defaults))
+    }
+
+    #[allow(clippy::result_large_err)]
+    pub fn into_workspace_manifest(
+        self,
+        root_directory: Option<&Path>,
+    ) -> Result<(WorkspaceManifest, Option<PackageManifest>, Vec<Warning>), TomlError> {
+        let (pixi, pyproject, package_defaults) = self.load_pixi_and_defaults()?;
+        let resolved = pyproject.resolve()?;
+        let mut groups = resolved.optional_dependencies;
+        groups.extend(resolved.dependency_groups);
 
         // Convert the TOML document into a pixi manifest.
         // TODO:  would be nice to add license, license-file, readme, homepage,
         // repository, documentation, regarding the above, the types are a bit
         // different than we expect, so the conversion is not straightforward we
         // could change these types or we can convert. Let's decide when we make it.
-        // etc.
-        let implicit_pypi_features = pypi_dependency_groups
-            .iter()
-            .map(|(name, _)| {
-                (
-                    FeatureName::from(name.clone()),
-                    Feature::new(FeatureName::from(name.clone())),
-                )
-            })
-            .collect();
-        // Extract and convert project authors to Vec<String> format for reuse
-        let project_authors = project
-            .authors
-            .map(contacts_to_authors)
-            .or(poetry.authors.clone());
 
-        // Extract package defaults from [project] section
-        let package_defaults = PackageDefaults {
-            name: project.name.as_ref().map(|name| name.value.clone()),
-            version: project
-                .version
-                .as_ref()
-                .and_then(|v| v.value.to_string().parse().ok())
-                .or(poetry.version.as_ref().and_then(|v| v.parse().ok())),
-            description: project
-                .description
-                .as_ref()
-                .map(|desc| desc.value.clone())
-                .or(poetry.description.clone()),
-            authors: project_authors.clone(),
-            license: None,
-            license_file: None,
-            readme: None,
-            homepage: None,
-            repository: None,
-            documentation: None,
-        };
+        let implicit_pypi_features = groups
+            .keys()
+            .map(|name| FeatureName::from(name.clone()))
+            .map(|name| (name.clone(), Feature::new(name)))
+            .collect();
 
         let (mut workspace_manifest, package_manifest, warnings) = pixi.into_workspace_manifest(
             ExternalWorkspaceProperties {
-                name: project.name.map(Spanned::take),
-                version: project
-                    .version
-                    .and_then(|v| v.take().to_string().parse().ok())
-                    .or(poetry.version.and_then(|v| v.parse().ok())),
-                description: project
-                    .description
-                    .map(Spanned::take)
-                    .or(poetry.description),
-                authors: project_authors,
-                license: None,
-                license_file: None,
-                readme: None,
-                homepage: None,
-                repository: None,
-                documentation: None,
+                name: package_defaults.name.clone(),
+                version: package_defaults.version.clone(),
+                description: package_defaults.description.clone(),
+                authors: package_defaults.authors.clone(),
                 features: implicit_pypi_features,
+                ..Default::default()
             },
             package_defaults,
             root_directory,
         )?;
 
         // Add python as dependency based on the `project.requires_python` property
-        let python_spec = project.requires_python;
+        let python_spec = pyproject
+            .project
+            .as_ref()
+            .and_then(|p| p.requires_python.clone());
 
         let target = workspace_manifest
             .default_feature_mut()
@@ -397,7 +216,7 @@ impl PyProjectManifest {
         if !target.has_dependency(&python, SpecType::Run, None) {
             target.add_dependency(
                 &python,
-                &version_or_url_to_spec(&python_spec.map(Spanned::take)).unwrap(),
+                &version_or_url_to_spec(&python_spec).unwrap(),
                 SpecType::Run,
             );
         } else if let Some(_spec) = python_spec {
@@ -410,79 +229,65 @@ impl PyProjectManifest {
         }
 
         // Add pyproject dependencies as pypi dependencies
-        if let Some(deps) = project.dependencies {
-            for requirement in deps.iter() {
+        if let Some(deps) = pyproject.project.and_then(|p| p.dependencies) {
+            groups
+                .entry("default".to_string())
+                .or_default()
+                .extend(deps);
+        }
+
+        // For each group of (optional) dependencies or dependency group, add pypi
+        // dependencies
+        for (group, reqs) in groups.iter() {
+            let feature_name = FeatureName::from(group.as_str());
+            let target = workspace_manifest.target_mut(None, &feature_name).unwrap();
+
+            for requirement in reqs.iter() {
                 target
                     .try_add_pep508_dependency(
-                        &requirement.value,
+                        requirement,
                         None,
                         DependencyOverwriteBehavior::Error,
                     )
-                    .map_err(|err| {
-                        GenericError::new(format!("{}", err)).with_span(requirement.span.into())
-                    })?;
-            }
-        }
-
-        // For each group of optional dependency or dependency group, add pypi
-        // dependencies, filtering out self-references in optional dependencies
-        let project_name = workspace_manifest
-            .workspace
-            .name
-            .clone()
-            .and_then(|name| pep508_rs::PackageName::new(name).ok());
-        for (group, reqs) in pypi_dependency_groups {
-            let feature_name = FeatureName::from(group.to_string());
-            let target = workspace_manifest
-                .features
-                .entry(feature_name.clone())
-                .or_insert_with(move || Feature::new(feature_name))
-                .targets
-                .default_mut();
-            for requirement in reqs.iter() {
-                // filter out any self references in groups of extra dependencies
-                if project_name.as_ref() != Some(&requirement.name) {
-                    target
-                        .try_add_pep508_dependency(
-                            requirement,
-                            None,
-                            DependencyOverwriteBehavior::Error,
-                        )
-                        .map_err(|err| GenericError::new(format!("{}", err)))?;
-                }
+                    .map_err(|err| GenericError::new(format!("{}", err)))?;
             }
         }
 
         Ok((workspace_manifest, package_manifest, warnings))
     }
+}
 
-    fn extract_dependency_groups(
-        dependency_groups: Option<Spanned<TomlDependencyGroups>>,
-        optional_dependencies: Option<IndexMap<String, Vec<Spanned<Requirement>>>>,
-    ) -> Result<Vec<(String, Vec<Requirement>)>, TomlError> {
-        Ok(optional_dependencies
-            .map(|deps| {
-                deps.into_iter()
-                    .map(|(group, reqs)| {
-                        (
-                            group,
-                            reqs.into_iter().map(Spanned::take).collect::<Vec<_>>(),
-                        )
+/// Returns default package data from the pyproject.toml project section or the
+/// poetry section.
+fn get_package_defaults(
+    pyproject: &pyproject_toml::PyProjectToml,
+    poetry: &ToolPoetry,
+) -> PackageDefaults {
+    let project = pyproject.project.as_ref();
+
+    PackageDefaults {
+        name: project.map(|p| p.name.clone()),
+        version: project
+            .and_then(|p| p.version.clone())
+            .and_then(|v| v.to_string().parse().ok())
+            .or(poetry.version.as_ref().and_then(|v| v.parse().ok())),
+        description: project
+            .and_then(|p| p.description.clone())
+            .or(poetry.description.clone()),
+        authors: project
+            .and_then(|p| p.authors.clone())
+            .map(|authors| {
+                authors
+                    .into_iter()
+                    .map(|contact| match contact {
+                        Contact::NameEmail { name, email } => format!("{} <{}>", name, email),
+                        Contact::Name { name } => name,
+                        Contact::Email { email } => email,
                     })
                     .collect()
             })
-            .into_iter()
-            .chain(
-                dependency_groups
-                    .map(|Spanned { span, value }| {
-                        value.0.resolve().map_err(|err| {
-                            GenericError::new(format!("{}", err)).with_span(span.into())
-                        })
-                    })
-                    .transpose()?,
-            )
-            .flat_map(|map| map.into_iter())
-            .collect::<Vec<_>>())
+            .or(poetry.authors.clone()),
+        ..Default::default()
     }
 }
 
@@ -502,19 +307,6 @@ fn version_or_url_to_spec(
         }
         None => Ok(PixiSpec::default()),
     }
-}
-
-/// Converts [`Contact`] from pyproject.toml to a representation that is used in
-/// pixi.
-fn contacts_to_authors(contacts: Vec<Spanned<TomlContact>>) -> Vec<String> {
-    contacts
-        .into_iter()
-        .map(|contact| match contact.take().into_inner() {
-            Contact::NameEmail { name, email } => format!("{} <{}>", name, email),
-            Contact::Name { name } => name.clone(),
-            Contact::Email { email } => email.clone(),
-        })
-        .collect()
 }
 
 #[cfg(test)]
