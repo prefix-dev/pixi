@@ -132,6 +132,9 @@ impl TaskHash {
             return Ok(None);
         };
 
+        // Initialize the hasher state with the task args
+        task.args().hash(&mut hasher);
+
         // We need to compute hash from input args
         // If no input args are provided, we treat them as empty list.
         if let Some(ref inputs) = execute.inputs {
