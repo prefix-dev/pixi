@@ -36,6 +36,7 @@ pub mod init;
 pub mod install;
 pub mod list;
 pub mod lock;
+pub mod package_suggestions;
 pub mod reinstall;
 pub mod remove;
 pub mod run;
