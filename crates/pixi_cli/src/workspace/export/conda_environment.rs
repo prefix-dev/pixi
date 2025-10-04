@@ -61,7 +61,7 @@ fn format_pip_dependency(name: &PypiPackageName, requirement: &PixiPypiSpec) -> 
             }
 
             if let Some(ref subdirectory) = git_url.subdirectory {
-                git_string.push_str(&format!("#subdirectory=={subdirectory}"));
+                git_string.push_str(&format!("#subdirectory={subdirectory}"));
             }
 
             git_string
@@ -98,7 +98,7 @@ fn format_pip_dependency(name: &PypiPackageName, requirement: &PixiPypiSpec) -> 
             );
 
             if let Some(subdirectory) = subdirectory {
-                url_string.push_str(&format!("#subdirectory=={subdirectory}"));
+                url_string.push_str(&format!("#subdirectory={subdirectory}"));
             }
 
             url_string
