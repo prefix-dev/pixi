@@ -13,7 +13,7 @@ use miette::{IntoDiagnostic, Report};
 use pixi_config::{Config, default_channel_config};
 use pixi_core::{WorkspaceLocator, workspace::WorkspaceLocatorError};
 use pixi_progress::await_in_progress;
-use pixi_utils::reqwest::build_reqwest_clients;
+use pixi_utils::reqwest::build_lazy_reqwest_clients;
 use rattler_conda_types::{MatchSpec, PackageName, ParseStrictness, Platform, RepoDataRecord};
 use rattler_lock::Matches;
 use rattler_repodata_gateway::{GatewayError, RepoData};
@@ -22,8 +22,7 @@ use strsim::jaro;
 use tracing::{debug, error};
 use url::Url;
 
-use crate::cli_config::ChannelsConfig;
-use crate::cli_config::WorkspaceConfig;
+use crate::cli_config::{ChannelsConfig, WorkspaceConfig};
 
 /// Search a conda package
 ///
@@ -143,7 +142,7 @@ pub async fn execute_impl<W: Write>(
     let client = if let Some(project) = project {
         project.authenticated_client()?.clone()
     } else {
-        build_reqwest_clients(None, None)?.1
+        build_lazy_reqwest_clients(None, None)?.1
     };
 
     let config = Config::load_global();

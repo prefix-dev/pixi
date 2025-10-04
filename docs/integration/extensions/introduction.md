@@ -9,6 +9,7 @@ Then it will execute it by passing any additional arguments to it.
 Pixi extensions are standalone executables that follow a simple naming convention: they must be named `pixi-{command}` where `{command}` is the name of the subcommand you want to add. When you run `pixi {command}`, Pixi will automatically discover and execute the corresponding `pixi-{command}` executable.
 
 For example:
+
 - `pixi diff` → looks for `pixi-diff` executable
 - `pixi pack` → looks for `pixi-pack` executable  
 - `pixi deploy` → looks for `pixi-deploy` executable

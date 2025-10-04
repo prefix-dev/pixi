@@ -64,6 +64,11 @@ impl PypiPackageName {
     pub fn as_source(&self) -> &str {
         &self.source
     }
+
+    pub fn with_source(mut self, source: String) -> Self {
+        self.source = source;
+        self
+    }
 }
 
 #[cfg(test)]

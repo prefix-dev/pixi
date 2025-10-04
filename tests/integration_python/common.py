@@ -1,11 +1,10 @@
 import os
 import platform
 import subprocess
-from contextlib import contextmanager
+import sys
+from collections.abc import Sequence
 from enum import IntEnum
 from pathlib import Path
-import sys
-from collections.abc import Generator, Sequence
 from typing import override
 
 from rattler import Platform
@@ -160,16 +159,6 @@ def get_manifest(directory: Path) -> Path:
         return pyproject_toml
     else:
         raise ValueError("Neither pixi.toml nor pyproject.toml found")
-
-
-@contextmanager
-def cwd(path: str | Path) -> Generator[None, None, None]:
-    oldpwd = os.getcwd()
-    os.chdir(path)
-    try:
-        yield
-    finally:
-        os.chdir(oldpwd)
 
 
 def run_and_get_env(pixi: Path, *args: str, env_var: str) -> tuple[str | None, Output]:

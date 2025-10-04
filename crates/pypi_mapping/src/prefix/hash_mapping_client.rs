@@ -6,8 +6,8 @@ use std::{
 use dashmap::{DashMap, Entry};
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use rattler_digest::Sha256Hash;
+use rattler_networking::LazyClient;
 use reqwest::StatusCode;
-use reqwest_middleware::ClientWithMiddleware;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::{Semaphore, broadcast};
@@ -65,7 +65,7 @@ pub struct HashMappingClient {
 }
 
 struct HashMappingClientInner {
-    client: ClientWithMiddleware,
+    client: LazyClient,
     entries: DashMap<Sha256Hash, PendingOrFetched<Option<PackagePypiMapping>>>,
     limit: Option<Arc<Semaphore>>,
 }
@@ -79,7 +79,7 @@ enum PendingOrFetched<T> {
 
 /// A builder for a `HashMappingClient`.
 pub struct HashMappingClientBuilder {
-    client: ClientWithMiddleware,
+    client: LazyClient,
     limit: Option<Arc<Semaphore>>,
 }
 
@@ -115,7 +115,7 @@ impl HashMappingClientBuilder {
 impl HashMappingClient {
     /// Constructs a new `HashMappingClient` with the provided
     /// `ClientWithMiddleware`.
-    pub fn builder(client: ClientWithMiddleware) -> HashMappingClientBuilder {
+    pub fn builder(client: LazyClient) -> HashMappingClientBuilder {
         HashMappingClientBuilder {
             client,
             limit: None,
@@ -236,7 +236,7 @@ impl HashMappingClientInner {
 }
 
 async fn try_fetch_mapping(
-    client: &ClientWithMiddleware,
+    client: &LazyClient,
     sha256: &Sha256Hash,
     cache_metrics: &CacheMetrics,
 ) -> Result<Option<PackagePypiMapping>, HashMappingClientError> {
@@ -244,7 +244,7 @@ async fn try_fetch_mapping(
     let url = format!("{STORAGE_URL}/{HASH_DIR}/{}", hash_str);
 
     // Fetch the mapping from the server
-    let response = client.get(&url).send().await?;
+    let response = client.client().get(&url).send().await?;
 
     cache_metrics.record_request_response(&response);
 

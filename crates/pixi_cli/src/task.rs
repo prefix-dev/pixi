@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     error::Error,
     io::Write,
     path::PathBuf,
@@ -11,6 +11,7 @@ use fancy_display::FancyDisplay;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
+use pixi_api::WorkspaceContext;
 use pixi_manifest::{
     EnvironmentName, FeatureName,
     task::{Alias, CmdArgs, Dependency, Execute, Task, TaskArg, TaskName, quote},
@@ -19,13 +20,9 @@ use rattler_conda_types::Platform;
 use serde::Serialize;
 use serde_with::serde_as;
 
-use pixi_core::workspace::virtual_packages::verify_current_platform_can_run_environment;
-use pixi_core::{
-    Workspace, WorkspaceLocator,
-    workspace::{Environment, WorkspaceMut},
-};
+use pixi_core::{Workspace, WorkspaceLocator, workspace::Environment};
 
-use crate::cli_config::WorkspaceConfig;
+use crate::{cli_config::WorkspaceConfig, cli_interface::CliInterface};
 
 #[derive(Parser, Debug)]
 pub enum Operation {
@@ -255,7 +252,7 @@ fn print_heading(value: &str) {
 /// Create a human-readable representation of a list of tasks.
 /// Using a tabwriter for described tasks.
 fn print_tasks(
-    task_map: HashMap<Environment, HashMap<TaskName, &Task>>,
+    task_map: HashMap<EnvironmentName, HashMap<TaskName, Task>>,
     summary: bool,
 ) -> Result<(), std::io::Error> {
     if summary {
@@ -266,7 +263,7 @@ fn print_tasks(
                 .sorted()
                 .map(|name| name.fancy_display())
                 .join(", ");
-            eprintln!("{}: {}", env.name().fancy_display().bold(), formatted);
+            eprintln!("{}: {}", env.fancy_display().bold(), formatted);
         }
         return Ok(());
     }
@@ -309,63 +306,42 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
+
+    let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace.clone());
+
     match args.operation {
-        Operation::Add(args) => add_task(workspace.modify()?, args).await,
-        Operation::Remove(args) => remove_tasks(workspace.modify()?, args).await,
-        Operation::Alias(args) => alias_task(workspace.modify()?, args).await,
-        Operation::List(args) => list_tasks(workspace, args).await,
+        Operation::Add(args) => add_task(workspace_ctx, args).await,
+        Operation::Remove(args) => remove_tasks(workspace_ctx, args).await,
+        Operation::Alias(args) => alias_task(workspace_ctx, args).await,
+        Operation::List(args) => list_tasks(workspace_ctx, args).await,
     }
 }
 
-async fn list_tasks(workspace: Workspace, args: ListArgs) -> miette::Result<()> {
+async fn list_tasks(
+    workspace_ctx: WorkspaceContext<CliInterface>,
+    args: ListArgs,
+) -> miette::Result<()> {
     if args.json {
-        print_tasks_json(&workspace);
+        print_tasks_json(workspace_ctx.workspace());
         return Ok(());
     }
 
-    let explicit_environment = args
-        .environment
-        .map(|n| EnvironmentName::from_str(n.as_str()))
-        .transpose()?
-        .map(|n| {
-            workspace
-                .environment(&n)
-                .ok_or_else(|| miette::miette!("unknown environment '{n}'"))
-        })
-        .transpose()?;
+    let tasks_per_env = workspace_ctx
+        .list_tasks(
+            args.environment
+                .and_then(|e| EnvironmentName::from_str(&e.to_string()).ok()),
+        )
+        .await?;
 
-    let lockfile = workspace.load_lock_file().await.ok();
-
-    let env_task_map: HashMap<Environment, HashSet<TaskName>> =
-        if let Some(explicit_environment) = explicit_environment {
-            HashMap::from([(
-                explicit_environment.clone(),
-                explicit_environment.get_filtered_tasks(),
-            )])
-        } else {
-            workspace
-                .environments()
-                .iter()
-                .filter_map(|env| {
-                    if verify_current_platform_can_run_environment(env, lockfile.as_ref()).is_ok() {
-                        Some((env.clone(), env.get_filtered_tasks()))
-                    } else {
-                        None
-                    }
-                })
-                .collect()
-        };
-
-    let available_tasks: HashSet<TaskName> = env_task_map.values().flatten().cloned().collect();
-
-    if available_tasks.is_empty() {
+    if tasks_per_env.is_empty() {
         eprintln!("No tasks found",);
         return Ok(());
     }
 
     if args.machine_readable {
-        let unformatted: String = available_tasks
+        let unformatted: String = tasks_per_env
             .iter()
+            .flat_map(|(_, v)| v.keys())
             .sorted()
             .map(|name| name.as_str())
             .join(" ");
@@ -373,124 +349,54 @@ async fn list_tasks(workspace: Workspace, args: ListArgs) -> miette::Result<()> 
         return Ok(());
     }
 
-    let tasks_per_env = env_task_map
-        .into_iter()
-        .map(|(env, task_names)| {
-            let task_map = task_names
-                .into_iter()
-                .flat_map(|task_name| {
-                    env.task(&task_name, Some(env.best_platform()))
-                        .ok()
-                        .map(|task| (task_name, task))
-                })
-                .collect();
-            (env, task_map)
-        })
-        .collect();
-
     print_tasks(tasks_per_env, args.summary).into_diagnostic()?;
     Ok(())
 }
 
-async fn alias_task(mut workspace: WorkspaceMut, args: AliasArgs) -> miette::Result<()> {
-    let name = &args.alias;
-    let task: Task = args.clone().into();
-    workspace.manifest().add_task(
-        name.clone(),
-        task.clone(),
-        args.platform,
-        &FeatureName::DEFAULT,
-    )?;
-    workspace.save().await.into_diagnostic()?;
-    eprintln!(
-        "{} Added alias `{}`: {}",
-        console::style("@").blue(),
-        name.fancy_display().bold(),
-        task,
-    );
-    Ok(())
-}
-
-async fn remove_tasks(mut workspace: WorkspaceMut, args: RemoveArgs) -> miette::Result<()> {
-    let mut to_remove = Vec::new();
+async fn add_task(
+    workspace_ctx: WorkspaceContext<CliInterface>,
+    args: AddArgs,
+) -> miette::Result<()> {
     let feature = args
+        .clone()
         .feature
         .map_or_else(FeatureName::default, FeatureName::from);
-    for name in args.names.iter() {
-        if let Some(platform) = args.platform {
-            if !workspace
-                .workspace()
-                .workspace
-                .value
-                .tasks(Some(platform), &feature)?
-                .contains_key(name)
-            {
-                eprintln!(
-                    "{}Task '{}' does not exist on {}",
-                    console::style(console::Emoji("❌ ", "X")).red(),
-                    name.fancy_display().bold(),
-                    console::style(platform.as_str()).bold(),
-                );
-                continue;
-            }
-        } else if !workspace
-            .workspace()
-            .workspace
-            .value
-            .tasks(None, &feature)?
-            .contains_key(name)
-        {
-            eprintln!(
-                "{}Task `{}` does not exist for the `{}` feature",
-                console::style(console::Emoji("❌ ", "X")).red(),
-                name.fancy_display().bold(),
-                console::style(&feature).bold(),
-            );
-            continue;
-        }
 
-        // Safe to remove
-        to_remove.push((name, args.platform));
-    }
-
-    let mut removed = Vec::with_capacity(to_remove.len());
-    for (name, platform) in to_remove {
-        workspace
-            .manifest()
-            .remove_task(name.clone(), platform, &feature)?;
-        removed.push(name);
-    }
-
-    workspace.save().await.into_diagnostic()?;
-
-    for name in removed {
-        eprintln!(
-            "{}Removed task `{}` ",
-            console::style(console::Emoji("✔ ", "+")).green(),
-            name.fancy_display().bold(),
-        );
-    }
+    workspace_ctx
+        .add_task(
+            args.name.clone(),
+            args.clone().into(),
+            feature,
+            args.platform,
+        )
+        .await?;
 
     Ok(())
 }
 
-async fn add_task(mut workspace: WorkspaceMut, args: AddArgs) -> miette::Result<()> {
-    let name = &args.name;
-    let task: Task = args.clone().into();
-    let feature = args
-        .feature
-        .map_or_else(FeatureName::default, FeatureName::from);
-    workspace
-        .manifest()
-        .add_task(name.clone(), task.clone(), args.platform, &feature)?;
-    workspace.save().await.into_diagnostic()?;
-    eprintln!(
-        "{}Added task `{}`: {}",
-        console::style(console::Emoji("✔ ", "+")).green(),
-        name.fancy_display().bold(),
-        task,
-    );
+async fn alias_task(
+    workspace_ctx: WorkspaceContext<CliInterface>,
+    args: AliasArgs,
+) -> miette::Result<()> {
+    workspace_ctx
+        .alias_task(args.clone().alias, args.clone().into(), args.platform)
+        .await?;
+
     Ok(())
+}
+
+async fn remove_tasks(
+    workspace_ctx: WorkspaceContext<CliInterface>,
+    args: RemoveArgs,
+) -> miette::Result<()> {
+    workspace_ctx
+        .remove_task(
+            args.names,
+            args.platform,
+            args.feature
+                .map_or_else(FeatureName::default, FeatureName::from),
+        )
+        .await
 }
 
 fn print_tasks_json(project: &Workspace) {

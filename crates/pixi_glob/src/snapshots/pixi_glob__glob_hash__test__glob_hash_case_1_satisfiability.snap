@@ -1,7 +1,6 @@
 ---
 source: crates/pixi_glob/src/glob_hash.rs
 expression: snapshot
-snapshot_kind: text
 ---
 Globs:
 - tests/data/satisfiability/source-dependency/**/*

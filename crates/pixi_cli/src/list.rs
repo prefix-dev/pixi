@@ -11,11 +11,9 @@ use human_bytes::human_bytes;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_consts::consts;
-use pixi_core::{
-    WorkspaceLocator,
-    lock_file::{UpdateLockFileOptions, UvResolutionContext},
-};
+use pixi_core::{WorkspaceLocator, lock_file::UpdateLockFileOptions};
 use pixi_manifest::FeaturesExt;
+use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
     ConversionError, pypi_options_to_index_locations, to_uv_normalize, to_uv_version,
 };
@@ -226,7 +224,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let config_settings = ConfigSettings::default();
     let mut registry_index = if let Some(python_record) = python_record {
         if environment.has_pypi_dependencies() {
-            uv_context = UvResolutionContext::from_workspace(&workspace)?;
+            uv_context = UvResolutionContext::from_config(workspace.config())?;
             index_locations =
                 pypi_options_to_index_locations(&environment.pypi_options(), workspace.root())
                     .into_diagnostic()?;

@@ -82,6 +82,11 @@ test-specific-test = { cmd = "pytest -k '{{ test_substring }}'", args = [
 ], depends-on = [
   "build-release",
 ] }
+test-specific-test-debug = { cmd = "pytest --pixi-build=debug -k '{{ test_substring }}'", args = [
+  "test_substring",
+], depends-on = [
+  "build-debug",
+] }
 # Update one test channel by passing on value of `mappings.toml`
 # e.g. "multiple_versions_channel_1"
 update-test-channel = { cmd = "python update-channels.py {{ channel }}", args = [

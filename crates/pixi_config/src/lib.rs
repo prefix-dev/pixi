@@ -654,7 +654,7 @@ pub struct Config {
     pub loaded_from: Vec<PathBuf>,
 
     #[serde(skip, default = "default_channel_config")]
-    channel_config: ChannelConfig,
+    pub channel_config: ChannelConfig,
 
     /// Configuration for repodata fetching.
     #[serde(alias = "repodata_config")] // BREAK: remove to stop supporting snake_case alias
@@ -1326,8 +1326,8 @@ impl Config {
         ]
     }
 
-    /// Merge the given config into the current one.
-    /// The given config will have higher priority
+    /// Merge the `other` config into `self`.
+    /// The `other` config will have higher priority
     #[must_use]
     pub fn merge_config(mut self, mut other: Config) -> Self {
         self.mirrors.extend(other.mirrors);
@@ -1346,8 +1346,11 @@ impl Config {
             // Extended self.mirrors with other.mirrors
             mirrors: self.mirrors,
             loaded_from: other.loaded_from,
-            // currently this is always the default so just use the other value
-            channel_config: other.channel_config,
+            channel_config: if other.channel_config == default_channel_config() {
+                self.channel_config
+            } else {
+                other.channel_config
+            },
             repodata_config: self.repodata_config.merge(other.repodata_config),
             pypi_config: self.pypi_config.merge(other.pypi_config),
             s3_options: {

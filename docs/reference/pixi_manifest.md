@@ -1,5 +1,6 @@
 
 The `pixi.toml` is the workspace manifest, also known as the Pixi workspace configuration file.
+It specifies environments for a workspace, and the package dependency requirements for those environments. It can also specify tasks which can run in those environments, as well as many other configuration options.
 
 A `toml` file is structured in different tables.
 This document will explain the usage of the different tables.
@@ -65,7 +66,7 @@ Pixi solves the dependencies for all these platforms and puts them in the lock f
 --8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_platforms"
 ```
 
-The available platforms are listed here: [link](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/enum.Platform.html)
+The available platforms are listed here: [link](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/platform/enum.Platform.html)
 
 !!! tip "Special macOS behavior"
     macOS has two platforms: `osx-64` for Intel Macs and `osx-arm64` for Apple Silicon Macs.

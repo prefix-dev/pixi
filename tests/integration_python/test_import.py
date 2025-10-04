@@ -76,6 +76,14 @@ class TestCondaEnv:
         "dependencies": ["cowpy=1.1.4", "libblas=*=*openblas", "snakemake-minimal"],
     }
 
+    url_channel_dep_env_yaml: dict[str, Iterable[str]] = {
+        "name": "url-channel-dep-env",
+        "channels": ["conda-forge"],
+        "dependencies": [
+            "https://someartifactory.com/artifactory/api/conda/chaos-conda-dev/::somepackage==0.1.0"
+        ],
+    }
+
     def test_import_conda_env(self, pixi: Path, tmp_pixi_workspace: Path) -> None:
         manifest_path = tmp_pixi_workspace / "pixi.toml"
 
@@ -493,6 +501,65 @@ class TestCondaEnv:
                 },
                 "environments": {
                     "complex-env": {"features": ["complex-env"], "no-default-feature": True}
+                },
+            }
+        )
+
+    def test_import_url_channel_dep(self, pixi: Path, tmp_pixi_workspace: Path) -> None:
+        """
+        Check that channels are parsed correctly when a conda-env file provides a
+        dependency of the form `url::pkg` under `dependencies:`.
+        Regression test for prefix-dev/pixi#4195.
+        """
+        manifest_path = tmp_pixi_workspace / "pixi.toml"
+
+        import_file_path = tmp_pixi_workspace / "url_channel_dep_env.yml"
+        with open(import_file_path, "w") as file:
+            yaml.dump(self.url_channel_dep_env_yaml, file)
+
+        verify_cli_command([pixi, "init", tmp_pixi_workspace])
+
+        # Import an environment with a `url::pkg` dependency
+        verify_cli_command(
+            [
+                pixi,
+                "import",
+                "--manifest-path",
+                manifest_path,
+                import_file_path,
+                "--format=conda-env",
+            ],
+        )
+
+        parsed_manifest = tomllib.loads(manifest_path.read_text())
+        assert (
+            "https://someartifactory.com/artifactory/api/conda/chaos-conda-dev"
+            in parsed_manifest["feature"]["url-channel-dep-env"]["channels"]
+        )
+        assert parsed_manifest == snapshot(
+            {
+                "workspace": IsPartialDict,
+                "tasks": {},
+                "dependencies": {},
+                "feature": {
+                    "url-channel-dep-env": {
+                        "channels": [
+                            "conda-forge",
+                            "https://someartifactory.com/artifactory/api/conda/chaos-conda-dev",
+                        ],
+                        "dependencies": {
+                            "somepackage": {
+                                "version": "==0.1.0",
+                                "channel": "https://someartifactory.com/artifactory/api/conda/chaos-conda-dev",
+                            }
+                        },
+                    }
+                },
+                "environments": {
+                    "url-channel-dep-env": {
+                        "features": ["url-channel-dep-env"],
+                        "no-default-feature": True,
+                    }
                 },
             }
         )

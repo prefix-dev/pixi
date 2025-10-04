@@ -1,21 +1,19 @@
 pub(crate) mod conda_metadata;
 mod conda_prefix;
 pub mod list;
-mod pypi_prefix;
-mod python_status;
 pub use conda_prefix::{CondaPrefixUpdated, CondaPrefixUpdater, CondaPrefixUpdaterBuilder};
 use dialoguer::theme::ColorfulTheme;
 use futures::{FutureExt, StreamExt, TryStreamExt, stream};
 use miette::{Context, IntoDiagnostic};
 use pixi_consts::consts;
 use pixi_git::credentials::store_credentials_from_url;
+pub use pixi_install_pypi::{ContinuePyPIPrefixUpdate, on_python_interpreter_change};
 use pixi_manifest::FeaturesExt;
 use pixi_progress::await_in_progress;
 use pixi_pypi_spec::PixiPypiSpec;
+pub use pixi_python_status::PythonStatus;
 use pixi_spec::{GitSpec, PixiSpec};
 use pixi_utils::{prefix::Prefix, rlimit::try_increase_rlimit_to_sensible};
-pub use pypi_prefix::{ContinuePyPIPrefixUpdate, on_python_interpreter_change};
-pub use python_status::PythonStatus;
 use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, LockedPackageRef};
 use serde::{Deserialize, Serialize};
@@ -452,7 +450,7 @@ async fn ensure_pixi_directory_and_gitignore(pixi_dir: &Path) -> miette::Result<
 }
 
 /// Specifies how the lock-file should be updated.
-#[derive(Debug, Default, PartialEq, Eq, Copy, Clone)]
+#[derive(Debug, Default, PartialEq, Eq, Copy, Clone, Deserialize, Serialize)]
 pub enum LockFileUsage {
     /// Update the lock-file if it is out of date.
     #[default]

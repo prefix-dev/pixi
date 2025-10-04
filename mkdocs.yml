@@ -122,6 +122,7 @@ nav:
           - Conda/Mamba: switching_from/conda.md
       - Multi Environment: tutorials/multi_environment.md
       - Global Tools: global_tools/introduction.md
+      - Import Environments: tutorials/import.md
   - Concepts:
       - Environments: workspace/environment.md
       - Tasks: workspace/advanced_tasks.md
@@ -174,7 +175,7 @@ nav:
   - Advanced:
       - Channel Logic: advanced/channel_logic.md
       - Info Command: advanced/explain_info_command.md
-      - Dependency Overrides: overrides/override.md
+      - Dependency Overrides: advanced/override.md
       - Shebang: advanced/shebang.md
       - Shell: advanced/pixi_shell.md
   - Reference:
@@ -241,6 +242,7 @@ plugins:
         "integration/editor/devcontainer.md": "integration/editor/vscode.md"
         "integration/editor/pycharm.md": "integration/editor/jetbrains.md"
         "advanced/installation.md": "installation.md"
+        "overrides/override.md": "advanced/override.md"
 
         # Redirects for links from code to make sure we don't break them.
         # Using descriptive names that never existed, to avoid conflicts.

@@ -19,6 +19,12 @@ use std::{
     sync::Arc,
 };
 
+use crate::{
+    activation::{CurrentEnvVarBehavior, initialize_env_variables},
+    diff::LockFileDiff,
+    lock_file::filter_lock_file,
+    repodata::Repodata,
+};
 use async_once_cell::OnceCell as AsyncCell;
 pub use discovery::{DiscoveryStart, WorkspaceLocator, WorkspaceLocatorError};
 pub use environment::Environment;
@@ -39,27 +45,19 @@ use pixi_manifest::{
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::SourceSpec;
-use pixi_utils::reqwest::build_reqwest_clients;
-use pixi_utils::variants::VariantConfig;
+use pixi_utils::reqwest::build_lazy_reqwest_clients;
+use pixi_utils::{reqwest::LazyReqwestClient, variants::VariantConfig};
 use pypi_mapping::{ChannelName, CustomMapping, MappingLocation, MappingSource};
 use rattler_conda_types::{Channel, ChannelConfig, MatchSpec, PackageName, Platform, Version};
 use rattler_lock::{LockFile, LockedPackageRef};
-use rattler_networking::s3_middleware;
+use rattler_networking::{LazyClient, s3_middleware};
 use rattler_repodata_gateway::Gateway;
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
-use reqwest_middleware::ClientWithMiddleware;
 pub use solve_group::SolveGroup;
 use tokio::sync::Semaphore;
 use url::Url;
 pub use workspace_mut::WorkspaceMut;
 use xxhash_rust::xxh3::xxh3_64;
-
-use crate::{
-    activation::{CurrentEnvVarBehavior, initialize_env_variables},
-    diff::LockFileDiff,
-    lock_file::filter_lock_file,
-    repodata::Repodata,
-};
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
 
@@ -142,7 +140,7 @@ pub struct Workspace {
     /// Reqwest client shared for this workspace.
     /// This is wrapped in a `OnceLock` to allow for lazy initialization.
     // TODO: once https://github.com/rust-lang/rust/issues/109737 is stabilized, switch to OnceLock
-    client: OnceCell<(reqwest::Client, ClientWithMiddleware)>,
+    client: OnceCell<(LazyReqwestClient, rattler_networking::LazyClient)>,
 
     /// The repodata gateway to use for answering queries about repodata.
     /// This is wrapped in a `OnceLock` to allow for lazy initialization.
@@ -495,8 +493,8 @@ impl Workspace {
 
     /// Create an authenticated reqwest client for this project
     /// use authentication from `rattler_networking`
-    pub fn authenticated_client(&self) -> miette::Result<&ClientWithMiddleware> {
-        Ok(&self.client_and_authenticated_client()?.1)
+    pub fn authenticated_client(&self) -> miette::Result<&LazyClient> {
+        Ok(&self.lazy_client_and_authenticated_client()?.1)
     }
 
     /// Returns a semaphore than can be used to limit the number of concurrent
@@ -548,11 +546,11 @@ impl Workspace {
             .with_tool_platform(tool_platform, tool_virtual_packages))
     }
 
-    fn client_and_authenticated_client(
+    fn lazy_client_and_authenticated_client(
         &self,
-    ) -> miette::Result<&(reqwest::Client, ClientWithMiddleware)> {
+    ) -> miette::Result<&(LazyReqwestClient, rattler_networking::LazyClient)> {
         self.client.get_or_try_init(|| {
-            build_reqwest_clients(Some(&self.config), Some(self.s3_config.clone()))
+            build_lazy_reqwest_clients(Some(self.config()), Some(self.s3_config.clone()))
         })
     }
 

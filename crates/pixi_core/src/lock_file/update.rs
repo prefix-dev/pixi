@@ -4,6 +4,7 @@ use std::{
     future::{Future, ready},
     iter,
     path::PathBuf,
+    pin::Pin,
     str::FromStr,
     sync::Arc,
     time::{Duration, Instant},
@@ -23,10 +24,15 @@ use pixi_command_dispatcher::{
 };
 use pixi_consts::consts;
 use pixi_glob::GlobHashCache;
+use pixi_install_pypi::{
+    LazyEnvironmentVariables, PyPIBuildConfig, PyPIContextConfig, PyPIEnvironmentUpdater,
+    PyPIUpdateConfig,
+};
 use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
 use pixi_record::{ParseLockFileError, PixiRecord};
 use pixi_utils::prefix::Prefix;
+use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
     ConversionError, to_extra_name, to_marker_environment, to_normalize, to_uv_extra_name,
     to_uv_normalize,
@@ -36,13 +42,14 @@ use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler::package_cache::PackageCache;
 use rattler_conda_types::{Arch, GenericVirtualPackage, PackageName, ParseChannelError, Platform};
 use rattler_lock::{LockFile, LockedPackageRef, ParseCondaLockError};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::Semaphore;
 use tracing::Instrument;
 use uv_normalize::ExtraName;
 
 use super::{
-    CondaPrefixUpdater, InstallSubset, PixiRecordsByName, PypiRecordsByName, UvResolutionContext,
+    CondaPrefixUpdater, InstallSubset, PixiRecordsByName, PypiRecordsByName,
     outdated::OutdatedEnvironments, utils::IoConcurrencyLimit,
 };
 use crate::{
@@ -53,7 +60,6 @@ use crate::{
         PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PythonStatus,
         read_environment_file, write_environment_file,
     },
-    install_pypi::{PyPIBuildConfig, PyPIContextConfig, PyPIEnvironmentUpdater, PyPIUpdateConfig},
     lock_file::{
         self, PypiRecord, reporter::SolveProgressBar,
         virtual_packages::validate_system_meets_environment_requirements,
@@ -245,10 +251,18 @@ pub struct UpdateLockFileOptions {
     pub max_concurrent_solves: usize,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub enum ReinstallPackages {
     #[default]
     None,
+    All,
+    Some(HashSet<String>),
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub enum ReinstallEnvironment {
+    #[default]
+    Default,
     All,
     Some(HashSet<String>),
 }
@@ -535,20 +549,9 @@ impl<'p> LockFileDerivedData<'p> {
 
                 let uv_context = self
                     .uv_context
-                    .get_or_try_init(|| UvResolutionContext::from_workspace(self.workspace))?
+                    .get_or_try_init(|| UvResolutionContext::from_config(self.workspace.config()))?
                     .clone()
                     .set_cache_refresh(uv_reinstall, uv_packages);
-
-                // TODO: This can be really slow (~200ms for pixi on @ruben-arts machine).
-                let env_variables = get_activated_environment_variables(
-                    self.workspace.env_vars(),
-                    environment,
-                    CurrentEnvVarBehavior::Exclude,
-                    None,
-                    false,
-                    false,
-                )
-                .await?;
 
                 let non_isolated_packages = environment.pypi_options().no_build_isolation;
                 let no_build = environment
@@ -584,10 +587,13 @@ impl<'p> LockFileDerivedData<'p> {
                         exclude_newer: exclude_newer.as_ref(),
                     };
 
+                    let lazy_env_vars = LazyPixiEnvironmentVars {
+                        environment: environment.clone(),
+                    };
                     let context_config = PyPIContextConfig {
                         uv_context: &uv_context,
                         pypi_indexes: pypi_indexes.as_ref(),
-                        environment_variables: env_variables,
+                        environment_variables_lazy: Some(&lazy_env_vars),
                     };
 
                     // Ignored pypi records
@@ -598,7 +604,7 @@ impl<'p> LockFileDerivedData<'p> {
                         .into_diagnostic()?;
                     PyPIEnvironmentUpdater::new(config, build_config, context_config)
                         .with_ignored_extraneous(names)
-                        .update(&pixi_records, &pypi_records, &python_status)
+                        .update(&python_status, &pixi_records, &pypi_records)
                         .await
                 }
                 .with_context(|| {
@@ -682,6 +688,32 @@ impl<'p> LockFileDerivedData<'p> {
             })
             .await
             .map(|(prefix, python_status)| (prefix.clone(), python_status.clone()))
+    }
+}
+
+/// A trait to lazily evaluate the environment variables for a given pixi environment.
+struct LazyPixiEnvironmentVars<'p> {
+    environment: Environment<'p>,
+}
+
+impl LazyEnvironmentVariables for LazyPixiEnvironmentVars<'_> {
+    fn resolve(
+        &self,
+    ) -> Pin<Box<dyn Future<Output = miette::Result<HashMap<String, String>>> + '_>> {
+        let environment = self.environment.clone();
+        Box::pin(async move {
+            let workspace = environment.workspace();
+            let result = get_activated_environment_variables(
+                workspace.env_vars(),
+                &environment,
+                CurrentEnvVarBehavior::Exclude,
+                None,
+                false,
+                false,
+            )
+            .await?;
+            Ok(result.clone())
+        })
     }
 }
 
@@ -1454,7 +1486,7 @@ impl<'p> UpdateContext<'p> {
                 };
 
             let uv_context = uv_context
-                .get_or_try_init(|| UvResolutionContext::from_workspace(project))?
+                .get_or_try_init(|| UvResolutionContext::from_config(project.config()))?
                 .clone();
 
             let locked_group_records = self

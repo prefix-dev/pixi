@@ -9,6 +9,10 @@
     - `file_name`
     - `url`
     - `subdir`.
+
+!!! note
+    In v0.55.0 and earlier releases, by default only the `default` feature was upgraded.
+    Pass `--feature=default` if you want to emulate this behaviour on newer releases.
 --8<-- [end:description]
 
 --8<-- [start:example]

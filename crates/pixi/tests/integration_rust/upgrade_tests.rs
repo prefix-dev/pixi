@@ -38,8 +38,7 @@ async fn pypi_dependency_index_preserved_on_upgrade() {
     let workspace = Workspace::from_path(&pixi.manifest_path()).unwrap();
 
     let workspace_value = workspace.workspace.value.clone();
-    let feature = workspace_value.feature(&args.specs.feature).unwrap();
-
+    let feature = workspace_value.default_feature();
     let mut workspace = workspace.modify().unwrap();
 
     let (match_specs, pypi_deps) =
@@ -52,7 +51,7 @@ async fn pypi_dependency_index_preserved_on_upgrade() {
             IndexMap::default(),
             args.no_install_config.no_install,
             &args.lock_file_update_config.lock_file_usage().unwrap(),
-            &args.specs.feature,
+            &feature.name,
             &[],
             true,
             args.dry_run,

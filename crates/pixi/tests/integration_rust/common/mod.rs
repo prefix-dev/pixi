@@ -51,6 +51,8 @@ use crate::common::builders::{
 };
 
 const DEFAULT_PROJECT_CONFIG: &str = r#"
+default-channels = ["https://prefix.dev/conda-forge"]
+
 [repodata-config."https://prefix.dev"]
 disable-sharded = false
 "#;

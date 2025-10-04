@@ -30,7 +30,7 @@ pub struct GlobalSpecs {
     #[clap(long, requires = "git", help_heading = consts::CLAP_GIT_OPTIONS)]
     pub subdir: Option<String>,
 
-    /// The path to the local directory
+    /// The path to the local package
     #[clap(long, conflicts_with = "git")]
     pub path: Option<Utf8NativePathBuf>,
 }
@@ -59,6 +59,8 @@ pub enum GlobalSpecsConversionError {
     #[error("failed to infer package name")]
     #[diagnostic(transparent)]
     PackageNameInference(#[from] pixi_global::project::InferPackageNameError),
+    #[error("Input {0} looks like a path: please pass `--path`.")]
+    MissingPathArg(String),
 }
 
 impl GlobalSpecs {
@@ -92,6 +94,14 @@ impl GlobalSpecs {
                     .to_typed_path_buf(),
             }))
         } else {
+            fn pathlike(s: &str) -> bool {
+                s.contains(".conda") || s.contains('/') || s.contains('\\')
+            }
+            if let Some(pathlike_input) = self.specs.iter().find(|s| pathlike(s)) {
+                return Err(GlobalSpecsConversionError::MissingPathArg(
+                    pathlike_input.clone(),
+                ));
+            }
             None
         };
         if let Some(pixi_spec) = git_or_path_spec {

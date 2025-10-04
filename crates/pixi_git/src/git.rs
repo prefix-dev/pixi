@@ -1,3 +1,5 @@
+use rattler_networking::LazyClient;
+use reqwest::StatusCode;
 /// Derived from `uv-git` implementation
 /// Source: https://github.com/astral-sh/uv/blob/4b8cc3e29e4c2a6417479135beaa9783b05195d3/crates/uv-git/src/git.rs
 /// This module represents all necessary git types and operations to interact with git repositories.
@@ -12,9 +14,6 @@ use std::{
     str::FromStr,
     sync::LazyLock,
 };
-
-use reqwest::StatusCode;
-use reqwest_middleware::ClientWithMiddleware;
 use url::Url;
 
 use crate::{
@@ -223,7 +222,7 @@ impl GitRemote {
         db: Option<GitDatabase>,
         reference: &GitReference,
         locked_rev: Option<GitOid>,
-        client: &ClientWithMiddleware,
+        client: &LazyClient,
     ) -> Result<(GitDatabase, GitOid), GitError> {
         let locked_ref = locked_rev.map(|oid| GitReference::FullCommit(oid.to_string()));
         let reference = locked_ref.as_ref().unwrap_or(reference);
@@ -478,7 +477,7 @@ pub(crate) fn fetch(
     repo: &mut GitRepository,
     remote_url: &str,
     reference: &GitReference,
-    client: &ClientWithMiddleware,
+    client: &LazyClient,
 ) -> Result<(), GitError> {
     let oid_to_fetch = match github_fast_path(repo, remote_url, reference, client) {
         Ok(FastPathRev::UpToDate) => return Ok(()),
@@ -670,7 +669,7 @@ fn github_fast_path(
     repo: &mut GitRepository,
     url: &str,
     reference: &GitReference,
-    client: &ClientWithMiddleware,
+    client: &LazyClient,
 ) -> Result<FastPathRev, GitError> {
     let url = Url::parse(url)?;
     if !is_github(&url) {
@@ -754,7 +753,7 @@ fn github_fast_path(
 
     runtime.block_on(async move {
         tracing::debug!("Attempting GitHub fast path for: {url}");
-        let mut request = client.get(&url);
+        let mut request = client.client().get(&url);
         request = request.header("Accept", "application/vnd.github.3.sha");
         request = request.header("User-Agent", "pixi");
         if let Some(local_object) = local_object {

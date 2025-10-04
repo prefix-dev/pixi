@@ -1,0 +1,27 @@
+[package]
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+license.workspace = true
+name = "pixi_uv_context"
+readme.workspace = true
+repository.workspace = true
+version = "0.1.0"
+
+[dependencies]
+fs-err = { workspace = true }
+miette = { workspace = true }
+pixi_config = { workspace = true }
+pixi_consts = { workspace = true }
+pixi_utils = { workspace = true, default-features = false }
+pixi_uv_conversions = { workspace = true }
+reqwest = { workspace = true }
+tracing = { workspace = true }
+uv-cache = { workspace = true }
+uv-client = { workspace = true }
+uv-configuration = { workspace = true }
+uv-dispatch = { workspace = true }
+uv-distribution-types = { workspace = true }
+uv-pep508 = { workspace = true }
+uv-types = { workspace = true }
+uv-workspace = { workspace = true }

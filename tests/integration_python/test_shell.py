@@ -2,16 +2,14 @@ from pathlib import Path
 import json
 import platform
 
-from .common import ALL_PLATFORMS, ExitCode, verify_cli_command
+from .common import ALL_PLATFORMS, verify_cli_command
 
 
 def test_shell_hook_completions(
     pixi: Path, tmp_pixi_workspace: Path, completions_channel_1: str
 ) -> None:
     # Create a new workspace
-    verify_cli_command(
-        [pixi, "init", "--channel", completions_channel_1, tmp_pixi_workspace], ExitCode.SUCCESS
-    )
+    verify_cli_command([pixi, "init", "--channel", completions_channel_1, tmp_pixi_workspace])
 
     verify_cli_command(
         [pixi, "add", "--manifest-path", tmp_pixi_workspace, "ripgrep-completions"],
@@ -122,7 +120,6 @@ def test_shell_activation_order(pixi: Path, tmp_pixi_workspace: Path) -> None:
     # Ask pixi to compute the environment for shell activation via shell-hook --json
     out = verify_cli_command(
         [pixi, "shell-hook", "--manifest-path", manifest, "--json"],
-        expected_exit_code=ExitCode.SUCCESS,
     )
 
     data = json.loads(out.stdout)

@@ -23,6 +23,7 @@ pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true }
+rattler_networking = { workspace = true }
 reqwest = { workspace = true, features = ["json"] }
 reqwest-middleware = { workspace = true }
 reqwest-retry = { workspace = true }

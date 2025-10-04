@@ -1,21 +1,25 @@
-use std::{any::Any, path::PathBuf, sync::Arc, sync::LazyLock, time::Duration};
+use std::{
+    any::Any,
+    borrow::Cow,
+    collections::HashMap,
+    path::PathBuf,
+    sync::{Arc, LazyLock},
+    time::{Duration, Instant},
+};
 
 use miette::IntoDiagnostic;
+use pixi_config::Config;
 use pixi_consts::consts;
 use rattler_networking::{
-    AuthenticationMiddleware, AuthenticationStorage, GCSMiddleware, MirrorMiddleware,
+    AuthenticationMiddleware, AuthenticationStorage, GCSMiddleware, LazyClient, MirrorMiddleware,
     OciMiddleware, S3Middleware,
     authentication_storage::{self, AuthenticationStorageError},
     mirror_middleware::Mirror,
     retry_policies::ExponentialBackoff,
 };
-
 use reqwest::Client;
-use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, Middleware};
+use reqwest_middleware::{ClientWithMiddleware, Middleware};
 use reqwest_retry::RetryTransientMiddleware;
-use std::collections::HashMap;
-
-use pixi_config::Config;
 
 /// The default retry policy employed by pixi.
 /// TODO: At some point we might want to make this configurable.
@@ -124,37 +128,18 @@ pub fn reqwest_client_builder(config: Option<&Config>) -> miette::Result<reqwest
     Ok(builder)
 }
 
-pub fn build_reqwest_clients(
-    config: Option<&Config>,
+pub fn build_reqwest_middleware_stack(
+    config: &Config,
     s3_config_project: Option<HashMap<String, rattler_networking::s3_middleware::S3Config>>,
-) -> miette::Result<(Client, ClientWithMiddleware)> {
-    // If we do not have a config, we will just load the global default.
-    let config = if let Some(config) = config {
-        config.clone()
-    } else {
-        Config::load_global()
-    };
-
-    if config.tls_no_verify() {
-        tracing::warn!(
-            "TLS verification is disabled. This is insecure and should only be used for testing or internal networks."
-        );
-    }
-
-    let client = reqwest_client_builder(Some(&config))?
-        .danger_accept_invalid_certs(config.tls_no_verify())
-        .build()
-        .expect("failed to create reqwest Client");
-
-    let mut client_builder = ClientBuilder::new(client.clone());
+) -> miette::Result<Box<[Arc<dyn Middleware>]>> {
+    let mut result: Vec<Arc<dyn Middleware>> = Vec::new();
 
     if !config.mirror_map().is_empty() {
-        client_builder = client_builder
-            .with(mirror_middleware(&config))
-            .with(oci_middleware());
+        result.push(Arc::new(mirror_middleware(config)));
+        result.push(Arc::new(oci_middleware()));
     }
 
-    client_builder = client_builder.with(GCSMiddleware);
+    result.push(Arc::new(GCSMiddleware));
 
     let s3_config_global = config.compute_s3_config();
     let s3_config_project = s3_config_project.unwrap_or_default();
@@ -162,21 +147,97 @@ pub fn build_reqwest_clients(
     s3_config.extend(s3_config_global);
     s3_config.extend(s3_config_project);
 
-    let store = auth_store(&config).into_diagnostic()?;
-    let s3_middleware = S3Middleware::new(s3_config, store);
-    client_builder = client_builder.with(s3_middleware);
+    let store = auth_store(config).into_diagnostic()?;
+    result.push(Arc::new(S3Middleware::new(s3_config, store)));
 
-    client_builder = client_builder.with_arc(Arc::new(
-        auth_middleware(&config).expect("could not create auth middleware"),
+    result.push(Arc::new(
+        auth_middleware(config).expect("could not create auth middleware"),
     ));
 
-    client_builder = client_builder.with(RetryTransientMiddleware::new_with_policy(
+    result.push(Arc::new(RetryTransientMiddleware::new_with_policy(
         default_retry_policy(),
-    ));
+    )));
 
-    let authenticated_client = client_builder.build();
+    Ok(result.into_boxed_slice())
+}
+
+pub fn build_reqwest_clients(
+    config: Option<&Config>,
+    s3_config_project: Option<HashMap<String, rattler_networking::s3_middleware::S3Config>>,
+) -> miette::Result<(Client, ClientWithMiddleware)> {
+    // If we do not have a config, we will just load the global default.
+    let config = if let Some(config) = config {
+        Cow::Borrowed(config)
+    } else {
+        Cow::Owned(Config::load_global())
+    };
+
+    let client = LazyReqwestClient::new(&config)?.into_client();
+    let middleware = build_reqwest_middleware_stack(&config, s3_config_project)?;
+    let authenticated_client = ClientWithMiddleware::new(client.clone(), middleware);
 
     Ok((client, authenticated_client))
+}
+
+pub fn build_lazy_reqwest_clients(
+    config: Option<&Config>,
+    s3_config_project: Option<HashMap<String, rattler_networking::s3_middleware::S3Config>>,
+) -> miette::Result<(LazyReqwestClient, LazyClient)> {
+    // If we do not have a config, we will just load the global default.
+    let config = if let Some(config) = config {
+        Cow::Borrowed(config)
+    } else {
+        Cow::Owned(Config::load_global())
+    };
+
+    let client = LazyReqwestClient::new(&config)?;
+    let middleware_stack = build_reqwest_middleware_stack(&config, s3_config_project)?;
+
+    let client_for_middleware = client.clone();
+    let client_with_middleware = rattler_networking::LazyClient::new(move || {
+        let client = client_for_middleware.into_client();
+        ClientWithMiddleware::new(client, middleware_stack)
+    });
+
+    Ok((client, client_with_middleware))
+}
+
+/// This is a wrapper around reqwest::Client that initializes the client lazily.
+///
+/// This is useful because the initialization of the client can be expensive.
+#[derive(Clone)]
+pub struct LazyReqwestClient {
+    pub client: Arc<LazyLock<reqwest::Client, Box<dyn FnOnce() -> reqwest::Client + Send + Sync>>>,
+}
+
+impl LazyReqwestClient {
+    pub fn new(config: &Config) -> miette::Result<Self> {
+        let tls_no_verify = config.tls_no_verify();
+        if tls_no_verify {
+            tracing::warn!(
+                "TLS verification is disabled. This is insecure and should only be used for testing or internal networks."
+            );
+        }
+
+        let builder =
+            reqwest_client_builder(Some(config))?.danger_accept_invalid_certs(tls_no_verify);
+
+        Ok(Self {
+            client: Arc::new(LazyLock::new(Box::new(move || {
+                let start = Instant::now();
+                let client = builder
+                    .danger_accept_invalid_certs(tls_no_verify)
+                    .build()
+                    .expect("failed to create reqwest Client");
+                tracing::debug!("instantiating reqwest Client took {:?}", start.elapsed());
+                client
+            }))),
+        })
+    }
+
+    pub fn into_client(self) -> reqwest::Client {
+        (*self.client).clone()
+    }
 }
 
 pub fn uv_middlewares(config: &Config) -> Vec<Arc<dyn Middleware>> {
@@ -190,7 +251,8 @@ pub fn uv_middlewares(config: &Config) -> Vec<Arc<dyn Middleware>> {
     };
 
     // Add authentication middleware after mirror rewriting so it can authenticate
-    // against the rewritten URLs (important for mirrors that require different credentials)
+    // against the rewritten URLs (important for mirrors that require different
+    // credentials)
     if let Ok(auth_middleware) = auth_middleware(config) {
         middlewares.push(Arc::new(auth_middleware));
     }
@@ -199,9 +261,10 @@ pub fn uv_middlewares(config: &Config) -> Vec<Arc<dyn Middleware>> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use pixi_config::Config;
     use url::Url;
+
+    use super::*;
 
     #[test]
     fn test_uv_middlewares_includes_auth_with_mirrors() {

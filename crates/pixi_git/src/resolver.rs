@@ -16,7 +16,7 @@ use crate::{
 };
 use dashmap::DashMap;
 use dashmap::mapref::one::Ref;
-use reqwest_middleware::ClientWithMiddleware;
+use rattler_networking::LazyClient;
 use serde::Serialize;
 
 #[derive(Debug, thiserror::Error)]
@@ -50,7 +50,7 @@ impl GitResolver {
     pub async fn fetch(
         &self,
         url: GitUrl,
-        client: ClientWithMiddleware,
+        client: LazyClient,
         cache: PathBuf,
         reporter: Option<Arc<dyn Reporter>>,
     ) -> Result<Fetch, GitError> {

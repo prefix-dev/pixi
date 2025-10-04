@@ -9,6 +9,7 @@ use itertools::Itertools;
 use miette::{Diagnostic, LabeledSpan, SourceOffset, SourceSpan};
 use pixi_pypi_spec::Pep508ToPyPiRequirementError;
 use pixi_toml::TomlDiagnostic;
+use pyproject_toml::ResolveError;
 use rattler_conda_types::{InvalidPackageNameError, version_spec::ParseVersionSpecError};
 use thiserror::Error;
 use toml_span::{DeserError, Error};
@@ -113,6 +114,8 @@ pub enum TomlError {
     #[error(transparent)]
     Conversion(#[from] Box<Pep508ToPyPiRequirementError>),
     #[error(transparent)]
+    ResolveError(#[from] ResolveError),
+    #[error(transparent)]
     InvalidNonPackageDependencies(#[from] InvalidNonPackageDependencies),
 }
 
@@ -163,6 +166,7 @@ impl Display for TomlError {
                 write!(f, "Could not convert pep508 to pixi pypi requirement")
             }
             TomlError::InvalidNonPackageDependencies(err) => write!(f, "{err}"),
+            TomlError::ResolveError(err) => write!(f, "{err}"),
         }
     }
 }

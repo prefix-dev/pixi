@@ -462,7 +462,7 @@ allow-direct-references = true
 
 def test_help_warning_when_platform_not_supported(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """Test that the help command warns about unsupported platforms"""
-    verify_cli_command([pixi, "init", tmp_pixi_workspace], ExitCode.SUCCESS)
+    verify_cli_command([pixi, "init", tmp_pixi_workspace])
 
     # Remove all platforms
     manifest_path = tmp_pixi_workspace / "pixi.toml"

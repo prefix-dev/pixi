@@ -659,62 +659,328 @@ expression: "(parse_dependencies(env_info.dependencies().clone()).unwrap(),\npar
             },
         ],
         [
-            Name(
-                "pytorch",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/pytorch/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "pytorch",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/pytorch/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "conda-forge",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/conda-forge/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "conda-forge",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/conda-forge/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "conda-forge",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/conda-forge/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "conda-forge",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/conda-forge/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "conda-forge",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/conda-forge/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "conda-forge",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/conda-forge/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "conda-forge",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/conda-forge/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "conda-forge",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/conda-forge/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "conda-forge",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/conda-forge/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "conda-forge",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/conda-forge/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "conda-forge",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/conda-forge/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "conda-forge",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/conda-forge/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "conda-forge",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/conda-forge/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "conda-forge",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/conda-forge/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "conda-forge",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/conda-forge/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "conda-forge",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/conda-forge/",
+                    query: None,
+                    fragment: None,
+                },
             ),
-            Name(
-                "conda-forge",
+            Url(
+                Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "conda.anaconda.org",
+                        ),
+                    ),
+                    port: None,
+                    path: "/conda-forge/",
+                    query: None,
+                    fragment: None,
+                },
             ),
         ],
     ),
