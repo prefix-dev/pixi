@@ -4796,6 +4796,7 @@ dependencies = [
  "pixi_config",
  "pixi_consts",
  "pixi_core",
+ "pixi_diff",
  "pixi_git",
  "pixi_global",
  "pixi_manifest",
@@ -4953,7 +4954,6 @@ dependencies = [
 name = "pixi_core"
 version = "0.1.0"
 dependencies = [
- "ahash",
  "async-once-cell",
  "async-trait",
  "barrier_cell",
@@ -4987,6 +4987,7 @@ dependencies = [
  "pixi_config",
  "pixi_consts",
  "pixi_default_versions",
+ "pixi_diff",
  "pixi_git",
  "pixi_glob",
  "pixi_install_pypi",
@@ -5055,6 +5056,23 @@ name = "pixi_default_versions"
 version = "0.1.0"
 dependencies = [
  "rattler_conda_types",
+]
+
+[[package]]
+name = "pixi_diff"
+version = "0.1.0"
+dependencies = [
+ "ahash",
+ "console 0.15.11",
+ "indexmap 2.11.1",
+ "itertools 0.14.0",
+ "pixi_consts",
+ "pixi_manifest",
+ "rattler_conda_types",
+ "rattler_lock",
+ "serde",
+ "serde_json",
+ "tabwriter",
 ]
 
 [[package]]

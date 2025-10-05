@@ -186,6 +186,7 @@ pixi_config = { path = "crates/pixi_config" }
 pixi_consts = { path = "crates/pixi_consts" }
 pixi_core = { path = "crates/pixi_core" }
 pixi_default_versions = { path = "crates/pixi_default_versions" }
+pixi_diff = { path = "crates/pixi_diff" }
 pixi_git = { path = "crates/pixi_git" }
 pixi_glob = { path = "crates/pixi_glob" }
 pixi_global = { path = "crates/pixi_global" }
