@@ -98,9 +98,21 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Query any and all information we can acquire about the package we're
     // attempting to build.
-    let Ok(search_start) = workspace_locator.path() else {
+    let Ok(manifest_path) = workspace_locator.path() else {
         miette::bail!("could not determine the current working directory to locate the workspace");
     };
+    let manifest_path_canonical = dunce::canonicalize(&manifest_path)
+        .into_diagnostic()
+        .with_context(|| {
+            format!(
+                "failed to canonicalize manifest path '{}'",
+                manifest_path.display()
+            )
+        })?;
+    // Store the manifest location relative to the workspace root when possible to
+    // keep the pinned path relocatable and avoid double-prefixing during resolution.
+    let manifest_spec_path = pathdiff::diff_paths(&manifest_path_canonical, workspace.root())
+        .unwrap_or(manifest_path_canonical.clone());
     let channel_config = workspace.channel_config();
     let channels = workspace
         .default_environment()
@@ -109,7 +121,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Determine the source of the package.
     let source: PinnedSourceSpec = PinnedPathSpec {
-        path: search_start.to_string_lossy().into_owned().into(),
+        path: manifest_spec_path.to_string_lossy().into_owned().into(),
     }
     .into();
 
