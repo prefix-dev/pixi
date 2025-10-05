@@ -11,10 +11,13 @@ version = "0.1.0"
 [dependencies]
 python = ">=3.12.5,<4"
 # Specific channel and version
-ca-certificates = { version = "2024.8.30", channel = "conda-forge" }
+ca-certificates = { version = "==2024.8.30", channel = "conda-forge" }
 
 [pypi-dependencies]
 rich = ">=13.8.0, <14"
+# NOTE: this will be updated to current absolute path in test-exports.sh
+#       to test local modifications, use an absolute path and remove the override
+test-git-subdir-roundtrip = { git = "git+ssh://must/replace", rev = "main", subdirectory = "tests/data/mock-projects/test-project-export/test-git-subdir-roundtrip" }
 
 [target.linux-64.dependencies]
 requests = ">=2.32.3,<3"
