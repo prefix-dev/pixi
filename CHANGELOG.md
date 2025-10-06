@@ -5,6 +5,84 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.56.0] - 2025-10-06
+#### ✨ Highlights
+
+Install a `.conda` package directly using `pixi global install`:
+```
+pixi global install --path /path/to/package-name.conda
+```
+
+#### Added
+
+- Add paxton-as-pixi SVG by @VeckoTheGecko in [#4592](https://github.com/prefix-dev/pixi/pull/4592)
+- Add a hyperlink to lock file docs by @lucascolley in [#4600](https://github.com/prefix-dev/pixi/pull/4600)
+- Add description of a workspace to first workspace docs by @lucascolley in [#4602](https://github.com/prefix-dev/pixi/pull/4602)
+- Add a tutorial on `pixi import` and `pixi init --import` by @lucascolley in [#4631](https://github.com/prefix-dev/pixi/pull/4631)
+
+
+#### Changed
+
+- Option to ignore env var during activation by @Hofer-Julian in [#4619](https://github.com/prefix-dev/pixi/pull/4619)
+- Add new (minimal) pixi_api abstraction crate by @haecker-felix in [#4546](https://github.com/prefix-dev/pixi/pull/4546)
+- Drop StyledText abstraction, rename config to workspace by @haecker-felix in [#4647](https://github.com/prefix-dev/pixi/pull/4647)
+- More simple introduction to manifest reference by @lucascolley in [#4601](https://github.com/prefix-dev/pixi/pull/4601)
+- Direct `.conda` global installation by @lucascolley in [#4502](https://github.com/prefix-dev/pixi/pull/4502)
+- Implement task support for WorkspaceContext by @haecker-felix in [#4667](https://github.com/prefix-dev/pixi/pull/4667)
+- Unsafe-best-match for build as well by @tdejager in [#4649](https://github.com/prefix-dev/pixi/pull/4649)
+
+
+#### Documentation
+
+- `project` -> `workspace`, improve `first_workspace` page by @lucascolley in [#4586](https://github.com/prefix-dev/pixi/pull/4586)
+- Fix bash completion sourcing example by @Hofer-Julian in [#4590](https://github.com/prefix-dev/pixi/pull/4590)
+- `project` -> `workspace` in README also by @lucascolley in [#4589](https://github.com/prefix-dev/pixi/pull/4589)
+- Fix typo by @Hofer-Julian in [#4596](https://github.com/prefix-dev/pixi/pull/4596)
+- Fix broken hyperlink by @magsol in [#4605](https://github.com/prefix-dev/pixi/pull/4605)
+- Add global environments in setup-pixi by @pavelzw in [#4627](https://github.com/prefix-dev/pixi/pull/4627)
+- Add warning when viewing old docs version by @lucascolley in [#4628](https://github.com/prefix-dev/pixi/pull/4628)
+- Fix list in pixi extensions page by @pavelzw in [#4630](https://github.com/prefix-dev/pixi/pull/4630)
+- Update doc to include global environment caching information by @olivier-lacroix in [#4672](https://github.com/prefix-dev/pixi/pull/4672)
+
+
+#### Fixed
+
+- Correct SIGINT forwarding by @remimimimimi in [#4552](https://github.com/prefix-dev/pixi/pull/4552)
+- Inconsistent caching when input or output globs unmatched by @tdejager in [#4547](https://github.com/prefix-dev/pixi/pull/4547)
+- Obscure error when importing `environment.yml` with empty `pip:` by @Hofer-Julian in [#4609](https://github.com/prefix-dev/pixi/pull/4609)
+- Use source name for a package by @nichmor in [#4597](https://github.com/prefix-dev/pixi/pull/4597)
+- Pixi init config loading by @Hofer-Julian in [#4610](https://github.com/prefix-dev/pixi/pull/4610)
+- `add_tests::add_with_channel` by @Hofer-Julian in [#4618](https://github.com/prefix-dev/pixi/pull/4618)
+- Optional dependencies break requirement conversion code by @Hofer-Julian in [#4603](https://github.com/prefix-dev/pixi/pull/4603)
+- Handle `url::pkg` dependencies from conda env file by @lucascolley in [#4621](https://github.com/prefix-dev/pixi/pull/4621)
+- Panic when trying to resolve cross-platform deps by @nichmor in [#4612](https://github.com/prefix-dev/pixi/pull/4612)
+- Adapt testsuite CI by @Hofer-Julian in [#4632](https://github.com/prefix-dev/pixi/pull/4632)
+- Skip multi-output test by @Hofer-Julian in [#4653](https://github.com/prefix-dev/pixi/pull/4653)
+- Upgrade all features by default by @lucascolley in [#4646](https://github.com/prefix-dev/pixi/pull/4646)
+- Available tasks output by @remimimimimi in [#4655](https://github.com/prefix-dev/pixi/pull/4655)
+- Restore $status before calling __fish_prompt_orig by @fstanis in [#4651](https://github.com/prefix-dev/pixi/pull/4651)
+- Use correct equality specifier for conda-environment export with git subdir pypi dep by @ihnorton in [#4658](https://github.com/prefix-dev/pixi/pull/4658)
+- Fix test-exports integration test after PR4658 by @ihnorton in [#4695](https://github.com/prefix-dev/pixi/pull/4695)
+- `pixi list` shouldn't panic in case of `BrokenPipe` error by @mrswastik-robot in [#4673](https://github.com/prefix-dev/pixi/pull/4673)
+- Double relative manifest path by @remimimimimi in [#4699](https://github.com/prefix-dev/pixi/pull/4699)
+
+
+#### Performance
+
+- Use `ignore` crate instead of `wax` crate for globbing by @tdejager in [#4578](https://github.com/prefix-dev/pixi/pull/4578)
+- Initialize the reqwest client lazily by @baszalmstra in [#4666](https://github.com/prefix-dev/pixi/pull/4666)
+- Initialize the environment variables lazily for sdist environments by @baszalmstra in [#4685](https://github.com/prefix-dev/pixi/pull/4685)
+
+#### Refactor
+
+- Extracted pixi_install_pypi from core by @tdejager in [#4643](https://github.com/prefix-dev/pixi/pull/4643)
+
+#### New Contributors
+* @ihnorton made their first contribution in [#4695](https://github.com/prefix-dev/pixi/pull/4695)
+* @fstanis made their first contribution in [#4651](https://github.com/prefix-dev/pixi/pull/4651)
+* @magsol made their first contribution in [#4605](https://github.com/prefix-dev/pixi/pull/4605)
+* @VeckoTheGecko made their first contribution in [#4592](https://github.com/prefix-dev/pixi/pull/4592)
+
 ### [0.55.0] - 2025-09-15
 #### ✨ Highlights
 
