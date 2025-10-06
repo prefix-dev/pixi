@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 
 # Run from the root of the project using `bash tests/scripts/test-export.sh`
-set -e
-set -x
-echo "Running test_export.sh"
+# -e: exit on error
+# -u: treat unset variables as an error
+# -x: print commands and their arguments as they are executed
+# -o pipefail: the return value of a pipeline is the status of the last command
+set -euxo pipefail
+echo "Running test-export.sh"
 
 echo "Exporting the export test environment"
 pixi project export conda-environment --manifest-path tests/data/mock-projects/test-project-export --environment default | tee test-env.yml
