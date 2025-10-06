@@ -10,12 +10,7 @@ eval "$(pixi shell-hook)"
 unset PIXI_IN_SHELL
 echo "Exporting the export test environment"
 cd tests/data/mock-projects/test-project-export
-
-# For the git subdirectory round-trip test, we need to edit
-# the pixi.toml.orig git subdirectory entry to use an absolute path
-python -c 'import pathlib; pathlib.Path("tmp").mkdir(exist_ok=True); p = pathlib.Path("./tmp/pixi.toml"); p.write_text(pathlib.Path("pixi.toml").read_text().replace("git+ssh:\/\/must\/replace", str(p.absolute().parents[4])))'
-
-pixi project --manifest-path tmp/pixi.toml export conda-environment | tee test-env.yml
+pixi project export conda-environment | tee test-env.yml
 echo "Creating the export test environment with micromamba"
 micromamba create -y -f test-env.yml -n export-test
 micromamba env list
@@ -24,8 +19,7 @@ micromamba env remove -y -n export-test
 export _PIXITEST_TMP=$(mktemp -d)
 pixi init -i test-env.yml $_PIXITEST_TMP
 pixi install --manifest-path $_PIXITEST_TMP
-rm test-env.yml tmp/pixi.toml
-rmdir tmp
+rm test-env.yml
 cd ../../../..
 
 # Setuptools error with env_test_package
