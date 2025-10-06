@@ -1412,6 +1412,66 @@ def test_task_caching_with_multiple_inputs_args(pixi: Path, tmp_pixi_workspace: 
     )
 
 
+def test_caching_multiple_tasks_with_depends_on_args(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Test ``depends-on`` with the same inputs, outputs, but different args, are cached indpendently.
+
+    This test addresses GitHub issue #4675 where ``pixi run`` would ignore args
+    provided by ``depends-on`` when determining the cache state.
+    """
+    # a "linter" that removes all whitespace
+    cmd = """
+        python -c "import sys, pathlib; p = pathlib.Path('foo.py'); t = p.read_text(); ok = ' ' not in t; (
+            {%- if fix | int -%}print('1 unchanged' if ok else [p.write_text(t.replace(' ', '')), '1 fixed'][1])
+            {%- else -%}sys.exit(([print('1 ok'), 0] if ok else [print('1 issue'), 1])[1])
+            {% endif -%}
+        )"
+    """
+
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest_content = tomli.loads(EMPTY_BOILERPLATE_PROJECT)
+    manifest_content["tasks"] = {
+        "_lint_or_fix": {"args": ["fix"], "cmd": cmd, "inputs": ["foo.py"]},
+        "fix": {"depends-on": [{"task": "_lint_or_fix", "args": [{"fix": "1"}]}]},
+        "lint": {"depends-on": [{"task": "_lint_or_fix", "args": [{"fix": "0"}]}]},
+    }
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    # create a file with "lint"
+    foo_py = tmp_pixi_workspace.joinpath("foo.py")
+    foo_py.write_text("""print( "foo" )""")
+
+    def _run(
+        args: list[str], rc: ExitCode, stdout: str | None = None, stderr: str | None = None
+    ) -> list[Path]:
+        """Run a task, return the cache paths."""
+        verify_cli_command(
+            [*map(str, [pixi.resolve(), "run", "--manifest-path", manifest_path, *args])],
+            expected_exit_code=rc,
+            stdout_contains=stdout,
+            stderr_contains=stderr,
+        )
+        return sorted((tmp_pixi_workspace / ".pixi/task-cache-v0").glob("*"))
+
+    # warm up cache
+    assert len(_run(["lint"], ExitCode.FAILURE, "1 issue")) == 0, "unexpected cache"
+    assert len(_run(["fix"], ExitCode.SUCCESS, "1 fixed")) == 1, "unexpected cache"
+    warm_cache = _run(["lint"], ExitCode.SUCCESS, "1 ok")
+    assert len(warm_cache) == 2, "unexpected cache"
+    # cache should be stable
+    _run(["fix"], ExitCode.SUCCESS, None, "cache hit")
+    _run(["lint"], ExitCode.SUCCESS, None, "cache hit")
+    # invalidate cache
+    foo_py.write_text("""print( "bar" )""")
+    # rerun
+    _run(["lint"], ExitCode.FAILURE, "1 issue")
+    _run(["fix"], ExitCode.SUCCESS, "1 fixed")
+    _run(["lint"], ExitCode.SUCCESS, "1 ok")
+    # cache should be stable with new text
+    _run(["fix"], ExitCode.SUCCESS, None, "cache hit")
+    final_cache = _run(["lint"], ExitCode.SUCCESS, None, "cache hit")
+    assert final_cache == warm_cache, "cache files were not stable"
+
+
 def test_shell_quoting_run_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """Test that shell quoting works correctly for CLI commands with quotes.
 
