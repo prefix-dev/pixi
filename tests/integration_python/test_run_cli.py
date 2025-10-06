@@ -1413,7 +1413,7 @@ def test_task_caching_with_multiple_inputs_args(pixi: Path, tmp_pixi_workspace: 
 
 
 def test_caching_multiple_tasks_with_depends_on_args(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    """Test ``depends-on`` with the same inputs, outputs, but different args, are cached indpendently.
+    """Test ``depends-on`` with the same inputs, outputs, but different args, are cached independently.
 
     This test addresses GitHub issue #4675 where ``pixi run`` would ignore args
     provided by ``depends-on`` when determining the cache state.
