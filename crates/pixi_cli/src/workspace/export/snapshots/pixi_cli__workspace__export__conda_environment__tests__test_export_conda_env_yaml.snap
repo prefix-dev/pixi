@@ -15,4 +15,4 @@ dependencies:
 - pip
 - pip:
   - rich>=13.8.0, <14
-  - test-git-subdir-roundtrip @ git+git+ssh://must/replace@main#subdirectory=tests/data/mock-projects/test-project-export/test-git-subdir-roundtrip
+  - test-git-subdir-roundtrip @ git+https://github.com/prefix-dev/pixi@main#subdirectory=tests/data/mock-projects/test-project-export/test-git-subdir-roundtrip
