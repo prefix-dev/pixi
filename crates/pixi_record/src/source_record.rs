@@ -141,6 +141,18 @@ impl TryFrom<CondaSourceData> for SourceRecord {
                 sha256,
                 md5: None,
             }),
+            PackageBuildSource {
+                kind: PackageBuildSourceKind::Path(path),
+                subdirectory,
+            } => PinnedSourceSpec::Path(crate::PinnedPathSpec {
+                path: {
+                    if let Some(subdir) = subdirectory {
+                        path.join(subdir)
+                    } else {
+                        path
+                    }
+                },
+            }),
         });
         Ok(Self {
             package_record: value.package_record,
