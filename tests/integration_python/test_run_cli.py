@@ -1445,7 +1445,7 @@ def test_caching_multiple_tasks_with_depends_on_args(pixi: Path, tmp_pixi_worksp
     ) -> list[Path]:
         """Run a task, return the cache paths."""
         verify_cli_command(
-            [*map(str, [pixi.resolve(), "run", "--manifest-path", manifest_path, *args])],
+            [pixi, "run", "--manifest-path", manifest_path, *args],
             expected_exit_code=rc,
             stdout_contains=stdout,
             stderr_contains=stderr,
