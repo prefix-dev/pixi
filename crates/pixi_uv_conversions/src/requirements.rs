@@ -12,7 +12,7 @@ use uv_distribution_types::RequirementSource;
 use uv_normalize::{InvalidNameError, PackageName};
 use uv_pep440::VersionSpecifiers;
 use uv_pep508::VerbatimUrl;
-use uv_pypi_types::{ParsedPathUrl, ParsedUrl, VerbatimParsedUrl};
+use uv_pypi_types::{ParsedDirectoryUrl, ParsedPathUrl, ParsedUrl, VerbatimParsedUrl};
 use uv_redacted::DisplaySafeUrl;
 
 use crate::{
@@ -256,19 +256,23 @@ pub fn pep508_requirement_to_uv_requirement(
                 let url = match url_or_path {
                     // It is actually a path
                     UrlOrPath::Path(path) => {
-                        // We expect an packaged wheel or sdist here
-                        let ext =
-                            DistExtension::from_path(Path::new(path.as_str())).map_err(|e| {
-                                ConversionError::ExpectedDistButFoundPath(
-                                    PathBuf::from_str(path.as_str()).expect("not a path"),
-                                    e,
-                                )
-                            })?;
-                        let parsed_url = ParsedUrl::Path(ParsedPathUrl::from_source(
-                            PathBuf::from(path.as_str()).into_boxed_path(),
-                            ext,
-                            verbatim_url.to_url().into(),
-                        ));
+                        // Try to parse as a packaged wheel or sdist, otherwise treat as directory
+                        let parsed_url = match DistExtension::from_path(Path::new(path.as_str())) {
+                            Ok(ext) => ParsedUrl::Path(ParsedPathUrl::from_source(
+                                PathBuf::from(path.as_str()).into_boxed_path(),
+                                ext,
+                                verbatim_url.to_url().into(),
+                            )),
+                            Err(_) => {
+                                // If no extension, treat as a directory
+                                ParsedUrl::Directory(ParsedDirectoryUrl::from_source(
+                                    PathBuf::from(path.as_str()).into_boxed_path(),
+                                    Some(false), // editable
+                                    Some(false), // virtual
+                                    DisplaySafeUrl::from(verbatim_url.to_url()),
+                                ))
+                            }
+                        };
 
                         VerbatimParsedUrl {
                             parsed_url,
@@ -277,7 +281,6 @@ pub fn pep508_requirement_to_uv_requirement(
                             )
                             .with_given(verbatim_url.given().expect("should have given string")),
                         }
-                        // Can only be an archive
                     }
                     // It is a URL
                     UrlOrPath::Url(u) => VerbatimParsedUrl {

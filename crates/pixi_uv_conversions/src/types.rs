@@ -144,7 +144,4 @@ pub enum ConversionError {
 
     #[error(transparent)]
     FmtError(#[from] std::fmt::Error),
-
-    #[error("expected an (.whl or sdist) but found: '{}'", ._0.display())]
-    ExpectedDistButFoundPath(PathBuf, #[source] ExtensionError),
 }
