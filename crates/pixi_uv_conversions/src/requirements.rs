@@ -267,8 +267,8 @@ pub fn pep508_requirement_to_uv_requirement(
                                 // If no extension, treat as a directory
                                 ParsedUrl::Directory(ParsedDirectoryUrl::from_source(
                                     PathBuf::from(path.as_str()).into_boxed_path(),
-                                    Some(false), // Set this to false, might require post-processing on the result
-                                    Some(false), // we do not support this yet
+                                    Some(false), // Set editable to false, might require post-processing on the result
+                                    Some(false), // we do not support virtual packages yet
                                     DisplaySafeUrl::from(verbatim_url.to_url()),
                                 ))
                             }
