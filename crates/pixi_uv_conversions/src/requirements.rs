@@ -243,19 +243,23 @@ pub fn pep508_requirement_to_uv_requirement(
 ) -> Result<uv_distribution_types::Requirement, ConversionError> {
     let parsed_url = if let Some(version_or_url) = requirement.version_or_url {
         match version_or_url {
+            // We need to convert the version
             pep508_rs::VersionOrUrl::VersionSpecifier(version) => Some(
                 uv_pep508::VersionOrUrl::VersionSpecifier(to_uv_version_specifiers(&version)?),
             ),
+            // We need to convert the URL
             pep508_rs::VersionOrUrl::Url(verbatim_url) => {
+                // Figure out if the Url is a URL or a path
                 let url_or_path =
                     UrlOrPath::from_str(verbatim_url.as_str()).expect("should be convertible");
 
-                // it is actually a path
                 let url = match url_or_path {
+                    // It is actually a path
                     UrlOrPath::Path(path) => {
+                        // We expect an packaged wheel or sdist here
                         let ext =
                             DistExtension::from_path(Path::new(path.as_str())).map_err(|e| {
-                                ConversionError::ExpectedArchiveButFoundPath(
+                                ConversionError::ExpectedDistButFoundPath(
                                     PathBuf::from_str(path.as_str()).expect("not a path"),
                                     e,
                                 )
@@ -275,6 +279,7 @@ pub fn pep508_requirement_to_uv_requirement(
                         }
                         // Can only be an archive
                     }
+                    // It is a URL
                     UrlOrPath::Url(u) => VerbatimParsedUrl {
                         parsed_url: ParsedUrl::try_from(DisplaySafeUrl::from(u.clone()))
                             .expect("cannot convert to url"),
