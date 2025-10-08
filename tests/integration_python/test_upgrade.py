@@ -277,7 +277,7 @@ test = ["test"]
     )
     parsed_manifest = tomllib.loads(manifest_path.read_text())
 
-    # Check that `requrires-python` is the same
+    # Check that `requires-python` is the same
     assert parsed_manifest["project"]["requires-python"] == "==3.13"
 
     # Check that `tool.pixi.dependencies.python` isn't added

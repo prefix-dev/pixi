@@ -128,7 +128,7 @@ cmd = "pytest --inline-snapshot=fix -k '{{ expression }}'"
 [feature.lint.dependencies]
 actionlint = ">=1.7.7,<2"
 basedpyright = ">=1.31.6,<2"
-cargo-deny = ">=0.18.5,<0.19"
+cargo-deny = ">=0.18,<0.18.5" # 0.18.5 breaks license checking for uv crates
 dprint = ">=0.49.1,<0.51"
 go-shfmt = ">=3.12.0,<4"
 lefthook = ">=1.13.6,<2"
