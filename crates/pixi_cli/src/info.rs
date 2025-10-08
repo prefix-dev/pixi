@@ -1,4 +1,4 @@
-use std::{fmt::Display, path::PathBuf};
+use std::{fmt::Display, io::Write, path::PathBuf};
 
 use chrono::{DateTime, Local};
 use clap::Parser;
@@ -491,9 +491,27 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     if args.json {
-        println!("{}", serde_json::to_string_pretty(&info).into_diagnostic()?);
+        writeln!(
+            std::io::stdout(),
+            "{}",
+            serde_json::to_string_pretty(&info).into_diagnostic()?
+        )
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::BrokenPipe {
+                std::process::exit(0);
+            }
+            e
+        })
+        .into_diagnostic()?;
     } else {
-        println!("{}", info);
+        writeln!(std::io::stdout(), "{}", info)
+            .map_err(|e| {
+                if e.kind() == std::io::ErrorKind::BrokenPipe {
+                    std::process::exit(0);
+                }
+                e
+            })
+            .into_diagnostic()?;
     }
 
     Ok(())

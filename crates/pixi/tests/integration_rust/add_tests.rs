@@ -83,6 +83,7 @@ async fn add_functionality() {
 
 /// Test adding a package with a specific channel
 #[tokio::test]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn add_with_channel() {
     setup_tracing();
 
