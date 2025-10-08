@@ -16,6 +16,7 @@ use crate::setup_tracing;
 /// before when running `pixi list -e all`, this would have not included numpy
 /// we are now explicitly testing that this works
 #[tokio::test]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn pyproject_optional_dependencies_resolve_recursively() {
     setup_tracing();
 
