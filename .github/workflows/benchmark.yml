@@ -3,12 +3,12 @@ name: CodSpeed
 on:
   push:
     branches:
-      - "feature/codespeed"
+      - "feature/codspeed"
   pull_request:
     types: [opened, synchronize, closed]
     branches:
       - main
-      - "feature/codespeed"
+      - "feature/codspeed"
 
 jobs:
   benchmarks:
