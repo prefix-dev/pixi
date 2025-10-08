@@ -333,120 +333,6 @@ ______________________________________________________________________
 - [Rattler](https://github.com/conda/rattler): Everything conda but built in Rust. Backend of Pixi.
 - [rattler-build](https://rattler.build): A blazing fast build system for conda packages.
 
-# Basic usage of Pixi
-
-Pixi can do alot of things, but it is designed to be simple to use. Let's go through the basic usage of Pixi.
-
-## Managing workspaces
-
-- [`pixi init`](../reference/cli/pixi/init/) - create a new Pixi manifest in the current directory
-- [`pixi add`](../reference/cli/pixi/add/) - add a dependency to your manifest
-- [`pixi remove`](../reference/cli/pixi/remove/) - remove a dependency from your manifest
-- [`pixi update`](../reference/cli/pixi/update/) - update dependencies in your manifest
-- [`pixi upgrade`](../reference/cli/pixi/upgrade/) - upgrade the dependencies in your manifest to the latest versions, even if you pinned them to a specific version
-- [`pixi lock`](../reference/cli/pixi/lock/) - create or update the lockfile for your manifest
-- [`pixi info`](../reference/cli/pixi/info/) - show information about your workspace
-- [`pixi run`](../reference/cli/pixi/run/) - run a task defined in your manifest or any command in the current environment
-- [`pixi shell`](../reference/cli/pixi/shell/) - start a shell in the current environment
-- [`pixi list`](../reference/cli/pixi/list/) - list all dependencies in the current environment
-- [`pixi tree`](../reference/cli/pixi/tree/) - show a tree of dependencies in the current environment
-- [`pixi clean`](../reference/cli/pixi/clean/) - remove the environment from your machine
-
-## Managing global installations
-
-Pixi can manage global installations of tools and environments. It installs the environments in a central location, so you can use them from anywhere.
-
-- [`pixi global install`](../reference/cli/pixi/global/install/) - install a package into it's own environment in the global space.
-- [`pixi global uninstall`](../reference/cli/pixi/global/uninstall/) - uninstall an environment from the global space.
-- [`pixi global add`](../reference/cli/pixi/global/add/) - add a package to an existing globally installed environment.
-- [`pixi global sync`](../reference/cli/pixi/global/sync/) - sync the globally installed environments with the global manifest, describing all the environments you want to install.
-- [`pixi global edit`](../reference/cli/pixi/global/edit/) - edit the global manifest.
-- [`pixi global update`](../reference/cli/pixi/global/update/) - update the global environments
-- [`pixi global list`](../reference/cli/pixi/global/list/) - list all the installed environments
-
-More information: [Global Tools](../global_tools/introduction/)
-
-## Running one-off commands
-
-Pixi can run one-off commands in a specific environment.
-
-- [`pixi exec`](../reference/cli/pixi/exec/) - run a command in a temporary environment.
-- [`pixi exec --spec`](../reference/cli/pixi/exec/#arg---spec) - run a command in a temporary environment, with a specific specification.
-
-For example:
-
-```bash
-> pixi exec python -VV
-Python 3.13.5 | packaged by conda-forge | (main, Jun 16 2025, 08:24:05) [Clang 18.1.8 ]
-> pixi exec --spec "python=3.12" python -VV
-Python 3.12.11 | packaged by conda-forge | (main, Jun  4 2025, 14:38:53) [Clang 18.1.8 ]
-
-```
-
-## Multiple environments
-
-Pixi workspaces allow you to manage multiple environments. An environment is build out of one or multiple features.
-
-- [`pixi add --feature`](../reference/cli/pixi/add/#arg---feature) - add a package to a feature
-- [`pixi task add --feature`](../reference/cli/pixi/task/add/#arg---feature) - add a task to a specific feature
-- [`pixi workspace environment add`](../reference/cli/pixi/workspace/environment/add/) - add an environment to the workspace
-- [`pixi run --environment`](../reference/cli/pixi/run/#arg---environment) - run a command in a specific environment
-- [`pixi shell --environment`](../reference/cli/pixi/shell/#arg---environment) - activate a specific environment
-- [`pixi list --environment`](../reference/cli/pixi/list/#arg---environment) - list the dependencies in a specific environment
-
-More information: [Multiple environments](../workspace/multi_environment/)
-
-## Tasks
-
-Pixi can run cross-platform tasks using it's built-in task runner. This can be a predefined task or any normal executable.
-
-- [`pixi run`](../reference/cli/pixi/run/) - Run a task or command
-- [`pixi task add`](../reference/cli/pixi/task/add/) - Add a new task to the manifest
-
-Tasks can have other tasks as dependencies. Here is an example of a more complex task usecase pixi.toml
-
-```toml
-[tasks]
-build = "make build"
-# using the toml table view
-[tasks.test]
-cmd = "pytest"
-depends-on = ["build"]
-
-```
-
-More information: [Tasks](../workspace/advanced_tasks/)
-
-## Multi platform support
-
-Pixi supports multiple platforms out of the box. You can specify which platforms your workspace supports and Pixi will ensure that the dependencies are compatible with those platforms.
-
-- [`pixi add --platform`](../reference/cli/pixi/add/#arg---platform) - add a package only to a specific platform
-- [`pixi workspace platform add`](../reference/cli/pixi/workspace/platform/add/) - add a platform that you want to support to the workspace
-
-More information: [Multi platform support](../workspace/multi_platform_configuration/)
-
-## Utilities
-
-Pixi comes with a set of utilities to help you debug or manage your setup.
-
-- [`pixi info`](../reference/cli/pixi/info/) - Show information about the current workspace, and the global setup.
-- [`pixi config`](../reference/cli/pixi/config/) - Show or edit the Pixi configuration.
-- [`pixi tree`](../reference/cli/pixi/tree/) - Show a tree of dependencies in the current environment.
-- [`pixi list`](../reference/cli/pixi/list/) - List all dependencies in the current environment.
-- [`pixi clean`](../reference/cli/pixi/clean/) - Remove the workspace environments from your machine.
-- `pixi help` - Show help for Pixi commands.
-- `pixi help <subcommand>` - Show help for a specific Pixi command.
-- [`pixi auth`](../reference/cli/pixi/auth/) - Manage authentication for conda channels.
-- [`pixi search`](../reference/cli/pixi/search/) - Search for packages in the configured channels.
-- [`pixi completion`](../reference/cli/pixi/completion/) - Generate shell completion scripts for Pixi commands.
-
-## Going further
-
-There is still much more that Pixi has to offer. Check out the topics on the sidebar on the left to learn more.
-
-And don't forget to [join our Discord](https://discord.gg/kKV8ZxyzY4) to join our community of Pixi enthusiasts!
-
 To install `pixi` you can run the following command in your terminal:
 
 ```bash
@@ -681,280 +567,321 @@ Before un-installation you might want to delete any previous files pixi has inst
 1. Remove the pixi binary from your `PATH`:
    - For Linux and macOS, remove `~/.pixi/bin` from your `PATH` in your shell configuration file (e.g., `~/.bashrc`, `~/.zshrc`).
    - For Windows, remove `%UserProfile%\.pixi\bin` from your `PATH` environment variable.
-# Tutorials documentation
 
-# Global Tools
+# Basic usage of Pixi
 
-Pixi global demo
+Pixi can do alot of things, but it is designed to be simple to use. Let's go through the basic usage of Pixi.
 
-With `pixi global`, users can manage globally installed tools in a way that makes them available from any directory. This means that the Pixi environment will be placed in a global location, and the tools will be exposed to the system `PATH`, allowing you to run them from the command line. Some packages, especially those with graphical user interfaces, will also add start menu entries.
+## Managing workspaces
 
-## Basic Usage
+- [`pixi init`](../reference/cli/pixi/init/) - create a new Pixi manifest in the current directory
+- [`pixi add`](../reference/cli/pixi/add/) - add a dependency to your manifest
+- [`pixi remove`](../reference/cli/pixi/remove/) - remove a dependency from your manifest
+- [`pixi update`](../reference/cli/pixi/update/) - update dependencies in your manifest
+- [`pixi upgrade`](../reference/cli/pixi/upgrade/) - upgrade the dependencies in your manifest to the latest versions, even if you pinned them to a specific version
+- [`pixi lock`](../reference/cli/pixi/lock/) - create or update the lockfile for your manifest
+- [`pixi info`](../reference/cli/pixi/info/) - show information about your workspace
+- [`pixi run`](../reference/cli/pixi/run/) - run a task defined in your manifest or any command in the current environment
+- [`pixi shell`](../reference/cli/pixi/shell/) - start a shell in the current environment
+- [`pixi list`](../reference/cli/pixi/list/) - list all dependencies in the current environment
+- [`pixi tree`](../reference/cli/pixi/tree/) - show a tree of dependencies in the current environment
+- [`pixi clean`](../reference/cli/pixi/clean/) - remove the environment from your machine
 
-Running the following command installs [`rattler-build`](https://prefix-dev.github.io/rattler-build/latest/) on your system.
+## Managing global installations
+
+Pixi can manage global installations of tools and environments. It installs the environments in a central location, so you can use them from anywhere.
+
+- [`pixi global install`](../reference/cli/pixi/global/install/) - install a package into it's own environment in the global space.
+- [`pixi global uninstall`](../reference/cli/pixi/global/uninstall/) - uninstall an environment from the global space.
+- [`pixi global add`](../reference/cli/pixi/global/add/) - add a package to an existing globally installed environment.
+- [`pixi global sync`](../reference/cli/pixi/global/sync/) - sync the globally installed environments with the global manifest, describing all the environments you want to install.
+- [`pixi global edit`](../reference/cli/pixi/global/edit/) - edit the global manifest.
+- [`pixi global update`](../reference/cli/pixi/global/update/) - update the global environments
+- [`pixi global list`](../reference/cli/pixi/global/list/) - list all the installed environments
+
+More information: [Global Tools](../global_tools/introduction/)
+
+## Running one-off commands
+
+Pixi can run one-off commands in a specific environment.
+
+- [`pixi exec`](../reference/cli/pixi/exec/) - run a command in a temporary environment.
+- [`pixi exec --spec`](../reference/cli/pixi/exec/#arg---spec) - run a command in a temporary environment, with a specific specification.
+
+For example:
 
 ```bash
-pixi global install rattler-build
+> pixi exec python -VV
+Python 3.13.5 | packaged by conda-forge | (main, Jun 16 2025, 08:24:05) [Clang 18.1.8 ]
+> pixi exec --spec "python=3.12" python -VV
+Python 3.12.11 | packaged by conda-forge | (main, Jun  4 2025, 14:38:53) [Clang 18.1.8 ]
 
 ```
 
-What's great about `pixi global` is that, by default, it isolates each package in its own environment, exposing only the necessary entry points. This means you don't have to worry about removing a package and accidentally breaking seemingly unrelated packages. This behavior is quite similar to that of [`pipx`](https://pipx.pypa.io/latest/installation/).
+## Multiple environments
 
-However, there are times when you may want multiple dependencies in the same environment. For instance, while `ipython` is really useful on its own, it becomes much more useful when `numpy` and `matplotlib` are available when using it.
+Pixi workspaces allow you to manage multiple environments. An environment is build out of one or multiple features.
 
-Let's execute the following command:
+- [`pixi add --feature`](../reference/cli/pixi/add/#arg---feature) - add a package to a feature
+- [`pixi task add --feature`](../reference/cli/pixi/task/add/#arg---feature) - add a task to a specific feature
+- [`pixi workspace environment add`](../reference/cli/pixi/workspace/environment/add/) - add an environment to the workspace
+- [`pixi run --environment`](../reference/cli/pixi/run/#arg---environment) - run a command in a specific environment
+- [`pixi shell --environment`](../reference/cli/pixi/shell/#arg---environment) - activate a specific environment
+- [`pixi list --environment`](../reference/cli/pixi/list/#arg---environment) - list the dependencies in a specific environment
 
-```bash
-pixi global install ipython --with numpy --with matplotlib
+More information: [Multiple environments](../workspace/multi_environment/)
+
+## Tasks
+
+Pixi can run cross-platform tasks using it's built-in task runner. This can be a predefined task or any normal executable.
+
+- [`pixi run`](../reference/cli/pixi/run/) - Run a task or command
+- [`pixi task add`](../reference/cli/pixi/task/add/) - Add a new task to the manifest
+
+Tasks can have other tasks as dependencies. Here is an example of a more complex task usecase pixi.toml
+
+```toml
+[tasks]
+build = "make build"
+# using the toml table view
+[tasks.test]
+cmd = "pytest"
+depends-on = ["build"]
 
 ```
 
-`numpy` exposes executables, but since it's added via `--with` it's executables are not being exposed.
+More information: [Tasks](../workspace/advanced_tasks/)
 
-Importing `numpy` and `matplotlib` now works as expected.
+## Multi platform support
 
-```bash
-ipython -c 'import numpy; import matplotlib'
+Pixi supports multiple platforms out of the box. You can specify which platforms your workspace supports and Pixi will ensure that the dependencies are compatible with those platforms.
 
-```
+- [`pixi add --platform`](../reference/cli/pixi/add/#arg---platform) - add a package only to a specific platform
+- [`pixi workspace platform add`](../reference/cli/pixi/workspace/platform/add/) - add a platform that you want to support to the workspace
 
-At some point, you might want to install multiple versions of the same package on your system. Since they will be all available on the system `PATH`, they need to be exposed under different names.
+More information: [Multi platform support](../workspace/multi_platform_configuration/)
 
-Let's check out the following command:
+## Utilities
 
-```bash
-pixi global install --expose py3=python "python=3.12"
+Pixi comes with a set of utilities to help you debug or manage your setup.
 
-```
+- [`pixi info`](../reference/cli/pixi/info/) - Show information about the current workspace, and the global setup.
+- [`pixi config`](../reference/cli/pixi/config/) - Show or edit the Pixi configuration.
+- [`pixi tree`](../reference/cli/pixi/tree/) - Show a tree of dependencies in the current environment.
+- [`pixi list`](../reference/cli/pixi/list/) - List all dependencies in the current environment.
+- [`pixi clean`](../reference/cli/pixi/clean/) - Remove the workspace environments from your machine.
+- `pixi help` - Show help for Pixi commands.
+- `pixi help <subcommand>` - Show help for a specific Pixi command.
+- [`pixi auth`](../reference/cli/pixi/auth/) - Manage authentication for conda channels.
+- [`pixi search`](../reference/cli/pixi/search/) - Search for packages in the configured channels.
+- [`pixi completion`](../reference/cli/pixi/completion/) - Generate shell completion scripts for Pixi commands.
 
-By specifying `--expose` we specified that we want to expose the executable `python` under the name `py3`. The package `python` has more executables, but since we specified `--exposed` they are not auto-exposed.
+## Going further
 
-You can run `py3` to start the python interpreter.
+There is still much more that Pixi has to offer. Check out the topics on the sidebar on the left to learn more.
+
+And don't forget to [join our Discord](https://discord.gg/kKV8ZxyzY4) to join our community of Pixi enthusiasts!
+
+# Making a Pixi workspace
+
+Pixi's biggest strength is its ability to create reproducible, powerful, and flexible workspaces. A workspace lives in a directory on your system, and is a collection of Pixi environments that can be used to develop one or many projects in that directory. Let's go over the common steps to create a simple Pixi workspace.
+
+## Creating a Pixi workspace
+
+To create a new Pixi workspace, you can use the `pixi init` command:
 
 ```shell
-py3 -c "print('Hello World')"
+pixi init my_workspace
 
 ```
 
-## Install Dependencies From Source
+This command creates a new directory called `my_workspace` with the following structure:
 
-Pixi global also allows you to install [Pixi packages](../../build/getting_started/). Let's assume there's a C++ package we'd like to install globally from source. First, it needs to have a package manifest:
+```shell
+my_workspace
+├── .gitattributes
+├── .gitignore
+└── pixi.toml
+
+```
+
+The `pixi.toml` file is the manifest of your Pixi workspace. It contains all the information about your workspace, such as its channels, platforms, dependencies, tasks, and more.
+
+The file created by `pixi init` is a minimal manifest that looks like this:
 
 pixi.toml
 
 ```toml
-[package]
-name = "cpp_math"
+[workspace]
+authors = ["Jane Doe <jane.doe@example.com>"]
+channels = ["conda-forge"]
+name = "my_workspace"
+platforms = ["osx-arm64"]
 version = "0.1.0"
-[package.build]
-backend = { name = "pixi-build-cmake", version = "*" }
+[tasks]
+[dependencies]
 
 ```
 
-If the source is on your machine, you can install it like this:
+Do you want autocompletion of the manifest file?
+
+As `pixi.toml` has a JSON schema, it is possible to use IDE’s like VSCode to edit the field with autocompletion. Install the [Even Better TOML VSCode extension](https://marketplace.visualstudio.com/items?itemName=tamasfe.even-better-toml) to get the best experience. Or use the integrated schema support in PyCharm.
+
+## Managing dependencies
+
+After creating the workspace, you can start adding dependencies. Pixi uses the `pixi add` command to add dependencies to a workspace. This command will, by default, add the [**conda**](https://prefix.dev/blog/what-is-a-conda-package) dependency to the `pixi.toml`, solve the dependencies, write the [lock file](../workspace/lockfile/), and install the package in the environment. For example, let's add `numpy` and `pytest` to the workspace.
 
 ```shell
-pixi global install --path /path/to/cpp_math
+pixi add numpy pytest
 
 ```
 
-If the source resides in a git repository, you can access it like this:
+This results in these lines being added:
+
+pixi.toml
+
+```toml
+[dependencies]
+numpy = ">=2.2.6,<3"
+pytest = ">=8.3.5,<9"
+
+```
+
+You can also specify the version of the dependency you want to add.
 
 ```shell
-pixi global install --git https://github.com/ORG_NAME/cpp_math.git
+pixi add numpy==2.2.6 pytest==8.3.5
 
 ```
 
-One has to take care if the source contains multiple outputs, see for example this recipe:
+### PyPI dependencies
 
-recipe.yaml
+Pixi normally uses `conda` packages for dependencies, but you can also add dependencies from [PyPI](https://pypi.org). Pixi will make sure it doesn't try to install the same package from both sources, and avoid conflicts between them.
+
+If you want to add them to your workspace you can do that with the `--pypi` flag:
+
+```shell
+pixi add --pypi httpx
+
+```
+
+This will add the `httpx` package from PyPI to the workspace:
+
+pixi.toml
+
+```toml
+[pypi-dependencies]
+httpx = ">=0.28.1,<0.29"
+
+```
+
+To learn more about the differences between `conda` and PyPI, see [our Conda & PyPI concept documentation](../concepts/conda_pypi/).
+
+## Lock file
+
+Pixi will always create a lock file when the dependencies are solved. This file will contain all the exact versions of the workspace's dependencies (and their dependencies). This results in a reproducible environment, which you can share with others, and use for testing and deployment.
+
+The lockfile is called `pixi.lock` and it is created in the root of the workspace. To learn more about lock files, see [our detailed lock file documentation](../workspace/lockfile/).
+
+pixi.lock
 
 ```yaml
-recipe:
-  name: multi-output
-  version: "0.1.0"
-outputs:
-  - package:
-      name: foobar
-    build:
-      script:
-        - if: win
-          then:
-            - mkdir -p %PREFIX%\bin
-            - echo @echo off > %PREFIX%\bin\foobar.bat
-            - echo echo Hello from foobar >> %PREFIX%\bin\foobar.bat
-          else:
-            - mkdir -p $PREFIX/bin
-            - echo "#!/usr/bin/env bash" > $PREFIX/bin/foobar
-            - echo "echo Hello from foobar" >> $PREFIX/bin/foobar
-            - chmod +x $PREFIX/bin/foobar
-  - package:
-      name: bizbar
-    build:
-      script:
-        - if: win
-          then:
-            - mkdir -p %PREFIX%\bin
-            - echo @echo off > %PREFIX%\bin\bizbar.bat
-            - echo echo Hello from bizbar >> %PREFIX%\bin\bizbar.bat
-          else:
-            - mkdir -p $PREFIX/bin
-            - echo "#!/usr/bin/env bash" > $PREFIX/bin/bizbar
-            - echo "echo Hello from bizbar" >> $PREFIX/bin/bizbar
-            - chmod +x $PREFIX/bin/bizbar
+version: 6
+environments:
+  default:
+    channels:
+    - url: https://prefix.dev/conda-forge/
+    indexes:
+    - https://pypi.org/simple
+    packages:
+      osx-arm64:
+      - conda: https://prefix.dev/conda-forge/osx-arm64/bzip2-1.0.8-h99b78c6_7.conda
+      - pypi: ...
+packages:
+- conda: https://prefix.dev/conda-forge/osx-arm64/bzip2-1.0.8-h99b78c6_7.conda
+  sha256: adfa71f158cbd872a36394c56c3568e6034aa55c623634b37a4836bd036e6b91
+  md5: fc6948412dbbbe9a4c9ddbbcfe0a79ab
+  depends:
+  - __osx >=11.0
+  license: bzip2-1.0.6
+  license_family: BSD
+  size: 122909
+  timestamp: 1720974522888
+- pypi: ...
 
 ```
 
-In this case, we have to specify which output we want to install:
+## Managing tasks
+
+Pixi has a built-in cross-platform task runner which allows you to define tasks in the manifest. Think of tasks as commands (or chains of commands) which you may want to repeat many times over the course of developing a project (for example, running the tests).
+
+This is a great way to share tasks with others and to ensure that the same tasks are run in the same environment on different machines. The tasks are defined in the `pixi.toml` file under the `[tasks]` section.
+
+You can add one to your workspace by running the `pixi task add` command.
 
 ```shell
-pixi global install --path /path/to/package foobar
+pixi task add hello "echo Hello, World!"
 
 ```
 
-## Shell Completions
+This will add the following lines to the `pixi.toml` file:
 
-When you work in a terminal, you are using a shell and shells can process completions of command line tools. The process works like this: you type "git -" in your terminal and press `<TAB>`. Then, your shell will present you all the flags `git` offers. However, that only works if you have the completions installed for the tool in question. If the tool you installed via `pixi global` contains completions they will be automatically installed. At the moment, only Linux and macOS are supported.
-
-First install a tool with `pixi global`:
-
-```shell
-pixi global install git
-
-```
-
-The completions can be found under [`$PIXI_HOME`](../../reference/environment_variables/)`/completions`.
-
-You can then load the completions in the startup script of your shell:
-
-~/.bashrc
-
-```bash
-# bash, default on most Linux distributions
-for file in ~/.pixi/completions/bash/*; do
-    [ -e "$file" ] && source "$file"
-done
-
-```
-
-~/.zshrc
-
-```zsh
-# zsh, default on macOS
-fpath+=(~/.pixi/completions/zsh)
-autoload -Uz compinit
-compinit
-
-```
-
-~/.config/fish/config.fish
-
-```fish
-# fish
-for file in ~/.pixi/completions/fish/*
-    source $file
-end
-
-```
-
-Note
-
-Completions of packages are installed as long as their binaries are exposed under the same name: e.g. `exposed = { git = "git" }`.
-
-## Adding a Series of Tools at Once
-
-Without specifying an environment, you can add multiple tools at once:
-
-```shell
-pixi global install pixi-pack rattler-build
-
-```
-
-This command generates the following entry in the manifest:
+pixi.toml
 
 ```toml
-[envs.pixi-pack]
-channels = ["conda-forge"]
-dependencies= { pixi-pack = "*" }
-exposed = { pixi-pack = "pixi-pack" }
-[envs.rattler-build]
-channels = ["conda-forge"]
-dependencies = { rattler-build = "*" }
-exposed = { rattler-build = "rattler-build" }
+[tasks]
+hello = "echo Hello, World!"
 
 ```
 
-Creating two separate non-interfering environments, while exposing only the minimum required binaries.
-
-## Creating a Data Science Sandbox Environment
-
-You can create an environment with multiple tools using the following command:
+You can then run the task using the `pixi run` command:
 
 ```shell
-pixi global install --environment data-science --expose jupyter --expose ipython jupyter numpy pandas matplotlib ipython
+pixi run hello
 
 ```
 
-This command generates the following entry in the manifest:
+This will execute the command `echo Hello, World!` in the workspace's default environment.
+
+Do you want to use more powerful features?
+
+Tasks can be much more powerful, for example:
 
 ```toml
-[envs.data-science]
-channels = ["conda-forge"]
-dependencies = { jupyter = "*", ipython = "*" }
-exposed = { jupyter = "jupyter", ipython = "ipython" }
+[tasks.name-of-powerful-task]
+cmd = "echo This task can do much more! Like have {{ arguments }} and {{ "minijinja" | capitalize }} templates."
+# List of tasks that must be run before this one.
+depends-on = ["other-task"]
+# Working directory relative to the root of the workspace
+cwd = "current/working/directory"
+# List of arguments for the task
+args = [{ arg = "arguments", default = "default arguments" }]
+# Run the command if the input files have changed
+input = ["src"]
+# Run the command if the output files are missing
+output = ["output.txt"]
+# Set environment variables for the task
+env = { MY_ENV_VAR = "value" }
 
 ```
 
-In this setup, both `jupyter` and `ipython` are exposed from the `data-science` environment, allowing you to run:
+More information about tasks can be found in the [Tasks](../workspace/advanced_tasks/) section of the documentation.
+
+## Environments
+
+Pixi always creates an environment for your workspace (the "default" environment), which contains your `dependencies` and in which your tasks are run. You can also include [multiple environments](../workspace/multi_environment/) in one workspace. These environments are [located](../reference/pixi_configuration/#detached-environments "Find out how to move this location if required") in the `.pixi/envs` directory in the root of your workspace.
+
+Using these environments is as simple as running the `pixi run` or `pixi shell` command. `pixi run` will execute the remaining input as a command (or a task if the input matches the name of a defined task) in the environment, while `pixi shell` will spawn a new shell session in the environment. Both commands "activate" the environment — learn more at [our environment activation documentation](../workspace/environment/#activation).
 
 ```shell
-> ipython
-# Or
-> jupyter lab
+pixi run python -VV
+# or:
+pixi shell
+python -VV
+exit
 
 ```
-
-These commands will be available globally, making it easy to access your preferred tools without switching environments.
-
-## Install Packages For a Different Platform
-
-You can install packages for a different platform using the `--platform` flag. This is useful when you want to install packages for a different platform, such as `osx-64` packages on `osx-arm64`. For example, running this on `osx-arm64`:
-
-```shell
-pixi global install --platform osx-64 python
-
-```
-
-will create the following entry in the manifest:
-
-```toml
-[envs.python]
-channels = ["conda-forge"]
-platforms = ["osx-64"]
-dependencies = { python = "*" }
-# ...
-
-```
-
-## Packaging
-
-### Opt Out of `CONDA_PREFIX`
-
-Pixi activates the target environment before running a globally exposed executable, which usually sets `CONDA_PREFIX` to that environment's path. Some tools inspect `CONDA_PREFIX` and expect it to point to a standard Conda installation, which can lead to confusing behavior when the tool runs from a Pixi-managed prefix.
-
-Package authors can opt out of exporting `CONDA_PREFIX` by shipping a marker file at `etc/pixi/<executable>/global-ignore-conda-prefix` inside the environment (for example `etc/pixi/borg/global-ignore-conda-prefix` for an executable named `borg`). When this file is present for the exposed executable, Pixi removes `CONDA_PREFIX` from the environment variables, letting the tool behave as if no Conda environment is active.
-
-Here's a minimal `recipe.yaml` snippet that adds the marker while building the package with executable `borg`:
-
-```yaml
-build:
-  script:
-    - mkdir -p $PREFIX/etc/pixi/borg
-    - touch $PREFIX/etc/pixi/borg/global-ignore-conda-prefix
-
-```
-
-After installing such a package with `pixi global install`, the exposed executable no longer sees `CONDA_PREFIX` and can fall back to its default behavior.
+# Tutorials documentation
 
 We support the use of the `pyproject.toml` as our manifest file in pixi. This allows the user to keep one file with all configuration. The `pyproject.toml` file is a standard for Python projects. We don't advise to use the `pyproject.toml` file for anything else than python projects, the `pixi.toml` is better suited for other types of projects.
 
@@ -1249,7 +1176,7 @@ Given a source tree:
 
 ```
 
-Concretly what this looks like in the `pyproject.toml` for `main_project`:
+Concretely what this looks like in the `pyproject.toml` for `main_project`:
 
 ```toml
 [tool.pixi.pypi-dependencies]
@@ -2186,123 +2113,6 @@ Thanks for reading! Happy Coding 🚀
 
 Any questions? Feel free to reach out or share this tutorial on [X](https://twitter.com/prefix_dev), [join our Discord](https://discord.gg/kKV8ZxyzY4), send us an [e-mail](mailto:hi@prefix.dev) or follow our [GitHub](https://github.com/prefix-dev).
 
-Welcome to the guide designed to ease your transition from `conda` or `mamba` to `pixi`. This document compares key commands and concepts between these tools, highlighting `pixi`'s unique approach to managing environments and packages. With `pixi`, you'll experience a workspace-based workflow, enhancing your development process, and allowing for easy sharing of your work.
-
-## Why Pixi?
-
-`Pixi` builds upon the foundation of the conda ecosystem, introducing a workspace-centric approach rather than focusing solely on environments. This shift towards workspaces offers a more organized and efficient way to manage dependencies and run code, tailored to modern development practices.
-
-## Key Differences at a Glance
-
-| Task                        | Conda/Mamba                                       | Pixi                                                                       |
-| --------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------- |
-| Installation                | Requires an installer                             | Download and add to path (See [installation](../../))                      |
-| Creating an Environment     | `conda create -n myenv -c conda-forge python=3.8` | `pixi init myenv` followed by `pixi add python=3.8`                        |
-| Activating an Environment   | `conda activate myenv`                            | `pixi shell` within the workspace directory                                |
-| Deactivating an Environment | `conda deactivate`                                | `exit` from the `pixi shell`                                               |
-| Running a Task              | `conda run -n myenv python my_program.py`         | `pixi run python my_program.py` (See [run](../../reference/cli/pixi/run/)) |
-| Installing a Package        | `conda install numpy`                             | `pixi add numpy`                                                           |
-| Uninstalling a Package      | `conda remove numpy`                              | `pixi remove numpy`                                                        |
-
-No `base` environment
-
-Conda has a base environment, which is the default environment when you start a new shell. **Pixi does not have a base environment**. And requires you to install the tools you need in the workspace or globally. Using `pixi global install bat` will install `bat` in a global environment, which is not the same as the `base` environment in conda.
-
-Activating Pixi environment in the current shell
-
-For some advanced use-cases, you can activate the environment in the current shell. This uses the `pixi shell-hook` which prints the activation script, which can be used to activate the environment in the current shell without `pixi` itself.
-
-```shell
-~/myenv > eval "$(pixi shell-hook)"
-
-```
-
-## Environment vs Workspace
-
-`Conda` and `mamba` focus on managing environments, while `pixi` emphasizes workspaces. In `pixi`, a workspace is a folder containing a [manifest](../../reference/pixi_manifest/)(`pixi.toml`/`pyproject.toml`) file that describes the workspace, a `pixi.lock` lock-file that describes the exact dependencies, and a `.pixi` folder that contains the environment.
-
-This workspace-centric approach allows for easy sharing and collaboration, as the workspace folder contains all the necessary information to recreate the environment. It manages more than one environment for more than one platform in a single workspace, and allows for easy switching between them. (See [multiple environments](../../workspace/multi_environment/))
-
-## Global environments
-
-`conda` installs all environments in one global location. When this is important to you for filesystem reasons, you can use the [detached-environments](../../reference/pixi_configuration/#detached-environments) feature of pixi.
-
-```shell
-pixi config set detached-environments true
-# or a specific location
-pixi config set detached-environments /path/to/envs
-
-```
-
-This doesn't allow you to activate the environments using `pixi shell -n` but it will make the installation of the environments go to the same folder.
-
-`pixi` does have the `pixi global` command to install tools on your machine. (See [global](../../reference/cli/pixi/global/)) This is not a replacement for `conda` but works the same as [`pipx`](https://pipx.pypa.io/stable/) and [`condax`](https://mariusvniekerk.github.io/condax/). It creates a single isolated environment for the given requirement and installs the binaries into the global path.
-
-```shell
-pixi global install bat
-bat pixi.toml
-
-```
-
-Never install `pip` with `pixi global`
-
-Installations with `pixi global` get their own isolated environment. Installing `pip` with `pixi global` will create a new isolated environment with its own `pip` binary. Using that `pip` binary will install packages in the `pip` environment, making it unreachable form anywhere as you can't activate it.
-
-## Automated switching
-
-You can import `environment.yml` files into a Pixi workspace — see our [import tutorial](../../tutorials/import/).
-
-Exporting your environment
-
-If you are working with Conda users or systems, you can [export your environment to a `environment.yml`](../../reference/cli/pixi/workspace/export/) file to share them.
-
-```shell
-pixi workspace export conda-environment
-
-```
-
-Additionally you can export a [conda explicit specification](../../reference/cli/pixi/workspace/export/).
-
-## Troubleshooting
-
-Encountering issues? Here are solutions to some common problems when being used to the `conda` workflow:
-
-- Dependency `is excluded because due to strict channel priority not using this option from: 'https://conda.anaconda.org/conda-forge/'` This error occurs when the package is in multiple channels. `pixi` uses a strict channel priority. See [channel priority](../../advanced/channel_logic/) for more information.
-- `pixi global install pip`, pip doesn't work. `pip` is installed in the global isolated environment. Use `pixi add pip` in a workspace to install `pip` in the workspace environment and use that workspace.
-- `pixi global install <Any Library>` -> `import <Any Library>` -> `ModuleNotFoundError: No module named '<Any Library>'` The library is installed in the global isolated environment. Use `pixi add <Any Library>` in a workspace to install the library in the workspace environment and use that workspace.
-
-Welcome to the guide designed to ease your transition from `poetry` to `pixi`. This document compares key commands and concepts between these tools, highlighting `pixi`'s unique approach to managing environments and packages. With `pixi`, you'll experience a workspace-based workflow similar to `poetry` while including the `conda` ecosystem and allowing for easy sharing of your work.
-
-## Why Pixi?
-
-Poetry is most-likely the closest tool to Pixi in terms of workspace management, in the python ecosystem. On top of the PyPI ecosystem, `pixi` adds the power of the conda ecosystem, allowing for a more flexible and powerful environment management.
-
-## Quick look at the differences
-
-| Task                       | Poetry                                                  | Pixi                                                                                                                                                    |
-| -------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Creating an Environment    | `poetry new myenv`                                      | `pixi init myenv`                                                                                                                                       |
-| Running a Task             | `poetry run which python`                               | `pixi run which python` `pixi` uses a built-in cross platform shell for run where poetry uses your shell.                                               |
-| Installing a Package       | `poetry add numpy`                                      | `pixi add numpy` adds the conda variant. `pixi add --pypi numpy` adds the PyPI variant.                                                                 |
-| Uninstalling a Package     | `poetry remove numpy`                                   | `pixi remove numpy` removes the conda variant. `pixi remove --pypi numpy` removes the PyPI variant.                                                     |
-| Building a package         | `poetry build`                                          | We've yet to implement package building and publishing                                                                                                  |
-| Publishing a package       | `poetry publish`                                        | We've yet to implement package building and publishing                                                                                                  |
-| Reading the pyproject.toml | `[tool.poetry]`                                         | `[tool.pixi]`                                                                                                                                           |
-| Defining dependencies      | `[tool.poetry.dependencies]`                            | `[tool.pixi.dependencies]` for conda, `[tool.pixi.pypi-dependencies]` or `[project.dependencies]` for PyPI dependencies                                 |
-| Dependency definition      | - `numpy = "^1.2.3"`- `numpy = "~1.2.3"`- `numpy = "*"` | - `numpy = ">=1.2.3 <2.0.0"`- `numpy = ">=1.2.3 <1.3.0"`- `numpy = "*"`                                                                                 |
-| Lock file                  | `poetry.lock`                                           | `pixi.lock`                                                                                                                                             |
-| Environment directory      | `~/.cache/pypoetry/virtualenvs/myenv`                   | `./.pixi` Defaults to the workspace directory, move this using the [`detached-environments`](../../reference/pixi_configuration/#detached-environments) |
-
-## Support both `poetry` and `pixi` in my workspace
-
-You can allow users to use `poetry` and `pixi` in the same workspace, they will not touch each other's parts of the configuration or system. It's best to duplicate the dependencies, basically making an exact copy of the `tool.poetry.dependencies` into `tool.pixi.pypi-dependencies`. Make sure that `python` is only defined in the `tool.pixi.dependencies` and not in the `tool.pixi.pypi-dependencies`.
-
-Mixing `pixi` and `poetry`
-
-It's possible to use `poetry` in `pixi` environments but this is advised against. Pixi supports PyPI dependencies in a different way than `poetry` does, and mixing them can lead to unexpected behavior. As you can only use one package manager at a time, it's best to stick to one.
-
-If using poetry on top of a Pixi workspace, you'll always need to install the `poetry` environment after the `pixi` environment. And let `pixi` handle the `python` and `poetry` installation.
-
 In this tutorial we will show you how to import existing environments into a Pixi workspace. In case some words used in the tutorial don't make sense to you, you may get value from first reading some of our other tutorials, like [our first workspace walthrough](../../first_workspace/) and [our guide to multi-environment workspaces](../multi_environment/).
 
 ## `pixi import`
@@ -3216,219 +3026,397 @@ In this tutorial, we showed you how to create a Rust project using `pixi`. We al
 ## Show Off Your Work!
 
 Finished with your project? We'd love to see what you've created! Share your work on social media using the hashtag #pixi and tag us @prefix_dev. Let's inspire the community together!
-# Concepts documentation
 
-# The Global Manifest
+Welcome to the guide designed to ease your transition from `conda` or `mamba` to `pixi`. This document compares key commands and concepts between these tools, highlighting `pixi`'s unique approach to managing environments and packages. With `pixi`, you'll experience a workspace-based workflow, enhancing your development process, and allowing for easy sharing of your work.
 
-This global manifest contains the list of environments that are installed globally, their dependencies and exposed binaries. It can be edited, synced, checked in to a version control system, and shared with others.
+## Why Pixi?
 
-Running the commands from the section before results in the following manifest:
+`Pixi` builds upon the foundation of the conda ecosystem, introducing a workspace-centric approach rather than focusing solely on environments. This shift towards workspaces offers a more organized and efficient way to manage dependencies and run code, tailored to modern development practices.
+
+## Key Differences at a Glance
+
+| Task                        | Conda/Mamba                                       | Pixi                                                                       |
+| --------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------- |
+| Installation                | Requires an installer                             | Download and add to path (See [installation](../../))                      |
+| Creating an Environment     | `conda create -n myenv -c conda-forge python=3.8` | `pixi init myenv` followed by `pixi add python=3.8`                        |
+| Activating an Environment   | `conda activate myenv`                            | `pixi shell` within the workspace directory                                |
+| Deactivating an Environment | `conda deactivate`                                | `exit` from the `pixi shell`                                               |
+| Running a Task              | `conda run -n myenv python my_program.py`         | `pixi run python my_program.py` (See [run](../../reference/cli/pixi/run/)) |
+| Installing a Package        | `conda install numpy`                             | `pixi add numpy`                                                           |
+| Uninstalling a Package      | `conda remove numpy`                              | `pixi remove numpy`                                                        |
+
+No `base` environment
+
+Conda has a base environment, which is the default environment when you start a new shell. **Pixi does not have a base environment**. And requires you to install the tools you need in the workspace or globally. Using `pixi global install bat` will install `bat` in a global environment, which is not the same as the `base` environment in conda.
+
+Activating Pixi environment in the current shell
+
+For some advanced use-cases, you can activate the environment in the current shell. This uses the `pixi shell-hook` which prints the activation script, which can be used to activate the environment in the current shell without `pixi` itself.
+
+```shell
+~/myenv > eval "$(pixi shell-hook)"
+
+```
+
+## Environment vs Workspace
+
+`Conda` and `mamba` focus on managing environments, while `pixi` emphasizes workspaces. In `pixi`, a workspace is a folder containing a [manifest](../../reference/pixi_manifest/)(`pixi.toml`/`pyproject.toml`) file that describes the workspace, a `pixi.lock` lock-file that describes the exact dependencies, and a `.pixi` folder that contains the environment.
+
+This workspace-centric approach allows for easy sharing and collaboration, as the workspace folder contains all the necessary information to recreate the environment. It manages more than one environment for more than one platform in a single workspace, and allows for easy switching between them. (See [multiple environments](../../workspace/multi_environment/))
+
+## Global environments
+
+`conda` installs all environments in one global location. When this is important to you for filesystem reasons, you can use the [detached-environments](../../reference/pixi_configuration/#detached-environments) feature of pixi.
+
+```shell
+pixi config set detached-environments true
+# or a specific location
+pixi config set detached-environments /path/to/envs
+
+```
+
+This doesn't allow you to activate the environments using `pixi shell -n` but it will make the installation of the environments go to the same folder.
+
+`pixi` does have the `pixi global` command to install tools on your machine. (See [global](../../reference/cli/pixi/global/)) This is not a replacement for `conda` but works the same as [`pipx`](https://pipx.pypa.io/stable/) and [`condax`](https://mariusvniekerk.github.io/condax/). It creates a single isolated environment for the given requirement and installs the binaries into the global path.
+
+```shell
+pixi global install bat
+bat pixi.toml
+
+```
+
+Never install `pip` with `pixi global`
+
+Installations with `pixi global` get their own isolated environment. Installing `pip` with `pixi global` will create a new isolated environment with its own `pip` binary. Using that `pip` binary will install packages in the `pip` environment, making it unreachable form anywhere as you can't activate it.
+
+## Automated switching
+
+You can import `environment.yml` files into a Pixi workspace — see our [import tutorial](../../tutorials/import/).
+
+Exporting your environment
+
+If you are working with Conda users or systems, you can [export your environment to a `environment.yml`](../../reference/cli/pixi/workspace/export/) file to share them.
+
+```shell
+pixi workspace export conda-environment
+
+```
+
+Additionally you can export a [conda explicit specification](../../reference/cli/pixi/workspace/export/).
+
+## Troubleshooting
+
+Encountering issues? Here are solutions to some common problems when being used to the `conda` workflow:
+
+- Dependency `is excluded because due to strict channel priority not using this option from: 'https://conda.anaconda.org/conda-forge/'` This error occurs when the package is in multiple channels. `pixi` uses a strict channel priority. See [channel priority](../../advanced/channel_logic/) for more information.
+- `pixi global install pip`, pip doesn't work. `pip` is installed in the global isolated environment. Use `pixi add pip` in a workspace to install `pip` in the workspace environment and use that workspace.
+- `pixi global install <Any Library>` -> `import <Any Library>` -> `ModuleNotFoundError: No module named '<Any Library>'` The library is installed in the global isolated environment. Use `pixi add <Any Library>` in a workspace to install the library in the workspace environment and use that workspace.
+
+Welcome to the guide designed to ease your transition from `poetry` to `pixi`. This document compares key commands and concepts between these tools, highlighting `pixi`'s unique approach to managing environments and packages. With `pixi`, you'll experience a workspace-based workflow similar to `poetry` while including the `conda` ecosystem and allowing for easy sharing of your work.
+
+## Why Pixi?
+
+Poetry is most-likely the closest tool to Pixi in terms of workspace management, in the python ecosystem. On top of the PyPI ecosystem, `pixi` adds the power of the conda ecosystem, allowing for a more flexible and powerful environment management.
+
+## Quick look at the differences
+
+| Task                       | Poetry                                                  | Pixi                                                                                                                                                    |
+| -------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Creating an Environment    | `poetry new myenv`                                      | `pixi init myenv`                                                                                                                                       |
+| Running a Task             | `poetry run which python`                               | `pixi run which python` `pixi` uses a built-in cross platform shell for run where poetry uses your shell.                                               |
+| Installing a Package       | `poetry add numpy`                                      | `pixi add numpy` adds the conda variant. `pixi add --pypi numpy` adds the PyPI variant.                                                                 |
+| Uninstalling a Package     | `poetry remove numpy`                                   | `pixi remove numpy` removes the conda variant. `pixi remove --pypi numpy` removes the PyPI variant.                                                     |
+| Building a package         | `poetry build`                                          | We've yet to implement package building and publishing                                                                                                  |
+| Publishing a package       | `poetry publish`                                        | We've yet to implement package building and publishing                                                                                                  |
+| Reading the pyproject.toml | `[tool.poetry]`                                         | `[tool.pixi]`                                                                                                                                           |
+| Defining dependencies      | `[tool.poetry.dependencies]`                            | `[tool.pixi.dependencies]` for conda, `[tool.pixi.pypi-dependencies]` or `[project.dependencies]` for PyPI dependencies                                 |
+| Dependency definition      | - `numpy = "^1.2.3"`- `numpy = "~1.2.3"`- `numpy = "*"` | - `numpy = ">=1.2.3 <2.0.0"`- `numpy = ">=1.2.3 <1.3.0"`- `numpy = "*"`                                                                                 |
+| Lock file                  | `poetry.lock`                                           | `pixi.lock`                                                                                                                                             |
+| Environment directory      | `~/.cache/pypoetry/virtualenvs/myenv`                   | `./.pixi` Defaults to the workspace directory, move this using the [`detached-environments`](../../reference/pixi_configuration/#detached-environments) |
+
+## Support both `poetry` and `pixi` in my workspace
+
+You can allow users to use `poetry` and `pixi` in the same workspace, they will not touch each other's parts of the configuration or system. It's best to duplicate the dependencies, basically making an exact copy of the `tool.poetry.dependencies` into `tool.pixi.pypi-dependencies`. Make sure that `python` is only defined in the `tool.pixi.dependencies` and not in the `tool.pixi.pypi-dependencies`.
+
+Mixing `pixi` and `poetry`
+
+It's possible to use `poetry` in `pixi` environments but this is advised against. Pixi supports PyPI dependencies in a different way than `poetry` does, and mixing them can lead to unexpected behavior. As you can only use one package manager at a time, it's best to stick to one.
+
+If using poetry on top of a Pixi workspace, you'll always need to install the `poetry` environment after the `pixi` environment. And let `pixi` handle the `python` and `poetry` installation.
+
+# Global Tools
+
+Pixi global demo
+
+With `pixi global`, users can manage globally installed tools in a way that makes them available from any directory. This means that the Pixi environment will be placed in a global location, and the tools will be exposed to the system `PATH`, allowing you to run them from the command line. Some packages, especially those with graphical user interfaces, will also add start menu entries.
+
+## Basic Usage
+
+Running the following command installs [`rattler-build`](https://prefix-dev.github.io/rattler-build/latest/) on your system.
+
+```bash
+pixi global install rattler-build
+
+```
+
+What's great about `pixi global` is that, by default, it isolates each package in its own environment, exposing only the necessary entry points. This means you don't have to worry about removing a package and accidentally breaking seemingly unrelated packages. This behavior is quite similar to that of [`pipx`](https://pipx.pypa.io/latest/installation/).
+
+However, there are times when you may want multiple dependencies in the same environment. For instance, while `ipython` is really useful on its own, it becomes much more useful when `numpy` and `matplotlib` are available when using it.
+
+Let's execute the following command:
+
+```bash
+pixi global install ipython --with numpy --with matplotlib
+
+```
+
+`numpy` exposes executables, but since it's added via `--with` it's executables are not being exposed.
+
+Importing `numpy` and `matplotlib` now works as expected.
+
+```bash
+ipython -c 'import numpy; import matplotlib'
+
+```
+
+At some point, you might want to install multiple versions of the same package on your system. Since they will be all available on the system `PATH`, they need to be exposed under different names.
+
+Let's check out the following command:
+
+```bash
+pixi global install --expose py3=python "python=3.12"
+
+```
+
+By specifying `--expose` we specified that we want to expose the executable `python` under the name `py3`. The package `python` has more executables, but since we specified `--exposed` they are not auto-exposed.
+
+You can run `py3` to start the python interpreter.
+
+```shell
+py3 -c "print('Hello World')"
+
+```
+
+## Install Dependencies From Source
+
+Pixi global also allows you to install [Pixi packages](../../build/getting_started/). Let's assume there's a C++ package we'd like to install globally from source. First, it needs to have a package manifest:
+
+pixi.toml
 
 ```toml
-version = 1
+[package]
+name = "cpp_math"
+version = "0.1.0"
+[package.build]
+backend = { name = "pixi-build-cmake", version = "*" }
+
+```
+
+If the source is on your machine, you can install it like this:
+
+```shell
+pixi global install --path /path/to/cpp_math
+
+```
+
+If the source resides in a git repository, you can access it like this:
+
+```shell
+pixi global install --git https://github.com/ORG_NAME/cpp_math.git
+
+```
+
+One has to take care if the source contains multiple outputs, see for example this recipe:
+
+recipe.yaml
+
+```yaml
+recipe:
+  name: multi-output
+  version: "0.1.0"
+outputs:
+  - package:
+      name: foobar
+    build:
+      script:
+        - if: win
+          then:
+            - mkdir -p %PREFIX%\bin
+            - echo @echo off > %PREFIX%\bin\foobar.bat
+            - echo echo Hello from foobar >> %PREFIX%\bin\foobar.bat
+          else:
+            - mkdir -p $PREFIX/bin
+            - echo "#!/usr/bin/env bash" > $PREFIX/bin/foobar
+            - echo "echo Hello from foobar" >> $PREFIX/bin/foobar
+            - chmod +x $PREFIX/bin/foobar
+  - package:
+      name: bizbar
+    build:
+      script:
+        - if: win
+          then:
+            - mkdir -p %PREFIX%\bin
+            - echo @echo off > %PREFIX%\bin\bizbar.bat
+            - echo echo Hello from bizbar >> %PREFIX%\bin\bizbar.bat
+          else:
+            - mkdir -p $PREFIX/bin
+            - echo "#!/usr/bin/env bash" > $PREFIX/bin/bizbar
+            - echo "echo Hello from bizbar" >> $PREFIX/bin/bizbar
+            - chmod +x $PREFIX/bin/bizbar
+
+```
+
+In this case, we have to specify which output we want to install:
+
+```shell
+pixi global install --path /path/to/package foobar
+
+```
+
+## Shell Completions
+
+When you work in a terminal, you are using a shell and shells can process completions of command line tools. The process works like this: you type "git -" in your terminal and press `<TAB>`. Then, your shell will present you all the flags `git` offers. However, that only works if you have the completions installed for the tool in question. If the tool you installed via `pixi global` contains completions they will be automatically installed. At the moment, only Linux and macOS are supported.
+
+First install a tool with `pixi global`:
+
+```shell
+pixi global install git
+
+```
+
+The completions can be found under [`$PIXI_HOME`](../../reference/environment_variables/)`/completions`.
+
+You can then load the completions in the startup script of your shell:
+
+~/.bashrc
+
+```bash
+# bash, default on most Linux distributions
+for file in ~/.pixi/completions/bash/*; do
+    [ -e "$file" ] && source "$file"
+done
+
+```
+
+~/.zshrc
+
+```zsh
+# zsh, default on macOS
+fpath+=(~/.pixi/completions/zsh)
+autoload -Uz compinit
+compinit
+
+```
+
+~/.config/fish/config.fish
+
+```fish
+# fish
+for file in ~/.pixi/completions/fish/*
+    source $file
+end
+
+```
+
+Note
+
+Completions of packages are installed as long as their binaries are exposed under the same name: e.g. `exposed = { git = "git" }`.
+
+## Adding a Series of Tools at Once
+
+Without specifying an environment, you can add multiple tools at once:
+
+```shell
+pixi global install pixi-pack rattler-build
+
+```
+
+This command generates the following entry in the manifest:
+
+```toml
+[envs.pixi-pack]
+channels = ["conda-forge"]
+dependencies= { pixi-pack = "*" }
+exposed = { pixi-pack = "pixi-pack" }
 [envs.rattler-build]
 channels = ["conda-forge"]
 dependencies = { rattler-build = "*" }
 exposed = { rattler-build = "rattler-build" }
-[envs.ipython]
+
+```
+
+Creating two separate non-interfering environments, while exposing only the minimum required binaries.
+
+## Creating a Data Science Sandbox Environment
+
+You can create an environment with multiple tools using the following command:
+
+```shell
+pixi global install --environment data-science --expose jupyter --expose ipython jupyter numpy pandas matplotlib ipython
+
+```
+
+This command generates the following entry in the manifest:
+
+```toml
+[envs.data-science]
 channels = ["conda-forge"]
-dependencies = { ipython = "*", numpy = "*", matplotlib = "*" }
-exposed = { ipython = "ipython", ipython3 = "ipython3" }
+dependencies = { jupyter = "*", ipython = "*" }
+exposed = { jupyter = "jupyter", ipython = "ipython" }
+
+```
+
+In this setup, both `jupyter` and `ipython` are exposed from the `data-science` environment, allowing you to run:
+
+```shell
+> ipython
+# Or
+> jupyter lab
+
+```
+
+These commands will be available globally, making it easy to access your preferred tools without switching environments.
+
+## Install Packages For a Different Platform
+
+You can install packages for a different platform using the `--platform` flag. This is useful when you want to install packages for a different platform, such as `osx-64` packages on `osx-arm64`. For example, running this on `osx-arm64`:
+
+```shell
+pixi global install --platform osx-64 python
+
+```
+
+will create the following entry in the manifest:
+
+```toml
 [envs.python]
 channels = ["conda-forge"]
-dependencies = { python = "3.12.*" } # (1)!
-exposed = { py3 = "python" } # (2)!
-
-```
-
-1. Dependencies are the packages that will be installed in the environment. You can specify the version or use a wildcard.
-1. The exposed binaries are the ones that will be available in the system path. In this case, `python` is exposed under the name `py3`.
-
-## Manifest locations
-
-The manifest can be found at the following locations depending on your operating system. Run [`pixi info`](../../reference/cli/pixi/info/), to find the currently used manifest on your system.
-
-| **Priority** | **Location**                                       | **Comments**                            |
-| ------------ | -------------------------------------------------- | --------------------------------------- |
-| 4            | `$PIXI_HOME/manifests/pixi-global.toml`            | Global manifest in `PIXI_HOME`.         |
-| 3            | `$HOME/.pixi/manifests/pixi-global.toml`           | Global manifest in user home directory. |
-| 2            | `$XDG_CONFIG_HOME/pixi/manifests/pixi-global.toml` | XDG compliant config directory.         |
-| 1            | `$HOME/.config/pixi/manifests/pixi-global.toml`    | Config directory.                       |
-
-| **Priority** | **Location**                                                        | **Comments**                            |
-| ------------ | ------------------------------------------------------------------- | --------------------------------------- |
-| 3            | `$PIXI_HOME/manifests/pixi-global.toml`                             | Global manifest in `PIXI_HOME`.         |
-| 2            | `$HOME/.pixi/manifests/pixi-global.toml`                            | Global manifest in user home directory. |
-| 1            | `$HOME/Library/Application Support/pixi/manifests/pixi-global.toml` | Config directory.                       |
-
-| **Priority** | **Location**                                     | **Comments**                            |
-| ------------ | ------------------------------------------------ | --------------------------------------- |
-| 3            | `$PIXI_HOME\manifests/pixi-global.toml`          | Global manifest in `PIXI_HOME`.         |
-| 2            | `%USERPROFILE%\.pixi\manifests\pixi-global.toml` | Global manifest in user home directory. |
-| 1            | `%APPDATA%\pixi\manifests\pixi-global.toml`      | Config directory.                       |
-
-Note
-
-If multiple locations exist, the manifest with the highest priority will be used.
-
-## Channels
-
-The `channels` key describes the Conda channels that will be used to download the packages. There is a priority to these, so the first one will have the highest priority. If a package is not found in that channel the next one will be used. For example, running:
-
-```text
-pixi global install --channel conda-forge --channel bioconda snakemake
-
-```
-
-Results in the following entry in the manifest:
-
-```toml
-[envs.snakemake]
-channels = ["conda-forge", "bioconda"]
-dependencies = { snakemake = "*" }
-exposed = { snakemake = "snakemake" }
-
-```
-
-More information on channels can be found [here](../../advanced/channel_logic/).
-
-## Dependencies
-
-Dependencies are the Conda packages that will be installed into your environment. For example, running:
-
-```text
-pixi global install "python<3.12"
-
-```
-
-creates the following entry in the manifest:
-
-```toml
-[envs.vim]
-channels = ["conda-forge"]
-dependencies = { python = "<3.12" }
+platforms = ["osx-64"]
+dependencies = { python = "*" }
 # ...
 
 ```
 
-Typically, you'd specify just the tool you're installing, but you can add more packages if needed. Defining the environment to install into will allow you to add multiple dependencies at once. For example, running:
+## Packaging
 
-```shell
-pixi global install --environment my-env git vim python
+### Opt Out of `CONDA_PREFIX`
 
-```
+Pixi activates the target environment before running a globally exposed executable, which usually sets `CONDA_PREFIX` to that environment's path. Some tools inspect `CONDA_PREFIX` and expect it to point to a standard Conda installation, which can lead to confusing behavior when the tool runs from a Pixi-managed prefix.
 
-will create the following entry in the manifest:
+Package authors can opt out of exporting `CONDA_PREFIX` by shipping a marker file at `etc/pixi/<executable>/global-ignore-conda-prefix` inside the environment (for example `etc/pixi/borg/global-ignore-conda-prefix` for an executable named `borg`). When this file is present for the exposed executable, Pixi removes `CONDA_PREFIX` from the environment variables, letting the tool behave as if no Conda environment is active.
 
-```toml
-[envs.my-env]
-channels = ["conda-forge"]
-dependencies = { git = "*", vim = "*", python = "*" }
-# ...
+Here's a minimal `recipe.yaml` snippet that adds the marker while building the package with executable `borg`:
 
-```
-
-You can [`add`](../../reference/cli/pixi/global/add/) dependencies to an existing environment by running:
-
-```shell
-pixi global add --environment my-env package-a package-b
+```yaml
+build:
+  script:
+    - mkdir -p $PREFIX/etc/pixi/borg
+    - touch $PREFIX/etc/pixi/borg/global-ignore-conda-prefix
 
 ```
 
-They will be added as dependencies to the `my-env` environment but won't auto expose the binaries from the new packages.
-
-You can [`remove`](../../reference/cli/pixi/global/remove/) dependencies by running:
-
-```shell
-pixi global remove --environment my-env package-a package-b
-
-```
-
-## Exposed executables
-
-One can instruct `pixi global install`, under which name it will expose executables:
-
-```shell
-pixi global install --expose bird=bat bat
-
-```
-
-The manifest is modified like this:
-
-```toml
-[envs.bat]
-channels = ["https://prefix.dev/conda-forge"]
-dependencies = { bat = "*" }
-exposed = { bird = "bat" }
-
-```
-
-This means that executable `bat` will be exposed under the name `bird`.
-
-### Automatically Exposed Executables
-
-There is some added automatic behavior, if you install a package with the same name as the environment, it will be exposed with the same name. Even if the binary name is only exposed through dependencies of the package For example, running:
-
-```text
-pixi global install ansible
-
-```
-
-will create the following entry in the manifest:
-
-```toml
-[envs.ansible]
-channels = ["conda-forge"]
-dependencies = { ansible = "*" }
-exposed = { ansible = "ansible" } # (1)!
-
-```
-
-1. The `ansible` binary is exposed even though it is installed by a dependency of `ansible`, the `ansible-core` package.
-
-It's also possible to expose an executable which is located in a nested directory. For example dotnet.exe executable is located in a dotnet folder, to expose `dotnet` you must specify its relative path :
-
-```text
-pixi global install dotnet --expose dotnet=dotnet\dotnet
-
-```
-
-Which will create the following entry in the manifest:
-
-```toml
-[envs.dotnet]
-channels = ["conda-forge"]
-dependencies = { dotnet = "*" }
-exposed = { dotnet = 'dotnet\dotnet' }
-
-```
-
-## Shortcuts
-
-Especially for graphical user interfaces it is useful to add shortcuts. This way the application shows up in the start menu or is suggested when you want to open a file type the application supports. If the package supports shortcuts, nothing has to be done from your side. Simply executing `pixi global install` will do the trick. For example, `pixi global install mss` will lead to the following manifest:
-
-```toml
-[envs.mss]
-channels = ["https://prefix.dev/conda-forge"]
-dependencies = { mss = "*" }
-exposed = { ... }
-shortcuts = ["mss"]
-
-```
-
-Note the `shortcuts` entry. If it's present, `pixi` will install the shortcut for the `mss` package. This means, the application will show up in the start menu. If you want to package an application yourself that would benefit from this, you can check out the corresponding [documentation](https://conda.github.io/menuinst/).
-
-## Trampolines
-
-To increase efficiency, `pixi` uses *trampolines*—small, specialized binary files that manage configuration and environment setup before executing the main binary. The trampoline approach allows for skipping the execution of activation scripts that have a significant performance impact.
-
-When you execute a globally installed executable, a trampoline performs the following sequence of steps:
-
-- Each trampoline first reads a configuration file named after the binary being executed. This configuration file, in JSON format (e.g., `python.json`), contains key information about how the environment should be set up. The configuration file is stored in [`$PIXI_HOME`](../../reference/environment_variables/)`/bin/trampoline_configuration`.
-- Once the configuration is loaded and the environment is set, the trampoline executes the original binary with the correct environment settings.
-- When installing a new binary, a new trampoline is placed in the [`$PIXI_HOME`](../../reference/environment_variables/)`/bin` directory and is hard-linked to the [`$PIXI_HOME`](../../reference/environment_variables/)`/bin/trampoline_configuration/trampoline_bin`. This optimizes storage space and avoids duplication of the same trampoline.
-
-The trampoline will take care that the `PATH` contains the newest changes on your local `PATH` while avoiding caching temporary `PATH` changes during installation. If you want to control the base `PATH` pixi considers, you can set `export PIXI_BASE_PATH=$PATH` in your shell startup script.
+After installing such a package with `pixi global install`, the exposed executable no longer sees `CONDA_PREFIX` and can fall back to its default behavior.
+# Concepts documentation
 
 When building a package, you often have to do more than just run the code. Steps like formatting, linting, compiling, testing, benchmarking, etc. are often part of a workspace. With Pixi tasks, this should become much easier to do.
 
@@ -5222,6 +5210,218 @@ You can override virtual packages by setting the following environment variables
 ## Additional Resources
 
 For more detailed information on managing `virtual packages` and overriding system requirements, refer to the [Conda Documentation](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html).
+
+# The Global Manifest
+
+This global manifest contains the list of environments that are installed globally, their dependencies and exposed binaries. It can be edited, synced, checked in to a version control system, and shared with others.
+
+Running the commands from the section before results in the following manifest:
+
+```toml
+version = 1
+[envs.rattler-build]
+channels = ["conda-forge"]
+dependencies = { rattler-build = "*" }
+exposed = { rattler-build = "rattler-build" }
+[envs.ipython]
+channels = ["conda-forge"]
+dependencies = { ipython = "*", numpy = "*", matplotlib = "*" }
+exposed = { ipython = "ipython", ipython3 = "ipython3" }
+[envs.python]
+channels = ["conda-forge"]
+dependencies = { python = "3.12.*" } # (1)!
+exposed = { py3 = "python" } # (2)!
+
+```
+
+1. Dependencies are the packages that will be installed in the environment. You can specify the version or use a wildcard.
+1. The exposed binaries are the ones that will be available in the system path. In this case, `python` is exposed under the name `py3`.
+
+## Manifest locations
+
+The manifest can be found at the following locations depending on your operating system. Run [`pixi info`](../../reference/cli/pixi/info/), to find the currently used manifest on your system.
+
+| **Priority** | **Location**                                       | **Comments**                            |
+| ------------ | -------------------------------------------------- | --------------------------------------- |
+| 4            | `$PIXI_HOME/manifests/pixi-global.toml`            | Global manifest in `PIXI_HOME`.         |
+| 3            | `$HOME/.pixi/manifests/pixi-global.toml`           | Global manifest in user home directory. |
+| 2            | `$XDG_CONFIG_HOME/pixi/manifests/pixi-global.toml` | XDG compliant config directory.         |
+| 1            | `$HOME/.config/pixi/manifests/pixi-global.toml`    | Config directory.                       |
+
+| **Priority** | **Location**                                                        | **Comments**                            |
+| ------------ | ------------------------------------------------------------------- | --------------------------------------- |
+| 3            | `$PIXI_HOME/manifests/pixi-global.toml`                             | Global manifest in `PIXI_HOME`.         |
+| 2            | `$HOME/.pixi/manifests/pixi-global.toml`                            | Global manifest in user home directory. |
+| 1            | `$HOME/Library/Application Support/pixi/manifests/pixi-global.toml` | Config directory.                       |
+
+| **Priority** | **Location**                                     | **Comments**                            |
+| ------------ | ------------------------------------------------ | --------------------------------------- |
+| 3            | `$PIXI_HOME\manifests/pixi-global.toml`          | Global manifest in `PIXI_HOME`.         |
+| 2            | `%USERPROFILE%\.pixi\manifests\pixi-global.toml` | Global manifest in user home directory. |
+| 1            | `%APPDATA%\pixi\manifests\pixi-global.toml`      | Config directory.                       |
+
+Note
+
+If multiple locations exist, the manifest with the highest priority will be used.
+
+## Channels
+
+The `channels` key describes the Conda channels that will be used to download the packages. There is a priority to these, so the first one will have the highest priority. If a package is not found in that channel the next one will be used. For example, running:
+
+```text
+pixi global install --channel conda-forge --channel bioconda snakemake
+
+```
+
+Results in the following entry in the manifest:
+
+```toml
+[envs.snakemake]
+channels = ["conda-forge", "bioconda"]
+dependencies = { snakemake = "*" }
+exposed = { snakemake = "snakemake" }
+
+```
+
+More information on channels can be found [here](../../advanced/channel_logic/).
+
+## Dependencies
+
+Dependencies are the Conda packages that will be installed into your environment. For example, running:
+
+```text
+pixi global install "python<3.12"
+
+```
+
+creates the following entry in the manifest:
+
+```toml
+[envs.vim]
+channels = ["conda-forge"]
+dependencies = { python = "<3.12" }
+# ...
+
+```
+
+Typically, you'd specify just the tool you're installing, but you can add more packages if needed. Defining the environment to install into will allow you to add multiple dependencies at once. For example, running:
+
+```shell
+pixi global install --environment my-env git vim python
+
+```
+
+will create the following entry in the manifest:
+
+```toml
+[envs.my-env]
+channels = ["conda-forge"]
+dependencies = { git = "*", vim = "*", python = "*" }
+# ...
+
+```
+
+You can [`add`](../../reference/cli/pixi/global/add/) dependencies to an existing environment by running:
+
+```shell
+pixi global add --environment my-env package-a package-b
+
+```
+
+They will be added as dependencies to the `my-env` environment but won't auto expose the binaries from the new packages.
+
+You can [`remove`](../../reference/cli/pixi/global/remove/) dependencies by running:
+
+```shell
+pixi global remove --environment my-env package-a package-b
+
+```
+
+## Exposed executables
+
+One can instruct `pixi global install`, under which name it will expose executables:
+
+```shell
+pixi global install --expose bird=bat bat
+
+```
+
+The manifest is modified like this:
+
+```toml
+[envs.bat]
+channels = ["https://prefix.dev/conda-forge"]
+dependencies = { bat = "*" }
+exposed = { bird = "bat" }
+
+```
+
+This means that executable `bat` will be exposed under the name `bird`.
+
+### Automatically Exposed Executables
+
+There is some added automatic behavior, if you install a package with the same name as the environment, it will be exposed with the same name. Even if the binary name is only exposed through dependencies of the package For example, running:
+
+```text
+pixi global install ansible
+
+```
+
+will create the following entry in the manifest:
+
+```toml
+[envs.ansible]
+channels = ["conda-forge"]
+dependencies = { ansible = "*" }
+exposed = { ansible = "ansible" } # (1)!
+
+```
+
+1. The `ansible` binary is exposed even though it is installed by a dependency of `ansible`, the `ansible-core` package.
+
+It's also possible to expose an executable which is located in a nested directory. For example dotnet.exe executable is located in a dotnet folder, to expose `dotnet` you must specify its relative path :
+
+```text
+pixi global install dotnet --expose dotnet=dotnet\dotnet
+
+```
+
+Which will create the following entry in the manifest:
+
+```toml
+[envs.dotnet]
+channels = ["conda-forge"]
+dependencies = { dotnet = "*" }
+exposed = { dotnet = 'dotnet\dotnet' }
+
+```
+
+## Shortcuts
+
+Especially for graphical user interfaces it is useful to add shortcuts. This way the application shows up in the start menu or is suggested when you want to open a file type the application supports. If the package supports shortcuts, nothing has to be done from your side. Simply executing `pixi global install` will do the trick. For example, `pixi global install mss` will lead to the following manifest:
+
+```toml
+[envs.mss]
+channels = ["https://prefix.dev/conda-forge"]
+dependencies = { mss = "*" }
+exposed = { ... }
+shortcuts = ["mss"]
+
+```
+
+Note the `shortcuts` entry. If it's present, `pixi` will install the shortcut for the `mss` package. This means, the application will show up in the start menu. If you want to package an application yourself that would benefit from this, you can check out the corresponding [documentation](https://conda.github.io/menuinst/).
+
+## Trampolines
+
+To increase efficiency, `pixi` uses *trampolines*—small, specialized binary files that manage configuration and environment setup before executing the main binary. The trampoline approach allows for skipping the execution of activation scripts that have a significant performance impact.
+
+When you execute a globally installed executable, a trampoline performs the following sequence of steps:
+
+- Each trampoline first reads a configuration file named after the binary being executed. This configuration file, in JSON format (e.g., `python.json`), contains key information about how the environment should be set up. The configuration file is stored in [`$PIXI_HOME`](../../reference/environment_variables/)`/bin/trampoline_configuration`.
+- Once the configuration is loaded and the environment is set, the trampoline executes the original binary with the correct environment settings.
+- When installing a new binary, a new trampoline is placed in the [`$PIXI_HOME`](../../reference/environment_variables/)`/bin` directory and is hard-linked to the [`$PIXI_HOME`](../../reference/environment_variables/)`/bin/trampoline_configuration/trampoline_bin`. This optimizes storage space and avoids duplication of the same trampoline.
+
+The trampoline will take care that the `PATH` contains the newest changes on your local `PATH` while avoiding caching temporary `PATH` changes during installation. If you want to control the base `PATH` pixi considers, you can set `export PIXI_BASE_PATH=$PATH` in your shell startup script.
 # Building documentation
 
 In this tutorial, we will show you how to build the same C++ package as from [Building a C++ Package](../cpp/) tutorial using [`rattler-build`](https://rattler.build). In this tutorial we assume that you've read the [Building a C++ Package](../cpp/) tutorial. If you haven't read it yet, we recommend you to do so before continuing. You might also want to check out the [documentation](https://prefix-dev.github.io/pixi-build-backends/backends/pixi-build-rattler-build/) for the `pixi-build-rattler-build` backend. The project structure and the source code will be the same as in the previous tutorial, so we may skip explicit explanations of some parts.
@@ -15108,202 +15308,6 @@ pixi workspace version set <VERSION>
   **required**: `true`
 # Miscellaneous documentation
 
-When you want to show your users and contributors that they can use Pixi in your repo, you can use the following badge:
-
-```text
-[![Pixi Badge](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/prefix-dev/pixi/main/assets/badge/v0.json)](https://pixi.sh)
-
-```
-
-Customize your badge
-
-To further customize the look and feel of your badge, you can add `&style=<custom-style>` at the end of the URL. See [the documentation on shields.io](https://shields.io/badges/endpoint-badge) for more info.
-
-## Built using Pixi
-
-- Deltares:
-
-  - [Ribasim](https://github.com/Deltares/Ribasim): Water resources model
-  - [Ribasim-NL](https://github.com/Deltares/Ribasim-NL): Ribasim water resources modeling in the Netherlands
-  - [iMOD Python](https://github.com/Deltares/imod-python): Make massive MODFLOW models
-  - [iMOD Coupler](https://github.com/Deltares/imod_coupler): Application for coupling hydrological kernels
-  - [iMOD Documentation](https://github.com/Deltares/iMOD-Documentation): Documentation of the iMOD suite.
-  - [Xugrid](https://github.com/Deltares/xugrid): Xarray and unstructured grids
-  - [Numba celltree](https://github.com/Deltares/numba_celltree): Celltree data structure for searching for points, lines, boxes, and cells (convex polygons) in a two dimensional unstructured mesh.
-  - [QGIS-Tim](https://github.com/Deltares/QGIS-Tim): QGIS plugin and utilities for TimML multi-layer analytic element model
-  - [Pandamesh](https://github.com/Deltares/pandamesh): From geodataframe to mesh
-  - [Wflow](https://github.com/Deltares/Wflow.jl): Hydrological modeling framework
-  - [HydroMT](https://github.com/Deltares/hydromt): Automated and reproducible model building and analysis
-  - [HydroMT SFINCS](https://github.com/Deltares/hydromt_sfincs): SFINCS plugin for HydroMT
-  - [PyFlwDir](https://github.com/Deltares/pyflwdir): Fast methods to work with hydro- and topography data in pure Python.
-
-- USGS:
-
-  - [MODFLOW 6](https://github.com/MODFLOW-USGS/modflow6): USGS modular hydrological model
-
-- QuantCo:
-
-  - [glum](https://github.com/quantco/glum): High performance Python GLMs with all the features!
-  - [tabmat](https://github.com/quantco/tabmat): Efficient matrix representations for working with tabular data
-  - [pixi-pack](https://github.com/quantco/pixi-pack): A tool to pack and unpack conda environments created with pixi
-  - [polarify](https://github.com/quantco/polarify): Simplifying conditional Polars Expressions with Python 🐍 🐻‍❄️
-  - [copier-template-python-open-source](https://github.com/quantco/copier-template-python-open-source): Copier template for python projects using pixi
-  - [datajudge](https://github.com/quantco/datajudge): Assessing whether data from database complies with reference information
-  - [ndonnx](https://github.com/quantco/ndonnx): ONNX-backed array library that is compliant with the Array API standard
-  - [multiregex](https://github.com/quantco/multiregex): Quickly match many regexes against a string
-  - [slim-trees](https://github.com/quantco/slim-trees): Pickle your ML models more efficiently for deployment 🚀
-  - [sqlcompyre](https://github.com/quantco/sqlcompyre): Compare SQL tables and databases
-  - [metalearners](https://github.com/quantco/metalearners): MetaLearners for CATE estimation
-  - [tabulardelta](https://github.com/quantco/tabulardelta): Simplify table comparisons
-  - [pydiverse.pipedag](https://github.com/pydiverse/pydiverse.pipedag): A library for data pipeline orchestration optimizing high development iteration speed
-  - [pydiverse.transform](https://github.com/pydiverse/pydiverse.transform): Pipe based dataframe manipulation library that can also transform data on SQL databases
-
-- [pixi-pycharm](https://github.com/pavelzw/pixi-pycharm): Conda shim for PyCharm that proxies pixi
-
-- [pixi-diff-to-markdown](https://github.com/pavelzw/pixi-diff-to-markdown): Generate markdown summaries from Pixi update
-
-- [jiaxiyang/cpp_project_guideline](https://github.com/jiaxiyang/cpp_project_guideline): Guide the way beginners make their c++ projects.
-
-- [hex-inc/vegafusion](https://github.com/hex-inc/vegafusion): Serverside scaling of Vega and Altair visualizations in Rust, Python, WASM, and Java
-
-- [pablovela5620/arxiv-researcher](https://github.com/pablovela5620/arxiv-researcher): Summarize PDF's and Arixv papers with Langchain and Nougat 🦉
-
-- [HaoZeke/xtsci-dist](https://github.com/HaoZeke/xtsci-dist): Incremental `scipy` port using `xtensor`
-
-- [jslorrma/keyrings.artifacts](https://github.com/jslorrma/keyrings.artifacts): Keyring backend that provides authentication for publishing or consuming Python packages to or from Azure Artifacts feeds within Azure DevOps
-
-- [LFortran](https://github.com/lfortran/lfortran): A modern cross-platform Fortran compiler
-
-- [Rerun](https://www.rerun.io/): Rerun is an SDK for building time aware visualizations of multimodal data.
-
-- [conda-auth](https://github.com/conda-incubator/conda-auth): a conda plugin providing more secure authentication support to conda.
-
-- [py-rattler](https://github.com/conda/rattler/tree/main/py-rattler): Build your own conda environment manager using the python wrapper of our Rattler backend.
-
-- [array-api-extra](https://github.com/data-apis/array-api-extra): Extra array functions built on top of the Python array API standard.
-
-- [marray](https://github.com/mdhaber/marray): Masked versions of Python array API standard compatible arrays.
-
-- [quantity-array](https://github.com/quantity-dev/quantity-array): Quantities with Python array API standard arrays.
-
-- [Bodo](https://github.com/bodo-ai/bodo): High-Performance Python Compute Engine for Data and AI.
-
-- [metrology-apis](https://github.com/quantity-dev/metrology-apis): Standardised Metrology APIs in Python.
-
-- [xsf](https://github.com/scipy/xsf): Special function implementations.
-
-- [pyfixest](https://github.com/py-econometrics/pyfixest): Fast High-Dimensional Fixed Effects Regression in Python following fixest-syntax.
-
-- [geovista](https://github.com/bjlittle/geovista): Cartographic rendering and mesh analytics powered by [PyVista](https://github.com/pyvista/pyvista) 🌍
-
-## What is the difference with `conda`, `mamba`, `poetry`, `pip`
-
-| Tool   | Installs python | Builds packages | Runs predefined tasks | Has lock files builtin | Fast | Use without python                                                      |
-| ------ | --------------- | --------------- | --------------------- | ---------------------- | ---- | ----------------------------------------------------------------------- |
-| Conda  | ✅              | ❌              | ❌                    | ❌                     | ❌   | ❌                                                                      |
-| Mamba  | ✅              | ❌              | ❌                    | ❌                     | ✅   | [✅](https://mamba.readthedocs.io/en/latest/user_guide/micromamba.html) |
-| Pip    | ❌              | ✅              | ❌                    | ❌                     | ❌   | ❌                                                                      |
-| Pixi   | ✅              | 🚧              | ✅                    | ✅                     | ✅   | ✅                                                                      |
-| Poetry | ❌              | ✅              | ❌                    | ✅                     | ❌   | ❌                                                                      |
-
-## Why the name `pixi`
-
-Starting with the name `prefix` we iterated until we had a name that was easy to pronounce, spell and remember. There also wasn't a CLI tool yet using that name. Unlike `px`, `pex`, `pax`, etc. When in code mode we spell it like this `pixi`, otherwise we always start with an uppercase letter: Pixi. We think the name sparks curiosity and fun, if you don't agree, I'm sorry, but you can always alias it to whatever you like.
-
-```shell
-alias not_pixi="pixi"
-
-```
-
-PowerShell:
-
-```powershell
-New-Alias -Name not_pixi -Value pixi
-
-```
-
-## Where is `pixi build`
-
-**TL;DR**: It's coming we promise!
-
-`pixi build` is going to be the subcommand that can generate a conda package out of a Pixi workspace. This requires a solid build tool which we're creating with [`rattler-build`](https://github.com/prefix-dev/rattler-build) which will be used as a library in pixi.
-
-This is a guide for distribution maintainers wanting to package Pixi for a different package manager. Users of Pixi can ignore this page.
-
-## Building
-
-Pixi is written in Rust and compiled using Cargo, which are needed as compile-time dependencies. At runtime Pixi needs no dependencies in other than the runtime it was compiled against (`libc`, ...).
-
-To build Pixi run
-
-```shell
-cargo build --locked --profile dist
-
-```
-
-Instead of using the predefined `dist` profile, which is optimized for binary size, you can also pass other options to let cargo optimize the binary for other metrics.
-
-### Build-time Options
-
-Pixi provides some compile-time options, which can influence the build
-
-#### TLS
-
-By default, Pixi is built with Rustls TLS implementation. You can compile Pixi using the platform native TLS implementation using by adding `--no-default-features --feature native-tls` to the build command. Note that this might add additional runtime dependencies, such as OpenSSL on Linux.
-
-#### Self-Update
-
-Pixi has a self-update functionality. When Pixi is installed using another package manager one usually doesn't want pixi to try to update itself and instead let it be updated by the package manager. For this reason the self-update feature is disabled by default. It can be enabled by adding `--feature self_update` to the build command.
-
-When the self-update feature is disabled and a user tries to run `pixi self-update` an error message is displayed. This message can be customized by setting the `PIXI_SELF_UPDATE_DISABLED_MESSAGE` environment variable at build time to point the user to the package manager they should be using to update pixi.
-
-```shell
-PIXI_SELF_UPDATE_DISABLED_MESSAGE="`self-update` has been disabled for this build. Run `brew upgrade pixi` instead" cargo build --locked --profile dist
-
-```
-
-#### Custom version
-
-You can specify a custom version string to be used in the `--version` output by setting the `PIXI_VERSION` environment variable during the build.
-
-```shell
-PIXI_VERSION="HEAD-123456" cargo build --locked --profile dist
-
-```
-
-## Shell completion
-
-After building Pixi you can generate shell autocompletion scripts by running
-
-```shell
-pixi completion --shell <SHELL>
-
-```
-
-and saving the output to a file. Currently supported shells are `bash`, `elvish`, `fish`, `nushell`, `powershell` and `zsh`.
-
-We created `pixi` because we want to have a cargo/npm/yarn like package management experience for conda. We really love what the conda packaging ecosystem achieves, but we think that the user experience can be improved a lot. Modern package managers like `cargo` have shown us, how great a package manager can be. We want to bring that experience to the conda ecosystem.
-
-## Pixi values
-
-We want to make Pixi a great experience for everyone, so we have a few values that we want to uphold:
-
-1. **Fast**. We want to have a fast package manager, that is able to solve the environment in a few seconds.
-1. **User Friendly**. We want to have a package manager that puts user friendliness on the front-line. Providing easy, accessible and intuitive commands. That have the element of *least surprise*.
-1. **Isolated Environment**. We want to have isolated environments, that are reproducible and easy to share. Ideally, it should run on all common platforms. The Conda packaging system provides an excellent base for this.
-1. **Single Tool**. We want to integrate most common uses when working on a development workspace with Pixi, so it should support at least dependency management, command management, building and uploading packages. You should not need to reach to another external tool for this.
-1. **Fun**. It should be fun to use Pixi and not cause frustrations, you should not need to think about it a lot and it should generally just get out of your way.
-
-## Conda
-
-We are building on top of the conda packaging ecosystem, this means that we have a huge number of packages available for different platforms on [conda-forge](https://conda-forge.org/). We believe the conda packaging ecosystem provides a solid base to manage your dependencies. Conda-forge is community maintained and very open to contributions. It is widely used in data science and scientific computing, robotics and other fields. And has a proven track record.
-
-More info: [Conda & Pypi](../../concepts/conda_pypi/)
-
-## Target languages
-
-Essentially, we are language agnostics, we are targeting any language that can be installed with conda. Including: C++, Python, Rust, Zig etc. But we do believe the python ecosystem can benefit from a good package manager that is based on conda. So we are trying to provide an alternative to existing solutions there. We also think we can provide a good solution for C++ projects, as there are a lot of libraries available on conda-forge today. Pixi also truly shines when using it for multi-language projects e.g. a mix of C++ and Python, because we provide a nice way to build everything up to and including system level packages.
-
 # Changelog
 
 All notable changes to this project will be documented in this file.
@@ -19178,3 +19182,199 @@ Lots and lots of fixes and improvements to make it easier for this user, where b
 - `pixi add` command is fixed. ([#132](https://github.com/prefix-dev/pixi/pull/132))
 
 - Community issues fixed: [#70](https://github.com/prefix-dev/pixi/issues/70), [#72](https://github.com/prefix-dev/pixi/issues/72), [#90](https://github.com/prefix-dev/pixi/issues/90), [#92](https://github.com/prefix-dev/pixi/issues/92), [#94](https://github.com/prefix-dev/pixi/issues/94), [#96](https://github.com/prefix-dev/pixi/issues/96)
+
+When you want to show your users and contributors that they can use Pixi in your repo, you can use the following badge:
+
+```text
+[![Pixi Badge](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/prefix-dev/pixi/main/assets/badge/v0.json)](https://pixi.sh)
+
+```
+
+Customize your badge
+
+To further customize the look and feel of your badge, you can add `&style=<custom-style>` at the end of the URL. See [the documentation on shields.io](https://shields.io/badges/endpoint-badge) for more info.
+
+## Built using Pixi
+
+- Deltares:
+
+  - [Ribasim](https://github.com/Deltares/Ribasim): Water resources model
+  - [Ribasim-NL](https://github.com/Deltares/Ribasim-NL): Ribasim water resources modeling in the Netherlands
+  - [iMOD Python](https://github.com/Deltares/imod-python): Make massive MODFLOW models
+  - [iMOD Coupler](https://github.com/Deltares/imod_coupler): Application for coupling hydrological kernels
+  - [iMOD Documentation](https://github.com/Deltares/iMOD-Documentation): Documentation of the iMOD suite.
+  - [Xugrid](https://github.com/Deltares/xugrid): Xarray and unstructured grids
+  - [Numba celltree](https://github.com/Deltares/numba_celltree): Celltree data structure for searching for points, lines, boxes, and cells (convex polygons) in a two dimensional unstructured mesh.
+  - [QGIS-Tim](https://github.com/Deltares/QGIS-Tim): QGIS plugin and utilities for TimML multi-layer analytic element model
+  - [Pandamesh](https://github.com/Deltares/pandamesh): From geodataframe to mesh
+  - [Wflow](https://github.com/Deltares/Wflow.jl): Hydrological modeling framework
+  - [HydroMT](https://github.com/Deltares/hydromt): Automated and reproducible model building and analysis
+  - [HydroMT SFINCS](https://github.com/Deltares/hydromt_sfincs): SFINCS plugin for HydroMT
+  - [PyFlwDir](https://github.com/Deltares/pyflwdir): Fast methods to work with hydro- and topography data in pure Python.
+
+- USGS:
+
+  - [MODFLOW 6](https://github.com/MODFLOW-USGS/modflow6): USGS modular hydrological model
+
+- QuantCo:
+
+  - [glum](https://github.com/quantco/glum): High performance Python GLMs with all the features!
+  - [tabmat](https://github.com/quantco/tabmat): Efficient matrix representations for working with tabular data
+  - [pixi-pack](https://github.com/quantco/pixi-pack): A tool to pack and unpack conda environments created with pixi
+  - [polarify](https://github.com/quantco/polarify): Simplifying conditional Polars Expressions with Python 🐍 🐻‍❄️
+  - [copier-template-python-open-source](https://github.com/quantco/copier-template-python-open-source): Copier template for python projects using pixi
+  - [datajudge](https://github.com/quantco/datajudge): Assessing whether data from database complies with reference information
+  - [ndonnx](https://github.com/quantco/ndonnx): ONNX-backed array library that is compliant with the Array API standard
+  - [multiregex](https://github.com/quantco/multiregex): Quickly match many regexes against a string
+  - [slim-trees](https://github.com/quantco/slim-trees): Pickle your ML models more efficiently for deployment 🚀
+  - [sqlcompyre](https://github.com/quantco/sqlcompyre): Compare SQL tables and databases
+  - [metalearners](https://github.com/quantco/metalearners): MetaLearners for CATE estimation
+  - [tabulardelta](https://github.com/quantco/tabulardelta): Simplify table comparisons
+  - [pydiverse.pipedag](https://github.com/pydiverse/pydiverse.pipedag): A library for data pipeline orchestration optimizing high development iteration speed
+  - [pydiverse.transform](https://github.com/pydiverse/pydiverse.transform): Pipe based dataframe manipulation library that can also transform data on SQL databases
+
+- [pixi-pycharm](https://github.com/pavelzw/pixi-pycharm): Conda shim for PyCharm that proxies pixi
+
+- [pixi-diff-to-markdown](https://github.com/pavelzw/pixi-diff-to-markdown): Generate markdown summaries from Pixi update
+
+- [jiaxiyang/cpp_project_guideline](https://github.com/jiaxiyang/cpp_project_guideline): Guide the way beginners make their c++ projects.
+
+- [hex-inc/vegafusion](https://github.com/hex-inc/vegafusion): Serverside scaling of Vega and Altair visualizations in Rust, Python, WASM, and Java
+
+- [pablovela5620/arxiv-researcher](https://github.com/pablovela5620/arxiv-researcher): Summarize PDF's and Arixv papers with Langchain and Nougat 🦉
+
+- [HaoZeke/xtsci-dist](https://github.com/HaoZeke/xtsci-dist): Incremental `scipy` port using `xtensor`
+
+- [jslorrma/keyrings.artifacts](https://github.com/jslorrma/keyrings.artifacts): Keyring backend that provides authentication for publishing or consuming Python packages to or from Azure Artifacts feeds within Azure DevOps
+
+- [LFortran](https://github.com/lfortran/lfortran): A modern cross-platform Fortran compiler
+
+- [Rerun](https://www.rerun.io/): Rerun is an SDK for building time aware visualizations of multimodal data.
+
+- [conda-auth](https://github.com/conda-incubator/conda-auth): a conda plugin providing more secure authentication support to conda.
+
+- [py-rattler](https://github.com/conda/rattler/tree/main/py-rattler): Build your own conda environment manager using the python wrapper of our Rattler backend.
+
+- [array-api-extra](https://github.com/data-apis/array-api-extra): Extra array functions built on top of the Python array API standard.
+
+- [marray](https://github.com/mdhaber/marray): Masked versions of Python array API standard compatible arrays.
+
+- [quantity-array](https://github.com/quantity-dev/quantity-array): Quantities with Python array API standard arrays.
+
+- [Bodo](https://github.com/bodo-ai/bodo): High-Performance Python Compute Engine for Data and AI.
+
+- [metrology-apis](https://github.com/quantity-dev/metrology-apis): Standardised Metrology APIs in Python.
+
+- [xsf](https://github.com/scipy/xsf): Special function implementations.
+
+- [pyfixest](https://github.com/py-econometrics/pyfixest): Fast High-Dimensional Fixed Effects Regression in Python following fixest-syntax.
+
+- [geovista](https://github.com/bjlittle/geovista): Cartographic rendering and mesh analytics powered by [PyVista](https://github.com/pyvista/pyvista) 🌍
+
+## What is the difference with `conda`, `mamba`, `poetry`, `pip`
+
+| Tool   | Installs python | Builds packages | Runs predefined tasks | Has lock files builtin | Fast | Use without python                                                      |
+| ------ | --------------- | --------------- | --------------------- | ---------------------- | ---- | ----------------------------------------------------------------------- |
+| Conda  | ✅              | ❌              | ❌                    | ❌                     | ❌   | ❌                                                                      |
+| Mamba  | ✅              | ❌              | ❌                    | ❌                     | ✅   | [✅](https://mamba.readthedocs.io/en/latest/user_guide/micromamba.html) |
+| Pip    | ❌              | ✅              | ❌                    | ❌                     | ❌   | ❌                                                                      |
+| Pixi   | ✅              | 🚧              | ✅                    | ✅                     | ✅   | ✅                                                                      |
+| Poetry | ❌              | ✅              | ❌                    | ✅                     | ❌   | ❌                                                                      |
+
+## Why the name `pixi`
+
+Starting with the name `prefix` we iterated until we had a name that was easy to pronounce, spell and remember. There also wasn't a CLI tool yet using that name. Unlike `px`, `pex`, `pax`, etc. When in code mode we spell it like this `pixi`, otherwise we always start with an uppercase letter: Pixi. We think the name sparks curiosity and fun, if you don't agree, I'm sorry, but you can always alias it to whatever you like.
+
+```shell
+alias not_pixi="pixi"
+
+```
+
+PowerShell:
+
+```powershell
+New-Alias -Name not_pixi -Value pixi
+
+```
+
+## Where is `pixi build`
+
+**TL;DR**: It's coming we promise!
+
+`pixi build` is going to be the subcommand that can generate a conda package out of a Pixi workspace. This requires a solid build tool which we're creating with [`rattler-build`](https://github.com/prefix-dev/rattler-build) which will be used as a library in pixi.
+
+This is a guide for distribution maintainers wanting to package Pixi for a different package manager. Users of Pixi can ignore this page.
+
+## Building
+
+Pixi is written in Rust and compiled using Cargo, which are needed as compile-time dependencies. At runtime Pixi needs no dependencies in other than the runtime it was compiled against (`libc`, ...).
+
+To build Pixi run
+
+```shell
+cargo build --locked --profile dist
+
+```
+
+Instead of using the predefined `dist` profile, which is optimized for binary size, you can also pass other options to let cargo optimize the binary for other metrics.
+
+### Build-time Options
+
+Pixi provides some compile-time options, which can influence the build
+
+#### TLS
+
+By default, Pixi is built with Rustls TLS implementation. You can compile Pixi using the platform native TLS implementation using by adding `--no-default-features --feature native-tls` to the build command. Note that this might add additional runtime dependencies, such as OpenSSL on Linux.
+
+#### Self-Update
+
+Pixi has a self-update functionality. When Pixi is installed using another package manager one usually doesn't want pixi to try to update itself and instead let it be updated by the package manager. For this reason the self-update feature is disabled by default. It can be enabled by adding `--feature self_update` to the build command.
+
+When the self-update feature is disabled and a user tries to run `pixi self-update` an error message is displayed. This message can be customized by setting the `PIXI_SELF_UPDATE_DISABLED_MESSAGE` environment variable at build time to point the user to the package manager they should be using to update pixi.
+
+```shell
+PIXI_SELF_UPDATE_DISABLED_MESSAGE="`self-update` has been disabled for this build. Run `brew upgrade pixi` instead" cargo build --locked --profile dist
+
+```
+
+#### Custom version
+
+You can specify a custom version string to be used in the `--version` output by setting the `PIXI_VERSION` environment variable during the build.
+
+```shell
+PIXI_VERSION="HEAD-123456" cargo build --locked --profile dist
+
+```
+
+## Shell completion
+
+After building Pixi you can generate shell autocompletion scripts by running
+
+```shell
+pixi completion --shell <SHELL>
+
+```
+
+and saving the output to a file. Currently supported shells are `bash`, `elvish`, `fish`, `nushell`, `powershell` and `zsh`.
+
+We created `pixi` because we want to have a cargo/npm/yarn like package management experience for conda. We really love what the conda packaging ecosystem achieves, but we think that the user experience can be improved a lot. Modern package managers like `cargo` have shown us, how great a package manager can be. We want to bring that experience to the conda ecosystem.
+
+## Pixi values
+
+We want to make Pixi a great experience for everyone, so we have a few values that we want to uphold:
+
+1. **Fast**. We want to have a fast package manager, that is able to solve the environment in a few seconds.
+1. **User Friendly**. We want to have a package manager that puts user friendliness on the front-line. Providing easy, accessible and intuitive commands. That have the element of *least surprise*.
+1. **Isolated Environment**. We want to have isolated environments, that are reproducible and easy to share. Ideally, it should run on all common platforms. The Conda packaging system provides an excellent base for this.
+1. **Single Tool**. We want to integrate most common uses when working on a development workspace with Pixi, so it should support at least dependency management, command management, building and uploading packages. You should not need to reach to another external tool for this.
+1. **Fun**. It should be fun to use Pixi and not cause frustrations, you should not need to think about it a lot and it should generally just get out of your way.
+
+## Conda
+
+We are building on top of the conda packaging ecosystem, this means that we have a huge number of packages available for different platforms on [conda-forge](https://conda-forge.org/). We believe the conda packaging ecosystem provides a solid base to manage your dependencies. Conda-forge is community maintained and very open to contributions. It is widely used in data science and scientific computing, robotics and other fields. And has a proven track record.
+
+More info: [Conda & Pypi](../../concepts/conda_pypi/)
+
+## Target languages
+
+Essentially, we are language agnostics, we are targeting any language that can be installed with conda. Including: C++, Python, Rust, Zig etc. But we do believe the python ecosystem can benefit from a good package manager that is based on conda. So we are trying to provide an alternative to existing solutions there. We also think we can provide a good solution for C++ projects, as there are a lot of libraries available on conda-forge today. Pixi also truly shines when using it for multi-language projects e.g. a mix of C++ and Python, because we provide a nice way to build everything up to and including system level packages.

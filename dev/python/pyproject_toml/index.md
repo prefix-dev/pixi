@@ -291,7 +291,7 @@ Given a source tree:
 
 ```
 
-Concretly what this looks like in the `pyproject.toml` for `main_project`:
+Concretely what this looks like in the `pyproject.toml` for `main_project`:
 
 ```toml
 [tool.pixi.pypi-dependencies]

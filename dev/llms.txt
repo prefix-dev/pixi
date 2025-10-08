@@ -21,32 +21,33 @@ for further details on how to use the software.
 ## Getting Started documentation
 
 - [Home](https://prefix-dev.github.io/pixi/dev/index.md)
-- [Basic Usage](https://prefix-dev.github.io/pixi/dev/getting_started/index.md)
 - [Installation](https://prefix-dev.github.io/pixi/dev/installation/index.md)
+- [Basic Usage](https://prefix-dev.github.io/pixi/dev/getting_started/index.md)
+- [First Workspace](https://prefix-dev.github.io/pixi/dev/first_workspace/index.md)
 
 ## Tutorials documentation
 
-- [Global Tools](https://prefix-dev.github.io/pixi/dev/global_tools/introduction/index.md)
 - [pyproject.toml](https://prefix-dev.github.io/pixi/dev/python/pyproject_toml/index.md)
 - [Pytorch Installation](https://prefix-dev.github.io/pixi/dev/python/pytorch/index.md)
 - [Basic Usage](https://prefix-dev.github.io/pixi/dev/python/tutorial/index.md)
-- [Conda/Mamba](https://prefix-dev.github.io/pixi/dev/switching_from/conda/index.md)
-- [Poetry](https://prefix-dev.github.io/pixi/dev/switching_from/poetry/index.md)
 - [Import Environments](https://prefix-dev.github.io/pixi/dev/tutorials/import/index.md)
 - [Multi Environment](https://prefix-dev.github.io/pixi/dev/tutorials/multi_environment/index.md)
 - [ROS 2](https://prefix-dev.github.io/pixi/dev/tutorials/ros2/index.md)
 - [Rust](https://prefix-dev.github.io/pixi/dev/tutorials/rust/index.md)
+- [Conda/Mamba](https://prefix-dev.github.io/pixi/dev/switching_from/conda/index.md)
+- [Poetry](https://prefix-dev.github.io/pixi/dev/switching_from/poetry/index.md)
+- [Global Tools](https://prefix-dev.github.io/pixi/dev/global_tools/introduction/index.md)
 
 ## Concepts documentation
 
-- [Manifest](https://prefix-dev.github.io/pixi/dev/global_tools/manifest/index.md)
-- [Trampolines](https://prefix-dev.github.io/pixi/dev/global_tools/trampolines/index.md)
 - [Tasks](https://prefix-dev.github.io/pixi/dev/workspace/advanced_tasks/index.md)
 - [Environments](https://prefix-dev.github.io/pixi/dev/workspace/environment/index.md)
 - [Lock File](https://prefix-dev.github.io/pixi/dev/workspace/lockfile/index.md)
 - [Multi Environment](https://prefix-dev.github.io/pixi/dev/workspace/multi_environment/index.md)
 - [Multi Platform](https://prefix-dev.github.io/pixi/dev/workspace/multi_platform_configuration/index.md)
 - [System Requirements](https://prefix-dev.github.io/pixi/dev/workspace/system_requirements/index.md)
+- [Manifest](https://prefix-dev.github.io/pixi/dev/global_tools/manifest/index.md)
+- [Trampolines](https://prefix-dev.github.io/pixi/dev/global_tools/trampolines/index.md)
 
 ## Building documentation
 
@@ -195,9 +196,9 @@ for further details on how to use the software.
 
 ## Miscellaneous documentation
 
+- [Changelog](https://prefix-dev.github.io/pixi/dev/CHANGELOG/index.md)
 - [Community](https://prefix-dev.github.io/pixi/dev/misc/Community/index.md)
 - [FAQ](https://prefix-dev.github.io/pixi/dev/misc/FAQ/index.md)
 - [Packaging Pixi](https://prefix-dev.github.io/pixi/dev/misc/packaging/index.md)
 - [Pixi Vision](https://prefix-dev.github.io/pixi/dev/misc/vision/index.md)
-- [Changelog](https://prefix-dev.github.io/pixi/dev/CHANGELOG/index.md)
 
