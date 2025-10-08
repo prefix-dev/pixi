@@ -1782,7 +1782,7 @@ impl Display for EditablePackagesMismatch {
             format_package_list(f, &self.unexpected_editable)?;
             write!(
                 f,
-                "NOT to be editable but in the lock-file {they} {are}",
+                " NOT to be editable but in the lock-file {they} {are}",
                 they = it_they(self.unexpected_editable.len()),
                 are = is_are(self.unexpected_editable.len())
             )?
