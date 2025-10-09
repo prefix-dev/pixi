@@ -1,6 +1,9 @@
 mod cycle;
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 
 pub use cycle::{Cycle, CycleEnvironment};
 use futures::TryStreamExt;
@@ -367,6 +370,11 @@ impl SourceMetadataSpec {
         if dependencies.dependencies.is_empty() {
             return Ok(vec![]);
         }
+        let override_pinned_map = self
+            .backend_metadata
+            .override_pinned_build_source
+            .as_ref()
+            .map(|pinned| BTreeMap::from([(pkg_name.clone(), pinned.clone())]));
         match command_dispatcher
             .solve_pixi_environment(PixiEnvironmentSpec {
                 name: Some(format!("{} ({})", pkg_name.as_source(), env_type)),
@@ -389,7 +397,7 @@ impl SourceMetadataSpec {
                 channel_config: self.backend_metadata.channel_config.clone(),
                 variants: self.backend_metadata.variants.clone(),
                 enabled_protocols: self.backend_metadata.enabled_protocols.clone(),
-                override_pinned_source_for_package: None,
+                override_pinned_source_for_package: override_pinned_map,
             })
             .await
         {
