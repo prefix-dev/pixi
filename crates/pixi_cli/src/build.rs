@@ -7,7 +7,7 @@ use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, BuildEnvironment, BuildProfile, CacheDirs, SourceBuildSpec,
 };
 use pixi_config::ConfigCli;
-use pixi_core::{UpdateLockFileOptions, WorkspaceLocator};
+use pixi_core::WorkspaceLocator;
 use pixi_manifest::FeaturesExt;
 use pixi_progress::global_multi_progress;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
@@ -58,16 +58,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_closest_package(false)
         .locate()?
         .with_cli_config(args.config_cli);
-
-    // Ensure that the lock-file is up-to-date.
-    let lock_file = workspace
-        .update_lock_file(UpdateLockFileOptions {
-            lock_file_usage: args.lock_and_install_config.lock_file_usage()?,
-            no_install: args.lock_and_install_config.no_install(),
-            max_concurrent_solves: workspace.config().max_concurrent_solves(),
-        })
-        .await?
-        .0;
 
     // Construct a command dispatcher based on the workspace.
     let multi_progress = global_multi_progress();
@@ -137,7 +127,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         if let Some(parent) = manifest_spec_path.parent() {
             parent
         } else {
-            miette::bail!("source location: {} doesn't have a parent", search_start);
+            miette::bail!(
+                "explicit manifest path: {} doesn't have a parent",
+                manifest_spec_path.display()
+            );
         }
     } else {
         manifest_spec_path.as_ref()
@@ -181,15 +174,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Build the individual packages
     for package in packages {
-        let pinned_build_source = lock_file.pinned_build_source(&package);
-
         let built_package = command_dispatcher
             .source_build(SourceBuildSpec {
                 package,
                 // Build into a temporary directory first
                 output_directory: Some(temp_output_dir.path().to_path_buf()),
                 source: source.clone(),
-                pinned_build_source,
+                pinned_build_source: None,
                 channels: channels.clone(),
                 channel_config: channel_config.clone(),
                 build_environment: build_environment.clone(),
