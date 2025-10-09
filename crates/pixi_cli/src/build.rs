@@ -137,7 +137,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         if let Some(parent) = manifest_spec_path.parent() {
             parent
         } else {
-            miette::bail!("search start doesn't have a parent");
+            miette::bail!("source location: {} doesn't have a parent", search_start);
         }
     } else {
         manifest_spec_path.as_ref()
