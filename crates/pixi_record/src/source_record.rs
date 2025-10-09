@@ -57,14 +57,14 @@ pub struct InputHash {
 
 impl From<SourceRecord> for CondaPackageData {
     fn from(value: SourceRecord) -> Self {
-        let package_build_source = value.pinned_source_spec.and_then(|s| match s {
-            PinnedSourceSpec::Url(pinned_url_spec) => Some(PackageBuildSource {
+        let package_build_source = value.pinned_source_spec.map(|s| match s {
+            PinnedSourceSpec::Url(pinned_url_spec) => PackageBuildSource {
                 kind: PackageBuildSourceKind::Url {
                     url: pinned_url_spec.url,
                     sha256: pinned_url_spec.sha256,
                 },
                 subdirectory: None,
-            }),
+            },
             PinnedSourceSpec::Git(pinned_git_spec) => {
                 let subdirectory = pinned_git_spec
                     .source
@@ -79,19 +79,19 @@ impl From<SourceRecord> for CondaPackageData {
                     GitReference::DefaultBranch => None,
                 };
 
-                Some(PackageBuildSource {
+                PackageBuildSource {
                     kind: PackageBuildSourceKind::Git {
                         url: pinned_git_spec.git,
                         spec,
                         rev: pinned_git_spec.source.commit.to_string(),
                     },
                     subdirectory,
-                })
+                }
             }
-            PinnedSourceSpec::Path(pinned_path) => Some(PackageBuildSource {
+            PinnedSourceSpec::Path(pinned_path) => PackageBuildSource {
                 kind: PackageBuildSourceKind::Path(pinned_path.path),
                 subdirectory: None,
-            }),
+            },
         });
         CondaPackageData::Source(CondaSourceData {
             package_record: value.package_record,
