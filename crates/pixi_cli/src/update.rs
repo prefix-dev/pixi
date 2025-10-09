@@ -6,14 +6,12 @@ use itertools::Itertools;
 use miette::{Context, IntoDiagnostic, MietteDiagnostic};
 use pixi_config::ConfigCli;
 use pixi_consts::consts;
+use pixi_core::WorkspaceLocator;
 use pixi_core::{
     Workspace,
     lock_file::{UpdateContext, filter_lock_file},
 };
-use pixi_core::{
-    WorkspaceLocator,
-    diff::{LockFileDiff, LockFileJsonDiff},
-};
+use pixi_diff::{LockFileDiff, LockFileJsonDiff};
 use pixi_manifest::EnvironmentName;
 use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, LockedPackageRef};
@@ -182,7 +180,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Format as json?
     if args.json {
         let diff = LockFileDiff::from_lock_files(loaded_lock_file, &lock_file);
-        let json_diff = LockFileJsonDiff::new(Some(&workspace), diff);
+        let json_diff = LockFileJsonDiff::new(Some(workspace.named_environments()), diff);
         let json = serde_json::to_string_pretty(&json_diff).expect("failed to convert to json");
         println!("{}", json);
     } else if diff.is_empty() {

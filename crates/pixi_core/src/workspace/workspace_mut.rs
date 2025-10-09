@@ -15,6 +15,7 @@ use pixi_command_dispatcher::{
     CommandDispatcherError, MissingChannelError, SolvePixiEnvironmentError::MissingChannel,
 };
 use pixi_config::PinningStrategy;
+use pixi_diff::LockFileDiff;
 use pixi_manifest::{
     DependencyOverwriteBehavior, FeatureName, FeaturesExt, HasFeaturesIter, LoadManifestsError,
     ManifestDocument, ManifestKind, PypiDependencyLocation, SpecType, TomlError, WorkspaceManifest,
@@ -28,7 +29,6 @@ use toml_edit::DocumentMut;
 
 use crate::{
     Workspace,
-    diff::LockFileDiff,
     environment::LockFileUsage,
     lock_file::{LockFileDerivedData, ReinstallPackages, UpdateContext, UpdateMode},
     workspace::{

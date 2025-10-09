@@ -2,13 +2,12 @@ use clap::Parser;
 use miette::{Context, IntoDiagnostic};
 use pixi_core::{
     WorkspaceLocator,
-    diff::{LockFileDiff, LockFileJsonDiff},
     environment::LockFileUsage,
     lock_file::{LockFileDerivedData, UpdateLockFileOptions},
 };
+use pixi_diff::{LockFileDiff, LockFileJsonDiff};
 
 use crate::cli_config::NoInstallConfig;
-
 use crate::cli_config::WorkspaceConfig;
 
 /// Solve environment and update the lock file without installing the
@@ -54,7 +53,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Format as json?
     if args.json {
         let diff = LockFileDiff::from_lock_files(&original_lock_file, &lock_file);
-        let json_diff = LockFileJsonDiff::new(Some(&workspace), diff);
+        let json_diff = LockFileJsonDiff::new(Some(workspace.named_environments()), diff);
         let json = serde_json::to_string_pretty(&json_diff).expect("failed to convert to json");
         println!("{}", json);
     } else if lock_updated {

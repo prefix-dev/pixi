@@ -9,10 +9,10 @@ use pep508_rs::{MarkerTree, Requirement};
 use pixi_config::ConfigCli;
 use pixi_core::{
     WorkspaceLocator,
-    diff::{LockFileDiff, LockFileJsonDiff},
     lock_file::UpdateContext,
     workspace::{MatchSpecs, PypiDeps, WorkspaceMut},
 };
+use pixi_diff::{LockFileDiff, LockFileJsonDiff};
 use pixi_manifest::{FeatureName, SpecType};
 use pixi_pypi_spec::PixiPypiSpec;
 use pixi_spec::PixiSpec;
@@ -223,7 +223,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .update()
                 .await?;
             let diff = LockFileDiff::from_lock_files(&original_lock_file, &derived.lock_file);
-            let json_diff = LockFileJsonDiff::new(Some(workspace.workspace()), diff);
+            let json_diff =
+                LockFileJsonDiff::new(Some(workspace.workspace().named_environments()), diff);
             let json = serde_json::to_string_pretty(&json_diff).expect("failed to convert to json");
             println!("{}", json);
             // Revert changes after computing the diff in dry-run mode.
@@ -233,7 +234,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             let saved_workspace = workspace.save().await.into_diagnostic()?;
             let updated_lock_file = saved_workspace.load_lock_file().await?;
             let diff = LockFileDiff::from_lock_files(&original_lock_file, &updated_lock_file);
-            let json_diff = LockFileJsonDiff::new(Some(&saved_workspace), diff);
+            let json_diff = LockFileJsonDiff::new(Some(saved_workspace.named_environments()), diff);
             let json = serde_json::to_string_pretty(&json_diff).expect("failed to convert to json");
             println!("{}", json);
         }
