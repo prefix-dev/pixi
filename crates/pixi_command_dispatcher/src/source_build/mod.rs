@@ -502,6 +502,11 @@ impl SourceBuildSpec {
             )
         };
 
+        // We always create the host prefix so that $PREFIX exists during the build.
+        let host_prefix_directory = Prefix::create(&directories.host_prefix)
+            .map_err(SourceBuildError::CreateBuildEnvironmentDirectory)
+            .map_err(CommandDispatcherError::Failed)?;
+
         // Install the host environment.
         let host_prefix = if host_records.is_empty() {
             None
@@ -511,9 +516,7 @@ impl SourceBuildSpec {
                     .install_pixi_environment(InstallPixiEnvironmentSpec {
                         name: format!("{} (host)", self.package.name.as_source()),
                         records: host_records.clone(),
-                        prefix: Prefix::create(&directories.host_prefix)
-                            .map_err(SourceBuildError::CreateBuildEnvironmentDirectory)
-                            .map_err(CommandDispatcherError::Failed)?,
+                        prefix: host_prefix_directory,
                         installed: None,
                         ignore_packages: None,
                         build_environment: self.build_environment.to_build_from_build(),

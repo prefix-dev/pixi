@@ -71,8 +71,7 @@ fn default_build_environment() -> BuildEnvironment {
 }
 
 #[tokio::test]
-#[ignore = "multi-output recipes don't work with pixi-build-rattler-build 0.3.3: https://github.com/prefix-dev/pixi-build-backends/issues/379"]
-//#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 pub async fn simple_test() {
     let (reporter, events) = EventReporter::new();
     let (tool_platform, tool_virtual_packages) = tool_platform();
