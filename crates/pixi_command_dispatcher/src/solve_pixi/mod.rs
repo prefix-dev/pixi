@@ -87,10 +87,8 @@ pub struct PixiEnvironmentSpec {
     /// Optional override for a specific package: use this pinned source for
     /// checkout and as the package_build_source instead of pinning anew.
     #[serde(skip)]
-    pub override_pinned_source_for_package: Option<(
-        rattler_conda_types::PackageName,
-        pixi_record::PinnedSourceSpec,
-    )>,
+    pub override_pinned_source_for_package:
+        Option<BTreeMap<rattler_conda_types::PackageName, pixi_record::PinnedSourceSpec>>,
 }
 
 impl Default for PixiEnvironmentSpec {

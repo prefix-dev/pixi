@@ -28,7 +28,7 @@ pub struct SourceMetadataCollector {
     enabled_protocols: EnabledProtocols,
     variants: Option<BTreeMap<String, Vec<String>>>,
     override_pinned_source_for_package:
-        Option<(rattler_conda_types::PackageName, PinnedSourceSpec)>,
+        Option<BTreeMap<rattler_conda_types::PackageName, PinnedSourceSpec>>,
 }
 
 #[derive(Default)]
@@ -75,10 +75,9 @@ impl SourceMetadataCollector {
         build_environment: BuildEnvironment,
         variants: Option<BTreeMap<String, Vec<String>>>,
         enabled_protocols: EnabledProtocols,
-        override_pinned_source_for_package: Option<(
-            rattler_conda_types::PackageName,
-            PinnedSourceSpec,
-        )>,
+        override_pinned_source_for_package: Option<
+            BTreeMap<rattler_conda_types::PackageName, PinnedSourceSpec>,
+        >,
     ) -> Self {
         Self {
             command_queue,
@@ -164,16 +163,10 @@ impl SourceMetadataCollector {
         tracing::trace!("Collecting source metadata for {name:#?}");
 
         // Determine if we should override the build_source pin for this package.
-        let override_pin =
-            self.override_pinned_source_for_package
-                .as_ref()
-                .and_then(|(pkg, pin)| {
-                    if pkg == &name {
-                        Some(pin.clone())
-                    } else {
-                        None
-                    }
-                });
+        let override_pin = self
+            .override_pinned_source_for_package
+            .as_ref()
+            .and_then(|map| map.get(&name).cloned());
 
         // Always checkout the manifest-defined source location (root), discovery
         // will pick build_source; we only override the build pin later.

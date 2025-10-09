@@ -1,6 +1,6 @@
 use std::{
     cmp::PartialEq,
-    collections::{HashMap, HashSet, hash_map::Entry},
+    collections::{BTreeMap, HashMap, HashSet, hash_map::Entry},
     future::{Future, ready},
     iter,
     path::PathBuf,
@@ -1440,30 +1440,30 @@ impl<'p> UpdateContext<'p> {
                     .unwrap_or_default();
 
                 // Spawn a task to solve the group.
-                // Determine override pinned source for current package when performing
-                // a targeted update that does not include the current package.
+                // Determine override pinned sources for source packages when performing
+                // a targeted update.
                 let override_pinned = (|| {
-                    let pkg_name_str = source
-                        .workspace()
-                        .package
-                        .as_ref()
-                        .and_then(|p| p.value.package.name.clone())?;
                     let targets = self.update_targets.as_ref()?;
-                    if targets.is_empty() || targets.contains(&pkg_name_str) {
+                    if targets.is_empty() {
                         return None;
                     }
-
-                    // Find the previous pin in the existing locked group records.
-                    let rec = locked_group_records.records.iter().find_map(|r| match r {
-                        PixiRecord::Source(src)
-                            if src.package_record.name.as_source() == pkg_name_str =>
-                        {
-                            Some(src)
-                        }
-                        _ => None,
-                    })?;
-                    let prev_pin = rec.pinned_source_spec.clone()?;
-                    Some((rec.package_record.name.clone(), prev_pin))
+                    Some(
+                        locked_group_records
+                            .records
+                            .iter()
+                            .filter_map(|r| match r {
+                                PixiRecord::Source(src) => {
+                                    let name = src.package_record.name.clone();
+                                    if targets.contains(name.as_source()) {
+                                        src.pinned_source_spec.clone().map(|spec| (name, spec))
+                                    } else {
+                                        None
+                                    }
+                                }
+                                _ => None,
+                            })
+                            .collect(),
+                    )
                 })();
 
                 let group_solve_task = spawn_solve_conda_environment_task(
@@ -1979,10 +1979,9 @@ async fn spawn_solve_conda_environment_task(
     platform: Platform,
     channel_priority: ChannelPriority,
     command_dispatcher: CommandDispatcher,
-    override_pinned_source_for_package: Option<(
-        rattler_conda_types::PackageName,
-        pixi_record::PinnedSourceSpec,
-    )>,
+    override_pinned_source_for_package: Option<
+        BTreeMap<rattler_conda_types::PackageName, pixi_record::PinnedSourceSpec>,
+    >,
 ) -> Result<TaskResult, SolveCondaEnvironmentError> {
     // Get the dependencies for this platform
     let dependencies = group.combined_dependencies(Some(platform));
