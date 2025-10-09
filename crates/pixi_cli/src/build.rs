@@ -189,6 +189,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 // Build into a temporary directory first
                 output_directory: Some(temp_output_dir.path().to_path_buf()),
                 source: source.clone(),
+                pinned_build_source,
                 channels: channels.clone(),
                 channel_config: channel_config.clone(),
                 build_environment: build_environment.clone(),
@@ -197,7 +198,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 work_directory: None,
                 clean: args.clean,
                 build_profile: BuildProfile::Release,
-                pinned_build_source,
             })
             .await?;
 

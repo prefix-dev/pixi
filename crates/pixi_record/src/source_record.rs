@@ -88,7 +88,10 @@ impl From<SourceRecord> for CondaPackageData {
                     subdirectory,
                 })
             }
-            PinnedSourceSpec::Path(_) => None,
+            PinnedSourceSpec::Path(pinned_path) => Some(PackageBuildSource {
+                kind: PackageBuildSourceKind::Path(pinned_path.path),
+                subdirectory: None,
+            }),
         });
         CondaPackageData::Source(CondaSourceData {
             package_record: value.package_record,

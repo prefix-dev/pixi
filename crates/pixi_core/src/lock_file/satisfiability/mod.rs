@@ -1584,7 +1584,7 @@ pub(crate) async fn verify_package_platform_satisfiability(
         )));
     }
 
-    // Verify the pixi build package's package_build_source matches the manifest (Url/Git).
+    // Verify the pixi build package's package_build_source matches the manifest.
     verify_build_source_matches_manifest(environment, locked_pixi_records)?;
 
     Ok(VerifiedIndividualEnvironment {
@@ -1918,7 +1918,25 @@ fn verify_build_source_matches_manifest(
                 ))
             })
         }
-        pixi_spec::SourceLocationSpec::Path(_) => Ok(()),
+        pixi_spec::SourceLocationSpec::Path(path_spec) => {
+            let Some(locked_path) = src_record
+                .pinned_source_spec
+                .as_ref()
+                .and_then(|p| p.as_path())
+            else {
+                return Err(Box::new(PlatformUnsat::PackageBuildSourceMismatch(
+                    src_record.package_record.name.as_source().to_string(),
+                    SourceMismatchError::SourceTypeMismatch,
+                )));
+            };
+
+            locked_path.satisfies(&path_spec).map_err(|e| {
+                Box::new(PlatformUnsat::PackageBuildSourceMismatch(
+                    src_record.package_record.name.as_source().to_string(),
+                    e,
+                ))
+            })
+        }
     }
 }
 
