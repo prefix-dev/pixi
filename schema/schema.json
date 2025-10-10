@@ -535,26 +535,6 @@
         }
       }
     },
-    "BuildVariantFileEntry": {
-      "title": "BuildVariantFileEntry",
-      "description": "An external file contributing variant definitions.",
-      "type": "object",
-      "required": [
-        "file"
-      ],
-      "additionalProperties": false,
-      "properties": {
-        "file": {
-          "title": "File",
-          "description": "Path to a variant definition file relative to the workspace root.",
-          "type": "string",
-          "pattern": "^[^\\\\]+$",
-          "examples": [
-            "./variants/conda_build_config.yaml"
-          ]
-        }
-      }
-    },
     "ChannelInlineTable": {
       "title": "ChannelInlineTable",
       "description": "A precise description of a `conda` channel, with an optional priority.",
@@ -2156,14 +2136,6 @@
             "John Doe <j.doe@prefix.dev>"
           ]
         },
-        "build-variant-files": {
-          "title": "Build-Variant-Files",
-          "description": "Ordered list of variant definition files to merge, highest priority first.",
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/BuildVariantFileEntry"
-          }
-        },
         "build-variants": {
           "title": "Build-Variants",
           "description": "The build variants of the project",
@@ -2176,6 +2148,15 @@
           },
           "propertyNames": {
             "minLength": 1
+          }
+        },
+        "build-variants-files": {
+          "title": "Build-Variants-Files",
+          "description": "Ordered list of variant definition files.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[^\\\\]+$"
           }
         },
         "channel-priority": {

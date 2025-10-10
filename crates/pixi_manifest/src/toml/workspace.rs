@@ -21,11 +21,6 @@ use crate::{
 };
 
 #[derive(Debug, Clone)]
-pub struct TomlBuildVariantFile {
-    file: Spanned<PathBuf>,
-}
-
-#[derive(Debug, Clone)]
 pub struct TomlWorkspaceTarget {
     build_variants: Option<HashMap<String, Vec<String>>>,
 }
@@ -55,7 +50,7 @@ pub struct TomlWorkspace {
     pub preview: TomlPreview,
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlWorkspaceTarget>,
     pub build_variants: Option<HashMap<String, Vec<String>>>,
-    pub build_variant_files: Option<Vec<TomlBuildVariantFile>>,
+    pub build_variant_files: Option<Vec<Spanned<TomlFromStr<PathBuf>>>>,
     pub requires_pixi: Option<VersionSpec>,
     pub exclude_newer: Option<ExcludeNewer>,
 
@@ -157,13 +152,35 @@ impl TomlWorkspace {
 }
 
 fn convert_build_variant_files(
-    entries: Option<Vec<TomlBuildVariantFile>>,
+    entries: Option<Vec<Spanned<TomlFromStr<PathBuf>>>>,
     root_directory: Option<&Path>,
 ) -> Result<Vec<BuildVariantSource>, TomlError> {
     if let Some(entries) = entries {
         entries
             .into_iter()
-            .map(|entry| entry.into_workspace_source(root_directory))
+            .map(|Spanned { value, span }| {
+                let path = value.into_inner();
+                let span_range = if span.is_empty() {
+                    None
+                } else {
+                    Some(span.into())
+                };
+
+                if let Some(root_directory) = root_directory {
+                    let full_path = root_directory.join(&path);
+                    if !full_path.is_file() {
+                        return Err(TomlError::from(
+                            GenericError::new(format!(
+                                "'{}' does not exist",
+                                dunce::simplified(&full_path).display()
+                            ))
+                            .with_opt_span(span_range),
+                        ));
+                    }
+                }
+
+                Ok(BuildVariantSource::File(path))
+            })
             .collect()
     } else {
         Ok(Vec::new())
@@ -214,7 +231,8 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
         let target = th
             .optional::<TomlIndexMap<_, _>>("target")
             .map(TomlIndexMap::into_inner);
-        let build_variant_files = th.optional::<Vec<TomlBuildVariantFile>>("build-variant-files");
+        let build_variant_files =
+            th.optional::<Vec<Spanned<TomlFromStr<PathBuf>>>>("build-variants-files");
         let build_variants = th
             .optional::<TomlHashMap<_, _>>("build-variants")
             .map(TomlHashMap::into_inner);
@@ -266,50 +284,6 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspaceTarget {
         th.finalize(None)?;
 
         Ok(TomlWorkspaceTarget { build_variants })
-    }
-}
-
-impl<'de> toml_span::Deserialize<'de> for TomlBuildVariantFile {
-    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
-        let mut th = TableHelper::new(value)?;
-
-        let file = th
-            .required::<TomlWith<_, Spanned<TomlFromStr<PathBuf>>>>("file")?
-            .into_inner();
-
-        th.finalize(None)?;
-
-        Ok(Self { file })
-    }
-}
-
-impl TomlBuildVariantFile {
-    fn into_workspace_source(
-        self,
-        root_directory: Option<&Path>,
-    ) -> Result<BuildVariantSource, TomlError> {
-        let Spanned { value: path, span } = self.file;
-        let span_range = if span.is_empty() {
-            None
-        } else {
-            Some(span.into())
-        };
-
-        // Ensure that file exists
-        if let Some(root_directory) = root_directory {
-            let full_path = root_directory.join(&path);
-            if !full_path.is_file() {
-                return Err(TomlError::from(
-                    GenericError::new(format!(
-                        "'{}' does not exist",
-                        dunce::simplified(&full_path).display()
-                    ))
-                    .with_opt_span(span_range),
-                ));
-            }
-        }
-
-        Ok(BuildVariantSource::File(path))
     }
 }
 
@@ -385,7 +359,7 @@ mod test {
         let input = r#"
         channels = []
         platforms = []
-        build-variant-files = [{ file = "missing.yaml" }]
+        build-variants-files = ["missing.yaml"]
         "#;
         let path = Path::new("");
         let parse_error = TomlWorkspace::from_toml_str(input)
@@ -393,10 +367,10 @@ mod test {
             .unwrap_err();
         assert_snapshot!(format_parse_error(input, parse_error), @r#"
          × 'missing.yaml' does not exist
-          ╭─[pixi.toml:4:42]
+          ╭─[pixi.toml:4:34]
         3 │         platforms = []
-        4 │         build-variant-files = [{ file = "missing.yaml" }]
-          ·                                          ────────────
+        4 │         build-variants-files = ["missing.yaml"]
+          ·                                  ────────────
         5 │
           ╰────
         "#);

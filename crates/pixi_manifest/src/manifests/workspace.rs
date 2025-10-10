@@ -1398,9 +1398,9 @@ start = "python -m flask run --port=5050"
         name = "foo"
         channels = []
         platforms = []
-        build-variant-files = [
-            { file = "variants/a.yaml" },
-            { file = "variants/b.yaml" },
+        build-variants-files = [
+            "variants/a.yaml",
+            "variants/b.yaml",
         ]
 
         "#;
@@ -1425,12 +1425,12 @@ start = "python -m flask run --port=5050"
         platforms = []
 
         [workspace.target.win-64]
-        build-variant-files = [{ file = "windows.yaml" }]
+        build-variants-files = ["windows.yaml"]
         "#;
 
         let error = expect_parse_failure(contents);
         assert!(
-            error.contains("build-variant-files"),
+            error.contains("build-variants-files"),
             "unexpected error message {error}"
         );
     }
