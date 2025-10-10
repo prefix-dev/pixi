@@ -7,9 +7,7 @@ use pixi_git::sha::GitSha;
 use pixi_spec::{GitReference, SourceSpec};
 use rattler_conda_types::{MatchSpec, Matches, NamelessMatchSpec, PackageRecord};
 use rattler_digest::{Sha256, Sha256Hash};
-use rattler_lock::{
-    CondaPackageData, CondaSourceData, GitShallowSpec, PackageBuildSource, PackageBuildSourceKind,
-};
+use rattler_lock::{CondaPackageData, CondaSourceData, GitShallowSpec, PackageBuildSource};
 use serde::{Deserialize, Serialize};
 use typed_path::Utf8TypedPathBuf;
 
@@ -58,12 +56,10 @@ pub struct InputHash {
 impl From<SourceRecord> for CondaPackageData {
     fn from(value: SourceRecord) -> Self {
         let package_build_source = value.pinned_source_spec.map(|s| match s {
-            PinnedSourceSpec::Url(pinned_url_spec) => PackageBuildSource {
-                kind: PackageBuildSourceKind::Url {
-                    url: pinned_url_spec.url,
-                    sha256: pinned_url_spec.sha256,
-                },
-                subdirectory: None,
+            PinnedSourceSpec::Url(pinned_url_spec) => PackageBuildSource::Url {
+                url: pinned_url_spec.url,
+                sha256: pinned_url_spec.sha256,
+                subdir: None,
             },
             PinnedSourceSpec::Git(pinned_git_spec) => {
                 let subdirectory = pinned_git_spec
@@ -79,18 +75,15 @@ impl From<SourceRecord> for CondaPackageData {
                     GitReference::DefaultBranch => None,
                 };
 
-                PackageBuildSource {
-                    kind: PackageBuildSourceKind::Git {
-                        url: pinned_git_spec.git,
-                        spec,
-                        rev: pinned_git_spec.source.commit.to_string(),
-                    },
-                    subdirectory,
+                PackageBuildSource::Git {
+                    url: pinned_git_spec.git,
+                    spec,
+                    rev: pinned_git_spec.source.commit.to_string(),
+                    subdir: subdirectory,
                 }
             }
-            PinnedSourceSpec::Path(pinned_path) => PackageBuildSource {
-                kind: PackageBuildSourceKind::Path(pinned_path.path),
-                subdirectory: None,
+            PinnedSourceSpec::Path(pinned_path) => PackageBuildSource::Path {
+                path: pinned_path.path,
             },
         });
         CondaPackageData::Source(CondaSourceData {
@@ -116,9 +109,11 @@ impl TryFrom<CondaSourceData> for SourceRecord {
 
     fn try_from(value: CondaSourceData) -> Result<Self, Self::Error> {
         let pinned_source_spec = value.package_build_source.map(|source| match source {
-            PackageBuildSource {
-                kind: PackageBuildSourceKind::Git { url, spec, rev },
-                subdirectory,
+            PackageBuildSource::Git {
+                url,
+                spec,
+                rev,
+                subdir,
             } => {
                 let reference = match spec {
                     Some(GitShallowSpec::Branch(branch)) => GitReference::Branch(branch),
@@ -131,31 +126,23 @@ impl TryFrom<CondaSourceData> for SourceRecord {
                     git: url,
                     source: PinnedGitCheckout {
                         commit: GitSha::from_str(&rev).unwrap(),
-                        subdirectory: subdirectory.map(|s| s.to_string()),
+                        subdirectory: subdir.map(|s| s.to_string()),
                         reference,
                     },
                 })
             }
-            PackageBuildSource {
-                kind: PackageBuildSourceKind::Url { url, sha256 },
-                ..
+            PackageBuildSource::Url {
+                url,
+                sha256,
+                subdir: _,
             } => PinnedSourceSpec::Url(crate::PinnedUrlSpec {
                 url,
                 sha256,
                 md5: None,
             }),
-            PackageBuildSource {
-                kind: PackageBuildSourceKind::Path(path),
-                subdirectory,
-            } => PinnedSourceSpec::Path(crate::PinnedPathSpec {
-                path: {
-                    if let Some(subdir) = subdirectory {
-                        path.join(subdir)
-                    } else {
-                        path
-                    }
-                },
-            }),
+            PackageBuildSource::Path { path } => {
+                PinnedSourceSpec::Path(crate::PinnedPathSpec { path })
+            }
         });
         Ok(Self {
             package_record: value.package_record,
@@ -257,18 +244,20 @@ mod tests {
             .package_build_source
             .as_ref()
             .expect("expected package build source");
-        let PackageBuildSource { kind, subdirectory } = package_build_source;
 
-        let PackageBuildSourceKind::Git { url, spec, rev } = kind else {
+        let PackageBuildSource::Git {
+            url,
+            spec,
+            rev,
+            subdir,
+        } = package_build_source
+        else {
             panic!("expected git package build source");
         };
 
         assert_eq!(url.path(), "/repo.git");
         assert_eq!(url.host_str(), Some("example.com"));
-        assert_eq!(
-            subdirectory.as_ref().map(|s| s.as_str()),
-            Some("nested/project")
-        );
+        assert_eq!(subdir.as_ref().map(|s| s.as_str()), Some("nested/project"));
         assert!(matches!(spec, Some(GitShallowSpec::Branch(branch)) if branch == "main"));
         assert_eq!(rev, "0123456789abcdef0123456789abcdef01234567");
 
