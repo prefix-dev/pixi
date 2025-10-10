@@ -1341,7 +1341,7 @@ checksum = "b94f61472cee1439c0b966b47e3aca9ae07e45d070759512cd390ea2bebc6675"
 [[package]]
 name = "coalesced_map"
 version = "0.1.2"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#7659b6e6e66855251a63204dc076aa96ba760f83"
+source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#e9d77c11c0a79c62185351d76848aecaf0abcc5f"
 dependencies = [
  "dashmap",
  "tokio",
@@ -2114,7 +2114,7 @@ dependencies = [
 [[package]]
 name = "file_url"
 version = "0.2.6"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#7659b6e6e66855251a63204dc076aa96ba760f83"
+source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#e9d77c11c0a79c62185351d76848aecaf0abcc5f"
 dependencies = [
  "itertools 0.14.0",
  "percent-encoding",
@@ -2967,7 +2967,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.6.0",
+ "socket2 0.5.10",
  "system-configuration",
  "tokio",
  "tower-service",
@@ -2987,7 +2987,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.62.2",
+ "windows-core 0.59.0",
 ]
 
 [[package]]
@@ -4340,7 +4340,7 @@ checksum = "1e91099d4268b0e11973f036e885d652fb0b21fedcf69738c627f94db6a44f42"
 [[package]]
 name = "path_resolver"
 version = "0.2.1"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#7659b6e6e66855251a63204dc076aa96ba760f83"
+source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#e9d77c11c0a79c62185351d76848aecaf0abcc5f"
 dependencies = [
  "fs-err",
  "fxhash",
@@ -5806,7 +5806,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash",
  "rustls",
- "socket2 0.6.0",
+ "socket2 0.5.10",
  "thiserror 2.0.17",
  "tokio",
  "tracing",
@@ -5843,7 +5843,7 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.6.0",
+ "socket2 0.5.10",
  "tracing",
  "windows-sys 0.60.2",
 ]
@@ -5955,7 +5955,7 @@ dependencies = [
 [[package]]
 name = "rattler"
 version = "0.37.7"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#7659b6e6e66855251a63204dc076aa96ba760f83"
+source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#e9d77c11c0a79c62185351d76848aecaf0abcc5f"
 dependencies = [
  "anyhow",
  "clap",
@@ -5999,7 +5999,7 @@ dependencies = [
 [[package]]
 name = "rattler_cache"
 version = "0.3.37"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#7659b6e6e66855251a63204dc076aa96ba760f83"
+source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#e9d77c11c0a79c62185351d76848aecaf0abcc5f"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -6031,7 +6031,7 @@ dependencies = [
 [[package]]
 name = "rattler_conda_types"
 version = "0.40.0"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#7659b6e6e66855251a63204dc076aa96ba760f83"
+source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#e9d77c11c0a79c62185351d76848aecaf0abcc5f"
 dependencies = [
  "chrono",
  "core-foundation 0.10.1",
@@ -6072,7 +6072,7 @@ dependencies = [
 [[package]]
 name = "rattler_digest"
 version = "1.1.5"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#7659b6e6e66855251a63204dc076aa96ba760f83"
+source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#e9d77c11c0a79c62185351d76848aecaf0abcc5f"
 dependencies = [
  "blake2",
  "digest",
@@ -6089,7 +6089,7 @@ dependencies = [
 [[package]]
 name = "rattler_lock"
 version = "0.25.0"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#7659b6e6e66855251a63204dc076aa96ba760f83"
+source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#e9d77c11c0a79c62185351d76848aecaf0abcc5f"
 dependencies = [
  "chrono",
  "file_url",
@@ -6114,7 +6114,7 @@ dependencies = [
 [[package]]
 name = "rattler_macros"
 version = "1.0.11"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#7659b6e6e66855251a63204dc076aa96ba760f83"
+source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#e9d77c11c0a79c62185351d76848aecaf0abcc5f"
 dependencies = [
  "quote",
  "syn",
@@ -6123,7 +6123,7 @@ dependencies = [
 [[package]]
 name = "rattler_menuinst"
 version = "0.2.29"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#7659b6e6e66855251a63204dc076aa96ba760f83"
+source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#e9d77c11c0a79c62185351d76848aecaf0abcc5f"
 dependencies = [
  "chrono",
  "configparser",
@@ -6152,7 +6152,7 @@ dependencies = [
 [[package]]
 name = "rattler_networking"
 version = "0.25.16"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#7659b6e6e66855251a63204dc076aa96ba760f83"
+source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#e9d77c11c0a79c62185351d76848aecaf0abcc5f"
 dependencies = [
  "anyhow",
  "async-once-cell",
@@ -6183,7 +6183,7 @@ dependencies = [
 [[package]]
 name = "rattler_package_streaming"
 version = "0.23.7"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#7659b6e6e66855251a63204dc076aa96ba760f83"
+source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#e9d77c11c0a79c62185351d76848aecaf0abcc5f"
 dependencies = [
  "bzip2 0.6.0",
  "chrono",
@@ -6212,7 +6212,7 @@ dependencies = [
 [[package]]
 name = "rattler_pty"
 version = "0.2.6"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#7659b6e6e66855251a63204dc076aa96ba760f83"
+source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#e9d77c11c0a79c62185351d76848aecaf0abcc5f"
 dependencies = [
  "libc",
  "nix 0.30.1",
@@ -6222,7 +6222,7 @@ dependencies = [
 [[package]]
 name = "rattler_redaction"
 version = "0.1.12"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#7659b6e6e66855251a63204dc076aa96ba760f83"
+source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#e9d77c11c0a79c62185351d76848aecaf0abcc5f"
 dependencies = [
  "reqwest",
  "reqwest-middleware",
@@ -6232,7 +6232,7 @@ dependencies = [
 [[package]]
 name = "rattler_repodata_gateway"
 version = "0.24.7"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#7659b6e6e66855251a63204dc076aa96ba760f83"
+source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#e9d77c11c0a79c62185351d76848aecaf0abcc5f"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -6291,7 +6291,7 @@ dependencies = [
 [[package]]
 name = "rattler_shell"
 version = "0.25.2"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#7659b6e6e66855251a63204dc076aa96ba760f83"
+source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#e9d77c11c0a79c62185351d76848aecaf0abcc5f"
 dependencies = [
  "anyhow",
  "enum_dispatch",
@@ -6311,7 +6311,7 @@ dependencies = [
 [[package]]
 name = "rattler_solve"
 version = "3.0.5"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#7659b6e6e66855251a63204dc076aa96ba760f83"
+source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#e9d77c11c0a79c62185351d76848aecaf0abcc5f"
 dependencies = [
  "chrono",
  "futures",
@@ -6327,8 +6327,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_virtual_packages"
-version = "2.2.0"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#7659b6e6e66855251a63204dc076aa96ba760f83"
+version = "2.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "299c16885487278a7d305634e4a58512bf0fc4b052623d033cc05fa6cd1255e9"
 dependencies = [
  "archspec",
  "libloading",
@@ -7375,7 +7376,7 @@ checksum = "bbbb5d9659141646ae647b42fe094daf6c6192d1620870b449d9557f748b2daa"
 [[package]]
 name = "simple_spawn_blocking"
 version = "1.1.0"
-source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#7659b6e6e66855251a63204dc076aa96ba760f83"
+source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#e9d77c11c0a79c62185351d76848aecaf0abcc5f"
 dependencies = [
  "tokio",
 ]
@@ -7642,7 +7643,7 @@ dependencies = [
  "ntapi",
  "objc2-core-foundation",
  "objc2-io-kit",
- "windows 0.61.3",
+ "windows 0.59.0",
 ]
 
 [[package]]
@@ -10661,3 +10662,8 @@ dependencies = [
  "quote",
  "syn",
 ]
+
+[[patch.unused]]
+name = "rattler_virtual_packages"
+version = "2.2.0"
+source = "git+https://github.com/remimimimimi/rattler?branch=feat%2Flock%2Fpackage_build_source%2Fpath#e9d77c11c0a79c62185351d76848aecaf0abcc5f"
