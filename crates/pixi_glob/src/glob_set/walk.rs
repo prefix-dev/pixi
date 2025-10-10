@@ -80,8 +80,16 @@ pub fn walk_globs(
     globs: &[SimpleGlob],
 ) -> Result<Vec<ignore::DirEntry>, GlobSetError> {
     let mut ob = ignore::overrides::OverrideBuilder::new(effective_walk_root);
-    for glob in globs {
-        let pattern = anchor_literal_pattern(glob.to_pattern());
+    let glob_patterns = globs
+        .iter()
+        .map(|g| anchor_literal_pattern(g.to_pattern()))
+        .collect_vec();
+
+    // Always add ignore hidden folders unless the user explicitly included them
+    // because we add patterns as overrides, which overrides any `WalkBuilder` settings.
+    let ignore_patterns = ignore_hidden_folders(glob_patterns);
+
+    for pattern in ignore_patterns {
         ob.add(&pattern).map_err(GlobSetError::BuildOverrides)?;
     }
 
@@ -171,8 +179,37 @@ fn anchor_literal_pattern(pattern: String) -> String {
     }
 }
 
+/// Ensures that hidden folders (starting with a dot) are always ignored unless explicitly included.
+/// This is done by adding a negated pattern for `**/.*` unless the user
+/// already specified a pattern that would include hidden folders or a specific hidden folder.
+/// This is important to avoid accidentally including hidden folders in the results when patterns like ** are used.
+/// Also, negated pattern should go after other patterns to ensure they are applied correctly.
+pub fn ignore_hidden_folders(mut patterns: Vec<String>) -> Vec<String> {
+    // Detect if user explicitly included hidden folders
+    // e.g. ".*", "**/.*", "./.*", "*/.*", etc.
+    let user_includes_hidden = patterns
+        .iter()
+        .any(|p| p == ".*" || p == "./.*" || p.contains("/.*"));
+
+    if user_includes_hidden {
+        return patterns;
+    }
+
+    // Append negations at the end if they aren't already present.
+    if !patterns.iter().any(|p| p == "!.*") {
+        patterns.push("!.*".to_string());
+    }
+    if !patterns.iter().any(|p| p == "!**/.*") {
+        patterns.push("!**/.*".to_string());
+    }
+
+    patterns
+}
+
 #[cfg(test)]
 mod tests {
+    use crate::glob_set::walk::ignore_hidden_folders;
+
     use super::anchor_literal_pattern;
 
     #[test]
@@ -204,5 +241,24 @@ mod tests {
             anchor_literal_pattern("../pixi.toml".to_string()),
             "../pixi.toml"
         );
+    }
+
+    #[test]
+    fn adds_negated_patterns_when_no_hidden_includes() {
+        let input = vec!["**".to_string()];
+        let expected = vec!["**".to_string(), "!.*".to_string(), "!**/.*".to_string()];
+        assert_eq!(ignore_hidden_folders(input), expected);
+    }
+
+    #[test]
+    fn explicit_hidden_include_is_kept_and_negated_patterns_added_at_end() {
+        let input = vec!["**".to_string(), ".nichita".to_string()];
+        let expected = vec![
+            "**".to_string(),
+            ".nichita".to_string(),
+            "!.*".to_string(),
+            "!**/.*".to_string(),
+        ];
+        assert_eq!(ignore_hidden_folders(input), expected);
     }
 }
