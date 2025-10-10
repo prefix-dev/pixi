@@ -82,6 +82,9 @@ pub struct BackendSourceBuildV0Method {
     /// Variant configuration
     pub variants: Option<BTreeMap<String, Vec<String>>>,
 
+    /// Variant file paths associated with the configuration.
+    pub variant_files: Option<Vec<PathBuf>>,
+
     /// The directory where to place the built package. This is used as a hint
     /// for the backend, it may still place the package elsewhere.
     pub output_directory: Option<PathBuf>,
@@ -210,6 +213,7 @@ impl BackendSourceBuildSpec {
                     variant_configuration: params
                         .variants
                         .map(|variants| variants.into_iter().collect()),
+                    variant_files: params.variant_files.clone(),
                     work_directory: work_directory.clone(),
                     host_platform: Some(PlatformAndVirtualPackages {
                         platform: params.build_environment.host_platform,

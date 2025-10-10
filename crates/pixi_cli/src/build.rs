@@ -12,6 +12,7 @@ use pixi_manifest::FeaturesExt;
 use pixi_progress::global_multi_progress;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
 use pixi_reporters::TopLevelProgress;
+use pixi_utils::variants::VariantConfig;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use tempfile::tempdir;
 
@@ -71,7 +72,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .finish();
 
     // Determine the variant configuration for the build.
-    let variant_configuration = workspace.variants(args.target_platform);
+    let VariantConfig {
+        variants,
+        variant_files,
+    } = workspace.variants(args.target_platform)?;
 
     // Build platform virtual packages
     let build_virtual_packages: Vec<GenericVirtualPackage> = workspace
@@ -131,7 +135,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         channels: channels.clone(),
         channel_config: channel_config.clone(),
         build_environment: build_environment.clone(),
-        variants: Some(variant_configuration.clone()),
+        variants: Some(variants.clone()),
+        variant_files: Some(variant_files.clone()),
         enabled_protocols: Default::default(),
     };
     let backend_metadata = command_dispatcher
@@ -167,7 +172,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 channels: channels.clone(),
                 channel_config: channel_config.clone(),
                 build_environment: build_environment.clone(),
-                variants: Some(variant_configuration.clone()),
+                variants: Some(variants.clone()),
+                variant_files: Some(variant_files.clone()),
                 enabled_protocols: Default::default(),
                 work_directory: None,
                 clean: args.clean,

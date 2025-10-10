@@ -175,6 +175,10 @@ class Workspace(StrictBaseModel):
     preview: list[KnownPreviewFeature | str] | bool | None = Field(
         None, description="Defines the enabling of preview features of the project"
     )
+    build_variants_files: list[PathNoBackslash] | None = Field(
+        None,
+        description="Ordered list of variant definition files.",
+    )
     build_variants: dict[NonEmptyStr, list[str]] | None = Field(
         None, description="The build variants of the project"
     )

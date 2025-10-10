@@ -80,6 +80,9 @@ pub struct PixiEnvironmentSpec {
     /// Build variants to use during the solve
     pub variants: Option<BTreeMap<String, Vec<String>>>,
 
+    /// Variant file paths to use during the solve
+    pub variant_files: Option<Vec<PathBuf>>,
+
     /// The protocols that are enabled for source packages
     #[serde(skip_serializing_if = "crate::is_default")]
     pub enabled_protocols: EnabledProtocols,
@@ -99,6 +102,7 @@ impl Default for PixiEnvironmentSpec {
             exclude_newer: None,
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from(".")),
             variants: None,
+            variant_files: None,
             enabled_protocols: EnabledProtocols::default(),
         }
     }
@@ -134,6 +138,7 @@ impl PixiEnvironmentSpec {
             self.channel_config.clone(),
             self.build_environment.clone(),
             self.variants.clone(),
+            self.variant_files.clone(),
             self.enabled_protocols.clone(),
         )
         .collect(

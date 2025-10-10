@@ -42,6 +42,9 @@ pub struct CondaBuildParams {
     /// The variants that we want to build
     pub variant_configuration: Option<BTreeMap<String, Vec<String>>>,
 
+    /// The variant file paths that were provided by the pixi workspace.
+    pub variant_files: Option<Vec<PathBuf>>,
+
     /// A directory that can be used by the backend to store files for
     /// subsequent requests. This directory is unique for each separate source
     /// dependency.
