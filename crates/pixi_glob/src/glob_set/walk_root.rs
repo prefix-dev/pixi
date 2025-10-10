@@ -9,6 +9,8 @@
 
 use std::path::{Component, Path, PathBuf};
 
+use itertools::Itertools;
+
 /// Simple handler to work with our globs
 /// basically splits up negation
 #[derive(Clone, Debug)]
@@ -69,7 +71,7 @@ struct GlobSpec {
 /// Contains the globs and the joinable path
 pub struct WalkRoot {
     // The parsed glob specifications
-    specs: Vec<GlobSpec>,
+    pub specs: Vec<GlobSpec>,
     // The maximum number of parent dirs we need to ascend
     max_parent_dirs: usize,
 }

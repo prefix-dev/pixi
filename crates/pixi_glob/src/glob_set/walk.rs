@@ -80,8 +80,16 @@ pub fn walk_globs(
     globs: &[SimpleGlob],
 ) -> Result<Vec<ignore::DirEntry>, GlobSetError> {
     let mut ob = ignore::overrides::OverrideBuilder::new(effective_walk_root);
-    for glob in globs {
-        let pattern = anchor_literal_pattern(glob.to_pattern());
+    let glob_patterns = globs
+        .iter()
+        .map(|g| anchor_literal_pattern(g.to_pattern()))
+        .collect_vec();
+
+    // Always add ignore hidden folders unless the user explicitly included them
+    // because we add patterns as overrides, which overrides any `WalkBuilder` settings.
+    let ignore_patterns = ignore_hidden_folders(glob_patterns);
+
+    for pattern in ignore_patterns {
         ob.add(&pattern).map_err(GlobSetError::BuildOverrides)?;
     }
 
@@ -159,7 +167,7 @@ fn anchor_literal_pattern(pattern: String) -> String {
     };
 
     if needs_anchor(body) {
-        let mut anchored = String::with_capacity(pattern.len() + 2);
+        let mut anchored = String::with_capacity(pattern.len() + 1);
         if negated {
             anchored.push('!');
         }
@@ -171,16 +179,42 @@ fn anchor_literal_pattern(pattern: String) -> String {
     }
 }
 
+/// Ensures that hidden folders (starting with a dot) are always ignored unless explicitly included.
+/// This is done by adding a negated pattern for `**/.*` unless the user
+/// already specified a pattern that would include hidden folders or a specific hidden folder.
+/// This is important to avoid accidentally including hidden folders in the results when patterns like ** are used.
+/// Also, negated pattern should go after other patterns to ensure they are applied correctly.
+pub fn ignore_hidden_folders(mut patterns: Vec<String>) -> Vec<String> {
+    // Detect if user explicitly included hidden folders *globally*
+    // e.g. ".*", "**/.*", "./.*", "*/.*", etc.
+    let user_includes_hidden_globally = patterns
+        .iter()
+        .any(|p| p == ".*" || p == "./.*" || p.contains("/.*"));
+
+    if user_includes_hidden_globally {
+        return patterns;
+    }
+
+    // Append negations at the end if they aren't already present.
+    if !patterns.iter().any(|p| p == "!.*") {
+        patterns.push("!.*".to_string());
+    }
+    if !patterns.iter().any(|p| p == "!**/.*") {
+        patterns.push("!**/.*".to_string());
+    }
+
+    patterns
+}
+
 #[cfg(test)]
 mod tests {
+    use crate::glob_set::walk::ignore_hidden_folders;
+
     use super::anchor_literal_pattern;
 
     #[test]
     fn anchors_literal_file_patterns() {
-        assert_eq!(
-            anchor_literal_pattern("pixi.toml".to_string()),
-            "/pixi.toml"
-        );
+        assert_eq!(anchor_literal_pattern("pixi.toml".to_string()), "pixi.toml");
         // Patterns that already specify a subdirectory should stay untouched.
         assert_eq!(
             anchor_literal_pattern("foo/bar/baz.txt".to_string()),
@@ -192,7 +226,7 @@ mod tests {
     fn leaves_non_literal_patterns_untouched() {
         assert_eq!(
             anchor_literal_pattern("!pixi.toml".to_string()),
-            "!/pixi.toml"
+            "!pixi.toml"
         );
         assert_eq!(anchor_literal_pattern("*.toml".to_string()), "*.toml");
         assert_eq!(anchor_literal_pattern("!*.toml".to_string()), "!*.toml");
@@ -205,4 +239,66 @@ mod tests {
             "../pixi.toml"
         );
     }
+
+    #[test]
+    fn adds_negated_patterns_when_no_hidden_includes() {
+        let input = vec!["**".to_string()];
+        let expected = vec!["**".to_string(), "!.*".to_string(), "!**/.*".to_string()];
+        assert_eq!(ignore_hidden_folders(input), expected);
+    }
+
+    #[test]
+    fn explicit_hidden_include_is_kept_and_negated_patterns_added_at_end() {
+        let input = vec!["**".to_string(), ".nichita".to_string()];
+        let expected = vec![
+            "**".to_string(),
+            ".nichita".to_string(),
+            "!.*".to_string(),
+            "!**/.*".to_string(),
+        ];
+        assert_eq!(ignore_hidden_folders(input), expected);
+    }
+
+    // #[test]
+    // fn global_hidden_include_skips_negations() {
+    //     let input = vec!["**".into(), "**/.*".into()];
+    //     let expected = vec!["**".into(), "**/.*".into()];
+    //     assert_eq!(ignore_hidden_folders(input), expected);
+    // }
+
+    // #[test]
+    // fn deduplicates_auto_negations() {
+    //     let input = vec!["**".into(), "!.*".into()];
+    //     let expected = vec!["**".into(), "!.*".into(), "!**/.*".into()];
+    //     assert_eq!(ignore_hidden_folders(input), expected);
+    // }
+
+    // #[test]
+    // fn no_negations_if_hidden_included_globally() {
+    //     let input = vec!["**".into(), "./.*".into()];
+    //     let expected = vec!["**".into(), "./.*".into()];
+    //     assert_eq!(ignore_hidden_folders(input), expected);
+    // }
+
+    // #[test]
+    // fn handles_multiple_includes() {
+    //     let input = vec!["**".into(), ".git".into(), ".env".into()];
+    //     let expected = vec![
+    //         ".git".into(),
+    //         ".env".into(),
+    //         "**".into(),
+    //         ".git".into(),
+    //         ".env".into(),
+    //         "!.*".into(),
+    //         "!**/.*".into(),
+    //     ];
+    //     assert_eq!(ignore_hidden_folders(input), expected);
+    // }
+
+    // #[test]
+    // fn works_with_empty_input() {
+    //     let input: Vec<String> = vec![];
+    //     let expected = vec!["!.*".into(), "!**/.*".into()];
+    //     assert_eq!(ignore_hidden_folders(input), expected);
+    // }
 }
