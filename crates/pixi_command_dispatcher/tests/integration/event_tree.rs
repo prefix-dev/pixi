@@ -130,7 +130,7 @@ impl EventTree {
                         format!(
                             "{} @ {}",
                             &spec.package.as_source(),
-                            spec.backend_metadata.source
+                            spec.backend_metadata.manifest_source
                         ),
                     );
                     builder.set_event_parent((*id).into(), *context);
@@ -146,7 +146,7 @@ impl EventTree {
                 }
                 Event::SourceMetadataFinished { .. } => {}
                 Event::BuildBackendMetadataQueued { id, context, spec } => {
-                    build_backend_metadata_label.insert(*id, spec.source.to_string());
+                    build_backend_metadata_label.insert(*id, spec.manifest_source.to_string());
                     builder.set_event_parent((*id).into(), *context);
                 }
                 Event::BuildBackendMetadataStarted { id } => {
@@ -162,7 +162,11 @@ impl EventTree {
                 Event::SourceBuildQueued { id, context, spec } => {
                     source_build_label.insert(
                         *id,
-                        format!("{} @ {}", spec.package.name.as_source(), spec.source),
+                        format!(
+                            "{} @ {}",
+                            spec.package.name.as_source(),
+                            spec.manifest_source
+                        ),
                     );
                     builder.set_event_parent((*id).into(), *context);
                 }

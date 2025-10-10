@@ -11,7 +11,7 @@ use pixi_spec::PixiSpec;
 use pixi_toml::{TomlFromStr, TomlIndexMap, TomlIndexSet, TomlWith};
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
 use serde::{Serialize, Serializer, ser::SerializeMap};
-use serde_with::serde_derive::Deserialize;
+use serde_derive::Deserialize;
 use thiserror::Error;
 use toml_span::{DeserError, Deserialize, Value, de_helpers::TableHelper};
 

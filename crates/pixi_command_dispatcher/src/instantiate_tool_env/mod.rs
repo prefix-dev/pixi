@@ -209,6 +209,7 @@ impl InstantiateToolEnvironmentSpec {
                 channel_priority: ChannelPriority::default(),
                 variants: self.variants.clone(),
                 strategy: SolveStrategy::default(),
+                pin_overrides: BTreeMap::new(),
             })
             .await
             .map_err_with(Box::new)
