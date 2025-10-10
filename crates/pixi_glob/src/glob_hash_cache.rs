@@ -22,7 +22,7 @@ pub struct GlobHashKey {
     /// The glob patterns.
     globs: BTreeSet<String>,
     /// Additional hash which should invalidate the cache if it changes.
-    additional_hash: Option<Vec<u8>>,
+    additional_hash: Vec<u8>,
 }
 
 impl GlobHashKey {
@@ -30,7 +30,7 @@ impl GlobHashKey {
     pub fn new(
         root: impl Into<PathBuf>,
         globs: BTreeSet<String>,
-        additional_hash: Option<Vec<u8>>,
+        additional_hash: Vec<u8>,
     ) -> Self {
         let mut root = root.into();
         // Ensure that `root` points to a directory, not a file.

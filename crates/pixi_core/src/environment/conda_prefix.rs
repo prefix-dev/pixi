@@ -68,6 +68,7 @@ impl CondaPrefixUpdaterBuilder<'_> {
             .into_diagnostic()?;
         let name = self.group.name();
         let prefix = self.group.prefix();
+        let variant_config = self.group.workspace().variants(self.platform)?;
 
         Ok(CondaPrefixUpdater::new(
             channels,
@@ -76,7 +77,7 @@ impl CondaPrefixUpdaterBuilder<'_> {
             prefix,
             self.platform,
             self.virtual_packages,
-            self.group.workspace().variants(self.platform),
+            variant_config,
             self.command_dispatcher,
         ))
     }
@@ -195,6 +196,10 @@ pub async fn update_prefix_conda(
 
     // Run the installation through the command dispatcher.
     let build_environment = BuildEnvironment::simple(host_platform, host_virtual_packages);
+    let VariantConfig {
+        variants,
+        variant_files,
+    } = variant_config;
     let result = command_dispatcher
         .install_pixi_environment(InstallPixiEnvironmentSpec {
             name,
@@ -206,8 +211,8 @@ pub async fn update_prefix_conda(
             build_environment,
             channels,
             channel_config,
-            variants: Some(variant_config),
-
+            variants: Some(variants),
+            variant_files: Some(variant_files),
             enabled_protocols: Default::default(),
         })
         .await?;

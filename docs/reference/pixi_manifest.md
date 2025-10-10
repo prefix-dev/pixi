@@ -312,6 +312,32 @@ c_compiler_version = ["11.4", "13.0"]
 
 For detailed examples and tutorials, see the [build variants documentation](../build/variants.md).
 
+### `build-variant-files` (optional)
+
+!!! warning "Preview Feature"
+    Build variant files require the `pixi-build` preview feature to be enabled:
+    ```toml
+    [workspace]
+    preview = ["pixi-build"]
+    ```
+
+Use `build-variant-files` to reference external variant definitions from YAML files.
+Paths are resolved relative to the workspace root and processed in the listed
+order—entries from earlier files take precedence over values loaded from later ones.
+
+```toml
+[workspace]
+build-variant-files = [
+    { file = "./pinning/conda_build_config.yaml" },
+    { file = "./variants/overrides.yaml" },
+]
+```
+
+Each entry must provide a `file` key that points to either a `conda_build_config.yaml`
+or `.yaml` file of a different name.
+If the file is called `conda_build_config.yaml`, it will attempt to parse it with a subset of [`conda-build`'s variant syntax](https://docs.conda.io/projects/conda-build/en/stable/resources/variants.html#using-variants-with-the-conda-build-api).
+Otherwise, it will use `rattler-build`'s syntax as outlined in the [rattler-build documentation](https://rattler.build/latest/variants/#variant-configuration).
+
 ## The `tasks` table
 
 Tasks are a way to automate certain custom commands in your workspace.

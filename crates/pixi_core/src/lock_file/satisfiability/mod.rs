@@ -12,12 +12,13 @@ use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pixi_build_discovery::{DiscoveredBackend, EnabledProtocols};
-use pixi_build_type_conversions::compute_project_model_hash;
+use pixi_command_dispatcher::calculate_additional_glob_hash;
 use pixi_git::url::RepositoryUrl;
 use pixi_glob::{GlobHashCache, GlobHashError, GlobHashKey};
 use pixi_manifest::{FeaturesExt, pypi::pypi_options::NoBuild};
 use pixi_record::{LockedGitUrl, ParseLockFileError, PixiRecord, SourceMismatchError};
 use pixi_spec::{PixiSpec, SourceAnchor, SourceSpec, SpecConversionError};
+use pixi_utils::variants::VariantConfig;
 use pixi_uv_conversions::{
     AsPep508Error, as_uv_req, into_pixi_reference, pep508_requirement_to_uv_requirement,
     to_normalize, to_uv_specifiers, to_uv_version,
@@ -43,7 +44,9 @@ use uv_pypi_types::ParsedUrlError;
 use super::{
     PixiRecordsByName, PypiRecord, PypiRecordsByName, package_identifier::ConversionError,
 };
-use crate::workspace::{Environment, grouped_environment::GroupedEnvironment};
+use crate::workspace::{
+    Environment, HasWorkspaceRef, errors::VariantsError, grouped_environment::GroupedEnvironment,
+};
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum EnvironmentUnsat {
@@ -390,6 +393,10 @@ pub enum PlatformUnsat {
     #[error(transparent)]
     #[diagnostic(transparent)]
     BackendDiscovery(#[from] pixi_build_discovery::DiscoveryError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Variants(#[from] VariantsError),
 
     #[error("'{name}' is locked as a conda package but only requested by pypi dependencies")]
     CondaPackageShouldBePypi { name: String },
@@ -1511,17 +1518,21 @@ pub(crate) async fn verify_package_platform_satisfiability(
         .map_err(PlatformUnsat::BackendDiscovery)
         .map_err(Box::new)?;
 
-        let project_model_hash = discovered_backend
-            .init_params
-            .project_model
-            .as_ref()
-            .map(compute_project_model_hash);
+        let VariantConfig { variants, .. } = environment
+            .workspace()
+            .variants(platform)
+            .map_err(|err| Box::new(err.into()))?;
+
+        let additional_glob_hash = calculate_additional_glob_hash(
+            &discovered_backend.init_params.project_model,
+            &Some(variants),
+        );
 
         let input_hash = input_hash_cache
             .compute_hash(GlobHashKey::new(
                 source_dir,
                 locked_input_hash.globs.clone(),
-                project_model_hash,
+                additional_glob_hash,
             ))
             .await
             .map_err(PlatformUnsat::FailedToComputeInputHash)

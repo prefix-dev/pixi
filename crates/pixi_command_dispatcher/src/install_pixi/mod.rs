@@ -65,6 +65,9 @@ pub struct InstallPixiEnvironmentSpec {
     /// Build variants to use during the solve
     pub variants: Option<BTreeMap<String, Vec<String>>>,
 
+    /// Build variant file contents to use during the solve
+    pub variant_files: Option<Vec<PathBuf>>,
+
     /// The protocols that are enabled for source packages
     #[serde(skip_serializing_if = "crate::is_default")]
     pub enabled_protocols: EnabledProtocols,
@@ -108,6 +111,7 @@ impl InstallPixiEnvironmentSpec {
             channels: Vec::new(),
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from(".")),
             variants: None,
+            variant_files: None,
             enabled_protocols: EnabledProtocols::default(),
         }
     }
@@ -210,6 +214,7 @@ impl InstallPixiEnvironmentSpec {
                 channels: self.channels.clone(),
                 build_environment: self.build_environment.clone(),
                 variants: self.variants.clone(),
+                variant_files: self.variant_files.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
                 output_directory: None,
                 work_directory: None,
@@ -241,4 +246,11 @@ pub enum InstallPixiEnvironmentError {
         #[source]
         SourceBuildError,
     ),
+
+    #[error(
+        "failed to convert install transaction to prefix records from '{}'",
+        .0.path().display()
+    )]
+    #[diagnostic(help("try `pixi clean` to reset the environment and run the command again"))]
+    ConvertTransactionToPrefixRecord(Prefix, #[source] std::io::Error),
 }

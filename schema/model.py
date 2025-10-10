@@ -113,6 +113,16 @@ KnownPreviewFeature = PixiBuildFeature
 #     PixiBuild: Annotated[str, Field(description="Enables building of source records")] = "pixi-build"
 
 
+class BuildVariantFileEntry(StrictBaseModel):
+    """An external file contributing variant definitions."""
+
+    file: PathNoBackslash = Field(
+        ...,
+        description="Path to a variant definition file relative to the workspace root.",
+        examples=["./variants/conda_build_config.yaml"],
+    )
+
+
 class Workspace(StrictBaseModel):
     """The project's metadata information."""
 
@@ -174,6 +184,10 @@ class Workspace(StrictBaseModel):
     )
     preview: list[KnownPreviewFeature | str] | bool | None = Field(
         None, description="Defines the enabling of preview features of the project"
+    )
+    build_variant_files: list[BuildVariantFileEntry] | None = Field(
+        None,
+        description="Ordered list of variant definition files.",
     )
     build_variants: dict[NonEmptyStr, list[str]] | None = Field(
         None, description="The build variants of the project"

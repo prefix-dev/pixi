@@ -8,10 +8,11 @@ mod solve_group;
 pub mod virtual_packages;
 mod workspace_mut;
 
+use self::errors::VariantsError;
 #[cfg(not(windows))]
 use std::os::unix::fs::symlink;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fmt::{Debug, Formatter},
     hash::Hash,
     path::{Path, PathBuf},
@@ -39,7 +40,7 @@ use pixi_command_dispatcher::{CacheDirs, CommandDispatcher, CommandDispatcherBui
 use pixi_config::{Config, RunPostLinkScripts};
 use pixi_consts::consts;
 use pixi_manifest::{
-    AssociateProvenance, EnvironmentName, Environments, ExplicitManifestError,
+    AssociateProvenance, BuildVariantSource, EnvironmentName, Environments, ExplicitManifestError,
     HasWorkspaceManifest, LoadManifestsError, ManifestProvenance, Manifests, PackageManifest,
     SpecType, WithProvenance, WithWarnings, WorkspaceManifest,
 };
@@ -170,6 +171,8 @@ pub struct Workspace {
 
     /// The concurrent request semaphore
     concurrent_downloads_semaphore: OnceCell<Arc<Semaphore>>,
+
+    variants: OnceCell<VariantConfig>,
 }
 
 impl Debug for Workspace {
@@ -240,6 +243,7 @@ impl Workspace {
             s3_config,
             repodata_gateway: Default::default(),
             concurrent_downloads_semaphore: OnceCell::default(),
+            variants: OnceCell::default(),
         }
     }
 
@@ -464,25 +468,44 @@ impl Workspace {
     }
 
     /// Returns the resolved variant configuration for a given platform.
-    pub fn variants(&self, platform: Platform) -> VariantConfig {
-        let mut result = VariantConfig::new();
+    pub fn variants(&self, platform: Platform) -> Result<VariantConfig, VariantsError> {
+        self.variants
+            .get_or_try_init(|| {
+                // Get inline variants for all targets
+                let mut variants = BTreeMap::new();
+                // Resolves from most specific to least specific.
+                for build_variants in self
+                    .workspace
+                    .value
+                    .workspace
+                    .build_variants
+                    .resolve(Some(platform))
+                    .flatten()
+                {
+                    // Update the hash map, but only items that are not already in the map.
+                    for (key, value) in build_variants {
+                        variants.entry(key.clone()).or_insert_with(|| value.clone());
+                    }
+                }
 
-        // Resolves from most specific to least specific.
-        for variants in self
-            .workspace
-            .value
-            .workspace
-            .build_variants
-            .resolve(Some(platform))
-            .flatten()
-        {
-            // Update the hash map, but only items that are not already in the map.
-            for (key, value) in variants {
-                result.entry(key.clone()).or_insert_with(|| value.clone());
-            }
-        }
+                // Collect absolute variant file paths without reading their content.
+                let variant_files = self
+                    .workspace
+                    .value
+                    .workspace
+                    .build_variant_files
+                    .iter()
+                    .map(|source| match source {
+                        BuildVariantSource::File(path) => self.root.join(path),
+                    })
+                    .collect();
 
-        result
+                Ok(VariantConfig {
+                    variants,
+                    variant_files,
+                })
+            })
+            .cloned()
     }
 
     // /// Returns the reqwest client used for http networking
