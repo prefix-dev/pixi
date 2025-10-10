@@ -40,6 +40,7 @@ mod command_dispatcher;
 mod command_dispatcher_processor;
 mod discover_backend_cache;
 mod executor;
+mod expand_dev_sources;
 mod install_pixi;
 mod instantiate_tool_env;
 mod limits;
@@ -68,6 +69,9 @@ pub use command_dispatcher::{
     CommandDispatcherErrorResultExt, InstantiateBackendError, InstantiateBackendSpec,
 };
 pub use executor::Executor;
+pub use expand_dev_sources::{
+    DependencyOnlySource, ExpandDevSourcesError, ExpandDevSourcesSpec, ExpandedDevSources,
+};
 pub use install_pixi::{
     InstallPixiEnvironmentError, InstallPixiEnvironmentResult, InstallPixiEnvironmentSpec,
 };

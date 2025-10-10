@@ -510,6 +510,41 @@ impl CommandDispatcher {
         spec.request(self.clone()).await
     }
 
+    /// Expands a list of dev sources into their dependencies.
+    ///
+    /// Dev sources are source packages whose dependencies should be installed
+    /// without building the packages themselves. This is particularly useful
+    /// for development environments where you want to work on a package while
+    /// having all its dependencies available.
+    ///
+    /// For each dev source, this method:
+    /// 1. Checks out the source code
+    /// 2. Extracts all dependencies (build, host, and run) and constraints
+    /// 3. Filters out dependencies that are themselves dev sources (to avoid
+    ///    duplication)
+    ///
+    /// The result can then be passed to `solve_pixi_environment` to create
+    /// an environment with all the dependencies but without the dev source
+    /// packages themselves.
+    ///
+    /// # Example use case
+    ///
+    /// You're developing two packages (`pkgA` and `pkgB`) where `pkgA` depends
+    /// on `pkgB`. Instead of building both packages, you can use
+    /// `expand_dev_sources` to:
+    /// 1. Get the dependencies of both `pkgA` and `pkgB`
+    /// 2. Remove `pkgB` from `pkgA`'s dependencies (since it's also a dev source)
+    /// 3. Create an environment with just the external dependencies
+    ///
+    /// This allows you to work on the source code of both packages directly.
+    pub async fn expand_dev_sources(
+        &self,
+        spec: crate::ExpandDevSourcesSpec,
+    ) -> Result<crate::ExpandedDevSources, CommandDispatcherError<crate::ExpandDevSourcesError>>
+    {
+        spec.request(self.clone()).await
+    }
+
     /// Calls into a pixi build backend to perform a source build.
     pub(crate) async fn backend_source_build(
         &self,
