@@ -1,6 +1,6 @@
 use std::{
     cmp::PartialEq,
-    collections::{HashMap, HashSet, hash_map::Entry},
+    collections::{BTreeMap, HashMap, HashSet, hash_map::Entry},
     future::{Future, ready},
     iter,
     path::PathBuf,
@@ -19,8 +19,8 @@ use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Diagnostic, IntoDiagnostic, MietteDiagnostic, Report, WrapErr};
 use pixi_command_dispatcher::{
-    BuildEnvironment, CommandDispatcher, CommandDispatcherError, PixiEnvironmentSpec,
-    SolvePixiEnvironmentError,
+    BuildEnvironment, CommandDispatcher, CommandDispatcherError, DependencyOnlySource,
+    ExpandDevSourcesSpec, ExpandedDevSources, PixiEnvironmentSpec, SolvePixiEnvironmentError,
 };
 use pixi_consts::consts;
 use pixi_glob::GlobHashCache;
@@ -28,7 +28,7 @@ use pixi_install_pypi::{
     LazyEnvironmentVariables, PyPIBuildConfig, PyPIContextConfig, PyPIEnvironmentUpdater,
     PyPIUpdateConfig,
 };
-use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
+use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt, HasFeaturesIter};
 use pixi_progress::global_multi_progress;
 use pixi_record::{ParseLockFileError, PixiRecord};
 use pixi_utils::prefix::Prefix;
@@ -40,7 +40,10 @@ use pixi_uv_conversions::{
 use pypi_mapping::{self, MappingClient};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{Arch, GenericVirtualPackage, PackageName, ParseChannelError, Platform};
+use rattler_conda_types::{
+    Arch, ChannelConfig, ChannelUrl, GenericVirtualPackage, PackageName, ParseChannelError,
+    Platform,
+};
 use rattler_lock::{LockFile, LockedPackageRef, ParseCondaLockError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -226,6 +229,15 @@ pub enum SolveCondaEnvironmentError {
         #[source]
         #[diagnostic_source]
         source: CommandDispatcherError<SolvePixiEnvironmentError>,
+    },
+
+    #[error("failed to expand develop dependencies for environment '{}' for platform '{}'", .environment_name.fancy_display(), .platform)]
+    ExpandDevSourcesFailed {
+        environment_name: GroupedEnvironmentName,
+        platform: Platform,
+        #[source]
+        #[diagnostic_source]
+        source: CommandDispatcherError<pixi_command_dispatcher::ExpandDevSourcesError>,
     },
 
     #[error(transparent)]
@@ -1893,6 +1905,69 @@ pub enum TaskResult {
     ),
 }
 
+/// Expands develop dependencies for a grouped environment.
+///
+/// Collects all develop dependencies from the features of the grouped environment,
+/// converts them to DependencyOnlySource format, and uses the command dispatcher
+/// to expand them into their build/host/run dependencies.
+///
+/// Returns `None` if there are no develop dependencies.
+async fn expand_develop_dependencies(
+    group: &GroupedEnvironment<'_>,
+    platform: Platform,
+    channel_config: &ChannelConfig,
+    channels: &[ChannelUrl],
+    virtual_packages: &[GenericVirtualPackage],
+    variants: &BTreeMap<String, Vec<String>>,
+    command_dispatcher: &CommandDispatcher,
+) -> Result<Option<ExpandedDevSources>, SolveCondaEnvironmentError> {
+    // Collect develop dependencies from all features in the group
+    let mut develop_deps = IndexMap::new();
+    for feature in group.features() {
+        if let Some(deps) = feature.develop_dependencies(Some(platform)) {
+            develop_deps.extend(deps.into_owned());
+        }
+    }
+
+    // If there are no develop dependencies, return early
+    if develop_deps.is_empty() {
+        return Ok(None);
+    }
+
+    // Convert to Vec<DependencyOnlySource>
+    let dev_sources: Vec<DependencyOnlySource> = develop_deps
+        .into_iter()
+        .map(|(name, spec)| DependencyOnlySource {
+            source: spec,
+            output_name: name,
+        })
+        .collect();
+
+    // Create the spec for expanding dev sources
+    let spec = ExpandDevSourcesSpec {
+        dev_sources,
+        channel_config: channel_config.clone(),
+        channels: channels.to_vec(),
+        build_environment: BuildEnvironment::simple(platform, virtual_packages.to_vec()),
+        variants: Some(variants.clone()),
+        enabled_protocols: Default::default(),
+    };
+
+    // Expand the dev sources
+    let expanded = command_dispatcher
+        .expand_dev_sources(spec)
+        .await
+        .map_err(
+            |source| SolveCondaEnvironmentError::ExpandDevSourcesFailed {
+                environment_name: group.name(),
+                platform,
+                source,
+            },
+        )?;
+
+    Ok(Some(expanded))
+}
+
 /// A task that solves the conda dependencies for a given environment.
 #[allow(clippy::too_many_arguments)]
 async fn spawn_solve_conda_environment_task(
@@ -1951,6 +2026,31 @@ async fn spawn_solve_conda_environment_task(
     // Determine the build variants
     let variants = group.workspace().variants(platform);
 
+    // Expand develop dependencies if any
+    let expanded_develop = expand_develop_dependencies(
+        &group,
+        platform,
+        &channel_config,
+        &channels,
+        &virtual_packages,
+        &variants,
+        &command_dispatcher,
+    )
+    .await?;
+
+    // Merge expanded develop dependencies into regular dependencies
+    let mut dependencies = dependencies;
+    let constraints = if let Some(expanded) = expanded_develop {
+        // Merge the expanded dependencies
+        for (name, spec) in expanded.dependencies.into_specs() {
+            dependencies.insert(name, spec);
+        }
+        // Use the expanded constraints
+        expanded.constraints
+    } else {
+        Default::default()
+    };
+
     let start = Instant::now();
 
     // Solve the environment using the command dispatcher.
@@ -1958,7 +2058,7 @@ async fn spawn_solve_conda_environment_task(
         .solve_pixi_environment(PixiEnvironmentSpec {
             name: Some(group_name.to_string()),
             dependencies,
-            constraints: Default::default(),
+            constraints,
             installed: existing_repodata_records.records.clone(),
             build_environment: BuildEnvironment::simple(platform, virtual_packages),
             channels,
