@@ -523,11 +523,26 @@ impl CommandDispatcher {
     /// 3. Filters out dependencies that are themselves dev sources (to avoid
     ///    duplication)
     ///
-    /// The result can then be passed to `solve_pixi_environment` to create
-    /// an environment with all the dependencies but without the dev source
-    /// packages themselves.
+    /// The result can then be merged into a `PixiEnvironmentSpec` and passed to
+    /// `solve_pixi_environment` to create an environment with all the dependencies
+    /// but without the dev source packages themselves.
     ///
-    /// # Example use case
+    /// # Example
+    ///
+    /// ```ignore
+    /// // Expand dev sources
+    /// let expanded = command_dispatcher.expand_dev_sources(spec).await?;
+    ///
+    /// // Merge into environment spec
+    /// let mut env_spec = PixiEnvironmentSpec::default();
+    /// env_spec.dependencies.extend(expanded.dependencies);
+    /// env_spec.constraints.extend(expanded.constraints);
+    ///
+    /// // Solve the environment
+    /// let solved = command_dispatcher.solve_pixi_environment(env_spec).await?;
+    /// ```
+    ///
+    /// # Use case
     ///
     /// You're developing two packages (`pkgA` and `pkgB`) where `pkgA` depends
     /// on `pkgB`. Instead of building both packages, you can use
