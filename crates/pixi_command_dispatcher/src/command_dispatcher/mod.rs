@@ -485,6 +485,31 @@ impl CommandDispatcher {
         self.execute_task(spec).await
     }
 
+    /// Returns the dependencies (build, host, and run) for a specific output
+    /// from a source package.
+    ///
+    /// This method retrieves metadata from the build backend for the given
+    /// source and extracts the dependencies for the specified output name.
+    /// The dependencies are returned in their raw form as specified by the
+    /// backend, including both regular dependencies and constraints.
+    ///
+    /// This is useful when you want to install the dependencies of a source
+    /// package without actually building it - for instance, to set up a
+    /// development environment or to inspect what would be needed to build
+    /// the package.
+    ///
+    /// # Requirements
+    ///
+    /// - The build backend must support the `conda/outputs` procedure (API v1+)
+    /// - The specified output must exist in the source package
+    pub async fn get_output_dependencies(
+        &self,
+        spec: crate::GetOutputDependenciesSpec,
+    ) -> Result<crate::OutputDependencies, CommandDispatcherError<crate::GetOutputDependenciesError>>
+    {
+        spec.request(self.clone()).await
+    }
+
     /// Calls into a pixi build backend to perform a source build.
     pub(crate) async fn backend_source_build(
         &self,
