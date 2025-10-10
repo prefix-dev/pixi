@@ -13,9 +13,9 @@ use itertools::Itertools;
 use pixi_build_backend_passthrough::PassthroughBackend;
 use pixi_build_frontend::{BackendOverride, InMemoryOverriddenBackends};
 use pixi_command_dispatcher::{
-    BuildEnvironment, CacheDirs, CommandDispatcher, Executor, InstallPixiEnvironmentSpec,
-    InstantiateToolEnvironmentSpec, PackageIdentifier, PixiEnvironmentSpec,
-    SourceBuildCacheStatusSpec,
+    BuildEnvironment, CacheDirs, CommandDispatcher, Executor, GetOutputDependenciesSpec,
+    InstallPixiEnvironmentSpec, InstantiateToolEnvironmentSpec, PackageIdentifier,
+    PixiEnvironmentSpec, SourceBuildCacheStatusSpec,
 };
 use pixi_config::default_channel_config;
 use pixi_record::PinnedPathSpec;
@@ -608,4 +608,174 @@ async fn source_build_cache_status_clear_works() {
         weak_first.upgrade().is_none(),
         "Original Arc should be deallocated after cache clear"
     );
+}
+
+/// Tests that `get_output_dependencies` correctly retrieves build, host, and run
+/// dependencies for a specific output from a source package using the in-memory
+/// backend.
+#[tokio::test]
+pub async fn test_get_output_dependencies() {
+    // Setup: Create a dispatcher with the in-memory backend
+    let root_dir = workspaces_dir().join("output-dependencies");
+    let tempdir = tempfile::tempdir().unwrap();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(root_dir.clone())
+        .with_cache_dirs(default_cache_dirs().with_workspace(tempdir.path().to_path_buf()))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+
+    // Pin the source spec to a path
+    let pinned_source = PinnedPathSpec {
+        path: "test-package".into(),
+    }
+    .into();
+
+    // Create the spec for getting output dependencies
+    let spec = GetOutputDependenciesSpec {
+        source: pinned_source,
+        output_name: PackageName::new_unchecked("test-package"),
+        channel_config: default_channel_config(),
+        channels: vec![],
+        build_environment: BuildEnvironment::simple(tool_platform, tool_virtual_packages),
+        variants: None,
+        enabled_protocols: Default::default(),
+    };
+
+    // Act: Get the output dependencies
+    let result = dispatcher
+        .get_output_dependencies(spec)
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("get_output_dependencies should succeed");
+
+    // Assert: Verify the dependencies are returned correctly
+    assert!(
+        result.build_dependencies.is_some(),
+        "Build dependencies should be present"
+    );
+    assert!(
+        result.host_dependencies.is_some(),
+        "Host dependencies should be present"
+    );
+
+    let build_deps = result.build_dependencies.unwrap();
+    let host_deps = result.host_dependencies.unwrap();
+    let run_deps = result.run_dependencies;
+
+    // Verify build dependencies (cmake, make)
+    let build_dep_names: Vec<_> = build_deps
+        .depends
+        .iter()
+        .map(|dep| dep.name.as_str())
+        .sorted()
+        .collect();
+    assert_eq!(
+        build_dep_names,
+        vec!["cmake", "make"],
+        "Build dependencies should include cmake and make"
+    );
+
+    // Verify host dependencies (zlib, openssl)
+    let host_dep_names: Vec<_> = host_deps
+        .depends
+        .iter()
+        .map(|dep| dep.name.as_str())
+        .sorted()
+        .collect();
+    assert_eq!(
+        host_dep_names,
+        vec!["openssl", "zlib"],
+        "Host dependencies should include zlib and openssl"
+    );
+
+    // Verify run dependencies (python, numpy)
+    let run_dep_names: Vec<_> = run_deps
+        .depends
+        .iter()
+        .map(|dep| dep.name.as_str())
+        .sorted()
+        .collect();
+    assert_eq!(
+        run_dep_names,
+        vec!["numpy", "python"],
+        "Run dependencies should include python and numpy"
+    );
+}
+
+/// Tests that `get_output_dependencies` returns an appropriate error when the
+/// specified output is not found in the source package.
+#[tokio::test]
+pub async fn test_get_output_dependencies_output_not_found() {
+    // Setup: Create a dispatcher with the in-memory backend
+    let root_dir = workspaces_dir().join("output-dependencies");
+    let tempdir = tempfile::tempdir().unwrap();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(root_dir.clone())
+        .with_cache_dirs(default_cache_dirs().with_workspace(tempdir.path().to_path_buf()))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+
+    // Pin the source spec to a path
+    let pinned_source = PinnedPathSpec {
+        path: "test-package".into(),
+    }
+    .into();
+
+    // Create the spec with a non-existent output name
+    let spec = GetOutputDependenciesSpec {
+        source: pinned_source,
+        output_name: PackageName::new_unchecked("non-existent-output"),
+        channel_config: default_channel_config(),
+        channels: vec![],
+        build_environment: BuildEnvironment::simple(tool_platform, tool_virtual_packages),
+        variants: None,
+        enabled_protocols: Default::default(),
+    };
+
+    // Act: Try to get the output dependencies
+    let error = dispatcher
+        .get_output_dependencies(spec)
+        .await
+        .expect_err("Expected OutputNotFound error");
+
+    // Assert: Verify we got the expected error type
+    use pixi_command_dispatcher::{CommandDispatcherError, GetOutputDependenciesError};
+    match error {
+        CommandDispatcherError::Failed(GetOutputDependenciesError::OutputNotFound {
+            output_name,
+            available_outputs,
+        }) => {
+            assert_eq!(
+                output_name.as_source(),
+                "non-existent-output",
+                "Error should contain the requested output name"
+            );
+            assert_eq!(
+                available_outputs.len(),
+                1,
+                "Should have one available output"
+            );
+            assert_eq!(
+                available_outputs[0].as_source(),
+                "test-package",
+                "Available outputs should include test-package"
+            );
+        }
+        other => panic!(
+            "Expected OutputNotFound error, got: {}",
+            format_diagnostic(&other)
+        ),
+    }
 }
