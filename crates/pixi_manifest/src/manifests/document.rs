@@ -869,7 +869,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    # Dev dependency comment  
+    # Dev dependency comment
     "PyYaML>=6.0", # dev inline comment
 ]
 

@@ -3,11 +3,12 @@ use std::{borrow::Cow, collections::HashMap, str::FromStr};
 use indexmap::{IndexMap, map::Entry};
 use itertools::Either;
 use pixi_spec::PixiSpec;
+use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{PackageName, ParsePlatformError, Platform};
 
 use super::error::DependencyError;
 use crate::{
-    DependencyOverwriteBehavior, SpecType,
+    CondaDependencies, DependencyOverwriteBehavior, PyPiDependencies, SpecType,
     activation::Activation,
     task::{Task, TaskName},
     utils::PixiSpanned,
@@ -24,10 +25,10 @@ pub struct WorkspaceTarget {
     /// TODO: While the pixi-build feature is not stabilized yet, a workspace
     /// can have host- and build dependencies. When pixi-build is stabilized, we
     /// can simplify this part of the code.
-    pub dependencies: HashMap<SpecType, IndexMap<PackageName, PixiSpec>>,
+    pub dependencies: HashMap<SpecType, CondaDependencies>,
 
     /// Specific python dependencies
-    pub pypi_dependencies: Option<IndexMap<PypiPackageName, PixiPypiSpec>>,
+    pub pypi_dependencies: Option<PyPiDependencies>,
 
     /// Additional information to activate an environment.
     pub activation: Option<Activation>,
@@ -40,27 +41,30 @@ pub struct WorkspaceTarget {
 #[derive(Default, Debug, Clone)]
 pub struct PackageTarget {
     /// Dependencies for this target.
-    pub dependencies: HashMap<SpecType, IndexMap<PackageName, PixiSpec>>,
+    pub dependencies: HashMap<SpecType, DependencyMap<PackageName, PixiSpec>>,
 }
 
 impl WorkspaceTarget {
     /// Returns the run dependencies of the target
-    pub fn run_dependencies(&self) -> Option<&IndexMap<PackageName, PixiSpec>> {
+    pub fn run_dependencies(&self) -> Option<&DependencyMap<PackageName, PixiSpec>> {
         self.dependencies.get(&SpecType::Run)
     }
 
     /// Returns the host dependencies of the target
-    pub fn host_dependencies(&self) -> Option<&IndexMap<PackageName, PixiSpec>> {
+    pub fn host_dependencies(&self) -> Option<&DependencyMap<PackageName, PixiSpec>> {
         self.dependencies.get(&SpecType::Host)
     }
 
     /// Returns the build dependencies of the target
-    pub fn build_dependencies(&self) -> Option<&IndexMap<PackageName, PixiSpec>> {
+    pub fn build_dependencies(&self) -> Option<&DependencyMap<PackageName, PixiSpec>> {
         self.dependencies.get(&SpecType::Build)
     }
 
     /// Returns the dependencies of a certain type.
-    pub fn dependencies(&self, spec_type: SpecType) -> Option<&IndexMap<PackageName, PixiSpec>> {
+    pub fn dependencies(
+        &self,
+        spec_type: SpecType,
+    ) -> Option<&DependencyMap<PackageName, PixiSpec>> {
         self.dependencies.get(&spec_type)
     }
 
@@ -74,31 +78,46 @@ impl WorkspaceTarget {
     ///
     /// This function returns a `Cow` to avoid cloning the dependencies if they
     /// can be returned directly from the underlying map.
-    pub fn combined_dependencies(&self) -> Option<Cow<'_, IndexMap<PackageName, PixiSpec>>> {
-        let mut all_deps = None;
+    pub fn combined_dependencies(&self) -> Option<Cow<'_, DependencyMap<PackageName, PixiSpec>>> {
+        let mut first_deps: Option<&DependencyMap<PackageName, PixiSpec>> = None;
+        let mut count = 0;
+
+        // Count and find the first non-empty spec type
+        for spec_type in [SpecType::Run, SpecType::Host, SpecType::Build] {
+            if let Some(specs) = self.dependencies.get(&spec_type) {
+                if !specs.is_empty() {
+                    if first_deps.is_none() {
+                        first_deps = Some(specs);
+                    }
+                    count += 1;
+                }
+            }
+        }
+
+        // If there's only one non-empty spec type, return a borrowed reference
+        if count == 1 {
+            return first_deps.map(Cow::Borrowed);
+        }
+
+        // If there are multiple spec types, combine them
+        let mut all_deps: Option<DependencyMap<PackageName, PixiSpec>> = None;
         for spec_type in [SpecType::Run, SpecType::Host, SpecType::Build] {
             let Some(specs) = self.dependencies.get(&spec_type) else {
-                // If the specific dependencies don't exist we can skip them.
                 continue;
             };
             if specs.is_empty() {
-                // If the dependencies are empty, we can skip them.
                 continue;
             }
 
             all_deps = match all_deps {
-                None => Some(Cow::Borrowed(specs)),
+                None => Some(specs.clone()),
                 Some(mut all_deps) => {
-                    all_deps.to_mut().extend(
-                        specs
-                            .into_iter()
-                            .map(|(name, spec)| (name.clone(), spec.clone())),
-                    );
+                    all_deps = all_deps.overwrite(specs);
                     Some(all_deps)
                 }
             }
         }
-        all_deps
+        all_deps.map(Cow::Owned)
     }
 
     /// Checks if this target contains a dependency
@@ -108,12 +127,12 @@ impl WorkspaceTarget {
         spec_type: SpecType,
         exact: Option<&PixiSpec>,
     ) -> bool {
-        let current_dependency = self
+        let current_dependencies = self
             .dependencies(spec_type)
-            .and_then(|deps| deps.get(dep_name).cloned());
+            .and_then(|deps| deps.get(dep_name));
 
-        match (current_dependency, exact) {
-            (Some(current_spec), Some(spec)) => current_spec == *spec,
+        match (current_dependencies, exact) {
+            (Some(specs), Some(spec)) => specs.contains(spec),
             (Some(_), None) => true,
             (None, _) => false,
         }
@@ -130,19 +149,27 @@ impl WorkspaceTarget {
         let Some(dependencies) = self.dependencies.get_mut(&spec_type) else {
             return Err(DependencyError::NoSpecType(spec_type.name().into()));
         };
-        dependencies
-            .shift_remove_entry(dep_name)
-            .ok_or_else(|| DependencyError::NoDependency(dep_name.as_normalized().into()))
+        let (name, mut specs) = dependencies
+            .remove(dep_name)
+            .ok_or_else(|| DependencyError::NoDependency(dep_name.as_normalized().into()))?;
+
+        // Return the first (and typically only) spec
+        let spec = specs
+            .pop()
+            .expect("DependencyMap should not contain empty IndexSets");
+        Ok((name, spec))
     }
 
     /// Adds a dependency to a target
-    ///
-    /// This will overwrite any existing dependency of the same name
-    pub fn add_dependency(&mut self, dep_name: &PackageName, spec: &PixiSpec, spec_type: SpecType) {
-        self.dependencies
-            .entry(spec_type)
-            .or_default()
-            .insert(dep_name.clone(), spec.clone());
+    pub(crate) fn add_dependency(
+        &mut self,
+        dep_name: &PackageName,
+        spec: &PixiSpec,
+        spec_type: SpecType,
+    ) {
+        let deps = self.dependencies.entry(spec_type).or_default();
+        // Insert the new spec
+        deps.insert(dep_name.clone(), spec.clone());
     }
 
     /// Adds a dependency to a target
@@ -174,22 +201,21 @@ impl WorkspaceTarget {
 
     /// Checks if this target contains a specific pypi dependency
     pub fn has_pypi_dependency(&self, requirement: &pep508_rs::Requirement, exact: bool) -> bool {
-        let current_requirement = self
+        let current_requirements = self
             .pypi_dependencies
             .as_ref()
             .and_then(|deps| deps.get(&PypiPackageName::from_normalized(requirement.name.clone())));
 
-        match (current_requirement, exact) {
-            (Some(r), true) => {
+        match (current_requirements, exact) {
+            (Some(specs), true) => {
                 // TODO: would be nice to compare pep508 == PyPiRequirement directly
-                *r == PixiPypiSpec::try_from(requirement.clone())
-                    .expect("could not convert pep508 requirement")
+                let target_spec = PixiPypiSpec::try_from(requirement.clone())
+                    .expect("could not convert pep508 requirement");
+                specs.contains(&target_spec)
             }
-            (Some(r), false) => {
-                if r.extras() != requirement.extras {
-                    return false;
-                }
-                true
+            (Some(specs), false) => {
+                // Check if any spec matches the extras
+                specs.iter().any(|r| r.extras() == requirement.extras)
             }
             (None, _) => false,
         }
@@ -198,6 +224,8 @@ impl WorkspaceTarget {
     /// Removes a pypi dependency from this target
     ///
     /// it will Err if the dependency is not found
+    ///
+    /// Note: This removes all specs for the given package name and returns one of them.
     pub fn remove_pypi_dependency(
         &mut self,
         dep_name: &PypiPackageName,
@@ -205,18 +233,22 @@ impl WorkspaceTarget {
         let Some(pypi_dependencies) = self.pypi_dependencies.as_mut() else {
             return Err(DependencyError::NoPyPiDependencies);
         };
-        pypi_dependencies
-            .shift_remove_entry(dep_name)
-            .ok_or_else(|| DependencyError::NoDependency(dep_name.as_source().into()))
+        let (name, mut specs) = pypi_dependencies
+            .remove(dep_name)
+            .ok_or_else(|| DependencyError::NoDependency(dep_name.as_source().into()))?;
+
+        // Return the first (and typically only) spec
+        let spec = specs
+            .pop()
+            .expect("DependencyMap should not contain empty IndexSets");
+        Ok((name, spec))
     }
 
     /// Adds a pypi dependency to a target
-    ///
-    /// This will overwrite any existing dependency of the same name
-    pub fn add_pypi_dependency(&mut self, name: PypiPackageName, requirement: PixiPypiSpec) {
-        self.pypi_dependencies
-            .get_or_insert_with(Default::default)
-            .insert(name, requirement);
+    pub(crate) fn add_pypi_dependency(&mut self, name: PypiPackageName, requirement: PixiPypiSpec) {
+        let deps = self.pypi_dependencies.get_or_insert_with(Default::default);
+        // Insert the new spec
+        deps.insert(name, requirement);
     }
 
     /// Adds a pypi dependency to a target
@@ -258,22 +290,25 @@ impl WorkspaceTarget {
 
 impl PackageTarget {
     /// Returns the dependencies of a certain type.
-    pub fn dependencies(&self, spec_type: SpecType) -> Option<&IndexMap<PackageName, PixiSpec>> {
+    pub fn dependencies(
+        &self,
+        spec_type: SpecType,
+    ) -> Option<&DependencyMap<PackageName, PixiSpec>> {
         self.dependencies.get(&spec_type)
     }
 
     /// Returns the run dependencies of the target
-    pub fn run_dependencies(&self) -> Option<&IndexMap<PackageName, PixiSpec>> {
+    pub fn run_dependencies(&self) -> Option<&DependencyMap<PackageName, PixiSpec>> {
         self.dependencies.get(&SpecType::Run)
     }
 
     /// Returns the host dependencies of the target
-    pub fn host_dependencies(&self) -> Option<&IndexMap<PackageName, PixiSpec>> {
+    pub fn host_dependencies(&self) -> Option<&DependencyMap<PackageName, PixiSpec>> {
         self.dependencies.get(&SpecType::Host)
     }
 
     /// Returns the build dependencies of the target
-    pub fn build_dependencies(&self) -> Option<&IndexMap<PackageName, PixiSpec>> {
+    pub fn build_dependencies(&self) -> Option<&DependencyMap<PackageName, PixiSpec>> {
         self.dependencies.get(&SpecType::Build)
     }
 
@@ -284,41 +319,25 @@ impl PackageTarget {
         spec_type: SpecType,
         exact: Option<&PixiSpec>,
     ) -> bool {
-        let current_dependency = self
+        let current_dependencies = self
             .dependencies(spec_type)
-            .and_then(|deps| deps.get(dep_name).cloned());
+            .and_then(|deps| deps.get(dep_name));
 
-        match (current_dependency, exact) {
-            (Some(current_spec), Some(spec)) => current_spec == *spec,
+        match (current_dependencies, exact) {
+            (Some(specs), Some(spec)) => specs.contains(spec),
             (Some(_), None) => true,
             (None, _) => false,
         }
     }
 
-    /// Removes a dependency from this target
-    ///
-    /// it will Err if the dependency is not found
-    pub fn remove_dependency(
-        &mut self,
-        dep_name: &PackageName,
-        spec_type: SpecType,
-    ) -> Result<(PackageName, PixiSpec), DependencyError> {
-        let Some(dependencies) = self.dependencies.get_mut(&spec_type) else {
-            return Err(DependencyError::NoSpecType(spec_type.name().into()));
-        };
-        dependencies
-            .shift_remove_entry(dep_name)
-            .ok_or_else(|| DependencyError::NoDependency(dep_name.as_normalized().into()))
-    }
-
     /// Adds a dependency to a target
     ///
-    /// This will overwrite any existing dependency of the same name
+    /// This will overwrite any existing dependency of the same name by first removing
+    /// any existing specs and then inserting the new one.
     pub fn add_dependency(&mut self, dep_name: &PackageName, spec: &PixiSpec, spec_type: SpecType) {
-        self.dependencies
-            .entry(spec_type)
-            .or_default()
-            .insert(dep_name.clone(), spec.clone());
+        let deps = self.dependencies.entry(spec_type).or_default();
+        // Insert the new spec
+        deps.insert(dep_name.clone(), spec.clone());
     }
 
     /// Adds a dependency to a target
@@ -620,7 +639,11 @@ mod tests {
             .combined_dependencies()
             .unwrap_or_default()
             .iter()
-            .map(|(name, spec)| format!("{} = {}", name.as_source(), spec.as_version_spec().unwrap()))
+            .filter_map(|(name, specs)| {
+                specs.iter().next().map(|spec| {
+                    format!("{} = {}", name.as_source(), spec.as_version_spec().unwrap())
+                })
+            })
             .join("\n"), @r###"
         run = ==2.0
         host = ==2.0
