@@ -796,3 +796,128 @@ pub async fn test_get_output_dependencies_output_not_found() {
         ),
     }
 }
+
+/// Tests that `expand_dev_sources` correctly extracts dependencies from dev
+/// sources and allows them to be merged into a PixiEnvironmentSpec.
+#[tokio::test]
+pub async fn test_expand_dev_sources() {
+    use pixi_command_dispatcher::{DependencyOnlySource, ExpandDevSourcesSpec};
+    use pixi_spec::{PathSourceSpec, SourceSpec};
+
+    // Setup: Create a dispatcher with the in-memory backend
+    let root_dir = workspaces_dir().join("output-dependencies");
+    let tempdir = tempfile::tempdir().unwrap();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(root_dir.clone())
+        .with_cache_dirs(default_cache_dirs().with_workspace(tempdir.path().to_path_buf()))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+
+    // Create dev sources for test-package and package-a
+    // package-a depends on test-package (also a dev source, should be filtered)
+    // and on package-b (not a dev source, should be included)
+    let dev_sources = vec![
+        DependencyOnlySource {
+            source: SourceSpec::from(PathSourceSpec {
+                path: "test-package".into(),
+            }),
+            output_name: PackageName::new_unchecked("test-package"),
+        },
+        DependencyOnlySource {
+            source: SourceSpec::from(PathSourceSpec {
+                path: "package-a".into(),
+            }),
+            output_name: PackageName::new_unchecked("package-a"),
+        },
+    ];
+
+    // Create the spec for expanding dev sources
+    let spec = ExpandDevSourcesSpec {
+        dev_sources,
+        channel_config: default_channel_config(),
+        channels: vec![],
+        build_environment: BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone()),
+        variants: None,
+        enabled_protocols: Default::default(),
+    };
+
+    // Act: Expand the dev sources
+    let expanded = dispatcher
+        .expand_dev_sources(spec)
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("expand_dev_sources should succeed");
+
+    // Print the expanded dependencies in JSON format for easy inspection
+    println!("\n=== Expanded Dependencies ===");
+    let json_string = serde_json::to_string_pretty(&expanded.dependencies)
+        .expect("Failed to serialize dependencies to JSON");
+    println!("{}", json_string);
+
+    if !expanded.constraints.is_empty() {
+        println!("\n=== Expanded Constraints ===");
+        let constraints_json = serde_json::to_string_pretty(&expanded.constraints)
+            .expect("Failed to serialize constraints to JSON");
+        println!("{}", constraints_json);
+    }
+    println!("=============================\n");
+
+    // Assert: Verify all dependencies were extracted
+    let all_dep_names: Vec<_> = expanded
+        .dependencies
+        .names()
+        .map(|name| name.as_normalized())
+        .sorted()
+        .collect();
+
+    // Expected dependencies:
+    // - From test-package: cmake, make (build), openssl, zlib (host), numpy, python (run)
+    // - From package-a: gcc (build), requests (run), package-b (run, which is a source)
+    // - test-package is NOT included even though package-a depends on it (filtered because it's a dev source)
+    // - package-b IS included (not a dev source)
+    assert_eq!(
+        all_dep_names,
+        vec![
+            "cmake",
+            "gcc",
+            "make",
+            "numpy",
+            "openssl",
+            "package-b",
+            "python",
+            "requests",
+            "zlib"
+        ],
+        "All dependencies should be extracted, with dev sources filtered out"
+    );
+
+    // Verify that test-package is NOT in the dependencies (it's filtered because it's a dev source)
+    assert!(
+        !expanded.dependencies.contains_key("test-package"),
+        "test-package should be filtered out because it's a dev source"
+    );
+
+    // Verify that package-a is NOT in the dependencies (it's filtered because it's a dev source)
+    assert!(
+        !expanded.dependencies.contains_key("package-a"),
+        "package-a should be filtered out because it's a dev source"
+    );
+
+    // Verify that package-b IS in the dependencies (it's not a dev source)
+    assert!(
+        expanded.dependencies.contains_key("package-b"),
+        "package-b should be included because it's not a dev source"
+    );
+
+    // Assert: Verify constraints are empty (test packages have no constraints)
+    assert!(
+        expanded.constraints.is_empty(),
+        "Test packages have no constraints"
+    );
+}
