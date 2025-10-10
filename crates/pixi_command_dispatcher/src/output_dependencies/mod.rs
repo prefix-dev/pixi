@@ -1,17 +1,19 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, str::FromStr};
 
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_build_types::procedures::conda_outputs::{CondaOutput, CondaOutputDependencies};
 use pixi_record::PinnedSourceSpec;
-use rattler_conda_types::{ChannelConfig, ChannelUrl, PackageName};
+use pixi_spec::{BinarySpec, PixiSpec};
+use pixi_spec_containers::DependencyMap;
+use rattler_conda_types::{ChannelConfig, ChannelUrl, InvalidPackageNameError, PackageName};
 use thiserror::Error;
 use tracing::instrument;
 
 use crate::{
     BuildBackendMetadataError, BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher,
     CommandDispatcherError, CommandDispatcherErrorResultExt,
-    build::source_metadata_cache::MetadataKind,
+    build::{conversion, source_metadata_cache::MetadataKind},
 };
 
 /// A specification for retrieving the dependencies of a specific output from a
@@ -48,15 +50,24 @@ pub struct GetOutputDependenciesSpec {
 pub struct OutputDependencies {
     /// The build dependencies of the package. These refer to the packages that
     /// should be installed in the "build" environment.
-    pub build_dependencies: Option<CondaOutputDependencies>,
+    pub build_dependencies: Option<DependencyMap<PackageName, PixiSpec>>,
+
+    /// Additional constraints for the build environment.
+    pub build_constraints: Option<DependencyMap<PackageName, BinarySpec>>,
 
     /// The "host" dependencies of the package. These refer to the packages that
     /// should be installed to be able to refer to them from the build process
     /// but not run them.
-    pub host_dependencies: Option<CondaOutputDependencies>,
+    pub host_dependencies: Option<DependencyMap<PackageName, PixiSpec>>,
+
+    /// Additional constraints for the host environment.
+    pub host_constraints: Option<DependencyMap<PackageName, BinarySpec>>,
 
     /// The dependencies for the run environment of the package.
-    pub run_dependencies: CondaOutputDependencies,
+    pub run_dependencies: DependencyMap<PackageName, PixiSpec>,
+
+    /// Additional constraints for the run environment.
+    pub run_constraints: DependencyMap<PackageName, BinarySpec>,
 }
 
 impl GetOutputDependenciesSpec {
@@ -110,17 +121,76 @@ impl GetOutputDependenciesSpec {
             })?;
 
         // Extract and return the dependencies.
-        Ok(extract_dependencies(output))
+        extract_dependencies(output).map_err(CommandDispatcherError::Failed)
     }
 }
 
-/// Extracts the dependencies from a CondaOutput.
-fn extract_dependencies(output: &CondaOutput) -> OutputDependencies {
-    OutputDependencies {
-        build_dependencies: output.build_dependencies.clone(),
-        host_dependencies: output.host_dependencies.clone(),
-        run_dependencies: output.run_dependencies.clone(),
+/// Extracts the dependencies from a CondaOutput and converts them to PixiSpecs.
+fn extract_dependencies(
+    output: &CondaOutput,
+) -> Result<OutputDependencies, GetOutputDependenciesError> {
+    let (build_deps, build_constraints) = output
+        .build_dependencies
+        .as_ref()
+        .map(convert_conda_dependencies)
+        .transpose()?
+        .map(|(deps, constraints)| (Some(deps), Some(constraints)))
+        .unwrap_or((None, None));
+
+    let (host_deps, host_constraints) = output
+        .host_dependencies
+        .as_ref()
+        .map(convert_conda_dependencies)
+        .transpose()?
+        .map(|(deps, constraints)| (Some(deps), Some(constraints)))
+        .unwrap_or((None, None));
+
+    let (run_deps, run_constraints) = convert_conda_dependencies(&output.run_dependencies)?;
+
+    Ok(OutputDependencies {
+        build_dependencies: build_deps,
+        build_constraints,
+        host_dependencies: host_deps,
+        host_constraints,
+        run_dependencies: run_deps,
+        run_constraints,
+    })
+}
+
+/// Converts CondaOutputDependencies to DependencyMaps of PixiSpecs and BinarySpecs.
+fn convert_conda_dependencies(
+    deps: &CondaOutputDependencies,
+) -> Result<
+    (
+        DependencyMap<PackageName, PixiSpec>,
+        DependencyMap<PackageName, BinarySpec>,
+    ),
+    GetOutputDependenciesError,
+> {
+    let mut dependencies = DependencyMap::default();
+    let mut constraints = DependencyMap::default();
+
+    // Convert depends
+    for depend in &deps.depends {
+        let name = PackageName::from_str(&depend.name).map_err(|err| {
+            GetOutputDependenciesError::InvalidPackageName(depend.name.clone(), err)
+        })?;
+
+        let spec = conversion::from_package_spec_v1(depend.spec.clone());
+        dependencies.insert(name, spec);
     }
+
+    // Convert constraints
+    for constraint in &deps.constraints {
+        let name = PackageName::from_str(&constraint.name).map_err(|err| {
+            GetOutputDependenciesError::InvalidPackageName(constraint.name.clone(), err)
+        })?;
+
+        let spec = conversion::from_binary_spec_v1(constraint.spec.clone());
+        constraints.insert(name, spec);
+    }
+
+    Ok((dependencies, constraints))
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -143,4 +213,7 @@ pub enum GetOutputDependenciesError {
         output_name: PackageName,
         available_outputs: Vec<PackageName>,
     },
+
+    #[error("backend returned a dependency on an invalid package name: {0}")]
+    InvalidPackageName(String, #[source] InvalidPackageNameError),
 }

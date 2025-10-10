@@ -666,13 +666,12 @@ pub async fn test_get_output_dependencies() {
 
     let build_deps = result.build_dependencies.unwrap();
     let host_deps = result.host_dependencies.unwrap();
-    let run_deps = result.run_dependencies;
+    let run_deps = &result.run_dependencies;
 
     // Verify build dependencies (cmake, make)
     let build_dep_names: Vec<_> = build_deps
-        .depends
-        .iter()
-        .map(|dep| dep.name.as_str())
+        .names()
+        .map(|name| name.as_normalized())
         .sorted()
         .collect();
     assert_eq!(
@@ -683,9 +682,8 @@ pub async fn test_get_output_dependencies() {
 
     // Verify host dependencies (zlib, openssl)
     let host_dep_names: Vec<_> = host_deps
-        .depends
-        .iter()
-        .map(|dep| dep.name.as_str())
+        .names()
+        .map(|name| name.as_normalized())
         .sorted()
         .collect();
     assert_eq!(
@@ -696,15 +694,34 @@ pub async fn test_get_output_dependencies() {
 
     // Verify run dependencies (python, numpy)
     let run_dep_names: Vec<_> = run_deps
-        .depends
-        .iter()
-        .map(|dep| dep.name.as_str())
+        .names()
+        .map(|name| name.as_normalized())
         .sorted()
         .collect();
     assert_eq!(
         run_dep_names,
         vec!["numpy", "python"],
         "Run dependencies should include python and numpy"
+    );
+
+    // Verify constraints are empty (our test package doesn't have any)
+    assert!(
+        result
+            .build_constraints
+            .as_ref()
+            .map_or(true, |c| c.is_empty()),
+        "Build constraints should be empty"
+    );
+    assert!(
+        result
+            .host_constraints
+            .as_ref()
+            .map_or(true, |c| c.is_empty()),
+        "Host constraints should be empty"
+    );
+    assert!(
+        result.run_constraints.is_empty(),
+        "Run constraints should be empty"
     );
 }
 
