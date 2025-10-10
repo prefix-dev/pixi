@@ -3,11 +3,11 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use futures::TryStreamExt;
 use indicatif::HumanBytes;
 use miette::{Context, Diagnostic, IntoDiagnostic};
-use reqwest::StatusCode;
+use reqwest::{Method, StatusCode};
 
 use rattler_digest::{Sha256, compute_file_digest};
 use rattler_networking::AuthenticationMiddleware;
@@ -25,8 +25,27 @@ use pixi_utils::reqwest::reqwest_client_builder;
 /// Example: `pixi upload https://prefix.dev/api/v1/upload/my_channel my_package.conda`
 ///
 /// Use `pixi auth login` to authenticate with the server.
+#[derive(Copy, Clone, Debug, ValueEnum, Eq, PartialEq)]
+pub enum UploadMethod {
+    Post,
+    Put,
+}
+
+impl From<UploadMethod> for Method {
+    fn from(value: UploadMethod) -> Self {
+        match value {
+            UploadMethod::Post => Method::POST,
+            UploadMethod::Put => Method::PUT,
+        }
+    }
+}
+
 #[derive(Parser, Debug)]
 pub struct Args {
+    /// HTTP method to use when uploading (POST for prefix.dev, PUT for Artifactory)
+    #[arg(long, value_enum, default_value = "post")]
+    method: UploadMethod,
+
     /// The host + channel to upload to
     host: String,
 
@@ -83,22 +102,42 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let body = reqwest::Body::wrap_stream(reader_stream);
 
-    let response = client
-        .post(args.host.clone())
+    let target_url = match args.method {
+        UploadMethod::Post => args.host.clone(),
+        UploadMethod::Put => {
+            if looks_like_file_target(&args.host) {
+                args.host.clone()
+            } else {
+                format!(
+                    "{}/{}",
+                    args.host.trim_end_matches('/'),
+                    filename.as_str()
+                )
+            }
+        }
+    };
+
+    let mut request = client
+        .request(args.method.into(), target_url.clone())
         .header("X-File-Sha256", sha256sum)
-        .header("X-File-Name", filename)
         .header("Content-Length", filesize)
-        .header("Content-Type", "application/octet-stream")
+        .header("Content-Type", "application/octet-stream");
+
+    if matches!(args.method, UploadMethod::Post) {
+        request = request.header("X-File-Name", filename);
+    }
+
+    let response = request
         .body(body)
         .send()
         .await
         .map_err(|e| UploadError::RequestFailed {
-            host: args.host.clone(),
+            host: target_url.clone(),
             source: e,
         })?;
 
     match response.status() {
-        StatusCode::OK => {
+        StatusCode::OK | StatusCode::CREATED | StatusCode::NO_CONTENT => {
             eprintln!(
                 "{} Package uploaded successfully!",
                 console::style("✔").green()
@@ -106,7 +145,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         StatusCode::UNAUTHORIZED => {
             return Err(UploadError::Unauthorized {
-                host: args.host.clone(),
+                host: target_url.clone(),
                 source: response
                     .error_for_status()
                     .expect_err("capture reqwest error"),
@@ -115,7 +154,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         StatusCode::INTERNAL_SERVER_ERROR => {
             return Err(UploadError::ServerError {
-                host: args.host.clone(),
+                host: target_url.clone(),
                 source: response
                     .error_for_status()
                     .expect_err("capture reqwest error"),
@@ -124,7 +163,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         StatusCode::CONFLICT => {
             return Err(UploadError::Conflict {
-                host: args.host.clone(),
+                host: target_url.clone(),
                 source: response
                     .error_for_status()
                     .expect_err("capture reqwest error"),
@@ -133,7 +172,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         status => {
             return Err(UploadError::UnexpectedStatus {
-                host: args.host.clone(),
+                host: target_url,
                 status,
                 source: response
                     .error_for_status()
@@ -144,6 +183,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     Ok(())
+}
+
+fn looks_like_file_target(target: &str) -> bool {
+    target.ends_with(".conda")
+        || target.ends_with(".tar.bz2")
+        || target.split('/').last().map_or(false, |segment| segment.contains('.'))
 }
 
 #[derive(Debug, Error, Diagnostic)]
