@@ -1,6 +1,6 @@
 // TODO: replace this with rattler-build upload after it moved into the rattler crate
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use clap::{Parser, ValueEnum};
@@ -9,7 +9,9 @@ use indicatif::HumanBytes;
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use reqwest::{Method, StatusCode};
 
+use rattler_conda_types::package::IndexJson;
 use rattler_digest::{Sha256, compute_file_digest};
+use rattler_package_streaming::{seek, ExtractError};
 use rattler_networking::AuthenticationMiddleware;
 use thiserror::Error;
 use tokio::fs::File;
@@ -108,14 +110,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             if looks_like_file_target(&args.host) {
                 args.host.clone()
             } else {
-                format!(
-                    "{}/{}",
-                    args.host.trim_end_matches('/'),
-                    filename.as_str()
-                )
+                build_put_target(&args.host, filename.as_str(), &args.package_file)
+                    .map_err(miette::ErrReport::from)?
             }
         }
     };
+
+    if matches!(args.method, UploadMethod::Put) && target_url != args.host {
+        println!("Resolved upload URL: {}", target_url);
+    }
 
     let mut request = client
         .request(args.method.into(), target_url.clone())
@@ -191,6 +194,30 @@ fn looks_like_file_target(target: &str) -> bool {
         || target.split('/').last().map_or(false, |segment| segment.contains('.'))
 }
 
+fn build_put_target(host: &str, filename: &str, package_path: &Path) -> Result<String, UploadError> {
+    let index_json: IndexJson =
+        seek::read_package_file(package_path).map_err(|source| {
+            UploadError::ReadIndexJson {
+                path: package_path.to_path_buf(),
+                source,
+            }
+        })?;
+
+    let subdir = index_json
+        .subdir
+        .as_deref()
+        .filter(|value| !value.is_empty());
+
+    let mut target = host.trim_end_matches('/').to_string();
+    if let Some(subdir) = subdir {
+        target.push('/');
+        target.push_str(subdir);
+    }
+    target.push('/');
+    target.push_str(filename);
+    Ok(target)
+}
+
 #[derive(Debug, Error, Diagnostic)]
 pub enum UploadError {
     #[error("Failed to send request to {host}")]
@@ -232,5 +259,13 @@ pub enum UploadError {
         host: String,
         #[source]
         source: reqwest::Error,
+    },
+
+    #[error("Failed to read index metadata from {path}")]
+    #[diagnostic(help("Ensure the file is a valid conda package."))]
+    ReadIndexJson {
+        path: PathBuf,
+        #[source]
+        source: ExtractError,
     },
 }
