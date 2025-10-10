@@ -45,6 +45,9 @@ pub struct TomlManifest {
     pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub pypi_dependencies: Option<PixiSpanned<IndexMap<PypiPackageName, PixiPypiSpec>>>,
+    pub develop: Option<
+        PixiSpanned<IndexMap<rattler_conda_types::PackageName, pixi_spec::TomlLocationSpec>>,
+    >,
 
     /// Additional information to activate an environment.
     pub activation: Option<PixiSpanned<Activation>>,
@@ -154,6 +157,7 @@ impl TomlManifest {
             host_dependencies: self.host_dependencies,
             build_dependencies: self.build_dependencies,
             pypi_dependencies: self.pypi_dependencies.map(PixiSpanned::into_inner),
+            develop: self.develop.map(PixiSpanned::into_inner),
             activation: self.activation.map(PixiSpanned::into_inner),
             tasks: self.tasks.map(PixiSpanned::into_inner).unwrap_or_default(),
             warnings: self.warnings,
@@ -485,6 +489,9 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
         let pypi_dependencies = th
             .optional::<TomlWith<_, PixiSpanned<TomlIndexMap<_, Same>>>>("pypi-dependencies")
             .map(TomlWith::into_inner);
+        let develop = th
+            .optional::<TomlWith<_, PixiSpanned<TomlIndexMap<_, Same>>>>("develop")
+            .map(TomlWith::into_inner);
         let activation = th.optional("activation");
         let tasks = th
             .optional::<TomlWith<_, PixiSpanned<TomlHashMap<_, Same>>>>("tasks")
@@ -546,6 +553,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
             host_dependencies,
             build_dependencies,
             pypi_dependencies,
+            develop,
             activation,
             tasks,
             feature,
@@ -898,6 +906,186 @@ mod test {
         platforms = []
 
         [feature.default.dependencies]
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_parse_develop_path() {
+        let manifest = WorkspaceManifest::from_toml_str(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64"]
+
+        [develop]
+        test-package = { path = "../test-package" }
+        "#,
+        )
+        .unwrap();
+
+        let develop_deps = manifest
+            .default_feature()
+            .develop_dependencies(None)
+            .expect("should have develop dependencies");
+
+        assert_eq!(develop_deps.len(), 1);
+        assert!(develop_deps.contains_key("test-package"));
+    }
+
+    #[test]
+    fn test_parse_develop_git() {
+        let manifest = WorkspaceManifest::from_toml_str(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64"]
+
+        [develop]
+        my-lib = { git = "https://github.com/example/my-lib.git", branch = "main" }
+        "#,
+        )
+        .unwrap();
+
+        let develop_deps = manifest
+            .default_feature()
+            .develop_dependencies(None)
+            .expect("should have develop dependencies");
+
+        assert_eq!(develop_deps.len(), 1);
+        assert!(develop_deps.contains_key("my-lib"));
+    }
+
+    #[test]
+    fn test_parse_develop_multiple() {
+        let manifest = WorkspaceManifest::from_toml_str(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64"]
+
+        [develop]
+        pkg-a = { path = "../pkg-a" }
+        pkg-b = { git = "https://github.com/example/pkg-b.git" }
+        pkg-c = { url = "https://example.com/pkg-c.tar.gz" }
+        "#,
+        )
+        .unwrap();
+
+        let develop_deps = manifest
+            .default_feature()
+            .develop_dependencies(None)
+            .expect("should have develop dependencies");
+
+        assert_eq!(develop_deps.len(), 3);
+        assert!(develop_deps.contains_key("pkg-a"));
+        assert!(develop_deps.contains_key("pkg-b"));
+        assert!(develop_deps.contains_key("pkg-c"));
+    }
+
+    #[test]
+    fn test_parse_feature_develop() {
+        let manifest = WorkspaceManifest::from_toml_str(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64"]
+
+        [feature.extra.develop]
+        feature-pkg = { path = "../feature-pkg" }
+
+        [environments]
+        default = []
+        extra = ["extra"]
+        "#,
+        )
+        .unwrap();
+
+        // Default feature should not have develop dependencies
+        assert!(
+            manifest
+                .default_feature()
+                .develop_dependencies(None)
+                .is_none()
+        );
+
+        // Extra feature should have develop dependencies
+        let extra_feature = manifest
+            .feature("extra")
+            .expect("extra feature should exist");
+        let develop_deps = extra_feature
+            .develop_dependencies(None)
+            .expect("should have develop dependencies");
+
+        assert_eq!(develop_deps.len(), 1);
+        assert!(develop_deps.contains_key("feature-pkg"));
+    }
+
+    #[test]
+    fn test_parse_target_develop() {
+        let manifest = WorkspaceManifest::from_toml_str(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64", "win-64"]
+
+        [target.linux-64.develop]
+        linux-pkg = { path = "../linux-pkg" }
+
+        [target.win-64.develop]
+        windows-pkg = { path = "../windows-pkg" }
+        "#,
+        )
+        .unwrap();
+
+        let linux_deps = manifest
+            .default_feature()
+            .develop_dependencies(Some(Platform::Linux64))
+            .expect("should have linux develop dependencies");
+
+        assert_eq!(linux_deps.len(), 1);
+        assert!(linux_deps.contains_key("linux-pkg"));
+
+        let windows_deps = manifest
+            .default_feature()
+            .develop_dependencies(Some(Platform::Win64))
+            .expect("should have windows develop dependencies");
+
+        assert_eq!(windows_deps.len(), 1);
+        assert!(windows_deps.contains_key("windows-pkg"));
+    }
+
+    #[test]
+    fn test_parse_develop_invalid_no_source_type() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64"]
+
+        [develop]
+        bad-pkg = { subdirectory = "subdir" }
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_parse_develop_invalid_multiple_sources() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64"]
+
+        [develop]
+        bad-pkg = { path = "../path", git = "https://github.com/example/repo.git" }
         "#,
         ));
     }
