@@ -9,8 +9,6 @@
 
 use std::path::{Component, Path, PathBuf};
 
-use itertools::Itertools;
-
 /// Simple handler to work with our globs
 /// basically splits up negation
 #[derive(Clone, Debug)]
