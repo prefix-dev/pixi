@@ -135,20 +135,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     } else {
         manifest_spec_path.as_ref()
     };
-    let source: PinnedSourceSpec = PinnedPathSpec {
+    let manifest_source: PinnedSourceSpec = PinnedPathSpec {
         path: manifest_path_dir.to_string_lossy().into_owned().into(),
     }
     .into();
 
     // Create the build backend metadata specification.
     let backend_metadata_spec = BuildBackendMetadataSpec {
-        source: source.clone(),
+        manifest_source: manifest_source.clone(),
         channels: channels.clone(),
         channel_config: channel_config.clone(),
         build_environment: build_environment.clone(),
         variants: Some(variant_configuration.clone()),
         enabled_protocols: Default::default(),
-        override_pinned_build_source: None,
+        pin_override: None,
     };
     let backend_metadata = command_dispatcher
         .build_backend_metadata(backend_metadata_spec.clone())
@@ -179,8 +179,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 package,
                 // Build into a temporary directory first
                 output_directory: Some(temp_output_dir.path().to_path_buf()),
-                source: source.clone(),
-                pinned_build_source: None,
+                manifest_source: manifest_source.clone(),
+                build_source: None,
                 channels: channels.clone(),
                 channel_config: channel_config.clone(),
                 build_environment: build_environment.clone(),

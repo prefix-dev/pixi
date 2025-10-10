@@ -27,8 +27,7 @@ pub struct SourceMetadataCollector {
     build_environment: BuildEnvironment,
     enabled_protocols: EnabledProtocols,
     variants: Option<BTreeMap<String, Vec<String>>>,
-    override_pinned_source_for_package:
-        Option<BTreeMap<rattler_conda_types::PackageName, PinnedSourceSpec>>,
+    pin_overrides: BTreeMap<rattler_conda_types::PackageName, PinnedSourceSpec>,
 }
 
 #[derive(Default)]
@@ -75,9 +74,7 @@ impl SourceMetadataCollector {
         build_environment: BuildEnvironment,
         variants: Option<BTreeMap<String, Vec<String>>>,
         enabled_protocols: EnabledProtocols,
-        override_pinned_source_for_package: Option<
-            BTreeMap<rattler_conda_types::PackageName, PinnedSourceSpec>,
-        >,
+        pin_overrides: BTreeMap<rattler_conda_types::PackageName, PinnedSourceSpec>,
     ) -> Self {
         Self {
             command_queue,
@@ -86,7 +83,7 @@ impl SourceMetadataCollector {
             enabled_protocols,
             channel_config,
             variants,
-            override_pinned_source_for_package,
+            pin_overrides,
         }
     }
 
@@ -163,10 +160,7 @@ impl SourceMetadataCollector {
         tracing::trace!("Collecting source metadata for {name:#?}");
 
         // Determine if we should override the build_source pin for this package.
-        let override_pin = self
-            .override_pinned_source_for_package
-            .as_ref()
-            .and_then(|map| map.get(&name).cloned());
+        let override_pin = self.pin_overrides.get(&name).cloned();
 
         // Always checkout the manifest-defined source location (root), discovery
         // will pick build_source; we only override the build pin later.
@@ -186,13 +180,13 @@ impl SourceMetadataCollector {
             .source_metadata(SourceMetadataSpec {
                 package: name.clone(),
                 backend_metadata: BuildBackendMetadataSpec {
-                    source: source.pinned,
+                    manifest_source: source.pinned,
                     channel_config: self.channel_config.clone(),
                     channels: self.channels.clone(),
                     build_environment: self.build_environment.clone(),
                     variants: self.variants.clone(),
                     enabled_protocols: self.enabled_protocols.clone(),
-                    override_pinned_build_source: override_pin,
+                    pin_override: override_pin,
                 },
             })
             .await

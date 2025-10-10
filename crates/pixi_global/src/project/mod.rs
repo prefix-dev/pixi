@@ -1380,7 +1380,7 @@ impl Project {
 
         // Create the metadata spec
         let metadata_spec = BuildBackendMetadataSpec {
-            source: pinned_source_spec,
+            manifest_source: pinned_source_spec,
             channel_config: self.global_channel_config().clone(),
             channels: self
                 .config()
@@ -1391,7 +1391,7 @@ impl Project {
             build_environment: pixi_command_dispatcher::BuildEnvironment::default(),
             variants: None,
             enabled_protocols: Default::default(),
-            override_pinned_build_source: None,
+            pin_override: None,
         };
 
         // Get the metadata using the command dispatcher

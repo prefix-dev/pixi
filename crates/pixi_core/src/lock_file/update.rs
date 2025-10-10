@@ -1411,7 +1411,7 @@ impl<'p> UpdateContext<'p> {
                 // Spawn a task to solve the group.
                 // Determine override pinned sources for source packages when performing
                 // a targeted update.
-                let override_pinned = (|| {
+                let pin_overrides = (|| {
                     let targets = self.update_targets.as_ref()?;
                     if targets.is_empty() {
                         return None;
@@ -1433,7 +1433,8 @@ impl<'p> UpdateContext<'p> {
                             })
                             .collect(),
                     )
-                })();
+                })()
+                .unwrap_or_default();
 
                 let group_solve_task = spawn_solve_conda_environment_task(
                     source.clone(),
@@ -1442,7 +1443,7 @@ impl<'p> UpdateContext<'p> {
                     platform,
                     channel_priority,
                     self.command_dispatcher.clone(),
-                    override_pinned,
+                    pin_overrides,
                 )
                 .map_err(Report::new)
                 .boxed_local();
@@ -1948,9 +1949,7 @@ async fn spawn_solve_conda_environment_task(
     platform: Platform,
     channel_priority: ChannelPriority,
     command_dispatcher: CommandDispatcher,
-    override_pinned_source_for_package: Option<
-        BTreeMap<rattler_conda_types::PackageName, pixi_record::PinnedSourceSpec>,
-    >,
+    pin_overrides: BTreeMap<rattler_conda_types::PackageName, pixi_record::PinnedSourceSpec>,
 ) -> Result<TaskResult, SolveCondaEnvironmentError> {
     // Get the dependencies for this platform
     let dependencies = group.combined_dependencies(Some(platform));
@@ -2018,7 +2017,7 @@ async fn spawn_solve_conda_environment_task(
             channel_config,
             variants: Some(variants),
             enabled_protocols: Default::default(),
-            override_pinned_source_for_package,
+            pin_overrides,
         })
         .await
         .map_err(|source| SolveCondaEnvironmentError::SolveFailed {

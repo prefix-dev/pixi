@@ -204,7 +204,7 @@ impl InstallPixiEnvironmentSpec {
         // Build the source package.
         let built_source = command_dispatcher
             .source_build(SourceBuildSpec {
-                source: source_record.source.clone(),
+                manifest_source: source_record.source.clone(),
                 package: source_record.into(),
                 channel_config: self.channel_config.clone(),
                 channels: self.channels.clone(),
@@ -216,7 +216,7 @@ impl InstallPixiEnvironmentSpec {
                 clean: false,
                 // When we install a pixi environment we always build in development mode.
                 build_profile: BuildProfile::Development,
-                pinned_build_source: None,
+                build_source: None,
             })
             .await?;
 

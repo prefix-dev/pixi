@@ -62,7 +62,7 @@ impl SourceMetadataSpec {
         skip_all,
         name = "source-metadata",
         fields(
-            source= %self.backend_metadata.source,
+            source= %self.backend_metadata.manifest_source,
             name = %self.package.as_source(),
             platform = %self.backend_metadata.build_environment.host_platform,
         )
@@ -84,14 +84,14 @@ impl SourceMetadataSpec {
             MetadataKind::GetMetadata { packages } => {
                 // Convert the metadata to source records.
                 let records = conversion::package_metadata_to_source_records(
-                    &build_backend_metadata.source,
+                    &build_backend_metadata.manifest_source,
                     packages,
                     &self.package,
                     &build_backend_metadata.metadata.input_hash,
                 );
 
                 Ok(SourceMetadata {
-                    source: build_backend_metadata.source.clone(),
+                    source: build_backend_metadata.manifest_source.clone(),
                     records,
                     // As the GetMetadata kind returns all records at once and we don't solve them we can skip this.
                     skipped_packages: Default::default(),
@@ -110,16 +110,16 @@ impl SourceMetadataSpec {
                         &command_dispatcher,
                         output,
                         build_backend_metadata.metadata.input_hash.clone(),
-                        build_backend_metadata.source.clone(),
+                        build_backend_metadata.manifest_source.clone(),
                         reporter.clone(),
                     ));
                 }
 
                 Ok(SourceMetadata {
-                    source: build_backend_metadata.source.clone(),
+                    source: build_backend_metadata.manifest_source.clone(),
                     records: futures.try_collect().await?,
                     skipped_packages,
-                    pinned_build_source: build_backend_metadata.package_build_source.clone(),
+                    pinned_build_source: build_backend_metadata.build_source.clone(),
                 })
             }
         }
@@ -370,11 +370,12 @@ impl SourceMetadataSpec {
         if dependencies.dependencies.is_empty() {
             return Ok(vec![]);
         }
-        let override_pinned_map = self
+        let pin_overrides = self
             .backend_metadata
-            .override_pinned_build_source
+            .pin_override
             .as_ref()
-            .map(|pinned| BTreeMap::from([(pkg_name.clone(), pinned.clone())]));
+            .map(|pinned| BTreeMap::from([(pkg_name.clone(), pinned.clone())]))
+            .unwrap_or_default();
         match command_dispatcher
             .solve_pixi_environment(PixiEnvironmentSpec {
                 name: Some(format!("{} ({})", pkg_name.as_source(), env_type)),
@@ -397,7 +398,7 @@ impl SourceMetadataSpec {
                 channel_config: self.backend_metadata.channel_config.clone(),
                 variants: self.backend_metadata.variants.clone(),
                 enabled_protocols: self.backend_metadata.enabled_protocols.clone(),
-                override_pinned_source_for_package: override_pinned_map,
+                pin_overrides,
             })
             .await
         {
