@@ -1,15 +1,17 @@
 // TODO: replace this with rattler-build upload after it moved into the rattler crate
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use futures::TryStreamExt;
 use indicatif::HumanBytes;
 use miette::{Context, Diagnostic, IntoDiagnostic};
-use reqwest::StatusCode;
+use reqwest::{Method, StatusCode};
 
+use rattler_conda_types::package::IndexJson;
 use rattler_digest::{Sha256, compute_file_digest};
+use rattler_package_streaming::{seek, ExtractError};
 use rattler_networking::AuthenticationMiddleware;
 use thiserror::Error;
 use tokio::fs::File;
@@ -25,8 +27,27 @@ use pixi_utils::reqwest::reqwest_client_builder;
 /// Example: `pixi upload https://prefix.dev/api/v1/upload/my_channel my_package.conda`
 ///
 /// Use `pixi auth login` to authenticate with the server.
+#[derive(Copy, Clone, Debug, ValueEnum, Eq, PartialEq)]
+pub enum UploadMethod {
+    Post,
+    Put,
+}
+
+impl From<UploadMethod> for Method {
+    fn from(value: UploadMethod) -> Self {
+        match value {
+            UploadMethod::Post => Method::POST,
+            UploadMethod::Put => Method::PUT,
+        }
+    }
+}
+
 #[derive(Parser, Debug)]
 pub struct Args {
+    /// HTTP method to use when uploading (POST for prefix.dev, PUT for Artifactory)
+    #[arg(long, value_enum, default_value = "post")]
+    method: UploadMethod,
+
     /// The host + channel to upload to
     host: String,
 
@@ -83,22 +104,43 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let body = reqwest::Body::wrap_stream(reader_stream);
 
-    let response = client
-        .post(args.host.clone())
+    let target_url = match args.method {
+        UploadMethod::Post => args.host.clone(),
+        UploadMethod::Put => {
+            if looks_like_file_target(&args.host) {
+                args.host.clone()
+            } else {
+                build_put_target(&args.host, filename.as_str(), &args.package_file)
+                    .map_err(miette::ErrReport::from)?
+            }
+        }
+    };
+
+    if matches!(args.method, UploadMethod::Put) && target_url != args.host {
+        println!("Resolved upload URL: {}", target_url);
+    }
+
+    let mut request = client
+        .request(args.method.into(), target_url.clone())
         .header("X-File-Sha256", sha256sum)
-        .header("X-File-Name", filename)
         .header("Content-Length", filesize)
-        .header("Content-Type", "application/octet-stream")
+        .header("Content-Type", "application/octet-stream");
+
+    if matches!(args.method, UploadMethod::Post) {
+        request = request.header("X-File-Name", filename);
+    }
+
+    let response = request
         .body(body)
         .send()
         .await
         .map_err(|e| UploadError::RequestFailed {
-            host: args.host.clone(),
+            host: target_url.clone(),
             source: e,
         })?;
 
     match response.status() {
-        StatusCode::OK => {
+        StatusCode::OK | StatusCode::CREATED | StatusCode::NO_CONTENT => {
             eprintln!(
                 "{} Package uploaded successfully!",
                 console::style("✔").green()
@@ -106,7 +148,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         StatusCode::UNAUTHORIZED => {
             return Err(UploadError::Unauthorized {
-                host: args.host.clone(),
+                host: target_url.clone(),
                 source: response
                     .error_for_status()
                     .expect_err("capture reqwest error"),
@@ -115,7 +157,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         StatusCode::INTERNAL_SERVER_ERROR => {
             return Err(UploadError::ServerError {
-                host: args.host.clone(),
+                host: target_url.clone(),
                 source: response
                     .error_for_status()
                     .expect_err("capture reqwest error"),
@@ -124,7 +166,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         StatusCode::CONFLICT => {
             return Err(UploadError::Conflict {
-                host: args.host.clone(),
+                host: target_url.clone(),
                 source: response
                     .error_for_status()
                     .expect_err("capture reqwest error"),
@@ -133,7 +175,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         status => {
             return Err(UploadError::UnexpectedStatus {
-                host: args.host.clone(),
+                host: target_url,
                 status,
                 source: response
                     .error_for_status()
@@ -144,6 +186,36 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     Ok(())
+}
+
+fn looks_like_file_target(target: &str) -> bool {
+    target.ends_with(".conda")
+        || target.ends_with(".tar.bz2")
+        || target.split('/').last().map_or(false, |segment| segment.contains('.'))
+}
+
+fn build_put_target(host: &str, filename: &str, package_path: &Path) -> Result<String, UploadError> {
+    let index_json: IndexJson =
+        seek::read_package_file(package_path).map_err(|source| {
+            UploadError::ReadIndexJson {
+                path: package_path.to_path_buf(),
+                source,
+            }
+        })?;
+
+    let subdir = index_json
+        .subdir
+        .as_deref()
+        .filter(|value| !value.is_empty());
+
+    let mut target = host.trim_end_matches('/').to_string();
+    if let Some(subdir) = subdir {
+        target.push('/');
+        target.push_str(subdir);
+    }
+    target.push('/');
+    target.push_str(filename);
+    Ok(target)
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -187,5 +259,13 @@ pub enum UploadError {
         host: String,
         #[source]
         source: reqwest::Error,
+    },
+
+    #[error("Failed to read index metadata from {path}")]
+    #[diagnostic(help("Ensure the file is a valid conda package."))]
+    ReadIndexJson {
+        path: PathBuf,
+        #[source]
+        source: ExtractError,
     },
 }
