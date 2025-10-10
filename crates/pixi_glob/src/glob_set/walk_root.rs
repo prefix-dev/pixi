@@ -88,6 +88,7 @@ impl WalkRoot {
     pub fn build<'t>(globs: impl IntoIterator<Item = &'t str>) -> Result<Self, WalkRootsError> {
         let mut specs = Vec::new();
         let mut max_parent_dirs = 0usize;
+
         for glob in globs {
             let negated = glob.starts_with('!');
             let glob = if negated { &glob[1..] } else { glob };

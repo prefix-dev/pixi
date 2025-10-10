@@ -167,7 +167,7 @@ fn anchor_literal_pattern(pattern: String) -> String {
     };
 
     if needs_anchor(body) {
-        let mut anchored = String::with_capacity(pattern.len() + 1);
+        let mut anchored = String::with_capacity(pattern.len() + 2);
         if negated {
             anchored.push('!');
         }
