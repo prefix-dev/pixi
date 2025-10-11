@@ -277,8 +277,7 @@ impl WorkspaceTarget {
 
     /// Adds a pypi dependency to a target
     ///
-    /// This will return an error if the exact same dependency already exist
-    /// This will overwrite any existing dependency of the same name
+    /// What happens when a dependency exists depends on the [`DependencyOverwriteBehavior`]
     pub fn try_add_pep508_dependency(
         &mut self,
         requirement: &pep508_rs::Requirement,
@@ -296,10 +295,7 @@ impl WorkspaceTarget {
                 DependencyOverwriteBehavior::Error => {
                     return Err(DependencyError::Duplicate(requirement.name.to_string()));
                 }
-                DependencyOverwriteBehavior::Append => {
-                    // For Append, continue to add even if dependency exists
-                }
-                DependencyOverwriteBehavior::Overwrite => {}
+                DependencyOverwriteBehavior::Append | DependencyOverwriteBehavior::Overwrite => {}
             }
         }
 
@@ -383,8 +379,7 @@ impl PackageTarget {
 
     /// Adds a dependency to a target
     ///
-    /// This will return an error if the exact same dependency already exist
-    /// This will overwrite any existing dependency of the same name
+    /// What happens when a dependency already exists depends on the [`DependencyOverwriteBehavior`]
     pub fn try_add_dependency(
         &mut self,
         dep_name: &PackageName,
@@ -401,9 +396,10 @@ impl PackageTarget {
                 DependencyOverwriteBehavior::Error => {
                     return Err(DependencyError::Duplicate(dep_name.as_normalized().into()));
                 }
-                DependencyOverwriteBehavior::Append => {
+                DependencyOverwriteBehavior::Append | DependencyOverwriteBehavior::Overwrite => {
                     // For Append, continue to add even if dependency exists
                 }
+                // This covers the other DependencyOverwriteBehavior is explicit case
                 _ => {}
             }
         }
