@@ -183,8 +183,7 @@ impl WorkspaceTarget {
 
     /// Adds a dependency to a target
     ///
-    /// This will return an error if the exact same dependency already exist
-    /// This will overwrite any existing dependency of the same name
+    /// What happens with the dependency depends on the [`DependencyOverwriteBehavior`]
     pub fn try_add_dependency(
         &mut self,
         dep_name: &PackageName,
