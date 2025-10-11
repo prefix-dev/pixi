@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use clap::Parser;
 use miette::IntoDiagnostic;
 
@@ -27,17 +29,24 @@ pub(crate) fn execute(args: Args) -> miette::Result<()> {
         .environments()
         .iter()
         .map(|e| {
-            println!(
+            let _ = writeln!(
+                std::io::stdout(),
                 "{} {}",
                 console::style("Environment:").bold().bright(),
                 e.name().fancy_display()
-            );
+            )
+            .inspect_err(|e| {
+                if e.kind() == std::io::ErrorKind::BrokenPipe {
+                    std::process::exit(0);
+                }
+            });
             e.channels()
         })
         .try_for_each(|c| -> Result<(), rattler_conda_types::ParseChannelError> {
             c.into_iter().try_for_each(
                 |channel| -> Result<(), rattler_conda_types::ParseChannelError> {
-                    println!(
+                    let _ = writeln!(
+                        std::io::stdout(),
                         "- {}",
                         if args.urls {
                             match channel.clone().into_base_url(&channel_config) {
@@ -47,7 +56,12 @@ pub(crate) fn execute(args: Args) -> miette::Result<()> {
                         } else {
                             channel.to_string()
                         }
-                    );
+                    )
+                    .inspect_err(|e| {
+                        if e.kind() == std::io::ErrorKind::BrokenPipe {
+                            std::process::exit(0);
+                        }
+                    });
                     Ok(())
                 },
             )

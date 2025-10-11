@@ -299,7 +299,13 @@ fn print_tasks(
         writeln!(writer, "{}\t{}", taskname.fancy_display(), row)?;
     }
 
-    writer.flush()
+    writer.flush().inspect_err(|e| {
+        if e.kind() == std::io::ErrorKind::BrokenPipe {
+            std::process::exit(0);
+        }
+    })?;
+
+    Ok(())
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -322,8 +328,7 @@ async fn list_tasks(
     args: ListArgs,
 ) -> miette::Result<()> {
     if args.json {
-        print_tasks_json(workspace_ctx.workspace());
-        return Ok(());
+        return print_tasks_json(workspace_ctx.workspace());
     }
 
     let tasks_per_env = workspace_ctx
@@ -345,7 +350,14 @@ async fn list_tasks(
             .sorted()
             .map(|name| name.as_str())
             .join(" ");
-        println!("{}", unformatted);
+        writeln!(std::io::stdout(), "{}", unformatted)
+            .inspect_err(|e| {
+                if e.kind() == std::io::ErrorKind::BrokenPipe {
+                    std::process::exit(0);
+                }
+            })
+            .into_diagnostic()?;
+
         return Ok(());
     }
 
@@ -399,12 +411,20 @@ async fn remove_tasks(
         .await
 }
 
-fn print_tasks_json(project: &Workspace) {
+fn print_tasks_json(project: &Workspace) -> miette::Result<()> {
     let env_feature_task_map: Vec<EnvTasks> = build_env_feature_task_map(project);
 
     let json_string =
         serde_json::to_string_pretty(&env_feature_task_map).expect("Failed to serialize tasks");
-    println!("{}", json_string);
+    writeln!(std::io::stdout(), "{}", json_string)
+        .inspect_err(|e| {
+            if e.kind() == std::io::ErrorKind::BrokenPipe {
+                std::process::exit(0);
+            }
+        })
+        .into_diagnostic()?;
+
+    Ok(())
 }
 
 fn build_env_feature_task_map(project: &Workspace) -> Vec<EnvTasks> {
