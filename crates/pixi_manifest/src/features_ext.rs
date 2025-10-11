@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use chrono::{DateTime, Utc};
 use indexmap::IndexSet;
 use miette::Diagnostic;
+use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, NamedChannelOrUrl, ParseChannelError, Platform,
 };
@@ -151,9 +152,11 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     /// requirements are returned. The different requirements per package
     /// are sorted in the same order as the features they came from.
     fn pypi_dependencies(&self, platform: Option<Platform>) -> PyPiDependencies {
-        self.features()
+        let deps: Vec<_> = self
+            .features()
             .filter_map(|f| f.pypi_dependencies(platform))
-            .into()
+            .collect();
+        DependencyMap::merge_all(deps.iter().map(|d| d.as_ref()))
     }
 
     /// Returns the dependencies to install for this collection.
@@ -166,9 +169,11 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     /// If the `platform` is `None` no platform specific dependencies are taken
     /// into consideration.
     fn dependencies(&self, kind: SpecType, platform: Option<Platform>) -> CondaDependencies {
-        self.features()
+        let deps: Vec<_> = self
+            .features()
             .filter_map(|f| f.dependencies(kind, platform))
-            .into()
+            .collect();
+        DependencyMap::merge_all(deps.iter().map(|d| d.as_ref()))
     }
 
     /// Returns the combined dependencies to install for this collection.
@@ -184,9 +189,11 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     /// If the `platform` is `None` no platform specific dependencies are taken
     /// into consideration.
     fn combined_dependencies(&self, platform: Option<Platform>) -> CondaDependencies {
-        self.features()
+        let deps: Vec<_> = self
+            .features()
             .filter_map(|f| f.combined_dependencies(platform))
-            .into()
+            .collect();
+        DependencyMap::merge_all(deps.iter().map(|d| d.as_ref()))
     }
 
     /// Returns the pypi options for this collection.

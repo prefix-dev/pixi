@@ -115,21 +115,21 @@ fn to_target_v1(
         host_dependencies: Some(
             target
                 .host_dependencies()
-                .map(|deps| to_pbt_dependencies(deps.iter(), channel_config))
+                .map(|deps| to_pbt_dependencies(deps.iter_specs(), channel_config))
                 .transpose()?
                 .unwrap_or_default(),
         ),
         build_dependencies: Some(
             target
                 .build_dependencies()
-                .map(|deps| to_pbt_dependencies(deps.iter(), channel_config))
+                .map(|deps| to_pbt_dependencies(deps.iter_specs(), channel_config))
                 .transpose()?
                 .unwrap_or_default(),
         ),
         run_dependencies: Some(
             target
                 .run_dependencies()
-                .map(|deps| to_pbt_dependencies(deps.iter(), channel_config))
+                .map(|deps| to_pbt_dependencies(deps.iter_specs(), channel_config))
                 .transpose()?
                 .unwrap_or_default(),
         ),
