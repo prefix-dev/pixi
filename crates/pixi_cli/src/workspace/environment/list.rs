@@ -28,11 +28,10 @@ pub async fn execute(workspace: Workspace) -> miette::Result<()> {
                 }
             )))
     )
-    .map_err(|e| {
+    .inspect_err(|e| {
         if e.kind() == std::io::ErrorKind::BrokenPipe {
             std::process::exit(0);
         }
-        e
     })
     .into_diagnostic()?;
 

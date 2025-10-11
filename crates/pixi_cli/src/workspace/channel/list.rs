@@ -35,11 +35,10 @@ pub(crate) fn execute(args: Args) -> miette::Result<()> {
                 console::style("Environment:").bold().bright(),
                 e.name().fancy_display()
             )
-            .map_err(|e| {
+            .inspect_err(|e| {
                 if e.kind() == std::io::ErrorKind::BrokenPipe {
                     std::process::exit(0);
                 }
-                e
             });
             e.channels()
         })
@@ -58,11 +57,10 @@ pub(crate) fn execute(args: Args) -> miette::Result<()> {
                             channel.to_string()
                         }
                     )
-                    .map_err(|e| {
+                    .inspect_err(|e| {
                         if e.kind() == std::io::ErrorKind::BrokenPipe {
                             std::process::exit(0);
                         }
-                        e
                     });
                     Ok(())
                 },

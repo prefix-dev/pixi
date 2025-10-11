@@ -15,21 +15,19 @@ pub async fn execute(workspace: Workspace) -> miette::Result<()> {
                 console::style("Environment:").bold().bright(),
                 e.name().fancy_display()
             )
-            .map_err(|e| {
+            .inspect_err(|e| {
                 if e.kind() == std::io::ErrorKind::BrokenPipe {
                     std::process::exit(0);
                 }
-                e
             });
             e.platforms()
         })
         .for_each(|c| {
             c.into_iter().for_each(|platform| {
-                let _ = writeln!(std::io::stdout(), "- {}", platform.as_str()).map_err(|e| {
+                let _ = writeln!(std::io::stdout(), "- {}", platform.as_str()).inspect_err(|e| {
                     if e.kind() == std::io::ErrorKind::BrokenPipe {
                         std::process::exit(0);
                     }
-                    e
                 });
             })
         });

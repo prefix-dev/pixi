@@ -299,11 +299,10 @@ fn print_tasks(
         writeln!(writer, "{}\t{}", taskname.fancy_display(), row)?;
     }
 
-    writer.flush().map_err(|e| {
+    writer.flush().inspect_err(|e| {
         if e.kind() == std::io::ErrorKind::BrokenPipe {
             std::process::exit(0);
         }
-        e
     })?;
 
     Ok(())
@@ -352,11 +351,9 @@ async fn list_tasks(
             .map(|name| name.as_str())
             .join(" ");
         writeln!(std::io::stdout(), "{}", unformatted)
-            .map_err(|e| {
+            .inspect_err(|e| {
                 if e.kind() == std::io::ErrorKind::BrokenPipe {
                     std::process::exit(0);
-                } else {
-                    e
                 }
             })
             .into_diagnostic()?;
@@ -420,11 +417,9 @@ fn print_tasks_json(project: &Workspace) -> miette::Result<()> {
     let json_string =
         serde_json::to_string_pretty(&env_feature_task_map).expect("Failed to serialize tasks");
     writeln!(std::io::stdout(), "{}", json_string)
-        .map_err(|e| {
+        .inspect_err(|e| {
             if e.kind() == std::io::ErrorKind::BrokenPipe {
                 std::process::exit(0);
-            } else {
-                e
             }
         })
         .into_diagnostic()?;
