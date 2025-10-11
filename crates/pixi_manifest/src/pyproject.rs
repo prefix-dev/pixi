@@ -218,6 +218,7 @@ impl PyProjectManifest {
                 &python,
                 &version_or_url_to_spec(&python_spec).unwrap(),
                 SpecType::Run,
+                DependencyOverwriteBehavior::Overwrite,
             );
         } else if let Some(_spec) = python_spec {
             if target.has_dependency(&python, SpecType::Run, None) {

@@ -166,10 +166,19 @@ impl WorkspaceTarget {
         dep_name: &PackageName,
         spec: &PixiSpec,
         spec_type: SpecType,
+        behavior: DependencyOverwriteBehavior,
     ) {
         let deps = self.dependencies.entry(spec_type).or_default();
-        // Insert the new spec
-        deps.insert(dep_name.clone(), spec.clone());
+        match behavior {
+            DependencyOverwriteBehavior::Append => {
+                // Append to existing specs
+                deps.insert(dep_name.clone(), spec.clone());
+            }
+            _ => {
+                // Overwrite any existing spec with the new one
+                deps.insert_overwrite(dep_name.clone(), spec.clone());
+            }
+        }
     }
 
     /// Adds a dependency to a target
@@ -192,10 +201,13 @@ impl WorkspaceTarget {
                 DependencyOverwriteBehavior::Error => {
                     return Err(DependencyError::Duplicate(dep_name.as_normalized().into()));
                 }
+                DependencyOverwriteBehavior::Append => {
+                    // For Append, continue to add even if dependency exists
+                }
                 _ => {}
             }
         }
-        self.add_dependency(dep_name, spec, spec_type);
+        self.add_dependency(dep_name, spec, spec_type, dependency_overwrite_behavior);
         Ok(true)
     }
 
@@ -245,10 +257,23 @@ impl WorkspaceTarget {
     }
 
     /// Adds a pypi dependency to a target
-    pub(crate) fn add_pypi_dependency(&mut self, name: PypiPackageName, requirement: PixiPypiSpec) {
+    pub(crate) fn add_pypi_dependency(
+        &mut self,
+        name: PypiPackageName,
+        requirement: PixiPypiSpec,
+        behavior: DependencyOverwriteBehavior,
+    ) {
         let deps = self.pypi_dependencies.get_or_insert_with(Default::default);
-        // Insert the new spec
-        deps.insert(name, requirement);
+        match behavior {
+            DependencyOverwriteBehavior::Append => {
+                // Append to existing specs
+                deps.insert(name, requirement);
+            }
+            _ => {
+                // Overwrite any existing spec with the new one
+                deps.insert_overwrite(name, requirement);
+            }
+        }
     }
 
     /// Adds a pypi dependency to a target
@@ -272,6 +297,9 @@ impl WorkspaceTarget {
                 DependencyOverwriteBehavior::Error => {
                     return Err(DependencyError::Duplicate(requirement.name.to_string()));
                 }
+                DependencyOverwriteBehavior::Append => {
+                    // For Append, continue to add even if dependency exists
+                }
                 DependencyOverwriteBehavior::Overwrite => {}
             }
         }
@@ -283,7 +311,7 @@ impl WorkspaceTarget {
             requirement.set_editable(editable);
         }
 
-        self.add_pypi_dependency(name, requirement);
+        self.add_pypi_dependency(name, requirement, dependency_overwrite_behavior);
         Ok(true)
     }
 }
@@ -334,10 +362,24 @@ impl PackageTarget {
     ///
     /// This will overwrite any existing dependency of the same name by first removing
     /// any existing specs and then inserting the new one.
-    pub fn add_dependency(&mut self, dep_name: &PackageName, spec: &PixiSpec, spec_type: SpecType) {
+    pub fn add_dependency(
+        &mut self,
+        dep_name: &PackageName,
+        spec: &PixiSpec,
+        spec_type: SpecType,
+        behavior: DependencyOverwriteBehavior,
+    ) {
         let deps = self.dependencies.entry(spec_type).or_default();
-        // Insert the new spec
-        deps.insert(dep_name.clone(), spec.clone());
+        match behavior {
+            DependencyOverwriteBehavior::Append => {
+                // Append to existing specs
+                deps.insert(dep_name.clone(), spec.clone());
+            }
+            _ => {
+                // Overwrite any existing spec with the new one
+                deps.insert_overwrite(dep_name.clone(), spec.clone());
+            }
+        }
     }
 
     /// Adds a dependency to a target
@@ -360,10 +402,13 @@ impl PackageTarget {
                 DependencyOverwriteBehavior::Error => {
                     return Err(DependencyError::Duplicate(dep_name.as_normalized().into()));
                 }
+                DependencyOverwriteBehavior::Append => {
+                    // For Append, continue to add even if dependency exists
+                }
                 _ => {}
             }
         }
-        self.add_dependency(dep_name, spec, spec_type);
+        self.add_dependency(dep_name, spec, spec_type, dependency_overwrite_behavior);
         Ok(true)
     }
 }

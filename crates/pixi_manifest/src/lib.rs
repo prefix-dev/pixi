@@ -87,6 +87,10 @@ pub enum DependencyOverwriteBehavior {
 
     /// Error on duplicate
     Error,
+
+    /// Append the new dependency spec to any existing specs.
+    /// This allows multiple specs for the same package.
+    Append,
 }
 
 #[derive(Copy, Clone)]
