@@ -28,9 +28,10 @@ use pixi_install_pypi::{
     LazyEnvironmentVariables, PyPIBuildConfig, PyPIContextConfig, PyPIEnvironmentUpdater,
     PyPIUpdateConfig,
 };
-use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt, HasFeaturesIter};
+use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
 use pixi_progress::global_multi_progress;
 use pixi_record::{ParseLockFileError, PixiRecord};
+use pixi_spec::SourceSpec;
 use pixi_utils::prefix::Prefix;
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
@@ -1907,13 +1908,13 @@ pub enum TaskResult {
 
 /// Expands develop dependencies for a grouped environment.
 ///
-/// Collects all develop dependencies from the features of the grouped environment,
-/// converts them to DependencyOnlySource format, and uses the command dispatcher
-/// to expand them into their build/host/run dependencies.
+/// Takes the develop dependencies, converts them to DependencyOnlySource format,
+/// and uses the command dispatcher to expand them into their build/host/run dependencies.
 ///
 /// Returns `None` if there are no develop dependencies.
 async fn expand_develop_dependencies(
-    group: &GroupedEnvironment<'_>,
+    develop_dependencies: IndexMap<PackageName, SourceSpec>,
+    group_name: GroupedEnvironmentName,
     platform: Platform,
     channel_config: &ChannelConfig,
     channels: &[ChannelUrl],
@@ -1921,21 +1922,13 @@ async fn expand_develop_dependencies(
     variants: &BTreeMap<String, Vec<String>>,
     command_dispatcher: &CommandDispatcher,
 ) -> Result<Option<ExpandedDevSources>, SolveCondaEnvironmentError> {
-    // Collect develop dependencies from all features in the group
-    let mut develop_deps = IndexMap::new();
-    for feature in group.features() {
-        if let Some(deps) = feature.develop_dependencies(Some(platform)) {
-            develop_deps.extend(deps.into_owned());
-        }
-    }
-
     // If there are no develop dependencies, return early
-    if develop_deps.is_empty() {
+    if develop_dependencies.is_empty() {
         return Ok(None);
     }
 
     // Convert to Vec<DependencyOnlySource>
-    let dev_sources: Vec<DependencyOnlySource> = develop_deps
+    let dev_sources: Vec<DependencyOnlySource> = develop_dependencies
         .into_iter()
         .map(|(name, spec)| DependencyOnlySource {
             source: spec,
@@ -1959,7 +1952,7 @@ async fn expand_develop_dependencies(
         .await
         .map_err(
             |source| SolveCondaEnvironmentError::ExpandDevSourcesFailed {
-                environment_name: group.name(),
+                environment_name: group_name,
                 platform,
                 source,
             },
@@ -1981,6 +1974,9 @@ async fn spawn_solve_conda_environment_task(
     // Get the dependencies for this platform
     let dependencies = group.combined_dependencies(Some(platform));
 
+    // Get the develop dependencies for this platform
+    let develop_dependencies = group.combined_develop_dependencies(Some(platform));
+
     // Get solve options
     let exclude_newer = group.exclude_newer();
     let strategy = group.solve_strategy();
@@ -1988,8 +1984,8 @@ async fn spawn_solve_conda_environment_task(
     // Get the environment name
     let group_name = group.name();
 
-    // Early out if there are no dependencies to solve.
-    if dependencies.is_empty() {
+    // Early out if there are no dependencies to solve and no develop dependencies to expand.
+    if dependencies.is_empty() && develop_dependencies.is_empty() {
         return Ok(TaskResult::CondaGroupSolved(
             group_name,
             platform,
@@ -2028,7 +2024,8 @@ async fn spawn_solve_conda_environment_task(
 
     // Expand develop dependencies if any
     let expanded_develop = expand_develop_dependencies(
-        &group,
+        develop_dependencies,
+        group_name.clone(),
         platform,
         &channel_config,
         &channels,
@@ -2050,6 +2047,16 @@ async fn spawn_solve_conda_environment_task(
     } else {
         Default::default()
     };
+
+    // Early out if the final combined dependencies are still empty after expansion
+    if dependencies.is_empty() {
+        return Ok(TaskResult::CondaGroupSolved(
+            group_name,
+            platform,
+            PixiRecordsByName::default(),
+            Duration::default(),
+        ));
+    }
 
     let start = Instant::now();
 

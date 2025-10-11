@@ -2,14 +2,16 @@ use std::fmt::Display;
 use std::path::PathBuf;
 
 use fancy_display::FancyDisplay;
+use indexmap::IndexMap;
 use itertools::Either;
 use pixi_consts::consts;
 use pixi_manifest::{
     EnvironmentName, Feature, HasFeaturesIter, HasWorkspaceManifest, SystemRequirements,
     WorkspaceManifest,
 };
+use pixi_spec::SourceSpec;
 use pixi_utils::prefix::Prefix;
-use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, Platform};
+use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, PackageName, Platform};
 
 use crate::{
     Workspace,
@@ -120,6 +122,24 @@ impl<'p> GroupedEnvironment<'p> {
     /// Returns the channel configuration for this grouped environment
     pub fn channel_config(&self) -> ChannelConfig {
         self.workspace().channel_config()
+    }
+
+    /// Returns the combined develop dependencies for this grouped environment.
+    ///
+    /// Develop dependencies from all features in the group are collected and
+    /// merged. If multiple features define the same develop dependency, the
+    /// last one wins (later features override earlier ones).
+    pub fn combined_develop_dependencies(
+        &self,
+        platform: Option<Platform>,
+    ) -> IndexMap<PackageName, SourceSpec> {
+        let mut result = IndexMap::new();
+        for feature in self.features() {
+            if let Some(deps) = feature.develop_dependencies(platform) {
+                result.extend(deps.into_owned());
+            }
+        }
+        result
     }
 }
 
