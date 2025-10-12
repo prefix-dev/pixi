@@ -878,7 +878,7 @@ mod tests {
         );
 
         // Should return Ok(false) indicating nothing was added
-        assert_eq!(result.unwrap(), false);
+        assert!(!result.unwrap());
 
         // Verify TOML still has original version
         assert_snapshot!(manifest_mut.document.to_string(), @r###"
