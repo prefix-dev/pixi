@@ -8,7 +8,8 @@ use rattler_conda_types::{PackageName, ParsePlatformError, Platform};
 
 use super::error::DependencyError;
 use crate::{
-    CondaDependencies, DependencyOverwriteBehavior, PyPiDependencies, SpecType,
+    CondaDependencies, DependencyOverwriteBehavior, InternalDependencyBehavior, PyPiDependencies,
+    SpecType,
     activation::Activation,
     task::{Task, TaskName},
     utils::PixiSpanned,
@@ -166,15 +167,15 @@ impl WorkspaceTarget {
         dep_name: &PackageName,
         spec: &PixiSpec,
         spec_type: SpecType,
-        behavior: DependencyOverwriteBehavior,
+        behavior: InternalDependencyBehavior,
     ) {
         let deps = self.dependencies.entry(spec_type).or_default();
         match behavior {
-            DependencyOverwriteBehavior::Append => {
+            InternalDependencyBehavior::Append => {
                 // Append to existing specs
                 deps.insert(dep_name.clone(), spec.clone());
             }
-            _ => {
+            InternalDependencyBehavior::Overwrite => {
                 // Overwrite any existing spec with the new one
                 deps.insert_overwrite(dep_name.clone(), spec.clone());
             }
@@ -193,20 +194,25 @@ impl WorkspaceTarget {
     ) -> Result<bool, DependencyError> {
         if self.has_dependency(dep_name, spec_type, None) {
             match dependency_overwrite_behavior {
-                DependencyOverwriteBehavior::OverwriteIfExplicit if !spec.has_version_spec() => {
-                    return Ok(false);
+                DependencyOverwriteBehavior::OverwriteIfExplicit => {
+                    if !spec.has_version_spec() {
+                        return Ok(false);
+                    }
                 }
                 DependencyOverwriteBehavior::IgnoreDuplicate => return Ok(false),
                 DependencyOverwriteBehavior::Error => {
                     return Err(DependencyError::Duplicate(dep_name.as_normalized().into()));
                 }
-                DependencyOverwriteBehavior::Append => {
-                    // For Append, continue to add even if dependency exists
-                }
-                _ => {}
+                DependencyOverwriteBehavior::Overwrite => {}
             }
         }
-        self.add_dependency(dep_name, spec, spec_type, dependency_overwrite_behavior);
+        // Convert public behavior to internal behavior
+        self.add_dependency(
+            dep_name,
+            spec,
+            spec_type,
+            dependency_overwrite_behavior.into(),
+        );
         Ok(true)
     }
 
@@ -260,15 +266,15 @@ impl WorkspaceTarget {
         &mut self,
         name: PypiPackageName,
         requirement: PixiPypiSpec,
-        behavior: DependencyOverwriteBehavior,
+        behavior: InternalDependencyBehavior,
     ) {
         let deps = self.pypi_dependencies.get_or_insert_with(Default::default);
         match behavior {
-            DependencyOverwriteBehavior::Append => {
+            InternalDependencyBehavior::Append => {
                 // Append to existing specs
                 deps.insert(name, requirement);
             }
-            _ => {
+            InternalDependencyBehavior::Overwrite => {
                 // Overwrite any existing spec with the new one
                 deps.insert_overwrite(name, requirement);
             }
@@ -278,7 +284,7 @@ impl WorkspaceTarget {
     /// Adds a pypi dependency to a target
     ///
     /// What happens when a dependency exists depends on the [`DependencyOverwriteBehavior`]
-    pub fn try_add_pep508_dependency(
+    pub(crate) fn try_add_pep508_dependency(
         &mut self,
         requirement: &pep508_rs::Requirement,
         editable: Option<bool>,
@@ -295,7 +301,7 @@ impl WorkspaceTarget {
                 DependencyOverwriteBehavior::Error => {
                     return Err(DependencyError::Duplicate(requirement.name.to_string()));
                 }
-                DependencyOverwriteBehavior::Append | DependencyOverwriteBehavior::Overwrite => {}
+                DependencyOverwriteBehavior::Overwrite => {}
             }
         }
 
@@ -306,7 +312,8 @@ impl WorkspaceTarget {
             requirement.set_editable(editable);
         }
 
-        self.add_pypi_dependency(name, requirement, dependency_overwrite_behavior);
+        // Convert public behavior to internal behavior
+        self.add_pypi_dependency(name, requirement, dependency_overwrite_behavior.into());
         Ok(true)
     }
 }
@@ -357,29 +364,30 @@ impl PackageTarget {
     ///
     /// This will overwrite any existing dependency of the same name by first removing
     /// any existing specs and then inserting the new one.
-    pub fn add_dependency(
+    pub(crate) fn add_dependency(
         &mut self,
         dep_name: &PackageName,
         spec: &PixiSpec,
         spec_type: SpecType,
-        behavior: DependencyOverwriteBehavior,
+        behavior: InternalDependencyBehavior,
     ) {
         let deps = self.dependencies.entry(spec_type).or_default();
         match behavior {
-            DependencyOverwriteBehavior::Append => {
+            InternalDependencyBehavior::Append => {
                 // Append to existing specs
                 deps.insert(dep_name.clone(), spec.clone());
             }
-            _ => {
+            InternalDependencyBehavior::Overwrite => {
                 // Overwrite any existing spec with the new one
                 deps.insert_overwrite(dep_name.clone(), spec.clone());
             }
         }
     }
 
-    /// Adds a dependency to a target
+    /// Adds a dependency to a target with public behavior
     ///
-    /// What happens when a dependency already exists depends on the [`DependencyOverwriteBehavior`]
+    /// This is similar to `add_dependency` but accepts the public `DependencyOverwriteBehavior`
+    /// and is used by code that needs to handle various overwrite behaviors.
     pub fn try_add_dependency(
         &mut self,
         dep_name: &PackageName,
@@ -389,21 +397,25 @@ impl PackageTarget {
     ) -> Result<bool, DependencyError> {
         if self.has_dependency(dep_name, spec_type, None) {
             match dependency_overwrite_behavior {
-                DependencyOverwriteBehavior::OverwriteIfExplicit if !spec.has_version_spec() => {
-                    return Ok(false);
+                DependencyOverwriteBehavior::OverwriteIfExplicit => {
+                    if !spec.has_version_spec() {
+                        return Ok(false);
+                    }
                 }
                 DependencyOverwriteBehavior::IgnoreDuplicate => return Ok(false),
                 DependencyOverwriteBehavior::Error => {
                     return Err(DependencyError::Duplicate(dep_name.as_normalized().into()));
                 }
-                DependencyOverwriteBehavior::Append | DependencyOverwriteBehavior::Overwrite => {
-                    // For Append, continue to add even if dependency exists
-                }
-                // This covers the other DependencyOverwriteBehavior is explicit case
-                _ => {}
+                DependencyOverwriteBehavior::Overwrite => {}
             }
         }
-        self.add_dependency(dep_name, spec, spec_type, dependency_overwrite_behavior);
+        // Convert public behavior to internal behavior
+        self.add_dependency(
+            dep_name,
+            spec,
+            spec_type,
+            dependency_overwrite_behavior.into(),
+        );
         Ok(true)
     }
 }
@@ -645,8 +657,11 @@ impl<T> Targets<T> {
 mod tests {
     use insta::assert_snapshot;
     use itertools::Itertools;
+    use pixi_spec::PixiSpec;
+    use rattler_conda_types::{PackageName, VersionSpec};
+    use std::str::FromStr;
 
-    use crate::WorkspaceManifest;
+    use crate::{DependencyOverwriteBehavior, FeatureName, SpecType, WorkspaceManifest};
 
     #[test]
     fn test_targets_overwrite_order() {
@@ -688,6 +703,189 @@ mod tests {
         run = ==2.0
         host = ==2.0
         build = ==1.0
+        "###);
+    }
+
+    /// Test that Overwrite behavior replaces existing dependencies (regression test)
+    /// This ensures that the default behavior preserves backward compatibility
+    #[test]
+    fn test_overwrite_behavior_regression() {
+        use crate::{ManifestDocument, WorkspaceManifest, WorkspaceManifestMut};
+
+        let manifest_content = r#"
+        [project]
+        name = "test"
+        channels = []
+        platforms = []
+
+        [dependencies]
+        foo = "1.0"
+        "#;
+
+        let mut manifest = WorkspaceManifest::from_toml_str(manifest_content).unwrap();
+        let mut document = ManifestDocument::empty_pixi();
+
+        // Create a mutable context
+        let mut manifest_mut = WorkspaceManifestMut {
+            workspace: &mut manifest,
+            document: &mut document,
+        };
+
+        // Add foo = "==2.0" with Overwrite behavior
+        let foo = PackageName::from_str("foo").unwrap();
+        let spec = PixiSpec::Version(
+            VersionSpec::from_str("==2.0", rattler_conda_types::ParseStrictness::Strict).unwrap(),
+        );
+
+        manifest_mut
+            .add_dependency(
+                &foo,
+                &spec,
+                SpecType::Run,
+                &[],
+                &FeatureName::default(),
+                DependencyOverwriteBehavior::Overwrite,
+            )
+            .unwrap();
+
+        // Verify the TOML output has only one foo dependency with version 2.0
+        assert_snapshot!(manifest_mut.document.to_string(), @r###"
+        [project]
+        name = "test"
+        channels = []
+        platforms = []
+
+        [dependencies]
+        foo = "==2.0"
+        "###);
+    }
+
+    /// Test that adding multiple dependencies with Overwrite keeps only the last one
+    #[test]
+    fn test_multiple_overwrite_keeps_last() {
+        use crate::{ManifestDocument, WorkspaceManifest, WorkspaceManifestMut};
+
+        let manifest_content = r#"
+        [project]
+        name = "test"
+        channels = []
+        platforms = []
+        "#;
+
+        let mut manifest = WorkspaceManifest::from_toml_str(manifest_content).unwrap();
+        let mut document = ManifestDocument::empty_pixi();
+
+        let mut manifest_mut = WorkspaceManifestMut {
+            workspace: &mut manifest,
+            document: &mut document,
+        };
+
+        let foo = PackageName::from_str("foo").unwrap();
+
+        // Add foo = "==1.0"
+        let spec1 = PixiSpec::Version(
+            VersionSpec::from_str("==1.0", rattler_conda_types::ParseStrictness::Strict).unwrap(),
+        );
+        manifest_mut
+            .add_dependency(
+                &foo,
+                &spec1,
+                SpecType::Run,
+                &[],
+                &FeatureName::default(),
+                DependencyOverwriteBehavior::Overwrite,
+            )
+            .unwrap();
+
+        // Add foo = "==2.0" (should overwrite)
+        let spec2 = PixiSpec::Version(
+            VersionSpec::from_str("==2.0", rattler_conda_types::ParseStrictness::Strict).unwrap(),
+        );
+        manifest_mut
+            .add_dependency(
+                &foo,
+                &spec2,
+                SpecType::Run,
+                &[],
+                &FeatureName::default(),
+                DependencyOverwriteBehavior::Overwrite,
+            )
+            .unwrap();
+
+        // Add foo = "==3.0" (should overwrite again)
+        let spec3 = PixiSpec::Version(
+            VersionSpec::from_str("==3.0", rattler_conda_types::ParseStrictness::Strict).unwrap(),
+        );
+        manifest_mut
+            .add_dependency(
+                &foo,
+                &spec3,
+                SpecType::Run,
+                &[],
+                &FeatureName::default(),
+                DependencyOverwriteBehavior::Overwrite,
+            )
+            .unwrap();
+
+        // Verify only the last version (3.0) is in the TOML
+        assert_snapshot!(manifest_mut.document.to_string(), @r###"
+        [project]
+        name = "test"
+        channels = []
+        platforms = []
+
+        [dependencies]
+        foo = "==3.0"
+        "###);
+    }
+
+    /// Test IgnoreDuplicate behavior doesn't add when dependency exists
+    #[test]
+    fn test_ignore_duplicate_doesnt_add() {
+        use crate::{ManifestDocument, WorkspaceManifest, WorkspaceManifestMut};
+
+        let manifest_content = r#"
+        [project]
+        name = "test"
+        channels = []
+        platforms = []
+
+        [dependencies]
+        foo = "1.0"
+        "#;
+
+        let mut manifest = WorkspaceManifest::from_toml_str(manifest_content).unwrap();
+        let mut document = ManifestDocument::empty_pixi();
+
+        let mut manifest_mut = WorkspaceManifestMut {
+            workspace: &mut manifest,
+            document: &mut document,
+        };
+
+        // Try to add foo = "==2.0" with IgnoreDuplicate
+        let foo = PackageName::from_str("foo").unwrap();
+        let spec = PixiSpec::Version(
+            VersionSpec::from_str("==2.0", rattler_conda_types::ParseStrictness::Strict).unwrap(),
+        );
+
+        let result = manifest_mut.add_dependency(
+            &foo,
+            &spec,
+            SpecType::Run,
+            &[],
+            &FeatureName::default(),
+            DependencyOverwriteBehavior::IgnoreDuplicate,
+        );
+
+        // Should return Ok(false) indicating nothing was added
+        assert_eq!(result.unwrap(), false);
+
+        // Verify TOML still has original version
+        assert_snapshot!(manifest_mut.document.to_string(), @r###"
+        [project]
+        name = "test"
+        channels = []
+        platforms = []
         "###);
     }
 }
