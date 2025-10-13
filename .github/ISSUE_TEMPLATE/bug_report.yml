@@ -27,7 +27,7 @@ body:
         ```shell
 
         ```
-        pixi.toml:
+        `pixi.toml`/`pyproject.toml` file that reproduces my issue:
         ```toml
 
         ```
