@@ -1,0 +1,59 @@
+[workspace]
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
+preview = ["pixi-build"]
+
+# --------------------------
+# Specify that the package in this directory is part of the default environment so we can start developing it.
+# --------------------------
+[develop]
+sdl_example = { path = "." }
+
+# --------------------------
+# Tasks to build and run the package
+# --------------------------
+[tasks.configure]
+# Configures CMake
+cmd = [
+    "cmake",
+    # Use the cross-platform Ninja generator
+    "-GNinja",
+    # The source is in the root directory
+    "-S.",
+    # We wanna build in the .build directory
+    "-B.build",
+]
+inputs = []
+outputs = [".build/build.ninja"]
+
+# Build the executable but make sure CMake is configured first.
+[tasks.build]
+cmd = ["cmake", "--build", ".build"]
+depends-on = ["configure"]
+inputs = ["CMakeLists.txt", "src/*"]
+outputs = [".build/bin/sdl_example*"]
+
+[tasks.start]
+cmd = [".build/bin/sdl_example"]
+depends-on = ["build"]
+
+# --------------------------
+# Package definition
+# --------------------------
+[package]
+authors = ["Bas Zalmstra <bas@prefix.dev>"]
+description = "Showcases how to create a simple C++ executable with Pixi"
+name = "sdl_example"
+version = "0.1.0"
+
+[package.build.backend]
+channels = [
+    "https://prefix.dev/pixi-build-backends",
+    "https://prefix.dev/conda-forge",
+]
+name = "pixi-build-cmake"
+version = "*"
+
+[package.host-dependencies]
+# This ensures that SDL2 is available at build time.
+sdl2 = ">=2.26.5,<3.0"

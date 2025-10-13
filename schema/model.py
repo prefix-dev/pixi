@@ -229,6 +229,22 @@ class MatchspecTable(StrictBaseModel):
     subdirectory: NonEmptyStr | None = Field(None, description="A subdirectory to use in the repo")
 
 
+class SourceSpecTable(StrictBaseModel):
+    """A precise description of a source package location."""
+
+    path: NonEmptyStr | None = Field(None, description="The path to the source package")
+
+    url: NonEmptyStr | None = Field(None, description="The URL to the source package")
+    md5: Md5Sum | None = Field(None, description="The md5 hash of the source package")
+    sha256: Sha256Sum | None = Field(None, description="The sha256 hash of the source package")
+
+    git: NonEmptyStr | None = Field(None, description="The git URL to the source repo")
+    rev: NonEmptyStr | None = Field(None, description="A git SHA revision to use")
+    tag: NonEmptyStr | None = Field(None, description="A git tag to use")
+    branch: NonEmptyStr | None = Field(None, description="A git branch to use")
+    subdirectory: NonEmptyStr | None = Field(None, description="A subdirectory to use in the repo")
+
+
 MatchSpec = NonEmptyStr | MatchspecTable
 CondaPackageName = NonEmptyStr
 
@@ -499,6 +515,9 @@ class Target(StrictBaseModel):
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies for this target"
     )
+    develop: dict[CondaPackageName, SourceSpecTable] | None = Field(
+        None, description="Source packages whose dependencies should be installed without building the package itself. Useful for development environments."
+    )
     tasks: dict[TaskName, TaskInlineTable | list[DependsOn] | NonEmptyStr] | None = Field(
         None, description="The tasks of the target"
     )
@@ -533,6 +552,9 @@ class Feature(StrictBaseModel):
     build_dependencies: Dependencies = BuildDependenciesField
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies of this feature"
+    )
+    develop: dict[CondaPackageName, SourceSpecTable] | None = Field(
+        None, description="Source packages whose dependencies should be installed without building the package itself. Useful for development environments."
     )
     tasks: dict[TaskName, TaskInlineTable | list[DependsOn] | NonEmptyStr] | None = Field(
         None, description="The tasks provided by this feature"
@@ -806,6 +828,9 @@ class BaseManifest(StrictBaseModel):
     build_dependencies: Dependencies = BuildDependenciesField
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies"
+    )
+    develop: dict[CondaPackageName, SourceSpecTable] | None = Field(
+        None, description="Source packages whose dependencies should be installed without building the package itself. Useful for development environments."
     )
     tasks: dict[TaskName, TaskInlineTable | list[DependsOn] | NonEmptyStr] | None = Field(
         None, description="The tasks of the project"
