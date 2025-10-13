@@ -1,191 +1,219 @@
-// TODO: replace this with rattler-build upload after it moved into the rattler crate
-
 use std::path::PathBuf;
-use std::sync::Arc;
 
 use clap::Parser;
-use futures::TryStreamExt;
-use indicatif::HumanBytes;
-use miette::{Context, Diagnostic, IntoDiagnostic};
-use reqwest::StatusCode;
+use miette::IntoDiagnostic;
+use rattler_upload::upload::opt::{CommonOpts, PrefixOpts, ServerType, UploadOpts};
+use url::Url;
 
-use rattler_digest::{Sha256, compute_file_digest};
-use rattler_networking::AuthenticationMiddleware;
-use thiserror::Error;
-use tokio::fs::File;
-use tokio_util::io::ReaderStream;
-
-use pixi_progress;
-use pixi_utils::reqwest::reqwest_client_builder;
-
-#[allow(rustdoc::bare_urls)]
 /// Upload a conda package
 ///
 /// With this command, you can upload a conda package to a channel.
-/// Example: `pixi upload https://prefix.dev/api/v1/upload/my_channel my_package.conda`
+///
+/// Examples:
+///   pixi upload prefix --channel my_channel my_package.conda
+///   pixi upload https://prefix.dev/api/v1/upload/my_channel my_package.conda  (legacy)
 ///
 /// Use `pixi auth login` to authenticate with the server.
 #[derive(Parser, Debug)]
+#[command(trailing_var_arg = true)]
 pub struct Args {
-    /// The host + channel to upload to
-    host: String,
-
-    /// The file to upload
-    package_file: PathBuf,
+    /// Arguments for the upload command
+    #[arg(allow_hyphen_values = true)]
+    args: Vec<String>,
 }
 
-/// Upload a package to a prefix.dev channel
+/// Upload a package to a channel
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let filename = args
-        .package_file
-        .file_name()
-        .wrap_err_with(|| {
-            miette::miette!("{} should have a file name", args.package_file.display())
-        })?
-        .to_string_lossy()
-        .to_string();
+    // Try to detect if this is the legacy format (URL as first argument)
+    let upload_opts = if !args.args.is_empty() && is_legacy_format(&args.args[0]) {
+        // Legacy format: pixi upload <url> <package_file>
+        parse_legacy_format(args.args)?
+    } else {
+        // New format: parse using rattler_upload's UploadOpts
+        match UploadOpts::try_parse_from(
+            std::iter::once("upload").chain(args.args.iter().map(|s| s.as_str())),
+        ) {
+            Ok(opts) => opts,
+            Err(e) => {
+                // If parsing fails, check if it might be legacy format without http(s)
+                if !args.args.is_empty() {
+                    eprintln!("Failed to parse upload command: {}", e);
+                    eprintln!();
+                    eprintln!("Note: The upload command format has changed. Examples:");
+                    eprintln!("  pixi upload prefix --channel my_channel my_package.conda");
+                    eprintln!(
+                        "  pixi upload quetz --url https://quetz.example.com --channel my_channel my_package.conda"
+                    );
+                    eprintln!("  pixi upload anaconda --owner my_user my_package.conda");
+                    eprintln!();
+                    eprintln!("For backwards compatibility, the legacy format is still supported:");
+                    eprintln!(
+                        "  pixi upload https://prefix.dev/api/v1/upload/my_channel my_package.conda"
+                    );
+                }
+                return Err(e).into_diagnostic();
+            }
+        }
+    };
 
-    let filesize = args.package_file.metadata().into_diagnostic()?.len();
+    // Execute the upload using rattler_upload
+    rattler_upload::upload_from_args(upload_opts).await
+}
 
-    println!("Uploading package to: {}", args.host);
-    println!(
-        "Package file:         {} ({})\n",
-        args.package_file.display(),
-        HumanBytes(filesize)
+/// Check if the first argument looks like a legacy URL format
+fn is_legacy_format(arg: &str) -> bool {
+    // Check if it's a URL (starts with http:// or https://)
+    if let Ok(url) = Url::parse(arg) {
+        if matches!(url.scheme(), "http" | "https") {
+            // Additional check: does it look like an upload URL?
+            let path = url.path();
+            return path.contains("/upload") || path.contains("/api/");
+        }
+    }
+    false
+}
+
+/// Parse the legacy format and convert to UploadOpts
+fn parse_legacy_format(args: Vec<String>) -> miette::Result<UploadOpts> {
+    if args.len() < 2 {
+        return Err(miette::miette!(
+            "Legacy format requires at least 2 arguments: <url> <package_file>"
+        ));
+    }
+
+    let url_str = &args[0];
+    let package_files: Vec<PathBuf> = args[1..].iter().map(PathBuf::from).collect();
+
+    let url = Url::parse(url_str)
+        .into_diagnostic()
+        .map_err(|e| miette::miette!("Failed to parse URL '{}': {}", url_str, e))?;
+
+    // Try to detect the server type and extract the channel from the URL
+    let (server_type, detected_url, channel) = detect_server_type_from_url(&url)?;
+
+    eprintln!("Using legacy upload format. Consider using the new format:");
+    eprintln!(
+        "  pixi upload {} --channel {} {}",
+        server_type,
+        channel,
+        package_files
+            .iter()
+            .map(|p| p.display().to_string())
+            .collect::<Vec<_>>()
+            .join(" ")
     );
+    eprintln!();
 
-    let client = reqwest_middleware::ClientBuilder::new(
-        reqwest_client_builder(None)?.build().into_diagnostic()?,
-    )
-    .with_arc(Arc::new(
-        AuthenticationMiddleware::from_env_and_defaults().into_diagnostic()?,
+    // Create UploadOpts based on detected server type
+    let server_type = match server_type.as_str() {
+        "prefix" => {
+            let prefix_opts = PrefixOpts {
+                url: detected_url,
+                channel,
+                api_key: None,
+                attestation: None,
+                skip_existing: false,
+            };
+            ServerType::Prefix(prefix_opts)
+        }
+        _ => {
+            return Err(miette::miette!(
+                "Could not determine server type from URL. Please use the new upload format."
+            ));
+        }
+    };
+
+    Ok(UploadOpts {
+        package_files,
+        server_type,
+        common: CommonOpts {
+            output_dir: None,
+            use_zstd: true,
+            use_bz2: true,
+            experimental: false,
+            allow_insecure_host: None,
+            auth_file: None,
+            channel_priority: None,
+        },
+        auth_store: None,
+    })
+}
+
+/// Detect the server type from the URL
+fn detect_server_type_from_url(url: &Url) -> miette::Result<(String, Url, String)> {
+    let host = url
+        .host_str()
+        .ok_or_else(|| miette::miette!("URL has no host"))?;
+
+    let path = url.path();
+
+    // Detect prefix.dev URLs
+    if host.contains("prefix.dev") {
+        // Extract channel from path like /api/v1/upload/my_channel
+        let channel = extract_channel_from_path(path)?;
+
+        // Reconstruct base URL
+        let base_url = Url::parse(&format!("{}://{}", url.scheme(), host)).into_diagnostic()?;
+
+        return Ok(("prefix".to_string(), base_url, channel));
+    }
+
+    // Could add more server type detection here (quetz, artifactory, etc.)
+
+    Err(miette::miette!(
+        "Could not detect server type from URL: {}. Supported hosts: prefix.dev",
+        url
     ))
-    .build();
+}
 
-    let sha256sum = format!(
-        "{:x}",
-        compute_file_digest::<Sha256>(&args.package_file).into_diagnostic()?
-    );
+/// Extract channel name from a path like /api/v1/upload/my_channel
+fn extract_channel_from_path(path: &str) -> miette::Result<String> {
+    let parts: Vec<&str> = path.trim_matches('/').split('/').collect();
 
-    let file = File::open(&args.package_file).await.into_diagnostic()?;
-
-    let progress_bar = indicatif::ProgressBar::new(filesize)
-        .with_prefix("Uploading")
-        .with_style(pixi_progress::default_bytes_style());
-
-    let reader_stream = ReaderStream::new(file)
-        .inspect_ok(move |bytes| {
-            progress_bar.inc(bytes.len() as u64);
-        })
-        .inspect_err(|e| {
-            println!("Error while uploading: {}", e);
-        });
-
-    let body = reqwest::Body::wrap_stream(reader_stream);
-
-    let response = client
-        .post(args.host.clone())
-        .header("X-File-Sha256", sha256sum)
-        .header("X-File-Name", filename)
-        .header("Content-Length", filesize)
-        .header("Content-Type", "application/octet-stream")
-        .body(body)
-        .send()
-        .await
-        .map_err(|e| UploadError::RequestFailed {
-            host: args.host.clone(),
-            source: e,
-        })?;
-
-    match response.status() {
-        StatusCode::OK => {
-            eprintln!(
-                "{} Package uploaded successfully!",
-                console::style("✔").green()
-            );
-        }
-        StatusCode::UNAUTHORIZED => {
-            return Err(UploadError::Unauthorized {
-                host: args.host.clone(),
-                source: response
-                    .error_for_status()
-                    .expect_err("capture reqwest error"),
-            }
-            .into());
-        }
-        StatusCode::INTERNAL_SERVER_ERROR => {
-            return Err(UploadError::ServerError {
-                host: args.host.clone(),
-                source: response
-                    .error_for_status()
-                    .expect_err("capture reqwest error"),
-            }
-            .into());
-        }
-        StatusCode::CONFLICT => {
-            return Err(UploadError::Conflict {
-                host: args.host.clone(),
-                source: response
-                    .error_for_status()
-                    .expect_err("capture reqwest error"),
-            }
-            .into());
-        }
-        status => {
-            return Err(UploadError::UnexpectedStatus {
-                host: args.host.clone(),
-                status,
-                source: response
-                    .error_for_status()
-                    .expect_err("capture reqwest error"),
-            }
-            .into());
+    // Look for the part after "upload"
+    if let Some(upload_idx) = parts.iter().position(|&p| p == "upload") {
+        if upload_idx + 1 < parts.len() {
+            return Ok(parts[upload_idx + 1].to_string());
         }
     }
 
-    Ok(())
+    Err(miette::miette!(
+        "Could not extract channel from path: {}. Expected format: /api/v1/upload/<channel>",
+        path
+    ))
 }
 
-#[derive(Debug, Error, Diagnostic)]
-pub enum UploadError {
-    #[error("Failed to send request to {host}")]
-    #[diagnostic(help("Check if the host is correct and reachable."))]
-    RequestFailed {
-        host: String,
-        #[source]
-        source: reqwest_middleware::Error,
-    },
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    #[error("Unauthorized request to {host}")]
-    #[diagnostic(help("Try logging in with `pixi auth login`."))]
-    Unauthorized {
-        host: String,
-        #[source]
-        source: reqwest::Error,
-    },
+    #[test]
+    fn test_is_legacy_format() {
+        assert!(is_legacy_format(
+            "https://prefix.dev/api/v1/upload/my_channel"
+        ));
+        assert!(is_legacy_format("http://localhost:8000/upload/test"));
+        assert!(!is_legacy_format("prefix"));
+        assert!(!is_legacy_format("my_package.conda"));
+    }
 
-    #[error("Server error at {host}")]
-    #[diagnostic(help("The server encountered an internal error. Try again later."))]
-    ServerError {
-        host: String,
-        #[source]
-        source: reqwest::Error,
-    },
+    #[test]
+    fn test_extract_channel() {
+        assert_eq!(
+            extract_channel_from_path("/api/v1/upload/my_channel").unwrap(),
+            "my_channel"
+        );
+        assert_eq!(extract_channel_from_path("/upload/test").unwrap(), "test");
+        assert!(extract_channel_from_path("/api/v1/").is_err());
+    }
 
-    #[error("Unexpected response from {host}: {status}")]
-    #[diagnostic(help("Unexpected status code, verify the API specification."))]
-    UnexpectedStatus {
-        host: String,
-        status: StatusCode,
-        #[source]
-        source: reqwest::Error,
-    },
+    #[test]
+    fn test_detect_server_type_prefix() {
+        let url = Url::parse("https://prefix.dev/api/v1/upload/my_channel").unwrap();
+        let (server_type, base_url, channel) = detect_server_type_from_url(&url).unwrap();
 
-    #[error("Conflict: The package likely already exists in the channel: {host}")]
-    #[diagnostic(help("Try changing the package version or build number."))]
-    Conflict {
-        host: String,
-        #[source]
-        source: reqwest::Error,
-    },
+        assert_eq!(server_type, "prefix");
+        assert_eq!(base_url.as_str(), "https://prefix.dev/");
+        assert_eq!(channel, "my_channel");
+    }
 }

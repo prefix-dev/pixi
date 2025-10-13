@@ -93,6 +93,7 @@ rattler_repodata_gateway = { workspace = true, features = [
 ] }
 rattler_shell = { workspace = true, features = ["sysinfo"] }
 rattler_solve = { workspace = true, features = ["resolvo", "serde"] }
+rattler_upload = { workspace = true, features = ["s3"] }
 rattler_virtual_packages = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true, features = [
