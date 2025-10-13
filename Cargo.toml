@@ -140,11 +140,11 @@ rattler_networking = { version = "0.25.13", default-features = false, features =
   "google-cloud-auth",
   "dirs",
 ] }
-rattler_package_streaming = { version = "0.23.0", default-features = false }
+rattler_package_streaming = { version = "0.23.8", default-features = false }
 rattler_repodata_gateway = { version = "0.24.4", default-features = false }
 rattler_shell = { version = "0.25.0", default-features = false }
 rattler_solve = { version = "3.0.5", default-features = false }
-rattler_virtual_packages = { version = "2.1.5", default-features = false }
+rattler_virtual_packages = { version = "2.2.1", default-features = false }
 simple_spawn_blocking = { version = "1.1.0", default-features = false }
 
 # Bumping this to a higher version breaks the Windows path handling.
