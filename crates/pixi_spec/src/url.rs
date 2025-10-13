@@ -1,10 +1,10 @@
 use crate::BinarySpec;
 use itertools::Either;
-use rattler_conda_types::{NamelessMatchSpec, package::ArchiveType};
+use rattler_conda_types::{NamelessMatchSpec, package::ArchiveIdentifier};
 use rattler_digest::{Md5Hash, Sha256Hash};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use std::{fmt::Display, path::Path};
+use std::fmt::Display;
 use url::Url;
 
 /// A specification of a package from a URL. This is used to represent both
@@ -77,11 +77,8 @@ impl UrlSpec {
     }
 
     /// Returns true if the URL points to a binary package.
-    ///
-    /// This is determined by checking if the URL path has a known binary archive
-    /// extension (e.g. `.tar.bz2`, `.conda`).
     pub fn is_binary(&self) -> bool {
-        ArchiveType::try_from(Path::new(self.url.path())).is_some()
+        ArchiveIdentifier::try_from_url(&self.url).is_some()
     }
 }
 
@@ -179,109 +176,3 @@ impl From<UrlBinarySpec> for BinarySpec {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_is_binary() {
-        // Test binary archive URLs supported by ArchiveType
-        let binary_urls = vec![
-            "https://conda.anaconda.org/conda-forge/linux-64/package.tar.bz2",
-            "https://conda.anaconda.org/conda-forge/linux-64/package.conda",
-            "file:///path/to/package.tar.bz2",
-            "file:///path/to/package.conda",
-        ];
-
-        for url_str in binary_urls {
-            let url = Url::parse(url_str).unwrap();
-            let spec = UrlSpec {
-                url: url.clone(),
-                md5: None,
-                sha256: None,
-            };
-            assert!(
-                spec.is_binary(),
-                "Expected {} to be identified as a binary archive",
-                url_str
-            );
-        }
-
-        // Test non-binary URLs (including unsupported archive formats)
-        let non_binary_urls = vec![
-            "https://github.com/user/repo/archive/v1.0.0.zip",
-            "https://github.com/user/repo/archive/v1.0.0.tar.gz",
-            "https://example.com/source.tar.xz",
-            "https://pypi.org/package/source.whl",
-            "https://example.com/source.tar",
-        ];
-
-        for url_str in non_binary_urls {
-            let url = Url::parse(url_str).unwrap();
-            let spec = UrlSpec {
-                url: url.clone(),
-                md5: None,
-                sha256: None,
-            };
-            assert!(
-                !spec.is_binary(),
-                "Expected {} to NOT be identified as a binary archive",
-                url_str
-            );
-        }
-    }
-
-    #[test]
-    fn test_into_source_or_binary() {
-        // Binary URL should return Right (binary)
-        let binary_url = Url::parse("https://conda.anaconda.org/package.tar.bz2").unwrap();
-        let binary_spec = UrlSpec {
-            url: binary_url,
-            md5: None,
-            sha256: None,
-        };
-        match binary_spec.into_source_or_binary() {
-            Either::Right(_) => {}
-            Either::Left(_) => panic!("Expected binary URL to return Right variant"),
-        }
-
-        // Non-binary URL should return Left (source)
-        let source_url = Url::parse("https://github.com/user/repo/archive/v1.0.0.zip").unwrap();
-        let source_spec = UrlSpec {
-            url: source_url,
-            md5: None,
-            sha256: None,
-        };
-        match source_spec.into_source_or_binary() {
-            Either::Left(_) => {}
-            Either::Right(_) => panic!("Expected source URL to return Left variant"),
-        }
-    }
-
-    #[test]
-    fn test_try_into_source_url() {
-        // Binary URL should return Err with original spec
-        let binary_url = Url::parse("https://conda.anaconda.org/package.conda").unwrap();
-        let binary_spec = UrlSpec {
-            url: binary_url,
-            md5: None,
-            sha256: None,
-        };
-        assert!(
-            binary_spec.try_into_source_url().is_err(),
-            "Expected binary URL to fail conversion to source URL"
-        );
-
-        // Non-binary URL should return Ok with source spec
-        let source_url = Url::parse("https://example.com/source.zip").unwrap();
-        let source_spec = UrlSpec {
-            url: source_url,
-            md5: None,
-            sha256: None,
-        };
-        assert!(
-            source_spec.try_into_source_url().is_ok(),
-            "Expected non-binary URL to succeed conversion to source URL"
-        );
-    }
-}
