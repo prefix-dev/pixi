@@ -15,7 +15,7 @@ use pixi_build_types::{
         initialize::InitializeParams,
     },
 };
-use std::fmt::Debug;
+use std::{fmt::Debug, sync::Arc};
 
 use crate::{BackendOutputStream, json_rpc::CommunicationError};
 
@@ -79,9 +79,10 @@ type ErasedInitializationFn =
     dyn Fn(InitializeParams) -> Result<ErasedInMemoryBackend, CommunicationError> + Send + Sync;
 
 /// A helper type that erases the type of the in-memory build backend.
+#[derive(Clone)]
 pub struct BoxedInMemoryBackend {
     identifier: String,
-    initialize: Box<ErasedInitializationFn>,
+    initialize: Arc<ErasedInitializationFn>,
     api_version: PixiBuildApiVersion,
 }
 
@@ -113,7 +114,7 @@ impl<T: InMemoryBackendInstantiator + Send + Sync + 'static> From<T> for BoxedIn
         Self {
             identifier: instantiator.identifier().to_owned(),
             api_version: instantiator.api_version(),
-            initialize: Box::new(move |params| {
+            initialize: Arc::new(move |params| {
                 instantiator
                     .initialize(params)
                     .map(|b| Box::new(b) as Box<dyn InMemoryBackend>)

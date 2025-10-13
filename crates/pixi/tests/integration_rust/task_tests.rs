@@ -134,6 +134,7 @@ async fn test_alias() {
             task: vec!["helloworld".to_string()],
             workspace_config: WorkspaceConfig {
                 manifest_path: None,
+                ..Default::default()
             },
             ..Default::default()
         })
@@ -217,6 +218,7 @@ async fn test_cwd() {
             task: vec!["pwd-test".to_string()],
             workspace_config: WorkspaceConfig {
                 manifest_path: None,
+                ..Default::default()
             },
             ..Default::default()
         })
@@ -239,7 +241,8 @@ async fn test_cwd() {
         pixi.run(Args {
             task: vec!["unknown-cwd".to_string()],
             workspace_config: WorkspaceConfig {
-                manifest_path: None
+                manifest_path: None,
+                ..Default::default()
             },
             ..Default::default()
         })
@@ -271,6 +274,7 @@ async fn test_task_with_env() {
             task: vec!["env-test".to_string()],
             workspace_config: WorkspaceConfig {
                 manifest_path: None,
+                ..Default::default()
             },
             ..Default::default()
         })
@@ -305,6 +309,7 @@ async fn test_clean_env() {
         task: vec!["env-test".to_string()],
         workspace_config: WorkspaceConfig {
             manifest_path: None,
+            ..Default::default()
         },
         clean_env: true,
         ..Default::default()
@@ -324,6 +329,7 @@ async fn test_clean_env() {
             task: vec!["env-test".to_string()],
             workspace_config: WorkspaceConfig {
                 manifest_path: None,
+                ..Default::default()
             },
             clean_env: false,
             ..Default::default()

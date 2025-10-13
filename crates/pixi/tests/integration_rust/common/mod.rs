@@ -61,6 +61,8 @@ disable-sharded = false
 pub struct PixiControl {
     /// The path to the project working file
     tmpdir: TempDir,
+    /// Optional backend override for testing purposes
+    backend_override: Option<pixi_build_frontend::BackendOverride>,
 }
 
 pub struct RunResult {
@@ -232,7 +234,21 @@ impl PixiControl {
         // Hide the progress bars for the tests
         // Otherwise the override the test output
         hide_progress_bars();
-        Ok(PixiControl { tmpdir: tempdir })
+        Ok(PixiControl {
+            tmpdir: tempdir,
+            backend_override: None,
+        })
+    }
+
+    /// Set a backend override for testing purposes. This allows injecting
+    /// custom build backends for testing build operations without needing
+    /// actual backend processes.
+    pub fn with_backend_override(
+        mut self,
+        backend_override: pixi_build_frontend::BackendOverride,
+    ) -> Self {
+        self.backend_override = Some(backend_override);
+        self
     }
 
     /// Creates a new PixiControl instance from an existing manifest
@@ -263,7 +279,11 @@ impl PixiControl {
 
     /// Loads the workspace manifest and returns it.
     pub fn workspace(&self) -> miette::Result<Workspace> {
-        Workspace::from_path(&self.manifest_path()).into_diagnostic()
+        let mut workspace = Workspace::from_path(&self.manifest_path()).into_diagnostic()?;
+        if let Some(backend_override) = &self.backend_override {
+            workspace = workspace.with_backend_override(backend_override.clone());
+        }
+        Ok(workspace)
     }
 
     /// Get the path to the workspace
@@ -366,6 +386,7 @@ impl PixiControl {
             args: add::Args {
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
+                    ..Default::default()
                 },
                 dependency_config: AddBuilder::dependency_config_with_specs(specs),
                 no_install_config: NoInstallConfig { no_install: true },
@@ -387,6 +408,7 @@ impl PixiControl {
                 package: name,
                 project_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
+                    ..Default::default()
                 },
                 platform: Platform::current(),
                 limit: None,
@@ -401,6 +423,7 @@ impl PixiControl {
             args: remove::Args {
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
+                    ..Default::default()
                 },
                 dependency_config: AddBuilder::dependency_config_with_specs(vec![spec]),
                 no_install_config: NoInstallConfig { no_install: true },
@@ -419,6 +442,7 @@ impl PixiControl {
             args: workspace::channel::AddRemoveArgs {
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
+                    ..Default::default()
                 },
                 channel: vec![],
                 no_install_config: NoInstallConfig { no_install: true },
@@ -441,6 +465,7 @@ impl PixiControl {
             args: workspace::channel::AddRemoveArgs {
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
+                    ..Default::default()
                 },
                 channel: vec![],
                 no_install_config: NoInstallConfig { no_install: true },
@@ -562,6 +587,7 @@ impl PixiControl {
                 environment: None,
                 project_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
+                    ..Default::default()
                 },
                 lock_file_usage: LockFileUsageConfig {
                     frozen: false,
@@ -584,6 +610,7 @@ impl PixiControl {
                 config: Default::default(),
                 project_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
+                    ..Default::default()
                 },
                 no_install: true,
                 dry_run: false,
@@ -620,6 +647,7 @@ impl PixiControl {
             args: lock::Args {
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(self.manifest_path()),
+                    ..Default::default()
                 },
                 no_install_config: NoInstallConfig { no_install: false },
                 check: false,
@@ -673,6 +701,7 @@ impl TasksControl<'_> {
         task::execute(task::Args {
             workspace_config: WorkspaceConfig {
                 manifest_path: Some(self.pixi.manifest_path()),
+                ..Default::default()
             },
             operation: task::Operation::Remove(task::RemoveArgs {
                 names: vec![name],

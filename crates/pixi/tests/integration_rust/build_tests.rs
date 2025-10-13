@@ -1,12 +1,17 @@
 use fs_err as fs;
+use pixi_build_backend_passthrough::PassthroughBackend;
+use pixi_build_frontend::BackendOverride;
+use pixi_consts::consts;
 use rattler_conda_types::Platform;
 use tempfile::TempDir;
 
-use crate::common::{
-    PixiControl,
-    package_database::{Package, PackageDatabase},
+use crate::{
+    common::{
+        LockFileExt, PixiControl,
+        package_database::{Package, PackageDatabase},
+    },
+    setup_tracing,
 };
-use crate::setup_tracing;
 
 /// Test that verifies build backend receives the correct resolved source path
 /// when a relative path is specified in the source field
@@ -281,4 +286,57 @@ preview = ["pixi-build"]
             }
         }
     }
+}
+
+/// Test that demonstrates using PassthroughBackend with PixiControl
+/// to test build operations without requiring actual backend processes.
+#[tokio::test]
+async fn test_with_passthrough_backend() {
+    setup_tracing();
+
+    // Create a PixiControl instance with PassthroughBackend
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    // Create a simple source directory
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+
+    // Create a pixi.toml that the PassthroughBackend will read
+    let pixi_toml_content = r#"
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+"#;
+    fs::write(source_dir.join("pixi.toml"), pixi_toml_content).unwrap();
+
+    // Create a manifest with a source dependency
+    let manifest_content = format!(
+        r#"
+[workspace]
+channels = []
+platforms = ["{}"]
+preview = ["pixi-build"]
+
+[dependencies]
+# This will use the PassthroughBackend instead of a real backend
+my-package = {{ path = "./my-package" }}
+"#,
+        Platform::current()
+    );
+
+    fs::write(pixi.manifest_path(), manifest_content).unwrap();
+
+    // Build the lock-file and ensure that it contains our package.
+    let lock_file = pixi.update_lock_file().await.unwrap();
+    assert!(lock_file.contains_conda_package(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Platform::current(),
+        "my-package",
+    ));
 }
