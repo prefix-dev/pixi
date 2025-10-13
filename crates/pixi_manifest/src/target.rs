@@ -888,4 +888,74 @@ mod tests {
         platforms = []
         "###);
     }
+
+    /// Test that target-specific dependencies overwrite default feature dependencies
+    /// This is a regression test for the issue where target dependencies were being
+    /// merged instead of overwriting the default dependencies.
+    #[test]
+    fn test_target_specific_overrides_default() {
+        use rattler_conda_types::Platform;
+
+        let manifest = WorkspaceManifest::from_toml_str(
+            r#"
+        [project]
+        name = "test"
+        channels = []
+        platforms = ["linux-64", "osx-arm64"]
+
+        [dependencies]
+        foo = "1.0"
+
+        [target.linux-64.dependencies]
+        foo = "2.0"
+        "#,
+        )
+        .unwrap();
+
+        let default_feature = manifest.default_feature();
+
+        // For linux-64: should only have foo = "2.0" (target overrides default)
+        let linux_deps = default_feature
+            .run_dependencies(Some(Platform::Linux64))
+            .expect("Should have dependencies for linux-64");
+        let foo_specs = linux_deps
+            .get(&PackageName::from_str("foo").unwrap())
+            .expect("Should have foo dependency");
+        let linux_specs: Vec<_> = foo_specs.iter().collect();
+
+        assert_eq!(
+            linux_specs.len(),
+            1,
+            "Expected exactly one spec for foo on linux-64, got {}: {:?}",
+            linux_specs.len(),
+            linux_specs
+        );
+        assert_eq!(
+            linux_specs[0].as_version_spec().unwrap().to_string(),
+            "==2.0",
+            "Expected foo=2.0 on linux-64"
+        );
+
+        // For osx-arm64: should only have foo = "1.0" (default only)
+        let osx_deps = default_feature
+            .run_dependencies(Some(Platform::OsxArm64))
+            .expect("Should have dependencies for osx-arm64");
+        let foo_specs = osx_deps
+            .get(&PackageName::from_str("foo").unwrap())
+            .expect("Should have foo dependency");
+        let osx_specs: Vec<_> = foo_specs.iter().collect();
+
+        assert_eq!(
+            osx_specs.len(),
+            1,
+            "Expected exactly one spec for foo on osx-arm64, got {}: {:?}",
+            osx_specs.len(),
+            osx_specs
+        );
+        assert_eq!(
+            osx_specs[0].as_version_spec().unwrap().to_string(),
+            "==1.0",
+            "Expected foo=1.0 on osx-arm64"
+        );
+    }
 }

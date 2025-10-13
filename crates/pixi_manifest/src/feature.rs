@@ -240,19 +240,16 @@ impl Feature {
         self.targets
             .resolve(platform)
             // Get the targets in reverse order, from least specific to most specific.
-            // This is required because we want more specific targets to add their specs.
+            // This is required because we want more specific targets to overwrite their specs.
             .rev()
             .filter_map(|t| t.dependencies(spec_type))
             .filter(|deps| !deps.is_empty())
             .fold(None, |acc, deps| match acc {
                 None => Some(Cow::Borrowed(deps)),
-                Some(mut acc) => {
-                    // Extend the accumulator with specs from this target
-                    acc.to_mut().extend(
-                        deps.iter_specs()
-                            .map(|(name, spec)| (name.clone(), spec.clone())),
-                    );
-                    Some(acc)
+                Some(acc) => {
+                    // Overwrite the accumulator with specs from this target
+                    // More specific targets (processed later) overwrite less specific ones
+                    Some(Cow::Owned(acc.as_ref().overwrite(deps)))
                 }
             })
     }
@@ -278,19 +275,16 @@ impl Feature {
         self.targets
             .resolve(platform)
             // Get the targets in reverse order, from least specific to most specific.
-            // This is required because we want more specific targets to add their specs.
+            // This is required because we want more specific targets to overwrite their specs.
             .rev()
             .filter_map(|t| t.combined_dependencies())
             .filter(|deps| !deps.is_empty())
             .fold(None, |acc, deps| match acc {
                 None => Some(deps),
-                Some(mut acc) => {
-                    // Extend the accumulator with specs from this target
-                    acc.to_mut().extend(
-                        deps.iter_specs()
-                            .map(|(name, spec)| (name.clone(), spec.clone())),
-                    );
-                    Some(acc)
+                Some(acc) => {
+                    // Overwrite the accumulator with specs from this target
+                    // More specific targets (processed later) overwrite less specific ones
+                    Some(Cow::Owned(acc.as_ref().overwrite(deps.as_ref())))
                 }
             })
     }
@@ -310,19 +304,16 @@ impl Feature {
         self.targets
             .resolve(platform)
             // Get the targets in reverse order, from least specific to most specific.
-            // This is required because we want more specific targets to add their specs.
+            // This is required because we want more specific targets to overwrite their specs.
             .rev()
             .filter_map(|t| t.pypi_dependencies.as_ref())
             .filter(|deps| !deps.is_empty())
             .fold(None, |acc, deps| match acc {
                 None => Some(Cow::Borrowed(deps)),
-                Some(mut acc) => {
-                    // Extend the accumulator with specs from this target
-                    acc.to_mut().extend(
-                        deps.iter_specs()
-                            .map(|(name, spec)| (name.clone(), spec.clone())),
-                    );
-                    Some(acc)
+                Some(acc) => {
+                    // Overwrite the accumulator with specs from this target
+                    // More specific targets (processed later) overwrite less specific ones
+                    Some(Cow::Owned(acc.as_ref().overwrite(deps)))
                 }
             })
     }
