@@ -5,13 +5,6 @@
 //!
 //! This is especially useful for testing purposes.
 
-#[cfg(feature = "passthrough_backend")]
-mod passthrough;
-
-use std::fmt::Debug;
-
-#[cfg(feature = "passthrough_backend")]
-pub use passthrough::PassthroughBackend;
 use pixi_build_types::{
     BackendCapabilities, PixiBuildApiVersion,
     procedures::{
@@ -22,6 +15,7 @@ use pixi_build_types::{
         initialize::InitializeParams,
     },
 };
+use std::fmt::Debug;
 
 use crate::{BackendOutputStream, json_rpc::CommunicationError};
 
