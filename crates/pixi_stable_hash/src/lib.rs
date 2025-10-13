@@ -205,6 +205,7 @@ impl IsDefault for rattler_conda_types::VersionSpec {
 }
 
 #[cfg(feature = "rattler_digest")]
+#[allow(deprecated)]
 impl<U, T: rattler_digest::digest::generic_array::ArrayLength<U>> IsDefault
     for rattler_digest::digest::generic_array::GenericArray<U, T>
 {
