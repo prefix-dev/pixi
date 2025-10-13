@@ -11,7 +11,7 @@ use pyproject_toml::{self, Contact, ResolveError};
 use rattler_conda_types::{PackageName, ParseStrictness::Lenient, VersionSpec};
 
 use super::{
-    DependencyOverwriteBehavior, Feature, SpecType, WorkspaceManifest,
+    DependencyOverwriteBehavior, Feature, InternalDependencyBehavior, SpecType, WorkspaceManifest,
     error::{RequirementConversionError, TomlError},
 };
 use crate::{
@@ -218,6 +218,7 @@ impl PyProjectManifest {
                 &python,
                 &version_or_url_to_spec(&python_spec).unwrap(),
                 SpecType::Run,
+                InternalDependencyBehavior::Overwrite,
             );
         } else if let Some(_spec) = python_spec {
             if target.has_dependency(&python, SpecType::Run, None) {
