@@ -1,8 +1,9 @@
 use std::collections::{BTreeMap, HashSet};
 
+use itertools::Either;
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
-use pixi_spec::{BinarySpec, PixiSpec, SourceSpec};
+use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceSpec};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{ChannelConfig, ChannelUrl, PackageName};
 use thiserror::Error;
@@ -125,6 +126,9 @@ impl ExpandDevSourcesSpec {
                     error,
                 })?;
 
+            // Create a SourceAnchor for resolving relative paths in dependencies
+            let source_anchor = SourceAnchor::from(SourceSpec::from(pinned_source.pinned.clone()));
+
             // Get the output dependencies
             let spec = GetOutputDependenciesSpec {
                 source: pinned_source.pinned,
@@ -151,9 +155,22 @@ impl ExpandDevSourcesSpec {
                         // Skip dependencies that are also dev_sources
                         // TODO: Currently matching by name only. In the future, we might want to
                         // also check if the source location matches for more precise matching.
-                        if !dev_source_names.contains(&name) {
-                            result.dependencies.insert(name, spec);
+                        if dev_source_names.contains(&name) {
+                            continue
                         }
+
+                        // Resolve relative paths for source dependencies
+                        let resolved_spec = match spec.into_source_or_binary() {
+                            Either::Left(source) => {
+                                // Resolve the source relative to the dev_source's location
+                                PixiSpec::from(source_anchor.resolve(source))
+                            }
+                            Either::Right(binary) => {
+                                // Binary specs don't need path resolution
+                                PixiSpec::from(binary)
+                            }
+                        };
+                        result.dependencies.insert(name, resolved_spec);
                     }
                 }
             };
