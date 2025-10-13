@@ -1,6 +1,19 @@
+//! A passthrough build backend for testing purposes.
+//!
+//! This backend simply passes along the information from the project model to
+//! the `conda/outputs` API without any modifications. It's useful for testing
+//! and debugging purposes, as it does not perform any actual building or
+//! processing of the project model.
+
 use std::{collections::BTreeSet, path::PathBuf};
 
 use ordermap::OrderMap;
+use pixi_build_frontend::{
+    BackendOutputStream,
+    error::BackendError,
+    in_memory::{InMemoryBackend, InMemoryBackendInstantiator},
+    json_rpc::CommunicationError,
+};
 use pixi_build_types::{
     BackendCapabilities, NamedSpecV1, PackageSpecV1, ProjectModelV1, SourcePackageName,
     TargetSelectorV1, TargetV1, TargetsV1, VersionedProjectModel,
@@ -15,13 +28,6 @@ use pixi_build_types::{
 };
 use rattler_conda_types::{PackageName, Platform, Version, package::IndexJson};
 use serde::Deserialize;
-
-use crate::{
-    BackendOutputStream,
-    error::BackendError,
-    in_memory::{InMemoryBackend, InMemoryBackendInstantiator},
-    json_rpc::CommunicationError,
-};
 
 const BACKEND_NAME: &str = "passthrough";
 

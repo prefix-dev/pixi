@@ -4616,6 +4616,8 @@ dependencies = [
  "miette 7.6.0",
  "pep508_rs",
  "pixi_allocator",
+ "pixi_build_backend_passthrough",
+ "pixi_build_frontend",
  "pixi_cli",
  "pixi_config",
  "pixi_consts",
@@ -4689,6 +4691,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixi_build_backend_passthrough"
+version = "0.1.0"
+dependencies = [
+ "fs-err",
+ "ordermap",
+ "pixi_build_frontend",
+ "pixi_build_types",
+ "rattler_conda_types",
+ "rattler_package_streaming",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "pixi_build_discovery"
 version = "0.1.0"
 dependencies = [
@@ -4723,7 +4739,6 @@ dependencies = [
  "pixi_build_discovery",
  "pixi_build_types",
  "rattler_conda_types",
- "rattler_package_streaming",
  "serde",
  "serde_json",
  "thiserror 2.0.16",
@@ -4792,6 +4807,7 @@ dependencies = [
  "pathdiff",
  "pep508_rs",
  "pixi_api",
+ "pixi_build_frontend",
  "pixi_command_dispatcher",
  "pixi_config",
  "pixi_consts",
@@ -4871,6 +4887,7 @@ dependencies = [
  "miette 7.6.0",
  "ordermap",
  "pin-project-lite",
+ "pixi_build_backend_passthrough",
  "pixi_build_discovery",
  "pixi_build_frontend",
  "pixi_build_type_conversions",

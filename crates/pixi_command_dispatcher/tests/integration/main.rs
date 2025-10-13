@@ -10,9 +10,8 @@ use std::{
 
 use event_reporter::EventReporter;
 use itertools::Itertools;
-use pixi_build_frontend::{
-    BackendOverride, InMemoryOverriddenBackends, in_memory::PassthroughBackend,
-};
+use pixi_build_backend_passthrough::PassthroughBackend;
+use pixi_build_frontend::{BackendOverride, InMemoryOverriddenBackends};
 use pixi_command_dispatcher::{
     BuildEnvironment, CacheDirs, CommandDispatcher, Executor, InstallPixiEnvironmentSpec,
     InstantiateToolEnvironmentSpec, PackageIdentifier, PixiEnvironmentSpec,

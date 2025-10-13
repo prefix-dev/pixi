@@ -55,6 +55,8 @@ pixi_spec = { workspace = true }
 pixi_task = { workspace = true }
 pixi_test_utils = { workspace = true }
 pixi_utils = { workspace = true }
+pixi_build_frontend = { workspace = true }
+pixi_build_backend_passthrough = { workspace = true }
 pypi_mapping = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true }
