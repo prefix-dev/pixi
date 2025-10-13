@@ -148,6 +148,7 @@ impl Args {
 }
 
 #[derive(Parser, Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum Command {
     // Commands in alphabetical order
     #[clap(visible_alias = "a")]
