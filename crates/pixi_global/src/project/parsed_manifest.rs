@@ -10,10 +10,10 @@ use pixi_manifest::{PrioritizedChannel, toml::TomlPlatform, utils::package_map::
 use pixi_spec::PixiSpec;
 use pixi_toml::{TomlFromStr, TomlIndexMap, TomlIndexSet, TomlWith};
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
-use serde::{Serialize, Serializer, ser::SerializeMap};
-use serde_with::serde_derive::Deserialize;
+use serde::{Deserialize, Serialize, Serializer, ser::SerializeMap};
 use thiserror::Error;
-use toml_span::{DeserError, Deserialize, Value, de_helpers::TableHelper};
+use toml_span::Deserialize as TomlDeserialize;
+use toml_span::{DeserError, Value, de_helpers::TableHelper};
 
 use super::{ExposedData, environment::EnvironmentName};
 use crate::{Mapping, project::manifest::TomlMapping};
@@ -118,7 +118,7 @@ pub struct ParsedManifest {
     pub envs: IndexMap<EnvironmentName, ParsedEnvironment>,
 }
 
-impl<'de> toml_span::Deserialize<'de> for ParsedManifest {
+impl<'de> TomlDeserialize<'de> for ParsedManifest {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         let mut th = TableHelper::new(value)?;
 
@@ -302,7 +302,7 @@ pub struct ParsedEnvironment {
     pub shortcuts: Option<IndexSet<PackageName>>,
 }
 
-impl<'de> toml_span::Deserialize<'de> for ParsedEnvironment {
+impl<'de> TomlDeserialize<'de> for ParsedEnvironment {
     fn deserialize(value: &mut toml_span::Value<'de>) -> Result<Self, DeserError> {
         let mut th = TableHelper::new(value)?;
 
@@ -399,7 +399,7 @@ impl FromStr for ExposedName {
     }
 }
 
-impl<'de> toml_span::Deserialize<'de> for ExposedName {
+impl<'de> TomlDeserialize<'de> for ExposedName {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         Ok(toml_span::de_helpers::parse(value)?)
     }

@@ -130,11 +130,11 @@ coalesced_map = "0.1.1"
 file_url = "0.2.6"
 rattler = { version = "0.37.5", default-features = false }
 rattler_cache = { version = "0.3.34", default-features = false }
-rattler_conda_types = { version = "0.39.2", default-features = false, features = [
+rattler_conda_types = { version = "0.40.0", default-features = false, features = [
   "rayon",
 ] }
 rattler_digest = { version = "1.1.5", default-features = false }
-rattler_lock = { version = "0.24.1", default-features = false }
+rattler_lock = { version = "0.25.0", default-features = false }
 rattler_menuinst = { version = "0.2.23", default-features = false }
 rattler_networking = { version = "0.25.13", default-features = false, features = [
   "google-cloud-auth",
@@ -143,7 +143,7 @@ rattler_networking = { version = "0.25.13", default-features = false, features =
 rattler_package_streaming = { version = "0.23.0", default-features = false }
 rattler_repodata_gateway = { version = "0.24.4", default-features = false }
 rattler_shell = { version = "0.25.0", default-features = false }
-rattler_solve = { version = "3.0.3", default-features = false }
+rattler_solve = { version = "3.0.5", default-features = false }
 rattler_virtual_packages = { version = "2.1.5", default-features = false }
 simple_spawn_blocking = { version = "1.1.0", default-features = false }
 
@@ -168,7 +168,7 @@ uv-types = { git = "https://github.com/astral-sh/uv", tag = "0.8.5" }
 uv-workspace = { git = "https://github.com/astral-sh/uv", tag = "0.8.5" }
 winapi = { version = "0.3.9", default-features = false }
 xxhash-rust = "0.8.15"
-zip = { version = "2.4.2", default-features = false }
+zip = { version = "6.0.0", default-features = false }
 zstd = { version = "0.13.3", default-features = false }
 
 barrier_cell = { path = "crates/barrier_cell" }
