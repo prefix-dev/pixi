@@ -156,7 +156,7 @@ impl ExpandDevSourcesSpec {
                         // TODO: Currently matching by name only. In the future, we might want to
                         // also check if the source location matches for more precise matching.
                         if dev_source_names.contains(&name) {
-                            continue
+                            continue;
                         }
 
                         // Resolve relative paths for source dependencies

@@ -1912,6 +1912,7 @@ pub enum TaskResult {
 /// and uses the command dispatcher to expand them into their build/host/run dependencies.
 ///
 /// Returns `None` if there are no develop dependencies.
+#[allow(clippy::too_many_arguments)]
 async fn expand_develop_dependencies(
     develop_dependencies: IndexMap<PackageName, SourceSpec>,
     group_name: GroupedEnvironmentName,

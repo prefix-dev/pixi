@@ -5,7 +5,10 @@ use pixi_consts::consts;
 use rattler_conda_types::Platform;
 
 use crate::{
-    common::{LockFileExt, PixiControl, package_database::{Package, PackageDatabase}},
+    common::{
+        LockFileExt, PixiControl,
+        package_database::{Package, PackageDatabase},
+    },
     setup_tracing,
 };
 
@@ -422,11 +425,7 @@ feature-package = {{ path = "./feature-package" }}
 
     // Verify that zlib is in the "test" environment but not in the default environment
     assert!(
-        lock_file.contains_conda_package(
-            "test",
-            Platform::current(),
-            "zlib",
-        ),
+        lock_file.contains_conda_package("test", Platform::current(), "zlib",),
         "zlib should be in the test environment lock-file (run dependency of feature-package)"
     );
 
@@ -441,11 +440,7 @@ feature-package = {{ path = "./feature-package" }}
 
     // Verify that feature-package itself is not built
     assert!(
-        !lock_file.contains_conda_package(
-            "test",
-            Platform::current(),
-            "feature-package",
-        ),
+        !lock_file.contains_conda_package("test", Platform::current(), "feature-package",),
         "feature-package should NOT be in the lock-file (it's a develop dependency)"
     );
 }
