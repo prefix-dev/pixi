@@ -381,9 +381,9 @@ pub enum StateChange {
     UpdatedEnvironment(EnvironmentUpdate),
     InstalledShortcut(String),
     UninstalledShortcut(String),
-    #[allow(dead_code)] // This variant is not used on Windows
+    #[cfg(unix)] // This variant is not used on Windows
     AddedCompletion(String),
-    #[allow(dead_code)] // This variant is not used on Windows
+    #[cfg(unix)] // This variant is not used on Windows
     RemovedCompletion(String),
 }
 

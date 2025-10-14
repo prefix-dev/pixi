@@ -249,7 +249,6 @@ impl GlobalExecutable {
 }
 
 /// Represents a trampoline binary installed by pixi.
-#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Trampoline {
     /// Exposed name of the trampoline

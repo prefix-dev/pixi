@@ -106,7 +106,6 @@ pub(crate) enum InternalDependencyBehavior {
 
     /// Append the new dependency spec to any existing specs.
     /// This allows multiple specs for the same package.
-    #[allow(dead_code)]
     Append,
 }
 
