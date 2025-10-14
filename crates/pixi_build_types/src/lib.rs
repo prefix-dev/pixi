@@ -5,8 +5,7 @@ mod conda_package_metadata;
 pub mod procedures;
 mod project_model;
 
-use std::fmt::Display;
-use std::sync::LazyLock;
+use std::{fmt::Display, sync::LazyLock};
 
 pub use capabilities::{BackendCapabilities, FrontendCapabilities};
 pub use channel_configuration::ChannelConfiguration;
@@ -81,7 +80,6 @@ impl PixiBuildApiVersion {
                 provides_conda_outputs: Some(true),
                 provides_conda_build_v1: Some(true),
                 highest_supported_project_model: Some(1),
-                ..BackendCapabilities::default()
             },
             2 => BackendCapabilities {
                 ..Self(1).expected_backend_capabilities()
@@ -90,7 +88,8 @@ impl PixiBuildApiVersion {
         }
     }
 
-    /// Returns true if this version of the protocol supports the name field in the project model to be `None`.
+    /// Returns true if this version of the protocol supports the name field in
+    /// the project model to be `None`.
     pub fn supports_name_none(&self) -> bool {
         self.0 >= 2
     }

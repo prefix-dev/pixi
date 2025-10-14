@@ -11,7 +11,7 @@ name = "simple_cpp"
 version = "0.1.0"
 
 [package.build]
-backend = { name = "pixi-build-cmake", version = "0.1.*" }
+backend = { name = "pixi-build-cmake", version = "0.3.*" }
 
 [package.host-dependencies]
 cmake = "3.20.*"
