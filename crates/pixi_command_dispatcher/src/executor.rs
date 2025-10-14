@@ -22,6 +22,36 @@ pub enum Executor {
 }
 
 pin_project_lite::pin_project! {
+    /// A collection of futures that can be executed either concurrently or serially.
+    ///
+    /// This type provides a unified interface for managing multiple futures with different
+    /// execution strategies. The execution mode is determined by the [`Executor`] passed
+    /// to [`ExecutorFutures::new`].
+    ///
+    /// # Usage
+    ///
+    /// Typically, you should obtain the executor from [`CommandDispatcher::executor()`]
+    /// rather than hardcoding a specific executor:
+    ///
+    /// ```ignore
+    /// // Get executor from the command dispatcher
+    /// let mut futures = ExecutorFutures::new(command_dispatcher.executor());
+    ///
+    /// // Push futures into the collection
+    /// for item in items {
+    ///     futures.push(process_item(item));
+    /// }
+    ///
+    /// // Collect results as they complete
+    /// while let Some(result) = futures.next().await {
+    ///     // Handle result
+    /// }
+    /// ```
+    ///
+    /// This ensures that:
+    /// - Production code uses concurrent execution for better performance
+    /// - Tests can use serial execution for deterministic behavior
+    /// - The execution mode is configured in one place (the dispatcher builder)
     #[project = ExecutorFuturesProj]
     pub(crate) enum ExecutorFutures<Fut> {
         Concurrent { #[pin] futures: FuturesUnordered<Fut> },
@@ -30,6 +60,16 @@ pin_project_lite::pin_project! {
 }
 
 impl<Fut> ExecutorFutures<Fut> {
+    /// Creates a new `ExecutorFutures` with the specified execution strategy.
+    ///
+    /// # Recommendation
+    ///
+    /// Instead of hardcoding `Executor::Concurrent` or `Executor::Serial`, prefer
+    /// obtaining the executor from [`CommandDispatcher::executor()`]:
+    ///
+    /// ```ignore
+    /// let mut futures = ExecutorFutures::new(command_dispatcher.executor());
+    /// ```
     pub fn new(executor: Executor) -> Self {
         match executor {
             Executor::Concurrent => Self::Concurrent {
@@ -41,6 +81,11 @@ impl<Fut> ExecutorFutures<Fut> {
         }
     }
 
+    /// Adds a future to the collection.
+    ///
+    /// The future will be executed according to the execution strategy:
+    /// - `Concurrent`: The future may be polled in any order with other futures
+    /// - `Serial`: The future will be polled in LIFO (last-in-first-out) order
     pub fn push(&mut self, fut: Fut) {
         match self {
             ExecutorFutures::Concurrent { futures } => futures.push(fut),
