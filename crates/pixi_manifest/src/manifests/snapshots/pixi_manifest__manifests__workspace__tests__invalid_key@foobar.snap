@@ -2,8 +2,8 @@
 source: crates/pixi_manifest/src/manifests/workspace.rs
 expression: "expect_parse_failure(&format!(\"{PROJECT_BOILERPLATE}\\n[foobar]\"))"
 ---
-  × Unexpected keys, expected only 'project', 'package', 'target', 'dependencies', 'host-dependencies', 'build-dependencies', 'pypi-dependencies', 'activation', 'tasks', 'feature', 'environments',
-  │ 'pypi-options', 'system-requirements'
+  × Unexpected keys, expected only 'project', 'package', 'target', 'dependencies', 'host-dependencies', 'build-dependencies', 'pypi-dependencies', 'develop', 'activation', 'tasks', 'feature',
+  │ 'environments', 'pypi-options', 'system-requirements'
    ╭─[pixi.toml:8:2]
  7 │
  8 │ [foobar]

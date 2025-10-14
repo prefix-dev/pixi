@@ -102,7 +102,7 @@ impl ExpandDevSourcesSpec {
         )
     )]
     pub(crate) async fn request(
-        self,
+        mut self,
         command_dispatcher: CommandDispatcher,
     ) -> Result<ExpandedDevSources, CommandDispatcherError<ExpandDevSourcesError>> {
         // Create a lookup set for dev_sources by output_name
@@ -117,136 +117,123 @@ impl ExpandDevSourcesSpec {
 
         // Process each dev_source concurrently
         let mut futures = ExecutorFutures::new(command_dispatcher.executor());
-
-        for dev_source in self.dev_sources {
-            futures.push(process_single_dev_source(
+        for dev_source in std::mem::take(&mut self.dev_sources) {
+            futures.push(self.process_single_dev_source(
                 dev_source,
                 &command_dispatcher,
-                &self.channel_config,
-                &self.channels,
-                &self.build_environment,
-                &self.variants,
-                &self.enabled_protocols,
                 &dev_source_names,
             ));
         }
 
         // Collect results as they complete
         let mut result = ExpandedDevSources::default();
-        while let Some(dev_source_result) = futures.next().await {
-            let (dependencies, constraints) = dev_source_result?;
+        while let Some(expanded) = futures.next().await {
+            let expanded = expanded?;
 
             // Merge dependencies and constraints into the result
-            for (name, spec) in dependencies.into_specs() {
+            for (name, spec) in expanded.dependencies.into_specs() {
                 result.dependencies.insert(name, spec);
             }
-            for (name, spec) in constraints.into_specs() {
+            for (name, spec) in expanded.constraints.into_specs() {
                 result.constraints.insert(name, spec);
             }
         }
 
         Ok(result)
     }
-}
 
-/// Process a single dev_source: checkout, get dependencies, and filter/resolve them.
-async fn process_single_dev_source(
-    dev_source: DependencyOnlySource,
-    command_dispatcher: &CommandDispatcher,
-    channel_config: &ChannelConfig,
-    channels: &[ChannelUrl],
-    build_environment: &BuildEnvironment,
-    variants: &Option<BTreeMap<String, Vec<String>>>,
-    enabled_protocols: &EnabledProtocols,
-    dev_source_names: &HashSet<PackageName>,
-) -> Result<
-    (
-        DependencyMap<PackageName, PixiSpec>,
-        DependencyMap<PackageName, BinarySpec>,
-    ),
-    CommandDispatcherError<ExpandDevSourcesError>,
-> {
-    // Pin and checkout the source
-    let pinned_source = command_dispatcher
-        .pin_and_checkout(dev_source.source.clone())
-        .await
-        .map_err_with(|error| ExpandDevSourcesError::SourceCheckout {
-            name: dev_source.output_name.as_source().to_string(),
-            error,
-        })?;
+    /// Process a single dev_source: checkout, get dependencies, and filter/resolve them.
+    async fn process_single_dev_source(
+        &self,
+        dev_source: DependencyOnlySource,
+        command_dispatcher: &CommandDispatcher,
+        dev_source_names: &HashSet<PackageName>,
+    ) -> Result<ExpandedDevSources, CommandDispatcherError<ExpandDevSourcesError>> {
+        // Pin and checkout the source
+        let pinned_source = command_dispatcher
+            .pin_and_checkout(dev_source.source.clone())
+            .await
+            .map_err_with(|error| ExpandDevSourcesError::SourceCheckout {
+                name: dev_source.output_name.as_source().to_string(),
+                error,
+            })?;
 
-    // Create a SourceAnchor for resolving relative paths in dependencies
-    let source_anchor = SourceAnchor::from(SourceSpec::from(pinned_source.pinned.clone()));
+        // Create a SourceAnchor for resolving relative paths in dependencies
+        let source_anchor = SourceAnchor::from(SourceSpec::from(pinned_source.pinned.clone()));
 
-    // Get the output dependencies
-    let spec = GetOutputDependenciesSpec {
-        source: pinned_source.pinned,
-        output_name: dev_source.output_name.clone(),
-        channel_config: channel_config.clone(),
-        channels: channels.to_vec(),
-        build_environment: build_environment.clone(),
-        variants: variants.clone(),
-        enabled_protocols: enabled_protocols.clone(),
-    };
-
-    let output_deps = command_dispatcher
-        .get_output_dependencies(spec)
-        .await
-        .map_err_with(|error| ExpandDevSourcesError::GetOutputDependencies {
-            name: dev_source.output_name.clone(),
-            error,
-        })?;
-
-    // Process dependencies
-    let mut dependencies = DependencyMap::default();
-    let process_deps =
-        |deps: Option<DependencyMap<PackageName, PixiSpec>>,
-         dependencies: &mut DependencyMap<PackageName, PixiSpec>| {
-            if let Some(deps) = deps {
-                for (name, spec) in deps.into_specs() {
-                    // Skip dependencies that are also dev_sources
-                    // TODO: Currently matching by name only. In the future, we might want to
-                    // also check if the source location matches for more precise matching.
-                    if dev_source_names.contains(&name) {
-                        continue;
-                    }
-
-                    // Resolve relative paths for source dependencies
-                    let resolved_spec = match spec.into_source_or_binary() {
-                        Either::Left(source) => {
-                            // Resolve the source relative to the dev_source's location
-                            PixiSpec::from(source_anchor.resolve(source))
-                        }
-                        Either::Right(binary) => {
-                            // Binary specs don't need path resolution
-                            PixiSpec::from(binary)
-                        }
-                    };
-                    dependencies.insert(name, resolved_spec);
-                }
-            }
+        // Get the output dependencies
+        let spec = GetOutputDependenciesSpec {
+            source: pinned_source.pinned,
+            output_name: dev_source.output_name.clone(),
+            channel_config: self.channel_config.clone(),
+            channels: self.channels.clone(),
+            build_environment: self.build_environment.clone(),
+            variants: self.variants.clone(),
+            enabled_protocols: self.enabled_protocols.clone(),
         };
 
-    // Process all dependency types
-    process_deps(output_deps.build_dependencies, &mut dependencies);
-    process_deps(output_deps.host_dependencies, &mut dependencies);
-    process_deps(Some(output_deps.run_dependencies), &mut dependencies);
+        let output_deps = command_dispatcher
+            .get_output_dependencies(spec)
+            .await
+            .map_err_with(|error| ExpandDevSourcesError::GetOutputDependencies {
+                name: dev_source.output_name.clone(),
+                error,
+            })?;
 
-    // Collect constraints
-    let mut constraints = DependencyMap::default();
-    if let Some(build_constraints) = output_deps.build_constraints {
-        for (name, spec) in build_constraints.into_specs() {
+        // Process dependencies
+        let mut dependencies = DependencyMap::default();
+        let process_deps =
+            |deps: Option<DependencyMap<PackageName, PixiSpec>>,
+             dependencies: &mut DependencyMap<PackageName, PixiSpec>| {
+                if let Some(deps) = deps {
+                    for (name, spec) in deps.into_specs() {
+                        // Skip dependencies that are also dev_sources
+                        // TODO: Currently matching by name only. In the future, we might want to
+                        // also check if the source location matches for more precise matching.
+                        if dev_source_names.contains(&name) {
+                            continue;
+                        }
+
+                        // Resolve relative paths for source dependencies
+                        let resolved_spec = match spec.into_source_or_binary() {
+                            Either::Left(source) => {
+                                // Resolve the source relative to the dev_source's location
+                                PixiSpec::from(source_anchor.resolve(source))
+                            }
+                            Either::Right(binary) => {
+                                // Binary specs don't need path resolution
+                                PixiSpec::from(binary)
+                            }
+                        };
+                        dependencies.insert(name, resolved_spec);
+                    }
+                }
+            };
+
+        // Process all dependency types
+        process_deps(output_deps.build_dependencies, &mut dependencies);
+        process_deps(output_deps.host_dependencies, &mut dependencies);
+        process_deps(Some(output_deps.run_dependencies), &mut dependencies);
+
+        // Collect constraints
+        let mut constraints = DependencyMap::default();
+        if let Some(build_constraints) = output_deps.build_constraints {
+            for (name, spec) in build_constraints.into_specs() {
+                constraints.insert(name, spec);
+            }
+        }
+        if let Some(host_constraints) = output_deps.host_constraints {
+            for (name, spec) in host_constraints.into_specs() {
+                constraints.insert(name, spec);
+            }
+        }
+        for (name, spec) in output_deps.run_constraints.into_specs() {
             constraints.insert(name, spec);
         }
-    }
-    if let Some(host_constraints) = output_deps.host_constraints {
-        for (name, spec) in host_constraints.into_specs() {
-            constraints.insert(name, spec);
-        }
-    }
-    for (name, spec) in output_deps.run_constraints.into_specs() {
-        constraints.insert(name, spec);
-    }
 
-    Ok((dependencies, constraints))
+        Ok(ExpandedDevSources {
+            dependencies,
+            constraints,
+        })
+    }
 }
