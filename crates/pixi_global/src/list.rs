@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use fancy_display::FancyDisplay;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
@@ -49,10 +51,11 @@ fn format_mapping(mapping: &Mapping) -> String {
     }
 }
 
-fn print_meta_info(environment: &ParsedEnvironment) {
+fn print_meta_info(environment: &ParsedEnvironment) -> miette::Result<()> {
     // Print exposed binaries, if binary similar to path only print once.
     let formatted_exposed = environment.exposed.iter().map(format_mapping).join(", ");
-    println!(
+    writeln!(
+        std::io::stdout(),
         "{}\n{}",
         console::style("Exposes:").bold().cyan(),
         if !formatted_exposed.is_empty() {
@@ -60,21 +63,47 @@ fn print_meta_info(environment: &ParsedEnvironment) {
         } else {
             "Nothing".to_string()
         }
-    );
+    )
+    .inspect_err(|e| {
+        if e.kind() == std::io::ErrorKind::BrokenPipe {
+            std::process::exit(0);
+        }
+    })
+    .into_diagnostic()?;
 
     // Print channels
     if !environment.channels().is_empty() {
-        println!(
+        writeln!(
+            std::io::stdout(),
             "{}\n{}",
             console::style("Channels:").bold().cyan(),
             environment.channels().iter().join(", ")
-        );
+        )
+        .inspect_err(|e| {
+            if e.kind() == std::io::ErrorKind::BrokenPipe {
+                std::process::exit(0);
+            }
+        })
+        .into_diagnostic()?;
     }
 
     // Print platform
     if let Some(platform) = environment.platform {
-        println!("{} {}", console::style("Platform:").bold().cyan(), platform);
+        writeln!(
+            std::io::stdout(),
+            "{} {}",
+            console::style("Platform:").bold().cyan(),
+            platform
+        )
+        .inspect_err(|e| {
+            if e.kind() == std::io::ErrorKind::BrokenPipe {
+                std::process::exit(0);
+            }
+        })
+        .into_diagnostic()?;
     }
+
+    Ok(())
 }
 
 /// List package and binaries in global environment
@@ -138,9 +167,15 @@ pub async fn list_specific_global_environment(
     } else {
         packages_to_output.sort_by(|a, b| a.name.cmp(&b.name));
     }
-    println!("{}", output_message);
+    writeln!(std::io::stdout(), "{}", output_message)
+        .inspect_err(|e| {
+            if e.kind() == std::io::ErrorKind::BrokenPipe {
+                std::process::exit(0);
+            }
+        })
+        .into_diagnostic()?;
     print_package_table(packages_to_output).into_diagnostic()?;
-    print_meta_info(env);
+    print_meta_info(env)?;
 
     Ok(())
 }
@@ -265,16 +300,34 @@ pub async fn list_all_global_environments(
         }
     }
     if message.is_empty() {
-        println!("No global environments found.");
+        writeln!(std::io::stdout(), "No global environments found.")
+            .inspect_err(|e| {
+                if e.kind() == std::io::ErrorKind::BrokenPipe {
+                    std::process::exit(0);
+                }
+            })
+            .into_diagnostic()?;
     } else {
         let header = format!(
             "Global environments as specified in '{}'",
             project.manifest.path.display()
         );
         if show_header {
-            println!("{}", header);
+            writeln!(std::io::stdout(), "{}", header)
+                .inspect_err(|e| {
+                    if e.kind() == std::io::ErrorKind::BrokenPipe {
+                        std::process::exit(0);
+                    }
+                })
+                .into_diagnostic()?;
         }
-        println!("{}", message);
+        writeln!(std::io::stdout(), "{}", message)
+            .inspect_err(|e| {
+                if e.kind() == std::io::ErrorKind::BrokenPipe {
+                    std::process::exit(0);
+                }
+            })
+            .into_diagnostic()?;
     }
 
     Ok(())
