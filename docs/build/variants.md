@@ -96,7 +96,7 @@ In this tutorial, we showed how to use variants to build multiple versions of a 
 We built `cpp_math` for Python 3.12 and 3.13, which allows us to test whether it works properly on both Python versions.
 Variants are not limited to a single dependency, you could for example try to test multiple versions of `nanobind`.
 
-On top of adding variants inline, they can also be included as files. Check out the [reference](../reference/pixi_manifest.md#build-variant-files-optional) to learn more!
+On top of adding variants inline, they can also be included as files. Check out the [reference](../reference/pixi_manifest.md#build-variants-files-optional) to learn more!
 
 Thanks for reading! Happy Coding 🚀
 

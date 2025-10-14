@@ -173,7 +173,7 @@ pub struct Workspace {
     concurrent_downloads_semaphore: OnceCell<Arc<Semaphore>>,
 
     variants: OnceCell<VariantConfig>,
-  
+
     /// Optional backend override for testing purposes
     backend_override: Option<BackendOverride>,
 }
