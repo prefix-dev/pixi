@@ -278,11 +278,11 @@ fn collect_specs_by_target(
     // Determine default-owned names for partitioning
     let default_deps_names: IndexSet<_> = feature
         .dependencies(SpecType::Run, None)
-        .map(|deps| deps.keys().cloned().collect())
+        .map(|deps| deps.names().cloned().collect())
         .unwrap_or_default();
     let default_pypi_names: IndexSet<_> = feature
         .pypi_dependencies(None)
-        .map(|deps| deps.keys().cloned().collect())
+        .map(|deps| deps.names().cloned().collect())
         .unwrap_or_default();
 
     // Parse default-target specs (written to default location)
@@ -323,12 +323,12 @@ fn collect_available_packages(
 
     // Default target
     if let Some(deps) = feature.dependencies(SpecType::Run, None) {
-        for (name, _) in deps.into_owned() {
+        for name in deps.names() {
             available.insert(name.as_normalized().to_string());
         }
     }
     if let Some(deps) = feature.pypi_dependencies(None) {
-        for (name, _) in deps.into_owned() {
+        for name in deps.names() {
             available.insert(name.as_normalized().to_string());
         }
     }
@@ -336,12 +336,12 @@ fn collect_available_packages(
     // Platform-specific targets
     for &platform in platforms {
         if let Some(deps) = feature.dependencies(SpecType::Run, Some(platform)) {
-            for (name, _) in deps.into_owned() {
+            for name in deps.names() {
                 available.insert(name.as_normalized().to_string());
             }
         }
         if let Some(deps) = feature.pypi_dependencies(Some(platform)) {
-            for (name, _) in deps.into_owned() {
+            for name in deps.names() {
                 available.insert(name.as_normalized().to_string());
             }
         }
@@ -366,11 +366,11 @@ pub fn parse_specs_for_platform(
     let match_spec_iter = feature
         .dependencies(spec_type, platform)
         .into_iter()
-        .flat_map(|deps| deps.into_owned());
+        .flat_map(|deps| deps.into_owned().into_specs());
     let pypi_deps_iter = feature
         .pypi_dependencies(platform)
         .into_iter()
-        .flat_map(|deps| deps.into_owned());
+        .flat_map(|deps| deps.into_owned().into_specs());
     // Note: package existence is validated across all platforms in `execute`.
     let match_specs = match_spec_iter
         // Don't upgrade excluded packages

@@ -173,6 +173,9 @@ pub struct Workspace {
     concurrent_downloads_semaphore: OnceCell<Arc<Semaphore>>,
 
     variants: OnceCell<VariantConfig>,
+  
+    /// Optional backend override for testing purposes
+    backend_override: Option<BackendOverride>,
 }
 
 impl Debug for Workspace {
@@ -244,6 +247,7 @@ impl Workspace {
             repodata_gateway: Default::default(),
             concurrent_downloads_semaphore: OnceCell::default(),
             variants: OnceCell::default(),
+            backend_override: None,
         }
     }
 
@@ -283,6 +287,13 @@ impl Workspace {
         C: Into<Config>,
     {
         self.config = self.config.merge_config(config.into());
+        self
+    }
+
+    /// Sets the backend override for this workspace. This is primarily used
+    /// for testing purposes to inject custom build backends.
+    pub fn with_backend_override(mut self, backend_override: BackendOverride) -> Self {
+        self.backend_override = Some(backend_override);
         self
     }
 
@@ -561,7 +572,12 @@ impl Workspace {
                 max_concurrent_solves: self.config().max_concurrent_solves().into(),
                 ..Limits::default()
             })
-            .with_backend_overrides(BackendOverride::from_env()?.unwrap_or_default())
+            .with_backend_overrides(
+                self.backend_override
+                    .clone()
+                    .or_else(|| BackendOverride::from_env().ok().flatten())
+                    .unwrap_or_default(),
+            )
             .execute_link_scripts(match self.config.run_post_link_scripts() {
                 RunPostLinkScripts::Insecure => true,
                 RunPostLinkScripts::False => false,

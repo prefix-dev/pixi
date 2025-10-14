@@ -1033,6 +1033,7 @@ start = "python -m flask run --port=5050"
                 .run_dependencies()
                 .unwrap()
                 .get("foo")
+                .and_then(|s| s.iter().next())
                 .unwrap()
                 .as_version_spec()
                 .unwrap()
@@ -1044,6 +1045,7 @@ start = "python -m flask run --port=5050"
                 .run_dependencies()
                 .unwrap()
                 .get("foo")
+                .and_then(|s| s.iter().next())
                 .unwrap()
                 .as_version_spec()
                 .unwrap()
@@ -1074,7 +1076,12 @@ start = "python -m flask run --port=5050"
             .default()
             .run_dependencies()
             .unwrap();
-        let test_map_spec = deps.get("test_map").unwrap().as_detailed().unwrap();
+        let test_map_spec = deps
+            .get("test_map")
+            .and_then(|s| s.iter().next())
+            .unwrap()
+            .as_detailed()
+            .unwrap();
 
         assert_eq!(
             test_map_spec.version.as_ref().unwrap().to_string(),
@@ -1088,6 +1095,7 @@ start = "python -m flask run --port=5050"
 
         assert_eq!(
             deps.get("test_build")
+                .and_then(|s| s.iter().next())
                 .unwrap()
                 .as_detailed()
                 .unwrap()
@@ -1098,13 +1106,23 @@ start = "python -m flask run --port=5050"
             "bla"
         );
 
-        let test_channel = deps.get("test_channel").unwrap().as_detailed().unwrap();
+        let test_channel = deps
+            .get("test_channel")
+            .and_then(|s| s.iter().next())
+            .unwrap()
+            .as_detailed()
+            .unwrap();
         assert_eq!(
             test_channel.channel,
             Some(NamedChannelOrUrl::Name("conda-forge".to_string()))
         );
 
-        let test_version = deps.get("test_version").unwrap().as_detailed().unwrap();
+        let test_version = deps
+            .get("test_version")
+            .and_then(|s| s.iter().next())
+            .unwrap()
+            .as_detailed()
+            .unwrap();
         assert_eq!(
             test_version.version.as_ref().unwrap().to_string(),
             ">=1.2.3"
@@ -1112,6 +1130,7 @@ start = "python -m flask run --port=5050"
 
         let test_version_channel = deps
             .get("test_version_channel")
+            .and_then(|s| s.iter().next())
             .unwrap()
             .as_detailed()
             .unwrap();
@@ -1126,6 +1145,7 @@ start = "python -m flask run --port=5050"
 
         let test_version_build = deps
             .get("test_version_build")
+            .and_then(|s| s.iter().next())
             .unwrap()
             .as_detailed()
             .unwrap();
@@ -1164,6 +1184,7 @@ start = "python -m flask run --port=5050"
         assert_eq!(
             run_dependencies
                 .get("my-game")
+                .and_then(|s| s.iter().next())
                 .unwrap()
                 .as_version_spec()
                 .unwrap()
@@ -1173,6 +1194,7 @@ start = "python -m flask run --port=5050"
         assert_eq!(
             build_dependencies
                 .get("cmake")
+                .and_then(|s| s.iter().next())
                 .unwrap()
                 .as_version_spec()
                 .unwrap()
@@ -1182,6 +1204,7 @@ start = "python -m flask run --port=5050"
         assert_eq!(
             host_dependencies
                 .get("sdl2")
+                .and_then(|s| s.iter().next())
                 .unwrap()
                 .as_version_spec()
                 .unwrap()
@@ -1294,10 +1317,12 @@ start = "python -m flask run --port=5050"
                 .clone()
                 .into_iter()
                 .flat_map(|d| d.into_iter())
-                .map(|(name, spec)| format!(
+                .map(|(name, specs)| format!(
                     "{} = {}",
                     name.as_source(),
-                    toml_edit::Value::from(spec)
+                    toml_edit::Value::from(
+                        specs.iter().next().expect("spec should be present").clone()
+                    )
                 ))
                 .join("\n")
         );
@@ -1714,7 +1739,7 @@ start = "python -m flask run --port=5050"
                     .dependencies
                     .get(&kind)
                     .into_iter()
-                    .flat_map(|x| x.keys())
+                    .flat_map(|x| x.iter().map(|(k, _)| k))
                     .any(|x| x.as_normalized() == "fooz")
             );
         }
@@ -2418,6 +2443,7 @@ platforms = ["linux-64", "win-64"]
                 .get(&SpecType::Run)
                 .unwrap()
                 .get(&PackageName::from_str("cuda").unwrap())
+                .and_then(|s| s.iter().next())
                 .unwrap()
                 .as_version_spec(),
             Some(&VersionSpec::from_str("x.y.z", Lenient).unwrap())
@@ -2430,6 +2456,7 @@ platforms = ["linux-64", "win-64"]
                 .get(&SpecType::Run)
                 .unwrap()
                 .get(&PackageName::from_str("cudnn").unwrap())
+                .and_then(|s| s.iter().next())
                 .unwrap()
                 .as_version_spec(),
             Some(&VersionSpec::from_str("12", Lenient).unwrap())
@@ -2442,6 +2469,7 @@ platforms = ["linux-64", "win-64"]
                 .as_ref()
                 .unwrap()
                 .get(&PypiPackageName::from_str("torch").expect("torch should be a valid name"))
+                .and_then(|s| s.iter().next())
                 .expect("pypi requirement should be available")
                 .clone()
                 .to_string(),
@@ -2455,6 +2483,7 @@ platforms = ["linux-64", "win-64"]
                 .get(&SpecType::Build)
                 .unwrap()
                 .get(&PackageName::from_str("cmake").unwrap())
+                .and_then(|s| s.iter().next())
                 .unwrap()
                 .as_version_spec(),
             Some(&VersionSpec::Any)
@@ -2507,6 +2536,7 @@ platforms = ["linux-64", "win-64"]
                 .get(&SpecType::Run)
                 .unwrap()
                 .get(&PackageName::from_str("mlx").unwrap())
+                .and_then(|s| s.iter().next())
                 .unwrap()
                 .as_version_spec(),
             Some(&VersionSpec::from_str("x.y.z", Lenient).unwrap())
@@ -2643,6 +2673,7 @@ bar = "*"
                 .get(&SpecType::Run)
                 .unwrap()
                 .get(&PackageName::from_str("baz").unwrap())
+                .and_then(|s| s.iter().next())
                 .unwrap()
                 .as_version_spec(),
             Some(&VersionSpec::from_str(">=1.2.3", Strict).unwrap())
@@ -2675,6 +2706,7 @@ bar = "*"
                 .get(&SpecType::Run)
                 .unwrap()
                 .get(&PackageName::from_str("bal").unwrap())
+                .and_then(|s| s.iter().next())
                 .unwrap()
                 .as_version_spec()
                 .unwrap()
@@ -2710,6 +2742,7 @@ bar = "*"
                 .get(&SpecType::Run)
                 .unwrap()
                 .get(&PackageName::from_str("boef").unwrap())
+                .and_then(|s| s.iter().next())
                 .unwrap()
                 .as_version_spec()
                 .unwrap()
@@ -2741,6 +2774,7 @@ bar = "*"
                 .and_then(|t| t.for_target(&TargetSelector::Platform(Platform::Linux64)))
                 .and_then(|t| t.dependencies.get(&SpecType::Build))
                 .and_then(|deps| deps.get(&PackageName::from_str("cmake").unwrap()))
+                .and_then(|specs| specs.iter().next())
                 .and_then(|spec| spec.as_version_spec())
                 .map(|spec| spec.to_string())
                 .unwrap(),

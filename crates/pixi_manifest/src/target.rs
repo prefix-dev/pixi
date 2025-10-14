@@ -3,11 +3,13 @@ use std::{borrow::Cow, collections::HashMap, str::FromStr};
 use indexmap::{IndexMap, map::Entry};
 use itertools::Either;
 use pixi_spec::PixiSpec;
+use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{PackageName, ParsePlatformError, Platform};
 
 use super::error::DependencyError;
 use crate::{
-    DependencyOverwriteBehavior, SpecType,
+    CondaDependencies, DependencyOverwriteBehavior, InternalDependencyBehavior, PyPiDependencies,
+    SpecType,
     activation::Activation,
     task::{Task, TaskName},
     utils::PixiSpanned,
@@ -24,10 +26,10 @@ pub struct WorkspaceTarget {
     /// TODO: While the pixi-build feature is not stabilized yet, a workspace
     /// can have host- and build dependencies. When pixi-build is stabilized, we
     /// can simplify this part of the code.
-    pub dependencies: HashMap<SpecType, IndexMap<PackageName, PixiSpec>>,
+    pub dependencies: HashMap<SpecType, CondaDependencies>,
 
     /// Specific python dependencies
-    pub pypi_dependencies: Option<IndexMap<PypiPackageName, PixiPypiSpec>>,
+    pub pypi_dependencies: Option<PyPiDependencies>,
 
     /// Additional information to activate an environment.
     pub activation: Option<Activation>,
@@ -40,27 +42,30 @@ pub struct WorkspaceTarget {
 #[derive(Default, Debug, Clone)]
 pub struct PackageTarget {
     /// Dependencies for this target.
-    pub dependencies: HashMap<SpecType, IndexMap<PackageName, PixiSpec>>,
+    pub dependencies: HashMap<SpecType, DependencyMap<PackageName, PixiSpec>>,
 }
 
 impl WorkspaceTarget {
     /// Returns the run dependencies of the target
-    pub fn run_dependencies(&self) -> Option<&IndexMap<PackageName, PixiSpec>> {
+    pub fn run_dependencies(&self) -> Option<&DependencyMap<PackageName, PixiSpec>> {
         self.dependencies.get(&SpecType::Run)
     }
 
     /// Returns the host dependencies of the target
-    pub fn host_dependencies(&self) -> Option<&IndexMap<PackageName, PixiSpec>> {
+    pub fn host_dependencies(&self) -> Option<&DependencyMap<PackageName, PixiSpec>> {
         self.dependencies.get(&SpecType::Host)
     }
 
     /// Returns the build dependencies of the target
-    pub fn build_dependencies(&self) -> Option<&IndexMap<PackageName, PixiSpec>> {
+    pub fn build_dependencies(&self) -> Option<&DependencyMap<PackageName, PixiSpec>> {
         self.dependencies.get(&SpecType::Build)
     }
 
     /// Returns the dependencies of a certain type.
-    pub fn dependencies(&self, spec_type: SpecType) -> Option<&IndexMap<PackageName, PixiSpec>> {
+    pub fn dependencies(
+        &self,
+        spec_type: SpecType,
+    ) -> Option<&DependencyMap<PackageName, PixiSpec>> {
         self.dependencies.get(&spec_type)
     }
 
@@ -74,31 +79,46 @@ impl WorkspaceTarget {
     ///
     /// This function returns a `Cow` to avoid cloning the dependencies if they
     /// can be returned directly from the underlying map.
-    pub fn combined_dependencies(&self) -> Option<Cow<'_, IndexMap<PackageName, PixiSpec>>> {
-        let mut all_deps = None;
+    pub fn combined_dependencies(&self) -> Option<Cow<'_, DependencyMap<PackageName, PixiSpec>>> {
+        let mut first_deps: Option<&DependencyMap<PackageName, PixiSpec>> = None;
+        let mut count = 0;
+
+        // Count and find the first non-empty spec type
+        for spec_type in [SpecType::Run, SpecType::Host, SpecType::Build] {
+            if let Some(specs) = self.dependencies.get(&spec_type) {
+                if !specs.is_empty() {
+                    if first_deps.is_none() {
+                        first_deps = Some(specs);
+                    }
+                    count += 1;
+                }
+            }
+        }
+
+        // If there's only one non-empty spec type, return a borrowed reference
+        if count == 1 {
+            return first_deps.map(Cow::Borrowed);
+        }
+
+        // If there are multiple spec types, combine them
+        let mut all_deps: Option<DependencyMap<PackageName, PixiSpec>> = None;
         for spec_type in [SpecType::Run, SpecType::Host, SpecType::Build] {
             let Some(specs) = self.dependencies.get(&spec_type) else {
-                // If the specific dependencies don't exist we can skip them.
                 continue;
             };
             if specs.is_empty() {
-                // If the dependencies are empty, we can skip them.
                 continue;
             }
 
             all_deps = match all_deps {
-                None => Some(Cow::Borrowed(specs)),
+                None => Some(specs.clone()),
                 Some(mut all_deps) => {
-                    all_deps.to_mut().extend(
-                        specs
-                            .into_iter()
-                            .map(|(name, spec)| (name.clone(), spec.clone())),
-                    );
+                    all_deps = all_deps.overwrite(specs);
                     Some(all_deps)
                 }
             }
         }
-        all_deps
+        all_deps.map(Cow::Owned)
     }
 
     /// Checks if this target contains a dependency
@@ -108,12 +128,12 @@ impl WorkspaceTarget {
         spec_type: SpecType,
         exact: Option<&PixiSpec>,
     ) -> bool {
-        let current_dependency = self
+        let current_dependencies = self
             .dependencies(spec_type)
-            .and_then(|deps| deps.get(dep_name).cloned());
+            .and_then(|deps| deps.get(dep_name));
 
-        match (current_dependency, exact) {
-            (Some(current_spec), Some(spec)) => current_spec == *spec,
+        match (current_dependencies, exact) {
+            (Some(specs), Some(spec)) => specs.contains(spec),
             (Some(_), None) => true,
             (None, _) => false,
         }
@@ -130,25 +150,41 @@ impl WorkspaceTarget {
         let Some(dependencies) = self.dependencies.get_mut(&spec_type) else {
             return Err(DependencyError::NoSpecType(spec_type.name().into()));
         };
-        dependencies
-            .shift_remove_entry(dep_name)
-            .ok_or_else(|| DependencyError::NoDependency(dep_name.as_normalized().into()))
+        let (name, mut specs) = dependencies
+            .remove(dep_name)
+            .ok_or_else(|| DependencyError::NoDependency(dep_name.as_normalized().into()))?;
+
+        // Return the first (and typically only) spec
+        let spec = specs
+            .pop()
+            .expect("DependencyMap should not contain empty IndexSets");
+        Ok((name, spec))
+    }
+
+    /// Adds a dependency to a target
+    pub(crate) fn add_dependency(
+        &mut self,
+        dep_name: &PackageName,
+        spec: &PixiSpec,
+        spec_type: SpecType,
+        behavior: InternalDependencyBehavior,
+    ) {
+        let deps = self.dependencies.entry(spec_type).or_default();
+        match behavior {
+            InternalDependencyBehavior::Append => {
+                // Append to existing specs
+                deps.insert(dep_name.clone(), spec.clone());
+            }
+            InternalDependencyBehavior::Overwrite => {
+                // Overwrite any existing spec with the new one
+                deps.insert_overwrite(dep_name.clone(), spec.clone());
+            }
+        }
     }
 
     /// Adds a dependency to a target
     ///
-    /// This will overwrite any existing dependency of the same name
-    pub fn add_dependency(&mut self, dep_name: &PackageName, spec: &PixiSpec, spec_type: SpecType) {
-        self.dependencies
-            .entry(spec_type)
-            .or_default()
-            .insert(dep_name.clone(), spec.clone());
-    }
-
-    /// Adds a dependency to a target
-    ///
-    /// This will return an error if the exact same dependency already exist
-    /// This will overwrite any existing dependency of the same name
+    /// What happens with the dependency depends on the [`DependencyOverwriteBehavior`]
     pub fn try_add_dependency(
         &mut self,
         dep_name: &PackageName,
@@ -158,38 +194,45 @@ impl WorkspaceTarget {
     ) -> Result<bool, DependencyError> {
         if self.has_dependency(dep_name, spec_type, None) {
             match dependency_overwrite_behavior {
-                DependencyOverwriteBehavior::OverwriteIfExplicit if !spec.has_version_spec() => {
-                    return Ok(false);
+                DependencyOverwriteBehavior::OverwriteIfExplicit => {
+                    if !spec.has_version_spec() {
+                        return Ok(false);
+                    }
                 }
                 DependencyOverwriteBehavior::IgnoreDuplicate => return Ok(false),
                 DependencyOverwriteBehavior::Error => {
                     return Err(DependencyError::Duplicate(dep_name.as_normalized().into()));
                 }
-                _ => {}
+                DependencyOverwriteBehavior::Overwrite => {}
             }
         }
-        self.add_dependency(dep_name, spec, spec_type);
+        // Convert public behavior to internal behavior
+        self.add_dependency(
+            dep_name,
+            spec,
+            spec_type,
+            dependency_overwrite_behavior.into(),
+        );
         Ok(true)
     }
 
     /// Checks if this target contains a specific pypi dependency
     pub fn has_pypi_dependency(&self, requirement: &pep508_rs::Requirement, exact: bool) -> bool {
-        let current_requirement = self
+        let current_requirements = self
             .pypi_dependencies
             .as_ref()
             .and_then(|deps| deps.get(&PypiPackageName::from_normalized(requirement.name.clone())));
 
-        match (current_requirement, exact) {
-            (Some(r), true) => {
+        match (current_requirements, exact) {
+            (Some(specs), true) => {
                 // TODO: would be nice to compare pep508 == PyPiRequirement directly
-                *r == PixiPypiSpec::try_from(requirement.clone())
-                    .expect("could not convert pep508 requirement")
+                let target_spec = PixiPypiSpec::try_from(requirement.clone())
+                    .expect("could not convert pep508 requirement");
+                specs.contains(&target_spec)
             }
-            (Some(r), false) => {
-                if r.extras() != requirement.extras {
-                    return false;
-                }
-                true
+            (Some(specs), false) => {
+                // Check if any spec matches the extras
+                specs.iter().any(|r| r.extras() == requirement.extras)
             }
             (None, _) => false,
         }
@@ -198,6 +241,8 @@ impl WorkspaceTarget {
     /// Removes a pypi dependency from this target
     ///
     /// it will Err if the dependency is not found
+    ///
+    /// Note: This removes all specs for the given package name and returns one of them.
     pub fn remove_pypi_dependency(
         &mut self,
         dep_name: &PypiPackageName,
@@ -205,25 +250,41 @@ impl WorkspaceTarget {
         let Some(pypi_dependencies) = self.pypi_dependencies.as_mut() else {
             return Err(DependencyError::NoPyPiDependencies);
         };
-        pypi_dependencies
-            .shift_remove_entry(dep_name)
-            .ok_or_else(|| DependencyError::NoDependency(dep_name.as_source().into()))
+        let (name, mut specs) = pypi_dependencies
+            .remove(dep_name)
+            .ok_or_else(|| DependencyError::NoDependency(dep_name.as_source().into()))?;
+
+        // Return the first (and typically only) spec
+        let spec = specs
+            .pop()
+            .expect("DependencyMap should not contain empty IndexSets");
+        Ok((name, spec))
+    }
+
+    /// Adds a pypi dependency to a target
+    pub(crate) fn add_pypi_dependency(
+        &mut self,
+        name: PypiPackageName,
+        requirement: PixiPypiSpec,
+        behavior: InternalDependencyBehavior,
+    ) {
+        let deps = self.pypi_dependencies.get_or_insert_with(Default::default);
+        match behavior {
+            InternalDependencyBehavior::Append => {
+                // Append to existing specs
+                deps.insert(name, requirement);
+            }
+            InternalDependencyBehavior::Overwrite => {
+                // Overwrite any existing spec with the new one
+                deps.insert_overwrite(name, requirement);
+            }
+        }
     }
 
     /// Adds a pypi dependency to a target
     ///
-    /// This will overwrite any existing dependency of the same name
-    pub fn add_pypi_dependency(&mut self, name: PypiPackageName, requirement: PixiPypiSpec) {
-        self.pypi_dependencies
-            .get_or_insert_with(Default::default)
-            .insert(name, requirement);
-    }
-
-    /// Adds a pypi dependency to a target
-    ///
-    /// This will return an error if the exact same dependency already exist
-    /// This will overwrite any existing dependency of the same name
-    pub fn try_add_pep508_dependency(
+    /// What happens when a dependency exists depends on the [`DependencyOverwriteBehavior`]
+    pub(crate) fn try_add_pep508_dependency(
         &mut self,
         requirement: &pep508_rs::Requirement,
         editable: Option<bool>,
@@ -251,29 +312,33 @@ impl WorkspaceTarget {
             requirement.set_editable(editable);
         }
 
-        self.add_pypi_dependency(name, requirement);
+        // Convert public behavior to internal behavior
+        self.add_pypi_dependency(name, requirement, dependency_overwrite_behavior.into());
         Ok(true)
     }
 }
 
 impl PackageTarget {
     /// Returns the dependencies of a certain type.
-    pub fn dependencies(&self, spec_type: SpecType) -> Option<&IndexMap<PackageName, PixiSpec>> {
+    pub fn dependencies(
+        &self,
+        spec_type: SpecType,
+    ) -> Option<&DependencyMap<PackageName, PixiSpec>> {
         self.dependencies.get(&spec_type)
     }
 
     /// Returns the run dependencies of the target
-    pub fn run_dependencies(&self) -> Option<&IndexMap<PackageName, PixiSpec>> {
+    pub fn run_dependencies(&self) -> Option<&DependencyMap<PackageName, PixiSpec>> {
         self.dependencies.get(&SpecType::Run)
     }
 
     /// Returns the host dependencies of the target
-    pub fn host_dependencies(&self) -> Option<&IndexMap<PackageName, PixiSpec>> {
+    pub fn host_dependencies(&self) -> Option<&DependencyMap<PackageName, PixiSpec>> {
         self.dependencies.get(&SpecType::Host)
     }
 
     /// Returns the build dependencies of the target
-    pub fn build_dependencies(&self) -> Option<&IndexMap<PackageName, PixiSpec>> {
+    pub fn build_dependencies(&self) -> Option<&DependencyMap<PackageName, PixiSpec>> {
         self.dependencies.get(&SpecType::Build)
     }
 
@@ -284,47 +349,45 @@ impl PackageTarget {
         spec_type: SpecType,
         exact: Option<&PixiSpec>,
     ) -> bool {
-        let current_dependency = self
+        let current_dependencies = self
             .dependencies(spec_type)
-            .and_then(|deps| deps.get(dep_name).cloned());
+            .and_then(|deps| deps.get(dep_name));
 
-        match (current_dependency, exact) {
-            (Some(current_spec), Some(spec)) => current_spec == *spec,
+        match (current_dependencies, exact) {
+            (Some(specs), Some(spec)) => specs.contains(spec),
             (Some(_), None) => true,
             (None, _) => false,
         }
     }
 
-    /// Removes a dependency from this target
+    /// Adds a dependency to a target
     ///
-    /// it will Err if the dependency is not found
-    pub fn remove_dependency(
+    /// This will overwrite any existing dependency of the same name by first removing
+    /// any existing specs and then inserting the new one.
+    pub(crate) fn add_dependency(
         &mut self,
         dep_name: &PackageName,
+        spec: &PixiSpec,
         spec_type: SpecType,
-    ) -> Result<(PackageName, PixiSpec), DependencyError> {
-        let Some(dependencies) = self.dependencies.get_mut(&spec_type) else {
-            return Err(DependencyError::NoSpecType(spec_type.name().into()));
-        };
-        dependencies
-            .shift_remove_entry(dep_name)
-            .ok_or_else(|| DependencyError::NoDependency(dep_name.as_normalized().into()))
+        behavior: InternalDependencyBehavior,
+    ) {
+        let deps = self.dependencies.entry(spec_type).or_default();
+        match behavior {
+            InternalDependencyBehavior::Append => {
+                // Append to existing specs
+                deps.insert(dep_name.clone(), spec.clone());
+            }
+            InternalDependencyBehavior::Overwrite => {
+                // Overwrite any existing spec with the new one
+                deps.insert_overwrite(dep_name.clone(), spec.clone());
+            }
+        }
     }
 
-    /// Adds a dependency to a target
+    /// Adds a dependency to a target with public behavior
     ///
-    /// This will overwrite any existing dependency of the same name
-    pub fn add_dependency(&mut self, dep_name: &PackageName, spec: &PixiSpec, spec_type: SpecType) {
-        self.dependencies
-            .entry(spec_type)
-            .or_default()
-            .insert(dep_name.clone(), spec.clone());
-    }
-
-    /// Adds a dependency to a target
-    ///
-    /// This will return an error if the exact same dependency already exist
-    /// This will overwrite any existing dependency of the same name
+    /// This is similar to `add_dependency` but accepts the public `DependencyOverwriteBehavior`
+    /// and is used by code that needs to handle various overwrite behaviors.
     pub fn try_add_dependency(
         &mut self,
         dep_name: &PackageName,
@@ -334,17 +397,25 @@ impl PackageTarget {
     ) -> Result<bool, DependencyError> {
         if self.has_dependency(dep_name, spec_type, None) {
             match dependency_overwrite_behavior {
-                DependencyOverwriteBehavior::OverwriteIfExplicit if !spec.has_version_spec() => {
-                    return Ok(false);
+                DependencyOverwriteBehavior::OverwriteIfExplicit => {
+                    if !spec.has_version_spec() {
+                        return Ok(false);
+                    }
                 }
                 DependencyOverwriteBehavior::IgnoreDuplicate => return Ok(false),
                 DependencyOverwriteBehavior::Error => {
                     return Err(DependencyError::Duplicate(dep_name.as_normalized().into()));
                 }
-                _ => {}
+                DependencyOverwriteBehavior::Overwrite => {}
             }
         }
-        self.add_dependency(dep_name, spec, spec_type);
+        // Convert public behavior to internal behavior
+        self.add_dependency(
+            dep_name,
+            spec,
+            spec_type,
+            dependency_overwrite_behavior.into(),
+        );
         Ok(true)
     }
 }
@@ -586,8 +657,11 @@ impl<T> Targets<T> {
 mod tests {
     use insta::assert_snapshot;
     use itertools::Itertools;
+    use pixi_spec::PixiSpec;
+    use rattler_conda_types::{PackageName, VersionSpec};
+    use std::str::FromStr;
 
-    use crate::WorkspaceManifest;
+    use crate::{DependencyOverwriteBehavior, FeatureName, SpecType, WorkspaceManifest};
 
     #[test]
     fn test_targets_overwrite_order() {
@@ -620,11 +694,268 @@ mod tests {
             .combined_dependencies()
             .unwrap_or_default()
             .iter()
-            .map(|(name, spec)| format!("{} = {}", name.as_source(), spec.as_version_spec().unwrap()))
+            .filter_map(|(name, specs)| {
+                specs.iter().next().map(|spec| {
+                    format!("{} = {}", name.as_source(), spec.as_version_spec().unwrap())
+                })
+            })
             .join("\n"), @r###"
         run = ==2.0
         host = ==2.0
         build = ==1.0
         "###);
+    }
+
+    /// Test that Overwrite behavior replaces existing dependencies (regression test)
+    /// This ensures that the default behavior preserves backward compatibility
+    #[test]
+    fn test_overwrite_behavior_regression() {
+        use crate::{ManifestDocument, WorkspaceManifest, WorkspaceManifestMut};
+
+        let manifest_content = r#"
+        [project]
+        name = "test"
+        channels = []
+        platforms = []
+
+        [dependencies]
+        foo = "1.0"
+        "#;
+
+        let mut manifest = WorkspaceManifest::from_toml_str(manifest_content).unwrap();
+        let mut document = ManifestDocument::empty_pixi();
+
+        // Create a mutable context
+        let mut manifest_mut = WorkspaceManifestMut {
+            workspace: &mut manifest,
+            document: &mut document,
+        };
+
+        // Add foo = "==2.0" with Overwrite behavior
+        let foo = PackageName::from_str("foo").unwrap();
+        let spec = PixiSpec::Version(
+            VersionSpec::from_str("==2.0", rattler_conda_types::ParseStrictness::Strict).unwrap(),
+        );
+
+        manifest_mut
+            .add_dependency(
+                &foo,
+                &spec,
+                SpecType::Run,
+                &[],
+                &FeatureName::default(),
+                DependencyOverwriteBehavior::Overwrite,
+            )
+            .unwrap();
+
+        // Verify the TOML output has only one foo dependency with version 2.0
+        assert_snapshot!(manifest_mut.document.to_string(), @r###"
+        [project]
+        name = "test"
+        channels = []
+        platforms = []
+
+        [dependencies]
+        foo = "==2.0"
+        "###);
+    }
+
+    /// Test that adding multiple dependencies with Overwrite keeps only the last one
+    #[test]
+    fn test_multiple_overwrite_keeps_last() {
+        use crate::{ManifestDocument, WorkspaceManifest, WorkspaceManifestMut};
+
+        let manifest_content = r#"
+        [project]
+        name = "test"
+        channels = []
+        platforms = []
+        "#;
+
+        let mut manifest = WorkspaceManifest::from_toml_str(manifest_content).unwrap();
+        let mut document = ManifestDocument::empty_pixi();
+
+        let mut manifest_mut = WorkspaceManifestMut {
+            workspace: &mut manifest,
+            document: &mut document,
+        };
+
+        let foo = PackageName::from_str("foo").unwrap();
+
+        // Add foo = "==1.0"
+        let spec1 = PixiSpec::Version(
+            VersionSpec::from_str("==1.0", rattler_conda_types::ParseStrictness::Strict).unwrap(),
+        );
+        manifest_mut
+            .add_dependency(
+                &foo,
+                &spec1,
+                SpecType::Run,
+                &[],
+                &FeatureName::default(),
+                DependencyOverwriteBehavior::Overwrite,
+            )
+            .unwrap();
+
+        // Add foo = "==2.0" (should overwrite)
+        let spec2 = PixiSpec::Version(
+            VersionSpec::from_str("==2.0", rattler_conda_types::ParseStrictness::Strict).unwrap(),
+        );
+        manifest_mut
+            .add_dependency(
+                &foo,
+                &spec2,
+                SpecType::Run,
+                &[],
+                &FeatureName::default(),
+                DependencyOverwriteBehavior::Overwrite,
+            )
+            .unwrap();
+
+        // Add foo = "==3.0" (should overwrite again)
+        let spec3 = PixiSpec::Version(
+            VersionSpec::from_str("==3.0", rattler_conda_types::ParseStrictness::Strict).unwrap(),
+        );
+        manifest_mut
+            .add_dependency(
+                &foo,
+                &spec3,
+                SpecType::Run,
+                &[],
+                &FeatureName::default(),
+                DependencyOverwriteBehavior::Overwrite,
+            )
+            .unwrap();
+
+        // Verify only the last version (3.0) is in the TOML
+        assert_snapshot!(manifest_mut.document.to_string(), @r###"
+        [project]
+        name = "test"
+        channels = []
+        platforms = []
+
+        [dependencies]
+        foo = "==3.0"
+        "###);
+    }
+
+    /// Test IgnoreDuplicate behavior doesn't add when dependency exists
+    #[test]
+    fn test_ignore_duplicate_doesnt_add() {
+        use crate::{ManifestDocument, WorkspaceManifest, WorkspaceManifestMut};
+
+        let manifest_content = r#"
+        [project]
+        name = "test"
+        channels = []
+        platforms = []
+
+        [dependencies]
+        foo = "1.0"
+        "#;
+
+        let mut manifest = WorkspaceManifest::from_toml_str(manifest_content).unwrap();
+        let mut document = ManifestDocument::empty_pixi();
+
+        let mut manifest_mut = WorkspaceManifestMut {
+            workspace: &mut manifest,
+            document: &mut document,
+        };
+
+        // Try to add foo = "==2.0" with IgnoreDuplicate
+        let foo = PackageName::from_str("foo").unwrap();
+        let spec = PixiSpec::Version(
+            VersionSpec::from_str("==2.0", rattler_conda_types::ParseStrictness::Strict).unwrap(),
+        );
+
+        let result = manifest_mut.add_dependency(
+            &foo,
+            &spec,
+            SpecType::Run,
+            &[],
+            &FeatureName::default(),
+            DependencyOverwriteBehavior::IgnoreDuplicate,
+        );
+
+        // Should return Ok(false) indicating nothing was added
+        assert!(!result.unwrap());
+
+        // Verify TOML still has original version
+        assert_snapshot!(manifest_mut.document.to_string(), @r###"
+        [project]
+        name = "test"
+        channels = []
+        platforms = []
+        "###);
+    }
+
+    /// Test that target-specific dependencies overwrite default feature dependencies
+    /// This is a regression test for the issue where target dependencies were being
+    /// merged instead of overwriting the default dependencies.
+    #[test]
+    fn test_target_specific_overrides_default() {
+        use rattler_conda_types::Platform;
+
+        let manifest = WorkspaceManifest::from_toml_str(
+            r#"
+        [project]
+        name = "test"
+        channels = []
+        platforms = ["linux-64", "osx-arm64"]
+
+        [dependencies]
+        foo = "1.0"
+
+        [target.linux-64.dependencies]
+        foo = "2.0"
+        "#,
+        )
+        .unwrap();
+
+        let default_feature = manifest.default_feature();
+
+        // For linux-64: should only have foo = "2.0" (target overrides default)
+        let linux_deps = default_feature
+            .run_dependencies(Some(Platform::Linux64))
+            .expect("Should have dependencies for linux-64");
+        let foo_specs = linux_deps
+            .get(&PackageName::from_str("foo").unwrap())
+            .expect("Should have foo dependency");
+        let linux_specs: Vec<_> = foo_specs.iter().collect();
+
+        assert_eq!(
+            linux_specs.len(),
+            1,
+            "Expected exactly one spec for foo on linux-64, got {}: {:?}",
+            linux_specs.len(),
+            linux_specs
+        );
+        assert_eq!(
+            linux_specs[0].as_version_spec().unwrap().to_string(),
+            "==2.0",
+            "Expected foo=2.0 on linux-64"
+        );
+
+        // For osx-arm64: should only have foo = "1.0" (default only)
+        let osx_deps = default_feature
+            .run_dependencies(Some(Platform::OsxArm64))
+            .expect("Should have dependencies for osx-arm64");
+        let foo_specs = osx_deps
+            .get(&PackageName::from_str("foo").unwrap())
+            .expect("Should have foo dependency");
+        let osx_specs: Vec<_> = foo_specs.iter().collect();
+
+        assert_eq!(
+            osx_specs.len(),
+            1,
+            "Expected exactly one spec for foo on osx-arm64, got {}: {:?}",
+            osx_specs.len(),
+            osx_specs
+        );
+        assert_eq!(
+            osx_specs[0].as_version_spec().unwrap().to_string(),
+            "==1.0",
+            "Expected foo=1.0 on osx-arm64"
+        );
     }
 }

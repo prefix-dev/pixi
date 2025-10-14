@@ -261,6 +261,7 @@ async fn install_locked_with_config() {
             task: vec!["which_python".to_string()],
             workspace_config: WorkspaceConfig {
                 manifest_path: None,
+                ..Default::default()
             },
             ..Default::default()
         })

@@ -73,6 +73,11 @@ pub enum GetFeatureError {
     FeatureDoesNotExist(FeatureName),
 }
 
+/// Behavior for handling duplicate dependencies in the public API.
+///
+/// This enum is used by `WorkspaceManifestMut` and other public APIs that modify
+/// both the in-memory manifest and the TOML document. It does not include `Append`
+/// to prevent the document and manifest from getting out of sync.
 #[derive(Debug, Copy, Clone)]
 pub enum DependencyOverwriteBehavior {
     /// Overwrite anything that is already present.
@@ -87,6 +92,34 @@ pub enum DependencyOverwriteBehavior {
 
     /// Error on duplicate
     Error,
+}
+
+/// Internal behavior for handling duplicate dependencies.
+///
+/// This enum is used internally by `WorkspaceTarget` and `PackageTarget` for
+/// in-memory operations. It includes `Append` which is used for feature merging
+/// (e.g., when resolving PyPI optional dependencies that inherit from each other).
+#[derive(Debug, Copy, Clone)]
+pub(crate) enum InternalDependencyBehavior {
+    /// Overwrite any existing spec with the new one.
+    Overwrite,
+
+    /// Append the new dependency spec to any existing specs.
+    /// This allows multiple specs for the same package.
+    #[allow(dead_code)]
+    Append,
+}
+
+impl From<DependencyOverwriteBehavior> for InternalDependencyBehavior {
+    fn from(behavior: DependencyOverwriteBehavior) -> Self {
+        // All public behaviors map to Overwrite for internal operations
+        match behavior {
+            DependencyOverwriteBehavior::Overwrite
+            | DependencyOverwriteBehavior::OverwriteIfExplicit
+            | DependencyOverwriteBehavior::IgnoreDuplicate
+            | DependencyOverwriteBehavior::Error => InternalDependencyBehavior::Overwrite,
+        }
+    }
 }
 
 #[derive(Copy, Clone)]
