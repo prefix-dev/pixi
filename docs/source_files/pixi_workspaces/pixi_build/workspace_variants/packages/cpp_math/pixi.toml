@@ -3,7 +3,7 @@ name = "cpp_math"
 version = "0.1.0"
 
 [package.build]
-backend = { name = "pixi-build-cmake", version = "==0.3.2" }
+backend = { name = "pixi-build-cmake", version = "==0.4.0" }
 
 # --8<-- [start:host-dependencies]
 [package.host-dependencies]

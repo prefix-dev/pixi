@@ -54,8 +54,7 @@ mod source_metadata;
 
 pub use backend_source_build::{
     BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildMethod,
-    BackendSourceBuildPrefix, BackendSourceBuildSpec, BackendSourceBuildV0Method,
-    BackendSourceBuildV1Method,
+    BackendSourceBuildPrefix, BackendSourceBuildSpec, BackendSourceBuildV1Method,
 };
 pub use build::BuildEnvironment;
 pub use build_backend_metadata::{

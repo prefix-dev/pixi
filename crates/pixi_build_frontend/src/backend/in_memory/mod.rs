@@ -8,9 +8,7 @@
 use pixi_build_types::{
     BackendCapabilities, PixiBuildApiVersion,
     procedures::{
-        conda_build_v0::{CondaBuildParams, CondaBuildResult},
         conda_build_v1::{CondaBuildV1Params, CondaBuildV1Result},
-        conda_metadata::{CondaMetadataParams, CondaMetadataResult},
         conda_outputs::{CondaOutputsParams, CondaOutputsResult},
         initialize::InitializeParams,
     },
@@ -41,21 +39,6 @@ pub trait InMemoryBackend: Send {
     }
 
     fn identifier(&self) -> &str;
-
-    fn conda_get_metadata(
-        &self,
-        params: CondaMetadataParams,
-    ) -> Result<CondaMetadataResult, CommunicationError> {
-        unimplemented!()
-    }
-
-    fn conda_build_v0(
-        &self,
-        params: CondaBuildParams,
-        output_stream: &(dyn BackendOutputStream + Send + 'static),
-    ) -> Result<CondaBuildResult, CommunicationError> {
-        unimplemented!()
-    }
 
     fn conda_build_v1(
         &self,

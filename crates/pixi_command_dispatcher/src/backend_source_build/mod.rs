@@ -4,35 +4,27 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::Display,
     path::PathBuf,
-    str::FromStr,
 };
 
 use futures::{SinkExt, channel::mpsc::UnboundedSender};
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_frontend::{Backend, json_rpc::CommunicationError};
-use pixi_build_types::{
-    ChannelConfiguration, PlatformAndVirtualPackages,
-    procedures::{
-        conda_build_v0::{CondaBuildParams, CondaBuiltPackage, CondaOutputIdentifier},
-        conda_build_v1::{
-            CondaBuildV1Dependency, CondaBuildV1DependencyRunExportSource,
-            CondaBuildV1DependencySource, CondaBuildV1Output, CondaBuildV1Params,
-            CondaBuildV1Prefix, CondaBuildV1PrefixPackage, CondaBuildV1Result,
-            CondaBuildV1RunExports,
-        },
-    },
+use pixi_build_types::procedures::conda_build_v1::{
+    CondaBuildV1Dependency, CondaBuildV1DependencyRunExportSource, CondaBuildV1DependencySource,
+    CondaBuildV1Output, CondaBuildV1Params, CondaBuildV1Prefix, CondaBuildV1PrefixPackage,
+    CondaBuildV1Result, CondaBuildV1RunExports,
 };
 use pixi_record::PinnedSourceSpec;
 use pixi_spec::{BinarySpec, PixiSpec, SpecConversionError};
 use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, MatchSpec, PackageName, Platform, RepoDataRecord, Version,
+    ChannelConfig, ChannelUrl, MatchSpec, PackageName, Platform, RepoDataRecord,
 };
 use serde::Serialize;
 use thiserror::Error;
 
 use crate::{
-    BuildEnvironment, CommandDispatcherError, PackageIdentifier,
+    CommandDispatcherError, PackageIdentifier,
     build::{Dependencies, DependencySource, PixiRunExports, WithSource},
 };
 
@@ -69,25 +61,7 @@ pub struct BackendSourceBuildSpec {
 
 #[derive(Debug, Serialize)]
 pub enum BackendSourceBuildMethod {
-    BuildV0(BackendSourceBuildV0Method),
     BuildV1(BackendSourceBuildV1Method),
-}
-
-#[derive(Debug, Serialize)]
-pub struct BackendSourceBuildV0Method {
-    /// Information about the platform to install build tools for and the
-    /// platform to target.
-    pub build_environment: BuildEnvironment,
-
-    /// Variant configuration
-    pub variants: Option<BTreeMap<String, Vec<String>>>,
-
-    /// The directory where to place the built package. This is used as a hint
-    /// for the backend, it may still place the package elsewhere.
-    pub output_directory: Option<PathBuf>,
-
-    /// Whether to build the package in editable mode.
-    pub editable: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -151,19 +125,6 @@ impl BackendSourceBuildSpec {
         log_sink: UnboundedSender<String>,
     ) -> Result<BackendBuiltSource, CommandDispatcherError<BackendSourceBuildError>> {
         match self.method {
-            BackendSourceBuildMethod::BuildV0(params) => {
-                Self::build_v0(
-                    self.backend,
-                    self.package,
-                    self.source,
-                    params,
-                    self.work_directory,
-                    self.channels,
-                    self.channel_config,
-                    log_sink,
-                )
-                .await
-            }
             BackendSourceBuildMethod::BuildV1(params) => {
                 Self::build_v1(
                     self.backend,
@@ -177,109 +138,6 @@ impl BackendSourceBuildSpec {
                 .await
             }
         }
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    async fn build_v0(
-        backend: Backend,
-        record: PackageIdentifier,
-        source: PinnedSourceSpec,
-        params: BackendSourceBuildV0Method,
-        work_directory: PathBuf,
-        channels: Vec<ChannelUrl>,
-        channel_config: ChannelConfig,
-        mut log_sink: UnboundedSender<String>,
-    ) -> Result<BackendBuiltSource, CommandDispatcherError<BackendSourceBuildError>> {
-        // Use the backend to build the source package.
-        let mut build_result = backend
-            .conda_build_v0(
-                CondaBuildParams {
-                    build_platform_virtual_packages: Some(
-                        params.build_environment.build_virtual_packages,
-                    ),
-                    channel_base_urls: Some(channels.into_iter().map(Into::into).collect()),
-                    channel_configuration: ChannelConfiguration {
-                        base_url: channel_config.channel_alias.clone(),
-                    },
-                    outputs: Some(BTreeSet::from_iter([CondaOutputIdentifier {
-                        name: Some(record.name.as_normalized().to_string()),
-                        version: Some(record.version.to_string()),
-                        build: Some(record.build.clone()),
-                        subdir: Some(record.subdir.clone()),
-                    }])),
-                    variant_configuration: params
-                        .variants
-                        .map(|variants| variants.into_iter().collect()),
-                    work_directory: work_directory.clone(),
-                    host_platform: Some(PlatformAndVirtualPackages {
-                        platform: params.build_environment.host_platform,
-                        virtual_packages: Some(
-                            params.build_environment.host_virtual_packages.clone(),
-                        ),
-                    }),
-                    editable: params.editable,
-                },
-                move |line| {
-                    let _err = futures::executor::block_on(log_sink.send(line));
-                },
-            )
-            .await
-            .map_err(BackendSourceBuildError::BuildError)
-            .map_err(CommandDispatcherError::Failed)?;
-
-        // If the backend returned more packages than expected output a warning.
-        if build_result.packages.len() > 1 {
-            let pkgs = build_result.packages.iter().format_with(", ", |pkg, f| {
-                f(&format_args!(
-                    "{}/{}={}={}",
-                    pkg.subdir,
-                    pkg.name.as_normalized(),
-                    pkg.version,
-                    pkg.build,
-                ))
-            });
-            tracing::warn!(
-                "While building {} for {}, the build backend returned more packages than expected: {pkgs}. Only the package matching the source record will be used.",
-                source,
-                record.subdir,
-            );
-        }
-
-        // Locate the package that matches the source record we requested to be build.
-        let built_package = if let Some(idx) = build_result
-            .packages
-            .iter()
-            .position(|pkg| v0_built_package_matches_request(&record, &pkg))
-        {
-            build_result.packages.swap_remove(idx)
-        } else {
-            return Err(CommandDispatcherError::Failed(
-                BackendSourceBuildError::UnexpectedPackage(UnexpectedPackageError {
-                    subdir: record.subdir.clone(),
-                    name: record.name.as_normalized().to_string(),
-                    version: record.version.to_string(),
-                    build: record.build.clone(),
-                    packages: build_result
-                        .packages
-                        .iter()
-                        .map(|pkg| {
-                            format!(
-                                "{}/{}={}={}",
-                                pkg.subdir,
-                                pkg.name.as_normalized(),
-                                pkg.version,
-                                pkg.build
-                            )
-                        })
-                        .collect(),
-                }),
-            ));
-        };
-
-        Ok(BackendBuiltSource {
-            input_globs: built_package.input_globs,
-            output_file: built_package.output_file,
-        })
     }
 
     async fn build_v1(
@@ -431,15 +289,6 @@ impl BackendSourceBuildSpec {
             output_file: built_package.output_file,
         })
     }
-}
-
-/// Returns true if the requested package matches the one that was built by a
-/// backend.
-fn v0_built_package_matches_request(record: &PackageIdentifier, pkg: &&CondaBuiltPackage) -> bool {
-    pkg.name == record.name
-        && Version::from_str(&pkg.version).ok().as_ref() == Some(&record.version)
-        && pkg.build == record.build
-        && pkg.subdir == record.subdir
 }
 
 /// Returns true if the requested package matches the one that was built by a

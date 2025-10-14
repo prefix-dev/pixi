@@ -2,13 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
-use pixi_build_frontend::{
-    Backend,
-    types::{
-        ChannelConfiguration, PlatformAndVirtualPackages,
-        procedures::conda_metadata::CondaMetadataParams,
-    },
-};
+use pixi_build_frontend::Backend;
 use pixi_build_type_conversions::compute_project_model_hash;
 use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
 use pixi_glob::GlobHashKey;
@@ -145,40 +139,28 @@ impl BuildBackendMetadataSpec {
             .await
             .map_err_with(BuildBackendMetadataError::Initialize)?;
 
-        // Based on the version of the backend, call the appropriate method to get
-        // metadata.
+        // Call the conda_outputs method to get metadata.
         let source = source_checkout.pinned.clone();
-        let metadata = if backend.capabilities().provides_conda_outputs() {
-            tracing::trace!(
-                "Using `{}` procedure to get metadata information",
-                pixi_build_types::procedures::conda_outputs::METHOD_NAME
-            );
-            self.call_conda_outputs(
-                command_dispatcher,
-                source_checkout,
-                backend,
-                project_model_hash,
-            )
-            .await?
-        } else if backend.capabilities().provides_conda_metadata() {
-            tracing::trace!(
-                "Using `{}` procedure to get metadata information",
-                pixi_build_types::procedures::conda_metadata::METHOD_NAME
-            );
-            self.call_conda_get_metadata(
-                command_dispatcher,
-                source_checkout,
-                backend,
-                project_model_hash,
-            )
-            .await?
-        } else {
+        if !backend.capabilities().provides_conda_outputs() {
             return Err(CommandDispatcherError::Failed(
                 BuildBackendMetadataError::BackendMissingCapabilities(
                     backend.identifier().to_string(),
                 ),
             ));
-        };
+        }
+
+        tracing::trace!(
+            "Using `{}` procedure to get metadata information",
+            pixi_build_types::procedures::conda_outputs::METHOD_NAME
+        );
+        let metadata = self
+            .call_conda_outputs(
+                command_dispatcher,
+                source_checkout,
+                backend,
+                project_model_hash,
+            )
+            .await?;
 
         // Store the metadata in the cache for later retrieval
         cache_entry
@@ -206,9 +188,7 @@ impl BuildBackendMetadataSpec {
         };
 
         let metadata_kind = match metadata.metadata {
-            MetadataKind::GetMetadata { .. } => {
-                pixi_build_types::procedures::conda_metadata::METHOD_NAME
-            }
+            MetadataKind::GetMetadata { .. } => "conda/getMetadata",
             MetadataKind::Outputs { .. } => {
                 pixi_build_types::procedures::conda_outputs::METHOD_NAME
             }
@@ -290,64 +270,6 @@ impl BuildBackendMetadataSpec {
         })
     }
 
-    /// Use the `conda/getMetadata` procedure to get the metadata for the source
-    async fn call_conda_get_metadata(
-        self,
-        command_dispatcher: CommandDispatcher,
-        source_checkout: SourceCheckout,
-        backend: Backend,
-        project_model_hash: Option<Vec<u8>>,
-    ) -> Result<CachedCondaMetadata, CommandDispatcherError<BuildBackendMetadataError>> {
-        // Query the backend for metadata.
-        let params = CondaMetadataParams {
-            build_platform: Some(PlatformAndVirtualPackages {
-                platform: self.build_environment.build_platform,
-                virtual_packages: Some(self.build_environment.build_virtual_packages),
-            }),
-            host_platform: Some(PlatformAndVirtualPackages {
-                platform: self.build_environment.host_platform,
-                virtual_packages: Some(self.build_environment.host_virtual_packages),
-            }),
-            channel_base_urls: Some(self.channels.into_iter().map(Into::into).collect()),
-            channel_configuration: ChannelConfiguration {
-                base_url: self.channel_config.channel_alias.clone(),
-            },
-            variant_configuration: self.variants.map(|variants| variants.into_iter().collect()),
-            work_directory: command_dispatcher.cache_dirs().working_dirs().join(
-                WorkDirKey {
-                    source: SourceRecordOrCheckout::Checkout {
-                        checkout: source_checkout.clone(),
-                    },
-                    host_platform: self.build_environment.host_platform,
-                    build_backend: backend.identifier().to_string(),
-                }
-                .key(),
-            ),
-        };
-        let metadata = backend
-            .conda_get_metadata(params)
-            .await
-            .map_err(BuildBackendMetadataError::Communication)
-            .map_err(CommandDispatcherError::Failed)?;
-
-        // Compute the input globs for the mutable source checkouts.
-        let input_hash = Self::compute_input_hash(
-            command_dispatcher,
-            &source_checkout,
-            metadata.input_globs.clone().unwrap_or_default(),
-            project_model_hash,
-        )
-        .await?;
-
-        Ok(CachedCondaMetadata {
-            id: random(),
-            input_hash: input_hash.clone(),
-            metadata: MetadataKind::GetMetadata {
-                packages: metadata.packages,
-            },
-        })
-    }
-
     /// Computes the input hash for metadata returned by the backend.
     async fn compute_input_hash(
         command_queue: CommandDispatcher,
@@ -412,9 +334,7 @@ pub enum BuildBackendMetadataError {
     #[diagnostic(transparent)]
     Communication(#[from] pixi_build_frontend::json_rpc::CommunicationError),
 
-    #[error(
-        "the build backend {0} does not support either the `conda/outputs` or `conda/getMetadata` procedures"
-    )]
+    #[error("the build backend {0} does not support the `conda/outputs` procedure")]
     BackendMissingCapabilities(String),
 
     #[error("could not compute hash of input files")]
