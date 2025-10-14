@@ -175,4 +175,3 @@ impl From<UrlBinarySpec> for BinarySpec {
         Self::Url(value)
     }
 }
-
