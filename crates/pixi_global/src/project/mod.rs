@@ -886,34 +886,15 @@ impl Project {
         let specs = binary_specs
             .into_iter()
             .map(|(name, spec)| {
-                let nameless = spec
-                    .clone()
-                    .try_into_nameless_match_spec(&default_channel_config())
-                    .into_diagnostic()?
-                    .ok_or_else(|| {
-                        miette::miette!("Couldn't convert {spec:?} to nameless match spec.")
-                    })?;
-                if let Some(url) = &nameless.url {
-                    // Check if the URL is a file and if it does not exist anymore,
-                    // just use a MatchSpec, but without the URL set.
-                    if url.scheme() == "file" {
-                        if let Ok(path) = url.to_file_path() {
-                            if !path.exists() {
-                                tracing::warn!(
-                                    "The package file for {} ({}) does not exist anymore.",
-                                    url,
-                                    name.as_normalized()
-                                );
-                                let mut nameless = nameless.clone();
-                                nameless.url = None;
-                                let match_spec =
-                                    MatchSpec::from_nameless(nameless, Some(name.clone()));
-                                return Ok(match_spec);
-                            }
-                        }
-                    }
-                }
-                let match_spec = MatchSpec::from_nameless(nameless, Some(name.clone()));
+                let match_spec = MatchSpec::from_nameless(
+                    spec.clone()
+                        .try_into_nameless_match_spec(&default_channel_config())
+                        .into_diagnostic()?
+                        .ok_or_else(|| {
+                            miette::miette!("Couldn't convert {spec:?} to nameless match spec.")
+                        })?,
+                    Some(name.clone()),
+                );
                 Ok(match_spec)
             })
             .collect::<Result<IndexSet<MatchSpec>, miette::Report>>()?;
