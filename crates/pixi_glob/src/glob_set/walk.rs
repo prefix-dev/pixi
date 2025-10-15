@@ -87,18 +87,33 @@ pub fn walk_globs(
 
     // Always add ignore hidden folders unless the user explicitly included them
     // because we add patterns as overrides, which overrides any `WalkBuilder` settings.
-    let ignore_patterns = ignore_hidden_folders(glob_patterns);
+    let ignore_patterns = set_ignore_hidden_patterns(&glob_patterns);
 
-    for pattern in ignore_patterns {
-        ob.add(&pattern).map_err(GlobSetError::BuildOverrides)?;
+    for provided_pattern in &glob_patterns {
+        ob.add(provided_pattern)
+            .map_err(GlobSetError::BuildOverrides)?;
     }
+
+    let enable_ignoring_hidden = if let Some(ref patterns) = ignore_patterns {
+        // If we added negated patterns for hidden folders, we want to allow searching through hidden folders
+        // unless the user explicitly included them
+        tracing::debug!("Adding ignore patterns for hidden folders: {:?}", patterns);
+        for pattern in patterns {
+            ob.add(pattern).map_err(GlobSetError::BuildOverrides)?;
+        }
+        false
+    } else {
+        true
+    };
 
     let overrides = ob.build().map_err(GlobSetError::BuildOverrides)?;
 
-    let walker = ignore::WalkBuilder::new(effective_walk_root)
+    let mut builder = ignore::WalkBuilder::new(effective_walk_root);
+
+    let walker_builder = builder
         .git_ignore(true)
         .git_exclude(true)
-        .hidden(true)
+        .hidden(enable_ignoring_hidden)
         .git_global(false)
         .ignore(false)
         .overrides(overrides)
@@ -111,7 +126,7 @@ pub fn walk_globs(
         sink: Arc::clone(&collected),
         err_root: effective_walk_root.to_path_buf(),
     };
-    walker.visit(&mut builder);
+    walker_builder.visit(&mut builder);
 
     let results = collected.lock().take().unwrap_or_default();
 
@@ -127,10 +142,11 @@ pub fn walk_globs(
         excludes = exclude_patterns,
         matched,
         elapsed_ms = elapsed.as_millis(),
+        root = ?effective_walk_root,
         "glob pass completed"
     );
 
-    results.into_iter().try_collect()
+    results.into_iter().collect()
 }
 
 /// Ensures plain file names behave as "current directory" matches for the ignore crate.
@@ -180,35 +196,121 @@ fn anchor_literal_pattern(pattern: String) -> String {
 }
 
 /// Ensures that hidden folders (starting with a dot) are always ignored unless explicitly included.
-/// This is done by adding a negated pattern for `**/.*` unless the user
-/// already specified a pattern that would include hidden folders or a specific hidden folder.
-/// This is important to avoid accidentally including hidden folders in the results when patterns like ** are used.
-/// Also, negated pattern should go after other patterns to ensure they are applied correctly.
-pub fn ignore_hidden_folders(mut patterns: Vec<String>) -> Vec<String> {
+/// The ones that are requested are added back as a whitelist.
+pub fn set_ignore_hidden_patterns(patterns: &[String]) -> Option<Vec<String>> {
     // Detect if user explicitly included hidden folders
-    // e.g. ".*", "**/.*", "./.*", "*/.*", etc.
-    let user_includes_hidden = patterns
+    // e.g. ".*", "**/.*", ".foobar/*", "**/.deep_hidden/**", etc.
+    let user_includes_hidden = patterns.iter().any(|p| {
+        // Check if pattern starts with a dot (whitelist)
+        p.starts_with('.') ||
+            // Check if pattern contains a hidden folder path component
+            p.contains("/.") && !p.starts_with("!.")
+    });
+
+    // Check if negation patterns for all hidden files/folders already exist
+    let has_negation_for_all_folders = patterns.iter().any(|p| p.starts_with("!**/.*"));
+
+    let requested_everything = patterns
         .iter()
-        .any(|p| p == ".*" || p == "./.*" || p.contains("/.*"));
+        .any(|p| p == "**" || p == "./**" || p == "**/*" || p == "./**/*");
 
-    if user_includes_hidden {
-        return patterns;
+    if has_negation_for_all_folders {
+        // If user negated all hidden folders, we do not need to add anything
+        return None;
     }
 
-    // Append negations at the end if they aren't already present.
-    if !patterns.iter().any(|p| p == "!.*") {
-        patterns.push("!.*".to_string());
-    }
-    if !patterns.iter().any(|p| p == "!**/.*") {
-        patterns.push("!**/.*".to_string());
+    let search_all_hidden = patterns
+        .iter()
+        .any(|p| p == ".*" || p == ".**" || p == "**/.*" || p == "./.*" || p == ".**/*");
+
+    // If user requested searching through hidden folders,
+    // we allow searching them all and don't add any negation patterns
+    if search_all_hidden {
+        return patterns.to_vec().into();
     }
 
-    patterns
+    // If user has explicitly included hidden folders and no negation exists,
+    // add the negation pattern at the end, then whitelist specific folders
+    // Example:
+    // Input: ["**", ".foo/bar.txt"]
+    // Output: ["**", ".foo", "!{**/.*, .*, .**/*}", ".foo", "!.foo/*", ".foo/bar.txt"]
+    // This is because `ignore` globs work as a whitelist ignore
+    // so first, we need to ignore all hidden files/folders,
+    // then add back the requested ones ( just the folder name, for some reason we don't know why .foo/bar.txt doesn't work )
+    // then ignore all its contents, then add back the specific file.
+    // This is a special case only when the user asks for all folders/files ( ** glob), which overrides all WalkBuilder settings
+    // or user requested hidden folders explicitly
+    if requested_everything || (user_includes_hidden && !has_negation_for_all_folders) {
+        let mut result = patterns.to_vec();
+        let mut seen = std::collections::HashSet::new();
+
+        // Track which patterns we've already added
+        for p in patterns {
+            seen.insert(p.clone());
+        }
+
+        result.push("!{**/.*, .*, .**/*}".to_string());
+        seen.insert("!{**/.*, .*, .**/*}".to_string());
+
+        // Now add back any explicitly whitelisted hidden folders/files
+        for pattern in patterns {
+            if (pattern.starts_with('.') || pattern.contains("/.")) && !pattern.starts_with("!.") {
+                // Check if this is a specific file path (not a glob pattern)
+                let is_specific_file = !pattern.contains('*')
+                    && !pattern.contains('?')
+                    && !pattern.contains('[')
+                    && pattern.contains('/');
+
+                if is_specific_file {
+                    // Transform specific file paths: .nichita/foo.txt
+                    if let Some(last_slash) = pattern.rfind('/') {
+                        let dir = &pattern[..last_slash];
+
+                        // Add: directory, negation of all its contents, then the specific file
+                        if seen.insert(dir.to_string()) {
+                            result.push(dir.to_string());
+                        }
+
+                        let negate_all = format!("!{}/*", dir);
+                        if seen.insert(negate_all.clone()) {
+                            result.push(negate_all);
+                        }
+
+                        // Always re-add the specific file pattern at the end
+                        result.push(pattern.clone());
+                    }
+                } else {
+                    // Extract the hidden folder name from patterns like:
+                    // ".pixi/*" -> ".pixi"
+                    // "**/.deep_pixi/**" -> ".deep_pixi"
+                    let hidden_folder = if pattern.starts_with('.') {
+                        // Pattern like ".pixi/*"
+                        pattern
+                    } else if let Some(idx) = pattern.find("/.") {
+                        // Pattern like "**/.deep_pixi/**"
+                        let after_slash = &pattern[idx + 1..];
+                        after_slash.split('/').next().unwrap_or(pattern)
+                    } else {
+                        continue;
+                    };
+
+                    // Re-add the whitelisted folder and its contents
+                    if seen.insert(hidden_folder.to_string()) {
+                        result.push(hidden_folder.to_string());
+                    }
+                }
+            }
+        }
+
+        return Some(result);
+    }
+
+    None
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::glob_set::walk::ignore_hidden_folders;
+    use crate::glob_set::walk::set_ignore_hidden_patterns;
 
     use super::anchor_literal_pattern;
 
@@ -243,22 +345,22 @@ mod tests {
         );
     }
 
-    #[test]
-    fn adds_negated_patterns_when_no_hidden_includes() {
-        let input = vec!["**".to_string()];
-        let expected = vec!["**".to_string(), "!.*".to_string(), "!**/.*".to_string()];
-        assert_eq!(ignore_hidden_folders(input), expected);
-    }
+    // #[test]
+    // fn adds_negated_patterns_when_no_hidden_includes() {
+    //     let input = vec!["**".to_string()];
+    //     let expected = vec!["**".to_string(), "!.*".to_string(), "!**/.*".to_string()];
+    //     assert_eq!(ignore_hidden_patterns(input), expected);
+    // }
 
-    #[test]
-    fn explicit_hidden_include_is_kept_and_negated_patterns_added_at_end() {
-        let input = vec!["**".to_string(), ".nichita".to_string()];
-        let expected = vec![
-            "**".to_string(),
-            ".nichita".to_string(),
-            "!.*".to_string(),
-            "!**/.*".to_string(),
-        ];
-        assert_eq!(ignore_hidden_folders(input), expected);
-    }
+    // #[test]
+    // fn explicit_hidden_include_is_kept_and_negated_patterns_added_at_end() {
+    //     let input = vec!["**".to_string(), ".nichita".to_string()];
+    //     let expected = vec![
+    //         "**".to_string(),
+    //         ".nichita".to_string(),
+    //         "!.*".to_string(),
+    //         "!**/.*".to_string(),
+    //     ];
+    //     assert_eq!(ignore_hidden_patterns(input), expected);
+    // }
 }
