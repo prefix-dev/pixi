@@ -246,6 +246,14 @@ pub fn set_ignore_hidden_patterns(patterns: &[String]) -> Option<Vec<String>> {
         .iter()
         .any(|p| p == ".*" || p == ".**" || p == "**/.*" || p == "./.*" || p == ".**/*");
 
+    tracing::debug!(
+        user_includes_hidden,
+        has_negation_for_all_folders,
+        search_all_hidden,
+        requested_everything,
+        "Determining hidden folder handling: ",
+    );
+
     // If user requested searching through hidden folders,
     // we allow searching them all and don't add any negation patterns
     if search_all_hidden {
@@ -296,7 +304,6 @@ pub fn set_ignore_hidden_patterns(patterns: &[String]) -> Option<Vec<String>> {
                     // Extract the hidden folder name from patterns like:
                     // ".pixi/*" -> ".pixi"
                     // "**/.deep_pixi/**" -> ".deep_pixi"
-                    dbg!("Processing hidden include pattern: {}", pattern);
                     let hidden_folder = if pattern.starts_with('.') {
                         // Pattern like ".pixi/*"
                         pattern
