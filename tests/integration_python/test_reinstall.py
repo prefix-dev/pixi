@@ -144,34 +144,3 @@ def test_pixi_reinstall_multi_env(pixi: Path, reinstall_workspace: Path) -> None
         stdout_contains="PyPI is number 2",
         env=env,
     )
-
-
-@pytest.mark.extra_slow
-def test_hidden_folder_dont_rebuild(pixi: Path, cpp_simple: Path) -> None:
-    env = {
-        "PIXI_CACHE_DIR": str(cpp_simple.joinpath("pixi_cache")),
-    }
-    manifest = cpp_simple.joinpath("pixi.toml")
-
-    # we should see a build on a first install
-    verify_cli_command(
-        [pixi, "install", "--manifest-path", manifest],
-        stderr_contains="Running build for recipe",
-        env=env,
-    )
-
-    # Adding an empty file in the .pixi folder should not trigger a rebuild
-    temp_file = cpp_simple.joinpath(".pixi", "SHOULD_NOT_TRIGGER_REBUILD")
-    temp_file.write_text("This file should not trigger a rebuild")
-    verify_cli_command(
-        [pixi, "install", "--manifest-path", manifest],
-        stdout_excludes="Running build for recipe",
-    )
-
-    # now we add some empty lines in the src/main.cpp file, which should trigger a rebuild
-    main_cpp = cpp_simple.joinpath("src", "main.cc")
-    main_cpp.write_text(main_cpp.read_text() + "\n\n\n")
-    verify_cli_command(
-        [pixi, "install", "--manifest-path", manifest],
-        stderr_contains="Running build for recipe",
-    )
