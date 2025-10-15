@@ -102,6 +102,8 @@ python_rich        0.1.0       pyhbf21a9e_0                   conda  python_rich
 
 In this tutorial, we showed how to use variants to build multiple versions of a single package. We built `cpp_math` for Python 3.12 and 3.13, which allows us to test whether it works properly on both Python versions. Variants are not limited to a single dependency, you could for example try to test multiple versions of `nanobind`.
 
+On top of adding variants inline, they can also be included as files. Check out the [reference](../../reference/pixi_manifest/#build-variants-files-optional) to learn more!
+
 Thanks for reading! Happy Coding 🚀
 
 Any questions? Feel free to reach out or share this tutorial on [X](https://twitter.com/prefix_dev), [join our Discord](https://discord.gg/kKV8ZxyzY4), send us an [e-mail](mailto:hi@prefix.dev) or follow our [GitHub](https://github.com/prefix-dev).

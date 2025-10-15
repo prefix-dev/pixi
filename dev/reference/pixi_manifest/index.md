@@ -313,6 +313,31 @@ c_compiler_version = ["11.4", "13.0"]
 
 For detailed examples and tutorials, see the [build variants documentation](../../build/variants/).
 
+### `build-variants-files` (optional)
+
+Preview Feature
+
+Build variant files require the `pixi-build` preview feature to be enabled:
+
+```toml
+[workspace]
+preview = ["pixi-build"]
+
+```
+
+Use `build-variants-files` to reference external variant definitions from YAML files. Paths are resolved relative to the workspace root and processed in the listed order—entries from earlier files take precedence over values loaded from later ones.
+
+```toml
+[workspace]
+build-variants-files = [
+    "./pinning/conda_build_config.yaml",
+    "./variants/overrides.yaml",
+]
+
+```
+
+Each entry must point to either a `conda_build_config.yaml` or another `.yaml` file that defines build variants. If the file is called `conda_build_config.yaml`, it will attempt to parse it with a subset of [`conda-build`'s variant syntax](https://docs.conda.io/projects/conda-build/en/stable/resources/variants.html#using-variants-with-the-conda-build-api). Otherwise, it will use `rattler-build`'s syntax as outlined in the [rattler-build documentation](https://rattler.build/latest/variants/#variant-configuration).
+
 ## The `tasks` table
 
 Tasks are a way to automate certain custom commands in your workspace. For example, a `lint` or `format` step. Tasks in a Pixi workspace are essentially cross-platform shell commands, with a unified syntax across platforms. For more in-depth information, check the [Advanced tasks documentation](../../workspace/advanced_tasks/). Pixi's tasks are run in a Pixi environment using `pixi run` and are executed using the [`deno_task_shell`](../../workspace/advanced_tasks/#our-task-runner-deno_task_shell).
