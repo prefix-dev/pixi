@@ -3,6 +3,7 @@ import platform
 import shutil
 import sys
 import tomllib
+import tomli_w
 from pathlib import Path
 
 import pytest
@@ -1191,6 +1192,55 @@ def test_frozen_no_install_invariant(pixi: Path, tmp_pixi_workspace: Path) -> No
     # Add bzip2 package to keep installation time low
     verify_cli_command([pixi, "add", "--manifest-path", manifest_path, "bzip2"])
 
+    recipe_path = tmp_pixi_workspace / "recipe.yaml"
+    recipe_path.write_text(
+        """recipe:
+  name: frozen_no_install_build
+  version: "0.1.0"
+
+outputs:
+  - package:
+      name: frozen_no_install_build
+    build:
+      script:
+        - if: win
+          then:
+            - mkdir -p %PREFIX%\\bin
+            - echo @echo off > %PREFIX%\\bin\\frozen_no_install_build.bat
+            - echo echo Hello from frozen_no_install_build >> %PREFIX%\\bin\\frozen_no_install_build.bat
+          else:
+            - mkdir -p $PREFIX/bin
+            - echo "#!/usr/bin/env bash" > $PREFIX/bin/frozen_no_install_build
+            - echo "echo Hello from frozen_no_install_build" >> $PREFIX/bin/frozen_no_install_build
+            - chmod +x $PREFIX/bin/frozen_no_install_build
+"""
+    )
+
+    manifest_data = tomllib.loads(manifest_path.read_text())
+    workspace_table = manifest_data.setdefault("workspace", {})
+    preview_list = workspace_table.setdefault("preview", [])
+    if "pixi-build" not in preview_list:
+        preview_list.append("pixi-build")
+
+    dependencies = manifest_data.setdefault("dependencies", {})
+    dependencies.pop("frozen_no_install_build", None)
+
+    package_table = manifest_data.setdefault("package", {})
+    package_table["name"] = "frozen_no_install_build"
+    package_table["version"] = "0.1.0"
+    build_table = package_table.setdefault("build", {})
+    backend_table = build_table.setdefault("backend", {})
+    backend_table["name"] = "pixi-build-rattler-build"
+    backend_table["version"] = "*"
+    backend_table["channels"] = [
+        "https://prefix.dev/pixi-build-backends",
+        "https://prefix.dev/conda-forge",
+    ]
+
+    manifest_path.write_text(tomli_w.dumps(manifest_data))
+
+    verify_cli_command([pixi, "lock", "--manifest-path", manifest_path])
+
     # Create a simple environment.yml file for import testing
     simple_env_yml = tmp_pixi_workspace / "simple_env.yml"
     simple_env_yml.write_text("""name: simple-env
@@ -1250,6 +1300,8 @@ dependencies:
         ),
         # Upgrade commands
         (["upgrade"], [], "pixi upgrade"),
+        # Pixi build (can lock its source)
+        (["build"], [], "pixi build"),
     ]
     # This command needs to stay last so we always have something that requires a re-solve
     # Dont move this!
