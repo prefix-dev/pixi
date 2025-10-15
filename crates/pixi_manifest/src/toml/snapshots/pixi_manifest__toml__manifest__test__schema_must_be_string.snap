@@ -2,7 +2,7 @@
 source: crates/pixi_manifest/src/toml/manifest.rs
 expression: "expect_parse_failure(r#\"\n        schema = false\n\n        [workspace]\n        channels = []\n        platforms = []\n        \"#,)"
 ---
-  × Unexpected keys, expected only 'workspace', 'package', 'target', 'dependencies', 'host-dependencies', 'build-dependencies', 'pypi-dependencies', 'develop', 'activation', 'tasks', 'feature',
+  × Unexpected keys, expected only 'workspace', 'package', 'target', 'dependencies', 'dev-dependencies', 'host-dependencies', 'build-dependencies', 'pypi-dependencies', 'develop', 'activation', 'tasks', 'feature',
   │ 'environments', 'pypi-options', 'system-requirements'
    ╭─[pixi.toml:2:9]
  1 │

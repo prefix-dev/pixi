@@ -2,7 +2,7 @@
 source: crates/pixi_manifest/src/toml/manifest.rs
 expression: "expect_parse_failure(r#\"\n        [workspace]\n        channels = []\n        platforms = []\n\n        [feature.foobar.run-dependencies]\n        \"#,)"
 ---
-  × Unexpected keys, expected only 'platforms', 'channels', 'channel-priority', 'target', 'dependencies', 'host-dependencies', 'build-dependencies', 'pypi-dependencies', 'develop', 'activation',
+  × Unexpected keys, expected only 'platforms', 'channels', 'channel-priority', 'target', 'dependencies', 'dev-dependencies', 'host-dependencies', 'build-dependencies', 'pypi-dependencies', 'develop', 'activation',
   │ 'tasks', 'pypi-options', 'system-requirements'
    ╭─[pixi.toml:6:25]
  5 │

@@ -135,6 +135,7 @@ pub struct TomlPackage {
     pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub run_dependencies: Option<PixiSpanned<UniquePackageMap>>,
+    pub dev_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlPackageTarget>,
 
     pub span: Span,
@@ -173,6 +174,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackage {
         let host_dependencies = th.optional("host-dependencies");
         let build_dependencies = th.optional("build-dependencies");
         let run_dependencies = th.optional("run-dependencies");
+        let dev_dependencies = th.optional("dev-dependencies");
         let build = th.required("build")?;
         let target = th
             .optional::<TomlWith<_, TomlIndexMap<_, Same>>>("target")
@@ -194,6 +196,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackage {
             host_dependencies,
             build_dependencies,
             run_dependencies,
+            dev_dependencies,
             build,
             target,
             span: value.span,
@@ -338,6 +341,7 @@ impl TomlPackage {
             run_dependencies: self.run_dependencies,
             host_dependencies: self.host_dependencies,
             build_dependencies: self.build_dependencies,
+            dev_dependencies: self.dev_dependencies,
         }
         .into_package_target(preview)?;
 
@@ -609,6 +613,47 @@ mod test {
             manifest.value.package.description,
             Some("Package description".to_string())
         );
+    }
+
+    #[test]
+    fn test_dev_dependencies_parsing() {
+        let input = r#"
+        name = "foo"
+        version = "1.0"
+
+        [build]
+        backend = { name = "setuptools", version = "1.0" }
+
+        [package.dev-dependencies]
+        serde = "1.0"
+        "#;
+
+        let package = TomlPackage::from_toml_str(input).unwrap();
+        let manifest = package
+            .into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &Preview::default(),
+                None,
+            )
+            .unwrap();
+
+        let dev_dependencies = manifest
+            .value
+            .targets
+            .default()
+            .dev_dependencies()
+            .expect("expected dev dependencies");
+
+        let serde_spec = dev_dependencies
+            .get("serde")
+            .and_then(|specs| specs.iter().next())
+            .expect("expected serde spec")
+            .as_version_spec()
+            .expect("expected version spec")
+            .to_string();
+
+        assert_eq!(serde_spec, "==1.0.0");
     }
 
     #[test]

@@ -168,6 +168,10 @@ pub trait HasDependencyConfig: Sized {
                     self.dependency_config().host = false;
                     self.dependency_config().build = true;
                 }
+                SpecType::Dev => {
+                    self.dependency_config().host = false;
+                    self.dependency_config().build = false;
+                }
                 SpecType::Run => {
                     self.dependency_config().host = false;
                     self.dependency_config().build = false;

@@ -12,6 +12,7 @@ pub struct TomlPackageTarget {
     pub run_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
+    pub dev_dependencies: Option<PixiSpanned<UniquePackageMap>>,
 }
 
 impl<'de> toml_span::Deserialize<'de> for TomlPackageTarget {
@@ -20,11 +21,13 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackageTarget {
         let run_dependencies = th.optional("run-dependencies");
         let host_dependencies = th.optional("host-dependencies");
         let build_dependencies = th.optional("build-dependencies");
+        let dev_dependencies = th.optional("dev-dependencies");
         th.finalize(None)?;
         Ok(TomlPackageTarget {
             run_dependencies,
             host_dependencies,
             build_dependencies,
+            dev_dependencies,
         })
     }
 }
@@ -35,6 +38,7 @@ impl TomlPackageTarget {
             dependencies: combine_target_dependencies(
                 [
                     (SpecType::Run, self.run_dependencies),
+                    (SpecType::Dev, self.dev_dependencies),
                     (SpecType::Host, self.host_dependencies),
                     (SpecType::Build, self.build_dependencies),
                 ],
