@@ -310,8 +310,6 @@ pub fn set_ignore_hidden_patterns(patterns: &[String]) -> Option<Vec<String>> {
 
 #[cfg(test)]
 mod tests {
-    use crate::glob_set::walk::set_ignore_hidden_patterns;
-
     use super::anchor_literal_pattern;
 
     #[test]
