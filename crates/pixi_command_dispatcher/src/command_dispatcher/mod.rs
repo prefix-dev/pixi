@@ -468,6 +468,26 @@ impl CommandDispatcher {
         self.execute_task(spec).await
     }
 
+    /// Returns the metadata for development sources.
+    ///
+    /// This method queries the build backend for all outputs from a dev source
+    /// and creates DevSourceRecords for each one. These records contain the
+    /// combined dependencies (build, host, run) for each output.
+    ///
+    /// Unlike `source_metadata`, this is specifically for development sources
+    /// where the dependencies are installed but the package itself is not built.
+    ///
+    /// # Requirements
+    ///
+    /// - The build backend must support the `conda/outputs` procedure (API v1+)
+    pub async fn dev_source_metadata(
+        &self,
+        spec: crate::DevSourceMetadataSpec,
+    ) -> Result<crate::DevSourceMetadata, CommandDispatcherError<crate::DevSourceMetadataError>>
+    {
+        spec.request(self.clone()).await
+    }
+
     /// Query the source build cache for a particular source package.
     pub async fn source_build_cache_status(
         &self,

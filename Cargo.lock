@@ -5344,6 +5344,7 @@ dependencies = [
  "miette 7.6.0",
  "pixi_git",
  "pixi_spec",
+ "pixi_spec_containers",
  "rattler_conda_types",
  "rattler_digest",
  "rattler_lock",

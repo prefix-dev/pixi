@@ -373,6 +373,7 @@ impl SourceMetadataSpec {
                     .into_specs()
                     .map(|(name, spec)| (name, spec.value))
                     .collect(),
+                dev_sources: Default::default(),
                 installed: vec![], // TODO: To lock build environments, fill this.
                 build_environment,
                 channels: self.backend_metadata.channels.clone(),

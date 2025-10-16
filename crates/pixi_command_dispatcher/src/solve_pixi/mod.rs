@@ -4,6 +4,7 @@ mod source_metadata_collector;
 use std::{borrow::Borrow, collections::BTreeMap, path::PathBuf, time::Instant};
 
 use chrono::{DateTime, Utc};
+use indexmap::IndexMap;
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
@@ -51,6 +52,11 @@ pub struct PixiEnvironmentSpec {
     #[serde(skip_serializing_if = "DependencyMap::is_empty")]
     pub constraints: DependencyMap<rattler_conda_types::PackageName, BinarySpec>,
 
+    /// Development sources whose dependencies should be installed without
+    /// building the packages themselves.
+    #[serde(skip_serializing_if = "IndexMap::is_empty")]
+    pub dev_sources: IndexMap<rattler_conda_types::PackageName, pixi_spec::DevSourceSpec>,
+
     /// The records of the packages that are currently already installed. These
     /// are used as hints to reduce the difference between individual solves.
     #[serde(skip)]
@@ -91,6 +97,7 @@ impl Default for PixiEnvironmentSpec {
             name: None,
             dependencies: DependencyMap::default(),
             constraints: DependencyMap::default(),
+            dev_sources: IndexMap::new(),
             installed: Vec::new(),
             build_environment: BuildEnvironment::default(),
             channels: vec![],

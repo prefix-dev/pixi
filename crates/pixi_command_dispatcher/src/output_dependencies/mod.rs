@@ -73,7 +73,7 @@ pub struct OutputDependencies {
 impl GetOutputDependenciesSpec {
     #[instrument(
         skip_all,
-        name = "output-dependencies",
+        name = "dev-sources",
         fields(
             source = %self.source,
             output = %self.output_name.as_source(),

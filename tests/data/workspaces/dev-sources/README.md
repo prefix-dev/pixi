@@ -1,6 +1,6 @@
-# Output Dependencies Test Workspace
+# Dev Sources Test Workspace
 
-This workspace is used to test the `get_output_dependencies` and `expand_dev_sources` functionality of the command dispatcher.
+This workspace is used to test the `dev_source_metadata` and related dev sources functionality of the command dispatcher.
 
 ## Structure
 

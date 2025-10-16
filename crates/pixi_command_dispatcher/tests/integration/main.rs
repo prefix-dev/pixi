@@ -616,7 +616,7 @@ async fn source_build_cache_status_clear_works() {
 #[tokio::test]
 pub async fn test_get_output_dependencies() {
     // Setup: Create a dispatcher with the in-memory backend
-    let root_dir = workspaces_dir().join("output-dependencies");
+    let root_dir = workspaces_dir().join("dev-sources");
     let tempdir = tempfile::tempdir().unwrap();
     let (tool_platform, tool_virtual_packages) = tool_platform();
 
@@ -730,7 +730,7 @@ pub async fn test_get_output_dependencies() {
 #[tokio::test]
 pub async fn test_get_output_dependencies_output_not_found() {
     // Setup: Create a dispatcher with the in-memory backend
-    let root_dir = workspaces_dir().join("output-dependencies");
+    let root_dir = workspaces_dir().join("dev-sources");
     let tempdir = tempfile::tempdir().unwrap();
     let (tool_platform, tool_virtual_packages) = tool_platform();
 
@@ -805,7 +805,7 @@ pub async fn test_expand_dev_sources() {
     use pixi_spec::{PathSourceSpec, SourceSpec};
 
     // Setup: Create a dispatcher with the in-memory backend
-    let root_dir = workspaces_dir().join("output-dependencies");
+    let root_dir = workspaces_dir().join("dev-sources");
     let tempdir = tempfile::tempdir().unwrap();
     let (tool_platform, tool_virtual_packages) = tool_platform();
 
@@ -920,4 +920,98 @@ pub async fn test_expand_dev_sources() {
         expanded.constraints.is_empty(),
         "Test packages have no constraints"
     );
+}
+
+/// Tests that `dev_source_metadata` correctly retrieves all outputs from a dev source
+/// and creates DevSourceRecords with combined dependencies.
+#[tokio::test]
+pub async fn test_dev_source_metadata() {
+    use pixi_command_dispatcher::{BuildBackendMetadataSpec, DevSourceMetadataSpec};
+    use pixi_record::PinnedPathSpec;
+
+    // Setup: Create a dispatcher with the in-memory backend
+    let root_dir = workspaces_dir().join("dev-sources");
+    let tempdir = tempfile::tempdir().unwrap();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(root_dir.clone())
+        .with_cache_dirs(default_cache_dirs().with_workspace(tempdir.path().to_path_buf()))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+
+    // Pin the source
+    let pinned_source = PinnedPathSpec {
+        path: "test-package".into(),
+    }
+    .into();
+
+    // Create the spec for getting dev source metadata
+    let spec = DevSourceMetadataSpec {
+        package_name: PackageName::new_unchecked("test-package"),
+        backend_metadata: BuildBackendMetadataSpec {
+            source: pinned_source,
+            channel_config: default_channel_config(),
+            channels: vec![],
+            build_environment: BuildEnvironment::simple(tool_platform, tool_virtual_packages),
+            variants: None,
+            enabled_protocols: Default::default(),
+        },
+    };
+
+    // Act: Get the dev source metadata
+    let result = dispatcher
+        .dev_source_metadata(spec)
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("dev_source_metadata should succeed");
+
+    // Assert: Verify we got records for all outputs
+    assert_eq!(
+        result.records.len(),
+        1,
+        "Should have one record for the test-package output"
+    );
+
+    let record = &result.records[0];
+
+    // Verify the record has the correct name
+    assert_eq!(
+        record.name.as_source(),
+        "test-package",
+        "Record should be for test-package"
+    );
+
+    // Verify all dependencies are combined (build + host + run)
+    // From the test data: build (cmake, make), host (zlib, openssl), run (python, numpy)
+    let dep_names: Vec<_> = record
+        .dependencies
+        .names()
+        .map(|name| name.as_normalized())
+        .sorted()
+        .collect();
+
+    assert_eq!(
+        dep_names,
+        vec!["cmake", "make", "numpy", "openssl", "python", "zlib"],
+        "All dependencies (build, host, run) should be combined"
+    );
+
+    // Verify constraints are empty (test package has no constraints)
+    assert!(
+        record.constraints.is_empty(),
+        "Test package has no constraints"
+    );
+
+    // Verify the source is pinned correctly
+    match &record.source {
+        pixi_record::PinnedSourceSpec::Path(path) => {
+            assert_eq!(path.path.as_str(), "test-package");
+        }
+        _ => panic!("Expected path source"),
+    }
 }

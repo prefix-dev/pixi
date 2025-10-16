@@ -200,6 +200,7 @@ impl InstantiateToolEnvironmentSpec {
                     .chain([self.requirement.clone()])
                     .collect(),
                 constraints,
+                dev_sources: Default::default(),
                 build_environment: self.build_environment.clone(),
                 exclude_newer: self.exclude_newer,
                 channel_config: self.channel_config.clone(),
