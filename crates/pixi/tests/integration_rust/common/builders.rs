@@ -348,6 +348,7 @@ impl TaskAddBuilder {
             operation: task::Operation::Add(self.args),
             workspace_config: WorkspaceConfig {
                 manifest_path: self.manifest_path,
+                ..Default::default()
             },
         })
         .await
@@ -372,6 +373,7 @@ impl TaskAliasBuilder {
             operation: task::Operation::Alias(self.args),
             workspace_config: WorkspaceConfig {
                 manifest_path: self.manifest_path,
+                ..Default::default()
             },
         })
         .await
@@ -520,6 +522,7 @@ impl IntoFuture for ProjectEnvironmentAddBuilder {
         workspace::environment::execute(workspace::environment::Args {
             workspace_config: WorkspaceConfig {
                 manifest_path: self.manifest_path,
+                ..Default::default()
             },
             command: workspace::environment::Command::Add(self.args),
         })
