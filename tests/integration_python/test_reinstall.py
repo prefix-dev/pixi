@@ -13,6 +13,15 @@ def reinstall_workspace(tmp_pixi_workspace: Path, mock_projects: Path) -> Path:
     return tmp_pixi_workspace
 
 
+@pytest.fixture
+def cpp_simple(tmp_pixi_workspace: Path, test_data: Path) -> Path:
+    test_rebuild_src = test_data / "cpp_simple"
+    shutil.rmtree(test_rebuild_src.joinpath(".pixi"), ignore_errors=True)
+    shutil.copytree(test_rebuild_src, tmp_pixi_workspace, dirs_exist_ok=True)
+
+    return tmp_pixi_workspace
+
+
 @pytest.mark.extra_slow
 def test_pixi_reinstall_default_env(pixi: Path, reinstall_workspace: Path) -> None:
     env = {

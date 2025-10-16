@@ -22,7 +22,6 @@ use std::{
 
 use crate::{
     activation::{CurrentEnvVarBehavior, initialize_env_variables},
-    diff::LockFileDiff,
     lock_file::filter_lock_file,
     repodata::Repodata,
 };
@@ -39,6 +38,7 @@ use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{CacheDirs, CommandDispatcher, CommandDispatcherBuilder, Limits};
 use pixi_config::{Config, RunPostLinkScripts};
 use pixi_consts::consts;
+use pixi_diff::LockFileDiff;
 use pixi_manifest::{
     AssociateProvenance, BuildVariantSource, EnvironmentName, Environments, ExplicitManifestError,
     HasWorkspaceManifest, LoadManifestsError, ManifestProvenance, Manifests, PackageManifest,
@@ -438,6 +438,14 @@ impl Workspace {
             .environments
             .iter()
             .map(|env| Environment::new(self, env))
+            .collect()
+    }
+
+    /// Returns a HashMap of environments in this project.
+    pub fn named_environments(&self) -> HashMap<EnvironmentName, Environment> {
+        self.environments()
+            .iter()
+            .map(|env| (env.name().clone(), env.clone()))
             .collect()
     }
 
