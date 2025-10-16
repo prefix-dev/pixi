@@ -13,9 +13,9 @@ use itertools::Itertools;
 use pixi_build_backend_passthrough::PassthroughBackend;
 use pixi_build_frontend::{BackendOverride, InMemoryOverriddenBackends};
 use pixi_command_dispatcher::{
-    BuildEnvironment, CacheDirs, CommandDispatcher, Executor, GetOutputDependenciesSpec,
-    InstallPixiEnvironmentSpec, InstantiateToolEnvironmentSpec, PackageIdentifier,
-    PixiEnvironmentSpec, SourceBuildCacheStatusSpec,
+    BuildEnvironment, CacheDirs, CommandDispatcher, Executor, InstallPixiEnvironmentSpec,
+    InstantiateToolEnvironmentSpec, PackageIdentifier, PixiEnvironmentSpec,
+    SourceBuildCacheStatusSpec,
 };
 use pixi_config::default_channel_config;
 use pixi_record::PinnedPathSpec;
@@ -610,11 +610,13 @@ async fn source_build_cache_status_clear_works() {
     );
 }
 
-/// Tests that `get_output_dependencies` correctly retrieves build, host, and run
-/// dependencies for a specific output from a source package using the in-memory
-/// backend.
+/// Tests that `dev_source_metadata` correctly retrieves all outputs from a dev source
+/// and creates DevSourceRecords with combined dependencies.
 #[tokio::test]
-pub async fn test_get_output_dependencies() {
+pub async fn test_dev_source_metadata() {
+    use pixi_command_dispatcher::{BuildBackendMetadataSpec, DevSourceMetadataSpec};
+    use pixi_record::PinnedPathSpec;
+
     // Setup: Create a dispatcher with the in-memory backend
     let root_dir = workspaces_dir().join("dev-sources");
     let tempdir = tempfile::tempdir().unwrap();
@@ -636,23 +638,25 @@ pub async fn test_get_output_dependencies() {
     }
     .into();
 
-    // Create the spec for getting output dependencies
-    let spec = GetOutputDependenciesSpec {
-        source: pinned_source,
-        output_name: PackageName::new_unchecked("test-package"),
-        channel_config: default_channel_config(),
-        channels: vec![],
-        build_environment: BuildEnvironment::simple(tool_platform, tool_virtual_packages),
-        variants: None,
-        enabled_protocols: Default::default(),
+    // Create the spec for dev source metadata
+    let spec = DevSourceMetadataSpec {
+        package_name: PackageName::new_unchecked("test-package"),
+        backend_metadata: BuildBackendMetadataSpec {
+            source: pinned_source,
+            channel_config: default_channel_config(),
+            channels: vec![],
+            build_environment: BuildEnvironment::simple(tool_platform, tool_virtual_packages),
+            variants: None,
+            enabled_protocols: Default::default(),
+        },
     };
 
-    // Act: Get the output dependencies
+    // Act: Get the dev source metadata
     let result = dispatcher
-        .get_output_dependencies(spec)
+        .dev_source_metadata(spec)
         .await
         .map_err(|e| format_diagnostic(&e))
-        .expect("get_output_dependencies should succeed");
+        .expect("dev_source_metadata should succeed");
 
     // Assert: Verify the dependencies are returned correctly
     assert!(
@@ -723,295 +727,4 @@ pub async fn test_get_output_dependencies() {
         result.run_constraints.is_empty(),
         "Run constraints should be empty"
     );
-}
-
-/// Tests that `get_output_dependencies` returns an appropriate error when the
-/// specified output is not found in the source package.
-#[tokio::test]
-pub async fn test_get_output_dependencies_output_not_found() {
-    // Setup: Create a dispatcher with the in-memory backend
-    let root_dir = workspaces_dir().join("dev-sources");
-    let tempdir = tempfile::tempdir().unwrap();
-    let (tool_platform, tool_virtual_packages) = tool_platform();
-
-    let dispatcher = CommandDispatcher::builder()
-        .with_root_dir(root_dir.clone())
-        .with_cache_dirs(default_cache_dirs().with_workspace(tempdir.path().to_path_buf()))
-        .with_executor(Executor::Serial)
-        .with_tool_platform(tool_platform, tool_virtual_packages.clone())
-        .with_backend_overrides(BackendOverride::from_memory(
-            PassthroughBackend::instantiator(),
-        ))
-        .finish();
-
-    // Pin the source spec to a path
-    let pinned_source = PinnedPathSpec {
-        path: "test-package".into(),
-    }
-    .into();
-
-    // Create the spec with a non-existent output name
-    let spec = GetOutputDependenciesSpec {
-        source: pinned_source,
-        output_name: PackageName::new_unchecked("non-existent-output"),
-        channel_config: default_channel_config(),
-        channels: vec![],
-        build_environment: BuildEnvironment::simple(tool_platform, tool_virtual_packages),
-        variants: None,
-        enabled_protocols: Default::default(),
-    };
-
-    // Act: Try to get the output dependencies
-    let error = dispatcher
-        .get_output_dependencies(spec)
-        .await
-        .expect_err("Expected OutputNotFound error");
-
-    // Assert: Verify we got the expected error type
-    use pixi_command_dispatcher::{CommandDispatcherError, GetOutputDependenciesError};
-    match error {
-        CommandDispatcherError::Failed(GetOutputDependenciesError::OutputNotFound {
-            output_name,
-            available_outputs,
-        }) => {
-            assert_eq!(
-                output_name.as_source(),
-                "non-existent-output",
-                "Error should contain the requested output name"
-            );
-            assert_eq!(
-                available_outputs.len(),
-                1,
-                "Should have one available output"
-            );
-            assert_eq!(
-                available_outputs[0].as_source(),
-                "test-package",
-                "Available outputs should include test-package"
-            );
-        }
-        other => panic!(
-            "Expected OutputNotFound error, got: {}",
-            format_diagnostic(&other)
-        ),
-    }
-}
-
-/// Tests that `expand_dev_sources` correctly extracts dependencies from dev
-/// sources and allows them to be merged into a PixiEnvironmentSpec.
-#[tokio::test]
-pub async fn test_expand_dev_sources() {
-    use pixi_command_dispatcher::{DependencyOnlySource, ExpandDevSourcesSpec};
-    use pixi_spec::{PathSourceSpec, SourceSpec};
-
-    // Setup: Create a dispatcher with the in-memory backend
-    let root_dir = workspaces_dir().join("dev-sources");
-    let tempdir = tempfile::tempdir().unwrap();
-    let (tool_platform, tool_virtual_packages) = tool_platform();
-
-    let dispatcher = CommandDispatcher::builder()
-        .with_root_dir(root_dir.clone())
-        .with_cache_dirs(default_cache_dirs().with_workspace(tempdir.path().to_path_buf()))
-        .with_executor(Executor::Serial)
-        .with_tool_platform(tool_platform, tool_virtual_packages.clone())
-        .with_backend_overrides(BackendOverride::from_memory(
-            PassthroughBackend::instantiator(),
-        ))
-        .finish();
-
-    // Create dev sources for test-package and package-a
-    // package-a depends on test-package (also a dev source, should be filtered)
-    // and on package-b (not a dev source, should be included)
-    let dev_sources = vec![
-        DependencyOnlySource {
-            source: SourceSpec::from(PathSourceSpec {
-                path: "test-package".into(),
-            }),
-            output_name: PackageName::new_unchecked("test-package"),
-        },
-        DependencyOnlySource {
-            source: SourceSpec::from(PathSourceSpec {
-                path: "package-a".into(),
-            }),
-            output_name: PackageName::new_unchecked("package-a"),
-        },
-    ];
-
-    // Create the spec for expanding dev sources
-    let spec = ExpandDevSourcesSpec {
-        dev_sources,
-        channel_config: default_channel_config(),
-        channels: vec![],
-        build_environment: BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone()),
-        variants: None,
-        enabled_protocols: Default::default(),
-    };
-
-    // Act: Expand the dev sources
-    let expanded = dispatcher
-        .expand_dev_sources(spec)
-        .await
-        .map_err(|e| format_diagnostic(&e))
-        .expect("expand_dev_sources should succeed");
-
-    // Print the expanded dependencies in JSON format for easy inspection
-    println!("\n=== Expanded Dependencies ===");
-    let json_string = serde_json::to_string_pretty(&expanded.dependencies)
-        .expect("Failed to serialize dependencies to JSON");
-    println!("{}", json_string);
-
-    if !expanded.constraints.is_empty() {
-        println!("\n=== Expanded Constraints ===");
-        let constraints_json = serde_json::to_string_pretty(&expanded.constraints)
-            .expect("Failed to serialize constraints to JSON");
-        println!("{}", constraints_json);
-    }
-    println!("=============================\n");
-
-    // Assert: Verify all dependencies were extracted
-    let all_dep_names: Vec<_> = expanded
-        .dependencies
-        .names()
-        .map(|name| name.as_normalized())
-        .sorted()
-        .collect();
-
-    // Expected dependencies:
-    // - From test-package: cmake, make (build), openssl, zlib (host), numpy, python (run)
-    // - From package-a: gcc (build), requests (run), package-b (run, which is a source)
-    // - test-package is NOT included even though package-a depends on it (filtered because it's a dev source)
-    // - package-b IS included (not a dev source)
-    assert_eq!(
-        all_dep_names,
-        vec![
-            "cmake",
-            "gcc",
-            "make",
-            "numpy",
-            "openssl",
-            "package-b",
-            "python",
-            "requests",
-            "zlib"
-        ],
-        "All dependencies should be extracted, with dev sources filtered out"
-    );
-
-    // Verify that test-package is NOT in the dependencies (it's filtered because it's a dev source)
-    assert!(
-        !expanded.dependencies.contains_key("test-package"),
-        "test-package should be filtered out because it's a dev source"
-    );
-
-    // Verify that package-a is NOT in the dependencies (it's filtered because it's a dev source)
-    assert!(
-        !expanded.dependencies.contains_key("package-a"),
-        "package-a should be filtered out because it's a dev source"
-    );
-
-    // Verify that package-b IS in the dependencies (it's not a dev source)
-    assert!(
-        expanded.dependencies.contains_key("package-b"),
-        "package-b should be included because it's not a dev source"
-    );
-
-    // Assert: Verify constraints are empty (test packages have no constraints)
-    assert!(
-        expanded.constraints.is_empty(),
-        "Test packages have no constraints"
-    );
-}
-
-/// Tests that `dev_source_metadata` correctly retrieves all outputs from a dev source
-/// and creates DevSourceRecords with combined dependencies.
-#[tokio::test]
-pub async fn test_dev_source_metadata() {
-    use pixi_command_dispatcher::{BuildBackendMetadataSpec, DevSourceMetadataSpec};
-    use pixi_record::PinnedPathSpec;
-
-    // Setup: Create a dispatcher with the in-memory backend
-    let root_dir = workspaces_dir().join("dev-sources");
-    let tempdir = tempfile::tempdir().unwrap();
-    let (tool_platform, tool_virtual_packages) = tool_platform();
-
-    let dispatcher = CommandDispatcher::builder()
-        .with_root_dir(root_dir.clone())
-        .with_cache_dirs(default_cache_dirs().with_workspace(tempdir.path().to_path_buf()))
-        .with_executor(Executor::Serial)
-        .with_tool_platform(tool_platform, tool_virtual_packages.clone())
-        .with_backend_overrides(BackendOverride::from_memory(
-            PassthroughBackend::instantiator(),
-        ))
-        .finish();
-
-    // Pin the source
-    let pinned_source = PinnedPathSpec {
-        path: "test-package".into(),
-    }
-    .into();
-
-    // Create the spec for getting dev source metadata
-    let spec = DevSourceMetadataSpec {
-        package_name: PackageName::new_unchecked("test-package"),
-        backend_metadata: BuildBackendMetadataSpec {
-            source: pinned_source,
-            channel_config: default_channel_config(),
-            channels: vec![],
-            build_environment: BuildEnvironment::simple(tool_platform, tool_virtual_packages),
-            variants: None,
-            enabled_protocols: Default::default(),
-        },
-    };
-
-    // Act: Get the dev source metadata
-    let result = dispatcher
-        .dev_source_metadata(spec)
-        .await
-        .map_err(|e| format_diagnostic(&e))
-        .expect("dev_source_metadata should succeed");
-
-    // Assert: Verify we got records for all outputs
-    assert_eq!(
-        result.records.len(),
-        1,
-        "Should have one record for the test-package output"
-    );
-
-    let record = &result.records[0];
-
-    // Verify the record has the correct name
-    assert_eq!(
-        record.name.as_source(),
-        "test-package",
-        "Record should be for test-package"
-    );
-
-    // Verify all dependencies are combined (build + host + run)
-    // From the test data: build (cmake, make), host (zlib, openssl), run (python, numpy)
-    let dep_names: Vec<_> = record
-        .dependencies
-        .names()
-        .map(|name| name.as_normalized())
-        .sorted()
-        .collect();
-
-    assert_eq!(
-        dep_names,
-        vec!["cmake", "make", "numpy", "openssl", "python", "zlib"],
-        "All dependencies (build, host, run) should be combined"
-    );
-
-    // Verify constraints are empty (test package has no constraints)
-    assert!(
-        record.constraints.is_empty(),
-        "Test package has no constraints"
-    );
-
-    // Verify the source is pinned correctly
-    match &record.source {
-        pixi_record::PinnedSourceSpec::Path(path) => {
-            assert_eq!(path.path.as_str(), "test-package");
-        }
-        _ => panic!("Expected path source"),
-    }
 }

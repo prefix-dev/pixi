@@ -62,8 +62,7 @@ async fn test_develop_dependencies_basic() {
     setup_tracing();
 
     // Create a package database with common dependencies
-    let mut package_database = create_test_package_database();
-    package_database.add_package(Package::build("empty-backend", "0.1.0").finish());
+    let package_database = create_test_package_database();
 
     // Convert to channel
     let channel = package_database.into_channel().await.unwrap();
@@ -156,8 +155,7 @@ async fn test_develop_dependencies_with_source_dependencies() {
     setup_tracing();
 
     // Create a package database
-    let mut package_database = create_test_package_database();
-    package_database.add_package(Package::build("empty-backend", "0.1.0").finish());
+    let package_database = create_test_package_database();
 
     let channel = package_database.into_channel().await.unwrap();
 
@@ -273,8 +271,7 @@ package-a = {{ path = "./package-a" }}
 async fn test_develop_dependencies_with_cross_references() {
     setup_tracing();
 
-    let mut package_database = create_test_package_database();
-    package_database.add_package(Package::build("empty-backend", "0.1.0").finish());
+    let package_database = create_test_package_database();
 
     let channel = package_database.into_channel().await.unwrap();
 
@@ -379,8 +376,7 @@ package-y = {{ path = "{}" }}
 async fn test_develop_dependencies_in_features() {
     setup_tracing();
 
-    let mut package_database = create_test_package_database();
-    package_database.add_package(Package::build("empty-backend", "0.1.0").finish());
+    let package_database = create_test_package_database();
 
     let channel = package_database.into_channel().await.unwrap();
 
@@ -445,13 +441,127 @@ feature-package = {{ path = "./feature-package" }}
     );
 }
 
+/// Test that a source package can be listed both in [develop] and in dependencies
+/// without causing conflicts (the package is essentially included twice, once as a develop dep
+/// and once as a regular source dep)
+#[tokio::test]
+async fn test_develop_and_regular_dependency_same_package() {
+    setup_tracing();
+
+    let package_database = create_test_package_database();
+
+    let channel = package_database.into_channel().await.unwrap();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    // Create a shared package that will be both a develop dependency and a regular dependency
+    let shared_package_path = create_source_package(
+        pixi.workspace_path(),
+        "shared-package",
+        "1.0.0",
+        r#"
+[package.host-dependencies]
+python = ">=3.8"
+"#,
+    );
+
+    // Create another package that depends on shared-package as a regular source dependency
+    let _dependent_package = create_source_package(
+        pixi.workspace_path(),
+        "dependent-package",
+        "1.0.0",
+        &format!(
+            r#"
+[package.run-dependencies]
+shared-package = {{ path = "{}" }}
+numpy = ">=1.0"
+"#,
+            shared_package_path.to_string_lossy().replace('\\', "\\\\")
+        ),
+    );
+
+    // Create a manifest that:
+    // 1. Lists shared-package as a develop dependency
+    // 2. Lists dependent-package as a regular source dependency
+    // This means shared-package appears both as a develop dep and as a transitive source dep
+    let manifest_content = format!(
+        r#"
+[workspace]
+channels = ["{}"]
+platforms = ["{}"]
+preview = ["pixi-build"]
+
+[dependencies]
+dependent-package = {{ path = "./dependent-package" }}
+
+[develop]
+shared-package = {{ path = "{}" }}
+"#,
+        channel.url(),
+        Platform::current(),
+        shared_package_path.to_string_lossy().replace('\\', "\\\\")
+    );
+
+    fs::write(pixi.manifest_path(), manifest_content).unwrap();
+
+    // Update the lock-file - this should work without conflicts
+    let lock_file = pixi.update_lock_file().await.unwrap();
+
+    // Verify that python is in the lock-file (from shared-package's dependencies)
+    assert!(
+        lock_file.contains_conda_package(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "python",
+        ),
+        "python should be in the lock-file (run dependency of shared-package)"
+    );
+
+    // Verify that numpy is in the lock-file (from dependent-package's dependencies)
+    assert!(
+        lock_file.contains_conda_package(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "numpy",
+        ),
+        "numpy should be in the lock-file (run dependency of dependent-package)"
+    );
+
+    // Verify that dependent-package IS in the lock-file (it's a regular source dependency)
+    assert!(
+        lock_file.contains_conda_package(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "dependent-package",
+        ),
+        "dependent-package SHOULD be in the lock-file (it's a regular source dependency)"
+    );
+
+    // Key assertion: shared-package WILL appear in the lock-file as a built package
+    // because it's a source dependency of dependent-package.
+    // The fact that it's also in [develop] doesn't prevent it from being built when
+    // it's needed as a dependency of another package.
+    // This is correct behavior - [develop] means "install my dependencies without building me",
+    // but if another package needs it built, it will be built.
+    assert!(
+        lock_file.contains_conda_package(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "shared-package",
+        ),
+        "shared-package SHOULD be in the lock-file (it's built as a source dependency of dependent-package)"
+    );
+}
+
 /// Test that platform-specific develop dependencies work correctly
 #[tokio::test]
 async fn test_develop_dependencies_platform_specific() {
     setup_tracing();
 
-    let mut package_database = create_test_package_database();
-    package_database.add_package(Package::build("empty-backend", "0.1.0").finish());
+    let package_database = create_test_package_database();
 
     let channel = package_database.into_channel().await.unwrap();
 

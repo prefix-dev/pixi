@@ -41,11 +41,9 @@ mod command_dispatcher_processor;
 mod dev_source_metadata;
 mod discover_backend_cache;
 mod executor;
-mod expand_dev_sources;
 mod install_pixi;
 mod instantiate_tool_env;
 mod limits;
-mod output_dependencies;
 mod package_identifier;
 pub mod reporter;
 mod solve_conda;
@@ -71,17 +69,11 @@ pub use command_dispatcher::{
 };
 pub use dev_source_metadata::{DevSourceMetadata, DevSourceMetadataError, DevSourceMetadataSpec};
 pub use executor::Executor;
-pub use expand_dev_sources::{
-    DependencyOnlySource, ExpandDevSourcesError, ExpandDevSourcesSpec, ExpandedDevSources,
-};
 pub use install_pixi::{
     InstallPixiEnvironmentError, InstallPixiEnvironmentResult, InstallPixiEnvironmentSpec,
 };
 pub use instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec};
 pub use limits::Limits;
-pub use output_dependencies::{
-    GetOutputDependenciesError, GetOutputDependenciesSpec, OutputDependencies,
-};
 pub use package_identifier::PackageIdentifier;
 pub use reporter::{
     CondaSolveReporter, GitCheckoutReporter, PixiInstallReporter, PixiSolveReporter, Reporter,

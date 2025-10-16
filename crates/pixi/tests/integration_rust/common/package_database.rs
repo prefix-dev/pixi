@@ -9,7 +9,7 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use rattler_conda_types::{
     ChannelInfo, PackageName, PackageRecord, PackageUrl, Platform, RepoData, VersionWithSource,
-    package::ArchiveType,
+    package::{ArchiveType, RunExportsJson},
 };
 use std::{collections::HashSet, path::Path};
 use tempfile::TempDir;
@@ -294,7 +294,7 @@ impl PackageBuilder {
                 track_features: vec![],
                 version: self.version,
                 purls: self.purls,
-                run_exports: None,
+                run_exports: Some(RunExportsJson::default()),
                 python_site_packages_path: None,
                 experimental_extra_depends: Default::default(),
             },
