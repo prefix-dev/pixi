@@ -4966,7 +4966,7 @@ version = "0.1.0"
 dependencies = [
  "ahash",
  "console 0.15.11",
- "indexmap 2.11.1",
+ "indexmap 2.11.4",
  "itertools 0.14.0",
  "pixi_consts",
  "pixi_manifest",
