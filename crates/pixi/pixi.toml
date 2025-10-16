@@ -1,0 +1,6 @@
+[package]
+name = "pixi"
+
+[package.build.backend]
+name = "pixi-build-rust"
+version = "*"
