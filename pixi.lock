@@ -2066,7 +2066,7 @@ environments:
     packages:
       linux-64:
       - conda: ./crates/pixi
-        subdir: linux-64
+        build: h24ff57e_0
       linux-aarch64:
       - conda: ./crates/pixi
         subdir: linux-aarch64
@@ -8641,8 +8641,10 @@ packages:
 - conda: ./crates/pixi
   name: pixi
   version: 0.56.0
-  build: hbf21a9e_0
+  build: h24ff57e_0
   subdir: linux-64
+  depends:
+  - __glibc >=2.34,<3.0.a0
   constrains:
   - __glibc >=2.17
   license: BSD-3-Clause
