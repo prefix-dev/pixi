@@ -134,7 +134,7 @@ impl<'p> GroupedEnvironment<'p> {
         platform: Option<Platform>,
     ) -> IndexMap<PackageName, SourceSpec> {
         let mut result = IndexMap::new();
-        for feature in self.features() {
+        for feature in self.features().rev() {
             if let Some(deps) = feature.develop_dependencies(platform) {
                 result.extend(deps.into_owned());
             }
