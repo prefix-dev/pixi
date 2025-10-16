@@ -7,14 +7,12 @@ use ahash::HashMap;
 use indexmap::IndexMap;
 use itertools::{Either, Itertools};
 use pixi_consts::consts;
-use pixi_manifest::FeaturesExt;
+use pixi_manifest::{EnvironmentName, FeaturesExt};
 use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, LockedPackage, LockedPackageRef};
 use serde::Serialize;
 use serde_json::Value;
 use tabwriter::TabWriter;
-
-use crate::Workspace;
 
 // Represents the differences between two sets of packages.
 #[derive(Default, Clone)]
@@ -377,24 +375,29 @@ pub struct LockFileJsonDiff {
 }
 
 impl LockFileJsonDiff {
-    pub fn new(project: Option<&Workspace>, value: LockFileDiff) -> Self {
+    pub fn new<'a, F: FeaturesExt<'a>>(
+        environments: Option<std::collections::HashMap<EnvironmentName, F>>,
+        value: LockFileDiff,
+    ) -> Self {
         let mut environment = IndexMap::new();
 
         for (environment_name, environment_diff) in value.environment {
             let mut environment_diff_json = IndexMap::new();
 
             for (platform, packages_diff) in environment_diff {
-                let conda_dependencies = project
+                let conda_dependencies = environments
+                    .as_ref()
                     .and_then(|p| {
-                        p.environment(environment_name.as_str()).map(|env| {
+                        p.get(environment_name.as_str()).map(|env| {
                             env.dependencies(pixi_manifest::SpecType::Run, Some(platform))
                         })
                     })
                     .unwrap_or_default();
 
-                let pypi_dependencies = project
+                let pypi_dependencies = environments
+                    .as_ref()
                     .and_then(|p| {
-                        p.environment(environment_name.as_str())
+                        p.get(environment_name.as_str())
                             .map(|env| env.pypi_dependencies(Some(platform)))
                     })
                     .unwrap_or_default();
