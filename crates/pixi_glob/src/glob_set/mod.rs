@@ -263,6 +263,30 @@ mod tests {
         "#);
     }
 
+    #[test]
+    fn check_hidden_folders_are_not_included() {
+        let temp_dir = tempdir().unwrap();
+        let root_path = temp_dir.path().join("workspace");
+        fs::create_dir(&root_path).unwrap();
+
+        let hidden_pixi_folder = root_path.join(".pixi");
+
+        fs::create_dir(&hidden_pixi_folder).unwrap();
+
+        File::create(hidden_pixi_folder.join("foo_hidden.txt")).unwrap();
+
+        File::create(root_path.as_path().join("some_text.txt")).unwrap();
+        // We want to match everything except hidden folders
+        let glob_set = GlobSet::create(vec!["**"]);
+
+        let entries = glob_set.collect_matching(&root_path).unwrap();
+
+        let paths = sorted_paths(entries, &root_path);
+        assert_yaml_snapshot!(paths, @r#"
+        - some_text.txt
+        "#);
+    }
+
     /// Because we are using ignore which uses gitignore style parsing of globs we need to do some extra processing
     /// to make this more like unix globs in this case we check this explicitly here
     #[test]
