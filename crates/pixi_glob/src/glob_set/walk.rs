@@ -88,7 +88,7 @@ pub fn walk_globs(
     let overrides = ob.build().map_err(GlobSetError::BuildOverrides)?;
 
     let walker = ignore::WalkBuilder::new(effective_walk_root)
-        .git_ignore(true)
+        .git_ignore(false)
         .git_exclude(true)
         .hidden(true)
         .git_global(false)
