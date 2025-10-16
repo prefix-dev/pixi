@@ -30,6 +30,7 @@ use crate::{
         environment::TomlEnvironmentList, task::TomlTask,
     },
     utils::{PixiSpanned, package_map::UniquePackageMap},
+    warning::Deprecation,
 };
 
 /// Raw representation of a pixi manifest. This is the deserialized form of the
@@ -469,7 +470,12 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
         let workspace = if th.contains("workspace") {
             Some(th.required_s("workspace")?.into())
         } else {
-            th.optional("project")
+            let project: Option<Spanned<TomlWorkspace>> = th.optional("project");
+            if let Some(project) = &project {
+                warnings
+                    .push(Deprecation::renamed_field("project", "workspace", project.span).into());
+            }
+            project.map(From::from)
         };
         let package = th.optional("package");
 
@@ -900,5 +906,29 @@ mod test {
         [feature.default.dependencies]
         "#,
         ));
+    }
+
+    #[test]
+    fn test_project_deprecation_warning() {
+        assert_snapshot!(
+            expect_parse_warnings(
+            r#"
+        [project]
+        name = "foo"
+        channels = []
+        "#,
+            ),
+            @r#"
+         ⚠ The `project` field is deprecated. Use `workspace` instead.
+          ╭─[pixi.toml:2:9]
+        1 │
+        2 │ ╭─▶         [project]
+        3 │ │           name = "foo"
+        4 │ ├─▶         channels = []
+          · ╰──── replace this with 'workspace'
+        5 │
+          ╰────
+        "#
+        );
     }
 }
