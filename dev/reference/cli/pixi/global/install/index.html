@@ -2793,6 +2793,10 @@
 <p>Running <code>osx-64</code> on Apple Silicon will install the Intel binary but run it using <a href="https://developer.apple.com/documentation/apple-silicon/about-the-rosetta-translation-environment">Rosetta</a>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi global install --platform osx-64 ruff
 </span></code></pre></div></p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+</div>
+<p>When you pass <code>--path</code> with a local <code>.conda</code> archive, Pixi copies the file into <code>PIXI_HOME/conda-files</code> and installs from that managed copy. Supplying any other kind of path keeps the original location unchanged.</p>
 <p>After using global install, you can use the package you installed anywhere on your system.</p>
 <h2 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">#</a></h2>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>pixi global install [OPTIONS] [PACKAGE]...

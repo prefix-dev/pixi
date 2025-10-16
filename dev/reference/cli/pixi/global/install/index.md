@@ -13,6 +13,10 @@ pixi global install --platform osx-64 ruff
 
 ```
 
+Note
+
+When you pass `--path` with a local `.conda` archive, Pixi copies the file into `PIXI_HOME/conda-files` and installs from that managed copy. Supplying any other kind of path keeps the original location unchanged.
+
 After using global install, you can use the package you installed anywhere on your system.
 
 ## Usage
