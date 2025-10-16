@@ -111,7 +111,7 @@ pub fn walk_globs(
     let mut builder = ignore::WalkBuilder::new(effective_walk_root);
 
     let walker_builder = builder
-        .git_ignore(true)
+        .git_ignore(false)
         .git_exclude(true)
         .hidden(enable_ignoring_hidden)
         .git_global(false)
@@ -304,13 +304,23 @@ pub fn set_ignore_hidden_patterns(patterns: &[String]) -> Option<Vec<String>> {
                     // Extract the hidden folder name from patterns like:
                     // ".pixi/*" -> ".pixi"
                     // "**/.deep_pixi/**" -> ".deep_pixi"
+                    // ".build/CMakeFiles/**" -> ".build"
                     let hidden_folder = if pattern.starts_with('.') {
-                        // Pattern like ".pixi/*"
-                        pattern
+                        // Pattern like ".pixi/*" or ".build/CMakeFiles/**"
+                        // Extract just the first hidden folder component
+                        if let Some(slash_idx) = pattern.find('/') {
+                            &pattern[..slash_idx]
+                        } else {
+                            pattern
+                        }
                     } else if let Some(idx) = pattern.find("/.") {
                         // Pattern like "**/.deep_pixi/**"
                         let after_slash = &pattern[idx + 1..];
-                        after_slash.split('/').next().unwrap_or(pattern)
+                        if let Some(slash_idx) = after_slash.find('/') {
+                            &after_slash[..slash_idx]
+                        } else {
+                            after_slash.split('/').next().unwrap_or(pattern)
+                        }
                     } else {
                         continue;
                     };
@@ -320,8 +330,6 @@ pub fn set_ignore_hidden_patterns(patterns: &[String]) -> Option<Vec<String>> {
                 }
             }
         }
-
-        dbg!("Final result patterns: ", &result);
 
         return Some(result.into_iter().collect());
     }

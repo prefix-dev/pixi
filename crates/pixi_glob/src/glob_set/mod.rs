@@ -264,6 +264,29 @@ mod tests {
     }
 
     #[test]
+    fn check_hidden_folder_is_whitelisted_with_star() {
+        let temp_dir = tempdir().unwrap();
+        let root_path = temp_dir.path().join("workspace");
+        fs::create_dir(&root_path).unwrap();
+
+        let hidden_pixi_folder = root_path.join(".pixi").join("subdir");
+
+        fs::create_dir_all(&hidden_pixi_folder).unwrap();
+
+        File::create(hidden_pixi_folder.join("foo_hidden.txt")).unwrap();
+
+        File::create(root_path.as_path().join("some_text.txt")).unwrap();
+        let glob_set = GlobSet::create(vec![".pixi/subdir/**"]);
+
+        let entries = glob_set.collect_matching(&root_path).unwrap();
+
+        let paths = sorted_paths(entries, &root_path);
+        assert_yaml_snapshot!(paths, @r#"
+        - ".pixi/subdir/foo_hidden.txt"
+        "#);
+    }
+
+    #[test]
     fn check_hidden_folders_are_not_included() {
         let temp_dir = tempdir().unwrap();
         let root_path = temp_dir.path().join("workspace");
