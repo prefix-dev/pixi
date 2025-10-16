@@ -5,7 +5,10 @@
 //! and debugging purposes, as it does not perform any actual building or
 //! processing of the project model.
 
-use std::{collections::BTreeSet, path::PathBuf};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::PathBuf,
+};
 
 use ordermap::OrderMap;
 use pixi_build_frontend::{
@@ -15,8 +18,8 @@ use pixi_build_frontend::{
     json_rpc::CommunicationError,
 };
 use pixi_build_types::{
-    BackendCapabilities, NamedSpecV1, PackageSpecV1, ProjectModelV1, SourcePackageName,
-    TargetSelectorV1, TargetV1, TargetsV1, VersionedProjectModel,
+    BackendCapabilities, BinaryPackageSpecV1, NamedSpecV1, PackageSpecV1, ProjectModelV1,
+    SourcePackageName, TargetSelectorV1, TargetV1, TargetsV1, VersionedProjectModel,
     procedures::{
         conda_build_v1::{CondaBuildV1Params, CondaBuildV1Result},
         conda_outputs::{
@@ -26,7 +29,7 @@ use pixi_build_types::{
         initialize::InitializeParams,
     },
 };
-use rattler_conda_types::{PackageName, Platform, Version, package::IndexJson};
+use rattler_conda_types::{PackageName, Platform, Version, VersionSpec, package::IndexJson};
 use serde::Deserialize;
 
 const BACKEND_NAME: &str = "passthrough";
@@ -67,76 +70,11 @@ impl InMemoryBackend for PassthroughBackend {
         &self,
         params: CondaOutputsParams,
     ) -> Result<CondaOutputsResult, CommunicationError> {
+        // Generate outputs for all variant combinations
+        let outputs = generate_variant_outputs(&self.project_model, &self.index_json, &params);
+
         Ok(CondaOutputsResult {
-            outputs: vec![CondaOutput {
-                metadata: CondaOutputMetadata {
-                    name: self
-                        .project_model
-                        .name
-                        .as_ref()
-                        .map(|name| PackageName::try_from(name.as_str()).unwrap())
-                        .unwrap_or_else(|| {
-                            self.index_json
-                                .as_ref()
-                                .map(|j| j.name.clone())
-                                .unwrap_or_else(|| {
-                                    PackageName::try_from("pixi-package_name").unwrap()
-                                })
-                        }),
-                    version: self
-                        .project_model
-                        .version
-                        .as_ref()
-                        .or_else(|| self.index_json.as_ref().map(|j| j.version.version()))
-                        .cloned()
-                        .unwrap_or_else(|| Version::major(0))
-                        .into(),
-                    build: self
-                        .index_json
-                        .as_ref()
-                        .map(|j| j.build.clone())
-                        .unwrap_or_default(),
-                    build_number: self
-                        .index_json
-                        .as_ref()
-                        .map(|j| j.build_number)
-                        .unwrap_or_default(),
-                    subdir: self
-                        .index_json
-                        .as_ref()
-                        .and_then(|j| j.subdir.as_deref())
-                        .map(|subdir| subdir.parse().unwrap())
-                        .unwrap_or(Platform::NoArch),
-                    license: self.project_model.license.clone(),
-                    license_family: None,
-                    noarch: self
-                        .index_json
-                        .as_ref()
-                        .map(|j| j.noarch)
-                        .unwrap_or_default(),
-                    purls: None,
-                    python_site_packages_path: None,
-                    variant: Default::default(),
-                },
-                build_dependencies: Some(extract_dependencies(
-                    &self.project_model.targets,
-                    |t| t.build_dependencies.as_ref(),
-                    params.host_platform,
-                )),
-                host_dependencies: Some(extract_dependencies(
-                    &self.project_model.targets,
-                    |t| t.host_dependencies.as_ref(),
-                    params.host_platform,
-                )),
-                run_dependencies: extract_dependencies(
-                    &self.project_model.targets,
-                    |t| t.run_dependencies.as_ref(),
-                    params.host_platform,
-                ),
-                ignore_run_exports: Default::default(),
-                run_exports: Default::default(),
-                input_globs: None,
-            }],
+            outputs,
             input_globs: Default::default(),
         })
     }
@@ -174,10 +112,251 @@ impl InMemoryBackend for PassthroughBackend {
     }
 }
 
+/// Generates all variant outputs for a package based on the variant configuration.
+///
+/// If any dependency has a "*" version requirement and there's a variant configuration
+/// for that package, multiple outputs will be generated - one for each variant combination.
+fn generate_variant_outputs(
+    project_model: &ProjectModelV1,
+    index_json: &Option<IndexJson>,
+    params: &CondaOutputsParams,
+) -> Vec<CondaOutput> {
+    // Check if we have variant configurations and dependencies with "*"
+    let variant_keys = find_variant_keys(project_model, params);
+
+    if variant_keys.is_empty() {
+        // No variants needed, return single output
+        return vec![create_output(
+            project_model,
+            index_json,
+            params,
+            &BTreeMap::new(),
+        )];
+    }
+
+    // Get variant values for each key from the configuration
+    let variant_values: Vec<(String, Vec<String>)> = variant_keys
+        .into_iter()
+        .filter_map(|key| {
+            params
+                .variant_configuration
+                .as_ref()
+                .and_then(|config| config.get(&key))
+                .map(|values| (key, values.clone()))
+        })
+        .collect();
+
+    if variant_values.is_empty() {
+        // No variant values found, return single output
+        return vec![create_output(
+            project_model,
+            index_json,
+            params,
+            &BTreeMap::new(),
+        )];
+    }
+
+    // Generate all combinations of variant values
+    let combinations = generate_variant_combinations(&variant_values);
+
+    // Create an output for each variant combination
+    combinations
+        .iter()
+        .map(|variant| create_output(project_model, index_json, params, variant))
+        .collect()
+}
+
+/// Finds all dependency names that have "*" requirements and have variant configurations.
+fn find_variant_keys(project_model: &ProjectModelV1, params: &CondaOutputsParams) -> Vec<String> {
+    let Some(targets) = &project_model.targets else {
+        return Vec::new();
+    };
+
+    let Some(variant_config) = &params.variant_configuration else {
+        return Vec::new();
+    };
+
+    let mut variant_keys = BTreeSet::new();
+
+    // Helper to check dependencies in a target
+    let mut check_deps = |deps: Option<&OrderMap<SourcePackageName, PackageSpecV1>>| {
+        if let Some(deps) = deps {
+            for (name, spec) in deps {
+                // Check if this dependency has a "*" requirement
+                if is_star_requirement(spec) {
+                    let name_str = name.as_str();
+                    // Check if there's a variant configuration for this package
+                    if variant_config.contains_key(name_str) {
+                        variant_keys.insert(name_str.to_string());
+                    }
+                }
+            }
+        }
+    };
+
+    // Check default target
+    if let Some(default_target) = &targets.default_target {
+        check_deps(default_target.build_dependencies.as_ref());
+        check_deps(default_target.host_dependencies.as_ref());
+        check_deps(default_target.run_dependencies.as_ref());
+    }
+
+    // Check platform-specific targets
+    if let Some(targets_map) = &targets.targets {
+        for (selector, target) in targets_map {
+            if matches_target_selector(selector, params.host_platform) {
+                check_deps(target.build_dependencies.as_ref());
+                check_deps(target.host_dependencies.as_ref());
+                check_deps(target.run_dependencies.as_ref());
+            }
+        }
+    }
+
+    variant_keys.into_iter().collect()
+}
+
+/// Checks if a package spec has a "*" version requirement.
+fn is_star_requirement(spec: &PackageSpecV1) -> bool {
+    let PackageSpecV1::Binary(boxed) = spec else {
+        return false;
+    };
+
+    match boxed.as_ref() {
+        BinaryPackageSpecV1 {
+            version,
+            build: None,
+            build_number: None,
+            file_name: None,
+            channel: None,
+            subdir: None,
+            md5: None,
+            sha256: None,
+            url: None,
+            license: None,
+        } => version
+            .as_ref()
+            .is_none_or(|v| matches!(v, VersionSpec::Any)),
+        _ => false,
+    }
+}
+
+/// Generates all combinations of variant values using a Cartesian product.
+///
+/// For example, if we have:
+/// - python: ["3.10", "3.11"]
+/// - numpy: ["1.0", "2.0"]
+///
+/// This will generate 4 combinations:
+/// - {python: "3.10", numpy: "1.0"}
+/// - {python: "3.10", numpy: "2.0"}
+/// - {python: "3.11", numpy: "1.0"}
+/// - {python: "3.11", numpy: "2.0"}
+fn generate_variant_combinations(
+    variant_values: &[(String, Vec<String>)],
+) -> Vec<BTreeMap<String, String>> {
+    use itertools::Itertools;
+
+    if variant_values.is_empty() {
+        return vec![BTreeMap::new()];
+    }
+
+    // Extract just the values for the cartesian product
+    let value_lists: Vec<_> = variant_values
+        .iter()
+        .map(|(_, values)| values.as_slice())
+        .collect();
+
+    // Generate all combinations using multi_cartesian_product
+    value_lists
+        .into_iter()
+        .multi_cartesian_product()
+        .map(|combination| {
+            // Zip the keys with the values from this combination
+            variant_values
+                .iter()
+                .map(|(key, _)| key)
+                .zip(combination.into_iter())
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect()
+        })
+        .collect()
+}
+
+/// Creates a single output with the given variant configuration.
+fn create_output(
+    project_model: &ProjectModelV1,
+    index_json: &Option<IndexJson>,
+    params: &CondaOutputsParams,
+    variant: &BTreeMap<String, String>,
+) -> CondaOutput {
+    CondaOutput {
+        metadata: CondaOutputMetadata {
+            name: project_model
+                .name
+                .as_ref()
+                .map(|name| PackageName::try_from(name.as_str()).unwrap())
+                .unwrap_or_else(|| {
+                    index_json
+                        .as_ref()
+                        .map(|j| j.name.clone())
+                        .unwrap_or_else(|| PackageName::try_from("pixi-package_name").unwrap())
+                }),
+            version: project_model
+                .version
+                .as_ref()
+                .or_else(|| index_json.as_ref().map(|j| j.version.version()))
+                .cloned()
+                .unwrap_or_else(|| Version::major(0))
+                .into(),
+            build: index_json
+                .as_ref()
+                .map(|j| j.build.clone())
+                .unwrap_or_default(),
+            build_number: index_json
+                .as_ref()
+                .map(|j| j.build_number)
+                .unwrap_or_default(),
+            subdir: index_json
+                .as_ref()
+                .and_then(|j| j.subdir.as_deref())
+                .map(|subdir| subdir.parse().unwrap())
+                .unwrap_or(Platform::NoArch),
+            license: project_model.license.clone(),
+            license_family: None,
+            noarch: index_json.as_ref().map(|j| j.noarch).unwrap_or_default(),
+            purls: None,
+            python_site_packages_path: None,
+            variant: variant.clone(),
+        },
+        build_dependencies: Some(extract_dependencies(
+            &project_model.targets,
+            |t| t.build_dependencies.as_ref(),
+            params.host_platform,
+            variant,
+        )),
+        host_dependencies: Some(extract_dependencies(
+            &project_model.targets,
+            |t| t.host_dependencies.as_ref(),
+            params.host_platform,
+            variant,
+        )),
+        run_dependencies: extract_dependencies(
+            &project_model.targets,
+            |t| t.run_dependencies.as_ref(),
+            params.host_platform,
+            variant,
+        ),
+        ignore_run_exports: Default::default(),
+        run_exports: Default::default(),
+        input_globs: None,
+    }
+}
+
 fn extract_dependencies<F: Fn(&TargetV1) -> Option<&OrderMap<SourcePackageName, PackageSpecV1>>>(
     targets: &Option<TargetsV1>,
     extract: F,
     platform: Platform,
+    variant: &BTreeMap<String, String>,
 ) -> CondaOutputDependencies {
     let depends = targets
         .iter()
@@ -195,9 +374,32 @@ fn extract_dependencies<F: Fn(&TargetV1) -> Option<&OrderMap<SourcePackageName, 
                         }),
                 )
                 .flat_map(|target| extract(target).into_iter().flat_map(OrderMap::iter))
-                .map(|(name, spec)| NamedSpecV1 {
-                    name: name.clone(),
-                    spec: spec.clone(),
+                .map(|(name, spec)| {
+                    // If this is a star dependency and we have a variant for it, replace the spec
+                    let resolved_spec = if is_star_requirement(spec) {
+                        if let Some(variant_value) = variant.get(name.as_str()) {
+                            // Replace with a version spec using the variant value
+                            PackageSpecV1::Binary(Box::new(BinaryPackageSpecV1 {
+                                version: Some(
+                                    rattler_conda_types::VersionSpec::from_str(
+                                        variant_value,
+                                        rattler_conda_types::ParseStrictness::Lenient,
+                                    )
+                                    .unwrap(),
+                                ),
+                                ..Default::default()
+                            }))
+                        } else {
+                            spec.clone()
+                        }
+                    } else {
+                        spec.clone()
+                    };
+
+                    NamedSpecV1 {
+                        name: name.clone(),
+                        spec: resolved_spec,
+                    }
                 })
         })
         .collect();
@@ -283,4 +485,134 @@ pub struct PassthroughBackendConfig {
 
     /// Build globs
     pub build_globs: Option<BTreeSet<String>>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pixi_build_types::{BinaryPackageSpecV1, PackageSpecV1};
+    use rattler_conda_types::{ParseStrictness, VersionSpec};
+
+    #[test]
+    fn test_is_star_requirement_with_star() {
+        let spec = PackageSpecV1::Binary(Box::new(BinaryPackageSpecV1 {
+            version: Some(VersionSpec::from_str("*", ParseStrictness::Lenient).unwrap()),
+            ..Default::default()
+        }));
+
+        assert!(is_star_requirement(&spec));
+    }
+
+    #[test]
+    fn test_is_star_requirement_with_version() {
+        let spec = PackageSpecV1::Binary(Box::new(BinaryPackageSpecV1 {
+            version: Some(VersionSpec::from_str(">=1.0", ParseStrictness::Lenient).unwrap()),
+            ..Default::default()
+        }));
+
+        assert!(!is_star_requirement(&spec));
+    }
+
+    #[test]
+    fn test_is_star_requirement_with_no_version() {
+        let spec = PackageSpecV1::Binary(Box::new(BinaryPackageSpecV1::default()));
+
+        assert!(is_star_requirement(&spec));
+    }
+
+    #[test]
+    fn test_generate_variant_combinations_empty() {
+        let variants = generate_variant_combinations(&[]);
+        assert_eq!(variants.len(), 1);
+        assert!(variants[0].is_empty());
+    }
+
+    #[test]
+    fn test_generate_variant_combinations_single() {
+        let variants = generate_variant_combinations(&[(
+            "python".to_string(),
+            vec!["3.10".to_string(), "3.11".to_string()],
+        )]);
+
+        assert_eq!(variants.len(), 2);
+        assert_eq!(variants[0].get("python").unwrap(), "3.10");
+        assert_eq!(variants[1].get("python").unwrap(), "3.11");
+    }
+
+    #[test]
+    fn test_generate_variant_combinations_multiple() {
+        let variants = generate_variant_combinations(&[
+            (
+                "python".to_string(),
+                vec!["3.10".to_string(), "3.11".to_string()],
+            ),
+            (
+                "numpy".to_string(),
+                vec!["1.0".to_string(), "2.0".to_string()],
+            ),
+        ]);
+
+        assert_eq!(variants.len(), 4);
+
+        // Verify all combinations exist
+        let expected = vec![
+            ("3.10", "1.0"),
+            ("3.10", "2.0"),
+            ("3.11", "1.0"),
+            ("3.11", "2.0"),
+        ];
+
+        for (expected_python, expected_numpy) in expected {
+            assert!(
+                variants
+                    .iter()
+                    .any(|v| v.get("python").unwrap() == expected_python
+                        && v.get("numpy").unwrap() == expected_numpy),
+                "Expected combination ({}, {}) not found",
+                expected_python,
+                expected_numpy
+            );
+        }
+    }
+
+    #[test]
+    fn test_generate_variant_combinations_three_dimensions() {
+        let variants = generate_variant_combinations(&[
+            (
+                "python".to_string(),
+                vec!["3.10".to_string(), "3.11".to_string()],
+            ),
+            (
+                "numpy".to_string(),
+                vec!["1.0".to_string(), "2.0".to_string()],
+            ),
+            (
+                "os".to_string(),
+                vec!["linux".to_string(), "windows".to_string()],
+            ),
+        ]);
+
+        // Should generate 2 * 2 * 2 = 8 combinations
+        assert_eq!(variants.len(), 8);
+
+        // Verify all keys are present in each variant
+        for variant in &variants {
+            assert!(variant.contains_key("python"));
+            assert!(variant.contains_key("numpy"));
+            assert!(variant.contains_key("os"));
+        }
+    }
+
+    #[test]
+    fn test_generate_variant_combinations_single_value() {
+        let variants = generate_variant_combinations(&[
+            ("python".to_string(), vec!["3.10".to_string()]),
+            ("numpy".to_string(), vec!["1.0".to_string()]),
+        ]);
+
+        // Should generate only 1 combination
+        assert_eq!(variants.len(), 1);
+        assert_eq!(variants[0].get("python").unwrap(), "3.10");
+        assert_eq!(variants[0].get("numpy").unwrap(), "1.0");
+    }
 }

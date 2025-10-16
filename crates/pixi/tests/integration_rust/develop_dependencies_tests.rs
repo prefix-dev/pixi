@@ -23,6 +23,10 @@ fn create_test_package_database() -> PackageDatabase {
     db.add_package(Package::build("openssl", "3.0.0").finish());
     db.add_package(Package::build("zlib", "1.2.11").finish());
     db.add_package(Package::build("python", "3.9.0").finish());
+    db.add_package(Package::build("python", "3.10.0").finish());
+    db.add_package(Package::build("python", "3.11.0").finish());
+    db.add_package(Package::build("python", "3.12.0").finish());
+    db.add_package(Package::build("python", "3.13.0").finish());
     db.add_package(Package::build("numpy", "1.21.0").finish());
     db.add_package(Package::build("requests", "2.26.0").finish());
 
@@ -620,5 +624,130 @@ platform-package = {{ path = "./platform-package" }}
             "platform-package",
         ),
         "platform-package should NOT be in the lock-file (it's a develop dependency)"
+    );
+}
+
+/// Test that variant selection chooses the highest matching version
+/// When python = "*" with variants [3.10, 3.12], should select 3.12 even though 3.13 exists
+#[tokio::test]
+async fn test_develop_dependency_variant_selection() {
+    setup_tracing();
+    let package_database = create_test_package_database();
+
+    let channel = package_database.into_channel().await.unwrap();
+
+    // Create the test directory
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    // Create the variant-python-package directory
+    create_source_package(
+        pixi.workspace_path(),
+        "variant-python-package",
+        "0.1.0",
+        r#"
+[package.run-dependencies]
+python = "*"
+        "#,
+    );
+
+    // Create a manifest with develop dependencies and variants
+    let manifest_content = format!(
+        r#"
+[workspace]
+channels = ["{}"]
+platforms = ["{}"]
+preview = ["pixi-build"]
+
+[dependencies]
+
+[develop]
+variant-python-package = {{ path = "./variant-python-package" }}
+
+[workspace.build-variants]
+python = ["3.10", "3.12"]
+"#,
+        channel.url(),
+        Platform::current()
+    );
+
+    fs::write(pixi.manifest_path(), manifest_content).unwrap();
+
+    // Update the lock-file
+    let lock_file = pixi.update_lock_file().await.unwrap();
+
+    // Verify that python 3.12 is in the lock-file (highest variant)
+    assert!(
+        lock_file.contains_match_spec(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "python ==3.12.0",
+        ),
+        "Should select python 3.12 (highest available variant), not 3.13"
+    );
+}
+
+/// Test that variant selection is constrained by regular dependencies
+/// When python = "*" with variants [3.10, 3.12], but dependencies require <3.12, should select 3.10
+#[tokio::test]
+async fn test_develop_dependency_variant_constrained_by_dependencies() {
+    setup_tracing();
+    let package_database = create_test_package_database();
+
+    let channel = package_database.into_channel().await.unwrap();
+
+    // Create the test directory
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    // Create the variant-python-package directory
+    create_source_package(
+        pixi.workspace_path(),
+        "variant-python-package",
+        "0.1.0",
+        r#"
+[package.run-dependencies]
+python = "*"
+        "#,
+    );
+
+    // Create a manifest with develop dependencies, variants, and a constraining dependency
+    let manifest_content = format!(
+        r#"
+[workspace]
+channels = ["{}"]
+platforms = ["{}"]
+preview = ["pixi-build"]
+
+[dependencies]
+python = "<3.12"
+
+[develop]
+variant-python-package = {{ path = "./variant-python-package" }}
+
+[workspace.build-variants]
+python = ["3.10", "3.12"]
+"#,
+        channel.url(),
+        Platform::current()
+    );
+
+    fs::write(pixi.manifest_path(), manifest_content).unwrap();
+
+    // Update the lock-file
+    let lock_file = pixi.update_lock_file().await.unwrap();
+
+    // Verify that python 3.10 is in the lock-file (constrained by dependency)
+    assert!(
+        lock_file.contains_match_spec(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "python ==3.10.0",
+        ),
+        "Should select python 3.10 (constrained by dependency <3.12), not 3.12"
     );
 }

@@ -145,15 +145,19 @@ impl SolveCondaEnvironmentSpec {
 
             // Create match specs for dev source packages themselves
             // Use a special prefix to avoid name clashes with real packages
+            // When multiple variants exist for the same package, we only create one match spec
+            // and let the solver choose which variant to use based on the constraints.
             // TODO: It would be nicer if the rattler solver could handle this directly
             // by introducing a special type of name/package for these virtual dependencies
             // that represent "install my dependencies but not me" packages.
-            let dev_source_match_specs = self
+            let dev_source_match_specs: Vec<_> = self
                 .dev_source_records
                 .iter()
-                .map(|dev_source| {
-                    let prefixed_name =
-                        format!("__pixi_dev_source_{}", dev_source.name.as_normalized());
+                .map(|dev_source| dev_source.name.clone())
+                .collect::<std::collections::HashSet<_>>()
+                .into_iter()
+                .map(|name| {
+                    let prefixed_name = format!("__pixi_dev_source_{}", name.as_normalized());
                     MatchSpec {
                         name: Some(rattler_conda_types::PackageName::new_unchecked(
                             prefixed_name,
@@ -161,7 +165,7 @@ impl SolveCondaEnvironmentSpec {
                         ..MatchSpec::default()
                     }
                 })
-                .collect::<Vec<_>>();
+                .collect();
 
             // Construct repodata records for source records and dev sources so that we can feed them to the
             // solver.
@@ -199,6 +203,7 @@ impl SolveCondaEnvironmentSpec {
                 let url = unique_dev_source_url(dev_source);
                 let prefixed_name =
                     format!("__pixi_dev_source_{}", dev_source.name.as_normalized());
+                let build_string = dev_source_build_string(dev_source);
                 let repodata_record = RepoDataRecord {
                     package_record: rattler_conda_types::PackageRecord {
                         subdir: self.platform.to_string(),
@@ -232,11 +237,11 @@ impl SolveCondaEnvironmentSpec {
                         ..rattler_conda_types::PackageRecord::new(
                             rattler_conda_types::PackageName::new_unchecked(prefixed_name.clone()),
                             Version::major(0),
-                            "dev".to_owned(),
+                            build_string.clone(),
                         )
                     },
                     url: url.clone(),
-                    file_name: format!("{}-0-dev.devsource", prefixed_name),
+                    file_name: format!("{}-0-{}.devsource", prefixed_name, build_string),
                     channel: None,
                 };
                 url_to_dev_source.insert(url, (dev_source, repodata_record));
@@ -339,6 +344,19 @@ fn unique_dev_source_url(dev_source: &pixi_record::DevSourceRecord) -> Url {
     drop(pairs);
 
     url
+}
+
+/// Generates a unique build string for a dev source record based on its variants.
+/// Uses a hash of the variants to ensure uniqueness when multiple variants exist.
+fn dev_source_build_string(dev_source: &pixi_record::DevSourceRecord) -> String {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    // Hash the variants to create a stable, unique build string
+    let mut hasher = DefaultHasher::new();
+    dev_source.variants.hash(&mut hasher);
+    let hash = hasher.finish();
+    format!("{:x}", hash)
 }
 
 #[derive(Debug, thiserror::Error)]

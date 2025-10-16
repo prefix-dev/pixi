@@ -1,5 +1,3 @@
-use std::collections::BTreeMap;
-
 use miette::Diagnostic;
 use pixi_record::{DevSourceRecord, PinnedSourceSpec};
 use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor};
@@ -99,7 +97,6 @@ impl DevSourceMetadataSpec {
                 output,
                 &build_backend_metadata.source,
                 &build_backend_metadata.metadata.input_hash,
-                &self.backend_metadata.variants,
                 &source_anchor,
             )?;
             records.push(record);
@@ -119,7 +116,6 @@ impl DevSourceMetadataSpec {
         output: &pixi_build_types::procedures::conda_outputs::CondaOutput,
         source: &PinnedSourceSpec,
         input_hash: &Option<pixi_record::InputHash>,
-        variants: &Option<BTreeMap<String, Vec<String>>>,
         source_anchor: &SourceAnchor,
     ) -> Result<DevSourceRecord, CommandDispatcherError<DevSourceMetadataError>> {
         // Combine all dependencies into a single map
@@ -177,19 +173,9 @@ impl DevSourceMetadataSpec {
             &mut all_constraints,
         );
 
-        // Extract variant values (not the lists of possible values)
-        // For now, we'll take the first value of each variant
-        // TODO: This needs to be properly handled based on the actual variant selection
-        let variant_values = variants
-            .as_ref()
-            .map(|v| {
-                v.iter()
-                    .filter_map(|(k, values)| {
-                        values.first().map(|first| (k.clone(), first.clone()))
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
+        // Use the variant values from the output metadata
+        // The backend has already selected specific variant values for this output
+        let variant_values = output.metadata.variant.clone();
 
         Ok(DevSourceRecord {
             name: output.metadata.name.clone(),

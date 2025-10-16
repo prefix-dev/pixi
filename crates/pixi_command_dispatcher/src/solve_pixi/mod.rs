@@ -129,12 +129,12 @@ impl PixiEnvironmentSpec {
         let dev_source_records = self.process_dev_sources(&command_queue).await?;
 
         // Split the requirements into source and binary requirements.
-        // This includes both direct environment dependencies and dependencies from dev sources.
-        let (source_specs, binary_specs) = Self::split_into_source_and_binary_requirements(
-            self.dependencies
-                .into_specs()
-                .chain(Self::dev_source_dependencies(&dev_source_records)),
-        );
+        let (dev_source_source_specs, dev_source_binary_specs) =
+            Self::split_into_source_and_binary_requirements(Self::dev_source_dependencies(
+                &dev_source_records,
+            ));
+        let (source_specs, binary_specs) =
+            Self::split_into_source_and_binary_requirements(self.dependencies.into_specs());
 
         Self::check_missing_channels(binary_specs.clone(), &self.channels, &self.channel_config)?;
 
@@ -153,7 +153,8 @@ impl PixiEnvironmentSpec {
         .collect(
             source_specs
                 .iter_specs()
-                .map(|(name, spec)| (name.clone(), spec.clone())),
+                .map(|(name, spec)| (name.clone(), spec.clone()))
+                .chain(dev_source_source_specs.into_specs()),
         )
         .await
         .map_err_with(SolvePixiEnvironmentError::from)?;
@@ -161,6 +162,11 @@ impl PixiEnvironmentSpec {
         // Convert the binary specs into match specs as well.
         let binary_match_specs = binary_specs
             .clone()
+            .into_match_specs(&self.channel_config)
+            .map_err(SolvePixiEnvironmentError::SpecConversionError)
+            .map_err(CommandDispatcherError::Failed)?;
+
+        let dev_source_binary_match_specs = dev_source_binary_specs
             .into_match_specs(&self.channel_config)
             .map_err(SolvePixiEnvironmentError::SpecConversionError)
             .map_err(CommandDispatcherError::Failed)?;
@@ -177,7 +183,8 @@ impl PixiEnvironmentSpec {
                 [self.build_environment.host_platform, Platform::NoArch],
                 binary_match_specs
                     .into_iter()
-                    .chain(transitive_dependencies),
+                    .chain(transitive_dependencies)
+                    .chain(dev_source_binary_match_specs),
             )
             .recursive(true);
 
