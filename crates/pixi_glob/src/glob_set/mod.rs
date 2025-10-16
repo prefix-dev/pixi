@@ -200,6 +200,93 @@ mod tests {
         "###);
     }
 
+    #[test]
+    fn check_we_ignore_hidden_files() {
+        let temp_dir = tempdir().unwrap();
+        let root_path = temp_dir.path().join("workspace");
+        fs::create_dir(&root_path).unwrap();
+
+        let hidden_pixi_folder = root_path.join(".pixi");
+
+        fs::create_dir(&hidden_pixi_folder).unwrap();
+        // This should not be picked up
+        File::create(hidden_pixi_folder.join("foo_hidden.txt")).unwrap();
+        // But because of the non-global ignore this should be
+        File::create(root_path.as_path().join("foo_public.txt")).unwrap();
+
+        let glob_set = GlobSet::create(vec!["*.txt"]);
+        let entries = glob_set.collect_matching(&root_path).unwrap();
+
+        let paths = sorted_paths(entries, &root_path);
+        assert_yaml_snapshot!(paths, @"- foo_public.txt");
+    }
+
+    #[test]
+    fn check_hidden_folders_are_included() {
+        let temp_dir = tempdir().unwrap();
+        let root_path = temp_dir.path().join("workspace");
+        fs::create_dir(&root_path).unwrap();
+
+        let hidden_pixi_folder = root_path.join(".pixi");
+
+        let hidden_foobar_folder = root_path.join(".foobar");
+
+        let hidden_recursive_folder = root_path
+            .join("recursive")
+            .join("foobar")
+            .join(".deep_hidden");
+
+        fs::create_dir(&hidden_pixi_folder).unwrap();
+        fs::create_dir(&hidden_foobar_folder).unwrap();
+        fs::create_dir_all(&hidden_recursive_folder).unwrap();
+
+        File::create(hidden_pixi_folder.join("foo_hidden.txt")).unwrap();
+        File::create(hidden_foobar_folder.as_path().join("foo_from_foobar.txt")).unwrap();
+        File::create(hidden_foobar_folder.as_path().join("build.txt")).unwrap();
+
+        File::create(hidden_recursive_folder.join("foo_from_deep_hidden.txt")).unwrap();
+
+        File::create(root_path.as_path().join("some_text.txt")).unwrap();
+        let glob_set = GlobSet::create(vec![
+            "**",
+            ".foobar/foo_from_foobar.txt",
+            "**/.deep_hidden/**",
+        ]);
+
+        let entries = glob_set.collect_matching(&root_path).unwrap();
+
+        let paths = sorted_paths(entries, &root_path);
+        assert_yaml_snapshot!(paths, @r#"
+        - ".foobar/foo_from_foobar.txt"
+        - recursive/foobar/.deep_hidden/foo_from_deep_hidden.txt
+        - some_text.txt
+        "#);
+    }
+
+    #[test]
+    fn check_hidden_folders_are_not_included() {
+        let temp_dir = tempdir().unwrap();
+        let root_path = temp_dir.path().join("workspace");
+        fs::create_dir(&root_path).unwrap();
+
+        let hidden_pixi_folder = root_path.join(".pixi");
+
+        fs::create_dir(&hidden_pixi_folder).unwrap();
+
+        File::create(hidden_pixi_folder.join("foo_hidden.txt")).unwrap();
+
+        File::create(root_path.as_path().join("some_text.txt")).unwrap();
+        // We want to match everything except hidden folders
+        let glob_set = GlobSet::create(vec!["**"]);
+
+        let entries = glob_set.collect_matching(&root_path).unwrap();
+
+        let paths = sorted_paths(entries, &root_path);
+        assert_yaml_snapshot!(paths, @r#"
+        - some_text.txt
+        "#);
+    }
+
     /// Because we are using ignore which uses gitignore style parsing of globs we need to do some extra processing
     /// to make this more like unix globs in this case we check this explicitly here
     #[test]
