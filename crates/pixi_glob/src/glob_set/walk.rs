@@ -321,8 +321,6 @@ pub fn set_ignore_hidden_patterns(patterns: &[String]) -> Option<Vec<String>> {
             }
         }
 
-        dbg!("Final result patterns: ", &result);
-
         return Some(result.into_iter().collect());
     }
 
