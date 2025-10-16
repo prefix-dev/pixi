@@ -8,6 +8,7 @@ use rattler_shell::{
     shell::{Bash, CmdExe, PowerShell, Shell, ShellEnum, ShellScript},
 };
 use which::which;
+use tempfile::TempPath;
 
 use pixi_config::{ConfigCli, ConfigCliActivation, ConfigCliPrompt};
 use pixi_core::{
@@ -138,59 +139,84 @@ fn start_cmdexe(
 }
 
 // allowing dead code so that we test this on unix compilation as well
-#[cfg_attr(unix, expect(unused))]
-fn start_winbash(
-    bash: Bash,
+#[allow(dead_code)]
+fn start_shell_using_winbash<T: Shell + Copy + 'static, F: FnOnce(&TempPath) -> String>(
+    shell: T,
+    exec_format: F,
     env: &HashMap<String, String>,
     prompt: String,
     prefix: &Prefix,
     source_shell_completions: bool,
 ) -> miette::Result<Option<i32>> {
     // create a tempfile for activation
-    let mut temp_file = tempfile::Builder::new()
-        .prefix("pixi_env_")
-        .suffix(&format!(".{}", bash.extension()))
+    let mut init_file = tempfile::Builder::new()
+        .prefix("pixi_init_")
+        .suffix(".sh")
         .rand_bytes(3)
         .tempfile()
         .into_diagnostic()?;
 
-    let mut shell_script = ShellScript::new(bash, Platform::current());
+    // the init file is always consumed by bash
+    let mut init_script = ShellScript::new(Bash, Platform::current());
     for (key, value) in env {
         if key == "PATH" || key == "Path" {
             // For Git Bash on Windows, the PATH must be formatted as POSIX paths according
             // to the cygpath command, and separated by ":" instead of ";". Use the
-            // shell_script.set_path call to handle these details.
+            // init_script.set_path call to handle these details.
             let paths = value
-                .split(";")
+                .split(';')
                 .map(PathBuf::from)
                 .collect::<Vec<PathBuf>>();
-            shell_script
+            init_script
                 .set_path(&paths, PathModificationBehavior::Replace)
                 .into_diagnostic()?;
         } else {
-            shell_script.set_env_var(key, value).into_diagnostic()?;
+            init_script.set_env_var(key, value).into_diagnostic()?;
         }
     }
-    if source_shell_completions && let Some(completions_dir) = bash.completion_script_location() {
-        shell_script
-            .source_completions(&prefix.root().join(completions_dir))
-            .into_diagnostic()?;
-    }
-    temp_file
-        .write_all(shell_script.contents().into_diagnostic()?.as_bytes())
+    init_file
+        .write_all(init_script.contents().into_diagnostic()?.as_bytes())
+        .into_diagnostic()?;
+
+    // the env file is consumed by the actual shell
+    let mut env_file = tempfile::Builder::new()
+        .prefix("pixi_env_")
+        .suffix(&format!(".{}", shell.extension()))
+        .rand_bytes(3)
+        .tempfile()
         .into_diagnostic()?;
 
     // Write custom prompt to the env file
-    temp_file.write_all(prompt.as_bytes()).into_diagnostic()?;
-    temp_file.flush().into_diagnostic()?;
+    env_file.write_all(prompt.as_bytes()).into_diagnostic()?;
+
+    // Write code to bootstrap the actual shell we want to start
+    if source_shell_completions && let Some(completions_dir) = shell.completion_script_location() {
+        let mut env_script = ShellScript::new(shell, Platform::current());
+        env_script
+            .source_completions(&prefix.root().join(completions_dir))
+            .into_diagnostic()?;
+        env_file
+            .write_all(env_script.contents().into_diagnostic()?.as_bytes())
+            .into_diagnostic()?;
+    }
+
+    env_file.flush().into_diagnostic()?;
+    let env_file_path = env_file.into_temp_path();
+    let exec_str = exec_format(&env_file_path);
+
+    init_file
+        .write_all(exec_str.as_bytes())
+        .into_diagnostic()?;
+
+    init_file.flush().into_diagnostic()?;
 
     // close the file handle, but keep the path (needed for Windows)
-    let temp_path = temp_file.into_temp_path();
+    let init_file_path = init_file.into_temp_path();
 
-    let bash_path = which(bash.executable()).into_diagnostic()?;
+    let bash_path = which(Bash.executable()).into_diagnostic()?;
     let mut command = std::process::Command::new(bash_path);
     command.arg("--init-file");
-    command.arg(&temp_path);
+    command.arg(&init_file_path);
     command.arg("-i");
 
     ignore_ctrl_c();
@@ -388,7 +414,24 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         ShellEnum::PowerShell(pwsh) => start_powershell(pwsh, env, prompt_hook),
         ShellEnum::CmdExe(cmdexe) => start_cmdexe(cmdexe, env, prompt_hook),
         ShellEnum::Bash(bash) => {
-            start_winbash(bash, env, prompt_hook, &prefix, source_shell_completions)
+            start_shell_using_winbash(
+                bash,
+                |env_file| format!(". \"{}\"", env_file.as_os_str().to_string_lossy()),
+                env,
+                prompt_hook,
+                &prefix,
+                source_shell_completions,
+            )
+        }
+        ShellEnum::Fish(fish) => {
+            start_shell_using_winbash(
+                fish,
+                |env_file| format!("exec fish -i -C \". \\\"{}\\\"\"", env_file.as_os_str().to_string_lossy()),
+                env,
+                prompt_hook,
+                &prefix,
+                source_shell_completions,
+            )
         }
         _ => {
             miette::bail!("Unsupported shell: {:?}", interactive_shell);
@@ -459,3 +502,4 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     }
 }
+
