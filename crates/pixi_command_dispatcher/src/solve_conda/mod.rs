@@ -6,7 +6,7 @@ use pixi_record::{PixiRecord, SourceRecord};
 use pixi_spec::{BinarySpec, SourceSpec};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, Platform, RepoDataRecord,
+    ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, Platform, RepoDataRecord, Version,
 };
 use rattler_repodata_gateway::RepoData;
 use rattler_solve::{ChannelPriority, SolveStrategy, SolverImpl};
@@ -40,6 +40,10 @@ pub struct SolveCondaEnvironmentSpec {
     /// Additional constraints of the environment
     #[serde(skip_serializing_if = "DependencyMap::is_empty")]
     pub constraints: DependencyMap<rattler_conda_types::PackageName, BinarySpec>,
+
+    /// Development source records whose dependencies should be installed.
+    #[serde(skip)]
+    pub dev_source_records: Vec<pixi_record::DevSourceRecord>,
 
     /// Available source repodata records.
     #[serde(skip)]
@@ -87,6 +91,7 @@ impl Default for SolveCondaEnvironmentSpec {
             source_specs: DependencyMap::default(),
             binary_specs: DependencyMap::default(),
             constraints: DependencyMap::default(),
+            dev_source_records: vec![],
             source_repodata: vec![],
             binary_repodata: vec![],
             installed: vec![],
@@ -138,9 +143,32 @@ impl SolveCondaEnvironmentSpec {
                 .into_match_specs(&self.channel_config)
                 .map_err(SolveCondaEnvironmentError::SpecConversionError)?;
 
-            // Construct repodata records for source records so that we can feed them to the
+            // Create match specs for dev source packages themselves
+            // Use a special prefix to avoid name clashes with real packages
+            // TODO: It would be nicer if the rattler solver could handle this directly
+            // by introducing a special type of name/package for these virtual dependencies
+            // that represent "install my dependencies but not me" packages.
+            let dev_source_match_specs = self
+                .dev_source_records
+                .iter()
+                .map(|dev_source| {
+                    let prefixed_name =
+                        format!("__pixi_dev_source_{}", dev_source.name.as_normalized());
+                    MatchSpec {
+                        name: Some(rattler_conda_types::PackageName::new_unchecked(
+                            prefixed_name,
+                        )),
+                        ..MatchSpec::default()
+                    }
+                })
+                .collect::<Vec<_>>();
+
+            // Construct repodata records for source records and dev sources so that we can feed them to the
             // solver.
             let mut url_to_source_package = HashMap::new();
+            let mut url_to_dev_source = HashMap::new();
+
+            // Add source records
             for source_metadata in &self.source_repodata {
                 for record in &source_metadata.records {
                     let url = unique_url(record);
@@ -159,8 +187,63 @@ impl SolveCondaEnvironmentSpec {
                 }
             }
 
-            // Collect repodata records from the remote servers and from the source metadata
-            // together. The repodata records go into the first "channel" to ensure
+            // Collect all dev source names for filtering
+            let dev_source_names: std::collections::HashSet<_> = self
+                .dev_source_records
+                .iter()
+                .map(|ds| ds.name.clone())
+                .collect();
+
+            // Add dev source records
+            for dev_source in &self.dev_source_records {
+                let url = unique_dev_source_url(dev_source);
+                let prefixed_name =
+                    format!("__pixi_dev_source_{}", dev_source.name.as_normalized());
+                let repodata_record = RepoDataRecord {
+                    package_record: rattler_conda_types::PackageRecord {
+                        subdir: self.platform.to_string(),
+                        depends: dev_source
+                            .dependencies
+                            .iter_specs()
+                            .filter(|(name, _)| !dev_source_names.contains(*name))
+                            .map(|(name, spec)| {
+                                let nameless = spec
+                                    .clone()
+                                    .try_into_nameless_match_spec_ref(&self.channel_config)
+                                    .unwrap_or_default();
+                                MatchSpec::from_nameless(nameless, Some(name.clone())).to_string()
+                            })
+                            .collect(),
+                        constrains: dev_source
+                            .constraints
+                            .iter_specs()
+                            .filter(|(name, _)| !dev_source_names.contains(*name))
+                            .filter_map(|(name, spec)| {
+                                let nameless = spec
+                                    .clone()
+                                    .try_into_nameless_match_spec(&self.channel_config)
+                                    .ok()?;
+                                Some(
+                                    MatchSpec::from_nameless(nameless, Some(name.clone()))
+                                        .to_string(),
+                                )
+                            })
+                            .collect(),
+                        ..rattler_conda_types::PackageRecord::new(
+                            rattler_conda_types::PackageName::new_unchecked(prefixed_name.clone()),
+                            Version::major(0),
+                            "dev".to_owned(),
+                        )
+                    },
+                    url: url.clone(),
+                    file_name: format!("{}-0-dev.devsource", prefixed_name),
+                    channel: None,
+                };
+                url_to_dev_source.insert(url, (dev_source, repodata_record));
+            }
+
+            // Collect repodata records from the remote servers, source metadata, and dev sources
+            // together. The source and dev source records go into the first "channel" to ensure
             // they are picked first.
             //
             // TODO: This only holds up when the channel priority is strict. We should
@@ -170,6 +253,7 @@ impl SolveCondaEnvironmentSpec {
                 url_to_source_package
                     .values()
                     .map(|(_, record)| record)
+                    .chain(url_to_dev_source.values().map(|(_, record)| record))
                     .collect_vec(),
             );
             for repo_data in &self.binary_repodata {
@@ -181,6 +265,7 @@ impl SolveCondaEnvironmentSpec {
                 specs: source_match_specs
                     .into_iter()
                     .chain(binary_match_specs)
+                    .chain(dev_source_match_specs)
                     .collect(),
                 locked_packages: installed,
                 virtual_packages: self.virtual_packages,
@@ -198,13 +283,17 @@ impl SolveCondaEnvironmentSpec {
                 solver_result
                     .records
                     .into_iter()
-                    .map(|record| {
-                        url_to_source_package.remove(&record.url).map_or_else(
-                            || PixiRecord::Binary(record),
-                            |(source_record, _repodata_record)| {
-                                PixiRecord::Source(source_record.clone())
-                            },
-                        )
+                    .filter_map(|record| {
+                        if let Some(source_record) = url_to_source_package.remove(&record.url) {
+                            // This is a source package, we want to return the source record
+                            // instead of the binary record.
+                            return Some(PixiRecord::Source(source_record.0.clone()));
+                        } else if let Some(_dev_source) = url_to_dev_source.remove(&record.url) {
+                            // This is a dev source, we don't want to return it.
+                            return None;
+                        }
+
+                        Some(PixiRecord::Binary(record))
                     })
                     .collect_vec(),
             )
@@ -231,6 +320,23 @@ fn unique_url(source: &SourceRecord) -> Url {
         .append_pair("version", &source.package_record.version.as_str())
         .append_pair("build", &source.package_record.build)
         .append_pair("subdir", &source.package_record.subdir);
+
+    url
+}
+
+/// Generates a unique URL for a dev source record.
+fn unique_dev_source_url(dev_source: &pixi_record::DevSourceRecord) -> Url {
+    let mut url = dev_source.source.identifiable_url();
+
+    // Add unique identifiers to the URL.
+    let mut pairs = url.query_pairs_mut();
+    pairs.append_pair("name", dev_source.name.as_source());
+
+    for (key, value) in &dev_source.variants {
+        pairs.append_pair(&format!("_{}", key), &value);
+    }
+
+    drop(pairs);
 
     url
 }

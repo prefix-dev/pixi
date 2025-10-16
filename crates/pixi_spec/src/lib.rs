@@ -346,6 +346,18 @@ impl PixiSpec {
         ::serde::Serialize::serialize(self, toml_edit::ser::ValueSerializer::new())
             .expect("conversion to toml cannot fail")
     }
+
+    /// Returns a [`NamelessMatchSpec`] that represents this spec disregarding
+    /// any source specification.
+    pub fn try_into_nameless_match_spec_ref(
+        self,
+        channel_config: &ChannelConfig,
+    ) -> Result<NamelessMatchSpec, SpecConversionError> {
+        match self.into_source_or_binary() {
+            Either::Left(_source) => Ok(NamelessMatchSpec::default()),
+            Either::Right(binary) => binary.try_into_nameless_match_spec(channel_config),
+        }
+    }
 }
 
 /// A specification for a source package.

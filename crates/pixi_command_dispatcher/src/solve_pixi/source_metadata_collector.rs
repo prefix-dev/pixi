@@ -86,7 +86,7 @@ impl SourceMetadataCollector {
 
     pub async fn collect(
         self,
-        specs: Vec<(rattler_conda_types::PackageName, SourceSpec)>,
+        specs: impl IntoIterator<Item = (rattler_conda_types::PackageName, SourceSpec)>,
     ) -> Result<CollectedSourceMetadata, CommandDispatcherError<CollectSourceMetadataError>> {
         let mut source_futures = ExecutorFutures::new(self.command_queue.executor());
         let mut specs = specs
