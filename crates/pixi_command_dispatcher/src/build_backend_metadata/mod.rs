@@ -6,7 +6,7 @@ use std::{
 
 use miette::Diagnostic;
 use pathdiff::diff_paths;
-use pixi_build_discovery::EnabledProtocols;
+use pixi_build_discovery::{CommandSpec, EnabledProtocols};
 use pixi_build_frontend::{
     Backend,
     types::{
@@ -32,6 +32,8 @@ use crate::{
         source_metadata_cache::{self, CachedCondaMetadata, MetadataKind, SourceMetadataKey},
     },
 };
+use pixi_build_discovery::BackendSpec;
+use pixi_build_frontend::BackendOverride;
 
 /// Represents a request for metadata from a build backend for a particular
 /// source location. The result of this request is the metadata for that
@@ -114,6 +116,12 @@ impl BuildBackendMetadataSpec {
             &self.variants,
         );
 
+        // Check if we should skip the metadata cache for this backend
+        let skip_cache = Self::should_skip_metadata_cache(
+            &discovered_backend.backend_spec,
+            command_dispatcher.build_backend_overrides(),
+        );
+
         // Check the source metadata cache, short circuit if there is a cache hit that
         // is still fresh.
         let cache_key = self.cache_key();
@@ -123,19 +131,26 @@ impl BuildBackendMetadataSpec {
             .await
             .map_err(BuildBackendMetadataError::Cache)
             .map_err(CommandDispatcherError::Failed)?;
-        if let Some(metadata) = Self::verify_cache_freshness(
-            &source_checkout,
-            &command_dispatcher,
-            metadata,
-            &additional_glob_hash,
-        )
-        .await?
-        {
-            return Ok(BuildBackendMetadata {
+
+        if !skip_cache {
+            if let Some(metadata) = Self::verify_cache_freshness(
+                &source_checkout,
+                &command_dispatcher,
                 metadata,
-                cache_entry,
-                source: source_checkout.pinned,
-            });
+                &additional_glob_hash,
+            )
+            .await?
+            {
+                return Ok(BuildBackendMetadata {
+                    metadata,
+                    cache_entry,
+                    source: source_checkout.pinned,
+                });
+            }
+        } else {
+            tracing::warn!(
+                "metadata cache disabled for non-binary build backend (system/path-based backends always regenerate metadata)"
+            );
         }
 
         // Instantiate the backend with the discovered information.
@@ -199,6 +214,38 @@ impl BuildBackendMetadataSpec {
             cache_entry,
             source,
         })
+    }
+
+    /// Checks if we should skip the metadata cache for this backend.
+    /// Returns true if:
+    /// 1. There's a System backend override (either for this specific backend or all backends)
+    /// 2. OR the original backend spec is System or Path-based
+    fn should_skip_metadata_cache(
+        backend_spec: &BackendSpec,
+        backend_override: &BackendOverride,
+    ) -> bool {
+        let BackendSpec::JsonRpc(json_rpc_spec) = backend_spec;
+
+        // Check if there's a System backend override for this backend
+        // In-memory overrides are deterministic and can use cached metadata
+        let has_system_override = match backend_override {
+            BackendOverride::System(overridden_backends) => overridden_backends
+                .named_backend_override(&json_rpc_spec.name)
+                .is_some(),
+            BackendOverride::InMemory(_) => false,
+        };
+
+        if has_system_override {
+            return true;
+        }
+
+        // Check if the original backend spec is non-binary (System or Path-based)
+        match &json_rpc_spec.command {
+            CommandSpec::System(_) => true,
+            CommandSpec::EnvironmentSpec(env_spec) => {
+                matches!(env_spec.requirement.1, pixi_spec::PixiSpec::Path(_))
+            }
+        }
     }
 
     async fn verify_cache_freshness(
