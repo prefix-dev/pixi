@@ -30,6 +30,7 @@ use crate::{
         environment::TomlEnvironmentList, task::TomlTask,
     },
     utils::{PixiSpanned, package_map::UniquePackageMap},
+    warning::Deprecation,
 };
 
 /// Raw representation of a pixi manifest. This is the deserialized form of the
@@ -480,8 +481,34 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
             .map(TomlWith::into_inner);
 
         let dependencies = th.optional("dependencies");
-        let host_dependencies = th.optional("host-dependencies");
-        let build_dependencies = th.optional("build-dependencies");
+
+        let host_dependencies: Option<Spanned<UniquePackageMap>> = th.optional("host-dependencies");
+        if let Some(host_dependencies) = &host_dependencies {
+            warnings.push(
+                Deprecation::renamed_field(
+                    "host-dependencies",
+                    "dependencies",
+                    host_dependencies.span,
+                )
+                .into(),
+            );
+        }
+        let host_dependencies = host_dependencies.map(From::from);
+
+        let build_dependencies: Option<Spanned<UniquePackageMap>> =
+            th.optional("build-dependencies");
+        if let Some(build_dependencies) = &build_dependencies {
+            warnings.push(
+                Deprecation::renamed_field(
+                    "build-dependencies",
+                    "dependencies",
+                    build_dependencies.span,
+                )
+                .into(),
+            );
+        }
+        let build_dependencies = build_dependencies.map(From::from);
+
         let pypi_dependencies = th
             .optional::<TomlWith<_, PixiSpanned<TomlIndexMap<_, Same>>>>("pypi-dependencies")
             .map(TomlWith::into_inner);
@@ -780,6 +807,60 @@ mod test {
         [target.osx.dependencies]
         "#,
         ));
+    }
+
+    #[test]
+    fn test_host_dependencies_deprecation_warning() {
+        assert_snapshot!(
+            expect_parse_warnings(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ['linux-64']
+
+        [host-dependencies]
+        foo = "*"
+        "#,
+            ),
+            @r#"
+         ⚠ The `host-dependencies` field is deprecated. Use `dependencies` instead.
+          ╭─[pixi.toml:7:9]
+        6 │
+        7 │ ╭─▶         [host-dependencies]
+        8 │ ├─▶         foo = "*"
+          · ╰──── replace this with 'dependencies'
+        9 │
+          ╰────
+        "#
+        );
+    }
+
+    #[test]
+    fn test_build_dependencies_deprecation_warning() {
+        assert_snapshot!(
+            expect_parse_warnings(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ['linux-64']
+
+        [build-dependencies]
+        bar = "*"
+        "#,
+            ),
+            @r#"
+         ⚠ The `build-dependencies` field is deprecated. Use `dependencies` instead.
+          ╭─[pixi.toml:7:9]
+        6 │
+        7 │ ╭─▶         [build-dependencies]
+        8 │ ├─▶         bar = "*"
+          · ╰──── replace this with 'dependencies'
+        9 │
+          ╰────
+        "#
+        );
     }
 
     #[test]
