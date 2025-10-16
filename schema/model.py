@@ -333,10 +333,6 @@ BuildDependenciesField = Field(
     None,
     description="The build `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
 )
-DevDependenciesField = Field(
-    None,
-    description="The development `conda` dependencies, installed for development workflows. See https://pixi.sh/latest/build/dependency_types/ for more information.",
-)
 RunDependenciesField = Field(
     None,
     description="The `conda` dependencies required at runtime. See https://pixi.sh/latest/build/dependency_types/ for more information.",
@@ -516,7 +512,6 @@ class Target(StrictBaseModel):
     dependencies: Dependencies = DependenciesField
     host_dependencies: Dependencies = HostDependenciesField
     build_dependencies: Dependencies = BuildDependenciesField
-    dev_dependencies: Dependencies = DevDependenciesField
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies for this target"
     )
@@ -556,7 +551,6 @@ class Feature(StrictBaseModel):
     dependencies: Dependencies = DependenciesField
     host_dependencies: Dependencies = HostDependenciesField
     build_dependencies: Dependencies = BuildDependenciesField
-    dev_dependencies: Dependencies = DevDependenciesField
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies of this feature"
     )
@@ -726,7 +720,6 @@ class Package(StrictBaseModel):
 
     host_dependencies: Dependencies = HostDependenciesField
     build_dependencies: Dependencies = BuildDependenciesField
-    dev_dependencies: Dependencies = DevDependenciesField
     run_dependencies: Dependencies = RunDependenciesField
 
     target: dict[TargetName, Target] | None = Field(
@@ -798,7 +791,6 @@ class PackageTarget(StrictBaseModel):
     run_dependencies: Dependencies = RunDependenciesField
     host_dependencies: Dependencies = HostDependenciesField
     build_dependencies: Dependencies = BuildDependenciesField
-    dev_dependencies: Dependencies = DevDependenciesField
 
 
 #######################
@@ -836,7 +828,6 @@ class BaseManifest(StrictBaseModel):
     dependencies: Dependencies = DependenciesField
     host_dependencies: Dependencies = HostDependenciesField
     build_dependencies: Dependencies = BuildDependenciesField
-    dev_dependencies: Dependencies = DevDependenciesField
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies"
     )

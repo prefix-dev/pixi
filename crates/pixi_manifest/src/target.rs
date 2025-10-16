@@ -60,11 +60,6 @@ impl WorkspaceTarget {
         self.dependencies.get(&SpecType::Host)
     }
 
-    /// Returns the dev dependencies of the target
-    pub fn dev_dependencies(&self) -> Option<&DependencyMap<PackageName, PixiSpec>> {
-        self.dependencies.get(&SpecType::Dev)
-    }
-
     /// Returns the build dependencies of the target
     pub fn build_dependencies(&self) -> Option<&DependencyMap<PackageName, PixiSpec>> {
         self.dependencies.get(&SpecType::Build)
@@ -344,11 +339,6 @@ impl PackageTarget {
     /// Returns the host dependencies of the target
     pub fn host_dependencies(&self) -> Option<&DependencyMap<PackageName, PixiSpec>> {
         self.dependencies.get(&SpecType::Host)
-    }
-
-    /// Returns the dev dependencies of the target
-    pub fn dev_dependencies(&self) -> Option<&DependencyMap<PackageName, PixiSpec>> {
-        self.dependencies.get(&SpecType::Dev)
     }
 
     /// Returns the build dependencies of the target
