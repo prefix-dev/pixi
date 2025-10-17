@@ -648,6 +648,7 @@ pub async fn test_dev_source_metadata() {
             channels: vec![],
             build_environment: BuildEnvironment::simple(tool_platform, tool_virtual_packages),
             variants: None,
+            variant_files: None,
             enabled_protocols: Default::default(),
         },
     };
