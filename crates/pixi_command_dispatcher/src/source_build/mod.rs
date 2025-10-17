@@ -479,7 +479,7 @@ impl SourceBuildSpec {
                         prefix: host_prefix_directory,
                         installed: None,
                         ignore_packages: None,
-                        build_environment: self.build_environment.to_build_from_build(),
+                        build_environment: self.build_environment.clone(),
                         force_reinstall: Default::default(),
                         channels: self.channels.clone(),
                         channel_config: self.channel_config.clone(),
