@@ -148,8 +148,12 @@ impl BuildBackendMetadataSpec {
                 });
             }
         } else {
+            let backend_name = match &discovered_backend.backend_spec {
+                BackendSpec::JsonRpc(spec) => &spec.name,
+            };
             tracing::warn!(
-                "metadata cache disabled for non-binary build backend (system/path-based backends always regenerate metadata)"
+                "metadata cache disabled for build backend '{}' (system/path-based backends always regenerate metadata)",
+                backend_name
             );
         }
 
