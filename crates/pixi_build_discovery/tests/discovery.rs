@@ -104,3 +104,21 @@ fn test_direct_recipe() {
         assert_discover_snapshot ! ( & path);
     });
 }
+
+#[test]
+fn test_direct_package_xml() {
+    let path = dunce::canonicalize(discovery_directory().join("ros-package/package.xml")).unwrap();
+    let source_path_regex = path
+        .parent()
+        .unwrap()
+        .to_string_lossy()
+        .replace(r"\", r"\\\\");
+    insta::with_settings!({
+        filters => vec![
+            (source_path_regex.as_str(), "file://<ROOT>"),
+            (r"\\", r"/"),
+        ],
+    }, {
+        assert_discover_snapshot ! ( & path);
+    });
+}
