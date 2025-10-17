@@ -24,6 +24,8 @@ use crate::{
 
 const VALID_RECIPE_NAMES: [&str; 2] = ["recipe.yaml", "recipe.yml"];
 const VALID_RECIPE_DIRS: [&str; 2] = ["", "recipe"];
+const VALID_ROS_BACKEND_NAMES: [&str; 1] = ["package.xml"];
+const VALID_RUST_BACKEND_NAMES: [&str; 1] = ["Cargo.toml"];
 
 /// Describes a backend discovered for a given source location.
 #[derive(Debug, Clone)]
@@ -140,6 +142,18 @@ impl DiscoveredBackend {
                     .expect("the recipe must live somewhere");
                 return Self::from_recipe(source_dir.to_path_buf(), source_path, channel_config);
             }
+
+            // If the user explicitly asked for a package.xml file
+            if VALID_ROS_BACKEND_NAMES.contains(&source_file_name) {
+                let source_dir = source_path
+                    .parent()
+                    .expect("the package.xml must live somewhere");
+                return Self::from_ros_package(
+                    source_dir.to_path_buf(),
+                    source_path,
+                    channel_config,
+                );
+            }
         }
 
         // Try to discover a pixi project.
@@ -154,6 +168,11 @@ impl DiscoveredBackend {
             if let Some(pixi) = Self::discover_rattler_build(source_path.clone(), channel_config)? {
                 return Ok(pixi);
             }
+        }
+
+        // Try to discover as a ROS package.
+        if let Some(ros) = Self::discover_ros(source_path.clone(), channel_config)? {
+            return Ok(ros);
         }
 
         Err(DiscoveryError::FailedToDiscover(
@@ -325,6 +344,49 @@ impl DiscoveredBackend {
                 return Ok(Some(Self::from_recipe(
                     source_dir,
                     recipe_path,
+                    channel_config,
+                )?));
+            }
+        }
+        Ok(None)
+    }
+
+    /// Construct a new instance based on a specific `package.xml` file in the
+    /// source directory.
+    fn from_ros_package(
+        source_dir: PathBuf,
+        package_xml_absolute_path: PathBuf,
+        channel_config: &ChannelConfig,
+    ) -> Result<Self, DiscoveryError> {
+        debug_assert!(source_dir.is_absolute());
+        debug_assert!(package_xml_absolute_path.is_absolute());
+        Ok(Self {
+            backend_spec: BackendSpec::JsonRpc(JsonRpcBackendSpec::default_ros_build(
+                channel_config,
+            )),
+            init_params: BackendInitializationParams {
+                workspace_root: source_dir.clone(),
+                source: None,
+                source_anchor: source_dir,
+                manifest_path: package_xml_absolute_path,
+                project_model: Some(ProjectModelV1::default()),
+                configuration: None,
+                target_configuration: None,
+            },
+        })
+    }
+
+    /// Try to discover a ROS package.xml file in the repository.
+    fn discover_ros(
+        source_dir: PathBuf,
+        channel_config: &ChannelConfig,
+    ) -> Result<Option<Self>, DiscoveryError> {
+        for &package_file in VALID_ROS_BACKEND_NAMES.iter() {
+            let package_path = source_dir.join(package_file);
+            if package_path.is_file() {
+                return Ok(Some(Self::from_ros_package(
+                    source_dir,
+                    package_path,
                     channel_config,
                 )?));
             }
