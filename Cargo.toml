@@ -115,7 +115,7 @@ pypi_mapping = { path = "crates/pypi_mapping" }
 pypi_modifiers = { path = "crates/pypi_modifiers" }
 pyproject-toml = "0.13.7"
 rand = { version = "0.9.1", default-features = false }
-rattler = { version = "0.37.6", default-features = false }
+rattler = { version = "0.38.0", default-features = false }
 rattler_cache = { version = "0.3.36", default-features = false }
 rattler_conda_types = { version = "0.40.0", default-features = false, features = [
   "rayon",
@@ -127,10 +127,11 @@ rattler_networking = { version = "0.25.15", default-features = false, features =
   "dirs",
   "google-cloud-auth",
 ] }
-rattler_package_streaming = { version = "0.23.0", default-features = false }
-rattler_repodata_gateway = { version = "0.24.7", default-features = false }
+rattler_package_streaming = { version = "0.23.9", default-features = false }
+rattler_repodata_gateway = { version = "0.24.10", default-features = false }
 rattler_shell = { version = "0.25.2", default-features = false }
 rattler_solve = { version = "3.0.5", default-features = false }
+rattler_upload = { version = "0.3.6", features = ["s3"] }
 rattler_virtual_packages = { version = "2.1.7", default-features = false }
 rayon = "1.10.0"
 regex = "1.11.1"
