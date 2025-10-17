@@ -275,7 +275,7 @@ fn generate_variant_combinations(
             variant_values
                 .iter()
                 .map(|(key, _)| key)
-                .zip(combination.into_iter())
+                .zip(combination)
                 .map(|(key, value)| (key.clone(), value.clone()))
                 .collect()
         })
@@ -515,7 +515,7 @@ mod tests {
 
     #[test]
     fn test_is_star_requirement_with_no_version() {
-        let spec = PackageSpecV1::Binary(Box::new(BinaryPackageSpecV1::default()));
+        let spec = PackageSpecV1::Binary(Box::default());
 
         assert!(is_star_requirement(&spec));
     }

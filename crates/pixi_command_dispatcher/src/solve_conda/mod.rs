@@ -338,7 +338,7 @@ fn unique_dev_source_url(dev_source: &pixi_record::DevSourceRecord) -> Url {
     pairs.append_pair("name", dev_source.name.as_source());
 
     for (key, value) in &dev_source.variants {
-        pairs.append_pair(&format!("_{}", key), &value);
+        pairs.append_pair(&format!("_{}", key), value);
     }
 
     drop(pairs);

@@ -303,9 +303,9 @@ impl PixiEnvironmentSpec {
 
     /// Returns an iterator over all dependencies from dev source records,
     /// excluding packages that are themselves dev sources.
-    fn dev_source_dependencies<'a>(
-        dev_source_records: &'a [pixi_record::DevSourceRecord],
-    ) -> impl Iterator<Item = (rattler_conda_types::PackageName, PixiSpec)> + 'a {
+    fn dev_source_dependencies(
+        dev_source_records: &[pixi_record::DevSourceRecord],
+    ) -> impl Iterator<Item = (rattler_conda_types::PackageName, PixiSpec)> + '_ {
         use std::collections::HashSet;
 
         // Collect all dev source package names to filter them out
