@@ -125,7 +125,7 @@ start = "rich-example-main"
 name = "python_rich"
 version = "0.1.0"
 [package.build] # (5)!
-backend = { name = "pixi-build-python", version = "==0.3.2" }
+backend = { name = "pixi-build-python", version = "==0.4.0" }
 [package.host-dependencies] # (6)!
 hatchling = "==1.26.3"
 [package.run-dependencies] # (7)!

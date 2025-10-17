@@ -5556,7 +5556,7 @@ For custom backend channels, you can add the channel to the `channels` section o
 
 ```toml
 [package.build]
-backend = { name = "pixi-build-python", version = "==0.3.2" }
+backend = { name = "pixi-build-python", version = "==0.4.0" }
 channels = [
   "https://prefix.dev/pixi-build-backends",
   "https://prefix.dev/conda-forge",
@@ -5857,7 +5857,7 @@ version = "0.1.0"
 # We are using `pixi-build-python` in order to build a Python package
 [package.build.backend]
 name = "pixi-build-python"
-version = "==0.3.2"
+version = "==0.4.0"
 # The Python package `python_rich` uses `hatchling` as Python build backend
 [package.host-dependencies]
 hatchling = "*"
@@ -5895,7 +5895,7 @@ Pixi backends describe how to build a conda package, for a certain language or b
 ```toml
 [package.build.backend]
 name = "pixi-build-python"
-version = "==0.3.2"
+version = "==0.4.0"
 
 ```
 
@@ -6114,7 +6114,7 @@ start = "rich-example-main"
 name = "python_rich"
 version = "0.1.0"
 [package.build] # (5)!
-backend = { name = "pixi-build-python", version = "==0.3.2" }
+backend = { name = "pixi-build-python", version = "==0.4.0" }
 [package.host-dependencies] # (6)!
 hatchling = "==1.26.3"
 [package.run-dependencies] # (7)!

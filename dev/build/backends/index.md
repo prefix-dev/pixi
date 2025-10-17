@@ -21,7 +21,7 @@ For custom backend channels, you can add the channel to the `channels` section o
 
 ```toml
 [package.build]
-backend = { name = "pixi-build-python", version = "==0.3.2" }
+backend = { name = "pixi-build-python", version = "==0.4.0" }
 channels = [
   "https://prefix.dev/pixi-build-backends",
   "https://prefix.dev/conda-forge",
