@@ -18,9 +18,7 @@ use pixi_build_types::{
     VersionedProjectModel,
     procedures::{
         self,
-        conda_build_v0::{CondaBuildParams, CondaBuildResult},
         conda_build_v1::{CondaBuildV1Params, CondaBuildV1Result},
-        conda_metadata::{CondaMetadataParams, CondaMetadataResult},
         conda_outputs::{CondaOutputsParams, CondaOutputsResult},
         initialize::{InitializeParams, InitializeResult},
         negotiate_capabilities::{NegotiateCapabilitiesParams, NegotiateCapabilitiesResult},
@@ -284,108 +282,6 @@ impl JsonRpcBackend {
         })
     }
 
-    /// Call the `conda/getMetadata` method on the backend.
-    pub async fn conda_get_metadata(
-        &self,
-        request: CondaMetadataParams,
-    ) -> Result<CondaMetadataResult, CommunicationError> {
-        // Capture all of stderr and discard it
-        let stderr = self.stderr.as_ref().map(|stderr| {
-            // Cancellation signal
-            let (cancel_tx, cancel_rx) = oneshot::channel();
-            // Spawn the stderr forwarding task
-            let handle = tokio::spawn(stderr_buffer(stderr.clone(), cancel_rx));
-            (cancel_tx, handle)
-        });
-
-        let result = self
-            .client
-            .request(
-                procedures::conda_metadata::METHOD_NAME,
-                RpcParams::from(request),
-            )
-            .await;
-
-        // Wait for the stderr sink to finish, by signaling it to stop
-        let backend_output = if let Some((cancel_tx, handle)) = stderr {
-            // Cancel the stderr forwarding. Ignore any error because that means the
-            // tasks also finished.
-            let _err = cancel_tx.send(());
-            let lines = handle.await.map_or_else(
-                |e| match e.try_into_panic() {
-                    Ok(panic) => std::panic::resume_unwind(panic),
-                    Err(_) => Err(CommunicationError::StdErrPipeStopped),
-                },
-                |e| e.map_err(|_| CommunicationError::StdErrPipeStopped),
-            )?;
-
-            Some(lines)
-        } else {
-            None
-        };
-
-        result.map_err(|err| {
-            CommunicationError::from_client_error(
-                self.backend_identifier.clone(),
-                err,
-                procedures::conda_metadata::METHOD_NAME,
-                self.manifest_path.parent().unwrap_or(&self.manifest_path),
-                backend_output,
-            )
-        })
-    }
-
-    pub async fn conda_build_v0<W: BackendOutputStream + Send + 'static>(
-        &self,
-        request: CondaBuildParams,
-        output_stream: W,
-    ) -> Result<CondaBuildResult, CommunicationError> {
-        // Capture all of stderr and discard it
-        let stderr = self.stderr.as_ref().map(|stderr| {
-            // Cancellation signal
-            let (cancel_tx, cancel_rx) = oneshot::channel();
-            // Spawn the stderr forwarding task
-            let handle = tokio::spawn(stream_stderr(stderr.clone(), cancel_rx, output_stream));
-            (cancel_tx, handle)
-        });
-
-        let result = self
-            .client
-            .request(
-                procedures::conda_build_v0::METHOD_NAME,
-                RpcParams::from(request),
-            )
-            .await;
-
-        // Wait for the stderr sink to finish, by signaling it to stop
-        let backend_output = if let Some((cancel_tx, handle)) = stderr {
-            // Cancel the stderr forwarding. Ignore any error because that means the
-            // tasks also finished.
-            let _err = cancel_tx.send(());
-            let lines = handle.await.map_or_else(
-                |e| match e.try_into_panic() {
-                    Ok(panic) => std::panic::resume_unwind(panic),
-                    Err(_) => Err(CommunicationError::StdErrPipeStopped),
-                },
-                |e| e.map_err(|_| CommunicationError::StdErrPipeStopped),
-            )?;
-
-            Some(lines)
-        } else {
-            None
-        };
-
-        result.map_err(|err| {
-            CommunicationError::from_client_error(
-                self.backend_identifier.clone(),
-                err,
-                procedures::conda_build_v0::METHOD_NAME,
-                self.manifest_path.parent().unwrap_or(&self.manifest_path),
-                backend_output,
-            )
-        })
-    }
-
     pub async fn conda_build_v1<W: BackendOutputStream + Send + 'static>(
         &self,
         request: CondaBuildV1Params,
@@ -481,7 +377,7 @@ impl JsonRpcBackend {
             CommunicationError::from_client_error(
                 self.backend_identifier.clone(),
                 err,
-                procedures::conda_metadata::METHOD_NAME,
+                procedures::conda_outputs::METHOD_NAME,
                 self.manifest_path.parent().unwrap_or(&self.manifest_path),
                 backend_output,
             )
