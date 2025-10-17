@@ -205,7 +205,7 @@ impl BuildBackendMetadataSpec {
     /// Checks if we should skip the metadata cache for this backend.
     /// Returns true if:
     /// 1. There's a System backend override (either for this specific backend or all backends)
-    /// 2. OR the original backend spec is System or Path-based
+    /// 2. OR the original backend spec is System or mutable (path-based non-binary)
     fn should_skip_metadata_cache(
         backend_spec: &BackendSpec,
         backend_override: &BackendOverride,
@@ -225,12 +225,10 @@ impl BuildBackendMetadataSpec {
             return true;
         }
 
-        // Check if the original backend spec is non-binary (System or Path-based)
+        // Check if the original backend spec is System or mutable
         match &json_rpc_spec.command {
             CommandSpec::System(_) => true,
-            CommandSpec::EnvironmentSpec(env_spec) => {
-                matches!(env_spec.requirement.1, pixi_spec::PixiSpec::Path(_))
-            }
+            CommandSpec::EnvironmentSpec(env_spec) => env_spec.requirement.1.is_mutable(),
         }
     }
 
