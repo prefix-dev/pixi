@@ -71,8 +71,11 @@ pub struct SourceBuildSpec {
     /// The build profile to use for the build.
     pub build_profile: BuildProfile,
 
-    /// Variant configuration
+    /// Build variants to use during the build
     pub variants: Option<BTreeMap<String, Vec<String>>>,
+
+    /// Build variant file contents to use during the build
+    pub variant_files: Option<Vec<PathBuf>>,
 
     /// The directory where to place the built package.
     pub output_directory: Option<PathBuf>,
@@ -336,6 +339,7 @@ impl SourceBuildSpec {
                 host_platform,
                 build_platform,
                 variant_configuration: self.variants.clone(),
+                variant_files: self.variant_files.clone(),
                 work_directory: work_directory.clone(),
                 channels: self.channels.clone(),
             })
@@ -449,6 +453,7 @@ impl SourceBuildSpec {
                         channels: self.channels.clone(),
                         channel_config: self.channel_config.clone(),
                         variants: self.variants.clone(),
+                        variant_files: self.variant_files.clone(),
                         enabled_protocols: self.enabled_protocols.clone(),
                     })
                     .await
@@ -479,6 +484,7 @@ impl SourceBuildSpec {
                         channels: self.channels.clone(),
                         channel_config: self.channel_config.clone(),
                         variants: self.variants.clone(),
+                        variant_files: self.variant_files.clone(),
                         enabled_protocols: self.enabled_protocols.clone(),
                     })
                     .await
@@ -626,6 +632,7 @@ impl SourceBuildSpec {
                 exclude_newer: None,
                 channel_config: self.channel_config.clone(),
                 variants: self.variants.clone(),
+                variant_files: self.variant_files.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
             })
             .await

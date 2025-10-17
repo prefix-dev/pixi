@@ -1253,6 +1253,11 @@ async fn test_multiple_prefix_update() {
 
     let command_dispatcher = project.command_dispatcher_builder().unwrap().finish();
 
+    let variant_config = group
+        .workspace()
+        .variants(current_platform)
+        .expect("variant configuration should load in test");
+
     let conda_prefix_updater = CondaPrefixUpdater::new(
         channels,
         group.workspace().channel_config(),
@@ -1260,7 +1265,7 @@ async fn test_multiple_prefix_update() {
         prefix,
         current_platform,
         virtual_packages,
-        group.workspace().variants(current_platform),
+        variant_config,
         command_dispatcher,
     );
 

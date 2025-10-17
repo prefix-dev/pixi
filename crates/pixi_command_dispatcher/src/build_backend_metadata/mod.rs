@@ -1,10 +1,14 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    hash::{Hash, Hasher},
+    path::PathBuf,
+};
 
 use miette::Diagnostic;
+use pathdiff::diff_paths;
 use pixi_build_discovery::EnabledProtocols;
 use pixi_build_frontend::Backend;
-use pixi_build_type_conversions::compute_project_model_hash;
-use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
+use pixi_build_types::{ProjectModelV1, procedures::conda_outputs::CondaOutputsParams};
 use pixi_glob::GlobHashKey;
 use pixi_record::{InputHash, PinnedSourceSpec};
 use pixi_spec::{SourceAnchor, SourceSpec};
@@ -12,6 +16,7 @@ use rand::random;
 use rattler_conda_types::{ChannelConfig, ChannelUrl};
 use thiserror::Error;
 use tracing::instrument;
+use xxhash_rust::xxh3::Xxh3;
 
 use crate::{
     BuildEnvironment, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
@@ -42,6 +47,9 @@ pub struct BuildBackendMetadataSpec {
 
     /// Variant configuration
     pub variants: Option<BTreeMap<String, Vec<String>>>,
+
+    /// Variant file paths provided by the workspace.
+    pub variant_files: Option<Vec<PathBuf>>,
 
     /// The protocols that are enabled for this source
     #[serde(skip_serializing_if = "crate::is_default")]
@@ -95,11 +103,10 @@ impl BuildBackendMetadataSpec {
             .map_err_with(BuildBackendMetadataError::Discovery)?;
 
         // Calculate the hash of the project model
-        let project_model_hash = discovered_backend
-            .init_params
-            .project_model
-            .as_ref()
-            .map(compute_project_model_hash);
+        let additional_glob_hash = calculate_additional_glob_hash(
+            &discovered_backend.init_params.project_model,
+            &self.variants,
+        );
 
         // Check the source metadata cache, short circuit if there is a cache hit that
         // is still fresh.
@@ -114,7 +121,7 @@ impl BuildBackendMetadataSpec {
             &source_checkout,
             &command_dispatcher,
             metadata,
-            &project_model_hash,
+            &additional_glob_hash,
         )
         .await?
         {
@@ -158,7 +165,7 @@ impl BuildBackendMetadataSpec {
                 command_dispatcher,
                 source_checkout,
                 backend,
-                project_model_hash,
+                additional_glob_hash,
             )
             .await?;
 
@@ -180,7 +187,7 @@ impl BuildBackendMetadataSpec {
         source_checkout: &SourceCheckout,
         command_dispatcher: &CommandDispatcher,
         metadata: Option<CachedCondaMetadata>,
-        project_model_hash: &Option<Vec<u8>>,
+        additional_glob_hash: &[u8],
     ) -> Result<Option<CachedCondaMetadata>, CommandDispatcherError<BuildBackendMetadataError>>
     {
         let Some(metadata) = metadata else {
@@ -206,7 +213,7 @@ impl BuildBackendMetadataSpec {
             .compute_hash(GlobHashKey::new(
                 source_checkout.path.clone(),
                 input_globs.globs.clone(),
-                project_model_hash.clone(),
+                additional_glob_hash.to_vec(),
             ))
             .await
             .map_err(BuildBackendMetadataError::GlobHash)
@@ -228,13 +235,14 @@ impl BuildBackendMetadataSpec {
         command_dispatcher: CommandDispatcher,
         source_checkout: SourceCheckout,
         backend: Backend,
-        project_model_hash: Option<Vec<u8>>,
+        additional_glob_hash: Vec<u8>,
     ) -> Result<CachedCondaMetadata, CommandDispatcherError<BuildBackendMetadataError>> {
         let params = CondaOutputsParams {
             channels: self.channels,
             host_platform: self.build_environment.host_platform,
             build_platform: self.build_environment.build_platform,
-            variant_configuration: self.variants.map(|variants| variants.into_iter().collect()),
+            variant_configuration: self.variants.clone(),
+            variant_files: self.variant_files.clone(),
             work_directory: command_dispatcher.cache_dirs().working_dirs().join(
                 WorkDirKey {
                     source: SourceRecordOrCheckout::Checkout {
@@ -253,11 +261,16 @@ impl BuildBackendMetadataSpec {
             .map_err(CommandDispatcherError::Failed)?;
 
         // Compute the input globs for the mutable source checkouts.
+        let input_globs = extend_input_globs_with_variant_files(
+            outputs.input_globs.clone(),
+            &self.variant_files,
+            &source_checkout,
+        );
         let input_hash = Self::compute_input_hash(
             command_dispatcher,
             &source_checkout,
-            outputs.input_globs.clone(),
-            project_model_hash,
+            input_globs,
+            additional_glob_hash,
         )
         .await?;
 
@@ -275,7 +288,7 @@ impl BuildBackendMetadataSpec {
         command_queue: CommandDispatcher,
         source: &SourceCheckout,
         input_globs: BTreeSet<String>,
-        project_model_hash: Option<Vec<u8>>,
+        additional_glob_hash: Vec<u8>,
     ) -> Result<Option<InputHash>, CommandDispatcherError<BuildBackendMetadataError>> {
         if source.pinned.is_immutable() {
             // If the source is immutable (e.g., a git commit), we do not need to compute an
@@ -289,7 +302,7 @@ impl BuildBackendMetadataSpec {
             .compute_hash(GlobHashKey::new(
                 &source.path,
                 input_globs.clone(),
-                project_model_hash,
+                additional_glob_hash,
             ))
             .await
             .map_err(BuildBackendMetadataError::GlobHash)
@@ -311,6 +324,28 @@ impl BuildBackendMetadataSpec {
             pinned_source: self.source.clone(),
         }
     }
+}
+
+/// Returns the input glob set extended with any variant file paths
+/// relative to the source checkout root.
+/// Paths are normalised to use forward slashes so that they are glob-compatible.
+fn extend_input_globs_with_variant_files(
+    mut input_globs: BTreeSet<String>,
+    variant_files: &Option<Vec<PathBuf>>,
+    source_checkout: &SourceCheckout,
+) -> BTreeSet<String> {
+    if let Some(variant_files) = variant_files {
+        for variant_file in variant_files {
+            let relative = match variant_file.strip_prefix(&source_checkout.path) {
+                Ok(stripped) => stripped.to_path_buf(),
+                Err(_) => diff_paths(variant_file, &source_checkout.path)
+                    .unwrap_or_else(|| variant_file.clone()),
+            };
+            let glob = relative.to_string_lossy().replace("\\", "/");
+            input_globs.insert(glob);
+        }
+    }
+    input_globs
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -342,4 +377,21 @@ pub enum BuildBackendMetadataError {
 
     #[error(transparent)]
     Cache(#[from] source_metadata_cache::SourceMetadataCacheError),
+}
+
+/// Computes an additional hash to be used in glob hash
+pub fn calculate_additional_glob_hash(
+    project_model: &Option<ProjectModelV1>,
+    variants: &Option<BTreeMap<String, Vec<String>>>,
+) -> Vec<u8> {
+    let mut hasher = Xxh3::new();
+    if let Some(project_model) = project_model {
+        project_model.hash(&mut hasher);
+    }
+    if let Some(variants) = variants {
+        if !variants.is_empty() {
+            variants.hash(&mut hasher);
+        }
+    }
+    hasher.finish().to_ne_bytes().to_vec()
 }

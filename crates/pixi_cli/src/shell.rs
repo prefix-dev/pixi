@@ -98,7 +98,7 @@ fn start_powershell(
 }
 
 // allowing dead code so that we test this on unix compilation as well
-#[allow(dead_code)]
+#[cfg_attr(unix, expect(unused))]
 fn start_cmdexe(
     cmdexe: CmdExe,
     env: &HashMap<String, String>,
@@ -137,7 +137,7 @@ fn start_cmdexe(
 }
 
 // allowing dead code so that we test this on unix compilation as well
-#[allow(dead_code)]
+#[cfg_attr(unix, expect(unused))]
 fn start_winbash(
     bash: Bash,
     env: &HashMap<String, String>,

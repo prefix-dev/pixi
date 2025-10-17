@@ -12,7 +12,6 @@ version = "0.1.0"
 slow_integration_tests = []
 
 [dependencies]
-ahash = { workspace = true }
 async-once-cell = { workspace = true }
 barrier_cell = { workspace = true }
 chrono = { workspace = true }
@@ -36,11 +35,11 @@ pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }
 pixi_build_discovery = { workspace = true }
 pixi_build_frontend = { workspace = true }
-pixi_build_type_conversions = { workspace = true }
 pixi_command_dispatcher = { workspace = true }
 pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_default_versions = { workspace = true }
+pixi_diff = { workspace = true }
 pixi_git = { workspace = true }
 pixi_glob = { workspace = true }
 pixi_install_pypi = { workspace = true }

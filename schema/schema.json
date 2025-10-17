@@ -2150,6 +2150,15 @@
             "minLength": 1
           }
         },
+        "build-variants-files": {
+          "title": "Build-Variants-Files",
+          "description": "Ordered list of variant definition files.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[^\\\\]+$"
+          }
+        },
         "channel-priority": {
           "$ref": "#/$defs/ChannelPriority",
           "description": "The type of channel priority that is used in the solve.\n- 'strict': only take the package from the channel it exist in first.\n- 'disabled': group all dependencies together as if there is no channel difference.",

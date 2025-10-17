@@ -134,14 +134,14 @@ impl<'a> UvBuildDispatchParams<'a> {
     }
 
     /// Set the link mode for the build dispatch
-    #[allow(dead_code)]
+    #[expect(unused)]
     pub fn with_link_mode(mut self, link_mode: LinkMode) -> Self {
         self.link_mode = link_mode;
         self
     }
 
     /// Set the constraints for the build dispatch
-    #[allow(dead_code)]
+    #[expect(unused)]
     pub fn with_constraints(mut self, constraints: Constraints) -> Self {
         self.constraints = constraints;
         self
@@ -153,7 +153,7 @@ impl<'a> UvBuildDispatchParams<'a> {
         self
     }
 
-    #[allow(dead_code)]
+    #[expect(unused)]
     pub fn with_preview_mode(mut self, preview: uv_configuration::Preview) -> Self {
         self.preview = preview;
         self
@@ -164,7 +164,7 @@ impl<'a> UvBuildDispatchParams<'a> {
         self
     }
 
-    #[allow(dead_code)]
+    #[expect(unused)]
     pub fn with_package_config_settings(
         mut self,
         package_config_settings: PackageConfigSettings,
@@ -173,7 +173,7 @@ impl<'a> UvBuildDispatchParams<'a> {
         self
     }
 
-    #[allow(dead_code)]
+    #[expect(unused)]
     pub fn with_extra_build_requires(mut self, extra_build_requires: ExtraBuildRequires) -> Self {
         self.extra_build_requires = extra_build_requires;
         self

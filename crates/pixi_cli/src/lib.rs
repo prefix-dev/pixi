@@ -296,23 +296,30 @@ fn setup_logging(args: &Args, use_colors: bool) -> miette::Result<()> {
         LevelFilter::TRACE => (LevelFilter::TRACE, LevelFilter::TRACE, LevelFilter::TRACE),
     };
 
-    let env_filter = EnvFilter::builder()
+    // Start building the filter with RUST_LOG support
+    let mut env_filter = EnvFilter::builder()
         .with_default_directive(level_filter.into())
         .from_env()
-        .into_diagnostic()?
+        .into_diagnostic()?;
+
+    // Only add CLI-based directives if RUST_LOG is not set
+    // This allows RUST_LOG to fully override CLI verbosity settings
+    if env::var("RUST_LOG").is_err() {
         // filter logs from apple codesign because they are very noisy
-        .add_directive("apple_codesign=off".parse().into_diagnostic()?)
-        .add_directive(format!("pixi={}", pixi_level).parse().into_diagnostic()?)
-        .add_directive(
-            format!("pixi_command_dispatcher={}", pixi_level)
-                .parse()
-                .into_diagnostic()?,
-        )
-        .add_directive(
-            format!("resolvo={}", low_level_filter)
-                .parse()
-                .into_diagnostic()?,
-        );
+        env_filter = env_filter
+            .add_directive("apple_codesign=off".parse().into_diagnostic()?)
+            .add_directive(format!("pixi={}", pixi_level).parse().into_diagnostic()?)
+            .add_directive(
+                format!("pixi_command_dispatcher={}", pixi_level)
+                    .parse()
+                    .into_diagnostic()?,
+            )
+            .add_directive(
+                format!("resolvo={}", low_level_filter)
+                    .parse()
+                    .into_diagnostic()?,
+            );
+    }
 
     // Set up the tracing subscriber
     let fmt_layer = tracing_subscriber::fmt::layer()
