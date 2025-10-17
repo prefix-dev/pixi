@@ -5,8 +5,7 @@ mod conda_package_metadata;
 pub mod procedures;
 mod project_model;
 
-use std::fmt::Display;
-use std::sync::LazyLock;
+use std::{fmt::Display, sync::LazyLock};
 
 pub use capabilities::{BackendCapabilities, FrontendCapabilities};
 pub use channel_configuration::ChannelConfiguration;
@@ -22,7 +21,7 @@ use rattler_conda_types::{
 };
 use serde::{Deserialize, Serialize};
 
-// Version 0: Initial version
+// Version 0: Initial version (removed)
 // Version 1: Added conda/outputs and conda/build_v1
 // Version 2: Name in project models can be `None`.
 
@@ -31,7 +30,7 @@ use serde::{Deserialize, Serialize};
 /// that a backend is selected that uses the same interface version as Pixi does
 pub static PIXI_BUILD_API_VERSION_NAME: LazyLock<PackageName> =
     LazyLock::new(|| PackageName::new_unchecked("pixi-build-api-version"));
-pub const PIXI_BUILD_API_VERSION_LOWER: u64 = 0;
+pub const PIXI_BUILD_API_VERSION_LOWER: u64 = 1;
 pub const PIXI_BUILD_API_VERSION_CURRENT: u64 = 2;
 pub const PIXI_BUILD_API_VERSION_UPPER: u64 = PIXI_BUILD_API_VERSION_CURRENT + 1;
 pub static PIXI_BUILD_API_VERSION_SPEC: LazyLock<VersionSpec> = LazyLock::new(|| {
@@ -77,16 +76,10 @@ impl PixiBuildApiVersion {
     /// Returns the backend capabilities that are expected for this version.
     pub fn expected_backend_capabilities(&self) -> BackendCapabilities {
         match self.0 {
-            0 => BackendCapabilities {
-                provides_conda_metadata: Some(true),
-                provides_conda_build: Some(true),
-                highest_supported_project_model: Some(1),
-                ..BackendCapabilities::default()
-            },
             1 => BackendCapabilities {
                 provides_conda_outputs: Some(true),
                 provides_conda_build_v1: Some(true),
-                ..Self(0).expected_backend_capabilities()
+                highest_supported_project_model: Some(1),
             },
             2 => BackendCapabilities {
                 ..Self(1).expected_backend_capabilities()
@@ -95,7 +88,8 @@ impl PixiBuildApiVersion {
         }
     }
 
-    /// Returns true if this version of the protocol supports the name field in the project model to be `None`.
+    /// Returns true if this version of the protocol supports the name field in
+    /// the project model to be `None`.
     pub fn supports_name_none(&self) -> bool {
         self.0 >= 2
     }
