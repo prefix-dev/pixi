@@ -747,6 +747,7 @@ pub async fn test_dev_source_metadata_with_variants() {
             channels: vec![],
             build_environment: BuildEnvironment::simple(tool_platform, tool_virtual_packages),
             variants: Some(variant_config),
+            variant_files: None,
             enabled_protocols: Default::default(),
         },
     };
