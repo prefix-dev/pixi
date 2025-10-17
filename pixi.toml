@@ -255,7 +255,7 @@ description = "Build build-backends used for testing purposes"
 zig = ">=0.15.1,<0.16"
 
 [feature.pixi-build.dependencies]
-pixi = { path = "./crates/pixi" }
+pixi = { path = "." }
 
 [feature.pixi-build.system-requirements]
 libc = { family = "glibc", version = "2.34" }
@@ -294,3 +294,15 @@ schema = { features = [
 ], no-default-feature = true, solve-group = "default" }
 test-export = { features = ["micromamba"], no-default-feature = true }
 trampoline = { features = ["trampoline"], no-default-feature = true }
+
+
+#
+# Package descriptions
+#
+
+[package]
+name = "pixi"
+
+[package.build]
+backend = { name = "pixi-build-rust", version = "*" }
+source = { path = "crates/pixi" }

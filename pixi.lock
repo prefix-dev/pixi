@@ -2065,19 +2065,19 @@ environments:
     - url: https://prefix.dev/conda-forge/
     packages:
       linux-64:
-      - conda: ./crates/pixi
+      - conda: .
         build: h24ff57e_0
       linux-aarch64:
-      - conda: ./crates/pixi
+      - conda: .
         subdir: linux-aarch64
       osx-64:
-      - conda: ./crates/pixi
+      - conda: .
         subdir: osx-64
       osx-arm64:
-      - conda: ./crates/pixi
+      - conda: .
         subdir: osx-arm64
       win-64:
-      - conda: ./crates/pixi
+      - conda: .
         subdir: win-64
   pypi-gen:
     channels:
@@ -8638,7 +8638,7 @@ packages:
   license: HPND
   size: 944083
   timestamp: 1758208682964
-- conda: ./crates/pixi
+- conda: .
   name: pixi
   version: 0.56.0
   build: h24ff57e_0
@@ -8649,12 +8649,12 @@ packages:
   - __glibc >=2.17
   license: BSD-3-Clause
   input:
-    hash: 76da028cc63770319500de469f65162f4b1fb8a4681b9f6a49ca6c495bf5ac67
+    hash: a6903542c089072c02969a62ebd498341d26cd11a5a01a9d3cdf504b1db3fd70
     globs:
     - ../../Cargo.toml
     - ../Cargo.toml
     - Cargo.toml
-- conda: ./crates/pixi
+- conda: .
   name: pixi
   version: 0.56.0
   build: hbf21a9e_0
@@ -8663,12 +8663,12 @@ packages:
   - __glibc >=2.17
   license: BSD-3-Clause
   input:
-    hash: 76da028cc63770319500de469f65162f4b1fb8a4681b9f6a49ca6c495bf5ac67
+    hash: a6903542c089072c02969a62ebd498341d26cd11a5a01a9d3cdf504b1db3fd70
     globs:
     - ../../Cargo.toml
     - ../Cargo.toml
     - Cargo.toml
-- conda: ./crates/pixi
+- conda: .
   name: pixi
   version: 0.56.0
   build: hbf21a9e_0
@@ -8677,12 +8677,12 @@ packages:
   - __osx >=10.13
   license: BSD-3-Clause
   input:
-    hash: 76da028cc63770319500de469f65162f4b1fb8a4681b9f6a49ca6c495bf5ac67
+    hash: a6903542c089072c02969a62ebd498341d26cd11a5a01a9d3cdf504b1db3fd70
     globs:
     - ../../Cargo.toml
     - ../Cargo.toml
     - Cargo.toml
-- conda: ./crates/pixi
+- conda: .
   name: pixi
   version: 0.56.0
   build: hbf21a9e_0
@@ -8691,19 +8691,19 @@ packages:
   - __osx >=11.0
   license: BSD-3-Clause
   input:
-    hash: 76da028cc63770319500de469f65162f4b1fb8a4681b9f6a49ca6c495bf5ac67
+    hash: a6903542c089072c02969a62ebd498341d26cd11a5a01a9d3cdf504b1db3fd70
     globs:
     - ../../Cargo.toml
     - ../Cargo.toml
     - Cargo.toml
-- conda: ./crates/pixi
+- conda: .
   name: pixi
   version: 0.56.0
   build: hbf21a9e_0
   subdir: win-64
   license: BSD-3-Clause
   input:
-    hash: 76da028cc63770319500de469f65162f4b1fb8a4681b9f6a49ca6c495bf5ac67
+    hash: a6903542c089072c02969a62ebd498341d26cd11a5a01a9d3cdf504b1db3fd70
     globs:
     - ../../Cargo.toml
     - ../Cargo.toml
