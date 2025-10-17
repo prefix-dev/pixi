@@ -4752,6 +4752,7 @@ dependencies = [
  "uv-pypi-types",
  "uv-requirements-txt",
  "uv-types",
+ "which",
  "zip 2.4.2",
 ]
 
