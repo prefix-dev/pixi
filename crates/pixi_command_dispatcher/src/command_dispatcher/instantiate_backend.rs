@@ -58,6 +58,18 @@ impl CommandDispatcher {
             spec.init_params.source_anchor
         };
 
+        // Canonicalize the source_dir to ensure it's a fully resolved absolute path
+        // without any relative components like ".." or "."
+        let source_dir = dunce::canonicalize(&source_dir).map_err(|e| {
+            CommandDispatcherError::Failed(InstantiateBackendError::SpecConversionError(
+                SpecConversionError::InvalidPath(format!(
+                    "failed to canonicalize source directory '{}': {}",
+                    source_dir.display(),
+                    e
+                )),
+            ))
+        })?;
+
         let command_spec = match self.build_backend_overrides() {
             BackendOverride::System(overridden_backends) => overridden_backends
                 .named_backend_override(&backend_spec.name)
