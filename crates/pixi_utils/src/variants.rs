@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, path::PathBuf};
 
 /// An alias for variant configuration. This maps a variant name to a list of
 /// options.
@@ -12,6 +12,11 @@ use std::collections::BTreeMap;
 /// numpy:
 ///     - 1.18
 /// ```
-///
-/// TODO: In the future we should turn this into a proper type.
-pub type VariantConfig = BTreeMap<String, Vec<String>>;
+#[derive(Debug, Clone)]
+pub struct VariantConfig {
+    /// Inline variant configuration
+    pub variants: BTreeMap<String, Vec<String>>,
+
+    /// Absolute paths to external variant files.
+    pub variant_files: Vec<PathBuf>,
+}

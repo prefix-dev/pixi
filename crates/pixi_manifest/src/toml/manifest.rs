@@ -30,6 +30,7 @@ use crate::{
         environment::TomlEnvironmentList, task::TomlTask,
     },
     utils::{PixiSpanned, package_map::UniquePackageMap},
+    warning::Deprecation,
 };
 
 /// Raw representation of a pixi manifest. This is the deserialized form of the
@@ -473,7 +474,12 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
         let workspace = if th.contains("workspace") {
             Some(th.required_s("workspace")?.into())
         } else {
-            th.optional("project")
+            let project: Option<Spanned<TomlWorkspace>> = th.optional("project");
+            if let Some(project) = &project {
+                warnings
+                    .push(Deprecation::renamed_field("project", "workspace", project.span).into());
+            }
+            project.map(From::from)
         };
         let package = th.optional("package");
 
@@ -484,8 +490,34 @@ impl<'de> toml_span::Deserialize<'de> for TomlManifest {
             .map(TomlWith::into_inner);
 
         let dependencies = th.optional("dependencies");
-        let host_dependencies = th.optional("host-dependencies");
-        let build_dependencies = th.optional("build-dependencies");
+
+        let host_dependencies: Option<Spanned<UniquePackageMap>> = th.optional("host-dependencies");
+        if let Some(host_dependencies) = &host_dependencies {
+            warnings.push(
+                Deprecation::renamed_field(
+                    "host-dependencies",
+                    "dependencies",
+                    host_dependencies.span,
+                )
+                .into(),
+            );
+        }
+        let host_dependencies = host_dependencies.map(From::from);
+
+        let build_dependencies: Option<Spanned<UniquePackageMap>> =
+            th.optional("build-dependencies");
+        if let Some(build_dependencies) = &build_dependencies {
+            warnings.push(
+                Deprecation::renamed_field(
+                    "build-dependencies",
+                    "dependencies",
+                    build_dependencies.span,
+                )
+                .into(),
+            );
+        }
+        let build_dependencies = build_dependencies.map(From::from);
+
         let pypi_dependencies = th
             .optional::<TomlWith<_, PixiSpanned<TomlIndexMap<_, Same>>>>("pypi-dependencies")
             .map(TomlWith::into_inner);
@@ -791,6 +823,60 @@ mod test {
     }
 
     #[test]
+    fn test_host_dependencies_deprecation_warning() {
+        assert_snapshot!(
+            expect_parse_warnings(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ['linux-64']
+
+        [host-dependencies]
+        foo = "*"
+        "#,
+            ),
+            @r#"
+         ⚠ The `host-dependencies` field is deprecated. Use `dependencies` instead.
+          ╭─[pixi.toml:7:9]
+        6 │
+        7 │ ╭─▶         [host-dependencies]
+        8 │ ├─▶         foo = "*"
+          · ╰──── replace this with 'dependencies'
+        9 │
+          ╰────
+        "#
+        );
+    }
+
+    #[test]
+    fn test_build_dependencies_deprecation_warning() {
+        assert_snapshot!(
+            expect_parse_warnings(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ['linux-64']
+
+        [build-dependencies]
+        bar = "*"
+        "#,
+            ),
+            @r#"
+         ⚠ The `build-dependencies` field is deprecated. Use `dependencies` instead.
+          ╭─[pixi.toml:7:9]
+        6 │
+        7 │ ╭─▶         [build-dependencies]
+        8 │ ├─▶         bar = "*"
+          · ╰──── replace this with 'dependencies'
+        9 │
+          ╰────
+        "#
+        );
+    }
+
+    #[test]
     fn test_unused_features() {
         assert_snapshot!(expect_parse_warnings(
             r#"
@@ -1088,5 +1174,29 @@ mod test {
         bad-pkg = { path = "../path", git = "https://github.com/example/repo.git" }
         "#,
         ));
+    }
+
+    #[test]
+    fn test_project_deprecation_warning() {
+        assert_snapshot!(
+            expect_parse_warnings(
+            r#"
+        [project]
+        name = "foo"
+        channels = []
+        "#,
+            ),
+            @r#"
+         ⚠ The `project` field is deprecated. Use `workspace` instead.
+          ╭─[pixi.toml:2:9]
+        1 │
+        2 │ ╭─▶         [project]
+        3 │ │           name = "foo"
+        4 │ ├─▶         channels = []
+          · ╰──── replace this with 'workspace'
+        5 │
+          ╰────
+        "#
+        );
     }
 }

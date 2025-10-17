@@ -1,8 +1,10 @@
-use std::fmt::Display;
-use std::path::{Path, PathBuf};
+use std::{
+    fmt::Display,
+    path::{Path, PathBuf},
+};
 
 use itertools::Either;
-use rattler_conda_types::{NamelessMatchSpec, package::ArchiveIdentifier};
+use rattler_conda_types::{NamelessMatchSpec, package::ArchiveType};
 use serde_with::serde_as;
 use typed_path::{Utf8NativePathBuf, Utf8TypedPathBuf};
 
@@ -54,11 +56,11 @@ impl PathSpec {
     }
 
     /// Returns true if this path points to a binary archive.
+    ///
+    /// This is determined by checking if the path has a known binary archive
+    /// extension (e.g. `.tar.bz2`, `.conda`).
     pub fn is_binary(&self) -> bool {
-        self.path
-            .file_name()
-            .and_then(ArchiveIdentifier::try_from_path)
-            .is_some()
+        ArchiveType::try_from(Path::new(self.path.as_str())).is_some()
     }
 
     /// Converts this instance into a [`PathSourceSpec`] if the path points to a
@@ -235,5 +237,87 @@ fn resolve_path(path: &Path, root_dir: impl AsRef<Path>) -> Result<PathBuf, Spec
         Ok(home_dir.join(user_path))
     } else {
         Ok(root_dir.as_ref().join(path))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_binary() {
+        // Test binary archive extensions supported by ArchiveType
+        let binary_extensions = vec![
+            "package.tar.bz2",
+            "package.conda",
+            "path/to/package.tar.bz2",
+            "path/to/package.conda",
+        ];
+
+        for path_str in binary_extensions {
+            let spec = PathSpec::new(Utf8TypedPathBuf::from(path_str));
+            assert!(
+                spec.is_binary(),
+                "Expected {} to be identified as a binary archive",
+                path_str
+            );
+        }
+
+        // Test non-binary paths (including unsupported archive formats)
+        let non_binary_paths = vec![
+            "directory",
+            "path/to/directory",
+            "file.txt",
+            "package.zip",
+            "package.tar.gz",
+            "package.tar",
+            "package.tar.xz",
+            "package.tar.zst",
+            "path/to/pyproject.toml",
+            "src/main.rs",
+        ];
+
+        for path_str in non_binary_paths {
+            let spec = PathSpec::new(Utf8TypedPathBuf::from(path_str));
+            assert!(
+                !spec.is_binary(),
+                "Expected {} to NOT be identified as a binary archive",
+                path_str
+            );
+        }
+    }
+
+    #[test]
+    fn test_into_source_or_binary() {
+        // Binary path should return Right (binary)
+        let binary_spec = PathSpec::new(Utf8TypedPathBuf::from("package.tar.bz2"));
+        match binary_spec.into_source_or_binary() {
+            Either::Right(_) => {}
+            Either::Left(_) => panic!("Expected binary spec to return Right variant"),
+        }
+
+        // Non-binary path should return Left (source)
+        let source_spec = PathSpec::new(Utf8TypedPathBuf::from("directory"));
+        match source_spec.into_source_or_binary() {
+            Either::Left(_) => {}
+            Either::Right(_) => panic!("Expected source spec to return Left variant"),
+        }
+    }
+
+    #[test]
+    fn test_try_into_source_path() {
+        // Binary path should return Err with original spec
+        let binary_spec = PathSpec::new(Utf8TypedPathBuf::from("package.conda"));
+        assert!(
+            binary_spec.try_into_source_path().is_err(),
+            "Expected binary path to fail conversion to source path"
+        );
+
+        // Non-binary path should return Ok with source spec
+        let source_spec = PathSpec::new(Utf8TypedPathBuf::from("path/to/source"));
+        assert!(
+            source_spec.try_into_source_path().is_ok(),
+            "Expected non-binary path to succeed conversion to source path"
+        );
     }
 }

@@ -58,8 +58,11 @@ pub struct InstantiateToolEnvironmentSpec {
     /// The channel configuration to use for this environment.
     pub channel_config: ChannelConfig,
 
-    /// Variants
+    /// Build variants
     pub variants: Option<BTreeMap<String, Vec<String>>>,
+
+    /// Build variant file contents
+    pub variant_files: Option<Vec<PathBuf>>,
 
     /// The protocols that are enabled for source packages
     #[serde(skip_serializing_if = "crate::is_default")]
@@ -90,6 +93,7 @@ impl Hash for InstantiateToolEnvironmentSpec {
             channel_config,
             enabled_protocols,
             variants,
+            variant_files,
         } = self;
         name.hash(state);
         requirement.hash(state);
@@ -113,6 +117,7 @@ impl Hash for InstantiateToolEnvironmentSpec {
         channel_config.hash(state);
         enabled_protocols.hash(state);
         variants.hash(state);
+        variant_files.hash(state);
     }
 }
 
@@ -133,6 +138,7 @@ impl InstantiateToolEnvironmentSpec {
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from(".")),
             enabled_protocols: EnabledProtocols::default(),
             variants: None,
+            variant_files: None,
         }
     }
 
@@ -209,6 +215,7 @@ impl InstantiateToolEnvironmentSpec {
                 installed: Vec::new(), // Install from scratch
                 channel_priority: ChannelPriority::default(),
                 variants: self.variants.clone(),
+                variant_files: self.variant_files.clone(),
                 strategy: SolveStrategy::default(),
             })
             .await
@@ -270,6 +277,7 @@ impl InstantiateToolEnvironmentSpec {
                 channels: self.channels,
                 channel_config: self.channel_config,
                 variants: self.variants,
+                variant_files: self.variant_files,
                 enabled_protocols: self.enabled_protocols,
             })
             .await

@@ -128,6 +128,7 @@ pub async fn simple_test() {
             ],
             channel_config: default_channel_config(),
             variants: None,
+            variant_files: None,
             enabled_protocols: Default::default(),
         })
         .await

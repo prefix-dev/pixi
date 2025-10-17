@@ -44,6 +44,8 @@ indicatif = { workspace = true }
 insta = { workspace = true, features = ["yaml", "glob", "filters"] }
 itertools = { workspace = true }
 pep508_rs = { workspace = true }
+pixi_build_backend_passthrough = { workspace = true }
+pixi_build_frontend = { workspace = true }
 pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_core = { workspace = true }
@@ -55,8 +57,6 @@ pixi_spec = { workspace = true }
 pixi_task = { workspace = true }
 pixi_test_utils = { workspace = true }
 pixi_utils = { workspace = true }
-pixi_build_frontend = { workspace = true }
-pixi_build_backend_passthrough = { workspace = true }
 pypi_mapping = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true }

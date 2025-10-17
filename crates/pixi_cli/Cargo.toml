@@ -69,6 +69,7 @@ pixi_command_dispatcher = { workspace = true }
 pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_core = { workspace = true }
+pixi_diff = { workspace = true }
 pixi_git = { workspace = true }
 pixi_global = { workspace = true }
 pixi_manifest = { workspace = true, features = ["rattler_lock"] }
