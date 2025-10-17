@@ -1912,6 +1912,9 @@ async fn spawn_solve_conda_environment_task(
     // Get the dependencies for this platform
     let dependencies = group.combined_dependencies(Some(platform));
 
+    // Get the develop dependencies for this platform
+    let develop_dependencies = group.combined_develop_dependencies(Some(platform));
+
     // Get solve options
     let exclude_newer = group.exclude_newer();
     let strategy = group.solve_strategy();
@@ -1919,8 +1922,8 @@ async fn spawn_solve_conda_environment_task(
     // Get the environment name
     let group_name = group.name();
 
-    // Early out if there are no dependencies to solve.
-    if dependencies.is_empty() {
+    // Early out if there are no dependencies to solve and no develop dependencies to expand.
+    if dependencies.is_empty() && develop_dependencies.is_empty() {
         return Ok(TaskResult::CondaGroupSolved(
             group_name,
             platform,
@@ -1960,6 +1963,19 @@ async fn spawn_solve_conda_environment_task(
         variant_files,
     } = group.workspace().variants(platform)?;
 
+    // Convert develop dependencies to DevSourceSpecs
+    let dev_sources: IndexMap<_, _> = develop_dependencies
+        .into_iter()
+        .map(|(name, source_spec)| {
+            (
+                name,
+                pixi_spec::DevSourceSpec {
+                    source: source_spec,
+                },
+            )
+        })
+        .collect();
+
     let start = Instant::now();
 
     // Solve the environment using the command dispatcher.
@@ -1968,6 +1984,7 @@ async fn spawn_solve_conda_environment_task(
             name: Some(group_name.to_string()),
             dependencies,
             constraints: Default::default(),
+            dev_sources,
             installed: existing_repodata_records.records.clone(),
             build_environment: BuildEnvironment::simple(platform, virtual_packages),
             channels,

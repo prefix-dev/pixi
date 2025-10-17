@@ -31,6 +31,7 @@ pub struct TomlFeature {
     pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub pypi_dependencies: Option<IndexMap<PypiPackageName, PixiPypiSpec>>,
+    pub develop: Option<IndexMap<rattler_conda_types::PackageName, pixi_spec::TomlLocationSpec>>,
 
     /// Additional information to activate an environment.
     pub activation: Option<Activation>,
@@ -60,6 +61,7 @@ impl TomlFeature {
             host_dependencies: self.host_dependencies,
             build_dependencies: self.build_dependencies,
             pypi_dependencies: self.pypi_dependencies,
+            develop: self.develop,
             activation: self.activation,
             tasks: self.tasks,
             warnings: self.warnings,
@@ -168,6 +170,9 @@ impl<'de> toml_span::Deserialize<'de> for TomlFeature {
         let pypi_dependencies = th
             .optional::<TomlIndexMap<_, _>>("pypi-dependencies")
             .map(TomlIndexMap::into_inner);
+        let develop = th
+            .optional::<TomlIndexMap<_, _>>("develop")
+            .map(TomlIndexMap::into_inner);
         let activation = th.optional("activation");
         let tasks = th
             .optional::<TomlHashMap<_, TomlTask>>("tasks")
@@ -198,6 +203,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlFeature {
             host_dependencies,
             build_dependencies,
             pypi_dependencies,
+            develop,
             activation,
             tasks,
             pypi_options,

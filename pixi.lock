@@ -2055,6 +2055,25 @@ environments:
       - conda: https://prefix.dev/conda-forge/win-64/yaml-0.2.5-h8ffe710_2.tar.bz2
       - conda: https://prefix.dev/conda-forge/noarch/zipp-3.22.0-pyhd8ed1ab_0.conda
       - conda: https://prefix.dev/conda-forge/win-64/zstd-1.5.7-hbeecb71_2.conda
+  pixi-build:
+    channels:
+    - url: https://prefix.dev/conda-forge/
+    packages:
+      linux-64:
+      - conda: .
+        build: h24ff57e_0
+      linux-aarch64:
+      - conda: .
+        subdir: linux-aarch64
+      osx-64:
+      - conda: .
+        subdir: osx-64
+      osx-arm64:
+      - conda: .
+        subdir: osx-arm64
+      win-64:
+      - conda: .
+        subdir: win-64
   pypi-gen:
     channels:
     - url: https://prefix.dev/conda-forge/
@@ -9126,6 +9145,76 @@ packages:
   license: HPND
   size: 944083
   timestamp: 1758208682964
+- conda: .
+  name: pixi
+  version: 0.56.0
+  build: h24ff57e_0
+  subdir: linux-64
+  depends:
+  - __glibc >=2.34,<3.0.a0
+  constrains:
+  - __glibc >=2.17
+  license: BSD-3-Clause
+  input:
+    hash: a6903542c089072c02969a62ebd498341d26cd11a5a01a9d3cdf504b1db3fd70
+    globs:
+    - ../../Cargo.toml
+    - ../Cargo.toml
+    - Cargo.toml
+- conda: .
+  name: pixi
+  version: 0.56.0
+  build: hbf21a9e_0
+  subdir: linux-aarch64
+  constrains:
+  - __glibc >=2.17
+  license: BSD-3-Clause
+  input:
+    hash: a6903542c089072c02969a62ebd498341d26cd11a5a01a9d3cdf504b1db3fd70
+    globs:
+    - ../../Cargo.toml
+    - ../Cargo.toml
+    - Cargo.toml
+- conda: .
+  name: pixi
+  version: 0.56.0
+  build: hbf21a9e_0
+  subdir: osx-64
+  constrains:
+  - __osx >=10.13
+  license: BSD-3-Clause
+  input:
+    hash: a6903542c089072c02969a62ebd498341d26cd11a5a01a9d3cdf504b1db3fd70
+    globs:
+    - ../../Cargo.toml
+    - ../Cargo.toml
+    - Cargo.toml
+- conda: .
+  name: pixi
+  version: 0.56.0
+  build: hbf21a9e_0
+  subdir: osx-arm64
+  constrains:
+  - __osx >=11.0
+  license: BSD-3-Clause
+  input:
+    hash: a6903542c089072c02969a62ebd498341d26cd11a5a01a9d3cdf504b1db3fd70
+    globs:
+    - ../../Cargo.toml
+    - ../Cargo.toml
+    - Cargo.toml
+- conda: .
+  name: pixi
+  version: 0.56.0
+  build: hbf21a9e_0
+  subdir: win-64
+  license: BSD-3-Clause
+  input:
+    hash: a6903542c089072c02969a62ebd498341d26cd11a5a01a9d3cdf504b1db3fd70
+    globs:
+    - ../../Cargo.toml
+    - ../Cargo.toml
+    - Cargo.toml
 - conda: https://prefix.dev/conda-forge/linux-64/pixman-0.46.0-h29eaf8c_0.conda
   sha256: 1330c3fd424fa2deec6a30678f235049c0ed1b0fad8d2d81ef995c9322d5e49a
   md5: d2f1c87d4416d1e7344cf92b1aaee1c4

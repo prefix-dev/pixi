@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use indexmap::IndexMap;
-use pixi_spec::PixiSpec;
+use pixi_spec::{PixiSpec, SourceSpec, TomlLocationSpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_toml::{TomlHashMap, TomlIndexMap};
 use toml_span::{DeserError, Value, de_helpers::TableHelper};
@@ -22,6 +22,7 @@ pub struct TomlTarget {
     pub host_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub build_dependencies: Option<PixiSpanned<UniquePackageMap>>,
     pub pypi_dependencies: Option<IndexMap<PypiPackageName, PixiPypiSpec>>,
+    pub develop: Option<IndexMap<PackageName, TomlLocationSpec>>,
 
     /// Additional information to activate an environment.
     pub activation: Option<Activation>,
@@ -69,6 +70,27 @@ impl TomlTarget {
             }
         }
 
+        // Convert develop dependencies from TomlLocationSpec to SourceSpec
+        let develop_dependencies = self
+            .develop
+            .map(|develop_map| {
+                develop_map
+                    .into_iter()
+                    .map(|(name, toml_loc)| {
+                        toml_loc
+                            .into_source_location_spec()
+                            .map(|location| (name, SourceSpec { location }))
+                    })
+                    .collect::<Result<IndexMap<_, _>, _>>()
+            })
+            .transpose()
+            .map_err(|e| {
+                TomlError::Generic(GenericError::new(format!(
+                    "failed to parse develop dependency: {}",
+                    e
+                )))
+            })?;
+
         Ok(WithWarnings {
             value: WorkspaceTarget {
                 dependencies: combine_target_dependencies(
@@ -83,6 +105,7 @@ impl TomlTarget {
                     // Convert IndexMap to DependencyMap
                     index_map.into_iter().collect()
                 }),
+                develop_dependencies,
                 activation: self.activation,
                 tasks: self.tasks,
             },
@@ -123,6 +146,9 @@ impl<'de> toml_span::Deserialize<'de> for TomlTarget {
         let pypi_dependencies = th
             .optional::<TomlIndexMap<_, _>>("pypi-dependencies")
             .map(TomlIndexMap::into_inner);
+        let develop = th
+            .optional::<TomlIndexMap<_, _>>("develop")
+            .map(TomlIndexMap::into_inner);
         let activation = th.optional("activation");
         let tasks = th
             .optional::<TomlHashMap<_, TomlTask>>("tasks")
@@ -146,6 +172,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTarget {
             host_dependencies,
             build_dependencies,
             pypi_dependencies,
+            develop,
             activation,
             tasks,
             warnings,

@@ -4,6 +4,7 @@ mod source_metadata_collector;
 use std::{borrow::Borrow, collections::BTreeMap, path::PathBuf, time::Instant};
 
 use chrono::{DateTime, Utc};
+use indexmap::IndexMap;
 use itertools::{Either, Itertools};
 use miette::Diagnostic;
 use pixi_build_discovery::EnabledProtocols;
@@ -51,6 +52,11 @@ pub struct PixiEnvironmentSpec {
     #[serde(skip_serializing_if = "DependencyMap::is_empty")]
     pub constraints: DependencyMap<rattler_conda_types::PackageName, BinarySpec>,
 
+    /// Development sources whose dependencies should be installed without
+    /// building the packages themselves.
+    #[serde(skip_serializing_if = "IndexMap::is_empty")]
+    pub dev_sources: IndexMap<rattler_conda_types::PackageName, pixi_spec::DevSourceSpec>,
+
     /// The records of the packages that are currently already installed. These
     /// are used as hints to reduce the difference between individual solves.
     #[serde(skip)]
@@ -94,6 +100,7 @@ impl Default for PixiEnvironmentSpec {
             name: None,
             dependencies: DependencyMap::default(),
             constraints: DependencyMap::default(),
+            dev_sources: IndexMap::new(),
             installed: Vec::new(),
             build_environment: BuildEnvironment::default(),
             channels: vec![],
@@ -122,9 +129,16 @@ impl PixiEnvironmentSpec {
         command_queue: CommandDispatcher,
         gateway_reporter: Option<Box<dyn rattler_repodata_gateway::Reporter>>,
     ) -> Result<Vec<PixiRecord>, CommandDispatcherError<SolvePixiEnvironmentError>> {
+        // Process dev sources to get their metadata (before dependencies are moved)
+        let dev_source_records = self.process_dev_sources(&command_queue).await?;
+
         // Split the requirements into source and binary requirements.
+        let (dev_source_source_specs, dev_source_binary_specs) =
+            Self::split_into_source_and_binary_requirements(Self::dev_source_dependencies(
+                &dev_source_records,
+            ));
         let (source_specs, binary_specs) =
-            Self::split_into_source_and_binary_requirements(self.dependencies);
+            Self::split_into_source_and_binary_requirements(self.dependencies.into_specs());
 
         Self::check_missing_channels(binary_specs.clone(), &self.channels, &self.channel_config)?;
 
@@ -145,7 +159,7 @@ impl PixiEnvironmentSpec {
             source_specs
                 .iter_specs()
                 .map(|(name, spec)| (name.clone(), spec.clone()))
-                .collect(),
+                .chain(dev_source_source_specs.into_specs()),
         )
         .await
         .map_err_with(SolvePixiEnvironmentError::from)?;
@@ -153,6 +167,11 @@ impl PixiEnvironmentSpec {
         // Convert the binary specs into match specs as well.
         let binary_match_specs = binary_specs
             .clone()
+            .into_match_specs(&self.channel_config)
+            .map_err(SolvePixiEnvironmentError::SpecConversionError)
+            .map_err(CommandDispatcherError::Failed)?;
+
+        let dev_source_binary_match_specs = dev_source_binary_specs
             .into_match_specs(&self.channel_config)
             .map_err(SolvePixiEnvironmentError::SpecConversionError)
             .map_err(CommandDispatcherError::Failed)?;
@@ -169,7 +188,8 @@ impl PixiEnvironmentSpec {
                 [self.build_environment.host_platform, Platform::NoArch],
                 binary_match_specs
                     .into_iter()
-                    .chain(transitive_dependencies),
+                    .chain(transitive_dependencies)
+                    .chain(dev_source_binary_match_specs),
             )
             .recursive(true);
 
@@ -197,6 +217,7 @@ impl PixiEnvironmentSpec {
                 source_specs,
                 binary_specs,
                 constraints: self.constraints,
+                dev_source_records,
                 source_repodata,
                 binary_repodata,
                 installed: self.installed,
@@ -212,18 +233,112 @@ impl PixiEnvironmentSpec {
             .map_err_with(SolvePixiEnvironmentError::from)
     }
 
+    /// Process dev sources to retrieve their metadata and create DevSourceRecords.
+    ///
+    /// For each dev source, this method:
+    /// 1. Pins and checks out the source
+    /// 2. Queries the build backend for metadata
+    /// 3. Creates DevSourceRecords for matching outputs
+    async fn process_dev_sources(
+        &self,
+        command_dispatcher: &CommandDispatcher,
+    ) -> Result<Vec<pixi_record::DevSourceRecord>, CommandDispatcherError<SolvePixiEnvironmentError>>
+    {
+        use crate::{BuildBackendMetadataSpec, DevSourceMetadataSpec};
+        use futures::StreamExt;
+
+        let mut dev_source_futures =
+            crate::executor::ExecutorFutures::new(command_dispatcher.executor());
+
+        // Create a future for each dev source
+        for (package_name, dev_source_spec) in &self.dev_sources {
+            let command_dispatcher = command_dispatcher.clone();
+            let package_name = package_name.clone();
+            let dev_source_spec = dev_source_spec.clone();
+            let channel_config = self.channel_config.clone();
+            let channels = self.channels.clone();
+            let build_environment = self.build_environment.clone();
+            let variants = self.variants.clone();
+            let variant_files = self.variant_files.clone();
+            let enabled_protocols = self.enabled_protocols.clone();
+
+            dev_source_futures.push(async move {
+                // Pin and checkout the source
+                let pinned_source = command_dispatcher
+                    .pin_and_checkout(dev_source_spec.source)
+                    .await
+                    .map_err_with(SolvePixiEnvironmentError::SourceCheckoutError)?;
+
+                // Create the spec for getting dev source metadata
+                let spec = DevSourceMetadataSpec {
+                    package_name,
+                    backend_metadata: BuildBackendMetadataSpec {
+                        source: pinned_source.pinned,
+                        channel_config,
+                        channels,
+                        build_environment,
+                        variants,
+                        variant_files,
+                        enabled_protocols,
+                    },
+                };
+
+                // Get the dev source metadata
+                command_dispatcher
+                    .dev_source_metadata(spec)
+                    .await
+                    .map_err_with(SolvePixiEnvironmentError::DevSourceMetadataError)
+            });
+        }
+
+        // Collect all dev source records
+        let mut all_records = Vec::new();
+        while let Some(result) = dev_source_futures.next().await {
+            let metadata = result?;
+            all_records.extend(metadata.records);
+        }
+
+        Ok(all_records)
+    }
+
+    /// Returns an iterator over all dependencies from dev source records,
+    /// excluding packages that are themselves dev sources.
+    fn dev_source_dependencies(
+        dev_source_records: &[pixi_record::DevSourceRecord],
+    ) -> impl Iterator<Item = (rattler_conda_types::PackageName, PixiSpec)> + '_ {
+        use std::collections::HashSet;
+
+        // Collect all dev source package names to filter them out
+        let dev_source_names: HashSet<_> = dev_source_records
+            .iter()
+            .map(|record| record.name.clone())
+            .collect();
+
+        // Collect all dependencies from all dev sources, filtering out dev sources themselves
+        dev_source_records
+            .iter()
+            .flat_map(|dev_source| {
+                dev_source
+                    .dependencies
+                    .iter_specs()
+                    .map(|(name, spec)| (name.clone(), spec.clone()))
+                    .collect::<Vec<_>>()
+            })
+            .filter(move |(name, _)| !dev_source_names.contains(name))
+    }
+
     /// Split the set of requirements into source and binary requirements.
     ///
     /// This method doesn't take `self` so we can move ownership of
     /// [`Self::requirements`] without also taking a mutable reference to
     /// `self`.
     fn split_into_source_and_binary_requirements(
-        specs: DependencyMap<rattler_conda_types::PackageName, PixiSpec>,
+        specs: impl IntoIterator<Item = (rattler_conda_types::PackageName, PixiSpec)>,
     ) -> (
         DependencyMap<rattler_conda_types::PackageName, SourceSpec>,
         DependencyMap<rattler_conda_types::PackageName, BinarySpec>,
     ) {
-        specs.into_specs().partition_map(|(name, constraint)| {
+        specs.into_iter().partition_map(|(name, constraint)| {
             match constraint.into_source_or_binary() {
                 Either::Left(source) => Either::Left((name, source)),
                 Either::Right(binary) => Either::Right((name, binary)),
@@ -238,24 +353,25 @@ impl PixiEnvironmentSpec {
         channel_config: &ChannelConfig,
     ) -> Result<(), CommandDispatcherError<SolvePixiEnvironmentError>> {
         for (pkg, spec) in binary_specs.iter_specs() {
-            if let BinarySpec::DetailedVersion(v) = spec {
-                if let Some(channel) = &v.channel {
-                    let base_url = channel
-                        .clone()
-                        .into_base_url(channel_config)
-                        .map_err(SolvePixiEnvironmentError::ParseChannelError)
-                        .map_err(CommandDispatcherError::Failed)?;
+            let BinarySpec::DetailedVersion(v) = spec else {
+                continue;
+            };
+            let Some(channel) = &v.channel else { continue };
 
-                    if !channels.iter().any(|c| c == &base_url) {
-                        return Err(CommandDispatcherError::Failed(
-                            SolvePixiEnvironmentError::MissingChannel(MissingChannelError {
-                                package: pkg.as_normalized().to_string(),
-                                channel: base_url,
-                                advice: None,
-                            }),
-                        ));
-                    }
-                }
+            let base_url = channel
+                .clone()
+                .into_base_url(channel_config)
+                .map_err(SolvePixiEnvironmentError::ParseChannelError)
+                .map_err(CommandDispatcherError::Failed)?;
+
+            if !channels.iter().any(|c| c == &base_url) {
+                return Err(CommandDispatcherError::Failed(
+                    SolvePixiEnvironmentError::MissingChannel(MissingChannelError {
+                        package: pkg.as_normalized().to_string(),
+                        channel: base_url,
+                        advice: None,
+                    }),
+                ));
             }
         }
         Ok(())
@@ -287,6 +403,14 @@ pub enum SolvePixiEnvironmentError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     MissingChannel(MissingChannelError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    DevSourceMetadataError(crate::DevSourceMetadataError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    SourceCheckoutError(crate::SourceCheckoutError),
 }
 
 /// An error for a missing channel in the solve request
@@ -327,5 +451,11 @@ impl From<CollectSourceMetadataError> for SolvePixiEnvironmentError {
             } => SolvePixiEnvironmentError::Cycle(cycle),
             _ => SolvePixiEnvironmentError::CollectSourceMetadataError(err),
         }
+    }
+}
+
+impl From<crate::DevSourceMetadataError> for SolvePixiEnvironmentError {
+    fn from(err: crate::DevSourceMetadataError) -> Self {
+        Self::DevSourceMetadataError(err)
     }
 }

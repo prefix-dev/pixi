@@ -366,6 +366,43 @@ impl Feature {
     pub fn pypi_options(&self) -> Option<&PypiOptions> {
         self.pypi_options.as_ref()
     }
+
+    /// Returns the develop dependencies of the feature for a given `platform`.
+    ///
+    /// Develop dependencies are source packages whose build/host/run dependencies
+    /// should be installed without building the packages themselves.
+    ///
+    /// This function returns a [`Cow`]. If the dependencies are not combined or
+    /// overwritten by multiple targets than this function returns a
+    /// reference to the internal dependencies.
+    ///
+    /// Returns `None` if this feature does not define any target that has any
+    /// of the requested develop dependencies.
+    ///
+    /// If the `platform` is `None` no platform specific dependencies are taken
+    /// into consideration.
+    pub fn develop_dependencies(
+        &self,
+        platform: Option<Platform>,
+    ) -> Option<Cow<'_, IndexMap<PackageName, pixi_spec::SourceSpec>>> {
+        self.targets
+            .resolve(platform)
+            // Get the targets in reverse order, from least specific to most specific.
+            // This is required because the extend function will overwrite existing keys.
+            .rev()
+            .filter_map(|t| t.develop_dependencies.as_ref())
+            .filter(|deps| !deps.is_empty())
+            .fold(None, |acc, deps| match acc {
+                None => Some(Cow::Borrowed(deps)),
+                Some(mut acc) => {
+                    acc.to_mut().extend(
+                        deps.into_iter()
+                            .map(|(name, spec)| (name.clone(), spec.clone())),
+                    );
+                    Some(acc)
+                }
+            })
+    }
 }
 
 #[cfg(test)]
