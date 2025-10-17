@@ -64,10 +64,12 @@ miette = { workspace = true, features = ["fancy-no-backtrace"] }
 pathdiff = { workspace = true }
 pep508_rs = { workspace = true }
 pixi_api = { workspace = true }
+pixi_build_frontend = { workspace = true }
 pixi_command_dispatcher = { workspace = true }
 pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_core = { workspace = true }
+pixi_diff = { workspace = true }
 pixi_git = { workspace = true }
 pixi_global = { workspace = true }
 pixi_manifest = { workspace = true, features = ["rattler_lock"] }
@@ -124,6 +126,7 @@ uv-pep508 = { workspace = true }
 uv-pypi-types = { workspace = true }
 uv-requirements-txt = { workspace = true }
 uv-types = { workspace = true }
+which = { workspace = true }
 zip = { workspace = true, features = ["deflate", "time"] }
 
 [dev-dependencies]

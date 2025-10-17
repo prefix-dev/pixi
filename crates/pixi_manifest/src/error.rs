@@ -117,6 +117,7 @@ pub enum TomlError {
     ResolveError(#[from] ResolveError),
     #[error(transparent)]
     InvalidNonPackageDependencies(#[from] InvalidNonPackageDependencies),
+    InvalidFeature(String),
 }
 
 impl From<toml_span::Error> for TomlError {
@@ -167,6 +168,7 @@ impl Display for TomlError {
             }
             TomlError::InvalidNonPackageDependencies(err) => write!(f, "{err}"),
             TomlError::ResolveError(err) => write!(f, "{err}"),
+            TomlError::InvalidFeature(feature_name) => write!(f, "{feature_name} does not exist"),
         }
     }
 }

@@ -285,7 +285,7 @@ plugins:
           - index.md
           - installation.md
           - getting_started.md
-          - first_project.md
+          - first_workspace.md
         Tutorials documentation:
           - python/*.md
           - tutorials/*.md

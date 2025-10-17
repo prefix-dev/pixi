@@ -53,6 +53,7 @@ pub enum WalkRootsError {
     CannotAscend { required: usize, root: PathBuf },
 }
 
+#[derive(Debug)]
 struct GlobSpec {
     // Is this a ! glob
     negated: bool,

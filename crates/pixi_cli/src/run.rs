@@ -96,6 +96,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Following statements don't spawn any progress bar, so set
     // progress draw target to hidden. Otherwise output may be
     // incorrect.
+    let not_hidden = !global_multi_progress().is_hidden();
     global_multi_progress().set_draw_target(ProgressDrawTarget::hidden());
 
     let cli_config = args
@@ -126,8 +127,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // We expect progress bar to be used afterwards, so set draw
     // target to the original one.
-    global_multi_progress().set_draw_target(ProgressDrawTarget::stderr_with_hz(20));
-
+    if not_hidden {
+        global_multi_progress().set_draw_target(ProgressDrawTarget::stderr_with_hz(20));
+    }
     // Sanity check of prefix location
     sanity_check_workspace(&workspace).await?;
 

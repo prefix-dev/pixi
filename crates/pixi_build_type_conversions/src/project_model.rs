@@ -6,17 +6,14 @@
 //! This will mostly be boilerplate conversions but some of these are a bit more
 //! interesting
 
-use std::hash::{Hash, Hasher};
-
 use ordermap::OrderMap;
 // Namespace to pbt, *please use* exclusively so we do not get confused between the two
 // different types
-use pixi_build_types::{self as pbt, ProjectModelV1};
+use pixi_build_types::{self as pbt};
 
 use pixi_manifest::{PackageManifest, PackageTarget, TargetSelector, Targets};
 use pixi_spec::{GitReference, PixiSpec, SpecConversionError};
 use rattler_conda_types::{ChannelConfig, NamelessMatchSpec, PackageName};
-use xxhash_rust::xxh3::Xxh3;
 
 /// Conversion from a `PixiSpec` to a `pbt::PixiSpecV1`.
 fn to_pixi_spec_v1(
@@ -115,21 +112,21 @@ fn to_target_v1(
         host_dependencies: Some(
             target
                 .host_dependencies()
-                .map(|deps| to_pbt_dependencies(deps.iter(), channel_config))
+                .map(|deps| to_pbt_dependencies(deps.iter_specs(), channel_config))
                 .transpose()?
                 .unwrap_or_default(),
         ),
         build_dependencies: Some(
             target
                 .build_dependencies()
-                .map(|deps| to_pbt_dependencies(deps.iter(), channel_config))
+                .map(|deps| to_pbt_dependencies(deps.iter_specs(), channel_config))
                 .transpose()?
                 .unwrap_or_default(),
         ),
         run_dependencies: Some(
             target
                 .run_dependencies()
-                .map(|deps| to_pbt_dependencies(deps.iter(), channel_config))
+                .map(|deps| to_pbt_dependencies(deps.iter_specs(), channel_config))
                 .transpose()?
                 .unwrap_or_default(),
         ),
@@ -185,14 +182,6 @@ pub fn to_project_model_v1(
         targets: Some(to_targets_v1(&manifest.targets, channel_config)?),
     };
     Ok(project)
-}
-
-/// This function is used to calculate a stable hash for the project model
-/// This is used to trigger cache invalidation if the project model changes
-pub fn compute_project_model_hash(project_model: &ProjectModelV1) -> Vec<u8> {
-    let mut hasher = Xxh3::new();
-    project_model.hash(&mut hasher);
-    hasher.finish().to_ne_bytes().to_vec()
 }
 
 #[cfg(test)]

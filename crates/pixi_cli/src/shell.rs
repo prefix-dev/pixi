@@ -7,6 +7,7 @@ use rattler_shell::{
     activation::PathModificationBehavior,
     shell::{Bash, CmdExe, PowerShell, Shell, ShellEnum, ShellScript},
 };
+use which::which;
 
 use pixi_config::{ConfigCli, ConfigCliActivation, ConfigCliPrompt};
 use pixi_core::{
@@ -98,7 +99,7 @@ fn start_powershell(
 }
 
 // allowing dead code so that we test this on unix compilation as well
-#[allow(dead_code)]
+#[cfg_attr(unix, expect(unused))]
 fn start_cmdexe(
     cmdexe: CmdExe,
     env: &HashMap<String, String>,
@@ -137,7 +138,7 @@ fn start_cmdexe(
 }
 
 // allowing dead code so that we test this on unix compilation as well
-#[allow(dead_code)]
+#[cfg_attr(unix, expect(unused))]
 fn start_winbash(
     bash: Bash,
     env: &HashMap<String, String>,
@@ -188,7 +189,8 @@ fn start_winbash(
     // close the file handle, but keep the path (needed for Windows)
     let temp_path = temp_file.into_temp_path();
 
-    let mut command = std::process::Command::new(bash.executable());
+    let bash_path = which(bash.executable()).into_diagnostic()?;
+    let mut command = std::process::Command::new(bash_path);
     command.arg("--init-file");
     command.arg(&temp_path);
     command.arg("-i");

@@ -83,6 +83,7 @@ async fn add_functionality() {
 
 /// Test adding a package with a specific channel
 #[tokio::test]
+#[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn add_with_channel() {
     setup_tracing();
 
@@ -514,9 +515,10 @@ async fn add_unconstrained_dependency() {
         .default_feature()
         .combined_dependencies(None)
         .unwrap_or_default()
-        .get("foobar")
-        .cloned()
+        .get_single("foobar")
         .unwrap()
+        .unwrap()
+        .clone()
         .to_toml_value()
         .to_string();
 
@@ -528,9 +530,10 @@ async fn add_unconstrained_dependency() {
         .expect("feature 'unreferenced' is missing")
         .combined_dependencies(None)
         .unwrap_or_default()
-        .get("bar")
-        .cloned()
+        .get_single("bar")
         .unwrap()
+        .unwrap()
+        .clone()
         .to_toml_value()
         .to_string();
 
@@ -568,9 +571,10 @@ async fn pinning_dependency() {
         .default_feature()
         .dependencies(SpecType::Run, None)
         .unwrap_or_default()
-        .get("python")
-        .cloned()
+        .get_single("python")
         .unwrap()
+        .unwrap()
+        .clone()
         .to_toml_value()
         .to_string();
     // Testing to see if edge cases are handled correctly
@@ -584,9 +588,10 @@ async fn pinning_dependency() {
         .default_feature()
         .dependencies(SpecType::Run, None)
         .unwrap_or_default()
-        .get("foobar")
-        .cloned()
+        .get_single("foobar")
         .unwrap()
+        .unwrap()
+        .clone()
         .to_toml_value()
         .to_string();
     assert_eq!(foobar_spec, r#"">=1,<2""#);
@@ -600,9 +605,10 @@ async fn pinning_dependency() {
         .default_feature()
         .dependencies(SpecType::Run, None)
         .unwrap_or_default()
-        .get("python")
-        .cloned()
+        .get_single("python")
         .unwrap()
+        .unwrap()
+        .clone()
         .to_toml_value()
         .to_string();
     assert_eq!(python_spec, r#""==3.13""#);
@@ -638,9 +644,10 @@ async fn add_dependency_pinning_strategy() {
         .default_feature()
         .dependencies(SpecType::Run, None)
         .unwrap_or_default()
-        .get("foo")
-        .cloned()
+        .get_single("foo")
         .unwrap()
+        .unwrap()
+        .clone()
         .to_toml_value()
         .to_string();
     assert_eq!(foo_spec, r#"">=1,<2""#);
@@ -652,9 +659,10 @@ async fn add_dependency_pinning_strategy() {
         .default_feature()
         .dependencies(SpecType::Run, None)
         .unwrap_or_default()
-        .get("python")
-        .cloned()
+        .get_single("python")
         .unwrap()
+        .unwrap()
+        .clone()
         .to_toml_value()
         .to_string();
     // Testing to see if edge cases are handled correctly
@@ -668,12 +676,13 @@ async fn add_dependency_pinning_strategy() {
         .default_feature()
         .dependencies(SpecType::Run, None)
         .unwrap_or_default()
-        .get("bar")
-        .cloned()
+        .get_single("bar")
         .unwrap()
+        .unwrap()
+        .clone()
         .to_toml_value()
         .to_string();
-    // Testing to make sure bugfix did not regress
+    // Testing to make sure bugfix did not regressed
     // Package should be automatically pinned to a major version
     assert_eq!(bar_spec, r#"">=1,<2""#);
 }

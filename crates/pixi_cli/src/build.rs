@@ -12,6 +12,7 @@ use pixi_manifest::FeaturesExt;
 use pixi_progress::global_multi_progress;
 use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
 use pixi_reporters::TopLevelProgress;
+use pixi_utils::variants::VariantConfig;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
 use tempfile::tempdir;
 
@@ -71,7 +72,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .finish();
 
     // Determine the variant configuration for the build.
-    let variant_configuration = workspace.variants(args.target_platform);
+    let VariantConfig {
+        variants,
+        variant_files,
+    } = workspace.variants(args.target_platform)?;
 
     // Build platform virtual packages
     let build_virtual_packages: Vec<GenericVirtualPackage> = workspace
@@ -98,9 +102,21 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Query any and all information we can acquire about the package we're
     // attempting to build.
-    let Ok(search_start) = workspace_locator.path() else {
+    let Ok(manifest_path) = workspace_locator.path() else {
         miette::bail!("could not determine the current working directory to locate the workspace");
     };
+    let manifest_path_canonical = dunce::canonicalize(&manifest_path)
+        .into_diagnostic()
+        .with_context(|| {
+            format!(
+                "failed to canonicalize manifest path '{}'",
+                manifest_path.display()
+            )
+        })?;
+    // Store the manifest location relative to the workspace root when possible to
+    // keep the pinned path relocatable and avoid double-prefixing during resolution.
+    let manifest_spec_path = pathdiff::diff_paths(&manifest_path_canonical, workspace.root())
+        .unwrap_or(manifest_path_canonical.clone());
     let channel_config = workspace.channel_config();
     let channels = workspace
         .default_environment()
@@ -109,7 +125,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Determine the source of the package.
     let source: PinnedSourceSpec = PinnedPathSpec {
-        path: search_start.to_string_lossy().into_owned().into(),
+        path: manifest_spec_path.to_string_lossy().into_owned().into(),
     }
     .into();
 
@@ -119,7 +135,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         channels: channels.clone(),
         channel_config: channel_config.clone(),
         build_environment: build_environment.clone(),
-        variants: Some(variant_configuration.clone()),
+        variants: Some(variants.clone()),
+        variant_files: Some(variant_files.clone()),
         enabled_protocols: Default::default(),
     };
     let backend_metadata = command_dispatcher
@@ -155,7 +172,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 channels: channels.clone(),
                 channel_config: channel_config.clone(),
                 build_environment: build_environment.clone(),
-                variants: Some(variant_configuration.clone()),
+                variants: Some(variants.clone()),
+                variant_files: Some(variant_files.clone()),
                 enabled_protocols: Default::default(),
                 work_directory: None,
                 clean: args.clean,

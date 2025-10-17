@@ -10,9 +10,8 @@ use std::{
 
 use event_reporter::EventReporter;
 use itertools::Itertools;
-use pixi_build_frontend::{
-    BackendOverride, InMemoryOverriddenBackends, in_memory::PassthroughBackend,
-};
+use pixi_build_backend_passthrough::PassthroughBackend;
+use pixi_build_frontend::{BackendOverride, InMemoryOverriddenBackends};
 use pixi_command_dispatcher::{
     BuildEnvironment, CacheDirs, CommandDispatcher, Executor, InstallPixiEnvironmentSpec,
     InstantiateToolEnvironmentSpec, PackageIdentifier, PixiEnvironmentSpec,
@@ -71,8 +70,7 @@ fn default_build_environment() -> BuildEnvironment {
 }
 
 #[tokio::test]
-#[ignore = "multi-output recipes don't work with pixi-build-rattler-build 0.3.3: https://github.com/prefix-dev/pixi-build-backends/issues/379"]
-//#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
 pub async fn simple_test() {
     let (reporter, events) = EventReporter::new();
     let (tool_platform, tool_virtual_packages) = tool_platform();
@@ -130,6 +128,7 @@ pub async fn simple_test() {
             ],
             channel_config: default_channel_config(),
             variants: None,
+            variant_files: None,
             enabled_protocols: Default::default(),
         })
         .await

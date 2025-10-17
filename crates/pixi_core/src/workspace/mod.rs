@@ -8,10 +8,11 @@ mod solve_group;
 pub mod virtual_packages;
 mod workspace_mut;
 
+use self::errors::VariantsError;
 #[cfg(not(windows))]
 use std::os::unix::fs::symlink;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fmt::{Debug, Formatter},
     hash::Hash,
     path::{Path, PathBuf},
@@ -21,7 +22,6 @@ use std::{
 
 use crate::{
     activation::{CurrentEnvVarBehavior, initialize_env_variables},
-    diff::LockFileDiff,
     lock_file::filter_lock_file,
     repodata::Repodata,
 };
@@ -38,8 +38,9 @@ use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{CacheDirs, CommandDispatcher, CommandDispatcherBuilder, Limits};
 use pixi_config::{Config, RunPostLinkScripts};
 use pixi_consts::consts;
+use pixi_diff::LockFileDiff;
 use pixi_manifest::{
-    AssociateProvenance, EnvironmentName, Environments, ExplicitManifestError,
+    AssociateProvenance, BuildVariantSource, EnvironmentName, Environments, ExplicitManifestError,
     HasWorkspaceManifest, LoadManifestsError, ManifestProvenance, Manifests, PackageManifest,
     SpecType, WithProvenance, WithWarnings, WorkspaceManifest,
 };
@@ -170,6 +171,11 @@ pub struct Workspace {
 
     /// The concurrent request semaphore
     concurrent_downloads_semaphore: OnceCell<Arc<Semaphore>>,
+
+    variants: OnceCell<VariantConfig>,
+
+    /// Optional backend override for testing purposes
+    backend_override: Option<BackendOverride>,
 }
 
 impl Debug for Workspace {
@@ -240,6 +246,8 @@ impl Workspace {
             s3_config,
             repodata_gateway: Default::default(),
             concurrent_downloads_semaphore: OnceCell::default(),
+            variants: OnceCell::default(),
+            backend_override: None,
         }
     }
 
@@ -279,6 +287,13 @@ impl Workspace {
         C: Into<Config>,
     {
         self.config = self.config.merge_config(config.into());
+        self
+    }
+
+    /// Sets the backend override for this workspace. This is primarily used
+    /// for testing purposes to inject custom build backends.
+    pub fn with_backend_override(mut self, backend_override: BackendOverride) -> Self {
+        self.backend_override = Some(backend_override);
         self
     }
 
@@ -426,6 +441,14 @@ impl Workspace {
             .collect()
     }
 
+    /// Returns a HashMap of environments in this project.
+    pub fn named_environments(&self) -> HashMap<EnvironmentName, Environment> {
+        self.environments()
+            .iter()
+            .map(|env| (env.name().clone(), env.clone()))
+            .collect()
+    }
+
     /// Returns an environment in this project based on a name or an environment
     /// variable.
     pub fn environment_from_name_or_env_var(
@@ -464,25 +487,44 @@ impl Workspace {
     }
 
     /// Returns the resolved variant configuration for a given platform.
-    pub fn variants(&self, platform: Platform) -> VariantConfig {
-        let mut result = VariantConfig::new();
+    pub fn variants(&self, platform: Platform) -> Result<VariantConfig, VariantsError> {
+        self.variants
+            .get_or_try_init(|| {
+                // Get inline variants for all targets
+                let mut variants = BTreeMap::new();
+                // Resolves from most specific to least specific.
+                for build_variants in self
+                    .workspace
+                    .value
+                    .workspace
+                    .build_variants
+                    .resolve(Some(platform))
+                    .flatten()
+                {
+                    // Update the hash map, but only items that are not already in the map.
+                    for (key, value) in build_variants {
+                        variants.entry(key.clone()).or_insert_with(|| value.clone());
+                    }
+                }
 
-        // Resolves from most specific to least specific.
-        for variants in self
-            .workspace
-            .value
-            .workspace
-            .build_variants
-            .resolve(Some(platform))
-            .flatten()
-        {
-            // Update the hash map, but only items that are not already in the map.
-            for (key, value) in variants {
-                result.entry(key.clone()).or_insert_with(|| value.clone());
-            }
-        }
+                // Collect absolute variant file paths without reading their content.
+                let variant_files = self
+                    .workspace
+                    .value
+                    .workspace
+                    .build_variant_files
+                    .iter()
+                    .map(|source| match source {
+                        BuildVariantSource::File(path) => self.root.join(path),
+                    })
+                    .collect();
 
-        result
+                Ok(VariantConfig {
+                    variants,
+                    variant_files,
+                })
+            })
+            .cloned()
     }
 
     // /// Returns the reqwest client used for http networking
@@ -538,7 +580,12 @@ impl Workspace {
                 max_concurrent_solves: self.config().max_concurrent_solves().into(),
                 ..Limits::default()
             })
-            .with_backend_overrides(BackendOverride::from_env()?.unwrap_or_default())
+            .with_backend_overrides(
+                self.backend_override
+                    .clone()
+                    .or_else(|| BackendOverride::from_env().ok().flatten())
+                    .unwrap_or_default(),
+            )
             .execute_link_scripts(match self.config.run_post_link_scripts() {
                 RunPostLinkScripts::Insecure => true,
                 RunPostLinkScripts::False => false,
