@@ -35,6 +35,7 @@ use pypi_modifiers::{
 use rattler_digest::{Md5, Sha256, parse_digest_from_hex};
 use rattler_lock::{
     PackageHashes, PypiPackageData, PypiPackageEnvironmentData, PypiSourceTreeHashable, UrlOrPath,
+    Verbatim,
 };
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
@@ -140,17 +141,18 @@ fn process_uv_path_url(
     path_url: &uv_pep508::VerbatimUrl,
     install_path: &Path,
     project_root: &Path,
-) -> Result<Utf8TypedPathBuf, ProcessPathUrlError> {
+) -> Result<(String, Utf8TypedPathBuf), ProcessPathUrlError> {
     let given = path_url
         .given()
-        .ok_or_else(|| ProcessPathUrlError::NoGivenPath(path_url.to_string()))?;
+        .ok_or_else(|| ProcessPathUrlError::NoGivenPath(path_url.to_string()))?
+        .to_string();
     let keep_abs = if given.starts_with("file://") {
         // Processed by UV this is a file url
         // don't keep it absolute as the origin is 1) and relative paths are impossible
         // we are assuming the intention was to keep it relative
         false
     } else {
-        let path = PathBuf::from(given);
+        let path = PathBuf::from(&given);
         // Determine if the path was given as an absolute path
         path.is_absolute()
     };
@@ -183,9 +185,9 @@ fn process_uv_path_url(
     Ok(if cfg!(windows) {
         // Replace backslashes with forward slashes on Windows because pathdiff can
         // return paths with backslashes.
-        Utf8TypedPathBuf::from(path_str.replace("\\", "/"))
+        (given, Utf8TypedPathBuf::from(path_str.replace("\\", "/")))
     } else {
-        Utf8TypedPathBuf::from(path_str)
+        (given, Utf8TypedPathBuf::from(path_str))
     })
 }
 
@@ -886,7 +888,7 @@ async fn lock_pypi_packages(
                             )
                             .into_diagnostic()
                             .context("cannot convert registry dist")?;
-                            (url_or_path, hash)
+                            (Verbatim::new(url_or_path), hash)
                         }
                         BuiltDist::DirectUrl(dist) => {
                             let url = dist.url.to_url();
@@ -894,19 +896,17 @@ async fn lock_pypi_packages(
                                 .into_diagnostic()
                                 .context("cannot create direct url")?;
 
-                            (UrlOrPath::Url(direct_url), None)
+                            (Verbatim::new(UrlOrPath::Url(direct_url)), None)
                         }
-                        BuiltDist::Path(dist) => (
-                            UrlOrPath::Path(
-                                process_uv_path_url(
-                                    &dist.url,
-                                    &dist.install_path,
-                                    abs_project_root,
-                                )
-                                .into_diagnostic()?,
-                            ),
-                            None,
-                        ),
+                        BuiltDist::Path(dist) => {
+                            let (given, path) = process_uv_path_url(
+                                &dist.url,
+                                &dist.install_path,
+                                abs_project_root,
+                            )
+                            .into_diagnostic()?;
+                            (Verbatim::new_with_given(UrlOrPath::Path(path), given), None)
+                        }
                     };
 
                     let metadata = registry_client
@@ -964,20 +964,22 @@ async fn lock_pypi_packages(
                                 get_url_or_path(&reg.index, &reg.file.url, abs_project_root)
                                     .into_diagnostic()
                                     .context("cannot convert registry sdist")?;
-                            (url_or_path, hash, false)
+                            (Verbatim::new(url_or_path), hash, false)
                         }
                         SourceDist::DirectUrl(direct) => {
                             let url = direct.url.to_url();
                             let direct_url = Url::parse(&format!("direct+{url}"))
                                 .into_diagnostic()
                                 .context("could not create direct-url")?;
-                            (direct_url.into(), hash, false)
+                            (Verbatim::new(direct_url.into()), hash, false)
                         }
                         SourceDist::Git(git) => {
                             // convert resolved source dist into a pinned git spec
                             let pinned_git_spec = into_pinned_git_spec(git.clone());
                             (
-                                pinned_git_spec.into_locked_git_url().to_url().into(),
+                                Verbatim::new(
+                                    pinned_git_spec.into_locked_git_url().to_url().into(),
+                                ),
                                 hash,
                                 false,
                             )
@@ -996,7 +998,7 @@ async fn lock_pypi_packages(
                             };
 
                             // process the path or url that we get back from uv
-                            let install_path = process_uv_path_url(
+                            let (given, install_path) = process_uv_path_url(
                                 &path.url,
                                 &path.install_path,
                                 abs_project_root,
@@ -1006,7 +1008,8 @@ async fn lock_pypi_packages(
                             // Create the url for the lock file. This is based on the passed in URL
                             // instead of from the source path to copy the path that was passed in
                             // from the requirement.
-                            let url_or_path = UrlOrPath::Path(install_path);
+                            let url_or_path =
+                                Verbatim::new_with_given(UrlOrPath::Path(install_path), given);
                             (url_or_path, hash, false)
                         }
                         SourceDist::Directory(dir) => {
@@ -1023,14 +1026,15 @@ async fn lock_pypi_packages(
                             };
 
                             // process the path or url that we get back from uv
-                            let install_path =
+                            let (given, install_path) =
                                 process_uv_path_url(&dir.url, &dir.install_path, abs_project_root)
                                     .into_diagnostic()?;
 
                             // Create the url for the lock file. This is based on the passed in URL
                             // instead of from the source path to copy the path that was passed in
                             // from the requirement.
-                            let url_or_path = UrlOrPath::Path(install_path);
+                            let url_or_path =
+                                Verbatim::new_with_given(UrlOrPath::Path(install_path), given);
                             (url_or_path, hash, dir.editable.unwrap_or(false))
                         }
                     };
@@ -1075,9 +1079,10 @@ mod tests {
         let url = uv_pep508::VerbatimUrl::parse_url("file:///a/b/c")
             .unwrap()
             .with_given("./b/c");
-        let path =
+        let (given, path) =
             process_uv_path_url(&url, &PathBuf::from("/a/b/c"), &PathBuf::from("/a")).unwrap();
         assert_eq!(path.as_str(), "./b/c");
+        assert_eq!(given, "./b/c");
     }
 
     // In this case we want to make the path relative to the project_root or lock
@@ -1088,9 +1093,10 @@ mod tests {
         let url = uv_pep508::VerbatimUrl::parse_url("file:///a/b/c")
             .unwrap()
             .with_given("./b/c");
-        let path =
+        let (given, path) =
             process_uv_path_url(&url, &PathBuf::from("/a/c/z"), &PathBuf::from("/a/b/f")).unwrap();
         assert_eq!(path.as_str(), "../../c/z");
+        assert_eq!(given, "./b/c");
     }
 
     // In this case we want to make the path relative to the project_root or lock
@@ -1101,7 +1107,7 @@ mod tests {
         let url = uv_pep508::VerbatimUrl::parse_url("file://C/a/b/c")
             .unwrap()
             .with_given("./b/c");
-        let path =
+        let (given, path) =
             process_uv_path_url(&url, &PathBuf::from("C:\\a\\b\\c"), &PathBuf::from("C:\\a"))
                 .unwrap();
         assert_eq!(path.as_str(), "./b/c");
@@ -1115,13 +1121,14 @@ mod tests {
         let url = uv_pep508::VerbatimUrl::parse_url("file://C/a/b/c")
             .unwrap()
             .with_given("./b/c");
-        let path = process_uv_path_url(
+        let (given, path) = process_uv_path_url(
             &url,
             &PathBuf::from("C:\\a\\c\\z"),
             &PathBuf::from("C:\\a\\b\\f"),
         )
         .unwrap();
         assert_eq!(path.as_str(), "../../c/z");
+        assert_eq!(given, "./b/c");
     }
 
     // In this case we want to keep the absolute path
@@ -1131,9 +1138,10 @@ mod tests {
         let url = uv_pep508::VerbatimUrl::parse_url("file:///a/b/c")
             .unwrap()
             .with_given("/a/b/c");
-        let path =
+        let (given, path) =
             process_uv_path_url(&url, &PathBuf::from("/a/b/c"), &PathBuf::from("/a")).unwrap();
         assert_eq!(path.as_str(), "/a/b/c");
+        assert_eq!(given, "/a/b/c");
     }
 
     // In this case we want to keep the absolute path
@@ -1143,9 +1151,10 @@ mod tests {
         let url = uv_pep508::VerbatimUrl::parse_url("file://C/a/b/c")
             .unwrap()
             .with_given("C:\\a\\b\\c");
-        let path =
+        let (given, path) =
             process_uv_path_url(&url, &PathBuf::from("C:\\a\\b\\c"), &PathBuf::from("C:\\a"))
                 .unwrap();
         assert_eq!(path.as_str(), "C:/a/b/c");
+        assert_eq!(given, "C:\\a\\b\\c");
     }
 }
