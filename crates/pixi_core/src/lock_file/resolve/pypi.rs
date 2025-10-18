@@ -1049,8 +1049,11 @@ async fn lock_pypi_packages(
                             .transpose()
                             .into_diagnostic()?,
                         location,
-                        requires_dist: to_requirements(metadata.requires_dist.iter())
-                            .into_diagnostic()?,
+                        requires_dist: to_requirements(
+                            metadata.requires_dist.iter(),
+                            abs_project_root,
+                        )
+                        .into_diagnostic()?,
                         hash,
                         editable,
                     }

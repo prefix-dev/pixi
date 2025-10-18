@@ -29,6 +29,8 @@ use thiserror::Error;
 pub use toml::{TomlLocationSpec, TomlSpec, TomlVersionSpecStr};
 pub use url::{UrlBinarySpec, UrlSourceSpec, UrlSpec};
 
+pub use rattler_lock::Verbatim;
+
 /// An error that is returned when a spec cannot be converted into another spec
 /// type.
 #[derive(Debug, Error)]
