@@ -10,8 +10,10 @@ use rattler_conda_types::{
 
 use crate::{
     CondaDependencies, PrioritizedChannel, PyPiDependencies, SpecType, SystemRequirements,
-    has_features_iter::HasFeaturesIter, has_manifest_ref::HasWorkspaceManifest,
-    pypi::pypi_options::PypiOptions, workspace::ChannelPriority,
+    has_features_iter::HasFeaturesIter,
+    has_manifest_ref::HasWorkspaceManifest,
+    pypi::pypi_options::PypiOptions,
+    workspace::{ChannelPriority, SolveStrategy},
 };
 
 /// ChannelPriorityCombination error, thrown when multiple channel priorities
@@ -19,6 +21,12 @@ use crate::{
 #[derive(Debug, thiserror::Error, Diagnostic)]
 #[error("Multiple channel priorities are not allowed in a single environment")]
 pub struct ChannelPriorityCombinationError;
+
+/// SolveStrategyCombinationError error, thrown when multiple solve strategies
+/// are set
+#[derive(Debug, thiserror::Error, Diagnostic)]
+#[error("Multiple solve strategies are not allowed in a single environment")]
+pub struct SolveStrategyCombinationError;
 
 /// A trait that implement various methods for collections that combine
 /// attributes of Features It is implemented by Environment, GroupedEnvironment
@@ -92,9 +100,24 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
             .map(Into::into)
     }
 
-    /// Returns the strategy for solving packages.
-    fn solve_strategy(&self) -> rattler_solve::SolveStrategy {
-        rattler_solve::SolveStrategy::default()
+    /// Returns the strategy for solving packages, resorting to the
+    /// default value of [`SolveStrategy`] when not set.
+    ///
+    /// # Errors
+    ///
+    /// Errors out on multiple values being set over different features.
+    fn solve_strategy(&self) -> Result<SolveStrategy, SolveStrategyCombinationError> {
+        self.features()
+            .flat_map(|feature| feature.solve_strategy)
+            .try_fold(None, |solve_strategy, feature_strategy| {
+                match solve_strategy {
+                    // Error out when the strategy is already set
+                    Some(_) => Err(SolveStrategyCombinationError),
+                    // Store the first strategy encountered
+                    None => Ok(Some(feature_strategy)),
+                }
+            })
+            .map(Option::unwrap_or_default)
     }
 
     /// Returns the platforms that this collection is compatible with.

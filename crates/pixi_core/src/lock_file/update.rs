@@ -28,7 +28,7 @@ use pixi_install_pypi::{
     LazyEnvironmentVariables, PyPIBuildConfig, PyPIContextConfig, PyPIEnvironmentUpdater,
     PyPIUpdateConfig,
 };
-use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt};
+use pixi_manifest::{ChannelPriority, EnvironmentName, FeaturesExt, SolveStrategy};
 use pixi_progress::global_multi_progress;
 use pixi_record::{ParseLockFileError, PixiRecord};
 use pixi_utils::{prefix::Prefix, variants::VariantConfig};
@@ -1376,6 +1376,9 @@ impl<'p> UpdateContext<'p> {
             // default.
             let channel_priority = source.channel_priority()?.unwrap_or_default();
 
+            // Determine the solve strategy and error out on conflicts.
+            let solve_strategy = source.solve_strategy()?;
+
             for platform in ordered_platforms {
                 // Is there an existing pending task to solve the group?
                 if self
@@ -1402,6 +1405,7 @@ impl<'p> UpdateContext<'p> {
                     self.mapping_client.clone(),
                     platform,
                     channel_priority,
+                    solve_strategy,
                     self.command_dispatcher.clone(),
                 )
                 .map_err(Report::new)
@@ -1765,7 +1769,7 @@ impl<'p> UpdateContext<'p> {
             builder.set_options(
                 &environment_name,
                 rattler_lock::SolveOptions {
-                    strategy: grouped_env.solve_strategy(),
+                    strategy: grouped_env.solve_strategy().unwrap_or_default().into(),
                     channel_priority: grouped_env
                         .channel_priority()
                         .unwrap_or_default()
@@ -1907,6 +1911,7 @@ async fn spawn_solve_conda_environment_task(
     mapping_client: MappingClient,
     platform: Platform,
     channel_priority: ChannelPriority,
+    solve_strategy: SolveStrategy,
     command_dispatcher: CommandDispatcher,
 ) -> Result<TaskResult, SolveCondaEnvironmentError> {
     // Get the dependencies for this platform
@@ -1914,7 +1919,6 @@ async fn spawn_solve_conda_environment_task(
 
     // Get solve options
     let exclude_newer = group.exclude_newer();
-    let strategy = group.solve_strategy();
 
     // Get the environment name
     let group_name = group.name();
@@ -1971,7 +1975,7 @@ async fn spawn_solve_conda_environment_task(
             installed: existing_repodata_records.records.clone(),
             build_environment: BuildEnvironment::simple(platform, virtual_packages),
             channels,
-            strategy,
+            strategy: solve_strategy.into(),
             channel_priority: channel_priority.into(),
             exclude_newer,
             channel_config,
@@ -2240,6 +2244,7 @@ async fn spawn_solve_pypi_task<'p>(
     };
 
     let environment_name = grouped_environment.name().clone();
+    let solve_strategy = grouped_environment.solve_strategy()?;
 
     let pixi_solve_records = &repodata_records.records;
     let locked_pypi_records = &locked_pypi_packages.records;
@@ -2279,6 +2284,7 @@ async fn spawn_solve_pypi_task<'p>(
             environment,
             disallow_install_conda_prefix,
             exclude_newer,
+            solve_strategy,
         )
         .await
         .with_context(|| {

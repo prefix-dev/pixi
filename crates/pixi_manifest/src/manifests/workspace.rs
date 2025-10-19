@@ -816,7 +816,8 @@ mod tests {
     use super::*;
     use crate::{
         ChannelPriority, DependencyOverwriteBehavior, EnvironmentName, FeatureName,
-        PrioritizedChannel, SpecType, TargetSelector, Task, TomlError, WorkspaceManifest,
+        PrioritizedChannel, SolveStrategy, SpecType, TargetSelector, Task, TomlError,
+        WorkspaceManifest,
         manifests::document::ManifestDocument,
         pyproject::PyProjectManifest,
         to_options,
@@ -2935,6 +2936,66 @@ bar = "*"
         assert_eq!(
             manifest.default_feature().channel_priority.unwrap(),
             ChannelPriority::Disabled
+        );
+    }
+
+    #[test]
+    pub fn test_solve_strategy_manifest() {
+        let contents = r#"
+        [project]
+        name = "foo"
+        platforms = []
+        channels = []
+
+        [feature.lowest]
+        solve-strategy = "lowest"
+
+        [feature.lowest-direct]
+        solve-strategy = "lowest-direct"
+
+        [feature.highest]
+        solve-strategy = "highest"
+
+        [environments]
+        test-lowest = ["lowest"]
+        test-lowest-direct = ["lowest-direct"]
+        test-highest = ["highest"]
+        "#;
+
+        let manifest = parse_pixi_toml(contents).manifest;
+
+        assert!(manifest.default_feature().solve_strategy.is_none());
+        assert_eq!(
+            manifest.feature("lowest").unwrap().solve_strategy.unwrap(),
+            SolveStrategy::Lowest
+        );
+        assert_eq!(
+            manifest
+                .feature("lowest-direct")
+                .unwrap()
+                .solve_strategy
+                .unwrap(),
+            SolveStrategy::LowestDirect
+        );
+
+        assert_eq!(
+            manifest.feature("highest").unwrap().solve_strategy.unwrap(),
+            SolveStrategy::Highest
+        );
+
+        let contents = r#"
+        [project]
+        name = "foo"
+        platforms = []
+        channels = []
+        solve-strategy = "lowest"
+        "#;
+
+        let manifest = parse_pixi_toml(contents).manifest;
+
+        assert_eq!(
+            manifest.default_feature().solve_strategy.unwrap(),
+            SolveStrategy::Lowest
         );
     }
 

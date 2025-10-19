@@ -18,7 +18,9 @@ use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
 use miette::{Context, IntoDiagnostic};
 use pixi_consts::consts;
-use pixi_manifest::{EnvironmentName, SystemRequirements, pypi::pypi_options::PypiOptions};
+use pixi_manifest::{
+    EnvironmentName, SolveStrategy, SystemRequirements, pypi::pypi_options::PypiOptions,
+};
 use pixi_pypi_spec::PixiPypiSpec;
 use pixi_record::PixiRecord;
 use pixi_reporters::{UvReporter, UvReporterOptions};
@@ -50,7 +52,8 @@ use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigests};
 use uv_requirements::LookaheadResolver;
 use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
-    PreferenceError, Preferences, PythonRequirement, ResolveError, Resolver, ResolverEnvironment,
+    PreferenceError, Preferences, PythonRequirement, ResolutionMode, ResolveError, Resolver,
+    ResolverEnvironment,
 };
 use uv_types::EmptyInstalledPackages;
 
@@ -281,6 +284,7 @@ pub async fn resolve_pypi(
     environment_name: Environment<'_>,
     disallow_install_conda_prefix: bool,
     exclude_newer: Option<DateTime<Utc>>,
+    solve_strategy: SolveStrategy,
 ) -> miette::Result<(LockedPypiPackages, Option<CondaPrefixUpdated>)> {
     // Solve python packages
     pb.set_message("resolving pypi dependencies");
@@ -455,11 +459,18 @@ pub async fn resolve_pypi(
         &build_options,
     );
 
+    let resolution_mode = match solve_strategy {
+        SolveStrategy::Highest => ResolutionMode::Highest,
+        SolveStrategy::Lowest => ResolutionMode::Lowest,
+        SolveStrategy::LowestDirect => ResolutionMode::LowestDirect,
+    };
+
     // Hi maintainers! For anyone coming here, if you expose any additional `uv`
     // options, similar to `index_strategy`, make sure to include them in this
     // struct as well instead of relying on the default. Otherwise there be
     // panics.
     let options = Options {
+        resolution_mode,
         index_strategy,
         build_options: build_options.clone(),
         exclude_newer: exclude_newer.map(to_exclude_newer).unwrap_or_default(),
