@@ -212,6 +212,22 @@ channel-priority = "disabled"
     package = {version = "*", channel = "channel-name"}
     ```
 
+### `solve-strategy` (optional)
+
+This is the setting for the strategy used in the solver step.
+
+Options:
+
+- `highest`: **Default**, Solve all packages to the highest compatible version.
+
+- `lowest`: Solve all packages to the lowest compatible version.
+
+- `lowest-direct`: Solve only direct dependency packages to the lowest compatible version. Transitive dependencies are still sorted using the `highest` strategy.
+
+```toml
+solve-strategy = "lowest"
+```
+
 ### `requires-pixi` (optional)
 
 The required version spec for `pixi` itself to resolve and build the workspace. If unset (**Default**),
@@ -874,6 +890,7 @@ The `feature` table allows you to define the following fields per feature.
 - `platforms`: Same as the [platforms](#platforms). Unless overridden, the `platforms` of the feature will be those defined at workspace level.
 - `channels`: Same as the [channels](#channels). Unless overridden, the `channels` of the feature will be those defined at workspace level.
 - `channel-priority`: Same as the [channel-priority](#channel-priority-optional).
+- `solve-strategy`: Same as the [solve-strategy](#solve-strategy-optional).
 - `target`: Same as the [target](#the-target-table).
 - `tasks`: Same as the [tasks](#the-tasks-table).
 
