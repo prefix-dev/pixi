@@ -1,9 +1,11 @@
-use std::path::Path;
+use std::{io, path::Path};
 
 use clap::Parser;
+use fs_err::tokio as tokio_fs;
 use miette::Diagnostic;
 use url::Url;
 
+use pixi_config::pixi_home;
 use pixi_consts::consts;
 use pixi_global::project::FromMatchSpecError;
 use pixi_spec::PixiSpec;
@@ -56,6 +58,23 @@ pub enum GlobalSpecsConversionError {
     RelativePath(String, String),
     #[error("could not absolutize path: {0}")]
     AbsolutizePath(String),
+    #[error("`.conda` path must include a file name: {0}")]
+    CondaPathMissingFileName(String),
+    #[error("failed to determine pixi home directory")]
+    PixiHomeUnavailable,
+    #[error("failed to create conda files directory at {path}")]
+    CreateCondaFilesDir {
+        path: String,
+        #[source]
+        source: io::Error,
+    },
+    #[error("failed to copy conda package from {src} to {dst}")]
+    CopyCondaFile {
+        src: String,
+        dst: String,
+        #[source]
+        source: io::Error,
+    },
     #[error("failed to infer package name")]
     #[diagnostic(transparent)]
     PackageNameInference(#[from] pixi_global::project::InferPackageNameError),
@@ -81,6 +100,48 @@ impl GlobalSpecs {
         } else if let Some(path) = &self.path {
             let absolute_path = dunce::canonicalize(path.as_str())
                 .map_err(|_| GlobalSpecsConversionError::AbsolutizePath(path.to_string()))?;
+
+            let is_conda = absolute_path
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("conda"));
+
+            let absolute_path = if is_conda {
+                let pixi_home_dir =
+                    pixi_home().ok_or(GlobalSpecsConversionError::PixiHomeUnavailable)?;
+                let conda_files_dir = pixi_home_dir.join("conda-files");
+                tokio_fs::create_dir_all(&conda_files_dir)
+                    .await
+                    .map_err(|source| GlobalSpecsConversionError::CreateCondaFilesDir {
+                        path: conda_files_dir.to_string_lossy().to_string(),
+                        source,
+                    })?;
+
+                let file_name = absolute_path.file_name().ok_or_else(|| {
+                    GlobalSpecsConversionError::CondaPathMissingFileName(
+                        absolute_path.to_string_lossy().to_string(),
+                    )
+                })?;
+
+                let destination = conda_files_dir.join(file_name);
+                if absolute_path != destination {
+                    tokio_fs::copy(&absolute_path, &destination)
+                        .await
+                        .map_err(|source| GlobalSpecsConversionError::CopyCondaFile {
+                            src: absolute_path.to_string_lossy().to_string(),
+                            dst: destination.to_string_lossy().to_string(),
+                            source,
+                        })?;
+                }
+
+                dunce::canonicalize(&destination).map_err(|_| {
+                    GlobalSpecsConversionError::AbsolutizePath(
+                        destination.to_string_lossy().to_string(),
+                    )
+                })?
+            } else {
+                absolute_path
+            };
 
             let relative_path =
                 pathdiff::diff_paths(&absolute_path, manifest_root).ok_or_else(|| {
@@ -140,7 +201,10 @@ impl GlobalSpecs {
 mod tests {
     use std::path::PathBuf;
 
+    use fs_err as fs;
     use rattler_conda_types::ChannelConfig;
+    use temp_env;
+    use tempfile::tempdir;
 
     use super::*;
 
@@ -196,6 +260,66 @@ mod tests {
             &global_specs.first().unwrap().spec,
             &PixiSpec::Git(..)
         ))
+    }
+
+    #[tokio::test]
+    async fn test_to_global_specs_with_conda_path_copies_file() {
+        let temp_dir = tempdir().unwrap();
+        let pixi_home_dir = temp_dir.path().join("pixi-home");
+        let file_name = "custom-package.conda".to_string();
+        let source_path = temp_dir.path().join(&file_name);
+        fs::write(&source_path, b"dummy package").unwrap();
+
+        temp_env::async_with_vars([("PIXI_HOME", Some(pixi_home_dir.to_str().unwrap()))], {
+            let pixi_home_dir = pixi_home_dir.clone();
+            let source_path = source_path.clone();
+            let file_name = file_name.clone();
+            async move {
+                fs::create_dir_all(&pixi_home_dir).unwrap();
+
+                let project = pixi_global::Project::discover_or_create().await.unwrap();
+                let channel_config = project.global_channel_config().clone();
+                let manifest_root = project.root.clone();
+
+                let specs = GlobalSpecs {
+                    specs: vec!["custom-package".to_string()],
+                    path: Some(Utf8NativePathBuf::from(
+                        source_path.to_string_lossy().to_string(),
+                    )),
+                    ..Default::default()
+                };
+
+                let global_specs = specs
+                    .to_global_specs(&channel_config, &manifest_root, &project)
+                    .await
+                    .unwrap();
+
+                assert_eq!(global_specs.len(), 1);
+                let installed_spec = &global_specs[0];
+
+                let PixiSpec::Path(path_spec) = &installed_spec.spec else {
+                    panic!("expected path spec");
+                };
+
+                let resolved_path = path_spec
+                    .resolve(&manifest_root)
+                    .unwrap()
+                    .canonicalize()
+                    .unwrap();
+                let expected_destination = pixi_home_dir
+                    .join("conda-files")
+                    .join(&file_name)
+                    .canonicalize()
+                    .unwrap();
+
+                assert_eq!(resolved_path, expected_destination);
+                assert!(
+                    expected_destination.is_file(),
+                    "expected copied .conda file to exist"
+                );
+            }
+        })
+        .await;
     }
 
     #[tokio::test]

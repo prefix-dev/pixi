@@ -39,7 +39,7 @@ impl GlobHash {
     pub fn from_patterns<'a>(
         root_dir: &Path,
         globs: impl IntoIterator<Item = &'a str>,
-        additional_hash: Option<Vec<u8>>,
+        additional_hash: Vec<u8>,
     ) -> Result<Self, GlobHashError> {
         // If the root is not a directory or does not exist, return an empty map.
         if !root_dir.is_dir() {
@@ -75,9 +75,7 @@ impl GlobHash {
                 })?;
         }
 
-        if let Some(additional_hash) = additional_hash {
-            rattler_digest::digest::Update::update(&mut hasher, &additional_hash);
-        }
+        rattler_digest::digest::Update::update(&mut hasher, &additional_hash);
 
         let hash = hasher.finalize();
 
@@ -187,7 +185,8 @@ mod test {
             .parent()
             .and_then(Path::parent)
             .unwrap();
-        let glob_hash = GlobHash::from_patterns(root_dir, globs.iter().copied(), None).unwrap();
+        let glob_hash =
+            GlobHash::from_patterns(root_dir, globs.iter().copied(), Vec::new()).unwrap();
         let snapshot = format!(
             "Globs:\n{}\nHash: {:x}\nMatched files:\n{}",
             globs

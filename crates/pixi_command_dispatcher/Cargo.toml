@@ -21,6 +21,7 @@ futures = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
 ordermap = { workspace = true }
+pathdiff = { workspace = true }
 pin-project-lite = { workspace = true }
 rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
@@ -49,7 +50,6 @@ simple_spawn_blocking = { workspace = true, features = ["tokio"] }
 
 pixi_build_discovery = { workspace = true, features = ["serde"] }
 pixi_build_frontend = { workspace = true }
-pixi_build_type_conversions = { workspace = true }
 pixi_build_types = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_git = { workspace = true }
@@ -63,7 +63,7 @@ pixi_utils = { workspace = true }
 [dev-dependencies]
 indexmap = { workspace = true }
 insta = { workspace = true, features = ["json"] }
-pixi_build_frontend = { workspace = true, features = ["passthrough_backend"] }
+pixi_build_backend_passthrough = { workspace = true }
 pixi_config = { workspace = true }
 pixi_test_utils = { workspace = true }
 tempfile = { workspace = true }

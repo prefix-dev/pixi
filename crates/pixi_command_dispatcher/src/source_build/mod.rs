@@ -23,12 +23,12 @@ use url::Url;
 
 use crate::{
     BackendSourceBuildError, BackendSourceBuildMethod, BackendSourceBuildPrefix,
-    BackendSourceBuildSpec, BackendSourceBuildV0Method, BackendSourceBuildV1Method,
-    BuildEnvironment, BuildProfile, CachedBuildStatus, CommandDispatcher, CommandDispatcherError,
-    CommandDispatcherErrorResultExt, InstallPixiEnvironmentError, InstallPixiEnvironmentResult,
-    InstallPixiEnvironmentSpec, InstantiateBackendError, InstantiateBackendSpec,
-    PixiEnvironmentSpec, SolvePixiEnvironmentError, SourceBuildCacheStatusError,
-    SourceBuildCacheStatusSpec, SourceCheckoutError,
+    BackendSourceBuildSpec, BackendSourceBuildV1Method, BuildEnvironment, BuildProfile,
+    CachedBuildStatus, CommandDispatcher, CommandDispatcherError, CommandDispatcherErrorResultExt,
+    InstallPixiEnvironmentError, InstallPixiEnvironmentResult, InstallPixiEnvironmentSpec,
+    InstantiateBackendError, InstantiateBackendSpec, PixiEnvironmentSpec,
+    SolvePixiEnvironmentError, SourceBuildCacheStatusError, SourceBuildCacheStatusSpec,
+    SourceCheckoutError,
     build::{
         BuildCacheError, BuildHostEnvironment, BuildHostPackage, CachedBuild,
         CachedBuildSourceInfo, Dependencies, DependenciesError, MoveError, PackageBuildInputHash,
@@ -71,8 +71,11 @@ pub struct SourceBuildSpec {
     /// The build profile to use for the build.
     pub build_profile: BuildProfile,
 
-    /// Variant configuration
+    /// Build variants to use during the build
     pub variants: Option<BTreeMap<String, Vec<String>>>,
+
+    /// Build variant file contents to use during the build
+    pub variant_files: Option<Vec<PathBuf>>,
 
     /// The directory where to place the built package.
     pub output_directory: Option<PathBuf>,
@@ -211,25 +214,16 @@ impl SourceBuildSpec {
             }
         }
 
-        // Build the package based on the support backend capabilities.
-        let mut built_source = if backend.capabilities().provides_conda_build_v1() {
-            self.build_v1(
+        // Build the package using the v1 build method.
+        let mut built_source = self
+            .build_v1(
                 command_dispatcher,
                 backend,
                 work_directory,
                 package_build_input_hash,
                 reporter,
             )
-            .await?
-        } else {
-            self.build_v0(
-                command_dispatcher,
-                backend,
-                work_directory,
-                package_build_input_hash,
-            )
-            .await?
-        };
+            .await?;
 
         // Create the output directory if it does not exist.
         fs_err::create_dir_all(&output_directory).map_err(|err| {
@@ -326,42 +320,6 @@ impl SourceBuildSpec {
         self.build_profile == BuildProfile::Development && self.source.is_mutable()
     }
 
-    async fn build_v0(
-        self,
-        command_dispatcher: CommandDispatcher,
-        backend: Backend,
-        work_directory: PathBuf,
-        package_build_input_hash: PackageBuildInputHash,
-    ) -> Result<BuiltPackage, CommandDispatcherError<SourceBuildError>> {
-        let result = command_dispatcher
-            .backend_source_build(BackendSourceBuildSpec {
-                method: BackendSourceBuildMethod::BuildV0(BackendSourceBuildV0Method {
-                    editable: self.editable(),
-                    build_environment: self.build_environment,
-                    variants: self.variants,
-                    output_directory: self.output_directory,
-                }),
-                backend,
-                package: self.package,
-                source: self.source,
-                work_directory,
-                channels: self.channels,
-                channel_config: self.channel_config,
-            })
-            .await
-            .map_err_with(SourceBuildError::from)?;
-
-        Ok(BuiltPackage {
-            output_file: result.output_file,
-            metadata: CachedBuildSourceInfo {
-                globs: result.input_globs,
-                build: Default::default(),
-                host: Default::default(),
-                package_build_input_hash: Some(package_build_input_hash),
-            },
-        })
-    }
-
     async fn build_v1(
         self,
         command_dispatcher: CommandDispatcher,
@@ -381,6 +339,7 @@ impl SourceBuildSpec {
                 host_platform,
                 build_platform,
                 variant_configuration: self.variants.clone(),
+                variant_files: self.variant_files.clone(),
                 work_directory: work_directory.clone(),
                 channels: self.channels.clone(),
             })
@@ -494,6 +453,7 @@ impl SourceBuildSpec {
                         channels: self.channels.clone(),
                         channel_config: self.channel_config.clone(),
                         variants: self.variants.clone(),
+                        variant_files: self.variant_files.clone(),
                         enabled_protocols: self.enabled_protocols.clone(),
                     })
                     .await
@@ -501,6 +461,11 @@ impl SourceBuildSpec {
                     .map_err_with(SourceBuildError::InstallBuildEnvironment)?,
             )
         };
+
+        // We always create the host prefix so that $PREFIX exists during the build.
+        let host_prefix_directory = Prefix::create(&directories.host_prefix)
+            .map_err(SourceBuildError::CreateBuildEnvironmentDirectory)
+            .map_err(CommandDispatcherError::Failed)?;
 
         // Install the host environment.
         let host_prefix = if host_records.is_empty() {
@@ -511,16 +476,15 @@ impl SourceBuildSpec {
                     .install_pixi_environment(InstallPixiEnvironmentSpec {
                         name: format!("{} (host)", self.package.name.as_source()),
                         records: host_records.clone(),
-                        prefix: Prefix::create(&directories.host_prefix)
-                            .map_err(SourceBuildError::CreateBuildEnvironmentDirectory)
-                            .map_err(CommandDispatcherError::Failed)?,
+                        prefix: host_prefix_directory,
                         installed: None,
                         ignore_packages: None,
-                        build_environment: self.build_environment.to_build_from_build(),
+                        build_environment: self.build_environment.clone(),
                         force_reinstall: Default::default(),
                         channels: self.channels.clone(),
                         channel_config: self.channel_config.clone(),
                         variants: self.variants.clone(),
+                        variant_files: self.variant_files.clone(),
                         enabled_protocols: self.enabled_protocols.clone(),
                     })
                     .await
@@ -668,6 +632,7 @@ impl SourceBuildSpec {
                 exclude_newer: None,
                 channel_config: self.channel_config.clone(),
                 variants: self.variants.clone(),
+                variant_files: self.variant_files.clone(),
                 enabled_protocols: self.enabled_protocols.clone(),
             })
             .await

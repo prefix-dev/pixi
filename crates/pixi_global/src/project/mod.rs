@@ -623,6 +623,7 @@ impl Project {
                 ignore_packages: None,
                 force_reinstall: Default::default(),
                 variants: None,
+                variant_files: None,
             })
             .await?;
 
@@ -1390,6 +1391,7 @@ impl Project {
                 .collect(),
             build_environment: pixi_command_dispatcher::BuildEnvironment::default(),
             variants: None,
+            variant_files: None,
             enabled_protocols: Default::default(),
         };
 

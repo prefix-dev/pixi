@@ -6,17 +6,17 @@ use std::{
 
 use miette::{IntoDiagnostic, Report, WrapErr};
 use pep440_rs::VersionSpecifiers;
+use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use pyproject_toml::{self, Contact, ResolveError};
 use rattler_conda_types::{PackageName, ParseStrictness::Lenient, VersionSpec};
 
 use super::{
-    DependencyOverwriteBehavior, Feature, SpecType, WorkspaceManifest,
+    Feature, InternalDependencyBehavior, SpecType, WorkspaceManifest,
     error::{RequirementConversionError, TomlError},
 };
 use crate::{
     FeatureName, ManifestKind, Warning,
-    error::GenericError,
     manifests::PackageManifest,
     toml::{
         ExternalWorkspaceProperties, FromTomlStr, PackageDefaults, PyProjectToml, TomlManifest,
@@ -218,6 +218,7 @@ impl PyProjectManifest {
                 &python,
                 &version_or_url_to_spec(&python_spec).unwrap(),
                 SpecType::Run,
+                InternalDependencyBehavior::Overwrite,
             );
         } else if let Some(_spec) = python_spec {
             if target.has_dependency(&python, SpecType::Run, None) {
@@ -240,16 +241,18 @@ impl PyProjectManifest {
         // dependencies
         for (group, reqs) in groups.iter() {
             let feature_name = FeatureName::from(group.as_str());
-            let target = workspace_manifest.target_mut(None, &feature_name).unwrap();
+            let target = workspace_manifest
+                .feature_mut(&feature_name)
+                .map_err(|_| TomlError::InvalidFeature(feature_name.to_string()))?
+                .targets
+                .default_mut();
 
             for requirement in reqs.iter() {
-                target
-                    .try_add_pep508_dependency(
-                        requirement,
-                        None,
-                        DependencyOverwriteBehavior::Error,
-                    )
-                    .map_err(|err| GenericError::new(format!("{}", err)))?;
+                // Convert to an internal representation
+                let name = PypiPackageName::from_normalized(requirement.name.clone());
+                let pixi_spec = PixiPypiSpec::try_from(requirement.clone()).map_err(Box::new)?;
+                // Add to target dependency, append if it already exists
+                target.add_pypi_dependency(name, pixi_spec, InternalDependencyBehavior::Append);
             }
         }
 
@@ -314,9 +317,11 @@ mod tests {
     use std::str::FromStr;
 
     use pep440_rs::VersionSpecifiers;
+    use pixi_pypi_spec::PypiPackageName;
     use rattler_conda_types::{ParseStrictness, VersionSpec};
 
-    use crate::{ManifestSource, Manifests};
+    use crate::toml::FromTomlStr;
+    use crate::{FeatureName, ManifestSource, Manifests};
 
     const PYPROJECT_FULL: &str = r#"
         [project]
@@ -482,5 +487,121 @@ mod tests {
         cmp(">=3.12", ">=3.12");
         cmp(">=3.10,<3.12", ">=3.10,<3.12");
         cmp("~=3.12", "~=3.12");
+    }
+
+    #[test]
+    fn dependency_groups_include_preserves_all_extras() {
+        const PYPROJECT_RECURSIVE_OPTIONALS: &str = r#"
+            [project]
+            name = "example"
+
+            [dependency-groups]
+            base = ["requests[socks]"]
+            all = [
+                { include-group = "base" },
+                "requests[security]",
+            ]
+
+            [tool.pixi.workspace]
+            channels = ["conda-forge"]
+            platforms = ["linux-64"]
+            "#;
+
+        let manifest =
+            super::PyProjectManifest::from_toml_str(PYPROJECT_RECURSIVE_OPTIONALS).unwrap();
+        let (workspace_manifest, _, _) = manifest.into_workspace_manifest(None).unwrap();
+
+        let feature = workspace_manifest
+            .feature(&FeatureName::from("all"))
+            .expect("feature is created for dependency group");
+        let deps = feature
+            .targets
+            .default()
+            .pypi_dependencies
+            .as_ref()
+            .expect("pypi dependencies are collected");
+
+        let requests_specs = deps
+            .get(&PypiPackageName::from_str("requests").unwrap())
+            .expect("requests is present in aggregated dependencies");
+
+        assert_eq!(
+            requests_specs.len(),
+            2,
+            "both extras should be preserved instead of being overwritten"
+        );
+
+        let rendered_specs: Vec<String> =
+            requests_specs.iter().map(|spec| spec.to_string()).collect();
+        assert!(
+            rendered_specs
+                .iter()
+                .any(|spec| spec.contains("extras = [\"socks\"]")),
+            "expected to find the socks extra carried over from the included group"
+        );
+        assert!(
+            rendered_specs
+                .iter()
+                .any(|spec| spec.contains("extras = [\"security\"]")),
+            "expected to find the security extra defined on the including group"
+        );
+    }
+
+    #[test]
+    fn optional_dependencies_include_preserves_all_extras() {
+        const PYPROJECT_OPTIONAL_DEPENDENCIES: &str = r#"
+            [project]
+            name = "example"
+
+            [project.optional-dependencies]
+            base = ["requests[socks]"]
+            all = [
+                "example[base]",
+                "requests[security]",
+            ]
+
+            [tool.pixi.workspace]
+            channels = ["conda-forge"]
+            platforms = ["linux-64"]
+            "#;
+
+        let manifest =
+            super::PyProjectManifest::from_toml_str(PYPROJECT_OPTIONAL_DEPENDENCIES).unwrap();
+        let (workspace_manifest, _, _) = manifest.into_workspace_manifest(None).unwrap();
+
+        let feature = workspace_manifest
+            .feature(&FeatureName::from("all"))
+            .expect("feature is created for optional dependency extra");
+        let deps = feature
+            .targets
+            .default()
+            .pypi_dependencies
+            .as_ref()
+            .expect("pypi dependencies are collected");
+
+        let requests_specs = deps
+            .get(&PypiPackageName::from_str("requests").unwrap())
+            .expect("requests is present in aggregated dependencies");
+
+        assert_eq!(
+            requests_specs.len(),
+            2,
+            "both extras should be preserved instead of being overwritten"
+        );
+
+        let rendered_specs: Vec<String> =
+            requests_specs.iter().map(|spec| spec.to_string()).collect();
+        assert!(
+            rendered_specs
+                .iter()
+                .any(|spec| spec.contains("extras = [\"socks\"]")),
+            "expected to find the socks extra carried over from the included extra"
+        );
+        assert!(
+            rendered_specs
+                .iter()
+                .any(|spec| spec.contains("extras = [\"security\"]")),
+            "expected to find the security extra defined on the including extra"
+        );
     }
 }

@@ -9,10 +9,10 @@ use pep508_rs::{MarkerTree, Requirement};
 use pixi_config::ConfigCli;
 use pixi_core::{
     WorkspaceLocator,
-    diff::{LockFileDiff, LockFileJsonDiff},
     lock_file::UpdateContext,
     workspace::{MatchSpecs, PypiDeps, WorkspaceMut},
 };
+use pixi_diff::{LockFileDiff, LockFileJsonDiff};
 use pixi_manifest::{FeatureName, SpecType};
 use pixi_pypi_spec::PixiPypiSpec;
 use pixi_spec::PixiSpec;
@@ -223,7 +223,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .update()
                 .await?;
             let diff = LockFileDiff::from_lock_files(&original_lock_file, &derived.lock_file);
-            let json_diff = LockFileJsonDiff::new(Some(workspace.workspace()), diff);
+            let json_diff =
+                LockFileJsonDiff::new(Some(workspace.workspace().named_environments()), diff);
             let json = serde_json::to_string_pretty(&json_diff).expect("failed to convert to json");
             println!("{}", json);
             // Revert changes after computing the diff in dry-run mode.
@@ -233,7 +234,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             let saved_workspace = workspace.save().await.into_diagnostic()?;
             let updated_lock_file = saved_workspace.load_lock_file().await?;
             let diff = LockFileDiff::from_lock_files(&original_lock_file, &updated_lock_file);
-            let json_diff = LockFileJsonDiff::new(Some(&saved_workspace), diff);
+            let json_diff = LockFileJsonDiff::new(Some(saved_workspace.named_environments()), diff);
             let json = serde_json::to_string_pretty(&json_diff).expect("failed to convert to json");
             println!("{}", json);
         }
@@ -278,11 +279,11 @@ fn collect_specs_by_target(
     // Determine default-owned names for partitioning
     let default_deps_names: IndexSet<_> = feature
         .dependencies(SpecType::Run, None)
-        .map(|deps| deps.keys().cloned().collect())
+        .map(|deps| deps.names().cloned().collect())
         .unwrap_or_default();
     let default_pypi_names: IndexSet<_> = feature
         .pypi_dependencies(None)
-        .map(|deps| deps.keys().cloned().collect())
+        .map(|deps| deps.names().cloned().collect())
         .unwrap_or_default();
 
     // Parse default-target specs (written to default location)
@@ -323,12 +324,12 @@ fn collect_available_packages(
 
     // Default target
     if let Some(deps) = feature.dependencies(SpecType::Run, None) {
-        for (name, _) in deps.into_owned() {
+        for name in deps.names() {
             available.insert(name.as_normalized().to_string());
         }
     }
     if let Some(deps) = feature.pypi_dependencies(None) {
-        for (name, _) in deps.into_owned() {
+        for name in deps.names() {
             available.insert(name.as_normalized().to_string());
         }
     }
@@ -336,12 +337,12 @@ fn collect_available_packages(
     // Platform-specific targets
     for &platform in platforms {
         if let Some(deps) = feature.dependencies(SpecType::Run, Some(platform)) {
-            for (name, _) in deps.into_owned() {
+            for name in deps.names() {
                 available.insert(name.as_normalized().to_string());
             }
         }
         if let Some(deps) = feature.pypi_dependencies(Some(platform)) {
-            for (name, _) in deps.into_owned() {
+            for name in deps.names() {
                 available.insert(name.as_normalized().to_string());
             }
         }
@@ -366,11 +367,11 @@ pub fn parse_specs_for_platform(
     let match_spec_iter = feature
         .dependencies(spec_type, platform)
         .into_iter()
-        .flat_map(|deps| deps.into_owned());
+        .flat_map(|deps| deps.into_owned().into_specs());
     let pypi_deps_iter = feature
         .pypi_dependencies(platform)
         .into_iter()
-        .flat_map(|deps| deps.into_owned());
+        .flat_map(|deps| deps.into_owned().into_specs());
     // Note: package existence is validated across all platforms in `execute`.
     let match_specs = match_spec_iter
         // Don't upgrade excluded packages

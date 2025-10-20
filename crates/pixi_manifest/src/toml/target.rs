@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use indexmap::IndexMap;
 use pixi_spec::PixiSpec;
+use pixi_spec_containers::DependencyMap;
 use pixi_toml::{TomlHashMap, TomlIndexMap};
 use toml_span::{DeserError, Value, de_helpers::TableHelper};
 
@@ -13,6 +14,7 @@ use crate::{
     utils::{PixiSpanned, package_map::UniquePackageMap},
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
+use rattler_conda_types::PackageName;
 
 #[derive(Debug, Default)]
 pub struct TomlTarget {
@@ -77,7 +79,10 @@ impl TomlTarget {
                     ],
                     pixi_build_enabled,
                 )?,
-                pypi_dependencies: self.pypi_dependencies,
+                pypi_dependencies: self.pypi_dependencies.map(|index_map| {
+                    // Convert IndexMap to DependencyMap
+                    index_map.into_iter().collect()
+                }),
                 activation: self.activation,
                 tasks: self.tasks,
             },
@@ -90,13 +95,18 @@ impl TomlTarget {
 pub(super) fn combine_target_dependencies(
     iter: impl IntoIterator<Item = (SpecType, Option<PixiSpanned<UniquePackageMap>>)>,
     is_pixi_build_enabled: bool,
-) -> Result<HashMap<SpecType, IndexMap<rattler_conda_types::PackageName, PixiSpec>>, TomlError> {
+) -> Result<HashMap<SpecType, DependencyMap<PackageName, PixiSpec>>, TomlError> {
     iter.into_iter()
         .filter_map(|(ty, deps)| {
             deps.map(|deps| {
                 deps.value
                     .into_inner(is_pixi_build_enabled)
-                    .map(|deps| (ty, deps))
+                    .map(|index_map| {
+                        // Convert IndexMap to DependencyMap
+                        let dep_map: DependencyMap<PackageName, PixiSpec> =
+                            index_map.into_iter().collect();
+                        (ty, dep_map)
+                    })
             })
         })
         .collect()

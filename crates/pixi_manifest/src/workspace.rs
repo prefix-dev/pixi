@@ -75,14 +75,24 @@ pub struct Workspace {
     /// Preview features
     pub preview: Preview,
 
-    /// Build variants
+    /// Build variants defined directly in the manifest.
     pub build_variants: Targets<Option<HashMap<String, Vec<String>>>>,
+
+    /// Ordered list of external variant configuration files.
+    pub build_variant_files: Vec<BuildVariantSource>,
 
     /// Version requirement for pixi itself
     pub requires_pixi: Option<VersionSpec>,
 
     /// Exclude package candidates that are newer than this date.
     pub exclude_newer: Option<ExcludeNewer>,
+}
+
+/// A source that contributes additional build variant definitions.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BuildVariantSource {
+    /// Load variants from a file relative to the workspace root.
+    File(PathBuf),
 }
 
 #[derive(

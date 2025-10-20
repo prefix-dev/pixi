@@ -5,7 +5,7 @@ use pixi_build_discovery::{CommandSpec, SystemCommandSpec};
 use crate::in_memory::{BoxedInMemoryBackend, InMemoryBackendInstantiator};
 
 /// A backend override that can be used to override the backend tools.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum BackendOverride {
     /// Overwrite the backend with an executable path.
     System(OverriddenBackends),
@@ -74,7 +74,7 @@ pub struct OverriddenTool {
 }
 
 /// List of overridden backends
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum OverriddenBackends {
     /// Overrides all backends and assume they are available in the root.
     All,
@@ -83,7 +83,7 @@ pub enum OverriddenBackends {
 }
 
 /// List of overridden backends using in memory backends.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum InMemoryOverriddenBackends {
     /// Overrides all backends and use the same in-memory backend for all
     All(BoxedInMemoryBackend),
