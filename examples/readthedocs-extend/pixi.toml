@@ -1,4 +1,4 @@
-[project]
+[workspace]
 channels = ["conda-forge"]
 name = "readthedocs-extend"
 platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]

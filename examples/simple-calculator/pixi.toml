@@ -1,4 +1,4 @@
-[project]
+[workspace]
 authors = ["Parsa <parsa@prefix.dev>"]
 channels = ["conda-forge"]
 description = "Example demonstrating task arguments in pixi"
