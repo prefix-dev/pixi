@@ -228,6 +228,18 @@ Options:
 solve-strategy = "lowest"
 ```
 
+!!! note
+    When multiple features used in an environment set a specific solve strategy,
+    the one from the left-most feature declared in the environment is used.
+    ```toml
+    [feature.one]
+    solve-strategy = "lowest"
+    [feature.two]
+    solve-strategy = "lowest-direct"    
+    [environments]
+    combined = ["two", "one"] # <- The solve strategy from feature `two` is used
+    ```
+
 ### `requires-pixi` (optional)
 
 The required version spec for `pixi` itself to resolve and build the workspace. If unset (**Default**),
