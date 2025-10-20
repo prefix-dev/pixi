@@ -73,6 +73,8 @@ pub struct BackendInitializationParams {
 pub struct EnabledProtocols {
     /// Enable the rattler-build protocol.
     pub enable_rattler_build: bool,
+    /// Enable the ROS protocol.
+    pub enable_ros: bool,
     /// Enable the pixi protocol.
     pub enable_pixi: bool,
 }
@@ -82,6 +84,7 @@ impl Default for EnabledProtocols {
     fn default() -> Self {
         Self {
             enable_rattler_build: true,
+            enable_ros: true,
             enable_pixi: true,
         }
     }
@@ -95,6 +98,9 @@ pub enum DiscoveryError {
 
     #[error("depending on a `{0}` file but the rattler-build protocol is not enabled")]
     UnsupportedRecipeYaml(String),
+
+    #[error("depending on a `{0}` file but the ros protocol is not enabled")]
+    UnsupportedPackageXml(String),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -144,6 +150,11 @@ impl DiscoveredBackend {
 
             // If the user explicitly asked for a package.xml file
             if VALID_ROS_BACKEND_NAMES.contains(&source_file_name) {
+                if !enabled_protocols.enable_ros {
+                    return Err(DiscoveryError::UnsupportedPackageXml(
+                        source_file_name.to_string(),
+                    ));
+                }
                 let source_dir = source_path
                     .parent()
                     .expect("the package.xml must live somewhere");
