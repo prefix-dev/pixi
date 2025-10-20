@@ -1,4 +1,4 @@
-[project]
+[workspace]
 authors = [
   "Wolf Vollprecht <wolf@prefix.dev>",
   "Bas Zalmstra <bas@prefix.dev>",
