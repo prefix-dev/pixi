@@ -938,9 +938,6 @@ jobs:
 
       - name: Run integration tests
         run: pixi run --locked test-slow
-        env:
-          PIXI_BIN_DIR: ${{ github.workspace }}/artifacts
-          BUILD_BACKENDS_BIN_DIR: ${{ github.workspace }}/artifacts
 
   test-build-windows-x86_64:
     timeout-minutes: 10
@@ -979,9 +976,6 @@ jobs:
       - name: Run integration tests
         run: pixi run --locked test-slow
         working-directory: ${{ env.PIXI_WORKSPACE }}
-        env:
-          PIXI_BIN_DIR: ${{ env.PIXI_WORKSPACE }}/artifacts
-          BUILD_BACKENDS_BIN_DIR: ${{ env.PIXI_WORKSPACE }}/artifacts
 
   test-build-macos-aarch64:
     timeout-minutes: 10
@@ -1013,6 +1007,3 @@ jobs:
 
       - name: Run integration tests
         run: pixi run --locked test-slow
-        env:
-          PIXI_BIN_DIR: ${{ github.workspace }}/artifacts
-          BUILD_BACKENDS_BIN_DIR: ${{ github.workspace }}/artifacts

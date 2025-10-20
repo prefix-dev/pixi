@@ -114,12 +114,25 @@ impl BuildCache {
         input: &BuildInput,
     ) -> Result<(Option<CachedBuild>, BuildCacheEntry), BuildCacheError> {
         let input_key = input.hash_key();
+        tracing::debug!(
+            source = %source,
+            input_key = %input_key,
+            name = %input.name,
+            version = %input.version,
+            subdir = %input.subdir,
+            host_platform = %input.host_platform,
+            build = %input.build,
+            channel_urls = ?input.channel_urls,
+            host_virtual_packages = ?input.host_virtual_packages,
+            build_virtual_packages = ?input.build_virtual_packages,
+            "opening source build cache entry",
+        );
 
         // Ensure the cache directory exists
         let cache_dir = self
             .root
             .join(source_checkout_cache_key(source))
-            .join(input_key);
+            .join(&input_key);
         fs_err::tokio::create_dir_all(&cache_dir)
             .await
             .map_err(|e| {
@@ -168,7 +181,22 @@ impl BuildCache {
                 )
             })?;
 
-        let metadata = serde_json::from_str(&cache_file_contents).ok();
+        let metadata: Option<CachedBuild> = serde_json::from_str(&cache_file_contents).ok();
+        if let Some(existing) = metadata.as_ref() {
+            tracing::debug!(
+                source = %source,
+                input_key = %input_key,
+                package = ?existing.record.package_record.name,
+                build = %existing.record.package_record.build,
+                "found cached build metadata",
+            );
+        } else {
+            tracing::debug!(
+                source = %source,
+                input_key = %input_key,
+                "no cached build metadata found",
+            );
+        }
         Ok((
             metadata,
             BuildCacheEntry {
@@ -271,6 +299,13 @@ impl BuildCacheEntry {
                     e,
                 )
             })?;
+
+        tracing::debug!(
+            cache_file = %self.cache_file_path.display(),
+            package = ?metadata.record.package_record.name,
+            build = %metadata.record.package_record.build,
+            "updated source build cache entry",
+        );
 
         Ok(metadata.record)
     }

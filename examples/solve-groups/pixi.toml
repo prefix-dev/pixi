@@ -1,4 +1,4 @@
-[project]
+[workspace]
 authors = ["Bas Zalmstra <zalmstra.bas@gmail.com>"]
 channels = ["conda-forge"]
 name = "solve-groups"

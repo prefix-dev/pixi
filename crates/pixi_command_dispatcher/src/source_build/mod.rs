@@ -146,10 +146,35 @@ impl SourceBuildSpec {
 
                 if let CachedBuildStatus::UpToDate(cached_build) = &build_cache.cached_build {
                     // If the build is up to date, we can return the cached build.
+                    tracing::debug!(
+                        source = %self.source,
+                        package = ?cached_build.record.package_record.name,
+                        build = %cached_build.record.package_record.build,
+                        output = %cached_build.record.file_name,
+                        "using cached source build",
+                    );
                     return Ok(SourceBuildResult {
                         output_file: build_cache.cache_dir.join(&cached_build.record.file_name),
                         record: cached_build.record.clone(),
                     });
+                }
+
+                match &build_cache.cached_build {
+                    CachedBuildStatus::Stale(existing) => {
+                        tracing::debug!(
+                            source = %self.source,
+                            package = ?existing.record.package_record.name,
+                            build = %existing.record.package_record.build,
+                            "rebuilding stale source build",
+                        );
+                    }
+                    CachedBuildStatus::Missing => {
+                        tracing::debug!(
+                            source = %self.source,
+                            "no cached source build; starting fresh build",
+                        );
+                    }
+                    CachedBuildStatus::UpToDate(_) => {}
                 }
 
                 (build_cache.cache_dir.clone(), Some(build_cache))
@@ -204,6 +229,12 @@ impl SourceBuildSpec {
                 .key(),
             ),
         };
+        tracing::debug!(
+            source = %self.source,
+            work_directory = %work_directory.display(),
+            backend = backend.identifier(),
+            "using work directory for source build",
+        );
 
         // Clean the working directory if requested.
         if self.clean {
@@ -215,6 +246,7 @@ impl SourceBuildSpec {
         }
 
         // Build the package using the v1 build method.
+        let source_for_logging = self.source.clone();
         let mut built_source = self
             .build_v1(
                 command_dispatcher,
@@ -292,6 +324,13 @@ impl SourceBuildSpec {
                 .expect("the output file should be a valid URL"),
             channel: None,
         };
+        tracing::debug!(
+            source = %source_for_logging,
+            package = ?record.package_record.name,
+            build = %record.package_record.build,
+            output = %record.file_name,
+            "built source package",
+        );
 
         // Update the cache entry if we have one.
         if let Some(build_cache) = build_cache {
