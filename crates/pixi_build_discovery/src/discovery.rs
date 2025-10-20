@@ -25,7 +25,6 @@ use crate::{
 const VALID_RECIPE_NAMES: [&str; 2] = ["recipe.yaml", "recipe.yml"];
 const VALID_RECIPE_DIRS: [&str; 2] = ["", "recipe"];
 const VALID_ROS_BACKEND_NAMES: [&str; 1] = ["package.xml"];
-const VALID_RUST_BACKEND_NAMES: [&str; 1] = ["Cargo.toml"];
 
 /// Describes a backend discovered for a given source location.
 #[derive(Debug, Clone)]
