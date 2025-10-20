@@ -491,7 +491,7 @@ pub fn verify_environment_satisfiability(
     }
 
     // Verify solver options
-    let expected_solve_strategy = environment.solve_strategy().unwrap_or_default().into();
+    let expected_solve_strategy = environment.solve_strategy().into();
     if locked_environment.solve_options().strategy != expected_solve_strategy {
         return Err(EnvironmentUnsat::SolveStrategyMismatch {
             locked_strategy: locked_environment.solve_options().strategy,

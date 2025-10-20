@@ -940,4 +940,69 @@ mod tests {
             Platform::Win32
         );
     }
+
+    #[test]
+    pub fn test_solve_strategy() {
+        let contents = r#"
+        [project]
+        name = "foo"
+        platforms = []
+        channels = []
+        solve-strategy = "lowest-direct"
+
+        [feature.lowest]
+        solve-strategy = "lowest"
+
+        [feature.highest]
+        solve-strategy = "highest"
+        
+        [feature.no_strategy]
+
+        [environments]
+        lowest = ["lowest"]
+        highest = ["highest"]
+        combined-declared = ["lowest", "highest"]
+        combined-undeclared = ["no_strategy", "lowest"]
+        implicit = ["no_strategy"]
+        "#;
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let workspace = Workspace::from_str(&temp_dir.path().join("pixi.toml"), contents).unwrap();
+
+        assert_eq!(
+            workspace.default_environment().solve_strategy(),
+            pixi_manifest::SolveStrategy::LowestDirect
+        );
+
+        assert_eq!(
+            workspace.environment("lowest").unwrap().solve_strategy(),
+            pixi_manifest::SolveStrategy::Lowest
+        );
+
+        assert_eq!(
+            workspace.environment("highest").unwrap().solve_strategy(),
+            pixi_manifest::SolveStrategy::Highest
+        );
+
+        assert_eq!(
+            workspace
+                .environment("combined-declared")
+                .unwrap()
+                .solve_strategy(),
+            pixi_manifest::SolveStrategy::Lowest
+        );
+
+        assert_eq!(
+            workspace
+                .environment("combined-undeclared")
+                .unwrap()
+                .solve_strategy(),
+            pixi_manifest::SolveStrategy::Lowest
+        );
+
+        assert_eq!(
+            workspace.environment("implicit").unwrap().solve_strategy(),
+            pixi_manifest::SolveStrategy::LowestDirect
+        );
+    }
 }
