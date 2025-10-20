@@ -168,4 +168,25 @@ impl JsonRpcBackendSpec {
             })),
         }
     }
+
+    /// Constructs a new default instance for spawning a ROS build backend.
+    pub fn default_ros_build(channel_config: &ChannelConfig) -> Self {
+        const DEFAULT_BUILD_TOOL: &str = "pixi-build-ros";
+
+        let conda_forge_channel = Channel::from_name("conda-forge", channel_config).base_url;
+        let backends_channel = Url::from_str("https://prefix.dev/pixi-build-backends")
+            .unwrap()
+            .into();
+
+        Self {
+            name: DEFAULT_BUILD_TOOL.to_string(),
+            command: CommandSpec::EnvironmentSpec(Box::new(EnvironmentSpec {
+                requirement: (DEFAULT_BUILD_TOOL.parse().unwrap(), PixiSpec::any()),
+                additional_requirements: Default::default(),
+                constraints: Default::default(),
+                channels: vec![conda_forge_channel, backends_channel],
+                command: None,
+            })),
+        }
+    }
 }
