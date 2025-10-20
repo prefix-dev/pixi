@@ -7445,7 +7445,7 @@ We created [prefix-dev/setup-pixi](https://github.com/prefix-dev/setup-pixi) to 
 ```yaml
 - uses: prefix-dev/setup-pixi@v0.9.2
   with:
-    pixi-version: v0.56.0
+    pixi-version: v0.57.0
     cache: true
     auth-host: prefix.dev
     auth-token: ${{ secrets.PREFIX_DEV_TOKEN }}
@@ -8228,7 +8228,7 @@ Create a new directory `.devcontainer` in the root of your workspace. Then, crea
 
 ```dockerfile
 FROM mcr.microsoft.com/devcontainers/base:jammy
-ARG PIXI_VERSION=v0.56.0
+ARG PIXI_VERSION=v0.57.0
 RUN curl -L -o /usr/local/bin/pixi -fsSL --compressed "https://github.com/prefix-dev/pixi/releases/download/${PIXI_VERSION}/pixi-$(uname -m)-unknown-linux-musl" \
     && chmod +x /usr/local/bin/pixi \
     && pixi info
@@ -15344,6 +15344,69 @@ pixi workspace version set <VERSION>
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+### [0.57.0] - 2025-10-20
+
+#### ✨ Highlights
+
+There's a new way to include variants in to a pixi workspace! Use `build-variants-files` to reference external variant definitions from YAML files.
+
+```toml
+[workspace]
+build-variants-files = [
+    "./pinning/conda_build_config.yaml",
+    "./variants/overrides.yaml",
+]
+
+```
+
+Read more about this feature in the [docs](https://pixi.sh/dev/reference/pixi_manifest/#build-variants-files-optional).
+
+We deprecated the following syntax in the pixi manifest and give explicit warning when it's used:
+
+- `[project]`: should be replaced by `[workspace]`.
+- `[build-dependencies]` and `[host-dependencies]`: should be replaced by `[dependencies]`.
+
+If you're working on pixi-build backend note that we deprecated build-api v0.
+
+And we also fixed a lot of things!
+
+#### Changed
+
+- Correctly parse directory requirements by @tdejager in [#4710](https://github.com/prefix-dev/pixi/pull/4710)
+- Load variants from files by @Hofer-Julian in [#4665](https://github.com/prefix-dev/pixi/pull/4665)
+- Always regenerate metadata on override by @tdejager in [#4774](https://github.com/prefix-dev/pixi/pull/4774)
+- Canonicalize source path in build-backend initialization by @tdejager in [#4781](https://github.com/prefix-dev/pixi/pull/4781)
+
+#### Fixed
+
+- Mark more online tests by @mgorny in [#4595](https://github.com/prefix-dev/pixi/pull/4595)
+- Always create the $PREFIX directory by @wolfv in [#4716](https://github.com/prefix-dev/pixi/pull/4716)
+- `BrokenPipe` errors on more commands by @mrswastik-robot in [#4730](https://github.com/prefix-dev/pixi/pull/4730)
+- Respect --no-progress again by @remimimimimi in [#4739](https://github.com/prefix-dev/pixi/pull/4739)
+- BrokenPipe error on `pixi global list` by @mrswastik-robot in [#4748](https://github.com/prefix-dev/pixi/pull/4748)
+- Recursive optional dependencies by @tdejager in [#4743](https://github.com/prefix-dev/pixi/pull/4743)
+- Do not include hidden folders when matching if source package is stale by @nichmor in [#4728](https://github.com/prefix-dev/pixi/pull/4728)
+- Ignore gitignore globs by @nichmor in [#4765](https://github.com/prefix-dev/pixi/pull/4765)
+- Only use extension to differentiate between source or binary dependencies by @baszalmstra in [#4737](https://github.com/prefix-dev/pixi/pull/4737)
+- Deprecate `[project]` by @Hofer-Julian in [#4771](https://github.com/prefix-dev/pixi/pull/4771)
+- Change logging directive by @tdejager in [#4773](https://github.com/prefix-dev/pixi/pull/4773)
+- Deprecate `[build-dependencies]` and `[host-dependencies]` by @Hofer-Julian in [#4767](https://github.com/prefix-dev/pixi/pull/4767)
+- `-v/--quiet` should take precedence over `RUST_LOG` by @tdejager in [#4779](https://github.com/prefix-dev/pixi/pull/4779)
+- Use which to locate bash on windows by @fstanis in [#4776](https://github.com/prefix-dev/pixi/pull/4776)
+- Propagate target-platform flags for pixi build by @AdamDorwart in [#4703](https://github.com/prefix-dev/pixi/pull/4703)
+
+#### Refactor
+
+- Move diff into a separate pixi_diff crate by @haecker-felix in [#4697](https://github.com/prefix-dev/pixi/pull/4697)
+
+#### Removed
+
+- Remove build-api v0 by @baszalmstra in [#4754](https://github.com/prefix-dev/pixi/pull/4754)
+
+#### New Contributors
+
+- @AdamDorwart made their first contribution in [#4703](https://github.com/prefix-dev/pixi/pull/4703)
 
 ### [0.56.0] - 2025-10-06
 
