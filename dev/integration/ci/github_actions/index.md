@@ -324,7 +324,7 @@ Activating an environment may be more useful than using a custom shell wrapper a
 
 ### `--frozen` and `--locked`
 
-You can specify whether `setup-pixi` should run `pixi install --frozen` or `pixi install --locked` depending on the `frozen` or the `locked` input argument. See the [official documentation](https://prefix.dev/docs/pixi/cli#install) for more information about the `--frozen` and `--locked` flags.
+You can specify whether `setup-pixi` should run `pixi install --frozen` or `pixi install --locked` depending on the `frozen` or the `locked` input argument. See the [official documentation](../../../reference/cli/pixi/install/#update-options) for more information about the `--frozen` and `--locked` flags.
 
 ```yaml
 - uses: prefix-dev/setup-pixi@v0.9.2
