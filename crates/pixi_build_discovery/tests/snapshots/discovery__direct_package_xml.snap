@@ -1,15 +1,14 @@
 ---
 source: crates/pixi_build_discovery/tests/discovery.rs
-assertion_line: 122
 expression: backend
 ---
 backend-spec:
   type: json-rpc
-  name: pixi-ros-backend
+  name: pixi-build-ros
   command:
     type: environment-spec
     requirement:
-      - pixi-ros-backend
+      - pixi-build-ros
       - "*"
     channels:
       - "https://conda.anaconda.org/conda-forge"
@@ -19,6 +18,17 @@ init-params:
   source: ~
   source-anchor: "file://<ROOT>/ros-package"
   manifest-path: "file://<ROOT>/ros-package/package.xml"
-  project-model: ~
+  project-model:
+    name: ~
+    version: ~
+    description: ~
+    authors: ~
+    license: ~
+    licenseFile: ~
+    readme: ~
+    homepage: ~
+    repository: ~
+    documentation: ~
+    targets: ~
   configuration: ~
   target-configuration: ~
