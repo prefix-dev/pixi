@@ -1,4 +1,4 @@
-[project]
+[workspace]
 authors = [{ name = "Tim de Jager", email = "tim@prefix.dev" }]
 dependencies = [
   "detectron2 @ git+https://github.com/facebookresearch/detectron2.git@bcfd464d0c810f0442d91a349c0f6df945467143",
