@@ -181,8 +181,10 @@ impl DiscoveredBackend {
         }
 
         // Try to discover as a ROS package.
-        if let Some(ros) = Self::discover_ros(source_path.clone(), channel_config)? {
-            return Ok(ros);
+        if enabled_protocols.enable_ros {
+            if let Some(ros) = Self::discover_ros(source_path.clone(), channel_config)? {
+                return Ok(ros);
+            }
         }
 
         Err(DiscoveryError::FailedToDiscover(
