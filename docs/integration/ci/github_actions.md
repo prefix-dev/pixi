@@ -10,7 +10,7 @@ We created [prefix-dev/setup-pixi](https://github.com/prefix-dev/setup-pixi) to 
 ```yaml
 - uses: prefix-dev/setup-pixi@v0.9.2
   with:
-    pixi-version: v0.56.0
+    pixi-version: v0.57.0
     cache: true
     auth-host: prefix.dev
     auth-token: ${{ secrets.PREFIX_DEV_TOKEN }}
@@ -334,7 +334,7 @@ However, be aware that this option augments the environment of your job.
 ### `--frozen` and `--locked`
 
 You can specify whether `setup-pixi` should run `pixi install --frozen` or `pixi install --locked` depending on the `frozen` or the `locked` input argument.
-See the [official documentation](https://prefix.dev/docs/pixi/cli#install) for more information about the `--frozen` and `--locked` flags.
+See the [official documentation](../../reference/cli/pixi/install.md#update-options) for more information about the `--frozen` and `--locked` flags.
 
 ```yaml
 - uses: prefix-dev/setup-pixi@v0.9.2

@@ -221,15 +221,38 @@ impl BuildBackendMetadataSpec {
             BackendOverride::InMemory(_) => false,
         };
 
-        if has_system_override {
-            return true;
+        let (command_kind, command_requires_skip) = match &json_rpc_spec.command {
+            CommandSpec::System(_) => ("system", true),
+            CommandSpec::EnvironmentSpec(env_spec) => {
+                let mutable = env_spec.requirement.1.is_mutable();
+                (
+                    if mutable {
+                        "mutable-environment"
+                    } else {
+                        "environment"
+                    },
+                    mutable,
+                )
+            }
+        };
+
+        let skip_cache = has_system_override || command_requires_skip;
+
+        if skip_cache {
+            let reason = if has_system_override {
+                "override"
+            } else {
+                command_kind
+            };
+            tracing::debug!(
+                backend = %json_rpc_spec.name,
+                reason,
+                command_kind,
+                "metadata cache disabled for backend",
+            );
         }
 
-        // Check if the original backend spec is System or mutable
-        match &json_rpc_spec.command {
-            CommandSpec::System(_) => true,
-            CommandSpec::EnvironmentSpec(env_spec) => env_spec.requirement.1.is_mutable(),
-        }
+        skip_cache
     }
 
     async fn verify_cache_freshness(
@@ -286,6 +309,7 @@ impl BuildBackendMetadataSpec {
         backend: Backend,
         additional_glob_hash: Vec<u8>,
     ) -> Result<CachedCondaMetadata, CommandDispatcherError<BuildBackendMetadataError>> {
+        let backend_identifier = backend.identifier().to_string();
         let params = CondaOutputsParams {
             channels: self.channels,
             host_platform: self.build_environment.host_platform,
@@ -298,7 +322,7 @@ impl BuildBackendMetadataSpec {
                         checkout: source_checkout.clone(),
                     },
                     host_platform: self.build_environment.host_platform,
-                    build_backend: backend.identifier().to_string(),
+                    build_backend: backend_identifier.clone(),
                 }
                 .key(),
             ),
@@ -309,11 +333,28 @@ impl BuildBackendMetadataSpec {
             .map_err(BuildBackendMetadataError::Communication)
             .map_err(CommandDispatcherError::Failed)?;
 
+        for output in &outputs.outputs {
+            tracing::debug!(
+                backend = %backend_identifier,
+                package = ?output.metadata.name,
+                version = %output.metadata.version,
+                build = %output.metadata.build,
+                subdir = %output.metadata.subdir,
+                "received metadata output from backend",
+            );
+        }
+
         // Compute the input globs for the mutable source checkouts.
         let input_globs = extend_input_globs_with_variant_files(
             outputs.input_globs.clone(),
             &self.variant_files,
             &source_checkout,
+        );
+        tracing::debug!(
+            backend = %backend_identifier,
+            source = %source_checkout.pinned,
+            glob_count = input_globs.len(),
+            "computing metadata input hash",
         );
         let input_hash = Self::compute_input_hash(
             command_dispatcher,
