@@ -1,0 +1,15 @@
+--8<-- [start:example]
+
+## Examples
+
+```shell
+pixi search pixi
+pixi search --limit 30 "py*"
+# search in a different channel and for a specific platform
+pixi search -c robostack --platform linux-64 "*plotjuggler*"
+# search for a specific version of a package
+pixi search "rattler-build<=0.35.4"
+pixi search "rattler-build[build_number=h2d22210_0]" --platform linux-64
+```
+
+--8<-- [end:example]
