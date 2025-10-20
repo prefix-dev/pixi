@@ -22,7 +22,7 @@ build-variants-files = [
 
 Read more about this feature in the [docs](https://pixi.sh/dev/reference/pixi_manifest/#build-variants-files-optional).
 
-We deprecated following syntax in the pixi manifest and give explicit warning when it's used:
+We deprecated the following syntax in the pixi manifest and give explicit warning when it's used:
 - `[project]`: should be replaced by `[workspace]`.
 - `[build-dependencies]` and `[host-dependencies]`: should be replaced by `[dependencies]`. 
 
