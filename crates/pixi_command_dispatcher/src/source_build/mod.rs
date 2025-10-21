@@ -344,13 +344,7 @@ impl SourceBuildSpec {
             let mut cached_entry = build_cache.cached_build.lock().await;
             *cached_entry = CachedBuildStatus::New(cached_build.clone());
             entry
-                .insert(CachedBuild {
-                    source: source_checkout
-                        .pinned
-                        .is_mutable()
-                        .then_some(built_source.metadata),
-                    record: record.clone(),
-                })
+                .insert(cached_build)
                 .await
                 .map_err(SourceBuildError::BuildCache)
                 .map_err(CommandDispatcherError::Failed)?;
