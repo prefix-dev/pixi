@@ -388,11 +388,13 @@ impl DiscoveredBackend {
 /// Retrieves channels from the workspace manifest
 /// if there's no workspace manifest, it will take the default channels from the Pixi config instead
 fn retrieve_channels(
-    source_dir: &PathBuf,
+    source_dir: &Path,
     channel_config: &ChannelConfig,
 ) -> Result<Vec<rattler_conda_types::ChannelUrl>, DiscoveryError> {
     let named_channels =
-        match WorkspaceDiscoverer::new(DiscoveryStart::SearchRoot(source_dir.clone())).discover() {
+        match WorkspaceDiscoverer::new(DiscoveryStart::SearchRoot(source_dir.to_path_buf()))
+            .discover()
+        {
             Err(e) => return Err(DiscoveryError::FailedToDiscoverPackage(e)),
             Ok(None) => Config::load_global().default_channels(),
             Ok(Some(workspace)) => PrioritizedChannel::sort_channels_by_priority(
