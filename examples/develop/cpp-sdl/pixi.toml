@@ -15,13 +15,13 @@ sdl_example = { path = "." }
 [tasks.configure]
 # Configures CMake
 cmd = [
-    "cmake",
-    # Use the cross-platform Ninja generator
-    "-GNinja",
-    # The source is in the root directory
-    "-S.",
-    # We wanna build in the .build directory
-    "-B.build",
+  "cmake",
+  # Use the cross-platform Ninja generator
+  "-GNinja",
+  # The source is in the root directory
+  "-S.",
+  # We wanna build in the .build directory
+  "-B.build",
 ]
 inputs = []
 outputs = [".build/build.ninja"]
@@ -48,8 +48,8 @@ version = "0.1.0"
 
 [package.build.backend]
 channels = [
-    "https://prefix.dev/pixi-build-backends",
-    "https://prefix.dev/conda-forge",
+  "https://prefix.dev/pixi-build-backends",
+  "https://prefix.dev/conda-forge",
 ]
 name = "pixi-build-cmake"
 version = "*"
