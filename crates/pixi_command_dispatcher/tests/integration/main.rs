@@ -15,7 +15,7 @@ use pixi_build_frontend::{BackendOverride, InMemoryOverriddenBackends};
 use pixi_command_dispatcher::{
     BuildEnvironment, CacheDirs, CommandDispatcher, Executor, InstallPixiEnvironmentSpec,
     InstantiateToolEnvironmentSpec, PackageIdentifier, PixiEnvironmentSpec,
-    SourceBuildCacheStatusSpec, SourceBuildSpec,
+    SourceBuildCacheStatusSpec,
 };
 use pixi_config::default_channel_config;
 use pixi_record::PinnedPathSpec;
