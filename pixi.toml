@@ -11,6 +11,8 @@ platforms = ["linux-64", "win-64", "osx-64", "osx-arm64", "linux-aarch64"]
 preview = ["pixi-build"]
 requires-pixi = ">=0.45"
 
+# Otherwise when building pixi with pixi-build
+# it fails to link with glibc
 [workspace.target.linux-64.build-variants]
 c_stdlib = ["sysroot"]
 c_stdlib_version = ["2.34"]
