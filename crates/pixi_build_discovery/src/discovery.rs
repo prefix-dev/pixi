@@ -8,6 +8,7 @@ use miette::Diagnostic;
 use ordermap::OrderMap;
 use pixi_build_type_conversions::{to_project_model_v1, to_target_selector_v1};
 use pixi_build_types::{ProjectModelV1, TargetSelectorV1};
+use pixi_config::Config;
 use pixi_manifest::{
     DiscoveryStart, ExplicitManifestError, PackageManifest, PrioritizedChannel, WithProvenance,
     WorkspaceDiscoverer, WorkspaceDiscoveryError, WorkspaceManifest,
@@ -195,35 +196,7 @@ impl DiscoveredBackend {
     ) -> Result<Self, DiscoveryError> {
         debug_assert!(source_dir.is_absolute());
         debug_assert!(recipe_absolute_path.is_absolute());
-
-        let manifests =
-            match WorkspaceDiscoverer::new(DiscoveryStart::SearchRoot(source_dir.clone()))
-                .discover()
-            {
-                Ok(None) => {
-                    return Err(DiscoveryError::FailedToDiscover(
-                        recipe_absolute_path.display().to_string(),
-                    ));
-                }
-                Err(e) => return Err(DiscoveryError::FailedToDiscoverPackage(e)),
-                Ok(Some(workspace)) => workspace.value,
-            };
-
-        let channels = PrioritizedChannel::sort_channels_by_priority(
-            &manifests.workspace.value.workspace.channels,
-        )
-        .map(|channel| {
-            channel
-                .clone()
-                .into_base_url(channel_config)
-                .map_err(|err| {
-                    DiscoveryError::SpecConversionError(SpecConversionError::InvalidChannel(
-                        channel.to_string(),
-                        err,
-                    ))
-                })
-        })
-        .collect::<Result<_, _>>()?;
+        let channels = retrieve_channels(&source_dir, channel_config)?;
 
         Ok(Self {
             backend_spec: BackendSpec::JsonRpc(JsonRpcBackendSpec::default_rattler_build(channels)),
@@ -395,34 +368,7 @@ impl DiscoveredBackend {
         debug_assert!(source_dir.is_absolute());
         debug_assert!(package_xml_absolute_path.is_absolute());
 
-        let manifests =
-            match WorkspaceDiscoverer::new(DiscoveryStart::SearchRoot(source_dir.clone()))
-                .discover()
-            {
-                Ok(None) => {
-                    return Err(DiscoveryError::FailedToDiscover(
-                        package_xml_absolute_path.display().to_string(),
-                    ));
-                }
-                Err(e) => return Err(DiscoveryError::FailedToDiscoverPackage(e)),
-                Ok(Some(workspace)) => workspace.value,
-            };
-
-        let channels = PrioritizedChannel::sort_channels_by_priority(
-            &manifests.workspace.value.workspace.channels,
-        )
-        .map(|channel| {
-            channel
-                .clone()
-                .into_base_url(channel_config)
-                .map_err(|err| {
-                    DiscoveryError::SpecConversionError(SpecConversionError::InvalidChannel(
-                        channel.to_string(),
-                        err,
-                    ))
-                })
-        })
-        .collect::<Result<_, _>>()?;
+        let channels = retrieve_channels(&source_dir, channel_config)?;
 
         Ok(Self {
             backend_spec: BackendSpec::JsonRpc(JsonRpcBackendSpec::default_ros_build(channels)),
@@ -437,4 +383,38 @@ impl DiscoveredBackend {
             },
         })
     }
+}
+
+/// Retrieves channels from the workspace manifest
+/// if there's no workspace manifest, it will take the default channels from the Pixi config instead
+fn retrieve_channels(
+    source_dir: &PathBuf,
+    channel_config: &ChannelConfig,
+) -> Result<Vec<rattler_conda_types::ChannelUrl>, DiscoveryError> {
+    let named_channels =
+        match WorkspaceDiscoverer::new(DiscoveryStart::SearchRoot(source_dir.clone())).discover() {
+            Err(e) => return Err(DiscoveryError::FailedToDiscoverPackage(e)),
+            Ok(None) => Config::load_global().default_channels(),
+            Ok(Some(workspace)) => PrioritizedChannel::sort_channels_by_priority(
+                &workspace.value.workspace.value.workspace.channels,
+            )
+            .cloned()
+            .collect(),
+        };
+
+    let channels = named_channels
+        .into_iter()
+        .map(|channel| {
+            channel
+                .clone()
+                .into_base_url(channel_config)
+                .map_err(|err| {
+                    DiscoveryError::SpecConversionError(SpecConversionError::InvalidChannel(
+                        channel.to_string(),
+                        err,
+                    ))
+                })
+        })
+        .collect::<Result<_, _>>()?;
+    Ok(channels)
 }

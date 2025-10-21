@@ -4603,6 +4603,7 @@ dependencies = [
  "pixi_build_discovery",
  "pixi_build_type_conversions",
  "pixi_build_types",
+ "pixi_config",
  "pixi_manifest",
  "pixi_spec",
  "pixi_spec_containers",
