@@ -22,9 +22,9 @@ use crate::{
     backend_spec::{CommandSpec, EnvironmentSpec, JsonRpcBackendSpec},
 };
 
-const VALID_RECIPE_NAMES: [&str; 2] = ["recipe.yaml", "recipe.yml"];
-const VALID_RECIPE_DIRS: [&str; 2] = ["", "recipe"];
-const VALID_ROS_BACKEND_NAMES: [&str; 1] = ["package.xml"];
+const RATTLER_BUILD_FILE_NAMES: [&str; 2] = ["recipe.yaml", "recipe.yml"];
+const RATTLER_BUILD_DIRS: [&str; 2] = ["", "recipe"];
+const ROS_BACKEND_FILE_NAMES: [&str; 1] = ["package.xml"];
 
 /// Describes a backend discovered for a given source location.
 #[derive(Debug, Clone)]
@@ -133,10 +133,11 @@ impl DiscoveredBackend {
             return Err(DiscoveryError::NotFound(source_path.to_path_buf()));
         };
 
-        // If the user explicitly asked for a recipe.yaml file
+        // If the user explicitly asked for a specific file,
+        // check if one of our backends support it
         let source_file_name = source_path.file_name().and_then(OsStr::to_str);
         if let Some(source_file_name) = source_file_name {
-            if VALID_RECIPE_NAMES.contains(&source_file_name) {
+            if RATTLER_BUILD_FILE_NAMES.contains(&source_file_name) {
                 if !enabled_protocols.enable_rattler_build {
                     return Err(DiscoveryError::UnsupportedRecipeYaml(
                         source_file_name.to_string(),
@@ -149,7 +150,7 @@ impl DiscoveredBackend {
             }
 
             // If the user explicitly asked for a package.xml file
-            if VALID_ROS_BACKEND_NAMES.contains(&source_file_name) {
+            if ROS_BACKEND_FILE_NAMES.contains(&source_file_name) {
                 if !enabled_protocols.enable_ros {
                     return Err(DiscoveryError::UnsupportedPackageXml(
                         source_file_name.to_string(),
@@ -157,7 +158,7 @@ impl DiscoveredBackend {
                 }
                 let source_dir = source_path
                     .parent()
-                    .expect("the package.xml must live somewhere");
+                    .expect("the recipe must live somewhere");
                 return Self::from_ros_package(
                     source_dir.to_path_buf(),
                     source_path,
@@ -180,13 +181,6 @@ impl DiscoveredBackend {
             }
         }
 
-        // Try to discover as a ROS package.
-        if enabled_protocols.enable_ros {
-            if let Some(ros) = Self::discover_ros(source_path.clone(), channel_config)? {
-                return Ok(ros);
-            }
-        }
-
         Err(DiscoveryError::FailedToDiscover(
             source_path.to_string_lossy().to_string(),
         ))
@@ -201,10 +195,38 @@ impl DiscoveredBackend {
     ) -> Result<Self, DiscoveryError> {
         debug_assert!(source_dir.is_absolute());
         debug_assert!(recipe_absolute_path.is_absolute());
+
+        let manifests =
+            match WorkspaceDiscoverer::new(DiscoveryStart::SearchRoot(source_dir.clone()))
+                .discover()
+            {
+                Ok(None) => {
+                    return Err(DiscoveryError::FailedToDiscover(
+                        recipe_absolute_path.display().to_string(),
+                    ));
+                }
+                Err(e) => return Err(DiscoveryError::FailedToDiscoverPackage(e)),
+                Ok(Some(workspace)) => workspace.value,
+            };
+
+        let channels = PrioritizedChannel::sort_channels_by_priority(
+            &manifests.workspace.value.workspace.channels,
+        )
+        .map(|channel| {
+            channel
+                .clone()
+                .into_base_url(channel_config)
+                .map_err(|err| {
+                    DiscoveryError::SpecConversionError(SpecConversionError::InvalidChannel(
+                        channel.to_string(),
+                        err,
+                    ))
+                })
+        })
+        .collect::<Result<_, _>>()?;
+
         Ok(Self {
-            backend_spec: BackendSpec::JsonRpc(JsonRpcBackendSpec::default_rattler_build(
-                channel_config,
-            )),
+            backend_spec: BackendSpec::JsonRpc(JsonRpcBackendSpec::default_rattler_build(channels)),
             init_params: BackendInitializationParams {
                 workspace_root: source_dir.clone(),
                 source: None,
@@ -347,9 +369,9 @@ impl DiscoveredBackend {
         source_dir: PathBuf,
         channel_config: &ChannelConfig,
     ) -> Result<Option<Self>, DiscoveryError> {
-        for (&recipe_dir, &recipe_file) in VALID_RECIPE_DIRS
+        for (&recipe_dir, &recipe_file) in RATTLER_BUILD_DIRS
             .iter()
-            .cartesian_product(VALID_RECIPE_NAMES.iter())
+            .cartesian_product(RATTLER_BUILD_FILE_NAMES.iter())
         {
             let recipe_path = source_dir.join(recipe_dir).join(recipe_file);
             if recipe_path.is_file() {
@@ -372,10 +394,38 @@ impl DiscoveredBackend {
     ) -> Result<Self, DiscoveryError> {
         debug_assert!(source_dir.is_absolute());
         debug_assert!(package_xml_absolute_path.is_absolute());
+
+        let manifests =
+            match WorkspaceDiscoverer::new(DiscoveryStart::SearchRoot(source_dir.clone()))
+                .discover()
+            {
+                Ok(None) => {
+                    return Err(DiscoveryError::FailedToDiscover(
+                        package_xml_absolute_path.display().to_string(),
+                    ));
+                }
+                Err(e) => return Err(DiscoveryError::FailedToDiscoverPackage(e)),
+                Ok(Some(workspace)) => workspace.value,
+            };
+
+        let channels = PrioritizedChannel::sort_channels_by_priority(
+            &manifests.workspace.value.workspace.channels,
+        )
+        .map(|channel| {
+            channel
+                .clone()
+                .into_base_url(channel_config)
+                .map_err(|err| {
+                    DiscoveryError::SpecConversionError(SpecConversionError::InvalidChannel(
+                        channel.to_string(),
+                        err,
+                    ))
+                })
+        })
+        .collect::<Result<_, _>>()?;
+
         Ok(Self {
-            backend_spec: BackendSpec::JsonRpc(JsonRpcBackendSpec::default_ros_build(
-                channel_config,
-            )),
+            backend_spec: BackendSpec::JsonRpc(JsonRpcBackendSpec::default_ros_build(channels)),
             init_params: BackendInitializationParams {
                 workspace_root: source_dir.clone(),
                 source: None,
@@ -386,23 +436,5 @@ impl DiscoveredBackend {
                 target_configuration: None,
             },
         })
-    }
-
-    /// Try to discover a ROS package.xml file in the repository.
-    fn discover_ros(
-        source_dir: PathBuf,
-        channel_config: &ChannelConfig,
-    ) -> Result<Option<Self>, DiscoveryError> {
-        for &package_file in VALID_ROS_BACKEND_NAMES.iter() {
-            let package_path = source_dir.join(package_file);
-            if package_path.is_file() {
-                return Ok(Some(Self::from_ros_package(
-                    source_dir,
-                    package_path,
-                    channel_config,
-                )?));
-            }
-        }
-        Ok(None)
     }
 }
