@@ -385,8 +385,6 @@ impl SourceBuildSpec {
                 .await
                 .map_err(SourceBuildError::BuildCache)
                 .map_err(CommandDispatcherError::Failed)?;
-
-            drop(cached_entry);
         }
 
         Ok(SourceBuildResult {

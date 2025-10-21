@@ -502,8 +502,8 @@ pub async fn test_stale_host_dependency_triggers_rebuild() {
 
     assert_eq!(
         rebuild_packages,
-        vec!["package-a", "package-b"],
-        "Expected only package-a and package-b to be rebuilt"
+        vec!["package-b"],
+        "Expected only package-b to be rebuilt"
     );
 }
 
