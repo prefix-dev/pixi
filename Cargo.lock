@@ -1108,9 +1108,9 @@ dependencies = [
 
 [[package]]
 name = "bzip2"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bea8dcd42434048e4f7a304411d9273a411f647446c1234a65ce0554923f4cff"
+checksum = "f3a53fac24f34a81bc9954b5d6cfce0c21e18ec6959f44f56e8e90e4bb7c346c"
 dependencies = [
  "libbz2-rs-sys",
 ]
@@ -1739,9 +1739,9 @@ dependencies = [
 
 [[package]]
 name = "deno_path_util"
-version = "0.6.2"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e87fa9392a9fe265bbc32c90aca28c3b4b02c12b22892bb3c633938e6dfaa342"
+checksum = "a4f70f7cbc884556f08781aaa75aef177d15bfee99e4fc40c25fa74514c678c0"
 dependencies = [
  "deno_error",
  "percent-encoding",
@@ -2515,9 +2515,9 @@ dependencies = [
 
 [[package]]
 name = "goblin"
-version = "0.10.2"
+version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7be320f077239a0361c20d608b4768c62a1b77aa4946dd76395aa4cd502cba7d"
+checksum = "51876e3748c4a347fe65b906f2b1ae46a1e55a497b22c94c1f4f2c469ff7673a"
 dependencies = [
  "log",
  "plain",
@@ -4486,7 +4486,7 @@ dependencies = [
 
 [[package]]
 name = "pixi"
-version = "0.56.0"
+version = "0.57.0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -4752,6 +4752,7 @@ dependencies = [
  "uv-pypi-types",
  "uv-requirements-txt",
  "uv-types",
+ "which",
  "zip 2.4.2",
 ]
 
@@ -6211,7 +6212,7 @@ version = "0.23.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "936b6716d2e27a05bdcfdef42aa26726d6537244ac773f840a8652788148d674"
 dependencies = [
- "bzip2 0.6.0",
+ "bzip2 0.6.1",
  "chrono",
  "fs-err",
  "futures-util",
@@ -6259,9 +6260,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_repodata_gateway"
-version = "0.24.9"
+version = "0.24.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57fa9b6808af340c66a80446ef58fb495dfa052f9d3af9535b95369f68a26d0f"
+checksum = "cb06130dbeca7f05ac182dafc55617ce0b5e511d969d4065efdf60948d3500c7"
 dependencies = [
  "anyhow",
  "async-compression",
@@ -7827,9 +7828,9 @@ dependencies = [
 
 [[package]]
 name = "tikv-jemalloc-sys"
-version = "0.6.0+5.3.0-1-ge13ca993e8ccb9ba9847cc330696e02839f328f7"
+version = "0.6.1+5.3.0-1-ge13ca993e8ccb9ba9847cc330696e02839f328f7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd3c60906412afa9c2b5b5a48ca6a5abe5736aec9eb48ad05037a677e52e4e2d"
+checksum = "cd8aa5b2ab86a2cefa406d889139c162cbb230092f7d1d7cbc1716405d852a3b"
 dependencies = [
  "cc",
  "libc",
@@ -7837,9 +7838,9 @@ dependencies = [
 
 [[package]]
 name = "tikv-jemallocator"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4cec5ff18518d81584f477e9bfdf957f5bb0979b0bac3af4ca30b5b3ae2d2865"
+checksum = "0359b4327f954e0567e69fb191cf1436617748813819c94b8cd4a431422d053a"
 dependencies = [
  "libc",
  "tikv-jemalloc-sys",

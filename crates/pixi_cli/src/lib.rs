@@ -296,17 +296,30 @@ fn setup_logging(args: &Args, use_colors: bool) -> miette::Result<()> {
         LevelFilter::TRACE => (LevelFilter::TRACE, LevelFilter::TRACE, LevelFilter::TRACE),
     };
 
-    // Start building the filter with RUST_LOG support
-    let mut env_filter = EnvFilter::builder()
-        .with_default_directive(level_filter.into())
-        .from_env()
-        .into_diagnostic()?;
+    // Check if CLI verbosity flags were explicitly set
+    let cli_verbosity_set = args.global_options.verbose > 0 || args.global_options.quiet > 0;
 
-    // Only add CLI-based directives if RUST_LOG is not set
-    // This allows RUST_LOG to fully override CLI verbosity settings
-    if env::var("RUST_LOG").is_err() {
-        // filter logs from apple codesign because they are very noisy
-        env_filter = env_filter
+    // Build the filter with appropriate precedence:
+    // - If CLI flags are set (--quiet/-v), use them and ignore RUST_LOG
+    // - If no CLI flags, try and RUST_LOG if available
+    let env_filter = if cli_verbosity_set {
+        // CLI flags take precedence i.e. ignore RUST_LOG
+        EnvFilter::builder()
+            .with_default_directive(level_filter.into())
+            .parse(format!(
+                "apple_codesign=off,pixi={},pixi_command_dispatcher={},resolvo={}",
+                pixi_level, pixi_level, low_level_filter
+            ))
+            .into_diagnostic()?
+    } else {
+        // No CLI flags - use RUST_LOG if set
+        let builder = EnvFilter::builder()
+            .with_default_directive(level_filter.into())
+            .from_env()
+            .into_diagnostic()?;
+
+        // Add default directives
+        builder
             .add_directive("apple_codesign=off".parse().into_diagnostic()?)
             .add_directive(format!("pixi={}", pixi_level).parse().into_diagnostic()?)
             .add_directive(
@@ -318,8 +331,8 @@ fn setup_logging(args: &Args, use_colors: bool) -> miette::Result<()> {
                 format!("resolvo={}", low_level_filter)
                     .parse()
                     .into_diagnostic()?,
-            );
-    }
+            )
+    };
 
     // Set up the tracing subscriber
     let fmt_layer = tracing_subscriber::fmt::layer()
