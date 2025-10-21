@@ -2,4 +2,4 @@
 source: crates/pixi/tests/integration_rust/add_tests.rs
 expression: git_package.unwrap().as_conda().unwrap().location()
 ---
-git+https://github.com/wolfv/pixi-build-examples?subdirectory=boost-check&rev=8a1d9b9#[FULL_COMMIT]
+git+https://github.com/prefix-dev/pixi-build-testsuite?subdirectory=tests%2Fdata%2Fpixi_build%2Fsimple-package&rev=d891d95#[FULL_COMMIT]
