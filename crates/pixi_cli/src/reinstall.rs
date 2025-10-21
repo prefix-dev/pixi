@@ -81,10 +81,5 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .reinstall(args.clone().into(), lock_file_usage)
         .await?;
 
-    // do twice reinstall to ensure that second time we dont rebuild
-    workspace_ctx
-        .reinstall(args.into(), lock_file_usage)
-        .await?;
-
     Ok(())
 }

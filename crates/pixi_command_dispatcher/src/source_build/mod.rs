@@ -241,24 +241,22 @@ impl SourceBuildSpec {
 
         // Build the package based on the support backend capabilities.
         let mut built_source = if backend.capabilities().provides_conda_build_v1() {
-            self.clone()
-                .build_v1(
-                    command_dispatcher.clone(),
-                    backend,
-                    work_directory,
-                    package_build_input_hash,
-                    reporter,
-                )
-                .await?
+            self.build_v1(
+                command_dispatcher,
+                backend,
+                work_directory,
+                package_build_input_hash,
+                reporter,
+            )
+            .await?
         } else {
-            self.clone()
-                .build_v0(
-                    command_dispatcher.clone(),
-                    backend,
-                    work_directory,
-                    package_build_input_hash,
-                )
-                .await?
+            self.build_v0(
+                command_dispatcher,
+                backend,
+                work_directory,
+                package_build_input_hash,
+            )
+            .await?
         };
 
         // Create the output directory if it does not exist.

@@ -183,7 +183,6 @@ impl CommandDispatcherBuilder {
             executor: self.executor,
         });
 
-        tracing::debug!("Spawning Command Dispatcher Processor");
         let (sender, join_handle) = CommandDispatcherProcessor::spawn(data.clone(), self.reporter);
         CommandDispatcher {
             channel: Some(CommandDispatcherChannel::Strong(sender)),
