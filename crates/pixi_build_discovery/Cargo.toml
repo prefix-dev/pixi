@@ -17,7 +17,6 @@ ordermap = { workspace = true }
 serde = { workspace = true, optional = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-url = { workspace = true }
 
 rattler_conda_types = { workspace = true }
 
