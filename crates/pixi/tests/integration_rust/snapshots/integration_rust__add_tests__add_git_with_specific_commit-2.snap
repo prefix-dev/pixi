@@ -9,4 +9,4 @@ platforms = ["linux-64"]
 preview = ['pixi-build']
 
 [dependencies]
-simple-package = { git = "https://github.com/prefix-dev/pixi-build-testsuite.git", rev = "d891d95", subdirectory = "tests/data/pixi_build/simple-package" }
+boost-check = { git = "https://github.com/wolfv/pixi-build-examples.git", rev = "8a1d9b9", subdirectory = "boost-check" }
