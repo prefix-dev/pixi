@@ -2,7 +2,7 @@ mod event_reporter;
 mod event_tree;
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     // ptr,
     str::FromStr,
@@ -15,7 +15,7 @@ use pixi_build_frontend::{BackendOverride, InMemoryOverriddenBackends};
 use pixi_command_dispatcher::{
     BuildEnvironment, CacheDirs, CommandDispatcher, Executor, InstallPixiEnvironmentSpec,
     InstantiateToolEnvironmentSpec, PackageIdentifier, PixiEnvironmentSpec,
-    SourceBuildCacheStatusSpec,
+    SourceBuildCacheStatusSpec, SourceBuildSpec,
 };
 use pixi_config::default_channel_config;
 use pixi_record::PinnedPathSpec;
@@ -608,5 +608,158 @@ async fn source_build_cache_status_clear_works() {
     assert!(
         weak_first.upgrade().is_none(),
         "Original Arc should be deallocated after cache clear"
+    );
+}
+
+/// Tests that forcing a rebuild of a package will ignore UpToDate cache status from previous builds.
+#[tokio::test]
+pub async fn test_force_rebuild() {
+    let root_dir = workspaces_dir().join("host-dependency");
+    let tempdir = tempfile::tempdir().unwrap();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
+    let build_command_dispatcher = || {
+        CommandDispatcher::builder()
+            .with_root_dir(root_dir.clone())
+            .with_cache_dirs(default_cache_dirs().with_workspace(tempdir.path().to_path_buf()))
+            .with_executor(Executor::Serial)
+            .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+            .with_backend_overrides(BackendOverride::from_memory(
+                PassthroughBackend::instantiator(),
+            ))
+    };
+
+    let (reporter, events) = EventReporter::new();
+    let dispatcher = build_command_dispatcher().with_reporter(reporter).finish();
+
+    // Made a source build of package-b CacheStatus::UpToDate by installing the environment once.
+    let records = dispatcher
+        .solve_pixi_environment(PixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([
+                (
+                    "package-a".parse().unwrap(),
+                    PathSpec::new("package-a").into(),
+                ),
+                (
+                    "package-c".parse().unwrap(),
+                    PathSpec::new("package-c").into(),
+                ),
+            ]),
+            build_environment: build_env.clone(),
+            ..PixiEnvironmentSpec::default()
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("expected solve to succeed");
+
+    // Install the environment to a temporary prefix.
+    // we know will have CacheStatus::New package-b after this
+    let prefix = Prefix::create(tempdir.path().join("prefix")).unwrap();
+    dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env.clone(),
+            ..InstallPixiEnvironmentSpec::new(records.clone(), prefix.clone())
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .unwrap();
+
+    let first_events = events.take();
+
+    dispatcher.clear_reporter().await;
+
+    // Now we want to rebuild package-b by forcing a rebuild
+    let mut spec = InstallPixiEnvironmentSpec::new(records.clone(), prefix);
+    spec.force_reinstall = HashSet::from_iter([PackageName::new_unchecked("package-b")]);
+
+    let _ = dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env.clone(),
+            ..spec.clone()
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .unwrap();
+
+    // Get all the events that happened.
+    let second_events = events.take();
+    let event_tree = EventTree::new(first_events.iter().chain(second_events.iter())).to_string();
+    eprintln!("{event_tree}");
+
+    // Ensure that package-b was not queued for rebuild since it is a fresh build already.
+    let rebuild_packages = second_events
+        .iter()
+        .filter_map(|event| match event {
+            event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
+                Some(package.name.as_normalized())
+            }
+            _ => None,
+        })
+        .sorted()
+        .collect::<Vec<_>>();
+
+    assert!(rebuild_packages.is_empty());
+
+    // now drop the dispatcher
+    drop(dispatcher);
+
+    // Construct a new command dispatcher (as if the program is restarted).
+    let (reporter, second_events) = EventReporter::new();
+    let dispatcher = build_command_dispatcher().with_reporter(reporter).finish();
+
+    let _ = dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env.clone(),
+            ..spec
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .unwrap();
+
+    let second_events = second_events.take();
+
+    // Ensure that package-b was force rebuilt.
+    let rebuild_packages = second_events
+        .iter()
+        .filter_map(|event| match event {
+            event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
+                Some(package.name.as_normalized())
+            }
+            _ => None,
+        })
+        .sorted()
+        .collect::<Vec<_>>();
+
+    eprintln!("Events after restart:\n");
+    let event_tree = EventTree::new(second_events.iter()).to_string();
+    eprintln!("{}", event_tree);
+
+    assert_eq!(
+        rebuild_packages,
+        vec!["package-b"],
+        "Expected only package-b to be queued for rebuild"
+    );
+
+    // now queue again without force rebuild and ensure no builds are queued
+    dispatcher.clear_reporter().await;
+    spec.force_reinstall = HashSet::new();
+
+    let last_events = events.take();
+
+    // package-b should just reuse cache
+    let rebuild_packages = last_events
+        .iter()
+        .filter_map(|event| match event {
+            event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
+                Some(package.name.as_normalized())
+            }
+            _ => None,
+        })
+        .sorted()
+        .collect::<Vec<_>>();
+
+    assert!(
+        rebuild_packages.is_empty(),
+        "Expected no packages to be queued for rebuild"
     );
 }

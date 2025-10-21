@@ -90,6 +90,9 @@ pub struct SourceBuildSpec {
     /// The protocols that are enabled for this source
     #[serde(skip_serializing_if = "crate::is_default")]
     pub enabled_protocols: EnabledProtocols,
+
+    /// Force rebuild even if the build cache is up to date.
+    pub force: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -127,33 +130,55 @@ impl SourceBuildSpec {
     ) -> Result<SourceBuildResult, CommandDispatcherError<SourceBuildError>> {
         // If the output directory is not set, we want to use the build cache. Read the
         // build cache in that case.
-        let (output_directory, build_cache) =
-            if let Some(output_directory) = self.output_directory.clone() {
-                (output_directory, None)
-            } else {
-                // Query the source build cache.
-                let build_cache = command_dispatcher
-                    .source_build_cache_status(SourceBuildCacheStatusSpec {
-                        package: self.package.clone(),
-                        build_environment: self.build_environment.clone(),
-                        source: self.source.clone(),
-                        channels: self.channels.clone(),
-                        channel_config: self.channel_config.clone(),
-                        enabled_protocols: self.enabled_protocols.clone(),
-                    })
-                    .await
-                    .map_err_with(SourceBuildError::from)?;
+        let (output_directory, build_cache) = if let Some(output_directory) =
+            self.output_directory.clone()
+        {
+            (output_directory, None)
+        } else {
+            // Query the source build cache.
+            let build_cache = command_dispatcher
+                .source_build_cache_status(SourceBuildCacheStatusSpec {
+                    package: self.package.clone(),
+                    build_environment: self.build_environment.clone(),
+                    source: self.source.clone(),
+                    channels: self.channels.clone(),
+                    channel_config: self.channel_config.clone(),
+                    enabled_protocols: self.enabled_protocols.clone(),
+                })
+                .await
+                .map_err_with(SourceBuildError::from)?;
 
-                if let CachedBuildStatus::UpToDate(cached_build) = &build_cache.cached_build {
+            // If the build is up to date and we are not forcing a rebuild, return the cached build.
+            // but if we force a rebuild, and we already have an new cached build, we can reuse the cache entry.
+            if let CachedBuildStatus::UpToDate(cached_build) =
+                &*build_cache.cached_build.lock().await
+            {
+                if !self.force {
                     // If the build is up to date, we can return the cached build.
                     return Ok(SourceBuildResult {
                         output_file: build_cache.cache_dir.join(&cached_build.record.file_name),
                         record: cached_build.record.clone(),
                     });
                 }
+                tracing::debug!(
+                    "source build for {} is up to date, but force rebuild is set, rebuilding anyway",
+                    self.package.name.as_normalized()
+                );
+            }
+            if let CachedBuildStatus::New(cached_build) = &*build_cache.cached_build.lock().await {
+                tracing::debug!(
+                    "source build for {} is already built and marked as new, reusing the cache entry",
+                    self.package.name.as_normalized()
+                );
+                // dont matter if we forceit , we can reuse the cache entry
+                return Ok(SourceBuildResult {
+                    output_file: build_cache.cache_dir.join(&cached_build.record.file_name),
+                    record: cached_build.record.clone(),
+                });
+            }
 
-                (build_cache.cache_dir.clone(), Some(build_cache))
-            };
+            (build_cache.cache_dir.clone(), Some(build_cache))
+        };
 
         // Check out the source code.
         let source_checkout = command_dispatcher
@@ -216,22 +241,24 @@ impl SourceBuildSpec {
 
         // Build the package based on the support backend capabilities.
         let mut built_source = if backend.capabilities().provides_conda_build_v1() {
-            self.build_v1(
-                command_dispatcher,
-                backend,
-                work_directory,
-                package_build_input_hash,
-                reporter,
-            )
-            .await?
+            self.clone()
+                .build_v1(
+                    command_dispatcher.clone(),
+                    backend,
+                    work_directory,
+                    package_build_input_hash,
+                    reporter,
+                )
+                .await?
         } else {
-            self.build_v0(
-                command_dispatcher,
-                backend,
-                work_directory,
-                package_build_input_hash,
-            )
-            .await?
+            self.clone()
+                .build_v0(
+                    command_dispatcher.clone(),
+                    backend,
+                    work_directory,
+                    package_build_input_hash,
+                )
+                .await?
         };
 
         // Create the output directory if it does not exist.
@@ -305,6 +332,19 @@ impl SourceBuildSpec {
         // Update the cache entry if we have one.
         if let Some(build_cache) = build_cache {
             let mut entry = build_cache.entry.lock().await;
+            // set the status that its a new cache
+            // so on the next run we can distinguish between up to date ( was already saved from previous session)
+            // and new that was just build now
+            let cached_build = CachedBuild {
+                source: source_checkout
+                    .pinned
+                    .is_mutable()
+                    .then_some(built_source.metadata.clone()),
+                record: record.clone(),
+            };
+
+            let mut cached_entry = build_cache.cached_build.lock().await;
+            *cached_entry = CachedBuildStatus::New(cached_build.clone());
             entry
                 .insert(CachedBuild {
                     source: source_checkout
@@ -316,6 +356,8 @@ impl SourceBuildSpec {
                 .await
                 .map_err(SourceBuildError::BuildCache)
                 .map_err(CommandDispatcherError::Failed)?;
+
+            drop(cached_entry);
         }
 
         Ok(SourceBuildResult {
