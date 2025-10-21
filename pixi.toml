@@ -12,8 +12,8 @@ preview = ["pixi-build"]
 requires-pixi = ">=0.45"
 
 [workspace.target.linux-64.build-variants]
-c_stdlib = ["sysroot"]
-c_stdlib_version = ["2.34"]
+#c_stdlib = ["sysroot"]
+c_stdlib_version = ["2.17"]
 
 [dependencies]
 cargo-insta = "*"
@@ -258,11 +258,6 @@ zig = ">=0.15.1,<0.16"
 [feature.pixi-build.dependencies]
 pixi = { path = "." }
 
-[feature.pixi-build.system-requirements]
-libc = "2.34"
-
-[system-requirements]
-libc = "2.34"
 
 #
 # Environment descriptions
@@ -309,3 +304,6 @@ name = "pixi"
 [package.build]
 backend = { name = "pixi-build-rust", version = "*" }
 source = { path = "crates/pixi" }
+
+[package.target.unix.build-dependencies]
+clang = "*"
